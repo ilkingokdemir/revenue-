@@ -1,61 +1,59 @@
 # Hotel Review Management Module - PRD
 
 ## Original Problem Statement
-Hotel management review module to receive all reviews from online platforms (Booking.com, Airbnb, Expedia, Trip.com, Google, TripAdvisor) and respond with AI-generated replies with manual edit capability.
+Hotel management review module to receive all reviews from online platforms and respond with AI-generated replies. Integrated with MyHotelBox.com.
 
-## What's Been Implemented (January-April 2026)
+## What's Been Implemented
+
+### Authentication & Team Management (April 2026)
+- JWT auth with httpOnly cookies + Bearer token support
+- 3 roles: Admin, Manager, Receptionist
+- 7 hotel departments: Front Desk, Management, Housekeeping, Food & Beverage, Maintenance, Spa & Wellness, Concierge
+- Admin can create/delete users, assign roles & departments
+- Brute force protection (5 attempts = 15 min lockout)
+- Auto-seeded admin account on startup
+
+### Approval Workflow (April 2026)
+- Status flow: Pending → Draft → Pending Approval → Approved/Rejected → Responded
+- Receptionists draft AI responses, submit for approval
+- Managers/Admins approve or reject with notes
+- Approval queue dialog for managers
+- Status filter includes all workflow states
+
+### Unique AI Response Engine (April 2026)
+- Every response is unique and personalized
+- References specific review details (room, dates, experiences)
+- Avoids reusing opening lines from recent responses
+- Unique session IDs prevent caching
+- Varied sentence structure and creative sign-offs
+
+### Multi-Language AI (April 2026)
+- 16 languages supported
+- Auto-detects guest language with confidence score
+- Generates replies in selected/detected language
+- "Translate to English" button for staff verification
 
 ### Platform Integrations (14 Total)
 - Google, Booking.com, TripAdvisor, Airbnb, Expedia, Trip.com
-- Agoda, Hotels.com, Yelp, Facebook Reviews, MakeMyTrip, HRS, Despegar, Hostelworld
-- Manual Import (CSV + form entry)
-
-### Multi-Language AI Response Generator (NEW - April 2026)
-- Auto-detects guest's language from review text (GPT-5.2)
-- 16 supported languages: English, French, German, Spanish, Italian, Portuguese, Chinese, Japanese, Korean, Arabic, Russian, Dutch, Thai, Hindi, Turkish
-- Language selector dropdown with "Auto-detect" default
-- AI generates replies in selected/detected language
-- "Translate to English" one-click button for staff verification
-- Language detection badge shows under review with confidence score
+- Agoda, Hotels.com, Yelp, Facebook, MakeMyTrip, HRS, Despegar, Hostelworld
 
 ### White-Label Branding
-- Custom logo, app name, subtitle, primary/accent colors, 6 presets
-- "Powered By" footer badge, live preview, persisted to MongoDB
+- Custom logo, app name, colors, "Powered By" badge
 
-### UI/UX Design
-- DM Sans font, organic earthy hospitality theme
-- Rounded-xl cards, slim nav, emerald AI panel, pill badges
-- Custom scrollbar, hover/active states, polished empty states
+### UI/UX
+- DM Sans font, earthy hospitality theme, rounded cards, emerald AI panel
 
 ### Core Features
 - AI Response Generation (GPT-5.2 via Emergent Key)
-- Response Templates (6 default templates)
-- AI Sentiment Analysis with auto-suggestions
-- Analytics Dashboard with priority queue
-- Competitor Benchmarking
-- Scheduled Reports (daily/weekly/monthly)
-- Email Notifications for negative reviews (Resend)
+- Response Templates, Sentiment Analysis, Analytics, Competitor Benchmarking
+- Scheduled Reports, Email Notifications (Resend)
 
 ## Architecture
 - Frontend: React + Tailwind CSS + Shadcn UI
 - Backend: FastAPI + MongoDB
 - AI: OpenAI GPT-5.2 (Emergent LLM Key)
-- Email: Resend (Emergent Key)
+- Auth: JWT + bcrypt + httpOnly cookies
 
-## DB Collections
-- reviews, competitors, templates, notification_settings, report_settings
-- platform_integrations, branding_settings
-
-## API Endpoints
-- Reviews: GET/POST /api/reviews, POST /api/reviews/generate-ai-response, POST /api/reviews/{id}/detect-language, POST /api/reviews/translate
-- Languages: GET /api/languages
-- Analytics: GET /api/analytics/overview, GET /api/analytics/dashboard
-- Templates: GET/POST/PUT/DELETE /api/templates
-- Integrations: GET /api/integrations, PUT /api/integrations/{platform}/configure
-- Branding: GET/PUT /api/branding, POST/DELETE /api/branding/logo
-- Settings: GET/PUT /api/settings/notifications, GET/PUT /api/settings/reports
-
-## Next Tasks (Prioritized)
-1. **P0** - Real bi-directional sync (requires platform API credentials/partner approvals)
-2. **P1** - Authentication system for team access
-3. **P2** - Refactor App.js (3200+ lines) into modular components
+## Next Tasks
+1. **P0** - Real bi-directional platform sync
+2. **P2** - Refactor App.js (3700+ lines) into modular components

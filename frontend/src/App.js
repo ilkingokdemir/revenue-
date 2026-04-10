@@ -50,7 +50,13 @@ import {
   PaintBrush,
   Palette,
   Upload,
-  Image
+  Image,
+  SignIn,
+  SignOut,
+  UserCircle,
+  ShieldCheck,
+  ClockCounterClockwise,
+  UserPlus
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -76,6 +82,18 @@ import { Progress } from "@/components/ui/progress";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
+
+// Configure axios to send cookies
+axios.defaults.withCredentials = true;
+
+function formatApiErrorDetail(detail) {
+  if (detail == null) return "Something went wrong. Please try again.";
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail))
+    return detail.map((e) => (e && typeof e.msg === "string" ? e.msg : JSON.stringify(e))).filter(Boolean).join(" ");
+  if (detail && typeof detail.msg === "string") return detail.msg;
+  return String(detail);
+}
 
 // Platform configuration with colors
 const PLATFORMS = {
@@ -170,8 +188,6 @@ const StatsCard = ({ icon: Icon, label, value, subtext }) => (
 
 // Review Card Component
 const ReviewCard = ({ review, isSelected, onClick }) => {
-  const isPending = review.response_status === "pending";
-  
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
@@ -199,12 +215,25 @@ const ReviewCard = ({ review, isSelected, onClick }) => {
             <span className="text-[11px] text-stone-400">
               {new Date(review.review_date).toLocaleDateString()}
             </span>
-            {isPending ? (
+            {review.response_status === "pending" && (
               <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600">
                 <WarningCircle size={12} weight="fill" />
                 Pending
               </span>
-            ) : (
+            )}
+            {review.response_status === "pending_approval" && (
+              <span className="flex items-center gap-1 text-[11px] font-medium text-blue-600">
+                <ClockCounterClockwise size={12} weight="fill" />
+                Awaiting Approval
+              </span>
+            )}
+            {review.response_status === "rejected" && (
+              <span className="flex items-center gap-1 text-[11px] font-medium text-red-600">
+                <X size={12} weight="bold" />
+                Rejected
+              </span>
+            )}
+            {review.response_status === "responded" && (
               <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-700">
                 <CheckCircle size={12} weight="fill" />
                 Responded
@@ -416,10 +445,20 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
                 {review.guest_name}
               </h3>
               <PlatformBadge platform={review.platform} />
-              {isResponded ? (
+              {review.response_status === "responded" ? (
                 <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <CheckCircle size={12} className="mr-1" weight="fill" />
                   Responded
+                </Badge>
+              ) : review.response_status === "pending_approval" ? (
+                <Badge className="bg-blue-50 text-blue-700 border border-blue-200">
+                  <ClockCounterClockwise size={12} className="mr-1" weight="fill" />
+                  Awaiting Approval
+                </Badge>
+              ) : review.response_status === "rejected" ? (
+                <Badge className="bg-red-50 text-red-700 border border-red-200">
+                  <X size={12} className="mr-1" weight="bold" />
+                  Rejected
                 </Badge>
               ) : (
                 <Badge className="bg-amber-50 text-amber-700 border border-amber-200">
@@ -2644,6 +2683,371 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
   );
 };
 
+// Login Page Component
+const LoginPage = ({ onLogin }) => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    try {
+      const { data } = await axios.post(`${API}/auth/login`, { email, password });
+      onLogin(data);
+    } catch (e) {
+      setError(formatApiErrorDetail(e.response?.data?.detail) || e.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4" data-testid="login-page">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        <div className="bg-white rounded-2xl shadow-card border border-stone-200/80 overflow-hidden">
+          <div className="bg-[#3E5245] p-8 text-center">
+            <div className="w-14 h-14 bg-white/15 rounded-xl flex items-center justify-center mx-auto mb-3">
+              <Buildings size={28} className="text-white" weight="fill" />
+            </div>
+            <h1 className="text-xl font-semibold text-white">Review Hub</h1>
+            <p className="text-sm text-white/60 mt-1">Hotel Review Management</p>
+          </div>
+          
+          <form onSubmit={handleSubmit} className="p-8 space-y-5">
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm text-red-700" data-testid="login-error">
+                {error}
+              </div>
+            )}
+            
+            <div>
+              <label className="text-sm font-medium text-stone-700 mb-1.5 block">Email</label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@hotelbox.com"
+                className="border-stone-200 h-11"
+                data-testid="login-email"
+                required
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-stone-700 mb-1.5 block">Password</label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                className="border-stone-200 h-11"
+                data-testid="login-password"
+                required
+              />
+            </div>
+            
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-[#3E5245] text-white py-2.5 rounded-lg hover:bg-[#2A3B30] transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
+              data-testid="login-submit-btn"
+            >
+              {isLoading ? (
+                <ArrowsClockwise size={16} className="animate-spin" />
+              ) : (
+                <SignIn size={16} />
+              )}
+              {isLoading ? "Signing in..." : "Sign In"}
+            </button>
+          </form>
+          
+          <div className="px-8 pb-6 text-center">
+            <p className="text-xs text-stone-400">Hotel staff accounts are created by administrators</p>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+// User Management Panel
+const UserManagementPanel = ({ currentUser }) => {
+  const [users, setUsers] = useState([]);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [newUser, setNewUser] = useState({ email: "", password: "", name: "", role: "receptionist", department: "front_desk" });
+  const [isLoading, setIsLoading] = useState(false);
+
+  const fetchUsers = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/users`);
+      setUsers(data);
+    } catch (e) {
+      console.error("Failed to load users");
+    }
+  }, []);
+
+  useEffect(() => { fetchUsers(); }, [fetchUsers]);
+
+  const handleAddUser = async () => {
+    if (!newUser.email || !newUser.password || !newUser.name) {
+      toast.error("Fill in all fields");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await axios.post(`${API}/auth/register`, newUser);
+      toast.success("User created!");
+      setShowAddUser(false);
+      setNewUser({ email: "", password: "", name: "", role: "receptionist", department: "front_desk" });
+      fetchUsers();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    try {
+      await axios.delete(`${API}/users/${userId}`);
+      toast.success("User removed");
+      fetchUsers();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    }
+  };
+
+  const roleColors = {
+    admin: "bg-red-50 text-red-700 border-red-200",
+    manager: "bg-blue-50 text-blue-700 border-blue-200",
+    receptionist: "bg-emerald-50 text-emerald-700 border-emerald-200"
+  };
+
+  const deptNames = {
+    front_desk: "Front Desk", management: "Management", housekeeping: "Housekeeping",
+    food_beverage: "Food & Beverage", maintenance: "Maintenance", spa_wellness: "Spa & Wellness", concierge: "Concierge"
+  };
+
+  return (
+    <DialogContent className="sm:max-w-[600px] max-h-[85vh] overflow-y-auto" data-testid="user-management-dialog">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-stone-900">
+          <Users size={20} className="text-[#3E5245]" />
+          Team Management
+        </DialogTitle>
+      </DialogHeader>
+      
+      <div className="space-y-4 mt-2">
+        {currentUser.role === "admin" && (
+          <button
+            onClick={() => setShowAddUser(!showAddUser)}
+            className="w-full bg-[#3E5245] text-white py-2 rounded-lg hover:bg-[#2A3B30] transition-all flex items-center justify-center gap-2 text-sm font-medium"
+            data-testid="add-user-btn"
+          >
+            <UserPlus size={16} />
+            Add Team Member
+          </button>
+        )}
+        
+        {showAddUser && (
+          <div className="bg-stone-50 rounded-xl p-4 border border-stone-200 space-y-3" data-testid="add-user-form">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Name</label>
+                <Input value={newUser.name} onChange={(e) => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="John Smith" className="border-stone-200 h-9 text-sm" data-testid="new-user-name" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Email</label>
+                <Input type="email" value={newUser.email} onChange={(e) => setNewUser(p => ({ ...p, email: e.target.value }))} placeholder="john@hotel.com" className="border-stone-200 h-9 text-sm" data-testid="new-user-email" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-stone-500 mb-1 block">Password</label>
+              <Input type="password" value={newUser.password} onChange={(e) => setNewUser(p => ({ ...p, password: e.target.value }))} placeholder="Min 6 characters" className="border-stone-200 h-9 text-sm" data-testid="new-user-password" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Role</label>
+                <Select value={newUser.role} onValueChange={(v) => setNewUser(p => ({ ...p, role: v }))} data-testid="new-user-role">
+                  <SelectTrigger className="border-stone-200 h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="receptionist">Receptionist</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-stone-500 mb-1 block">Department</label>
+                <Select value={newUser.department} onValueChange={(v) => setNewUser(p => ({ ...p, department: v }))} data-testid="new-user-department">
+                  <SelectTrigger className="border-stone-200 h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="front_desk">Front Desk</SelectItem>
+                    <SelectItem value="management">Management</SelectItem>
+                    <SelectItem value="housekeeping">Housekeeping</SelectItem>
+                    <SelectItem value="food_beverage">Food & Beverage</SelectItem>
+                    <SelectItem value="maintenance">Maintenance</SelectItem>
+                    <SelectItem value="spa_wellness">Spa & Wellness</SelectItem>
+                    <SelectItem value="concierge">Concierge</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <button onClick={handleAddUser} disabled={isLoading} className="w-full bg-emerald-700 text-white py-2 rounded-lg hover:bg-emerald-800 transition-all text-sm font-medium disabled:opacity-50" data-testid="confirm-add-user-btn">
+              {isLoading ? "Creating..." : "Create Account"}
+            </button>
+          </div>
+        )}
+        
+        <div className="space-y-2">
+          {users.map((u) => (
+            <div key={u.id} className="flex items-center justify-between p-3 bg-white border border-stone-200 rounded-lg" data-testid={`user-item-${u.id}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-stone-100 flex items-center justify-center">
+                  <UserCircle size={20} className="text-stone-400" />
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-stone-900">{u.name}</div>
+                  <div className="text-[11px] text-stone-400">{u.email} · {deptNames[u.department] || u.department}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border ${roleColors[u.role] || "bg-stone-50 text-stone-600"}`}>
+                  {u.role}
+                </span>
+                {currentUser.role === "admin" && u.email !== currentUser.email && (
+                  <button onClick={() => handleDeleteUser(u.id)} className="text-stone-400 hover:text-red-500 transition-colors" data-testid={`delete-user-${u.id}`}>
+                    <Trash size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </DialogContent>
+  );
+};
+
+// Approval Queue Panel
+const ApprovalQueuePanel = ({ onReviewUpdate }) => {
+  const [pendingReviews, setPendingReviews] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [rejectNotes, setRejectNotes] = useState({});
+
+  const fetchPending = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/reviews/pending-approval`);
+      setPendingReviews(data);
+    } catch (e) {
+      console.error("Failed to fetch pending approvals");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPending(); }, [fetchPending]);
+
+  const handleAction = async (reviewId, action, notes) => {
+    try {
+      await axios.post(`${API}/reviews/${reviewId}/approve`, { action, notes });
+      toast.success(action === "approve" ? "Response approved & published!" : "Response rejected");
+      fetchPending();
+      if (onReviewUpdate) onReviewUpdate();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail));
+    }
+  };
+
+  return (
+    <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto" data-testid="approval-queue-dialog">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-stone-900">
+          <ShieldCheck size={20} className="text-[#3E5245]" />
+          Approval Queue
+          {pendingReviews.length > 0 && (
+            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+              {pendingReviews.length} pending
+            </span>
+          )}
+        </DialogTitle>
+      </DialogHeader>
+
+      {isLoading ? (
+        <div className="py-8 text-center">
+          <ArrowsClockwise size={24} className="mx-auto mb-2 animate-spin text-stone-300" />
+          <p className="text-sm text-stone-400">Loading...</p>
+        </div>
+      ) : pendingReviews.length === 0 ? (
+        <div className="py-8 text-center" data-testid="no-pending-approvals">
+          <ShieldCheck size={32} className="mx-auto mb-2 text-emerald-300" />
+          <p className="text-sm text-stone-400">No responses pending approval</p>
+        </div>
+      ) : (
+        <div className="space-y-4 mt-2">
+          {pendingReviews.map((review) => (
+            <div key={review.id} className="border border-stone-200 rounded-xl overflow-hidden" data-testid={`approval-item-${review.id}`}>
+              <div className="bg-stone-50 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <PlatformBadge platform={review.platform} />
+                  <span className="text-sm font-medium text-stone-900">{review.guest_name}</span>
+                  <StarRating rating={review.rating} size={12} />
+                </div>
+                {review.drafted_by && (
+                  <span className="text-[11px] text-stone-400">Drafted by: {review.drafted_by}</span>
+                )}
+              </div>
+              <div className="p-4 space-y-3">
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-stone-400 font-semibold">Guest Review</span>
+                  <p className="text-sm text-stone-600 mt-1">{review.review_text}</p>
+                </div>
+                <div className="bg-emerald-50 rounded-lg p-3 border border-emerald-100">
+                  <span className="text-[10px] uppercase tracking-wider text-emerald-600 font-semibold">Proposed Response</span>
+                  <p className="text-sm text-emerald-900 mt-1">{review.response_text}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleAction(review.id, "approve")}
+                    className="flex-1 bg-emerald-700 text-white py-2 rounded-lg hover:bg-emerald-800 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                    data-testid={`approve-btn-${review.id}`}
+                  >
+                    <CheckCircle size={14} weight="fill" />
+                    Approve & Publish
+                  </button>
+                  <button
+                    onClick={() => handleAction(review.id, "reject", rejectNotes[review.id] || "")}
+                    className="flex-1 bg-white border border-red-200 text-red-600 py-2 rounded-lg hover:bg-red-50 transition-all text-sm font-medium flex items-center justify-center gap-1.5"
+                    data-testid={`reject-btn-${review.id}`}
+                  >
+                    <X size={14} />
+                    Reject
+                  </button>
+                </div>
+                <Input
+                  placeholder="Optional notes for rejection..."
+                  value={rejectNotes[review.id] || ""}
+                  onChange={(e) => setRejectNotes(p => ({ ...p, [review.id]: e.target.value }))}
+                  className="border-stone-200 h-8 text-xs"
+                  data-testid={`rejection-notes-${review.id}`}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </DialogContent>
+  );
+};
+
 // Branding Panel Component
 const BrandingPanel = ({ isOpen, onClose, branding, onBrandingUpdate }) => {
   const [form, setForm] = useState({
@@ -2938,7 +3342,7 @@ const BrandingPanel = ({ isOpen, onClose, branding, onBrandingUpdate }) => {
 };
 
 // Main Dashboard Component
-const Dashboard = () => {
+const Dashboard = ({ user, onLogout }) => {
   const [reviews, setReviews] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedReview, setSelectedReview] = useState(null);
@@ -2949,6 +3353,8 @@ const Dashboard = () => {
   const [showReports, setShowReports] = useState(false);
   const [showIntegrations, setShowIntegrations] = useState(false);
   const [showBranding, setShowBranding] = useState(false);
+  const [showUserManagement, setShowUserManagement] = useState(false);
+  const [showApprovalQueue, setShowApprovalQueue] = useState(false);
   const [branding, setBranding] = useState(null);
   const [templateTextToApply, setTemplateTextToApply] = useState(null);
   const [filters, setFilters] = useState({
@@ -3029,19 +3435,31 @@ const Dashboard = () => {
   const handleResponseSubmit = async (reviewId, responseText) => {
     setIsLoading(true);
     try {
+      // First save the response text
       await axios.put(`${API}/reviews/${reviewId}/respond`, {
         response_text: responseText
       });
+      
+      // If receptionist, auto-submit for approval
+      if (user?.role === "receptionist") {
+        try {
+          await axios.post(`${API}/reviews/${reviewId}/submit-for-approval`);
+          toast.success("Response submitted for manager approval!");
+        } catch (e) {
+          // If auth fails (no token), just save the draft
+          console.log("Auto-submit skipped:", e.message);
+        }
+      }
+      
       await fetchReviews();
       await fetchStats();
       
-      // Update selected review
       const updatedReview = reviews.find(r => r.id === reviewId);
       if (updatedReview) {
         setSelectedReview({
           ...updatedReview,
           response_text: responseText,
-          response_status: "responded"
+          response_status: user?.role === "receptionist" ? "pending_approval" : "responded"
         });
       }
     } catch (error) {
@@ -3146,6 +3564,30 @@ const Dashboard = () => {
                 onBrandingUpdate={(updated) => setBranding(updated)}
               />
             </Dialog>
+            {/* Approval Queue - Manager/Admin only */}
+            {(user?.role === "admin" || user?.role === "manager") && (
+              <Dialog open={showApprovalQueue} onOpenChange={setShowApprovalQueue}>
+                <DialogTrigger asChild>
+                  <button className="nav-btn" data-testid="approval-queue-btn">
+                    <ShieldCheck size={15} />
+                    Approvals
+                  </button>
+                </DialogTrigger>
+                <ApprovalQueuePanel onReviewUpdate={() => { fetchReviews(); fetchStats(); }} />
+              </Dialog>
+            )}
+            {/* User Management - Admin/Manager only */}
+            {(user?.role === "admin" || user?.role === "manager") && (
+              <Dialog open={showUserManagement} onOpenChange={setShowUserManagement}>
+                <DialogTrigger asChild>
+                  <button className="nav-btn" data-testid="team-btn">
+                    <Users size={15} />
+                    Team
+                  </button>
+                </DialogTrigger>
+                <UserManagementPanel currentUser={user} />
+              </Dialog>
+            )}
             <button
               onClick={() => {
                 fetchReviews();
@@ -3158,6 +3600,16 @@ const Dashboard = () => {
               <ArrowsClockwise size={15} />
               Refresh
             </button>
+            {/* User info & Logout */}
+            <div className="flex items-center gap-2 ml-2 pl-2 border-l border-stone-200">
+              <div className="text-right hidden sm:block">
+                <div className="text-xs font-medium text-stone-700" data-testid="user-name">{user?.name}</div>
+                <div className="text-[10px] text-stone-400 capitalize" data-testid="user-role">{user?.role}</div>
+              </div>
+              <button onClick={onLogout} className="nav-btn text-red-500 hover:text-red-600 hover:bg-red-50" data-testid="logout-btn">
+                <SignOut size={15} />
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -3229,6 +3681,8 @@ const Dashboard = () => {
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="pending_approval">Awaiting Approval</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
                     <SelectItem value="responded">Responded</SelectItem>
                   </SelectContent>
                 </Select>
@@ -3288,9 +3742,64 @@ const Dashboard = () => {
 };
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data } = await axios.get(`${API}/auth/me`);
+        setUser(data);
+      } catch (e) {
+        setUser(null);
+      } finally {
+        setAuthChecking(false);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const handleLogin = (userData) => {
+    setUser(userData);
+    // Set token in axios header for subsequent requests
+    if (userData.token) {
+      axios.defaults.headers.common["Authorization"] = `Bearer ${userData.token}`;
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await axios.post(`${API}/auth/logout`);
+    } catch (e) {
+      // ignore
+    }
+    delete axios.defaults.headers.common["Authorization"];
+    setUser(null);
+  };
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+        <div className="text-center">
+          <ArrowsClockwise size={28} className="mx-auto mb-3 animate-spin text-[#3E5245]" />
+          <p className="text-sm text-stone-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <>
+        <LoginPage onLogin={handleLogin} />
+        <Toaster position="top-right" richColors />
+      </>
+    );
+  }
+
   return (
     <div className="App">
-      <Dashboard />
+      <Dashboard user={user} onLogout={handleLogout} />
     </div>
   );
 }

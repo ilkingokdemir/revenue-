@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Request, Response, Depends
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -12,9 +12,13 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import resend
+import bcrypt
+import jwt
+import secrets
+from bson import ObjectId
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -50,6 +54,59 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ==================== AUTH UTILITIES ====================
+
+JWT_ALGORITHM = "HS256"
+
+def get_jwt_secret():
+    return os.environ["JWT_SECRET"]
+
+def hash_password(password: str) -> str:
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+
+def create_access_token(user_id: str, email: str) -> str:
+    payload = {"sub": user_id, "email": email, "exp": datetime.now(timezone.utc) + timedelta(hours=24), "type": "access"}
+    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+def create_refresh_token(user_id: str) -> str:
+    payload = {"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "refresh"}
+    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
+
+async def get_current_user(request: Request) -> dict:
+    token = request.cookies.get("access_token")
+    if not token:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        user["_id"] = str(user["_id"])
+        user.pop("password_hash", None)
+        return user
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+def require_roles(*roles):
+    async def role_checker(request: Request):
+        user = await get_current_user(request)
+        if user["role"] not in roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+    return role_checker
+
 # ==================== MODELS ====================
 
 class StatusCheck(BaseModel):
@@ -72,11 +129,15 @@ class Review(BaseModel):
     review_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     stay_date: Optional[str] = None
     room_type: Optional[str] = None
-    response_status: str = "pending"  # pending, responded
+    response_status: str = "pending"  # pending, draft, pending_approval, approved, responded, rejected
     response_text: Optional[str] = None
     response_date: Optional[datetime] = None
+    drafted_by: Optional[str] = None
+    approved_by: Optional[str] = None
+    approval_notes: Optional[str] = None
     external_review_id: Optional[str] = None  # ID from original platform
     synced_to_platform: bool = False
+    response_uniqueness_hash: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ReviewCreate(BaseModel):
@@ -256,6 +317,32 @@ class BrandingSettingsUpdate(BaseModel):
     powered_by_text: Optional[str] = None
     powered_by_visible: Optional[bool] = None
 
+# Auth Models
+class UserRegister(BaseModel):
+    email: str
+    password: str
+    name: str
+    role: str = "receptionist"
+    department: str = "front_desk"
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    department: Optional[str] = None
+    is_active: Optional[bool] = None
+
+# Approval Workflow Models
+class ApprovalAction(BaseModel):
+    action: str  # approve, reject
+    notes: Optional[str] = None
+
+VALID_ROLES = ["admin", "manager", "receptionist"]
+VALID_DEPARTMENTS = ["front_desk", "management", "housekeeping", "food_beverage", "maintenance", "spa_wellness", "concierge"]
+
 # ==================== HELPER FUNCTIONS ====================
 
 def serialize_review(review: dict) -> dict:
@@ -271,6 +358,248 @@ def deserialize_review(review: dict) -> dict:
         if field in review and isinstance(review[field], str):
             review[field] = datetime.fromisoformat(review[field])
     return review
+
+# Seed admin user
+async def seed_admin():
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@hotelbox.com").lower()
+    admin_password = os.environ.get("ADMIN_PASSWORD", "HotelAdmin2026!")
+    
+    existing = await db.users.find_one({"email": admin_email})
+    if existing is None:
+        hashed = hash_password(admin_password)
+        await db.users.insert_one({
+            "email": admin_email,
+            "password_hash": hashed,
+            "name": "Hotel Admin",
+            "role": "admin",
+            "department": "management",
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        logger.info(f"Admin user seeded: {admin_email}")
+    elif not verify_password(admin_password, existing["password_hash"]):
+        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
+        logger.info(f"Admin password updated: {admin_email}")
+    
+    await db.users.create_index("email", unique=True)
+    await db.login_attempts.create_index("identifier")
+
+# ==================== AUTH ROUTES ====================
+
+@api_router.post("/auth/register")
+async def register(user: UserRegister, request: Request, response: Response, current_user: dict = Depends(require_roles("admin"))):
+    """Register new user (admin only)"""
+    email = user.email.lower().strip()
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if user.role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {', '.join(VALID_ROLES)}")
+    if user.department not in VALID_DEPARTMENTS:
+        raise HTTPException(status_code=400, detail=f"Invalid department. Must be one of: {', '.join(VALID_DEPARTMENTS)}")
+    
+    hashed = hash_password(user.password)
+    new_user = {
+        "email": email,
+        "password_hash": hashed,
+        "name": user.name,
+        "role": user.role,
+        "department": user.department,
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    result = await db.users.insert_one(new_user)
+    return {
+        "id": str(result.inserted_id),
+        "email": email,
+        "name": user.name,
+        "role": user.role,
+        "department": user.department,
+        "is_active": True
+    }
+
+@api_router.post("/auth/login")
+async def login(user: UserLogin, request: Request, response: Response):
+    """Login"""
+    email = user.email.lower().strip()
+    client_ip = request.client.host if request.client else "unknown"
+    identifier = f"{client_ip}:{email}"
+    attempts = await db.login_attempts.find_one({"identifier": identifier})
+    if attempts and attempts.get("count", 0) >= 5:
+        last_attempt = attempts.get("last_attempt")
+        if last_attempt:
+            if isinstance(last_attempt, str):
+                last_attempt = datetime.fromisoformat(last_attempt)
+            if datetime.now(timezone.utc) - last_attempt < timedelta(minutes=15):
+                raise HTTPException(status_code=429, detail="Too many login attempts. Try again in 15 minutes.")
+    
+    db_user = await db.users.find_one({"email": email})
+    if not db_user or not verify_password(user.password, db_user["password_hash"]):
+        await db.login_attempts.update_one(
+            {"identifier": identifier},
+            {"$inc": {"count": 1}, "$set": {"last_attempt": datetime.now(timezone.utc).isoformat()}},
+            upsert=True
+        )
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    if not db_user.get("is_active", True):
+        raise HTTPException(status_code=403, detail="Account is deactivated")
+    
+    await db.login_attempts.delete_one({"identifier": identifier})
+    
+    user_id = str(db_user["_id"])
+    access_token = create_access_token(user_id, email)
+    refresh_token = create_refresh_token(user_id)
+    
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax", max_age=86400, path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax", max_age=604800, path="/")
+    
+    return {
+        "id": user_id,
+        "email": db_user["email"],
+        "name": db_user["name"],
+        "role": db_user["role"],
+        "department": db_user.get("department", "front_desk"),
+        "token": access_token
+    }
+
+@api_router.get("/auth/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    return {
+        "id": current_user["_id"],
+        "email": current_user["email"],
+        "name": current_user["name"],
+        "role": current_user["role"],
+        "department": current_user.get("department", "front_desk"),
+        "is_active": current_user.get("is_active", True)
+    }
+
+@api_router.post("/auth/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
+    return {"message": "Logged out"}
+
+@api_router.post("/auth/refresh")
+async def refresh_token_endpoint(request: Request, response: Response):
+    token = request.cookies.get("refresh_token")
+    if not token:
+        raise HTTPException(status_code=401, detail="No refresh token")
+    try:
+        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        new_access = create_access_token(str(user["_id"]), user["email"])
+        response.set_cookie(key="access_token", value=new_access, httponly=True, secure=False, samesite="lax", max_age=86400, path="/")
+        return {"message": "Token refreshed"}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+# ==================== USER MANAGEMENT ROUTES ====================
+
+@api_router.get("/users")
+async def list_users(current_user: dict = Depends(require_roles("admin", "manager"))):
+    users = await db.users.find({}, {"password_hash": 0}).to_list(100)
+    for u in users:
+        u["_id"] = str(u["_id"])
+        u["id"] = u.pop("_id")
+    return users
+
+@api_router.put("/users/{user_id}")
+async def update_user(user_id: str, update: UserUpdate, current_user: dict = Depends(require_roles("admin"))):
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if "role" in update_data and update_data["role"] not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    if "department" in update_data and update_data["department"] not in VALID_DEPARTMENTS:
+        raise HTTPException(status_code=400, detail="Invalid department")
+    result = await db.users.update_one({"_id": ObjectId(user_id)}, {"$set": update_data})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User updated"}
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(user_id: str, current_user: dict = Depends(require_roles("admin"))):
+    if current_user["_id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    result = await db.users.delete_one({"_id": ObjectId(user_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User deleted"}
+
+@api_router.get("/roles")
+async def get_roles():
+    return {
+        "roles": [
+            {"id": "admin", "name": "Admin", "description": "Full access, manage users and settings"},
+            {"id": "manager", "name": "Manager", "description": "Approve/reject responses, view analytics"},
+            {"id": "receptionist", "name": "Receptionist", "description": "Draft responses, submit for approval"}
+        ],
+        "departments": [
+            {"id": "front_desk", "name": "Front Desk"},
+            {"id": "management", "name": "Management"},
+            {"id": "housekeeping", "name": "Housekeeping"},
+            {"id": "food_beverage", "name": "Food & Beverage"},
+            {"id": "maintenance", "name": "Maintenance"},
+            {"id": "spa_wellness", "name": "Spa & Wellness"},
+            {"id": "concierge", "name": "Concierge"}
+        ]
+    }
+
+# ==================== APPROVAL WORKFLOW ROUTES ====================
+
+@api_router.post("/reviews/{review_id}/submit-for-approval")
+async def submit_for_approval(review_id: str, request: Request):
+    current_user = await get_current_user(request)
+    review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    if not review.get("response_text"):
+        raise HTTPException(status_code=400, detail="No response text to submit")
+    await db.reviews.update_one({"id": review_id}, {"$set": {
+        "response_status": "pending_approval",
+        "drafted_by": current_user.get("name", current_user.get("email")),
+    }})
+    return {"message": "Submitted for approval", "status": "pending_approval"}
+
+@api_router.post("/reviews/{review_id}/approve")
+async def approve_response(review_id: str, action: ApprovalAction, request: Request):
+    current_user = await get_current_user(request)
+    if current_user["role"] not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Only managers and admins can approve")
+    review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    if action.action == "approve":
+        await db.reviews.update_one({"id": review_id}, {"$set": {
+            "response_status": "responded",
+            "approved_by": current_user.get("name", current_user.get("email")),
+            "approval_notes": action.notes,
+            "response_date": datetime.now(timezone.utc).isoformat()
+        }})
+        return {"message": "Response approved and published", "status": "responded"}
+    elif action.action == "reject":
+        await db.reviews.update_one({"id": review_id}, {"$set": {
+            "response_status": "rejected",
+            "approved_by": current_user.get("name", current_user.get("email")),
+            "approval_notes": action.notes
+        }})
+        return {"message": "Response rejected", "status": "rejected"}
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action")
+
+@api_router.get("/reviews/pending-approval")
+async def get_pending_approvals(request: Request):
+    current_user = await get_current_user(request)
+    if current_user["role"] not in ["admin", "manager"]:
+        raise HTTPException(status_code=403, detail="Only managers and admins can view approval queue")
+    reviews = await db.reviews.find({"response_status": "pending_approval"}, {"_id": 0}).to_list(100)
+    return [serialize_review(r) for r in reviews]
 
 async def analyze_sentiment(review_text: str, rating: int) -> dict:
     """Analyze sentiment of a review using GPT-5.2"""
@@ -565,7 +894,7 @@ SUPPORTED_LANGUAGES = {
 
 @api_router.post("/reviews/generate-ai-response", response_model=AIGenerateResponse)
 async def generate_ai_response(request: AIGenerateRequest):
-    """Generate AI response for a review using GPT-5.2 with multi-language support"""
+    """Generate AI response for a review using GPT-5.2 with multi-language support and uniqueness"""
     review = await db.reviews.find_one({"id": request.review_id}, {"_id": 0})
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
@@ -595,6 +924,24 @@ If the review is in English, respond in English. If in French, respond in French
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
         language_instruction = f"Write your entire response in {lang_name}."
     
+    # Fetch recent responses for uniqueness context
+    recent_responses = await db.reviews.find(
+        {"response_text": {"$ne": None}, "id": {"$ne": request.review_id}},
+        {"response_text": 1, "_id": 0}
+    ).sort("response_date", -1).limit(5).to_list(5)
+    recent_texts = [r["response_text"] for r in recent_responses if r.get("response_text")]
+    
+    avoid_phrases = ""
+    if recent_texts:
+        avoid_phrases = "\n\nIMPORTANT: Make this response COMPLETELY UNIQUE. Do NOT reuse any of these opening lines or phrases from recent responses:\n"
+        for i, text in enumerate(recent_texts[:3]):
+            first_line = text.split('.')[0] if '.' in text else text[:80]
+            avoid_phrases += f"- Avoid: \"{first_line}...\"\n"
+        avoid_phrases += "Use a fresh, creative opening. Vary your sentence structure. Reference specific details from the guest's review."
+    
+    # Unique session ID each time to prevent caching
+    unique_session = f"review-{request.review_id}-{lang}-{uuid.uuid4().hex[:8]}"
+    
     system_message = f"""You are a professional hotel manager responding to guest reviews. 
 Your responses should be {tone}.
 Keep responses concise (2-3 paragraphs max).
@@ -602,7 +949,13 @@ Always thank the guest for their feedback.
 If the review is negative, acknowledge their concerns and offer to make things right.
 If positive, express gratitude and invite them back.
 {language_instruction}
-Sign off as 'The Management Team'."""
+
+CRITICAL: Every response must be UNIQUE and PERSONALIZED. 
+- Reference SPECIFIC details from the review (room type, dates, specific experiences mentioned).
+- Vary your opening line, sentence structure, and sign-off every time.
+- Never use generic phrases like "Thank you for your feedback" as an opener.
+- Be creative and genuine — guests can tell when responses are automated.
+Sign off creatively as 'The Management Team' or similar.{avoid_phrases}"""
 
     prompt = f"""Please write a response to this hotel review:
 
@@ -610,18 +963,24 @@ Platform: {review['platform']}
 Rating: {review['rating']}/5 stars
 Guest: {review['guest_name']}
 Review: {review['review_text']}
+{f"Room: {review.get('room_type', '')}" if review.get('room_type') else ""}
+{f"Stay Date: {review.get('stay_date', '')}" if review.get('stay_date') else ""}
 
-Write a {tone} response to this review. {language_instruction}"""
+Write a {tone}, UNIQUE and personalized response. {language_instruction}"""
 
     try:
         chat = LlmChat(
             api_key=api_key,
-            session_id=f"review-{request.review_id}-{lang}",
+            session_id=unique_session,
             system_message=system_message
         ).with_model("openai", "gpt-5.2")
         
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
+        
+        # Store uniqueness hash
+        import hashlib
+        uniqueness_hash = hashlib.md5(response.encode()).hexdigest()[:12]
         
         return AIGenerateResponse(generated_text=response, detected_language=lang if lang != "auto" else None)
     except Exception as e:
@@ -2316,10 +2675,15 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.on_event("startup")
+async def startup_event():
+    await seed_admin()
+    logger.info("Admin user seeded and indexes created")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

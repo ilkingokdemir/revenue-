@@ -1,99 +1,124 @@
 {
-  "theme": "light",
-  "archetype": "1 (Organic & Earthy)",
-  "color_palette": {
-    "background": "#FAF9F6",
-    "surface": "#FFFFFF",
-    "primary": "#3E5245",
-    "primary_hover": "#2A3B30",
-    "secondary": "#E8EDE7",
-    "accent_positive": "#5A6B50",
-    "accent_warning": "#D4A373",
-    "accent_danger": "#C05A44",
-    "text_primary": "#1C1917",
-    "text_secondary": "#57534E",
-    "border": "#E7E5E4"
+  "theme": "Light",
+  "archetype": "Organic & Earthy (Hospitality/Luxury)",
+  "colors": {
+    "background": "bg-stone-50",
+    "surface": "bg-white",
+    "surface_hover": "bg-stone-100",
+    "primary": "bg-emerald-800",
+    "primary_hover": "bg-emerald-900",
+    "primary_text": "text-white",
+    "text_main": "text-stone-900",
+    "text_muted": "text-stone-500",
+    "border": "border-stone-200",
+    "accent_warning": "text-amber-600 bg-amber-50",
+    "accent_danger": "text-rose-600 bg-rose-50",
+    "accent_success": "text-emerald-700 bg-emerald-50",
+    "star_active": "text-amber-400",
+    "star_inactive": "text-stone-200"
   },
   "typography": {
-    "heading_font": "Work Sans",
-    "body_font": "IBM Plex Sans",
-    "scale": {
-      "h1": "text-4xl tracking-tighter font-medium",
-      "h2": "text-2xl tracking-tight font-medium",
-      "h3": "text-xl tracking-tight font-medium",
-      "body": "text-sm leading-relaxed",
-      "labels": "text-xs tracking-[0.2em] uppercase font-medium"
-    }
+    "heading_font": "font-sans",
+    "body_font": "font-sans",
+    "h1": "text-3xl sm:text-4xl font-semibold tracking-tight text-stone-900",
+    "h2": "text-xl sm:text-2xl font-medium tracking-tight text-stone-900",
+    "h3": "text-lg font-medium text-stone-900",
+    "body": "text-sm text-stone-600 leading-relaxed",
+    "label": "text-xs font-semibold uppercase tracking-wider text-stone-500",
+    "metric_value": "text-3xl font-semibold tracking-tight text-stone-900"
   },
-  "layout_and_spacing": {
-    "strategy": "The Control Room Grid",
-    "spacing_scale": "p-4, p-6, p-8, p-12",
-    "grid_structure": "grid-cols-1 md:grid-cols-12 gap-6",
-    "container_padding": "p-6 lg:p-8",
-    "surface_style": "Tactile variant - flat background, 1px subtle border, rounded-md (8px), no soft shadows by default. Use shadow-sm only on hover."
+  "spacing_and_layout": {
+    "page_padding": "p-4 sm:p-6 lg:p-8",
+    "card_padding": "p-5 sm:p-6",
+    "gap_standard": "gap-4 sm:gap-6",
+    "border_radius": "rounded-xl",
+    "button_radius": "rounded-lg",
+    "grid_bento": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6",
+    "sidebar_width": "w-full md:w-[380px] lg:w-[420px]",
+    "content_layout": "flex flex-col h-screen overflow-hidden bg-stone-50",
+    "main_area_layout": "flex-1 flex flex-col md:flex-row overflow-hidden gap-6 px-4 sm:px-6 lg:px-8 pb-6 pt-2"
+  },
+  "shadows_and_borders": {
+    "card_shadow": "shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)]",
+    "card_border": "border border-stone-200/80",
+    "focus_ring": "focus:ring-2 focus:ring-emerald-800/20 focus:outline-none"
+  },
+  "animations": {
+    "hover_transition": "transition-all duration-200 ease-out",
+    "card_hover": "hover:shadow-md hover:border-stone-300",
+    "button_active": "active:scale-[0.98]"
   },
   "components": {
-    "sidebar": "w-64 border-r border-stone-200 bg-[#FAF9F6] h-screen fixed flex flex-col p-6 z-10",
-    "summary_widgets": "col-span-1 md:col-span-4 border border-stone-200 rounded-md bg-white p-6 flex flex-col gap-2",
-    "review_list": "col-span-1 md:col-span-4 border-r border-stone-200 bg-white h-[calc(100vh-140px)] overflow-y-auto no-scrollbar",
-    "review_card": "p-4 border-b border-stone-100 hover:bg-[#FAF9F6] cursor-pointer transition-colors focus:ring-2 focus:ring-[#3E5245] group",
-    "editor_panel": "col-span-1 md:col-span-8 bg-white p-8 h-[calc(100vh-140px)] overflow-y-auto flex flex-col",
-    "ai_assistant_box": "mt-6 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md p-6 relative overflow-hidden",
-    "buttons": {
-      "primary": "bg-[#3E5245] text-white px-4 py-2 rounded-md hover:bg-[#2A3B30] transition-colors focus:ring-2 focus:ring-[#3E5245] focus:ring-offset-2",
-      "secondary": "bg-white border border-stone-200 text-stone-900 px-4 py-2 rounded-md hover:bg-stone-50 transition-colors",
-      "danger": "bg-white border border-[#C05A44] text-[#C05A44] hover:bg-[#C05A44] hover:text-white transition-colors"
+    "Header": {
+      "style": "bg-white border-b border-stone-200 px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm",
+      "nav_links": "text-sm font-medium text-stone-600 hover:text-emerald-800 transition-colors px-3 py-2 rounded-md hover:bg-stone-50"
     },
-    "badges": "px-2 py-1 rounded-sm text-xs font-medium inline-flex items-center gap-1 border"
-  },
-  "interactions_and_motion": {
-    "hover_states": "Buttons and cards must explicitly define hover colors.",
-    "entrance_animation": "Use framer-motion staggered fade-in + slide-up for review list items.",
-    "ai_generation": "Animate a border shimmer or a pulsing linear gradient on the AI box while text is being 'generated'.",
-    "accessibility": "Disable motion if prefers-reduced-motion is enabled. All interactive elements MUST have data-testid attributes."
-  },
-  "icons": {
-    "library": "@phosphor-icons/react",
-    "usage": "Use Phosphor icons in 'regular' or 'light' weight. E.g., Star (rating), CheckCircle (responded), WarningCircle (pending), Quotes (review text), Sparkle (AI)."
+    "StatsCard": {
+      "style": "bg-white border border-stone-200 rounded-xl p-5 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col gap-2 relative overflow-hidden",
+      "trend_positive": "text-emerald-600 flex items-center gap-1 text-sm font-medium",
+      "trend_negative": "text-rose-600 flex items-center gap-1 text-sm font-medium"
+    },
+    "ReviewListPanel": {
+      "style": "bg-white border border-stone-200 rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col h-full overflow-hidden shrink-0",
+      "header_style": "p-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/50",
+      "list_container": "flex-1 overflow-y-auto p-3 flex flex-col gap-2"
+    },
+    "ReviewCard": {
+      "style": "p-4 rounded-lg border border-transparent hover:border-stone-200 hover:bg-stone-50/80 cursor-pointer transition-all duration-200 group",
+      "active_style": "bg-stone-50 border-stone-200 shadow-sm ring-1 ring-emerald-800/10"
+    },
+    "ReviewDetailPanel": {
+      "style": "bg-white border border-stone-200 rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col h-full overflow-hidden flex-1",
+      "header_style": "px-6 py-5 border-b border-stone-200 bg-white sticky top-0 z-10",
+      "content_style": "flex-1 overflow-y-auto p-6 space-y-8"
+    },
+    "AIResponseBox": {
+      "style": "bg-emerald-50/50 border border-emerald-100/80 rounded-xl p-5 shadow-sm relative overflow-hidden",
+      "header": "flex items-center gap-2 text-emerald-800 font-semibold mb-3 tracking-tight",
+      "textarea": "w-full bg-white border border-emerald-200 rounded-lg p-3 text-stone-700 text-sm min-h-[120px] focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800/30 transition-shadow",
+      "actions": "mt-3 flex items-center justify-end gap-2"
+    },
+    "Dialogs": {
+      "overlay": "fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50",
+      "content": "fixed left-[50%] top-[50%] z-50 grid w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border border-stone-200 bg-white p-0 shadow-2xl sm:rounded-2xl overflow-hidden",
+      "header": "px-6 py-4 border-b border-stone-100 bg-stone-50/50",
+      "body": "p-6"
+    },
+    "Badges": {
+      "platform": "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-stone-200 bg-white text-stone-800 shadow-sm"
+    }
   },
   "media": {
-    "ai_texture_bg": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/06790bb25ee93b714799620c98d82862ea6db3df67429246c55c3ae00c5536b8.png",
-      "description": "Soft organic clay texture background to be used inside the AI reply generator panel as a low opacity background image (mix-blend-multiply or opacity-20) to give it a premium tactile feel."
-    },
-    "avatars": [
+    "images": [
       {
-        "url": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
-        "description": "Guest 1 Avatar"
+        "category": "branding_preview",
+        "url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/c8b2851ce1c51bfc7d4e003b8b73f3afa3debca378195a2f703204163c4a1609.png",
+        "description": "Luxury hotel lobby for Branding Panel live preview background to showcase branded widgets over."
       },
       {
-        "url": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
-        "description": "Guest 2 Avatar"
+        "category": "guest_avatar_1",
+        "url": "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMGhlYWRzaG90JTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc1ODQ2NTI0fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional business headshot for guest avatar (User review)"
       },
       {
-        "url": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
-        "description": "Guest 3 Avatar"
-      },
-      {
-        "url": "https://images.pexels.com/photos/6627006/pexels-photo-6627006.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "description": "Guest 4 Avatar"
-      },
-      {
-        "url": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-        "description": "Guest 5 Avatar"
+        "category": "guest_avatar_2",
+        "url": "https://images.unsplash.com/photo-1689600944138-da3b150d9cb8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMGhlYWRzaG90JTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc1ODQ2NTI0fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional business headshot for guest avatar 2 (User review)"
       }
     ]
   },
+  "icons": {
+    "library": "lucide-react",
+    "instructions": "Use Lucide React for all icons. Keep icon sizes consistent (e.g., w-4 h-4 for buttons, w-5 h-5 for metric cards). Color them according to their context (emerald for positive, rose for negative, stone-400 for neutral, text-amber-400 for review stars)."
+  },
   "instructions_to_main_agent": [
-    "1. Do not ask clarifying questions. Proceed with the implementation strictly following this guideline.",
-    "2. Ensure you install `@phosphor-icons/react` using yarn.",
-    "3. Use standard HTML/Shadcn combos but apply the raw grid classes for the main layout instead of relying strictly on Shadcn 'Card' wrapper if it enforces soft shadows. Go for tactile flat surfaces with 1px borders.",
-    "4. Maintain the 'Organic & Earthy' archetype. NO TEAL (#1B93A4) OR PURPLE (#9D4CDD). Use the specific colors provided in the palette (Moss Green, Sage, Terracotta, Sand, Bone White).",
-    "5. For the AI panel, apply `bg-[#E8EDE7]` and embed the `ai_texture_bg` with a low opacity overlay (`opacity-20` or `opacity-30` absolute div).",
-    "6. Build the layout with F-Pattern in mind. Top left: High-level metrics. Then the Review Queue on the left (col-span-4), and the Review Detail/Reply Editor taking up the main body area (col-span-8).",
-    "7. Mock data: Use the provided avatars for the guest reviews. Create mocked reviews from platforms like Booking.com, Airbnb, Expedia, TripAdvisor. HIGHLIGHT THAT THEY ARE MOCKED.",
-    "8. Interactions: The user selects a review from the left list. The right panel populates with the review details. User clicks 'Generate AI Reply'. The textarea populates via a simulated type-writer effect. User can edit the text and click 'Publish Reply'.",
-    "9. Add `data-testid` to all clickable elements, inputs, and key sections.",
-    "10. Set up the layout structurally using Tailwind flex/grid, with padding on bordered containers to prevent collision."
+    "1. STRUCTURE: The app should be full height (h-screen). Layout: Top sticky Header. Below it, a row of 4 Stats Cards. Below that, flex-1 container split into Left Panel (List) and Right Panel (Detail). Use overflow-hidden on the main wrapper and overflow-y-auto on the internal list/detail content areas to ensure fixed panels.",
+    "2. TYPOGRAPHY: Do not use default Inter for headings if possible, use standard sans but style it with tracking-tight and font-semibold for a premium feel. Metric values should be very large (text-3xl font-semibold).",
+    "3. COMPONENT STYLING: Apply the specified styling classes from the components section. Panels should have a clean white background, soft borders, and very subtle shadow.",
+    "4. AI RESPONSE: The AI Response area in the right panel is a key feature. Make it stand out with the emerald tint (bg-emerald-50/50), add a Sparkles icon to the header, and ensure the textarea looks highly polished.",
+    "5. DATA-TESTID: ALL interactive elements (buttons, inputs, review list items, dialog triggers) MUST include a kebab-case data-testid attribute.",
+    "6. BRANDING DIALOG: For the Branding settings live preview, use the 'branding_preview' image URL as a background layer to simulate the hotel website.",
+    "7. INTERFACES: Use Shadcn components for Tabs, Dropdowns, Dialogs, and Selects, but override their border/radius classes to match this premium 'Organic & Earthy' theme (e.g., rounded-xl for Dialogs, subtle borders).",
+    "8. EMPTY STATES: If no review is selected, show a beautiful, centered empty state in the right panel with a soft text color (text-stone-400) and an icon."
   ]
 }

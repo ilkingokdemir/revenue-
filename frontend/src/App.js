@@ -95,6 +95,9 @@ function formatApiErrorDetail(detail) {
   return String(detail);
 }
 
+// Re-export from modular components for external use
+export { StarRating, PlatformBadge, StatsCard, ReviewCard } from "@/components/dashboard";
+
 // Platform configuration with colors
 const PLATFORMS = {
   "booking.com": { name: "Booking.com", color: "#003580", bg: "bg-[#003580]" },

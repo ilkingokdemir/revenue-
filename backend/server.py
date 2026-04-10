@@ -42,7 +42,31 @@ BOOKING_API_PASSWORD = os.environ.get('BOOKING_API_PASSWORD', '')
 TRIPADVISOR_API_KEY = os.environ.get('TRIPADVISOR_API_KEY', '')
 
 # Create the main app without a prefix
-app = FastAPI()
+app = FastAPI(
+    title="Hotel Review Hub API",
+    description="""
+## Hotel Review Management API
+
+Complete API for managing guest reviews across 14+ online platforms with AI-powered response generation.
+
+### Key Features
+- **Authentication** — JWT-based auth with Admin/Manager/Receptionist roles
+- **Reviews** — CRUD operations, AI response generation, multi-language support
+- **Approval Workflow** — Draft → Pending Approval → Approved/Rejected → Published
+- **Analytics** — Dashboard, sentiment analysis, competitor benchmarking
+- **Integrations** — 14 platform configurations (Google, Booking.com, Airbnb, etc.)
+- **Branding** — White-label customization (logo, colors, name)
+
+### Authentication
+Login via `POST /api/auth/login` to receive a JWT token. Use the token as:
+- **Cookie**: Automatically set as `access_token` httpOnly cookie
+- **Header**: `Authorization: Bearer <token>`
+    """,
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
+)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")

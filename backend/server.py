@@ -1665,7 +1665,10 @@ async def get_integrations():
     integrations = await db.platform_integrations.find({}, {"_id": 0}).to_list(100)
     
     # Ensure all platforms have an entry
-    platforms = ["google", "booking.com", "tripadvisor", "airbnb", "expedia", "trip.com"]
+    platforms = [
+        "google", "booking.com", "tripadvisor", "airbnb", "expedia", "trip.com",
+        "agoda", "hotels.com", "yelp", "facebook", "makemytrip", "hrs", "despegar", "hostelworld"
+    ]
     existing_platforms = {i["platform"] for i in integrations}
     
     for platform in platforms:
@@ -1991,6 +1994,96 @@ async def get_integration_requirements():
             ],
             "setup_url": "https://partner.trip.com",
             "fields_needed": ["api_key", "hotel_id"]
+        },
+        "agoda": {
+            "name": "Agoda",
+            "requirements": [
+                "Agoda Partner Program membership",
+                "YCS (Yield Control System) account",
+                "API credentials from Agoda connectivity team",
+                "Property ID"
+            ],
+            "setup_url": "https://partners.agoda.com",
+            "fields_needed": ["api_key", "property_id"],
+            "note": "Agoda is part of Booking Holdings - contact your market manager for API access"
+        },
+        "hotels.com": {
+            "name": "Hotels.com",
+            "requirements": [
+                "Hotels.com Partner account",
+                "Expedia Partner Central API access (same system)",
+                "Property ID"
+            ],
+            "setup_url": "https://www.hotels.com/hotel-supplier",
+            "fields_needed": ["api_key", "secret_key", "property_id"],
+            "note": "Hotels.com is part of Expedia Group - use Expedia Partner Central for API"
+        },
+        "yelp": {
+            "name": "Yelp",
+            "requirements": [
+                "Claimed Yelp Business page",
+                "Yelp Fusion API key",
+                "Business ID"
+            ],
+            "setup_url": "https://www.yelp.com/developers",
+            "fields_needed": ["api_key", "business_id"],
+            "note": "Yelp Fusion API is free for limited use - great for local discovery"
+        },
+        "facebook": {
+            "name": "Facebook Reviews",
+            "requirements": [
+                "Facebook Business Page",
+                "Meta Business Suite access",
+                "Facebook Graph API access token",
+                "Page ID"
+            ],
+            "setup_url": "https://developers.facebook.com",
+            "fields_needed": ["access_token", "page_id"],
+            "note": "Use Meta Business Suite for managing reviews - Graph API for automation"
+        },
+        "makemytrip": {
+            "name": "MakeMyTrip",
+            "requirements": [
+                "MakeMyTrip Partner extranet account",
+                "API access from MMT partner team",
+                "Property ID"
+            ],
+            "setup_url": "https://partner.makemytrip.com",
+            "fields_needed": ["api_key", "property_id"],
+            "note": "#1 platform in India - contact partner support for API access"
+        },
+        "hrs": {
+            "name": "HRS",
+            "requirements": [
+                "HRS Partner account",
+                "HRS API credentials",
+                "Hotel ID"
+            ],
+            "setup_url": "https://www.hrs.com/hotel",
+            "fields_needed": ["api_key", "hotel_id"],
+            "note": "Popular in Germany and Europe for business travel"
+        },
+        "despegar": {
+            "name": "Despegar",
+            "requirements": [
+                "Despegar Partner account",
+                "API credentials from Despegar team",
+                "Property ID"
+            ],
+            "setup_url": "https://www.despegar.com/hoteles",
+            "fields_needed": ["api_key", "property_id"],
+            "note": "#1 OTA in Latin America - contact partner team for API access"
+        },
+        "hostelworld": {
+            "name": "Hostelworld",
+            "requirements": [
+                "Hostelworld Inbox account",
+                "API credentials",
+                "Property ID"
+            ],
+            "setup_url": "https://www.hostelworldgroup.com",
+            "fields_needed": ["api_key", "property_id"],
+            "note": "Best for hostels and budget accommodations"
         },
         "manual_import": {
             "name": "Manual Import",

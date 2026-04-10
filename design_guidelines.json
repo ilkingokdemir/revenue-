@@ -1,0 +1,99 @@
+{
+  "theme": "light",
+  "archetype": "1 (Organic & Earthy)",
+  "color_palette": {
+    "background": "#FAF9F6",
+    "surface": "#FFFFFF",
+    "primary": "#3E5245",
+    "primary_hover": "#2A3B30",
+    "secondary": "#E8EDE7",
+    "accent_positive": "#5A6B50",
+    "accent_warning": "#D4A373",
+    "accent_danger": "#C05A44",
+    "text_primary": "#1C1917",
+    "text_secondary": "#57534E",
+    "border": "#E7E5E4"
+  },
+  "typography": {
+    "heading_font": "Work Sans",
+    "body_font": "IBM Plex Sans",
+    "scale": {
+      "h1": "text-4xl tracking-tighter font-medium",
+      "h2": "text-2xl tracking-tight font-medium",
+      "h3": "text-xl tracking-tight font-medium",
+      "body": "text-sm leading-relaxed",
+      "labels": "text-xs tracking-[0.2em] uppercase font-medium"
+    }
+  },
+  "layout_and_spacing": {
+    "strategy": "The Control Room Grid",
+    "spacing_scale": "p-4, p-6, p-8, p-12",
+    "grid_structure": "grid-cols-1 md:grid-cols-12 gap-6",
+    "container_padding": "p-6 lg:p-8",
+    "surface_style": "Tactile variant - flat background, 1px subtle border, rounded-md (8px), no soft shadows by default. Use shadow-sm only on hover."
+  },
+  "components": {
+    "sidebar": "w-64 border-r border-stone-200 bg-[#FAF9F6] h-screen fixed flex flex-col p-6 z-10",
+    "summary_widgets": "col-span-1 md:col-span-4 border border-stone-200 rounded-md bg-white p-6 flex flex-col gap-2",
+    "review_list": "col-span-1 md:col-span-4 border-r border-stone-200 bg-white h-[calc(100vh-140px)] overflow-y-auto no-scrollbar",
+    "review_card": "p-4 border-b border-stone-100 hover:bg-[#FAF9F6] cursor-pointer transition-colors focus:ring-2 focus:ring-[#3E5245] group",
+    "editor_panel": "col-span-1 md:col-span-8 bg-white p-8 h-[calc(100vh-140px)] overflow-y-auto flex flex-col",
+    "ai_assistant_box": "mt-6 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md p-6 relative overflow-hidden",
+    "buttons": {
+      "primary": "bg-[#3E5245] text-white px-4 py-2 rounded-md hover:bg-[#2A3B30] transition-colors focus:ring-2 focus:ring-[#3E5245] focus:ring-offset-2",
+      "secondary": "bg-white border border-stone-200 text-stone-900 px-4 py-2 rounded-md hover:bg-stone-50 transition-colors",
+      "danger": "bg-white border border-[#C05A44] text-[#C05A44] hover:bg-[#C05A44] hover:text-white transition-colors"
+    },
+    "badges": "px-2 py-1 rounded-sm text-xs font-medium inline-flex items-center gap-1 border"
+  },
+  "interactions_and_motion": {
+    "hover_states": "Buttons and cards must explicitly define hover colors.",
+    "entrance_animation": "Use framer-motion staggered fade-in + slide-up for review list items.",
+    "ai_generation": "Animate a border shimmer or a pulsing linear gradient on the AI box while text is being 'generated'.",
+    "accessibility": "Disable motion if prefers-reduced-motion is enabled. All interactive elements MUST have data-testid attributes."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "usage": "Use Phosphor icons in 'regular' or 'light' weight. E.g., Star (rating), CheckCircle (responded), WarningCircle (pending), Quotes (review text), Sparkle (AI)."
+  },
+  "media": {
+    "ai_texture_bg": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/06790bb25ee93b714799620c98d82862ea6db3df67429246c55c3ae00c5536b8.png",
+      "description": "Soft organic clay texture background to be used inside the AI reply generator panel as a low opacity background image (mix-blend-multiply or opacity-20) to give it a premium tactile feel."
+    },
+    "avatars": [
+      {
+        "url": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+        "description": "Guest 1 Avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+        "description": "Guest 2 Avatar"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+        "description": "Guest 3 Avatar"
+      },
+      {
+        "url": "https://images.pexels.com/photos/6627006/pexels-photo-6627006.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Guest 4 Avatar"
+      },
+      {
+        "url": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Guest 5 Avatar"
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "1. Do not ask clarifying questions. Proceed with the implementation strictly following this guideline.",
+    "2. Ensure you install `@phosphor-icons/react` using yarn.",
+    "3. Use standard HTML/Shadcn combos but apply the raw grid classes for the main layout instead of relying strictly on Shadcn 'Card' wrapper if it enforces soft shadows. Go for tactile flat surfaces with 1px borders.",
+    "4. Maintain the 'Organic & Earthy' archetype. NO TEAL (#1B93A4) OR PURPLE (#9D4CDD). Use the specific colors provided in the palette (Moss Green, Sage, Terracotta, Sand, Bone White).",
+    "5. For the AI panel, apply `bg-[#E8EDE7]` and embed the `ai_texture_bg` with a low opacity overlay (`opacity-20` or `opacity-30` absolute div).",
+    "6. Build the layout with F-Pattern in mind. Top left: High-level metrics. Then the Review Queue on the left (col-span-4), and the Review Detail/Reply Editor taking up the main body area (col-span-8).",
+    "7. Mock data: Use the provided avatars for the guest reviews. Create mocked reviews from platforms like Booking.com, Airbnb, Expedia, TripAdvisor. HIGHLIGHT THAT THEY ARE MOCKED.",
+    "8. Interactions: The user selects a review from the left list. The right panel populates with the review details. User clicks 'Generate AI Reply'. The textarea populates via a simulated type-writer effect. User can edit the text and click 'Publish Reply'.",
+    "9. Add `data-testid` to all clickable elements, inputs, and key sections.",
+    "10. Set up the layout structurally using Tailwind flex/grid, with padding on bordered containers to prevent collision."
+  ]
+}

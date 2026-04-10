@@ -13,6 +13,7 @@ Hotel management review module to receive all reviews from online platforms (Boo
 3. Manual editing capability before publishing responses
 4. Review filtering by platform and response status
 5. Analytics overview (total reviews, average rating, response rate, pending count)
+6. Email notifications for negative reviews (1-2 stars)
 
 ## What's Been Implemented (January 2026)
 
@@ -21,6 +22,11 @@ Hotel management review module to receive all reviews from online platforms (Boo
 - AI response generation using OpenAI GPT-5.2 via Emergent integrations
 - Statistics endpoint for dashboard metrics
 - Mock data seeding for demo purposes
+- **NEW: Email notification system for negative reviews**
+  - Notification settings API (GET/PUT)
+  - Test notification endpoint
+  - Configurable threshold (1, 2, or 3 stars)
+  - Demo mode logging (with Resend integration ready)
 
 ### Frontend (React + Tailwind)
 - Organic & Earthy themed dashboard (Moss Green, Sage, Terracotta palette)
@@ -31,6 +37,11 @@ Hotel management review module to receive all reviews from online platforms (Boo
 - Typewriter effect for AI-generated responses
 - Editable textarea for response customization
 - Publish/Update response functionality
+- **NEW: Email Notifications Settings Dialog**
+  - Enable/disable toggle
+  - Email address configuration
+  - Alert threshold selection
+  - Test notification button
 
 ### Platforms Supported (MOCKED for demo)
 - Booking.com
@@ -45,6 +56,8 @@ Hotel management review module to receive all reviews from online platforms (Boo
 Frontend (React) → Backend (FastAPI) → MongoDB
                          ↓
               OpenAI GPT-5.2 (via Emergent)
+                         ↓
+              Resend Email Service (for notifications)
 ```
 
 ## Prioritized Backlog
@@ -52,19 +65,21 @@ Frontend (React) → Backend (FastAPI) → MongoDB
 ### P0 (Critical - Next Phase)
 - Real API integration with platform partner APIs (when credentials available)
 - Two-way sync for posting responses back to platforms
+- Production Resend API key for real email delivery
 
 ### P1 (High Priority)
 - User authentication for multi-user access
-- Email notifications for new reviews
 - Response templates library
+- Multiple notification recipients
 
 ### P2 (Medium Priority)
 - Sentiment analysis on reviews
 - Response performance analytics
 - Bulk response actions
+- Weekly/monthly review summary reports
 
 ## Next Tasks
 1. Obtain API credentials from Booking.com, Airbnb, Google Business Profile
-2. Implement real-time webhook receivers for new reviews
+2. Configure production Resend API key for real email delivery
 3. Add user authentication module
 4. Create response templates feature

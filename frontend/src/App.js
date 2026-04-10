@@ -4,6 +4,7 @@ import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import ReviewWidget from "./ReviewWidget";
 import {
   Star,
   CheckCircle,
@@ -4048,6 +4049,29 @@ async def handle_review_webhook(request: Request):
           ))}
         </div>
       </div>
+
+      {/* Embeddable Widget */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mt-4" data-testid="widget-embed-section">
+        <div className="flex items-center gap-2 mb-2">
+          <Code size={16} className="text-emerald-700" />
+          <h3 className="text-sm font-semibold text-emerald-800">Embeddable Reviews Widget</h3>
+        </div>
+        <p className="text-xs text-emerald-700 mb-3">Embed the Review Hub directly into MyHotelBox.com dashboard using an iframe. Your staff can view and respond to reviews without leaving your software.</p>
+        <div className="bg-stone-900 rounded-lg p-3 font-mono text-[11px] leading-relaxed text-stone-200 overflow-x-auto">
+          <span className="text-stone-500">&lt;!-- Add to your MyHotelBox dashboard --&gt;</span><br/>
+          <span className="text-emerald-400">&lt;iframe</span><br/>
+          &nbsp;&nbsp;<span className="text-amber-300">src</span>=<span className="text-stone-300">"{guide.base_url.replace('/api', '')}/widget?api_key=YOUR_API_KEY&property_id=YOUR_PROPERTY_ID"</span><br/>
+          &nbsp;&nbsp;<span className="text-amber-300">width</span>=<span className="text-stone-300">"100%"</span><br/>
+          &nbsp;&nbsp;<span className="text-amber-300">height</span>=<span className="text-stone-300">"700"</span><br/>
+          &nbsp;&nbsp;<span className="text-amber-300">frameBorder</span>=<span className="text-stone-300">"0"</span><br/>
+          &nbsp;&nbsp;<span className="text-amber-300">style</span>=<span className="text-stone-300">"border-radius: 8px;"</span><br/>
+          <span className="text-emerald-400">/&gt;</span>
+        </div>
+        <div className="mt-2 flex items-center gap-3">
+          <span className="text-[10px] text-emerald-700">Supports: <code className="bg-emerald-100 px-1 rounded">?theme=dark</code> for dark mode</span>
+          <span className="text-[10px] text-emerald-700"><code className="bg-emerald-100 px-1 rounded">?property_id=xxx</code> to filter by property</span>
+        </div>
+      </div>
     </div>
   );
 };
@@ -4465,7 +4489,7 @@ const Dashboard = ({ user, onLogout }) => {
   );
 };
 
-function App() {
+function MainApp() {
   const [user, setUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
 
@@ -4526,6 +4550,13 @@ function App() {
       <Dashboard user={user} onLogout={handleLogout} />
     </div>
   );
+}
+
+function App() {
+  if (window.location.pathname === "/widget") {
+    return <ReviewWidget />;
+  }
+  return <MainApp />;
 }
 
 export default App;

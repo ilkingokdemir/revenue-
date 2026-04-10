@@ -131,6 +131,24 @@ def require_roles(*roles):
         return user
     return role_checker
 
+async def verify_api_key(request: Request) -> dict:
+    """Authenticate via API key (for widget/external access)"""
+    api_key = request.query_params.get("api_key")
+    if not api_key:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer rhk_"):
+            api_key = auth_header[7:]
+    if not api_key or not api_key.startswith("rhk_"):
+        raise HTTPException(status_code=401, detail="Valid API key required")
+    key_doc = await db.api_keys.find_one({"key": api_key, "is_active": True}, {"_id": 0})
+    if not key_doc:
+        raise HTTPException(status_code=401, detail="Invalid or inactive API key")
+    await db.api_keys.update_one({"key": api_key}, {
+        "$set": {"last_used": datetime.now(timezone.utc).isoformat()},
+        "$inc": {"request_count": 1}
+    })
+    return key_doc
+
 # ==================== MODELS ====================
 
 class StatusCheck(BaseModel):
@@ -969,6 +987,89 @@ async def get_integration_guide(request: Request):
             "User-Agent": "ReviewHub-Webhook/1.0"
         }
     }
+
+# ==================== WIDGET API (API Key Auth) ====================
+
+@api_router.get("/widget/reviews")
+async def widget_get_reviews(request: Request, key_doc: dict = Depends(verify_api_key)):
+    """Get reviews for widget display (authenticated via API key)"""
+    property_id = request.query_params.get("property_id", "default")
+    platform = request.query_params.get("platform")
+    status = request.query_params.get("status")
+    limit = min(int(request.query_params.get("limit", "20")), 50)
+    
+    query = {"property_id": property_id}
+    if platform:
+        query["platform"] = platform
+    if status:
+        query["response_status"] = status
+    
+    reviews = await db.reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+    return reviews
+
+@api_router.get("/widget/stats")
+async def widget_get_stats(request: Request, key_doc: dict = Depends(verify_api_key)):
+    """Get review stats for widget display"""
+    property_id = request.query_params.get("property_id", "default")
+    query = {"property_id": property_id}
+    
+    total = await db.reviews.count_documents(query)
+    responded = await db.reviews.count_documents({**query, "response_status": "responded"})
+    pending = await db.reviews.count_documents({**query, "response_status": {"$in": ["pending", "draft"]}})
+    
+    pipeline = [{"$match": query}, {"$group": {"_id": None, "avg": {"$avg": "$rating"}}}]
+    avg_result = await db.reviews.aggregate(pipeline).to_list(1)
+    avg_rating = round(avg_result[0]["avg"], 1) if avg_result else 0
+    
+    return {
+        "total_reviews": total,
+        "average_rating": avg_rating,
+        "response_rate": round((responded / total) * 100, 1) if total > 0 else 0,
+        "responded": responded,
+        "pending": pending
+    }
+
+@api_router.post("/widget/generate-response")
+async def widget_generate_response(request: Request, key_doc: dict = Depends(verify_api_key)):
+    """Generate AI response from widget"""
+    body = await request.json()
+    review_id = body.get("review_id")
+    language = body.get("language", "en")
+    tone = body.get("tone", "professional")
+    
+    if not review_id:
+        raise HTTPException(status_code=400, detail="review_id required")
+    
+    review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    prompt = f"""Generate a {tone} hotel review response in {language}.
+Guest: {review.get('guest_name', 'Guest')}
+Rating: {review.get('rating', 'N/A')}/5
+Platform: {review.get('platform', 'unknown')}
+Review: {review.get('review_text', '')}
+Keep it unique, warm, and under 150 words."""
+    
+    try:
+        chat = LlmChat(api_key=api_key, model="gpt-5.2")
+        response = chat.send_message(UserMessage(content=prompt))
+        response_text = response.content.strip()
+        
+        await db.reviews.update_one({"id": review_id}, {"$set": {
+            "response_text": response_text,
+            "response_status": "draft",
+            "response_language": language,
+            "response_generated_at": datetime.now(timezone.utc).isoformat()
+        }})
+        
+        return {"response_text": response_text, "review_id": review_id, "status": "draft"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)[:100]}")
 
 # ==================== APPROVAL WORKFLOW ROUTES ====================
 

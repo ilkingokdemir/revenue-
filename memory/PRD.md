@@ -5,35 +5,36 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 
 ## What's Been Implemented
 
+### Low-Rating Alerts (April 2026)
+- When review rating <= 2 stars: extra-prominent popup with:
+  - Darker red gradient (#991B1B), 2px red border, urgentPulse animation
+  - Warning triangle icon (replaces bell), "LOW RATING ALERT" badge + "NEEDS ATTENTION"
+  - Larger size (420px max-width, 40px icon), 3-line review preview
+  - "Respond quickly to protect your reputation" action prompt
+  - Alarm sound (descending square wave: 880→660→440Hz)
+  - Stays on screen 15 seconds (vs 8s for normal)
+- Email notification logged to DB (Resend integration ready, needs API key)
+- Normal reviews (3+ stars): standard bell icon, ascending chime, 8s dismiss
+
 ### Real-time Notification Popups with Sound (April 2026)
-- Red gradient popup slides in from top-right when new review arrives
-- Shows: bell icon, "NEW REVIEW" label, guest name, platform badge, star rating, review preview
-- Sound notification via Web Audio API (3-tone chime: 880Hz, 1100Hz, 1320Hz)
-- Polling every 20 seconds via GET /api/widget/reviews/new
-- Click X to dismiss individual, "Dismiss all" for multiple
-- Auto-dismiss after 8 seconds
-- Review list and stats auto-refresh on new review detection
+- Red popup slides from top-right, polls every 20s
+- Bell icon + sound for normal, alarm for low-rating
+- Dismiss individual or all, auto-dismiss
 
 ### Red Notification Badge (April 2026)
-- Pulsing red badge showing unread count, red dots on unread cards
-- Click review to mark read, click badge to mark all read
-- Persisted in MongoDB (is_read field)
+- Pulsing red unread count, red dots, mark read/all
 
 ### Embeddable Reviews Widget (April 2026)
-- Standalone at /widget?api_key=rhk_xxx&property_id=xxx
-- No login, API key auth, iframe embeddable, dark mode support
+- /widget?api_key=rhk_xxx&property_id=xxx, no login, iframe embeddable
 
-### Webhook Delivery Log + Test Ping (April 2026)
-- Last 20 deliveries, test ping with HTTP status + timing
+### Webhook System (April 2026)
+- CRUD, 8 event types, delivery log (last 20), test ping
 
-### MyHotelBox Integration Guide (April 2026)
-- 5-step walkthrough, API docs, code snippets, iframe embed code
+### Integration Guide (April 2026)
+- 5-step MyHotelBox walkthrough, code snippets, iframe embed code
 
-### Left Sidebar Navigation (April 2026)
-- 12 items across 4 sections
-
-### API Connection + Webhooks (April 2026)
-- CRUD for API keys (rhk_) and webhooks (8 event types)
+### Left Sidebar + API Keys (April 2026)
+- 12 nav items, API key CRUD (rhk_ prefix)
 
 ### Core Features
 - JWT auth, 3 roles, 7 departments, approval workflow

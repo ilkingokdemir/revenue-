@@ -1781,6 +1781,9 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
     room_type: ""
   });
   const [selectedPlatformDetails, setSelectedPlatformDetails] = useState(null);
+  const [showConfigWizard, setShowConfigWizard] = useState(null);
+  const [configCredentials, setConfigCredentials] = useState({});
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -1882,6 +1885,126 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
     return <Badge className="bg-stone-400 text-white"><LinkBreak size={12} className="mr-1" />Not Connected</Badge>;
   };
 
+  const handleSaveConfig = async (platform) => {
+    setIsSavingConfig(true);
+    try {
+      await axios.put(`${API}/integrations/${platform}/configure`, {
+        platform: platform,
+        credentials: configCredentials,
+        location_id: configCredentials.location_id || configCredentials.property_id || configCredentials.hotel_id,
+        property_name: configCredentials.property_name
+      });
+      toast.success(`${platform} credentials saved!`);
+      setShowConfigWizard(null);
+      setConfigCredentials({});
+      await fetchData();
+    } catch (error) {
+      console.error("Config save error:", error);
+      toast.error("Failed to save configuration");
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  // Setup guides for each platform
+  const setupGuides = {
+    google: {
+      title: "Google Business Profile Setup Guide",
+      steps: [
+        { title: "1. Verify Your Business", description: "Go to business.google.com and claim/verify your hotel listing if you haven't already." },
+        { title: "2. Create Google Cloud Project", description: "Visit console.cloud.google.com → Create new project → Name it 'Review Hub Integration'" },
+        { title: "3. Enable APIs", description: "In your project, go to 'APIs & Services' → 'Enable APIs' → Search and enable 'My Business Business Information API' and 'My Business Account Management API'" },
+        { title: "4. Create OAuth Credentials", description: "Go to 'APIs & Services' → 'Credentials' → 'Create Credentials' → 'OAuth client ID' → Select 'Web application'" },
+        { title: "5. Configure OAuth Consent", description: "Set up OAuth consent screen with your business info. Add scopes for business.manage" },
+        { title: "6. Get Your Location ID", description: "Your location ID format is: accounts/{account_id}/locations/{location_id}. Find this in your Business Profile dashboard." },
+        { title: "7. Generate Refresh Token", description: "Use Google's OAuth Playground (developers.google.com/oauthplayground) to generate a refresh token with your credentials." }
+      ],
+      fields: [
+        { key: "client_id", label: "OAuth Client ID", placeholder: "xxxx.apps.googleusercontent.com", type: "text" },
+        { key: "client_secret", label: "OAuth Client Secret", placeholder: "GOCSPX-xxxxx", type: "password" },
+        { key: "refresh_token", label: "Refresh Token", placeholder: "1//xxxxx", type: "password" },
+        { key: "location_id", label: "Location ID", placeholder: "accounts/123/locations/456", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ]
+    },
+    "booking.com": {
+      title: "Booking.com Connectivity Partner Setup",
+      steps: [
+        { title: "1. Apply for Partner Program", description: "Visit connect.booking.com and apply for the Connectivity Partner program. This requires a formal business application." },
+        { title: "2. Wait for Approval", description: "Booking.com reviews applications and typically responds within 2-4 weeks. They evaluate your business and technical capabilities." },
+        { title: "3. Complete Technical Onboarding", description: "Once approved, you'll receive access to their Partner Portal and technical documentation." },
+        { title: "4. Get Machine Account Credentials", description: "Booking.com will provide you with a machine account username and password for API access." },
+        { title: "5. Register Your Property", description: "Link your hotel property ID from your Booking.com extranet to the API connection." },
+        { title: "6. Test in Sandbox", description: "Booking.com provides a sandbox environment to test your integration before going live." }
+      ],
+      fields: [
+        { key: "username", label: "Machine Account Username", placeholder: "your_machine_account", type: "text" },
+        { key: "password", label: "Machine Account Password", placeholder: "••••••••", type: "password" },
+        { key: "property_id", label: "Property ID", placeholder: "12345678", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Booking.com API access requires approved Connectivity Partner status. Apply at connect.booking.com"
+    },
+    tripadvisor: {
+      title: "TripAdvisor Content API Setup",
+      steps: [
+        { title: "1. Apply for Content API", description: "Visit developer.tripadvisor.com and register for the Content API partner program." },
+        { title: "2. Submit Business Details", description: "Provide your business information and explain your use case for review management." },
+        { title: "3. Receive API Key", description: "Once approved, you'll receive an API key for accessing TripAdvisor's Content API." },
+        { title: "4. Find Your Location ID", description: "Search for your hotel on TripAdvisor. The location ID is in the URL (e.g., Hotel_Review-g123-d456)." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", type: "password" },
+        { key: "location_id", label: "Location ID", placeholder: "d123456", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "TripAdvisor Content API requires partner approval. Apply at developer.tripadvisor.com"
+    },
+    airbnb: {
+      title: "Airbnb API Setup",
+      steps: [
+        { title: "1. Join Partner Program", description: "Visit airbnb.com/partner and apply for their technology partner program." },
+        { title: "2. Provide Business Documentation", description: "Submit required business documentation for partner verification." },
+        { title: "3. Complete Integration Review", description: "Airbnb will review your integration requirements and use case." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your Airbnb API key", type: "password" },
+        { key: "listing_id", label: "Listing ID", placeholder: "12345678", type: "text" },
+        { key: "property_name", label: "Property Name", placeholder: "Your Property Name", type: "text" }
+      ],
+      notice: "Airbnb API is primarily available to property management software partners."
+    },
+    expedia: {
+      title: "Expedia Partner Central Setup",
+      steps: [
+        { title: "1. Access Partner Central", description: "Log into your Expedia Partner Central account at expediapartnercentral.com" },
+        { title: "2. Request API Access", description: "Contact your Expedia market manager to request API access for review management." },
+        { title: "3. Receive Credentials", description: "Once approved, you'll receive API key and secret for authentication." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your Expedia API key", type: "password" },
+        { key: "secret_key", label: "Secret Key", placeholder: "Your secret key", type: "password" },
+        { key: "property_id", label: "Property ID", placeholder: "12345678", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Contact your Expedia market manager for API access."
+    },
+    "trip.com": {
+      title: "Trip.com Partner API Setup",
+      steps: [
+        { title: "1. Contact Trip.com Partner Team", description: "Reach out to Trip.com's partner team at partner.trip.com to request API access." },
+        { title: "2. Complete Partner Agreement", description: "Sign the necessary partner agreements and provide business documentation." },
+        { title: "3. Receive API Credentials", description: "Once approved, you'll receive your API key and hotel ID mapping." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your Trip.com API key", type: "password" },
+        { key: "hotel_id", label: "Hotel ID", placeholder: "Your Trip.com hotel ID", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Contact Trip.com partner support for API access."
+    }
+  };
+
   return (
     <DialogContent className="sm:max-w-[750px] max-h-[90vh] overflow-y-auto" data-testid="integrations-dialog">
       <DialogHeader>
@@ -1891,14 +2014,107 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
         </DialogTitle>
       </DialogHeader>
 
+      {/* Configuration Wizard Modal */}
+      {showConfigWizard && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowConfigWizard(null)}>
+          <div className="bg-white rounded-lg max-w-2xl max-h-[90vh] overflow-auto m-4 w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-stone-200 p-4 flex justify-between items-center">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <span className="text-2xl">{getPlatformIcon(showConfigWizard)}</span>
+                {setupGuides[showConfigWizard]?.title || `${showConfigWizard} Setup`}
+              </h3>
+              <button onClick={() => setShowConfigWizard(null)} className="p-2 hover:bg-stone-100 rounded-md">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Setup Steps */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-[#1C1917] flex items-center gap-2">
+                  <Info size={18} className="text-[#3E5245]" />
+                  Setup Steps
+                </h4>
+                <div className="space-y-3">
+                  {setupGuides[showConfigWizard]?.steps.map((step, idx) => (
+                    <div key={idx} className="flex gap-3 p-3 bg-[#FAF9F6] rounded-md">
+                      <div className="w-6 h-6 bg-[#3E5245] text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
+                        {idx + 1}
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm text-[#1C1917]">{step.title.replace(/^\d+\.\s*/, '')}</div>
+                        <div className="text-xs text-[#57534E] mt-1">{step.description}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notice if any */}
+              {setupGuides[showConfigWizard]?.notice && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                  <p className="text-sm text-amber-800 flex items-center gap-2">
+                    <WarningCircle size={16} />
+                    {setupGuides[showConfigWizard].notice}
+                  </p>
+                </div>
+              )}
+
+              {/* Credential Fields */}
+              <div className="space-y-4">
+                <h4 className="font-medium text-[#1C1917] flex items-center gap-2">
+                  <Link size={18} className="text-[#3E5245]" />
+                  Enter Your Credentials
+                </h4>
+                <div className="space-y-3">
+                  {setupGuides[showConfigWizard]?.fields.map((field) => (
+                    <div key={field.key}>
+                      <label className="text-sm font-medium text-[#57534E] block mb-1">{field.label}</label>
+                      <Input
+                        type={field.type}
+                        placeholder={field.placeholder}
+                        value={configCredentials[field.key] || ""}
+                        onChange={(e) => setConfigCredentials(prev => ({ ...prev, [field.key]: e.target.value }))}
+                        className="border-stone-200"
+                        data-testid={`config-${field.key}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-stone-200">
+                <button
+                  onClick={() => setShowConfigWizard(null)}
+                  className="px-4 py-2 border border-stone-200 rounded-md hover:bg-stone-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSaveConfig(showConfigWizard)}
+                  disabled={isSavingConfig}
+                  className="px-4 py-2 bg-[#3E5245] text-white rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
+                  data-testid="save-config-btn"
+                >
+                  {isSavingConfig ? <ArrowsClockwise size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                  Save Configuration
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center h-48">
           <ArrowsClockwise size={32} className="animate-spin text-[#3E5245]" />
         </div>
       ) : (
         <Tabs defaultValue="platforms" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsList className="grid w-full grid-cols-3 mb-4">
             <TabsTrigger value="platforms" data-testid="integrations-platforms-tab">Platforms</TabsTrigger>
+            <TabsTrigger value="guides" data-testid="integrations-guides-tab">Setup Guides</TabsTrigger>
             <TabsTrigger value="import" data-testid="integrations-import-tab">Manual Import</TabsTrigger>
           </TabsList>
 
@@ -1907,7 +2123,7 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
             <div className="p-3 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md">
               <p className="text-sm text-[#57534E] flex items-center gap-2">
                 <Info size={16} className="text-[#3E5245]" />
-                Connect your review platforms to automatically sync reviews. Most platforms require partner API approval.
+                Connect your review platforms to automatically sync reviews. Click "Configure" to enter your API credentials.
               </p>
             </div>
 
@@ -1939,11 +2155,12 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => setSelectedPlatformDetails(selectedPlatformDetails === integration.platform ? null : integration.platform)}
-                          className="p-2 hover:bg-stone-100 rounded-md transition-colors"
-                          data-testid={`details-${integration.platform}`}
+                          onClick={() => setShowConfigWizard(integration.platform)}
+                          className="bg-white border border-stone-200 text-[#1C1917] px-3 py-1.5 rounded-md text-sm hover:bg-stone-50 transition-colors flex items-center gap-1"
+                          data-testid={`configure-${integration.platform}`}
                         >
-                          <CaretRight size={16} className={`text-[#57534E] transition-transform ${selectedPlatformDetails === integration.platform ? 'rotate-90' : ''}`} />
+                          <Link size={14} />
+                          Configure
                         </button>
                         <button
                           onClick={() => handleSync(integration.platform)}
@@ -1992,6 +2209,48 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
                   </div>
                 );
               })}
+            </div>
+          </TabsContent>
+
+          {/* Setup Guides Tab */}
+          <TabsContent value="guides" className="space-y-4">
+            <div className="p-3 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md">
+              <p className="text-sm text-[#57534E] flex items-center gap-2">
+                <Info size={16} className="text-[#3E5245]" />
+                Step-by-step guides to connect each platform. Click on a platform to see detailed setup instructions.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {Object.entries(setupGuides).map(([platform, guide]) => (
+                <div 
+                  key={platform}
+                  className="border border-stone-200 rounded-md p-4 bg-white hover:shadow-md transition-shadow cursor-pointer"
+                  onClick={() => setShowConfigWizard(platform)}
+                  data-testid={`guide-${platform}`}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-3xl">{getPlatformIcon(platform)}</span>
+                    <div>
+                      <h4 className="font-medium text-[#1C1917]">{guide.title.replace(' Setup Guide', '').replace(' Setup', '')}</h4>
+                      <p className="text-xs text-[#57534E]">{guide.steps.length} steps to connect</p>
+                    </div>
+                  </div>
+                  <div className="text-xs text-[#57534E] space-y-1">
+                    {guide.steps.slice(0, 2).map((step, idx) => (
+                      <div key={idx} className="flex items-start gap-2">
+                        <span className="text-[#3E5245] font-medium">{idx + 1}.</span>
+                        <span className="line-clamp-1">{step.title.replace(/^\d+\.\s*/, '')}</span>
+                      </div>
+                    ))}
+                    <div className="text-[#3E5245] font-medium">+ {guide.steps.length - 2} more steps...</div>
+                  </div>
+                  <button className="mt-3 w-full py-2 bg-[#FAF9F6] text-[#3E5245] rounded-md text-sm hover:bg-[#E8EDE7] transition-colors flex items-center justify-center gap-2">
+                    View Full Guide & Configure
+                    <CaretRight size={14} />
+                  </button>
+                </div>
+              ))}
             </div>
           </TabsContent>
 

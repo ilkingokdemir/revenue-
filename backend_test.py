@@ -783,6 +783,75 @@ class ReviewAPITester:
                 except Exception as e:
                     self.log_test(f"Platform Sync - {platform}", False, f"Request failed: {str(e)}")
 
+        # Test 5: Configuration wizard endpoints
+        print("   Testing configuration wizard...")
+        
+        # Test Google configuration
+        google_config = {
+            "platform": "google",
+            "credentials": {
+                "client_id": "test-client-id.apps.googleusercontent.com",
+                "client_secret": "GOCSPX-test-secret",
+                "refresh_token": "1//test-refresh-token",
+                "location_id": "accounts/123/locations/456",
+                "property_name": "Test Hotel"
+            },
+            "location_id": "accounts/123/locations/456",
+            "property_name": "Test Hotel"
+        }
+        
+        success, response = self.run_test(
+            "Configure Google Integration",
+            "PUT", "integrations/google/configure", 200,
+            data=google_config
+        )
+        
+        if success:
+            self.log_test("Configuration Wizard - Google", True, 
+                         f"Google integration configured successfully")
+        else:
+            self.log_test("Configuration Wizard - Google", False, "Failed to configure Google")
+        
+        # Test Booking.com configuration
+        booking_config = {
+            "platform": "booking.com",
+            "credentials": {
+                "username": "test-username",
+                "password": "test-password",
+                "property_id": "12345",
+                "property_name": "Test Hotel"
+            },
+            "location_id": "12345",
+            "property_name": "Test Hotel"
+        }
+        
+        success, response = self.run_test(
+            "Configure Booking.com Integration",
+            "PUT", "integrations/booking.com/configure", 200,
+            data=booking_config
+        )
+        
+        if success:
+            self.log_test("Configuration Wizard - Booking.com", True, 
+                         f"Booking.com integration configured successfully")
+        else:
+            self.log_test("Configuration Wizard - Booking.com", False, "Failed to configure Booking.com")
+
+        # Verify configuration was saved by checking integrations status
+        success, response = self.run_test(
+            "Verify Configuration Saved",
+            "GET", "integrations", 200
+        )
+        
+        if success:
+            configured_platforms = [item for item in response if item.get('credentials_configured')]
+            if len(configured_platforms) >= 2:
+                self.log_test("Configuration Verification", True, 
+                             f"Found {len(configured_platforms)} configured platforms")
+            else:
+                self.log_test("Configuration Verification", False, 
+                             f"Expected at least 2 configured platforms, found {len(configured_platforms)}")
+
     def run_comprehensive_test(self):
         """Run all tests in sequence"""
         print("🏨 Hotel Review Management API Testing")

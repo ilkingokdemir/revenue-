@@ -149,6 +149,13 @@ class CompetitorCreate(BaseModel):
     total_reviews: int
     response_rate: float
 
+class CompetitorUpdate(BaseModel):
+    name: Optional[str] = None
+    platform: Optional[str] = None
+    avg_rating: Optional[float] = None
+    total_reviews: Optional[int] = None
+    response_rate: Optional[float] = None
+
 class AnalyticsData(BaseModel):
     period: str
     total_reviews: int
@@ -1056,13 +1063,13 @@ async def add_competitor(input: CompetitorCreate):
     return competitor
 
 @api_router.put("/competitors/{competitor_id}")
-async def update_competitor(competitor_id: str, input: CompetitorCreate):
+async def update_competitor(competitor_id: str, input: CompetitorUpdate):
     """Update competitor data"""
     existing = await db.competitors.find_one({"id": competitor_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Competitor not found")
     
-    update_data = input.model_dump()
+    update_data = {k: v for k, v in input.model_dump().items() if v is not None}
     update_data['last_updated'] = datetime.now(timezone.utc).isoformat()
     
     await db.competitors.update_one(

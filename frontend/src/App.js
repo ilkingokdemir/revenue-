@@ -56,7 +56,14 @@ import {
   UserCircle,
   ShieldCheck,
   ClockCounterClockwise,
-  UserPlus
+  UserPlus,
+  Key,
+  WebhookLogo,
+  Gear,
+  House,
+  ArrowSquareOut,
+  Code,
+  CopySimple
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -3487,283 +3494,262 @@ const Dashboard = ({ user, onLogout }) => {
     }
   };
 
+  const [activeView, setActiveView] = useState("reviews");
+
+  // Sidebar menu items
+  const menuSections = [
+    {
+      label: "Main",
+      items: [
+        { id: "reviews", icon: ChatText, name: "Reviews", testId: "nav-reviews" },
+        { id: "analytics", icon: ChartBar, name: "Analytics", testId: "analytics-btn" },
+      ]
+    },
+    {
+      label: "Workflow",
+      items: [
+        { id: "templates", icon: FileText, name: "Templates", testId: "templates-btn" },
+        ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: "Approvals", testId: "approval-queue-btn" }] : []),
+      ]
+    },
+    {
+      label: "Connections",
+      items: [
+        { id: "integrations", icon: PlugsConnected, name: "Integrations", testId: "integrations-btn" },
+        { id: "api", icon: Key, name: "API Connection", testId: "api-connection-btn" },
+        { id: "webhooks", icon: Code, name: "Webhooks", testId: "webhooks-btn" },
+      ]
+    },
+    {
+      label: "Settings",
+      items: [
+        { id: "alerts", icon: Bell, name: "Alerts", testId: "notification-settings-btn" },
+        { id: "reports", icon: CalendarBlank, name: "Reports", testId: "reports-btn" },
+        { id: "branding", icon: Palette, name: "Branding", testId: "branding-btn" },
+        ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: "Team", testId: "team-btn" }] : []),
+      ]
+    }
+  ];
+
   return (
-    <div className="min-h-screen bg-stone-50" data-testid="review-dashboard">
-      {/* Header */}
-      <header className="bg-white border-b border-stone-200/80 px-6 py-3 sticky top-0 z-40 shadow-sm" data-testid="dashboard-header">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-stone-50 flex" data-testid="review-dashboard">
+      {/* Left Sidebar */}
+      <aside className="w-56 bg-[#1C1917] flex flex-col fixed inset-y-0 left-0 z-50" data-testid="sidebar">
+        {/* Logo */}
+        <div className="p-4 border-b border-stone-800">
+          <div className="flex items-center gap-2.5">
             {branding?.logo_url ? (
-              <img src={branding.logo_url} alt="Logo" className="w-9 h-9 rounded-lg object-cover" data-testid="header-logo" />
+              <img src={branding.logo_url} alt="Logo" className="w-8 h-8 rounded-lg object-cover" data-testid="header-logo" />
             ) : (
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: branding?.primary_color || "#3E5245" }}>
-                <Buildings size={20} className="text-white" weight="fill" />
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: branding?.primary_color || "#3E5245" }}>
+                <Buildings size={16} className="text-white" weight="fill" />
               </div>
             )}
-            <div>
-              <h1 className="text-base font-semibold tracking-tight text-stone-900" data-testid="header-app-name">{branding?.app_name || "Review Hub"}</h1>
-              <p className="text-[11px] text-stone-400" data-testid="header-subtitle">{branding?.subtitle || "Manage all your guest reviews in one place"}</p>
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold text-white truncate" data-testid="header-app-name">{branding?.app_name || "Review Hub"}</h1>
+              <p className="text-[10px] text-stone-500 truncate" data-testid="header-subtitle">{branding?.subtitle || "Review Management"}</p>
             </div>
-            {/* Property Selector */}
-            {properties.length > 1 && (
-              <Select value={activePropertyId} onValueChange={(v) => { setActivePropertyId(v); }} data-testid="property-selector">
-                <SelectTrigger className="w-[180px] bg-stone-50 border-stone-200 h-8 text-xs ml-4">
-                  <SelectValue placeholder="Select property" />
-                </SelectTrigger>
-                <SelectContent>
-                  {properties.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           </div>
-          <div className="flex items-center gap-1">
-            <Dialog open={showAnalytics} onOpenChange={setShowAnalytics}>
-              <DialogTrigger asChild>
-                <button className="nav-btn nav-btn-primary" data-testid="analytics-btn">
-                  <ChartBar size={15} />
-                  Analytics
+          {/* Property Selector */}
+          {properties.length > 1 && (
+            <Select value={activePropertyId} onValueChange={(v) => setActivePropertyId(v)} data-testid="property-selector">
+              <SelectTrigger className="w-full bg-stone-800 border-stone-700 text-stone-300 h-7 text-[11px] mt-3">
+                <SelectValue placeholder="Select property" />
+              </SelectTrigger>
+              <SelectContent>
+                {properties.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto py-3 custom-scrollbar">
+          {menuSections.map((section) => (
+            <div key={section.label} className="mb-3">
+              <div className="px-4 mb-1">
+                <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-stone-600">{section.label}</span>
+              </div>
+              {section.items.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveView(item.id)}
+                  className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
+                    activeView === item.id
+                      ? "bg-stone-800 text-white font-medium border-l-2 border-emerald-500"
+                      : "text-stone-400 hover:text-stone-200 hover:bg-stone-800/50 border-l-2 border-transparent"
+                  }`}
+                  data-testid={item.testId}
+                >
+                  <item.icon size={16} weight={activeView === item.id ? "fill" : "regular"} />
+                  {item.name}
                 </button>
-              </DialogTrigger>
-              <AnalyticsPanel 
-                isOpen={showAnalytics} 
-                onClose={() => setShowAnalytics(false)}
-              />
-            </Dialog>
-            <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
-              <DialogTrigger asChild>
-                <button className="nav-btn" data-testid="templates-btn">
-                  <FileText size={15} />
-                  Templates
-                </button>
-              </DialogTrigger>
-              <TemplatesManager 
-                isOpen={showTemplates} 
-                onClose={() => setShowTemplates(false)}
-                onSelectTemplate={handleApplyTemplate}
-              />
-            </Dialog>
-            <Dialog open={showNotificationSettings} onOpenChange={setShowNotificationSettings}>
-              <DialogTrigger asChild>
-                <button className="nav-btn" data-testid="notification-settings-btn">
-                  <Bell size={15} />
-                  Alerts
-                </button>
-              </DialogTrigger>
-              <NotificationSettings 
-                isOpen={showNotificationSettings} 
-                onClose={() => setShowNotificationSettings(false)} 
-              />
-            </Dialog>
-            <Dialog open={showReports} onOpenChange={setShowReports}>
-              <DialogTrigger asChild>
-                <button className="nav-btn" data-testid="reports-btn">
-                  <CalendarBlank size={15} />
-                  Reports
-                </button>
-              </DialogTrigger>
-              <ReportsSettings 
-                isOpen={showReports} 
-                onClose={() => setShowReports(false)} 
-              />
-            </Dialog>
-            <Dialog open={showIntegrations} onOpenChange={setShowIntegrations}>
-              <DialogTrigger asChild>
-                <button className="nav-btn" data-testid="integrations-btn">
-                  <PlugsConnected size={15} />
-                  Integrations
-                </button>
-              </DialogTrigger>
-              <IntegrationsPanel 
-                isOpen={showIntegrations} 
-                onClose={() => setShowIntegrations(false)}
-                onSyncComplete={handleSyncComplete}
-              />
-            </Dialog>
-            <Dialog open={showBranding} onOpenChange={setShowBranding}>
-              <DialogTrigger asChild>
-                <button className="nav-btn" data-testid="branding-btn">
-                  <Palette size={15} />
-                  Branding
-                </button>
-              </DialogTrigger>
-              <BrandingPanel
-                isOpen={showBranding}
-                onClose={() => setShowBranding(false)}
-                branding={branding}
-                onBrandingUpdate={(updated) => setBranding(updated)}
-              />
-            </Dialog>
-            {/* Approval Queue - Manager/Admin only */}
-            {(user?.role === "admin" || user?.role === "manager") && (
-              <Dialog open={showApprovalQueue} onOpenChange={setShowApprovalQueue}>
-                <DialogTrigger asChild>
-                  <button className="nav-btn" data-testid="approval-queue-btn">
-                    <ShieldCheck size={15} />
-                    Approvals
-                  </button>
-                </DialogTrigger>
-                <ApprovalQueuePanel onReviewUpdate={() => { fetchReviews(); fetchStats(); }} />
-              </Dialog>
-            )}
-            {/* User Management - Admin/Manager only */}
-            {(user?.role === "admin" || user?.role === "manager") && (
-              <Dialog open={showUserManagement} onOpenChange={setShowUserManagement}>
-                <DialogTrigger asChild>
-                  <button className="nav-btn" data-testid="team-btn">
-                    <Users size={15} />
-                    Team
-                  </button>
-                </DialogTrigger>
-                <UserManagementPanel currentUser={user} />
-              </Dialog>
-            )}
-            <button
-              onClick={() => {
-                fetchReviews();
-                fetchStats();
-                toast.success("Reviews refreshed!");
-              }}
-              className="nav-btn"
-              data-testid="refresh-btn"
-            >
-              <ArrowsClockwise size={15} />
-              Refresh
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        {/* User & Logout */}
+        <div className="p-3 border-t border-stone-800">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center">
+              <UserCircle size={18} className="text-stone-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium text-stone-300 truncate" data-testid="user-name">{user?.name}</div>
+              <div className="text-[10px] text-stone-500 capitalize" data-testid="user-role">{user?.role} · {user?.department?.replace("_", " ")}</div>
+            </div>
+            <button onClick={onLogout} className="text-stone-500 hover:text-red-400 transition-colors p-1" data-testid="logout-btn">
+              <SignOut size={16} />
             </button>
-            {/* User info & Logout */}
-            <div className="flex items-center gap-2 ml-2 pl-2 border-l border-stone-200">
-              <div className="text-right hidden sm:block">
-                <div className="text-xs font-medium text-stone-700" data-testid="user-name">{user?.name}</div>
-                <div className="text-[10px] text-stone-400 capitalize" data-testid="user-role">{user?.role}</div>
-              </div>
-              <button onClick={onLogout} className="nav-btn text-red-500 hover:text-red-600 hover:bg-red-50" data-testid="logout-btn">
-                <SignOut size={15} />
-              </button>
-            </div>
           </div>
         </div>
-      </header>
+      </aside>
 
-      <div className="p-4 sm:p-6 lg:p-8">
-        {/* Stats Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatsCard
-            icon={ChatText}
-            label="Total Reviews"
-            value={stats?.total_reviews || 0}
-            subtext={`Across ${Object.keys(stats?.by_platform || {}).length} platforms`}
-          />
-          <StatsCard
-            icon={Star}
-            label="Average Rating"
-            value={stats?.average_rating ? `${stats.average_rating}/5` : "N/A"}
-            subtext={<StarRating rating={Math.round(stats?.average_rating || 0)} size={12} />}
-          />
-          <StatsCard
-            icon={CheckCircle}
-            label="Response Rate"
-            value={`${stats?.response_rate || 0}%`}
-            subtext={`${stats?.responded || 0} of ${stats?.total_reviews || 0} responded`}
-          />
-          <StatsCard
-            icon={WarningCircle}
-            label="Pending"
-            value={stats?.pending || 0}
-            subtext="Reviews awaiting response"
-          />
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          {/* Filters & Review List */}
-          <div className="md:col-span-4 bg-white border border-stone-200/80 rounded-xl shadow-card overflow-hidden" data-testid="review-list-panel">
-            {/* Filters */}
-            <div className="p-4 border-b border-stone-100 bg-stone-50/50">
-              <div className="flex items-center gap-2 mb-2.5">
-                <FunnelSimple size={15} className="text-stone-400" />
-                <span className="text-xs font-semibold uppercase tracking-wider text-stone-400">Filters</span>
-              </div>
-              <div className="flex gap-2">
-                <Select
-                  value={filters.platform}
-                  onValueChange={(value) => setFilters(prev => ({ ...prev, platform: value }))}
-                  data-testid="platform-filter"
-                >
-                  <SelectTrigger className="flex-1 bg-white border-stone-200 h-8 text-xs">
-                    <SelectValue placeholder="Platform" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Platforms</SelectItem>
-                    {Object.entries(PLATFORMS).map(([key, config]) => (
-                      <SelectItem key={key} value={key}>{config.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                
-                <Select
-                  value={filters.status}
-                  onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
-                  data-testid="status-filter"
-                >
-                  <SelectTrigger className="flex-1 bg-white border-stone-200 h-8 text-xs">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="pending_approval">Awaiting Approval</SelectItem>
-                    <SelectItem value="rejected">Rejected</SelectItem>
-                    <SelectItem value="responded">Responded</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+      {/* Main Content Area */}
+      <main className="flex-1 ml-56">
+        {/* Reviews View (default) */}
+        {activeView === "reviews" && (
+          <div className="p-5">
+            {/* Stats Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+              <StatsCard icon={ChatText} label="Total Reviews" value={stats?.total_reviews || 0} subtext={`Across ${Object.keys(stats?.by_platform || {}).length} platforms`} />
+              <StatsCard icon={Star} label="Average Rating" value={stats?.average_rating ? `${stats.average_rating}/5` : "N/A"} subtext={<StarRating rating={Math.round(stats?.average_rating || 0)} size={12} />} />
+              <StatsCard icon={CheckCircle} label="Response Rate" value={`${stats?.response_rate || 0}%`} subtext={`${stats?.responded || 0} of ${stats?.total_reviews || 0} responded`} />
+              <StatsCard icon={WarningCircle} label="Pending" value={(stats?.pending || 0) + (stats?.pending_approval || 0)} subtext="Reviews awaiting response" />
             </div>
 
-            {/* Review List */}
-            <ScrollArea className="h-[calc(100vh-340px)] custom-scrollbar" data-testid="review-list">
-              {isLoading ? (
-                <div className="p-8 text-center">
-                  <ArrowsClockwise size={24} className="mx-auto mb-2 animate-spin text-stone-300" />
-                  <p className="text-sm text-stone-400">Loading reviews...</p>
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              {/* Filters & Review List */}
+              <div className="md:col-span-4 bg-white border border-stone-200/80 rounded-xl shadow-card overflow-hidden" data-testid="review-list-panel">
+                <div className="p-3 border-b border-stone-100 bg-stone-50/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <FunnelSimple size={14} className="text-stone-400" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">Filters</span>
+                    </div>
+                    <button onClick={() => { fetchReviews(); fetchStats(); toast.success("Refreshed!"); }} className="text-stone-400 hover:text-stone-600 transition-colors" data-testid="refresh-btn">
+                      <ArrowsClockwise size={14} />
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Select value={filters.platform} onValueChange={(value) => setFilters(prev => ({ ...prev, platform: value }))} data-testid="platform-filter">
+                      <SelectTrigger className="flex-1 bg-white border-stone-200 h-7 text-[11px]"><SelectValue placeholder="Platform" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Platforms</SelectItem>
+                        {Object.entries(PLATFORMS).map(([key, config]) => (
+                          <SelectItem key={key} value={key}>{config.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={filters.status} onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))} data-testid="status-filter">
+                      <SelectTrigger className="flex-1 bg-white border-stone-200 h-7 text-[11px]"><SelectValue placeholder="Status" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="pending_approval">Awaiting Approval</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="responded">Responded</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              ) : reviews.length === 0 ? (
-                <div className="p-8 text-center">
-                  <ChatText size={24} className="mx-auto mb-2 text-stone-300" />
-                  <p className="text-sm text-stone-400">No reviews found</p>
-                </div>
-              ) : (
-                <AnimatePresence>
-                  {reviews.map((review, index) => (
-                    <ReviewCard
-                      key={review.id}
-                      review={review}
-                      isSelected={selectedReview?.id === review.id}
-                      onClick={() => setSelectedReview(review)}
-                    />
-                  ))}
-                </AnimatePresence>
-              )}
-            </ScrollArea>
+                <ScrollArea className="h-[calc(100vh-250px)] custom-scrollbar" data-testid="review-list">
+                  {isLoading ? (
+                    <div className="p-8 text-center"><ArrowsClockwise size={24} className="mx-auto mb-2 animate-spin text-stone-300" /><p className="text-sm text-stone-400">Loading reviews...</p></div>
+                  ) : reviews.length === 0 ? (
+                    <div className="p-8 text-center"><ChatText size={24} className="mx-auto mb-2 text-stone-300" /><p className="text-sm text-stone-400">No reviews found</p></div>
+                  ) : (
+                    <AnimatePresence>
+                      {reviews.map((review) => (
+                        <ReviewCard key={review.id} review={review} isSelected={selectedReview?.id === review.id} onClick={() => setSelectedReview(review)} />
+                      ))}
+                    </AnimatePresence>
+                  )}
+                </ScrollArea>
+              </div>
+              {/* Review Detail */}
+              <div className="md:col-span-8 bg-white border border-stone-200/80 rounded-xl shadow-card p-5 flex flex-col" data-testid="review-detail-panel">
+                <AIResponsePanel review={selectedReview} onResponseSubmit={handleResponseSubmit} isLoading={isLoading} templateText={templateTextToApply} onTemplateApplied={() => setTemplateTextToApply(null)} />
+              </div>
+            </div>
           </div>
+        )}
 
-          {/* Review Detail & Response Editor */}
-          <div className="md:col-span-8 bg-white border border-stone-200/80 rounded-xl shadow-card p-6 flex flex-col" data-testid="review-detail-panel">
-            <AIResponsePanel
-              review={selectedReview}
-              onResponseSubmit={handleResponseSubmit}
-              isLoading={isLoading}
-              templateText={templateTextToApply}
-              onTemplateApplied={() => setTemplateTextToApply(null)}
-            />
-          </div>
-        </div>
-      </div>
+        {/* Analytics View */}
+        {activeView === "analytics" && (
+          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
+            <AnalyticsPanel isOpen={true} onClose={() => setActiveView("reviews")} />
+          </Dialog>
+        )}
+
+        {/* Templates View */}
+        {activeView === "templates" && (
+          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
+            <TemplatesManager isOpen={true} onClose={() => setActiveView("reviews")} onSelectTemplate={handleApplyTemplate} />
+          </Dialog>
+        )}
+
+        {/* Approvals View */}
+        {activeView === "approvals" && (
+          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
+            <ApprovalQueuePanel onReviewUpdate={() => { fetchReviews(); fetchStats(); }} />
+          </Dialog>
+        )}
+
+        {/* Integrations View */}
+        {activeView === "integrations" && (
+          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
+            <IntegrationsPanel isOpen={true} onClose={() => setActiveView("reviews")} onSyncComplete={handleSyncComplete} />
+          </Dialog>
+        )}
+
+        {/* API Connection View */}
+        {activeView === "api" && (
+          <ApiConnectionPanel user={user} />
+        )}
+
+        {/* Webhooks View */}
+        {activeView === "webhooks" && (
+          <WebhooksPanel user={user} />
+        )}
+
+        {/* Alerts View */}
+        {activeView === "alerts" && (
+          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
+            <NotificationSettings isOpen={true} onClose={() => setActiveView("reviews")} />
+          </Dialog>
+        )}
+
+        {/* Reports View */}
+        {activeView === "reports" && (
+          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
+            <ReportsSettings isOpen={true} onClose={() => setActiveView("reviews")} />
+          </Dialog>
+        )}
+
+        {/* Branding View */}
+        {activeView === "branding" && (
+          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
+            <BrandingPanel isOpen={true} onClose={() => setActiveView("reviews")} branding={branding} onBrandingUpdate={(updated) => setBranding(updated)} />
+          </Dialog>
+        )}
+
+        {/* Team View */}
+        {activeView === "team" && (
+          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
+            <UserManagementPanel currentUser={user} />
+          </Dialog>
+        )}
+      </main>
 
       {/* Powered By Footer */}
       {branding?.powered_by_visible && branding?.powered_by_text && (
-        <div className="text-center py-2 border-t border-stone-100 bg-white/80" data-testid="powered-by-footer">
-          <span className="text-[11px] text-stone-400">Powered by {branding.powered_by_text}</span>
+        <div className="fixed bottom-0 left-56 right-0 text-center py-1.5 border-t border-stone-100 bg-white/90 z-30" data-testid="powered-by-footer">
+          <span className="text-[10px] text-stone-400">Powered by {branding.powered_by_text}</span>
         </div>
       )}
 

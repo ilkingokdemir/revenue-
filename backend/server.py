@@ -660,6 +660,132 @@ async def get_roles():
         ]
     }
 
+# ==================== API CONNECTION ROUTES ====================
+
+@api_router.get("/api-keys")
+async def list_api_keys(current_user: dict = Depends(require_roles("admin"))):
+    """List all API keys"""
+    keys = await db.api_keys.find({}, {"_id": 0}).to_list(50)
+    # Mask the key value for security
+    for k in keys:
+        if k.get("key"):
+            k["key_masked"] = k["key"][:8] + "..." + k["key"][-4:]
+    return keys
+
+@api_router.post("/api-keys")
+async def create_api_key(request: Request, current_user: dict = Depends(require_roles("admin"))):
+    """Generate a new API key for external integrations"""
+    body = await request.json()
+    label = body.get("label", "Default Key")
+    
+    key_value = f"rhk_{secrets.token_hex(24)}"
+    new_key = {
+        "id": str(uuid.uuid4()),
+        "label": label,
+        "key": key_value,
+        "key_masked": key_value[:8] + "..." + key_value[-4:],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": current_user.get("name", current_user.get("email")),
+        "last_used": None,
+        "request_count": 0
+    }
+    await db.api_keys.insert_one(new_key)
+    new_key.pop("_id", None)
+    return new_key
+
+@api_router.delete("/api-keys/{key_id}")
+async def delete_api_key(key_id: str, current_user: dict = Depends(require_roles("admin"))):
+    """Delete an API key"""
+    result = await db.api_keys.delete_one({"id": key_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="API key not found")
+    return {"message": "API key deleted"}
+
+# ==================== WEBHOOK ROUTES ====================
+
+@api_router.get("/webhooks")
+async def list_webhooks(current_user: dict = Depends(require_roles("admin", "manager"))):
+    """List all webhook configurations"""
+    webhooks = await db.webhooks.find({}, {"_id": 0}).to_list(50)
+    return webhooks
+
+@api_router.post("/webhooks")
+async def create_webhook(request: Request, current_user: dict = Depends(require_roles("admin"))):
+    """Create a new webhook"""
+    body = await request.json()
+    url = body.get("url")
+    events = body.get("events", [])
+    label = body.get("label", "")
+    
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    
+    valid_events = [
+        "review.created", "review.responded", "review.approved", "review.rejected",
+        "response.generated", "response.published",
+        "rating.low", "rating.high"
+    ]
+    
+    for e in events:
+        if e not in valid_events:
+            raise HTTPException(status_code=400, detail=f"Invalid event: {e}. Valid: {', '.join(valid_events)}")
+    
+    webhook = {
+        "id": str(uuid.uuid4()),
+        "url": url,
+        "label": label,
+        "events": events or valid_events,
+        "is_active": True,
+        "secret": secrets.token_hex(16),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": current_user.get("name", current_user.get("email")),
+        "last_triggered": None,
+        "delivery_count": 0,
+        "failure_count": 0
+    }
+    await db.webhooks.insert_one(webhook)
+    webhook.pop("_id", None)
+    return webhook
+
+@api_router.put("/webhooks/{webhook_id}")
+async def update_webhook(webhook_id: str, request: Request, current_user: dict = Depends(require_roles("admin"))):
+    """Update a webhook"""
+    body = await request.json()
+    update_data = {}
+    if "url" in body: update_data["url"] = body["url"]
+    if "events" in body: update_data["events"] = body["events"]
+    if "label" in body: update_data["label"] = body["label"]
+    if "is_active" in body: update_data["is_active"] = body["is_active"]
+    
+    result = await db.webhooks.update_one({"id": webhook_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    updated = await db.webhooks.find_one({"id": webhook_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/webhooks/{webhook_id}")
+async def delete_webhook(webhook_id: str, current_user: dict = Depends(require_roles("admin"))):
+    """Delete a webhook"""
+    result = await db.webhooks.delete_one({"id": webhook_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    return {"message": "Webhook deleted"}
+
+@api_router.get("/webhooks/events")
+async def get_webhook_events():
+    """Get available webhook events"""
+    return [
+        {"id": "review.created", "name": "New Review", "description": "When a new review is received"},
+        {"id": "review.responded", "name": "Review Responded", "description": "When a response is published"},
+        {"id": "review.approved", "name": "Response Approved", "description": "When a response is approved by manager"},
+        {"id": "review.rejected", "name": "Response Rejected", "description": "When a response is rejected"},
+        {"id": "response.generated", "name": "AI Response Generated", "description": "When AI generates a response draft"},
+        {"id": "response.published", "name": "Response Published", "description": "When response is synced to platform"},
+        {"id": "rating.low", "name": "Low Rating Alert", "description": "When a review with rating <= 2 is received"},
+        {"id": "rating.high", "name": "High Rating", "description": "When a review with rating >= 4 is received"}
+    ]
+
 # ==================== APPROVAL WORKFLOW ROUTES ====================
 
 @api_router.post("/reviews/{review_id}/submit-for-approval")

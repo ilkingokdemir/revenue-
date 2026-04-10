@@ -145,6 +145,7 @@ class StatusCheckCreate(BaseModel):
 class Review(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str = "default"  # Hotel property identifier
     platform: str  # booking.com, airbnb, expedia, tripadvisor, google, trip.com
     guest_name: str
     guest_avatar: Optional[str] = None
@@ -165,6 +166,7 @@ class Review(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ReviewCreate(BaseModel):
+    property_id: str = "default"
     platform: str
     guest_name: str
     guest_avatar: Optional[str] = None
@@ -364,8 +366,36 @@ class ApprovalAction(BaseModel):
     action: str  # approve, reject
     notes: Optional[str] = None
 
+# Property Model
+class Property(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    address: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    property_type: str = "hotel"  # hotel, resort, hostel, apartment, villa
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class PropertyCreate(BaseModel):
+    name: str
+    address: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    property_type: str = "hotel"
+
+class PropertyUpdate(BaseModel):
+    name: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    property_type: Optional[str] = None
+    is_active: Optional[bool] = None
+
 VALID_ROLES = ["admin", "manager", "receptionist"]
 VALID_DEPARTMENTS = ["front_desk", "management", "housekeeping", "food_beverage", "maintenance", "spa_wellness", "concierge"]
+VALID_PROPERTY_TYPES = ["hotel", "resort", "hostel", "apartment", "villa", "boutique", "motel", "bed_breakfast"]
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -554,6 +584,62 @@ async def delete_user(user_id: str, current_user: dict = Depends(require_roles("
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User deleted"}
+
+# ==================== PROPERTY MANAGEMENT ROUTES ====================
+
+@api_router.get("/properties")
+async def list_properties(request: Request):
+    """List all properties"""
+    current_user = await get_current_user(request)
+    properties = await db.properties.find({}, {"_id": 0}).to_list(100)
+    if not properties:
+        # Seed a default property if none exist
+        default_prop = {
+            "id": "default",
+            "name": "My Hotel",
+            "address": "",
+            "city": "",
+            "country": "",
+            "property_type": "hotel",
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.properties.insert_one(default_prop)
+        properties = [default_prop]
+    return [{k: v for k, v in p.items() if k != "_id"} for p in properties]
+
+@api_router.post("/properties")
+async def create_property(prop: PropertyCreate, current_user: dict = Depends(require_roles("admin"))):
+    """Create a new property (admin only)"""
+    if prop.property_type not in VALID_PROPERTY_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid property type. Must be one of: {', '.join(VALID_PROPERTY_TYPES)}")
+    new_prop = Property(**prop.model_dump())
+    doc = new_prop.model_dump()
+    await db.properties.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/properties/{property_id}")
+async def update_property(property_id: str, update: PropertyUpdate, current_user: dict = Depends(require_roles("admin"))):
+    """Update a property (admin only)"""
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if "property_type" in update_data and update_data["property_type"] not in VALID_PROPERTY_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid property type")
+    result = await db.properties.update_one({"id": property_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Property not found")
+    updated = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/properties/{property_id}")
+async def delete_property(property_id: str, current_user: dict = Depends(require_roles("admin"))):
+    """Delete a property (admin only)"""
+    if property_id == "default":
+        raise HTTPException(status_code=400, detail="Cannot delete default property")
+    result = await db.properties.delete_one({"id": property_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Property not found")
+    return {"message": "Property deleted"}
 
 @api_router.get("/roles")
 async def get_roles():
@@ -834,12 +920,15 @@ async def get_status_checks():
 
 @api_router.get("/reviews", response_model=List[Review])
 async def get_reviews(
+    property_id: Optional[str] = None,
     platform: Optional[str] = None,
     status: Optional[str] = None,
     rating: Optional[int] = None
 ):
     """Get all reviews with optional filters"""
     query = {}
+    if property_id:
+        query["property_id"] = property_id
     if platform and platform != "all":
         query["platform"] = platform
     if status and status != "all":
@@ -1088,14 +1177,21 @@ async def get_languages():
     return [{"code": k, "name": v} for k, v in SUPPORTED_LANGUAGES.items()]
 
 @api_router.get("/reviews/stats/summary")
-async def get_review_stats():
+async def get_review_stats(property_id: Optional[str] = None):
     """Get review statistics summary"""
-    total = await db.reviews.count_documents({})
-    responded = await db.reviews.count_documents({"response_status": "responded"})
-    pending = await db.reviews.count_documents({"response_status": "pending"})
+    query = {}
+    if property_id:
+        query["property_id"] = property_id
+    
+    total = await db.reviews.count_documents(query)
+    responded = await db.reviews.count_documents({**query, "response_status": "responded"})
+    pending = await db.reviews.count_documents({**query, "response_status": "pending"})
+    pending_approval = await db.reviews.count_documents({**query, "response_status": "pending_approval"})
     
     # Calculate average rating
+    match_stage = {"$match": query} if query else {"$match": {}}
     pipeline = [
+        match_stage,
         {"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}}}
     ]
     result = await db.reviews.aggregate(pipeline).to_list(1)
@@ -1103,6 +1199,7 @@ async def get_review_stats():
     
     # Platform breakdown
     platform_pipeline = [
+        match_stage,
         {"$group": {"_id": "$platform", "count": {"$sum": 1}}}
     ]
     platform_result = await db.reviews.aggregate(platform_pipeline).to_list(100)
@@ -1112,6 +1209,7 @@ async def get_review_stats():
         "total_reviews": total,
         "responded": responded,
         "pending": pending,
+        "pending_approval": pending_approval,
         "response_rate": round((responded / total * 100) if total > 0 else 0, 1),
         "average_rating": round(avg_rating, 1) if avg_rating else 0,
         "by_platform": platforms
@@ -1123,6 +1221,20 @@ async def seed_reviews():
     existing = await db.reviews.count_documents({})
     if existing > 0:
         return {"message": f"Database already has {existing} reviews", "seeded": False}
+    
+    # Seed default property if not exists
+    prop_exists = await db.properties.find_one({"id": "default"})
+    if not prop_exists:
+        await db.properties.insert_one({
+            "id": "default",
+            "name": "My Hotel",
+            "address": "",
+            "city": "",
+            "country": "",
+            "property_type": "hotel",
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
     
     avatars = [
         "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
@@ -2707,6 +2819,11 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_event():
     await seed_admin()
+    # Migrate: ensure all reviews have property_id
+    await db.reviews.update_many(
+        {"property_id": {"$exists": False}},
+        {"$set": {"property_id": "default"}}
+    )
     logger.info("Admin user seeded and indexes created")
 
 @app.on_event("shutdown")

@@ -3360,6 +3360,8 @@ const Dashboard = ({ user, onLogout }) => {
   const [showApprovalQueue, setShowApprovalQueue] = useState(false);
   const [branding, setBranding] = useState(null);
   const [templateTextToApply, setTemplateTextToApply] = useState(null);
+  const [properties, setProperties] = useState([]);
+  const [activePropertyId, setActivePropertyId] = useState("default");
   const [filters, setFilters] = useState({
     platform: "all",
     status: "all"
@@ -3374,9 +3376,19 @@ const Dashboard = ({ user, onLogout }) => {
     fetchStats();
   };
 
+  const fetchProperties = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/properties`);
+      setProperties(data);
+    } catch (e) {
+      console.error("Error fetching properties:", e);
+    }
+  }, []);
+
   const fetchReviews = useCallback(async () => {
     try {
       const params = new URLSearchParams();
+      if (activePropertyId) params.append("property_id", activePropertyId);
       if (filters.platform !== "all") params.append("platform", filters.platform);
       if (filters.status !== "all") params.append("status", filters.status);
       
@@ -3386,11 +3398,12 @@ const Dashboard = ({ user, onLogout }) => {
       console.error("Error fetching reviews:", error);
       toast.error("Failed to load reviews");
     }
-  }, [filters]);
+  }, [filters, activePropertyId]);
 
   const fetchStats = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/reviews/stats/summary`);
+      const params = activePropertyId ? `?property_id=${activePropertyId}` : "";
+      const response = await axios.get(`${API}/reviews/stats/summary${params}`);
       setStats(response.data);
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -3423,6 +3436,7 @@ const Dashboard = ({ user, onLogout }) => {
     const init = async () => {
       setIsLoading(true);
       await seedReviews();
+      await fetchProperties();
       await fetchReviews();
       await fetchStats();
       await fetchBranding();
@@ -3433,7 +3447,8 @@ const Dashboard = ({ user, onLogout }) => {
 
   useEffect(() => {
     fetchReviews();
-  }, [filters, fetchReviews]);
+    fetchStats();
+  }, [filters, activePropertyId, fetchReviews, fetchStats]);
 
   const handleResponseSubmit = async (reviewId, responseText) => {
     setIsLoading(true);
@@ -3489,6 +3504,19 @@ const Dashboard = ({ user, onLogout }) => {
               <h1 className="text-base font-semibold tracking-tight text-stone-900" data-testid="header-app-name">{branding?.app_name || "Review Hub"}</h1>
               <p className="text-[11px] text-stone-400" data-testid="header-subtitle">{branding?.subtitle || "Manage all your guest reviews in one place"}</p>
             </div>
+            {/* Property Selector */}
+            {properties.length > 1 && (
+              <Select value={activePropertyId} onValueChange={(v) => { setActivePropertyId(v); }} data-testid="property-selector">
+                <SelectTrigger className="w-[180px] bg-stone-50 border-stone-200 h-8 text-xs ml-4">
+                  <SelectValue placeholder="Select property" />
+                </SelectTrigger>
+                <SelectContent>
+                  {properties.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <Dialog open={showAnalytics} onOpenChange={setShowAnalytics}>

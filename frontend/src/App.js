@@ -3351,6 +3351,419 @@ const BrandingPanel = ({ isOpen, onClose, branding, onBrandingUpdate }) => {
   );
 };
 
+// ==================== API CONNECTION PANEL ====================
+const ApiConnectionPanel = ({ user }) => {
+  const [apiKeys, setApiKeys] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showNewKey, setShowNewKey] = useState(false);
+  const [newKeyLabel, setNewKeyLabel] = useState("");
+  const [createdKey, setCreatedKey] = useState(null);
+  const [copiedKeyId, setCopiedKeyId] = useState(null);
+
+  const fetchKeys = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/api-keys`);
+      setApiKeys(data);
+    } catch (e) {
+      toast.error("Failed to load API keys");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchKeys(); }, [fetchKeys]);
+
+  const handleCreateKey = async () => {
+    if (!newKeyLabel.trim()) { toast.error("Enter a label for the key"); return; }
+    try {
+      const { data } = await axios.post(`${API}/api-keys`, { label: newKeyLabel.trim() });
+      setCreatedKey(data);
+      setNewKeyLabel("");
+      setShowNewKey(false);
+      fetchKeys();
+      toast.success("API key created!");
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to create key");
+    }
+  };
+
+  const handleDeleteKey = async (keyId) => {
+    try {
+      await axios.delete(`${API}/api-keys/${keyId}`);
+      toast.success("API key deleted");
+      if (createdKey?.id === keyId) setCreatedKey(null);
+      fetchKeys();
+    } catch (e) {
+      toast.error("Failed to delete key");
+    }
+  };
+
+  const copyToClipboard = (text, id) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKeyId(id);
+    toast.success("Copied to clipboard");
+    setTimeout(() => setCopiedKeyId(null), 2000);
+  };
+
+  return (
+    <div className="p-5" data-testid="api-connection-panel">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-800" data-testid="api-panel-title">API Connection</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Manage API keys for integrating with MyHotelBox.com</p>
+        </div>
+        {user?.role === "admin" && (
+          <button
+            onClick={() => setShowNewKey(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 text-white text-xs font-medium rounded-lg hover:bg-emerald-800 transition-colors"
+            data-testid="create-api-key-btn"
+          >
+            <Plus size={14} /> New API Key
+          </button>
+        )}
+      </div>
+
+      {/* New Key Form */}
+      {showNewKey && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white border border-stone-200 rounded-lg p-4 mb-4" data-testid="new-key-form">
+          <h3 className="text-sm font-medium text-stone-700 mb-3">Create New API Key</h3>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Key label (e.g., MyHotelBox Production)"
+              value={newKeyLabel}
+              onChange={(e) => setNewKeyLabel(e.target.value)}
+              className="flex-1 text-sm"
+              data-testid="api-key-label-input"
+            />
+            <button onClick={handleCreateKey} className="px-4 py-2 bg-emerald-700 text-white text-xs font-medium rounded-lg hover:bg-emerald-800 transition-colors" data-testid="confirm-create-key-btn">Create</button>
+            <button onClick={() => { setShowNewKey(false); setNewKeyLabel(""); }} className="px-3 py-2 border border-stone-300 text-stone-600 text-xs rounded-lg hover:bg-stone-50 transition-colors">Cancel</button>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Created Key Alert */}
+      {createdKey && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4" data-testid="created-key-alert">
+          <div className="flex items-start gap-2">
+            <WarningCircle size={18} className="text-amber-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-amber-800 mb-1">Save this key now — it won't be shown again</p>
+              <div className="flex items-center gap-2 bg-white border border-amber-300 rounded px-3 py-2">
+                <code className="text-xs text-stone-800 flex-1 break-all font-mono" data-testid="new-key-value">{createdKey.key}</code>
+                <button onClick={() => copyToClipboard(createdKey.key, "new")} className="text-stone-500 hover:text-emerald-700 flex-shrink-0" data-testid="copy-new-key-btn">
+                  {copiedKeyId === "new" ? <CheckCircle size={16} className="text-emerald-600" /> : <Copy size={16} />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* API Documentation Card */}
+      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Info size={16} className="text-stone-500" />
+          <h3 className="text-sm font-medium text-stone-700">Quick Start</h3>
+        </div>
+        <div className="space-y-2 text-xs text-stone-600">
+          <p>Include your API key in requests as a Bearer token:</p>
+          <div className="bg-stone-900 text-stone-100 rounded-lg p-3 font-mono text-[11px] leading-relaxed">
+            <span className="text-emerald-400">GET</span> /api/reviews<br />
+            <span className="text-stone-500">Authorization:</span> <span className="text-amber-300">Bearer rhk_your_api_key</span><br />
+            <span className="text-stone-500">Content-Type:</span> application/json
+          </div>
+          <p className="mt-2">
+            <a href={`${BACKEND_URL}/api/docs`} target="_blank" rel="noreferrer" className="text-emerald-700 hover:underline font-medium inline-flex items-center gap-1" data-testid="swagger-docs-link">
+              View Full API Documentation <ArrowSquareOut size={12} />
+            </a>
+          </p>
+        </div>
+      </div>
+
+      {/* Keys List */}
+      {isLoading ? (
+        <div className="flex justify-center py-12"><ArrowsClockwise size={24} className="animate-spin text-stone-400" /></div>
+      ) : apiKeys.length === 0 ? (
+        <div className="text-center py-12 bg-white border border-stone-200 rounded-lg" data-testid="no-keys-message">
+          <Key size={32} className="mx-auto text-stone-300 mb-3" />
+          <p className="text-sm text-stone-500">No API keys yet</p>
+          <p className="text-xs text-stone-400 mt-1">Create a key to start integrating</p>
+        </div>
+      ) : (
+        <div className="space-y-2" data-testid="api-keys-list">
+          {apiKeys.map((k) => (
+            <div key={k.id} className="bg-white border border-stone-200 rounded-lg p-4 flex items-center gap-4 hover:border-stone-300 transition-colors" data-testid={`api-key-${k.id}`}>
+              <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+                <Key size={16} className="text-emerald-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-stone-800">{k.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${k.is_active ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+                    {k.is_active ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mt-1">
+                  <code className="text-xs text-stone-500 font-mono">{k.key_masked}</code>
+                  <span className="text-[10px] text-stone-400">Created {new Date(k.created_at).toLocaleDateString()}</span>
+                  {k.request_count > 0 && <span className="text-[10px] text-stone-400">{k.request_count} requests</span>}
+                </div>
+              </div>
+              <button onClick={() => copyToClipboard(k.key_masked, k.id)} className="text-stone-400 hover:text-stone-600 p-1.5" data-testid={`copy-key-${k.id}`}>
+                {copiedKeyId === k.id ? <CheckCircle size={14} className="text-emerald-600" /> : <Copy size={14} />}
+              </button>
+              {user?.role === "admin" && (
+                <button onClick={() => handleDeleteKey(k.id)} className="text-stone-400 hover:text-red-500 p-1.5" data-testid={`delete-key-${k.id}`}>
+                  <Trash size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== WEBHOOKS PANEL ====================
+const WebhooksPanel = ({ user }) => {
+  const [webhooks, setWebhooks] = useState([]);
+  const [availableEvents, setAvailableEvents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showNewWebhook, setShowNewWebhook] = useState(false);
+  const [newWebhook, setNewWebhook] = useState({ url: "", label: "", events: [] });
+  const [expandedId, setExpandedId] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+
+  const fetchWebhooks = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [whRes, evRes] = await Promise.all([
+        axios.get(`${API}/webhooks`),
+        axios.get(`${API}/webhooks/events`)
+      ]);
+      setWebhooks(whRes.data);
+      setAvailableEvents(evRes.data);
+    } catch (e) {
+      toast.error("Failed to load webhooks");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchWebhooks(); }, [fetchWebhooks]);
+
+  const handleCreate = async () => {
+    if (!newWebhook.url.trim()) { toast.error("Enter a webhook URL"); return; }
+    try {
+      await axios.post(`${API}/webhooks`, newWebhook);
+      toast.success("Webhook created!");
+      setShowNewWebhook(false);
+      setNewWebhook({ url: "", label: "", events: [] });
+      fetchWebhooks();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to create webhook");
+    }
+  };
+
+  const handleToggle = async (wh) => {
+    try {
+      await axios.put(`${API}/webhooks/${wh.id}`, { is_active: !wh.is_active });
+      fetchWebhooks();
+      toast.success(`Webhook ${wh.is_active ? "paused" : "activated"}`);
+    } catch (e) {
+      toast.error("Failed to update webhook");
+    }
+  };
+
+  const handleDelete = async (whId) => {
+    try {
+      await axios.delete(`${API}/webhooks/${whId}`);
+      toast.success("Webhook deleted");
+      fetchWebhooks();
+    } catch (e) {
+      toast.error("Failed to delete webhook");
+    }
+  };
+
+  const toggleEvent = (eventId) => {
+    setNewWebhook(prev => ({
+      ...prev,
+      events: prev.events.includes(eventId) ? prev.events.filter(e => e !== eventId) : [...prev.events, eventId]
+    }));
+  };
+
+  const copySecret = (secret, id) => {
+    navigator.clipboard.writeText(secret);
+    setCopiedId(id);
+    toast.success("Secret copied");
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  return (
+    <div className="p-5" data-testid="webhooks-panel">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-800" data-testid="webhooks-panel-title">Webhooks</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Receive real-time notifications when events happen</p>
+        </div>
+        {user?.role === "admin" && (
+          <button
+            onClick={() => setShowNewWebhook(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 text-white text-xs font-medium rounded-lg hover:bg-emerald-800 transition-colors"
+            data-testid="create-webhook-btn"
+          >
+            <Plus size={14} /> New Webhook
+          </button>
+        )}
+      </div>
+
+      {/* New Webhook Form */}
+      {showNewWebhook && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-white border border-stone-200 rounded-lg p-4 mb-4" data-testid="new-webhook-form">
+          <h3 className="text-sm font-medium text-stone-700 mb-3">Create New Webhook</h3>
+          <div className="space-y-3">
+            <Input
+              placeholder="Label (e.g., MyHotelBox Sync)"
+              value={newWebhook.label}
+              onChange={(e) => setNewWebhook(p => ({ ...p, label: e.target.value }))}
+              className="text-sm"
+              data-testid="webhook-label-input"
+            />
+            <Input
+              placeholder="https://myhotelbox.com/api/webhooks/reviews"
+              value={newWebhook.url}
+              onChange={(e) => setNewWebhook(p => ({ ...p, url: e.target.value }))}
+              className="text-sm font-mono"
+              data-testid="webhook-url-input"
+            />
+            <div>
+              <p className="text-xs font-medium text-stone-600 mb-2">Events to subscribe (leave empty for all)</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {availableEvents.map((ev) => (
+                  <label key={ev.id} className="flex items-center gap-2 text-xs text-stone-600 p-1.5 rounded hover:bg-stone-50 cursor-pointer" data-testid={`event-${ev.id}`}>
+                    <input
+                      type="checkbox"
+                      checked={newWebhook.events.includes(ev.id)}
+                      onChange={() => toggleEvent(ev.id)}
+                      className="rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span>{ev.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button onClick={handleCreate} className="px-4 py-2 bg-emerald-700 text-white text-xs font-medium rounded-lg hover:bg-emerald-800 transition-colors" data-testid="confirm-create-webhook-btn">Create Webhook</button>
+              <button onClick={() => { setShowNewWebhook(false); setNewWebhook({ url: "", label: "", events: [] }); }} className="px-3 py-2 border border-stone-300 text-stone-600 text-xs rounded-lg hover:bg-stone-50 transition-colors">Cancel</button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Webhook Info Card */}
+      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Info size={16} className="text-stone-500" />
+          <h3 className="text-sm font-medium text-stone-700">How Webhooks Work</h3>
+        </div>
+        <div className="text-xs text-stone-600 space-y-1">
+          <p>When an event occurs (new review, response approved, etc.), we send a POST request to your URL with the event payload.</p>
+          <p>Each webhook includes a <code className="bg-stone-200 px-1 rounded text-[11px]">X-Webhook-Secret</code> header for verification.</p>
+        </div>
+      </div>
+
+      {/* Webhooks List */}
+      {isLoading ? (
+        <div className="flex justify-center py-12"><ArrowsClockwise size={24} className="animate-spin text-stone-400" /></div>
+      ) : webhooks.length === 0 ? (
+        <div className="text-center py-12 bg-white border border-stone-200 rounded-lg" data-testid="no-webhooks-message">
+          <Code size={32} className="mx-auto text-stone-300 mb-3" />
+          <p className="text-sm text-stone-500">No webhooks configured</p>
+          <p className="text-xs text-stone-400 mt-1">Set up webhooks to receive real-time updates</p>
+        </div>
+      ) : (
+        <div className="space-y-2" data-testid="webhooks-list">
+          {webhooks.map((wh) => (
+            <div key={wh.id} className="bg-white border border-stone-200 rounded-lg hover:border-stone-300 transition-colors" data-testid={`webhook-${wh.id}`}>
+              <div className="flex items-center gap-4 p-4">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${wh.is_active ? "bg-emerald-50" : "bg-stone-100"}`}>
+                  <Code size={16} className={wh.is_active ? "text-emerald-700" : "text-stone-400"} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-stone-800">{wh.label || "Unnamed Webhook"}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${wh.is_active ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+                      {wh.is_active ? "Active" : "Paused"}
+                    </span>
+                  </div>
+                  <code className="text-xs text-stone-500 font-mono block mt-0.5 truncate">{wh.url}</code>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Switch
+                    checked={wh.is_active}
+                    onCheckedChange={() => handleToggle(wh)}
+                    data-testid={`toggle-webhook-${wh.id}`}
+                  />
+                  <button onClick={() => setExpandedId(expandedId === wh.id ? null : wh.id)} className="text-stone-400 hover:text-stone-600 p-1.5" data-testid={`expand-webhook-${wh.id}`}>
+                    <CaretRight size={14} className={`transition-transform ${expandedId === wh.id ? "rotate-90" : ""}`} />
+                  </button>
+                  {user?.role === "admin" && (
+                    <button onClick={() => handleDelete(wh.id)} className="text-stone-400 hover:text-red-500 p-1.5" data-testid={`delete-webhook-${wh.id}`}>
+                      <Trash size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Expanded Details */}
+              <AnimatePresence>
+                {expandedId === wh.id && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                    <div className="px-4 pb-4 pt-0 border-t border-stone-100">
+                      <div className="grid grid-cols-2 gap-3 mt-3 text-xs">
+                        <div>
+                          <span className="text-stone-400 block mb-1">Secret</span>
+                          <div className="flex items-center gap-1.5">
+                            <code className="text-stone-600 font-mono bg-stone-50 px-2 py-1 rounded text-[11px]">{wh.secret?.slice(0, 8)}...{wh.secret?.slice(-4)}</code>
+                            <button onClick={() => copySecret(wh.secret, wh.id)} className="text-stone-400 hover:text-emerald-600" data-testid={`copy-secret-${wh.id}`}>
+                              {copiedId === wh.id ? <CheckCircle size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <span className="text-stone-400 block mb-1">Created</span>
+                          <span className="text-stone-600">{new Date(wh.created_at).toLocaleDateString()} by {wh.created_by}</span>
+                        </div>
+                        <div>
+                          <span className="text-stone-400 block mb-1">Deliveries</span>
+                          <span className="text-stone-600">{wh.delivery_count} sent, {wh.failure_count} failed</span>
+                        </div>
+                        <div>
+                          <span className="text-stone-400 block mb-1">Last Triggered</span>
+                          <span className="text-stone-600">{wh.last_triggered ? new Date(wh.last_triggered).toLocaleString() : "Never"}</span>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <span className="text-stone-400 text-xs block mb-1.5">Subscribed Events</span>
+                        <div className="flex flex-wrap gap-1">
+                          {wh.events?.map(ev => (
+                            <span key={ev} className="text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{ev}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Main Dashboard Component
 const Dashboard = ({ user, onLogout }) => {
   const [reviews, setReviews] = useState([]);

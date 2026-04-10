@@ -22,6 +22,15 @@ Hotel management review module to receive all reviews from online platforms (Boo
 - **Hostelworld** - 3-step API setup (hostels/budget)
 - **Manual Import** - CSV upload and form entry for any platform
 
+### White-Label Branding (NEW - April 2026)
+- Custom logo upload (stored as base64 in MongoDB, max 2MB)
+- Customizable app name and subtitle
+- 6 color theme presets (Forest, Ocean, Midnight, Plum, Charcoal, Navy)
+- Custom primary & accent color pickers
+- "Powered By" footer badge (toggle + custom text)
+- Live preview banner showing real-time changes
+- All settings persisted to MongoDB
+
 ### Core Features
 - AI Response Generation (GPT-5.2 via Emergent Key)
 - Response Templates (6 default templates)
@@ -38,7 +47,11 @@ Hotel management review module to receive all reviews from online platforms (Boo
 - AI: OpenAI GPT-5.2 (Emergent LLM Key)
 - Email: Resend (Emergent Key)
 
+## DB Collections
+- reviews, competitors, templates, notification_settings, report_settings
+- platform_integrations, branding_settings
+
 ## Next Tasks (Prioritized)
 1. **P0** - Real bi-directional sync (requires platform API credentials/partner approvals)
 2. **P1** - Authentication system for team access
-3. **P2** - Refactor App.js (2800+ lines) into modular components
+3. **P2** - Refactor App.js (3000+ lines) into modular components

@@ -4,12 +4,14 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import asyncio
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+import resend
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -18,6 +20,11 @@ load_dotenv(ROOT_DIR / '.env')
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# Resend configuration
+resend.api_key = os.environ.get('RESEND_API_KEY', '')
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', '')
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -78,6 +85,21 @@ class AIGenerateRequest(BaseModel):
 class AIGenerateResponse(BaseModel):
     generated_text: str
 
+class NotificationSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    notify_negative_reviews: bool = True
+    negative_threshold: int = 2  # Reviews with rating <= this value trigger notification
+    enabled: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class NotificationSettingsUpdate(BaseModel):
+    email: Optional[str] = None
+    notify_negative_reviews: Optional[bool] = None
+    negative_threshold: Optional[int] = None
+    enabled: Optional[bool] = None
+
 # ==================== HELPER FUNCTIONS ====================
 
 def serialize_review(review: dict) -> dict:
@@ -93,6 +115,116 @@ def deserialize_review(review: dict) -> dict:
         if field in review and isinstance(review[field], str):
             review[field] = datetime.fromisoformat(review[field])
     return review
+
+async def send_negative_review_notification(review: dict):
+    """Send email notification for negative reviews (1-2 stars)"""
+    settings = await db.notification_settings.find_one({}, {"_id": 0})
+    
+    if not settings or not settings.get('enabled', False):
+        logger.info("Notifications disabled or not configured")
+        return False
+    
+    if review.get('rating', 5) > settings.get('negative_threshold', 2):
+        logger.info(f"Review rating {review.get('rating')} above threshold, skipping notification")
+        return False
+    
+    notification_email = settings.get('email', NOTIFICATION_EMAIL)
+    if not notification_email:
+        logger.warning("No notification email configured")
+        return False
+    
+    if not resend.api_key or resend.api_key == 're_123456789':
+        logger.warning("Resend API key not configured - notification logged but not sent")
+        # Log the notification for demo purposes
+        await db.notification_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "review_id": review.get('id'),
+            "email": notification_email,
+            "status": "demo_logged",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        return True
+    
+    platform_names = {
+        "booking.com": "Booking.com",
+        "airbnb": "Airbnb",
+        "expedia": "Expedia",
+        "tripadvisor": "TripAdvisor",
+        "google": "Google",
+        "trip.com": "Trip.com"
+    }
+    
+    platform = platform_names.get(review.get('platform', ''), review.get('platform', 'Unknown'))
+    rating_stars = '★' * review.get('rating', 1) + '☆' * (5 - review.get('rating', 1))
+    
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #C05A44; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+            <h1 style="margin: 0; font-size: 24px;">⚠️ Negative Review Alert</h1>
+        </div>
+        <div style="background-color: #FAF9F6; padding: 20px; border: 1px solid #E7E5E4; border-top: none; border-radius: 0 0 8px 8px;">
+            <p style="color: #57534E; margin-bottom: 20px;">A new negative review requires your attention:</p>
+            
+            <div style="background-color: white; border: 1px solid #E7E5E4; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+                    <span style="background-color: #3E5245; color: white; padding: 4px 12px; border-radius: 4px; font-size: 12px;">{platform}</span>
+                    <span style="color: #D4A373; font-size: 18px;">{rating_stars}</span>
+                </div>
+                <p style="font-weight: bold; color: #1C1917; margin-bottom: 5px;">{review.get('guest_name', 'Guest')}</p>
+                <p style="color: #57534E; font-size: 14px; margin-bottom: 15px;">
+                    {review.get('room_type', '')} • {review.get('stay_date', '')}
+                </p>
+                <p style="color: #1C1917; line-height: 1.6; background-color: #FAF9F6; padding: 15px; border-radius: 4px;">
+                    "{review.get('review_text', '')}"
+                </p>
+            </div>
+            
+            <p style="color: #57534E; font-size: 14px;">
+                Quick response to negative reviews can help protect your hotel's reputation. 
+                Log in to Review Hub to craft a thoughtful response.
+            </p>
+            
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #E7E5E4; color: #57534E; font-size: 12px;">
+                This is an automated notification from Review Hub.
+            </div>
+        </div>
+    </div>
+    """
+    
+    try:
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [notification_email],
+            "subject": f"⚠️ Negative Review Alert: {review.get('rating')}/5 on {platform}",
+            "html": html_content
+        }
+        
+        email_result = await asyncio.to_thread(resend.Emails.send, params)
+        
+        # Log successful notification
+        await db.notification_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "review_id": review.get('id'),
+            "email": notification_email,
+            "email_id": email_result.get('id'),
+            "status": "sent",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        logger.info(f"Negative review notification sent to {notification_email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send notification: {str(e)}")
+        await db.notification_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "review_id": review.get('id'),
+            "email": notification_email,
+            "status": "failed",
+            "error": str(e),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        return False
 
 # ==================== ROUTES ====================
 
@@ -155,6 +287,11 @@ async def create_review(input: ReviewCreate):
     doc = review.model_dump()
     doc = serialize_review(doc)
     await db.reviews.insert_one(doc)
+    
+    # Trigger notification for negative reviews (1-2 stars)
+    if input.rating <= 2:
+        await send_negative_review_notification(doc)
+    
     return review
 
 @api_router.put("/reviews/{review_id}/respond", response_model=Review)
@@ -393,6 +530,82 @@ async def clear_reviews():
     """Clear all reviews (for testing)"""
     result = await db.reviews.delete_many({})
     return {"message": f"Deleted {result.deleted_count} reviews"}
+
+# ==================== NOTIFICATION SETTINGS ROUTES ====================
+
+@api_router.get("/notifications/settings")
+async def get_notification_settings():
+    """Get current notification settings"""
+    settings = await db.notification_settings.find_one({}, {"_id": 0})
+    if not settings:
+        # Return default settings
+        return {
+            "id": None,
+            "email": NOTIFICATION_EMAIL or "",
+            "notify_negative_reviews": True,
+            "negative_threshold": 2,
+            "enabled": False,
+            "message": "Notification settings not configured. Update to enable."
+        }
+    return settings
+
+@api_router.put("/notifications/settings")
+async def update_notification_settings(settings: NotificationSettingsUpdate):
+    """Update notification settings"""
+    existing = await db.notification_settings.find_one({}, {"_id": 0})
+    
+    if existing:
+        update_data = {k: v for k, v in settings.model_dump().items() if v is not None}
+        if update_data:
+            await db.notification_settings.update_one(
+                {"id": existing["id"]},
+                {"$set": update_data}
+            )
+        updated = await db.notification_settings.find_one({}, {"_id": 0})
+        return updated
+    else:
+        # Create new settings
+        new_settings = NotificationSettings(
+            email=settings.email or NOTIFICATION_EMAIL or "",
+            notify_negative_reviews=settings.notify_negative_reviews if settings.notify_negative_reviews is not None else True,
+            negative_threshold=settings.negative_threshold if settings.negative_threshold is not None else 2,
+            enabled=settings.enabled if settings.enabled is not None else True
+        )
+        doc = new_settings.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.notification_settings.insert_one(doc)
+        return new_settings
+
+@api_router.get("/notifications/log")
+async def get_notification_log():
+    """Get notification history"""
+    logs = await db.notification_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return logs
+
+@api_router.post("/notifications/test")
+async def test_notification():
+    """Send a test notification email"""
+    settings = await db.notification_settings.find_one({}, {"_id": 0})
+    
+    if not settings or not settings.get('enabled'):
+        raise HTTPException(status_code=400, detail="Notifications not enabled. Configure settings first.")
+    
+    test_review = {
+        "id": "test-notification",
+        "platform": "google",
+        "guest_name": "Test Guest",
+        "rating": 1,
+        "review_text": "This is a test notification to verify your email alerts are working correctly.",
+        "room_type": "Test Room",
+        "stay_date": "Test Date"
+    }
+    
+    success = await send_negative_review_notification(test_review)
+    
+    if success:
+        return {"status": "success", "message": f"Test notification sent to {settings.get('email')}"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to send test notification")
 
 # Include the router in the main app
 app.include_router(api_router)

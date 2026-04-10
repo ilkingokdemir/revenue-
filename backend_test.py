@@ -224,6 +224,104 @@ class ReviewAPITester:
         
         return success, response
 
+    def test_notification_settings(self):
+        """Test notification settings endpoints"""
+        print(f"\n📧 Testing Email Notification Settings...")
+        
+        # 1. Get current notification settings
+        success, response = self.run_test("Get Notification Settings", "GET", "notifications/settings", 200)
+        
+        if success:
+            print(f"   📋 Current settings: enabled={response.get('enabled', False)}, email={response.get('email', 'none')}")
+            print(f"   🎯 Threshold: {response.get('negative_threshold', 2)} stars")
+        
+        # 2. Update notification settings
+        settings_data = {
+            "email": "test@hotel.com",
+            "notify_negative_reviews": True,
+            "negative_threshold": 2,
+            "enabled": True
+        }
+        
+        success, response = self.run_test(
+            "Update Notification Settings", 
+            "PUT", 
+            "notifications/settings", 
+            200, 
+            data=settings_data
+        )
+        
+        if success:
+            print(f"   ✅ Settings updated: enabled={response.get('enabled', False)}")
+        
+        # 3. Get notification log
+        success, response = self.run_test("Get Notification Log", "GET", "notifications/log", 200)
+        
+        if success and isinstance(response, list):
+            print(f"   📜 Found {len(response)} notification log entries")
+        
+        return success
+
+    def test_notification_trigger(self):
+        """Test that negative reviews trigger notifications"""
+        print(f"\n🚨 Testing Negative Review Notification Trigger...")
+        
+        # Create a negative review (rating <= 2)
+        negative_review_data = {
+            "platform": "google",
+            "guest_name": "Unhappy Guest",
+            "rating": 2,  # This should trigger notification
+            "review_text": "Very disappointed with the service. Room was dirty and staff was unhelpful.",
+            "stay_date": "January 2026",
+            "room_type": "Standard Room"
+        }
+        
+        success, response = self.run_test(
+            "Create Negative Review (Should Trigger Notification)", 
+            "POST", 
+            "reviews", 
+            200, 
+            data=negative_review_data
+        )
+        
+        if success and response.get("id"):
+            print(f"   📝 Created negative review with ID: {response['id'][:8]}...")
+            print(f"   ⭐ Rating: {response.get('rating')}/5 (should trigger notification)")
+            
+            # Check notification log for new entry
+            import time
+            time.sleep(1)  # Give time for notification to be processed
+            
+            log_success, log_response = self.run_test("Check Notification Log After Negative Review", "GET", "notifications/log", 200)
+            
+            if log_success and isinstance(log_response, list) and len(log_response) > 0:
+                latest_log = log_response[0]  # Most recent log entry
+                if latest_log.get('review_id') == response['id']:
+                    print(f"   ✅ Notification logged for review: status={latest_log.get('status', 'unknown')}")
+                else:
+                    print(f"   ⚠️ No notification log found for this review")
+        
+        return success
+
+    def test_notification_test_endpoint(self):
+        """Test the test notification endpoint"""
+        print(f"\n🧪 Testing Test Notification Endpoint...")
+        
+        # First ensure settings are enabled
+        settings_data = {
+            "email": "test@hotel.com",
+            "enabled": True
+        }
+        self.run_test("Enable Notifications for Test", "PUT", "notifications/settings", 200, data=settings_data)
+        
+        # Send test notification
+        success, response = self.run_test("Send Test Notification", "POST", "notifications/test", 200)
+        
+        if success:
+            print(f"   ✅ Test notification sent: {response.get('message', 'success')}")
+        
+        return success
+
     def run_comprehensive_test(self):
         """Run all tests in sequence"""
         print("🏨 Hotel Review Management API Testing")
@@ -275,6 +373,18 @@ class ReviewAPITester:
         # 8. Test stats
         print("\n8️⃣ Testing Statistics...")
         self.test_stats_summary()
+
+        # 9. Test notification settings
+        print("\n9️⃣ Testing Notification Settings...")
+        self.test_notification_settings()
+
+        # 10. Test notification trigger
+        print("\n🔟 Testing Notification Trigger...")
+        self.test_notification_trigger()
+
+        # 11. Test notification test endpoint
+        print("\n1️⃣1️⃣ Testing Test Notification...")
+        self.test_notification_test_endpoint()
 
         # Print summary
         print("\n" + "=" * 50)

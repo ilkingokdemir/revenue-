@@ -12,13 +12,15 @@ import {
   ChatText,
   FunnelSimple,
   ArrowsClockwise,
-  CaretDown,
   Buildings,
-  ChartBar,
   Quotes,
   PaperPlaneTilt,
   PencilSimple,
-  X
+  Bell,
+  Gear,
+  X,
+  EnvelopeSimple,
+  TestTube
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -30,6 +32,15 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -381,12 +392,169 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading }) => {
   );
 };
 
+// Notification Settings Component
+const NotificationSettings = ({ isOpen, onClose }) => {
+  const [settings, setSettings] = useState({
+    email: "",
+    notify_negative_reviews: true,
+    negative_threshold: 2,
+    enabled: false
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchSettings();
+    }
+  }, [isOpen]);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await axios.get(`${API}/notifications/settings`);
+      setSettings(response.data);
+    } catch (error) {
+      console.error("Error fetching notification settings:", error);
+    }
+  };
+
+  const saveSettings = async () => {
+    setIsSaving(true);
+    try {
+      await axios.put(`${API}/notifications/settings`, settings);
+      toast.success("Notification settings saved!");
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      toast.error("Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const sendTestNotification = async () => {
+    setIsTesting(true);
+    try {
+      await axios.post(`${API}/notifications/test`);
+      toast.success("Test notification sent! Check your email.");
+    } catch (error) {
+      console.error("Error sending test notification:", error);
+      toast.error(error.response?.data?.detail || "Failed to send test notification");
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  return (
+    <DialogContent className="sm:max-w-[500px]" data-testid="notification-settings-dialog">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
+          <Bell size={20} weight="fill" className="text-[#3E5245]" />
+          Email Notifications
+        </DialogTitle>
+      </DialogHeader>
+      
+      <div className="space-y-6 py-4">
+        {/* Enable/Disable Toggle */}
+        <div className="flex items-center justify-between p-4 bg-[#FAF9F6] rounded-md border border-[#E7E5E4]">
+          <div>
+            <p className="font-medium text-[#1C1917]">Enable Notifications</p>
+            <p className="text-sm text-[#57534E]">Receive alerts for negative reviews</p>
+          </div>
+          <Switch
+            checked={settings.enabled}
+            onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enabled: checked }))}
+            data-testid="notification-enable-switch"
+          />
+        </div>
+
+        {/* Email Address */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-[#1C1917] flex items-center gap-2">
+            <EnvelopeSimple size={16} className="text-[#57534E]" />
+            Notification Email
+          </label>
+          <Input
+            type="email"
+            placeholder="hotel@example.com"
+            value={settings.email}
+            onChange={(e) => setSettings(prev => ({ ...prev, email: e.target.value }))}
+            className="border-stone-200"
+            data-testid="notification-email-input"
+          />
+          <p className="text-xs text-[#57534E]">Email address to receive negative review alerts</p>
+        </div>
+
+        {/* Rating Threshold */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-[#1C1917]">Alert Threshold</label>
+          <Select
+            value={String(settings.negative_threshold)}
+            onValueChange={(value) => setSettings(prev => ({ ...prev, negative_threshold: parseInt(value) }))}
+            data-testid="threshold-select"
+          >
+            <SelectTrigger className="border-stone-200">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1">1 star only</SelectItem>
+              <SelectItem value="2">1-2 stars (recommended)</SelectItem>
+              <SelectItem value="3">1-3 stars</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-[#57534E]">Send alerts when reviews are at or below this rating</p>
+        </div>
+
+        {/* Info Banner */}
+        <div className="p-3 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md">
+          <p className="text-xs text-[#57534E]">
+            <strong>Note:</strong> In demo mode, notifications are logged but not actually sent. 
+            Configure a valid Resend API key in production to enable real email delivery.
+          </p>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center justify-between pt-4 border-t border-stone-200">
+          <button
+            onClick={sendTestNotification}
+            disabled={!settings.enabled || !settings.email || isTesting}
+            className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors disabled:opacity-50 flex items-center gap-2"
+            data-testid="test-notification-btn"
+          >
+            <TestTube size={16} />
+            {isTesting ? "Sending..." : "Send Test"}
+          </button>
+          
+          <button
+            onClick={saveSettings}
+            disabled={isSaving}
+            className="bg-[#3E5245] text-white px-4 py-2 rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
+            data-testid="save-notification-settings-btn"
+          >
+            {isSaving ? (
+              <>
+                <ArrowsClockwise size={16} className="animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <CheckCircle size={16} weight="fill" />
+                Save Settings
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </DialogContent>
+  );
+};
+
 // Main Dashboard Component
 const Dashboard = () => {
   const [reviews, setReviews] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedReview, setSelectedReview] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
   const [filters, setFilters] = useState({
     platform: "all",
     status: "all"
@@ -482,18 +650,35 @@ const Dashboard = () => {
               <p className="text-sm text-[#57534E]">Manage all your guest reviews in one place</p>
             </div>
           </div>
-          <button
-            onClick={() => {
-              fetchReviews();
-              fetchStats();
-              toast.success("Reviews refreshed!");
-            }}
-            className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
-            data-testid="refresh-btn"
-          >
-            <ArrowsClockwise size={18} />
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <Dialog open={showNotificationSettings} onOpenChange={setShowNotificationSettings}>
+              <DialogTrigger asChild>
+                <button
+                  className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
+                  data-testid="notification-settings-btn"
+                >
+                  <Bell size={18} />
+                  Alerts
+                </button>
+              </DialogTrigger>
+              <NotificationSettings 
+                isOpen={showNotificationSettings} 
+                onClose={() => setShowNotificationSettings(false)} 
+              />
+            </Dialog>
+            <button
+              onClick={() => {
+                fetchReviews();
+                fetchStats();
+                toast.success("Reviews refreshed!");
+              }}
+              className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
+              data-testid="refresh-btn"
+            >
+              <ArrowsClockwise size={18} />
+              Refresh
+            </button>
+          </div>
         </div>
       </header>
 

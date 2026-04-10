@@ -1007,6 +1007,17 @@ async def widget_get_reviews(request: Request, key_doc: dict = Depends(verify_ap
     reviews = await db.reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return reviews
 
+@api_router.get("/widget/reviews/new")
+async def widget_new_reviews(request: Request, key_doc: dict = Depends(verify_api_key)):
+    """Get reviews created after a given timestamp (for polling)"""
+    property_id = request.query_params.get("property_id", "default")
+    since = request.query_params.get("since")
+    if not since:
+        return []
+    query = {"property_id": property_id, "created_at": {"$gt": since}}
+    reviews = await db.reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(10)
+    return reviews
+
 @api_router.get("/widget/stats")
 async def widget_get_stats(request: Request, key_doc: dict = Depends(verify_api_key)):
     """Get review stats for widget display"""

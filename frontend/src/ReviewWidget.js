@@ -5,24 +5,34 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 // Notification sound - short pleasant chime using Web Audio API
-const playNotificationSound = () => {
+const playNotificationSound = (isUrgent = false) => {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const playTone = (freq, start, dur) => {
+    const playTone = (freq, start, dur, vol = 0.15) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.frequency.value = freq;
-      osc.type = "sine";
-      gain.gain.setValueAtTime(0.15, ctx.currentTime + start);
+      osc.type = isUrgent ? "square" : "sine";
+      gain.gain.setValueAtTime(vol, ctx.currentTime + start);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
       osc.start(ctx.currentTime + start);
       osc.stop(ctx.currentTime + start + dur);
     };
-    playTone(880, 0, 0.15);
-    playTone(1100, 0.12, 0.15);
-    playTone(1320, 0.24, 0.2);
+    if (isUrgent) {
+      // Urgent alert: descending alarm tones, louder, repeated
+      playTone(880, 0, 0.15, 0.2);
+      playTone(660, 0.12, 0.15, 0.2);
+      playTone(880, 0.28, 0.15, 0.2);
+      playTone(660, 0.40, 0.15, 0.2);
+      playTone(440, 0.56, 0.25, 0.2);
+    } else {
+      // Normal: ascending pleasant chime
+      playTone(880, 0, 0.15);
+      playTone(1100, 0.12, 0.15);
+      playTone(1320, 0.24, 0.2);
+    }
   } catch (e) { /* audio not supported */ }
 };
 
@@ -31,58 +41,101 @@ const NotificationPopup = ({ notifications, onDismiss, onDismissAll, isDark }) =
   if (notifications.length === 0) return null;
 
   return (
-    <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, maxWidth: 380 }} data-testid="notification-popup-container">
-      {notifications.map((n, i) => (
+    <div style={{ position: "fixed", top: 16, right: 16, zIndex: 9999, display: "flex", flexDirection: "column", gap: 8, maxWidth: 420 }} data-testid="notification-popup-container">
+      {notifications.map((n, i) => {
+        const isLowRating = n.rating <= 2;
+        return (
         <div
           key={n.id}
           style={{
-            background: "linear-gradient(135deg, #DC2626, #B91C1C)",
-            borderRadius: 12,
-            padding: "14px 16px",
+            background: isLowRating
+              ? "linear-gradient(135deg, #991B1B, #7F1D1D)"
+              : "linear-gradient(135deg, #DC2626, #B91C1C)",
+            borderRadius: isLowRating ? 14 : 12,
+            padding: isLowRating ? "16px 18px" : "14px 16px",
             color: "#FFF",
-            boxShadow: "0 8px 32px rgba(220,38,38,0.4), 0 2px 8px rgba(0,0,0,0.15)",
-            animation: `slideIn 0.4s ease-out ${i * 0.1}s both`,
+            boxShadow: isLowRating
+              ? "0 12px 48px rgba(153,27,27,0.5), 0 4px 12px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1)"
+              : "0 8px 32px rgba(220,38,38,0.4), 0 2px 8px rgba(0,0,0,0.15)",
+            animation: isLowRating
+              ? `slideIn 0.4s ease-out ${i * 0.1}s both, urgentPulse 1.5s ease-in-out infinite`
+              : `slideIn 0.4s ease-out ${i * 0.1}s both`,
             display: "flex",
             gap: 12,
             alignItems: "flex-start",
             cursor: "pointer",
-            maxWidth: 380,
+            maxWidth: isLowRating ? 420 : 380,
+            border: isLowRating ? "2px solid rgba(239,68,68,0.5)" : "none",
           }}
           onClick={() => onDismiss(n.id)}
           data-testid={`notification-popup-${n.id}`}
         >
-          {/* Bell icon */}
-          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-            </svg>
+          {/* Icon */}
+          <div style={{
+            width: isLowRating ? 40 : 32,
+            height: isLowRating ? 40 : 32,
+            borderRadius: "50%",
+            background: isLowRating ? "rgba(254,202,202,0.25)" : "rgba(255,255,255,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0
+          }}>
+            {isLowRating ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FCA5A5" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+            )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.85, marginBottom: 2 }}>
-              New Review
+            <div style={{
+              fontSize: isLowRating ? 12 : 11,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              opacity: isLowRating ? 1 : 0.85,
+              marginBottom: isLowRating ? 4 : 2,
+              display: "flex", alignItems: "center", gap: 6
+            }}>
+              {isLowRating ? (
+                <>
+                  <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "2px 8px", borderRadius: 4, fontSize: 10 }}>LOW RATING ALERT</span>
+                  <span style={{ fontSize: 10, opacity: 0.7 }}>Needs Attention</span>
+                </>
+              ) : "New Review"}
             </div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+            <div style={{ fontSize: isLowRating ? 14 : 13, fontWeight: 600, marginBottom: 4 }}>
               {n.guest_name}
               <span style={{ marginLeft: 6, fontSize: 10, padding: "1px 6px", borderRadius: 4, background: "rgba(255,255,255,0.2)" }}>{n.platform_label}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
               {[1,2,3,4,5].map(s => (
-                <svg key={s} width={10} height={10} viewBox="0 0 20 20" fill={s <= n.rating ? "#FDE68A" : "rgba(255,255,255,0.3)"}>
+                <svg key={s} width={isLowRating ? 12 : 10} height={isLowRating ? 12 : 10} viewBox="0 0 20 20" fill={s <= n.rating ? (isLowRating ? "#FCA5A5" : "#FDE68A") : "rgba(255,255,255,0.3)"}>
                   <path d="M10 1l2.39 4.84 5.34.78-3.87 3.77.91 5.32L10 13.27l-4.77 2.51.91-5.32L2.27 6.69l5.34-.78L10 1z"/>
                 </svg>
               ))}
+              {isLowRating && <span style={{ fontSize: 10, marginLeft: 4, opacity: 0.8 }}>{n.rating}/5</span>}
             </div>
-            <div style={{ fontSize: 11, opacity: 0.85, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+            <div style={{ fontSize: isLowRating ? 12 : 11, opacity: isLowRating ? 0.95 : 0.85, lineHeight: 1.4, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: isLowRating ? 3 : 2, WebkitBoxOrient: "vertical" }}>
               {n.review_text}
             </div>
+            {isLowRating && (
+              <div style={{ marginTop: 8, fontSize: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ background: "rgba(254,202,202,0.2)", padding: "3px 8px", borderRadius: 4, fontWeight: 600 }}>
+                  Respond quickly to protect your reputation
+                </span>
+              </div>
+            )}
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onDismiss(n.id); }}
-            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 16, padding: 2, flexShrink: 0 }}
+            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: 18, padding: 2, flexShrink: 0 }}
             data-testid={`dismiss-notification-${n.id}`}
           >&times;</button>
         </div>
-      ))}
+        );
+      })}
       {notifications.length > 1 && (
         <button
           onClick={onDismissAll}
@@ -208,7 +261,8 @@ export default function ReviewWidget() {
             timestamp: Date.now()
           }));
           setNotifications(prev => [...newNotifs, ...prev].slice(0, 5));
-          playNotificationSound();
+          const hasLowRating = data.some(r => r.rating <= 2);
+          playNotificationSound(hasLowRating);
           fetchData(); // refresh the list
         }
       } catch (e) { /* silent */ }
@@ -218,12 +272,14 @@ export default function ReviewWidget() {
     return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
   }, [apiKey, propertyId, fetchData]);
 
-  // Auto-dismiss notifications after 8 seconds
+  // Auto-dismiss notifications (low-rating lasts 15s, normal 8s)
   useEffect(() => {
     if (notifications.length === 0) return;
+    const oldest = notifications[notifications.length - 1];
+    const timeout = oldest.rating <= 2 ? 15000 : 8000;
     const timer = setTimeout(() => {
       setNotifications(prev => prev.slice(0, -1));
-    }, 8000);
+    }, timeout);
     return () => clearTimeout(timer);
   }, [notifications]);
 
@@ -303,7 +359,7 @@ export default function ReviewWidget() {
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", background: bg, minHeight: "100vh", padding: 16 }} data-testid="review-widget">
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes badgePulse { 0%, 100% { box-shadow: 0 2px 8px rgba(220,38,38,0.35); } 50% { box-shadow: 0 2px 16px rgba(220,38,38,0.55); } } @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } * { box-sizing: border-box; margin: 0; padding: 0; } ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: ${borderColor}; border-radius: 4px; }`}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes badgePulse { 0%, 100% { box-shadow: 0 2px 8px rgba(220,38,38,0.35); } 50% { box-shadow: 0 2px 16px rgba(220,38,38,0.55); } } @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } @keyframes urgentPulse { 0%, 100% { box-shadow: 0 12px 48px rgba(153,27,27,0.5), 0 4px 12px rgba(0,0,0,0.2); transform: scale(1); } 50% { box-shadow: 0 16px 56px rgba(153,27,27,0.7), 0 6px 16px rgba(0,0,0,0.25); transform: scale(1.01); } } * { box-sizing: border-box; margin: 0; padding: 0; } ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: ${borderColor}; border-radius: 4px; }`}</style>
 
       {/* Notification Popups */}
       <NotificationPopup

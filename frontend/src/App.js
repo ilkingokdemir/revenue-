@@ -80,7 +80,15 @@ const PLATFORMS = {
   "expedia": { name: "Expedia", color: "#FFCC00", bg: "bg-[#FFCC00]", textDark: true },
   "tripadvisor": { name: "TripAdvisor", color: "#00AF87", bg: "bg-[#00AF87]" },
   "google": { name: "Google", color: "#4285F4", bg: "bg-[#4285F4]" },
-  "trip.com": { name: "Trip.com", color: "#287DFA", bg: "bg-[#287DFA]" }
+  "trip.com": { name: "Trip.com", color: "#287DFA", bg: "bg-[#287DFA]" },
+  "agoda": { name: "Agoda", color: "#5542B6", bg: "bg-[#5542B6]" },
+  "hotels.com": { name: "Hotels.com", color: "#D32F2F", bg: "bg-[#D32F2F]" },
+  "yelp": { name: "Yelp", color: "#D32323", bg: "bg-[#D32323]" },
+  "facebook": { name: "Facebook", color: "#1877F2", bg: "bg-[#1877F2]" },
+  "makemytrip": { name: "MakeMyTrip", color: "#EE2E24", bg: "bg-[#EE2E24]" },
+  "hrs": { name: "HRS", color: "#C4161C", bg: "bg-[#C4161C]" },
+  "despegar": { name: "Despegar", color: "#6B2D8B", bg: "bg-[#6B2D8B]" },
+  "hostelworld": { name: "Hostelworld", color: "#F47920", bg: "bg-[#F47920]" }
 };
 
 // Template categories
@@ -1869,7 +1877,15 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
       "tripadvisor": "🦉",
       "airbnb": "🏠",
       "expedia": "✈️",
-      "trip.com": "🌏"
+      "trip.com": "🌏",
+      "agoda": "🏨",
+      "hotels.com": "🛏️",
+      "yelp": "📣",
+      "facebook": "👤",
+      "makemytrip": "🇮🇳",
+      "hrs": "💼",
+      "despegar": "🌎",
+      "hostelworld": "🎒"
     };
     return icons[platform] || "🌐";
   };
@@ -2002,6 +2018,124 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
         { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
       ],
       notice: "Contact Trip.com partner support for API access."
+    },
+    "agoda": {
+      title: "Agoda Partner API Setup",
+      steps: [
+        { title: "1. Join Agoda Partner Program", description: "Visit partners.agoda.com and apply for the Agoda Partner Program with your business credentials." },
+        { title: "2. Access YCS (Yield Control System)", description: "Log into Agoda's YCS platform to manage your property and review settings." },
+        { title: "3. Request API Credentials", description: "Contact your Agoda market manager to request API access credentials for review management." },
+        { title: "4. Get Property ID", description: "Find your Property ID in the YCS dashboard under Property Settings." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your Agoda API key", type: "password" },
+        { key: "property_id", label: "Property ID", placeholder: "Your Agoda property ID", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Agoda is part of Booking Holdings. Contact your market manager for API access."
+    },
+    "hotels.com": {
+      title: "Hotels.com Partner Setup",
+      steps: [
+        { title: "1. Access Hotels.com Supplier Portal", description: "Visit hotels.com/hotel-supplier and log into your partner account." },
+        { title: "2. Use Expedia Partner Central", description: "Hotels.com uses Expedia's backend — access API settings via expediapartnercentral.com." },
+        { title: "3. Request API Credentials", description: "Apply for API access through Expedia Partner Central and receive your API key and secret." },
+        { title: "4. Get Property ID", description: "Find your Hotels.com Property ID in your Partner Central dashboard." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your Hotels.com API key", type: "password" },
+        { key: "secret_key", label: "Secret Key", placeholder: "Your secret key", type: "password" },
+        { key: "property_id", label: "Property ID", placeholder: "Your Hotels.com property ID", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Hotels.com is part of Expedia Group — use Expedia Partner Central for API access."
+    },
+    "yelp": {
+      title: "Yelp Fusion API Setup",
+      steps: [
+        { title: "1. Claim Your Business", description: "Go to biz.yelp.com and claim your business listing if you haven't already." },
+        { title: "2. Create a Yelp Fusion App", description: "Visit yelp.com/developers, create an app, and generate your Fusion API key." },
+        { title: "3. Get Business ID", description: "Use the Yelp Business Search API or find your Business ID in your Yelp business page URL." }
+      ],
+      fields: [
+        { key: "api_key", label: "Fusion API Key", placeholder: "Your Yelp Fusion API key", type: "password" },
+        { key: "business_id", label: "Business ID", placeholder: "your-hotel-city", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Yelp Fusion API is free for limited use — great for local discovery and reviews."
+    },
+    "facebook": {
+      title: "Facebook Reviews Setup",
+      steps: [
+        { title: "1. Set Up Facebook Business Page", description: "Ensure your hotel has a Facebook Business Page with reviews enabled." },
+        { title: "2. Access Meta Business Suite", description: "Go to business.facebook.com and set up Meta Business Suite for your page." },
+        { title: "3. Create a Facebook App", description: "Visit developers.facebook.com, create an app, and request pages_read_engagement permission." },
+        { title: "4. Generate Access Token", description: "Use the Graph API Explorer to generate a long-lived Page Access Token." },
+        { title: "5. Get Page ID", description: "Find your Page ID in your Facebook Page's About section or via the Graph API." }
+      ],
+      fields: [
+        { key: "access_token", label: "Page Access Token", placeholder: "Your Facebook page access token", type: "password" },
+        { key: "page_id", label: "Page ID", placeholder: "Your Facebook Page ID", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Use Meta Business Suite for managing reviews. Graph API required for automation."
+    },
+    "makemytrip": {
+      title: "MakeMyTrip Partner Setup",
+      steps: [
+        { title: "1. Access Partner Extranet", description: "Log into your MakeMyTrip Partner Extranet account at partner.makemytrip.com." },
+        { title: "2. Request API Access", description: "Contact your MakeMyTrip partner manager to request API access for review management." },
+        { title: "3. Get Property ID", description: "Find your Property ID in the MMT Extranet dashboard under property settings." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your MakeMyTrip API key", type: "password" },
+        { key: "property_id", label: "Property ID", placeholder: "Your MMT property ID", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "#1 platform in India — contact partner support for API access."
+    },
+    "hrs": {
+      title: "HRS Partner API Setup",
+      steps: [
+        { title: "1. Register as HRS Partner", description: "Visit hrs.com/hotel and register your property as an HRS hotel partner." },
+        { title: "2. Access Partner Portal", description: "Log into the HRS Partner Portal and navigate to API settings." },
+        { title: "3. Request API Credentials", description: "Apply for API credentials through your HRS account manager." },
+        { title: "4. Get Hotel ID", description: "Find your HRS Hotel ID in your partner dashboard." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your HRS API key", type: "password" },
+        { key: "hotel_id", label: "Hotel ID", placeholder: "Your HRS hotel ID", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Popular in Germany and Europe for business travel bookings."
+    },
+    "despegar": {
+      title: "Despegar Partner API Setup",
+      steps: [
+        { title: "1. Join Despegar Partner Program", description: "Visit despegar.com/hoteles and apply for the partner program." },
+        { title: "2. Complete Onboarding", description: "Work with the Despegar partner team to complete technical onboarding." },
+        { title: "3. Receive API Credentials", description: "Once approved, you'll receive API keys and property mapping from the Despegar team." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your Despegar API key", type: "password" },
+        { key: "property_id", label: "Property ID", placeholder: "Your Despegar property ID", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "#1 OTA in Latin America — contact partner team for API access."
+    },
+    "hostelworld": {
+      title: "Hostelworld API Setup",
+      steps: [
+        { title: "1. Register on Hostelworld", description: "Visit hostelworldgroup.com and register your property (hostels and budget accommodations)." },
+        { title: "2. Access Inbox Dashboard", description: "Log into your Hostelworld Inbox to manage reviews and guest communication." },
+        { title: "3. Request API Credentials", description: "Contact Hostelworld support to request API access for review integration." }
+      ],
+      fields: [
+        { key: "api_key", label: "API Key", placeholder: "Your Hostelworld API key", type: "password" },
+        { key: "property_id", label: "Property ID", placeholder: "Your Hostelworld property ID", type: "text" },
+        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
+      ],
+      notice: "Best for hostels and budget accommodations worldwide."
     }
   };
 

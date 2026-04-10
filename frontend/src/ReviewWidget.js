@@ -49,6 +49,7 @@ export default function ReviewWidget() {
   const [generating, setGenerating] = useState(false);
   const [filterPlatform, setFilterPlatform] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const params = new URLSearchParams(window.location.search);
   const apiKey = params.get("api_key") || "";
@@ -65,12 +66,14 @@ export default function ReviewWidget() {
       if (filterPlatform) reviewUrl += `&platform=${filterPlatform}`;
       if (filterStatus) reviewUrl += `&status=${filterStatus}`;
 
-      const [revRes, statRes] = await Promise.all([
+      const [revRes, statRes, unreadRes] = await Promise.all([
         axios.get(reviewUrl),
-        axios.get(`${API}/widget/stats?api_key=${apiKey}&property_id=${propertyId}`)
+        axios.get(`${API}/widget/stats?api_key=${apiKey}&property_id=${propertyId}`),
+        axios.get(`${API}/widget/unread-count?api_key=${apiKey}&property_id=${propertyId}`)
       ]);
       setReviews(revRes.data);
       setStats(statRes.data);
+      setUnreadCount(unreadRes.data.unread);
       setError(null);
     } catch (e) {
       setError(e.response?.status === 401 ? "Invalid API key" : "Failed to load reviews");
@@ -94,6 +97,25 @@ export default function ReviewWidget() {
     } finally {
       setGenerating(false);
     }
+  };
+
+  const handleSelectReview = async (review) => {
+    setSelectedReview(review);
+    if (!review.is_read) {
+      try {
+        await axios.put(`${API}/widget/reviews/${review.id}/read?api_key=${apiKey}`);
+        setReviews(prev => prev.map(r => r.id === review.id ? { ...r, is_read: true } : r));
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      } catch (e) { /* silent */ }
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await axios.put(`${API}/widget/reviews/mark-all-read?api_key=${apiKey}&property_id=${propertyId}`);
+      setReviews(prev => prev.map(r => ({ ...r, is_read: true })));
+      setUnreadCount(0);
+    } catch (e) { /* silent */ }
   };
 
   const isDark = theme === "dark";
@@ -130,10 +152,36 @@ export default function ReviewWidget() {
 
   return (
     <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", background: bg, minHeight: "100vh", padding: 16 }} data-testid="review-widget">
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } } * { box-sizing: border-box; margin: 0; padding: 0; } ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: ${borderColor}; border-radius: 4px; }`}</style>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } } @keyframes badgePulse { 0%, 100% { box-shadow: 0 2px 8px rgba(220,38,38,0.35); } 50% { box-shadow: 0 2px 16px rgba(220,38,38,0.55); } } * { box-sizing: border-box; margin: 0; padding: 0; } ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: ${borderColor}; border-radius: 4px; }`}</style>
 
-      {/* Stats Bar */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }} data-testid="widget-stats">
+      {/* Notification Badge + Stats Bar */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        {/* Red Notification Badge */}
+        {unreadCount > 0 && (
+          <div style={{ position: "relative" }} data-testid="notification-badge-container">
+            <div
+              style={{
+                background: "#DC2626", color: "#FFF", borderRadius: 20,
+                padding: "6px 14px", fontSize: 12, fontWeight: 700,
+                display: "flex", alignItems: "center", gap: 8,
+                boxShadow: "0 2px 8px rgba(220,38,38,0.35)",
+                animation: "badgePulse 2s ease-in-out infinite",
+                cursor: "pointer", userSelect: "none",
+                whiteSpace: "nowrap"
+              }}
+              onClick={handleMarkAllRead}
+              data-testid="unread-badge"
+              title="Click to mark all as read"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+              {unreadCount} new {unreadCount === 1 ? "review" : "reviews"}
+            </div>
+          </div>
+        )}
+        {/* Stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, flex: 1 }} data-testid="widget-stats">
         {[
           { label: "Reviews", value: stats?.total_reviews || 0 },
           { label: "Avg Rating", value: stats?.average_rating ? `${stats.average_rating}/5` : "N/A" },
@@ -145,6 +193,7 @@ export default function ReviewWidget() {
             <div style={{ fontSize: 10, color: textSecondary, marginTop: 2, textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</div>
           </div>
         ))}
+      </div>
       </div>
 
       {/* Filters */}
@@ -186,7 +235,7 @@ export default function ReviewWidget() {
             return (
               <div
                 key={r.id}
-                onClick={() => setSelectedReview(r)}
+                onClick={() => handleSelectReview(r)}
                 style={{
                   background: isSelected ? (isDark ? "#3E5245" : "#ECFDF5") : cardBg,
                   border: `1px solid ${isSelected ? accentColor : borderColor}`,
@@ -194,9 +243,13 @@ export default function ReviewWidget() {
                   padding: 12,
                   cursor: "pointer",
                   transition: "all 0.15s",
+                  position: "relative",
                 }}
                 data-testid={`widget-review-${r.id}`}
               >
+                {!r.is_read && (
+                  <div style={{ position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: "50%", background: "#DC2626", boxShadow: "0 0 4px rgba(220,38,38,0.5)" }} data-testid={`unread-dot-${r.id}`} />
+                )}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: textPrimary }}>{r.guest_name}</span>

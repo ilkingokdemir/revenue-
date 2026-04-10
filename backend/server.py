@@ -1029,6 +1029,31 @@ async def widget_get_stats(request: Request, key_doc: dict = Depends(verify_api_
         "pending": pending
     }
 
+@api_router.get("/widget/unread-count")
+async def widget_unread_count(request: Request, key_doc: dict = Depends(verify_api_key)):
+    """Get count of unread reviews"""
+    property_id = request.query_params.get("property_id", "default")
+    count = await db.reviews.count_documents({"property_id": property_id, "is_read": {"$ne": True}})
+    return {"unread": count}
+
+@api_router.put("/widget/reviews/{review_id}/read")
+async def widget_mark_read(review_id: str, key_doc: dict = Depends(verify_api_key)):
+    """Mark a review as read"""
+    result = await db.reviews.update_one({"id": review_id}, {"$set": {"is_read": True}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return {"ok": True}
+
+@api_router.put("/widget/reviews/mark-all-read")
+async def widget_mark_all_read(request: Request, key_doc: dict = Depends(verify_api_key)):
+    """Mark all reviews as read for a property"""
+    property_id = request.query_params.get("property_id", "default")
+    result = await db.reviews.update_many(
+        {"property_id": property_id, "is_read": {"$ne": True}},
+        {"$set": {"is_read": True}}
+    )
+    return {"marked": result.modified_count}
+
 @api_router.post("/widget/generate-response")
 async def widget_generate_response(request: Request, key_doc: dict = Depends(verify_api_key)):
     """Generate AI response from widget"""

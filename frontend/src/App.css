@@ -1,79 +1,151 @@
-/* Platform badge colors */
-.badge-booking {
-    background-color: #003580;
-    color: white;
-}
+/* ===== Hotel Review Hub - Premium Organic & Earthy Theme ===== */
 
-.badge-airbnb {
-    background-color: #FF5A5F;
-    color: white;
-}
+/* Base overrides */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
 
-.badge-expedia {
-    background-color: #FFCC00;
-    color: #1C1917;
-}
-
-.badge-tripadvisor {
-    background-color: #00AF87;
-    color: white;
-}
-
-.badge-google {
-    background-color: #4285F4;
-    color: white;
-}
-
-.badge-trip {
-    background-color: #287DFA;
-    color: white;
-}
-
-/* Review card active state */
-.review-card-active {
-    background-color: #E8EDE7 !important;
-    border-left: 3px solid #3E5245;
-}
-
-/* Rating stars */
-.star-filled {
-    color: #D4A373;
-}
-
-.star-empty {
-    color: #E7E5E4;
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* AI Panel texture overlay */
 .ai-texture-overlay {
-    background-image: url('https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/06790bb25ee93b714799620c98d82862ea6db3df67429246c55c3ae00c5536b8.png');
-    background-size: cover;
-    background-position: center;
-    opacity: 0.15;
-    mix-blend-mode: multiply;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.08;
+  mix-blend-mode: multiply;
 }
 
-/* Smooth transitions */
-.transition-smooth {
-    transition: all 0.2s ease-in-out;
+/* AI shimmer loading bar */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
-/* Focus styles */
-.focus-ring:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px #3E5245;
+.ai-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(62, 82, 69, 0.15), transparent);
+  animation: shimmer 1.5s ease-in-out infinite;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Typing cursor blink */
+@keyframes blink {
+  0%, 50% { border-color: #3E5245; }
+  51%, 100% { border-color: transparent; }
+}
+
+.cursor-blink {
+  border-right: 2px solid #3E5245;
+  animation: blink 1s step-end infinite;
+}
+
+/* Staggered card entrance */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeSlideUp 0.4s ease-out forwards;
+}
+
+/* Subtle card hover lift */
+.card-hover {
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+.card-hover:hover {
+  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  border-color: #d6d3d1;
+}
+
+/* Premium subtle shadow */
+.shadow-card {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.03);
+}
+
+/* Scrollbar styling */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
+}
+
+/* Nav button group */
+.nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #57534e;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+.nav-btn:hover {
+  background-color: #f5f5f4;
+  color: #1c1917;
+}
+.nav-btn-primary {
+  background-color: #3E5245;
+  color: white;
+  border-color: #3E5245;
+}
+.nav-btn-primary:hover {
+  background-color: #2A3B30;
+}
+
+/* Star rating golden glow */
+.star-glow {
+  filter: drop-shadow(0 0 1px rgba(212, 163, 115, 0.4));
+}
+
+/* Review list item */
+.review-item {
+  transition: all 0.15s ease;
+  border-left: 3px solid transparent;
+}
+.review-item:hover {
+  background-color: #fafaf9;
+}
+.review-item-active {
+  background-color: #f5f5f4;
+  border-left-color: #3E5245;
+}
+
+/* Platform badge pill */
+.platform-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 9999px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 /* Loading pulse */
 @keyframes pulse-subtle {
-    0%, 100% {
-        opacity: 1;
-    }
-    50% {
-        opacity: 0.7;
-    }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.pulse-subtle {
+  animation: pulse-subtle 1.5s ease-in-out infinite;
 }
 
-.pulse-subtle {
-    animation: pulse-subtle 1.5s ease-in-out infinite;
+/* Focus ring */
+*:focus-visible {
+  outline: 2px solid rgba(62, 82, 69, 0.3);
+  outline-offset: 2px;
 }

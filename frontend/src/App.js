@@ -129,7 +129,7 @@ const StarRating = ({ rating, size = 16 }) => {
           key={star}
           size={size}
           weight={star <= rating ? "fill" : "regular"}
-          className={star <= rating ? "text-[#D4A373]" : "text-[#E7E5E4]"}
+          className={star <= rating ? "text-amber-400 star-glow" : "text-stone-200"}
         />
       ))}
     </div>
@@ -141,7 +141,7 @@ const PlatformBadge = ({ platform }) => {
   const config = PLATFORMS[platform] || { name: platform, bg: "bg-gray-500" };
   return (
     <span
-      className={`${config.bg} ${config.textDark ? "text-[#1C1917]" : "text-white"} px-2 py-0.5 rounded text-xs font-medium`}
+      className={`platform-pill ${config.bg} ${config.textDark ? "text-stone-900" : "text-white"}`}
       data-testid={`platform-badge-${platform}`}
     >
       {config.name}
@@ -152,17 +152,19 @@ const PlatformBadge = ({ platform }) => {
 // Stats Card Component
 const StatsCard = ({ icon: Icon, label, value, subtext }) => (
   <motion.div
-    initial={{ opacity: 0, y: 20 }}
+    initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
-    className="border border-stone-200 rounded-md bg-white p-6 flex flex-col gap-2"
+    className="border border-stone-200/80 rounded-xl bg-white p-5 flex flex-col gap-1.5 shadow-card card-hover relative overflow-hidden"
     data-testid={`stats-card-${label.toLowerCase().replace(/\s/g, '-')}`}
   >
-    <div className="flex items-center gap-2 text-[#57534E]">
-      <Icon size={18} weight="regular" />
-      <span className="text-xs tracking-[0.2em] uppercase font-medium">{label}</span>
+    <div className="flex items-center justify-between">
+      <span className="text-[11px] tracking-[0.15em] uppercase font-semibold text-stone-400">{label}</span>
+      <div className="w-8 h-8 rounded-lg bg-stone-50 flex items-center justify-center">
+        <Icon size={16} weight="regular" className="text-stone-400" />
+      </div>
     </div>
-    <div className="text-3xl font-semibold text-[#1C1917] font-['Work_Sans']">{value}</div>
-    {subtext && <div className="text-sm text-[#57534E]">{subtext}</div>}
+    <div className="text-3xl font-semibold tracking-tight text-stone-900">{value}</div>
+    {subtext && <div className="text-xs text-stone-500">{subtext}</div>}
   </motion.div>
 );
 
@@ -172,39 +174,39 @@ const ReviewCard = ({ review, isSelected, onClick }) => {
   
   return (
     <motion.div
-      initial={{ opacity: 0, x: -20 }}
+      initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       onClick={onClick}
-      className={`p-4 border-b border-stone-100 hover:bg-[#FAF9F6] cursor-pointer transition-colors group ${
-        isSelected ? "bg-[#E8EDE7] border-l-[3px] border-l-[#3E5245]" : ""
+      className={`px-4 py-3.5 cursor-pointer review-item ${
+        isSelected ? "review-item-active" : ""
       }`}
       data-testid={`review-card-${review.id}`}
     >
       <div className="flex items-start gap-3">
         <img
-          src={review.guest_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(review.guest_name)}&background=E8EDE7&color=3E5245`}
+          src={review.guest_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(review.guest_name)}&background=f5f5f4&color=3E5245&bold=true`}
           alt={review.guest_name}
-          className="w-10 h-10 rounded-full object-cover"
+          className="w-9 h-9 rounded-full object-cover ring-1 ring-stone-200"
         />
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="font-medium text-[#1C1917] truncate">{review.guest_name}</span>
+          <div className="flex items-center justify-between gap-2 mb-0.5">
+            <span className="font-medium text-sm text-stone-900 truncate">{review.guest_name}</span>
             <PlatformBadge platform={review.platform} />
           </div>
-          <StarRating rating={review.rating} size={14} />
-          <p className="text-sm text-[#57534E] line-clamp-2 mt-2">{review.review_text}</p>
+          <StarRating rating={review.rating} size={12} />
+          <p className="text-sm text-stone-500 line-clamp-2 mt-1.5 leading-relaxed">{review.review_text}</p>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-xs text-[#57534E]">
+            <span className="text-[11px] text-stone-400">
               {new Date(review.review_date).toLocaleDateString()}
             </span>
             {isPending ? (
-              <span className="flex items-center gap-1 text-xs text-[#D4A373]">
-                <WarningCircle size={14} weight="fill" />
+              <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600">
+                <WarningCircle size={12} weight="fill" />
                 Pending
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-xs text-[#5A6B50]">
-                <CheckCircle size={14} weight="fill" />
+              <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+                <CheckCircle size={12} weight="fill" />
                 Responded
               </span>
             )}
@@ -322,10 +324,13 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
 
   if (!review) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#57534E]" data-testid="no-review-selected">
+      <div className="flex-1 flex items-center justify-center" data-testid="no-review-selected">
         <div className="text-center">
-          <ChatText size={48} className="mx-auto mb-4 opacity-50" />
-          <p>Select a review to view details and respond</p>
+          <div className="w-16 h-16 rounded-2xl bg-stone-100 flex items-center justify-center mx-auto mb-4">
+            <ChatText size={28} className="text-stone-300" />
+          </div>
+          <p className="text-sm font-medium text-stone-400">Select a review to view details and respond</p>
+          <p className="text-xs text-stone-300 mt-1">Choose from the list on the left</p>
         </div>
       </div>
     );
@@ -336,42 +341,44 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
   return (
     <div className="flex-1 flex flex-col" data-testid="ai-response-panel">
       {/* Review Details */}
-      <div className="border-b border-stone-200 pb-6 mb-6">
+      <div className="border-b border-stone-100 pb-6 mb-6">
         <div className="flex items-start gap-4">
           <img
-            src={review.guest_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(review.guest_name)}&background=E8EDE7&color=3E5245`}
+            src={review.guest_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(review.guest_name)}&background=f5f5f4&color=3E5245&bold=true`}
             alt={review.guest_name}
-            className="w-14 h-14 rounded-full object-cover"
+            className="w-12 h-12 rounded-full object-cover ring-2 ring-stone-100"
           />
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="text-xl font-medium text-[#1C1917] font-['Work_Sans']" data-testid="review-guest-name">
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <h3 className="text-lg font-semibold tracking-tight text-stone-900" data-testid="review-guest-name">
                 {review.guest_name}
               </h3>
               <PlatformBadge platform={review.platform} />
               {isResponded ? (
-                <Badge className="bg-[#5A6B50] text-white border-0">
-                  <CheckCircle size={14} className="mr-1" weight="fill" />
+                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <CheckCircle size={12} className="mr-1" weight="fill" />
                   Responded
                 </Badge>
               ) : (
-                <Badge className="bg-[#D4A373] text-white border-0">
-                  <WarningCircle size={14} className="mr-1" weight="fill" />
+                <Badge className="bg-amber-50 text-amber-700 border border-amber-200">
+                  <WarningCircle size={12} className="mr-1" weight="fill" />
                   Pending
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-4 text-sm text-[#57534E]">
+            <div className="flex items-center gap-3 text-xs text-stone-500">
               <StarRating rating={review.rating} />
-              <span>{review.room_type}</span>
-              <span>Stayed: {review.stay_date}</span>
+              {review.room_type && <span className="text-stone-300">|</span>}
+              {review.room_type && <span>{review.room_type}</span>}
+              {review.stay_date && <span className="text-stone-300">|</span>}
+              {review.stay_date && <span>Stayed: {review.stay_date}</span>}
             </div>
           </div>
         </div>
         
-        <div className="mt-4 bg-[#FAF9F6] rounded-md p-4 relative" data-testid="review-text-container">
-          <Quotes size={24} className="absolute top-2 left-2 text-[#E7E5E4]" weight="fill" />
-          <p className="text-[#1C1917] leading-relaxed pl-6" data-testid="review-text">
+        <div className="mt-4 bg-stone-50 rounded-xl p-5 relative" data-testid="review-text-container">
+          <Quotes size={20} className="absolute top-3 left-3 text-stone-200" weight="fill" />
+          <p className="text-stone-700 leading-relaxed pl-6 text-sm" data-testid="review-text">
             {review.review_text}
           </p>
         </div>
@@ -477,28 +484,29 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
       </div>
 
       {/* AI Response Generator */}
-      <div className="bg-[#E8EDE7] border border-[#D5DDD3] rounded-md p-6 relative overflow-hidden" data-testid="ai-generator-panel">
+      <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-6 relative overflow-hidden" data-testid="ai-generator-panel">
         {/* Texture overlay */}
         <div 
           className="absolute inset-0 ai-texture-overlay pointer-events-none"
           style={{
             backgroundImage: "url('https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/06790bb25ee93b714799620c98d82862ea6db3df67429246c55c3ae00c5536b8.png')",
-            backgroundSize: "cover",
-            opacity: 0.12
+            backgroundSize: "cover"
           }}
         />
         
         <div className="relative z-10">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Sparkle size={20} className="text-[#3E5245]" weight="fill" />
-              <span className="text-sm font-medium text-[#1C1917]">AI Response Assistant</span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-800 flex items-center justify-center">
+                <Sparkle size={14} className="text-white" weight="fill" />
+              </div>
+              <span className="text-sm font-semibold text-emerald-900 tracking-tight">AI Response Assistant</span>
             </div>
             
             {!isResponded && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 <Select value={tone} onValueChange={setTone} data-testid="tone-select">
-                  <SelectTrigger className="w-[140px] bg-white border-stone-200">
+                  <SelectTrigger className="w-[130px] bg-white/80 border-emerald-200 text-xs h-8">
                     <SelectValue placeholder="Select tone" />
                   </SelectTrigger>
                   <SelectContent>
@@ -511,18 +519,18 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
                 <button
                   onClick={generateAIResponse}
                   disabled={isGenerating || isLoading}
-                  className="bg-[#3E5245] text-white px-4 py-2 rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
+                  className="bg-emerald-800 text-white px-3.5 py-1.5 rounded-lg hover:bg-emerald-900 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5 text-sm font-medium"
                   data-testid="generate-ai-btn"
                 >
                   {isGenerating ? (
                     <>
-                      <ArrowsClockwise size={16} className="animate-spin" />
+                      <ArrowsClockwise size={14} className="animate-spin" />
                       Generating...
                     </>
                   ) : (
                     <>
-                      <Sparkle size={16} weight="fill" />
-                      Generate AI Reply
+                      <Sparkle size={14} weight="fill" />
+                      Generate Reply
                     </>
                   )}
                 </button>
@@ -531,15 +539,15 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
           </div>
 
           {isGenerating && (
-            <div className="ai-shimmer h-2 rounded-full mb-4" />
+            <div className="ai-shimmer h-1.5 rounded-full mb-3" />
           )}
 
           <div className="relative">
             <Textarea
               value={responseText}
               onChange={(e) => setResponseText(e.target.value)}
-              placeholder={isResponded ? "Response already submitted" : "AI-generated response will appear here. You can edit it before publishing..."}
-              className={`min-h-[180px] bg-white border-stone-200 resize-none ${isGenerating ? "cursor-blink" : ""}`}
+              placeholder={isResponded ? "Response already submitted" : "AI-generated response will appear here. You can edit before publishing..."}
+              className={`min-h-[160px] bg-white border-emerald-200/60 rounded-lg resize-none text-sm focus:ring-2 focus:ring-emerald-800/15 focus:border-emerald-300 ${isGenerating ? "cursor-blink" : ""}`}
               disabled={isResponded && !isEditing}
               data-testid="response-textarea"
             />
@@ -556,8 +564,8 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
           </div>
 
           <div className="flex items-center justify-between mt-4">
-            <p className="text-xs text-[#57534E]">
-              {isResponded ? "This review has been responded to." : "Edit the AI response before publishing to the platform."}
+            <p className="text-[11px] text-stone-400">
+              {isResponded ? "This review has been responded to." : "Edit the AI response before publishing."}
             </p>
             
             {(!isResponded || isEditing) && (
@@ -568,7 +576,7 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
                       setIsEditing(false);
                       setResponseText(review.response_text || "");
                     }}
-                    className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors"
+                    className="bg-white border border-stone-200 text-stone-700 px-3 py-1.5 rounded-lg hover:bg-stone-50 transition-all text-sm"
                     data-testid="cancel-edit-btn"
                   >
                     Cancel
@@ -577,11 +585,11 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
                 <button
                   onClick={handleSubmit}
                   disabled={!responseText.trim() || isLoading || isGenerating}
-                  className="bg-[#3E5245] text-white px-4 py-2 rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
+                  className="bg-emerald-800 text-white px-4 py-1.5 rounded-lg hover:bg-emerald-900 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center gap-1.5 text-sm font-medium"
                   data-testid="publish-response-btn"
                 >
-                  <PaperPlaneTilt size={16} weight="fill" />
-                  {isEditing ? "Update Response" : "Publish Response"}
+                  <PaperPlaneTilt size={14} weight="fill" />
+                  {isEditing ? "Update" : "Publish"}
                 </button>
               </div>
             )}
@@ -590,10 +598,10 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
       </div>
 
       {/* Info Banner */}
-      <div className="mt-4 p-3 bg-[#FAF9F6] border border-[#E7E5E4] rounded-md">
-        <p className="text-xs text-[#57534E] flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-[#D4A373]"></span>
-          <strong>DEMO MODE:</strong> Reviews are mocked for demonstration. In production, responses will sync to {PLATFORMS[review.platform]?.name || review.platform}.
+      <div className="mt-4 px-4 py-2.5 bg-stone-50 border border-stone-100 rounded-lg">
+        <p className="text-[11px] text-stone-400 flex items-center gap-2">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <strong className="text-stone-500">DEMO:</strong> Responses will sync to {PLATFORMS[review.platform]?.name || review.platform} in production.
         </p>
       </div>
     </div>
@@ -2934,32 +2942,28 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF9F6]" data-testid="review-dashboard">
+    <div className="min-h-screen bg-stone-50" data-testid="review-dashboard">
       {/* Header */}
-      <header className="bg-white border-b border-stone-200 px-6 py-4" data-testid="dashboard-header">
+      <header className="bg-white border-b border-stone-200/80 px-6 py-3 sticky top-0 z-40 shadow-sm" data-testid="dashboard-header">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {branding?.logo_url ? (
-              <img src={branding.logo_url} alt="Logo" className="w-10 h-10 rounded-md object-cover" data-testid="header-logo" />
+              <img src={branding.logo_url} alt="Logo" className="w-9 h-9 rounded-lg object-cover" data-testid="header-logo" />
             ) : (
-              <div className="w-10 h-10 rounded-md flex items-center justify-center" style={{ backgroundColor: branding?.primary_color || "#3E5245" }}>
-                <Buildings size={24} className="text-white" weight="fill" />
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: branding?.primary_color || "#3E5245" }}>
+                <Buildings size={20} className="text-white" weight="fill" />
               </div>
             )}
             <div>
-              <h1 className="text-xl font-semibold text-[#1C1917] font-['Work_Sans']" data-testid="header-app-name">{branding?.app_name || "Review Hub"}</h1>
-              <p className="text-sm text-[#57534E]" data-testid="header-subtitle">{branding?.subtitle || "Manage all your guest reviews in one place"}</p>
+              <h1 className="text-base font-semibold tracking-tight text-stone-900" data-testid="header-app-name">{branding?.app_name || "Review Hub"}</h1>
+              <p className="text-[11px] text-stone-400" data-testid="header-subtitle">{branding?.subtitle || "Manage all your guest reviews in one place"}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Dialog open={showAnalytics} onOpenChange={setShowAnalytics}>
               <DialogTrigger asChild>
-                <button
-                  className="text-white px-4 py-2 rounded-md hover:opacity-90 transition-colors flex items-center gap-2"
-                  style={{ backgroundColor: branding?.primary_color || "#3E5245" }}
-                  data-testid="analytics-btn"
-                >
-                  <ChartBar size={18} />
+                <button className="nav-btn nav-btn-primary" data-testid="analytics-btn">
+                  <ChartBar size={15} />
                   Analytics
                 </button>
               </DialogTrigger>
@@ -2970,11 +2974,8 @@ const Dashboard = () => {
             </Dialog>
             <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
               <DialogTrigger asChild>
-                <button
-                  className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
-                  data-testid="templates-btn"
-                >
-                  <FileText size={18} />
+                <button className="nav-btn" data-testid="templates-btn">
+                  <FileText size={15} />
                   Templates
                 </button>
               </DialogTrigger>
@@ -2986,11 +2987,8 @@ const Dashboard = () => {
             </Dialog>
             <Dialog open={showNotificationSettings} onOpenChange={setShowNotificationSettings}>
               <DialogTrigger asChild>
-                <button
-                  className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
-                  data-testid="notification-settings-btn"
-                >
-                  <Bell size={18} />
+                <button className="nav-btn" data-testid="notification-settings-btn">
+                  <Bell size={15} />
                   Alerts
                 </button>
               </DialogTrigger>
@@ -3001,11 +2999,8 @@ const Dashboard = () => {
             </Dialog>
             <Dialog open={showReports} onOpenChange={setShowReports}>
               <DialogTrigger asChild>
-                <button
-                  className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
-                  data-testid="reports-btn"
-                >
-                  <CalendarBlank size={18} />
+                <button className="nav-btn" data-testid="reports-btn">
+                  <CalendarBlank size={15} />
                   Reports
                 </button>
               </DialogTrigger>
@@ -3016,11 +3011,8 @@ const Dashboard = () => {
             </Dialog>
             <Dialog open={showIntegrations} onOpenChange={setShowIntegrations}>
               <DialogTrigger asChild>
-                <button
-                  className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
-                  data-testid="integrations-btn"
-                >
-                  <PlugsConnected size={18} />
+                <button className="nav-btn" data-testid="integrations-btn">
+                  <PlugsConnected size={15} />
                   Integrations
                 </button>
               </DialogTrigger>
@@ -3032,11 +3024,8 @@ const Dashboard = () => {
             </Dialog>
             <Dialog open={showBranding} onOpenChange={setShowBranding}>
               <DialogTrigger asChild>
-                <button
-                  className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
-                  data-testid="branding-btn"
-                >
-                  <Palette size={18} />
+                <button className="nav-btn" data-testid="branding-btn">
+                  <Palette size={15} />
                   Branding
                 </button>
               </DialogTrigger>
@@ -3053,19 +3042,19 @@ const Dashboard = () => {
                 fetchStats();
                 toast.success("Reviews refreshed!");
               }}
-              className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
+              className="nav-btn"
               data-testid="refresh-btn"
             >
-              <ArrowsClockwise size={18} />
+              <ArrowsClockwise size={15} />
               Refresh
             </button>
           </div>
         </div>
       </header>
 
-      <div className="p-6 lg:p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         {/* Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatsCard
             icon={ChatText}
             label="Total Reviews"
@@ -3095,12 +3084,12 @@ const Dashboard = () => {
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {/* Filters & Review List */}
-          <div className="md:col-span-4 bg-white border border-stone-200 rounded-md overflow-hidden" data-testid="review-list-panel">
+          <div className="md:col-span-4 bg-white border border-stone-200/80 rounded-xl shadow-card overflow-hidden" data-testid="review-list-panel">
             {/* Filters */}
-            <div className="p-4 border-b border-stone-200 bg-[#FAF9F6]">
-              <div className="flex items-center gap-2 mb-3">
-                <FunnelSimple size={18} className="text-[#57534E]" />
-                <span className="text-sm font-medium text-[#1C1917]">Filters</span>
+            <div className="p-4 border-b border-stone-100 bg-stone-50/50">
+              <div className="flex items-center gap-2 mb-2.5">
+                <FunnelSimple size={15} className="text-stone-400" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-stone-400">Filters</span>
               </div>
               <div className="flex gap-2">
                 <Select
@@ -3108,7 +3097,7 @@ const Dashboard = () => {
                   onValueChange={(value) => setFilters(prev => ({ ...prev, platform: value }))}
                   data-testid="platform-filter"
                 >
-                  <SelectTrigger className="flex-1 bg-white border-stone-200">
+                  <SelectTrigger className="flex-1 bg-white border-stone-200 h-8 text-xs">
                     <SelectValue placeholder="Platform" />
                   </SelectTrigger>
                   <SelectContent>
@@ -3124,7 +3113,7 @@ const Dashboard = () => {
                   onValueChange={(value) => setFilters(prev => ({ ...prev, status: value }))}
                   data-testid="status-filter"
                 >
-                  <SelectTrigger className="flex-1 bg-white border-stone-200">
+                  <SelectTrigger className="flex-1 bg-white border-stone-200 h-8 text-xs">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -3137,16 +3126,16 @@ const Dashboard = () => {
             </div>
 
             {/* Review List */}
-            <ScrollArea className="h-[calc(100vh-380px)]" data-testid="review-list">
+            <ScrollArea className="h-[calc(100vh-340px)] custom-scrollbar" data-testid="review-list">
               {isLoading ? (
-                <div className="p-8 text-center text-[#57534E]">
-                  <ArrowsClockwise size={32} className="mx-auto mb-2 animate-spin" />
-                  <p>Loading reviews...</p>
+                <div className="p-8 text-center">
+                  <ArrowsClockwise size={24} className="mx-auto mb-2 animate-spin text-stone-300" />
+                  <p className="text-sm text-stone-400">Loading reviews...</p>
                 </div>
               ) : reviews.length === 0 ? (
-                <div className="p-8 text-center text-[#57534E]">
-                  <ChatText size={32} className="mx-auto mb-2 opacity-50" />
-                  <p>No reviews found</p>
+                <div className="p-8 text-center">
+                  <ChatText size={24} className="mx-auto mb-2 text-stone-300" />
+                  <p className="text-sm text-stone-400">No reviews found</p>
                 </div>
               ) : (
                 <AnimatePresence>
@@ -3164,7 +3153,7 @@ const Dashboard = () => {
           </div>
 
           {/* Review Detail & Response Editor */}
-          <div className="md:col-span-8 bg-white border border-stone-200 rounded-md p-8 flex flex-col" data-testid="review-detail-panel">
+          <div className="md:col-span-8 bg-white border border-stone-200/80 rounded-xl shadow-card p-6 flex flex-col" data-testid="review-detail-panel">
             <AIResponsePanel
               review={selectedReview}
               onResponseSubmit={handleResponseSubmit}
@@ -3178,8 +3167,8 @@ const Dashboard = () => {
 
       {/* Powered By Footer */}
       {branding?.powered_by_visible && branding?.powered_by_text && (
-        <div className="text-center py-2 border-t border-stone-200 bg-white" data-testid="powered-by-footer">
-          <span className="text-xs text-[#78716C]">Powered by {branding.powered_by_text}</span>
+        <div className="text-center py-2 border-t border-stone-100 bg-white/80" data-testid="powered-by-footer">
+          <span className="text-[11px] text-stone-400">Powered by {branding.powered_by_text}</span>
         </div>
       )}
 

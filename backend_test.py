@@ -398,6 +398,200 @@ class ReviewAPITester:
         
         return True
 
+    def test_sentiment_analysis(self):
+        """Test sentiment analysis endpoints - NEW FEATURE"""
+        print(f"\n🧠 Testing AI Sentiment Analysis Feature...")
+        
+        # First ensure we have reviews to analyze
+        success, reviews = self.run_test("Get Reviews for Analysis", "GET", "reviews", 200)
+        
+        if not success or not reviews or len(reviews) == 0:
+            print("   ⚠️ No reviews found for sentiment analysis")
+            return False
+        
+        review_id = reviews[0]["id"]
+        
+        # 1. Test individual review sentiment analysis
+        success, analysis_response = self.run_test(
+            "Analyze Individual Review Sentiment", 
+            "POST", 
+            f"reviews/{review_id}/analyze", 
+            200
+        )
+        
+        if success and analysis_response.get("analysis"):
+            analysis = analysis_response["analysis"]
+            print(f"   🎯 Sentiment: {analysis.get('sentiment', 'unknown')}")
+            print(f"   📊 Score: {analysis.get('score', 0)}")
+            print(f"   🚨 Urgency: {analysis.get('urgency', 'unknown')}")
+            print(f"   🏷️ Topics: {', '.join(analysis.get('topics', [])[:3])}")
+            print(f"   💡 Suggested tone: {analysis.get('suggested_tone', 'unknown')}")
+            
+            # Check for suggested templates
+            templates = analysis_response.get("suggested_templates", [])
+            if templates:
+                print(f"   📝 Suggested templates: {len(templates)} found")
+        
+        # 2. Test batch sentiment analysis
+        success, batch_response = self.run_test(
+            "Run Batch Sentiment Analysis", 
+            "POST", 
+            "reviews/analyze-batch", 
+            200
+        )
+        
+        if success:
+            analyzed_count = batch_response.get("analyzed", 0)
+            total_count = batch_response.get("total", 0)
+            print(f"   📊 Batch analysis: {analyzed_count}/{total_count} reviews analyzed")
+        
+        return True
+
+    def test_analytics_dashboard(self):
+        """Test analytics dashboard endpoint - NEW FEATURE"""
+        print(f"\n📊 Testing Analytics Dashboard Feature...")
+        
+        # Get comprehensive analytics data
+        success, analytics = self.run_test("Get Analytics Dashboard", "GET", "analytics/dashboard", 200)
+        
+        if success and analytics:
+            # Check overview data
+            overview = analytics.get("overview", {})
+            print(f"   📈 Overview - Total Reviews: {overview.get('total_reviews', 0)}")
+            print(f"   ⭐ Average Rating: {overview.get('avg_rating', 0)}")
+            print(f"   📝 Response Rate: {overview.get('response_rate', 0)}%")
+            print(f"   ⏳ Pending: {overview.get('pending', 0)}")
+            
+            # Check rating distribution
+            rating_dist = analytics.get("rating_distribution", {})
+            if rating_dist:
+                print(f"   📊 Rating Distribution: {dict(rating_dist)}")
+            
+            # Check sentiment distribution
+            sentiment_dist = analytics.get("sentiment_distribution", {})
+            if sentiment_dist:
+                print(f"   🧠 Sentiment Distribution: {dict(sentiment_dist)}")
+            
+            # Check urgency distribution
+            urgency_dist = analytics.get("urgency_distribution", {})
+            if urgency_dist:
+                print(f"   🚨 Urgency Distribution: {dict(urgency_dist)}")
+            
+            # Check platform stats
+            platform_stats = analytics.get("platform_stats", [])
+            if platform_stats:
+                print(f"   🏢 Platform Stats: {len(platform_stats)} platforms")
+            
+            # Check top topics
+            top_topics = analytics.get("top_topics", [])
+            if top_topics:
+                print(f"   🏷️ Top Topics: {len(top_topics)} topics found")
+            
+            # Check priority queue
+            priority_queue = analytics.get("priority_queue", [])
+            if priority_queue:
+                print(f"   🔥 Priority Queue: {len(priority_queue)} urgent reviews")
+            
+            # Check common issues and praises
+            common_issues = analytics.get("common_issues", [])
+            common_praises = analytics.get("common_praises", [])
+            print(f"   ⚠️ Common Issues: {len(common_issues)} identified")
+            print(f"   ✨ Common Praises: {len(common_praises)} identified")
+        
+        return success
+
+    def test_competitor_benchmarking(self):
+        """Test competitor benchmarking endpoints - NEW FEATURE"""
+        print(f"\n🏆 Testing Competitor Benchmarking Feature...")
+        
+        # 1. Clear existing competitors and seed demo data
+        success, response = self.run_test("Seed Demo Competitors", "POST", "competitors/seed", 200)
+        
+        if success:
+            print(f"   📊 {response.get('message', 'Competitors seeded')}")
+        
+        # 2. Get all competitors
+        success, competitors = self.run_test("Get All Competitors", "GET", "competitors", 200)
+        
+        competitor_id = None
+        if success and isinstance(competitors, list):
+            print(f"   🏢 Found {len(competitors)} competitors")
+            if len(competitors) > 0:
+                competitor_id = competitors[0]["id"]
+                comp = competitors[0]
+                print(f"   📋 Sample: {comp.get('name', 'Unknown')} - {comp.get('avg_rating', 0)}/5")
+        
+        # 3. Add a new competitor
+        new_competitor_data = {
+            "name": "Test Competitor Hotel",
+            "platform": "all",
+            "avg_rating": 4.2,
+            "total_reviews": 500,
+            "response_rate": 75.0
+        }
+        
+        success, new_competitor = self.run_test(
+            "Add New Competitor", 
+            "POST", 
+            "competitors", 
+            200, 
+            data=new_competitor_data
+        )
+        
+        created_competitor_id = None
+        if success and new_competitor.get("id"):
+            created_competitor_id = new_competitor["id"]
+            print(f"   ✅ Created competitor: {new_competitor.get('name', 'Unknown')}")
+        
+        # 4. Update competitor
+        if created_competitor_id:
+            update_data = {
+                "name": "Updated Test Competitor",
+                "avg_rating": 4.5,
+                "total_reviews": 600,
+                "response_rate": 80.0
+            }
+            
+            success, updated = self.run_test(
+                "Update Competitor", 
+                "PUT", 
+                f"competitors/{created_competitor_id}", 
+                200, 
+                data=update_data
+            )
+            
+            if success:
+                print(f"   📝 Updated competitor: {updated.get('name', 'Unknown')}")
+        
+        # 5. Get benchmark comparison
+        success, benchmark = self.run_test("Get Competitor Benchmark", "GET", "competitors/benchmark", 200)
+        
+        if success and benchmark:
+            your_hotel = benchmark.get("your_hotel", {})
+            ranking = benchmark.get("ranking", {})
+            competitors_list = benchmark.get("competitors", [])
+            
+            print(f"   🏨 Your Hotel - Rating: {your_hotel.get('avg_rating', 0)}/5")
+            print(f"   📊 Your Hotel - Reviews: {your_hotel.get('total_reviews', 0)}")
+            print(f"   📝 Your Hotel - Response Rate: {your_hotel.get('response_rate', 0)}%")
+            print(f"   🏆 Rating Rank: #{ranking.get('rating_rank', 'N/A')} of {ranking.get('total_competitors', 'N/A')}")
+            print(f"   📈 Response Rate Rank: #{ranking.get('response_rate_rank', 'N/A')}")
+            print(f"   🏢 Competitors in benchmark: {len(competitors_list)}")
+        
+        # 6. Delete created competitor
+        if created_competitor_id:
+            success, delete_response = self.run_test(
+                "Delete Competitor", 
+                "DELETE", 
+                f"competitors/{created_competitor_id}", 
+                200
+            )
+            
+            if success:
+                print(f"   🗑️ Competitor deleted: {delete_response.get('message', 'success')}")
+        
+        return True
+
     def run_comprehensive_test(self):
         """Run all tests in sequence"""
         print("🏨 Hotel Review Management API Testing")
@@ -465,6 +659,18 @@ class ReviewAPITester:
         # 12. Test response templates feature
         print("\n1️⃣2️⃣ Testing Response Templates Feature...")
         self.test_response_templates()
+
+        # 13. Test sentiment analysis features
+        print("\n1️⃣3️⃣ Testing Sentiment Analysis Features...")
+        self.test_sentiment_analysis()
+
+        # 14. Test analytics dashboard
+        print("\n1️⃣4️⃣ Testing Analytics Dashboard...")
+        self.test_analytics_dashboard()
+
+        # 15. Test competitor benchmarking
+        print("\n1️⃣5️⃣ Testing Competitor Benchmarking...")
+        self.test_competitor_benchmarking()
 
         # Print summary
         print("\n" + "=" * 50)

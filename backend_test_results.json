@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-04-10T14:45:55.791823",
-  "total_tests": 35,
-  "passed_tests": 35,
-  "success_rate": 100.0,
-  "all_passed": true,
+  "timestamp": "2026-04-10T15:00:51.251114",
+  "total_tests": 45,
+  "passed_tests": 44,
+  "success_rate": 97.77777777777777,
+  "all_passed": false,
   "detailed_results": [
     {
       "test": "API Root",
@@ -18,9 +18,9 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "id": "3158eb4f-eb7a-4971-99c4-d143b008dee7",
+        "id": "51525c3a-52d0-4692-888d-914e09e802a9",
         "client_name": "test_client",
-        "timestamp": "2026-04-10T14:45:41.403516Z"
+        "timestamp": "2026-04-10T15:00:11.411868Z"
       }
     },
     {
@@ -42,6 +42,11 @@
           "id": "3158eb4f-eb7a-4971-99c4-d143b008dee7",
           "client_name": "test_client",
           "timestamp": "2026-04-10T14:45:41.403516Z"
+        },
+        {
+          "id": "51525c3a-52d0-4692-888d-914e09e802a9",
+          "client_name": "test_client",
+          "timestamp": "2026-04-10T15:00:11.411868Z"
         }
       ]
     },
@@ -68,154 +73,154 @@
       "details": "Status: 200",
       "response_data": [
         {
-          "id": "7f33576b-575b-4720-8127-3b8a35e94b95",
+          "id": "4b0c78bd-ea6a-4c4d-9ed0-783b91bbf72d",
           "platform": "google",
           "guest_name": "Thomas Wright",
           "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
           "rating": 5,
           "review_text": "Celebrated our anniversary here and the team made it unforgettable! Champagne in the room, special dinner arrangement, and the most beautiful room decoration. True five-star service!",
-          "review_date": "2026-04-10T14:45:41.818263Z",
+          "review_date": "2026-04-10T15:00:11.768053Z",
           "stay_date": "December 2025",
           "room_type": "Honeymoon Suite",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.818266Z"
+          "created_at": "2026-04-10T15:00:11.768054Z"
         },
         {
-          "id": "3b44021c-8852-4c1b-88f2-9b2664920373",
+          "id": "d685d2de-9fb1-472f-b592-75bcd936a727",
           "platform": "tripadvisor",
           "guest_name": "Jennifer Lee",
           "guest_avatar": "https://images.pexels.com/photos/6627006/pexels-photo-6627006.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
           "rating": 4,
           "review_text": "Lovely boutique hotel with character. The room decor was charming and unique. Breakfast could use more healthy options. Staff remembered our names which was a nice personal touch.",
-          "review_date": "2026-04-10T14:45:41.817836Z",
+          "review_date": "2026-04-10T15:00:11.767756Z",
           "stay_date": "December 2025",
           "room_type": "Boutique Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.817839Z"
+          "created_at": "2026-04-10T15:00:11.767757Z"
         },
         {
-          "id": "1b607041-d956-49c1-9e82-38ced9bae6a8",
+          "id": "4da8b487-5003-4acd-9f31-81458b94ab6d",
           "platform": "airbnb",
           "guest_name": "Robert Brown",
           "guest_avatar": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 1,
           "review_text": "Very disappointing experience. Found hair in the bathroom, the minibar was missing items that were charged to my bill, and housekeeping never came despite multiple requests. Will not return.",
-          "review_date": "2026-04-10T14:45:41.817497Z",
+          "review_date": "2026-04-10T15:00:11.767530Z",
           "stay_date": "January 2026",
           "room_type": "Standard Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.817499Z"
+          "created_at": "2026-04-10T15:00:11.767532Z"
         },
         {
-          "id": "b7988551-ca61-441d-bfd0-f94c11c4df22",
+          "id": "9d416d68-aa35-489c-a10a-185b949b4f4a",
           "platform": "booking.com",
           "guest_name": "Anna Martinez",
           "guest_avatar": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 5,
           "review_text": "Perfect family vacation! The kids loved the pool and the staff arranged wonderful activities. Rooms were spacious enough for our family of four. Breakfast had great variety for picky eaters.",
-          "review_date": "2026-04-10T14:45:41.817136Z",
+          "review_date": "2026-04-10T15:00:11.767252Z",
           "stay_date": "December 2025",
           "room_type": "Family Suite",
           "response_status": "responded",
           "response_text": "Dear Anna, what a pleasure it was to host your family! We're so glad the children had a wonderful time at the pool. Family happiness is our priority, and we're delighted we could contribute to your vacation memories. Can't wait to see you all again! - The Management Team",
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.817139Z"
+          "created_at": "2026-04-10T15:00:11.767254Z"
         },
         {
-          "id": "d90a2cca-56ac-4de5-a71e-e2342053f6f6",
+          "id": "4cdb5881-1656-49df-8a66-f90ee0816c65",
           "platform": "trip.com",
           "guest_name": "David Kim",
           "guest_avatar": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 4,
           "review_text": "Solid choice for business travelers. Clean rooms, fast WiFi, and convenient location near the business district. The gym is well-equipped. Would appreciate more power outlets near the desk.",
-          "review_date": "2026-04-10T14:45:41.816758Z",
+          "review_date": "2026-04-10T15:00:11.767019Z",
           "stay_date": "January 2026",
           "room_type": "Business Suite",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.816760Z"
+          "created_at": "2026-04-10T15:00:11.767020Z"
         },
         {
-          "id": "d5e9f2b4-df50-41d1-98ac-37afe9ec979c",
+          "id": "9b0938cd-3735-43e6-9cc5-dde1441a21fe",
           "platform": "google",
           "guest_name": "Lisa Anderson",
           "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
           "rating": 2,
           "review_text": "Disappointed with my stay. The room wasn't ready at check-in time despite confirming in advance. Noise from the street made it hard to sleep. Expected more for the price paid.",
-          "review_date": "2026-04-10T14:45:41.816378Z",
+          "review_date": "2026-04-10T15:00:11.766810Z",
           "stay_date": "January 2026",
           "room_type": "City View Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.816381Z"
+          "created_at": "2026-04-10T15:00:11.766811Z"
         },
         {
-          "id": "c03b6f9e-c018-4a69-af34-16a4804db9e7",
+          "id": "c76b3de2-d3ea-4c21-96fe-2709b42197e4",
           "platform": "tripadvisor",
           "guest_name": "James Wilson",
           "guest_avatar": "https://images.pexels.com/photos/6627006/pexels-photo-6627006.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
           "rating": 5,
           "review_text": "Outstanding hotel! From the moment we arrived, we were treated like royalty. The spa facilities are world-class and the rooftop restaurant has amazing views. Highly recommend the seafood platter!",
-          "review_date": "2026-04-10T14:45:41.815967Z",
+          "review_date": "2026-04-10T15:00:11.766601Z",
           "stay_date": "December 2025",
           "room_type": "Executive Suite",
           "response_status": "responded",
           "response_text": "Dear James, thank you so much for your wonderful review! We're thrilled to hear you enjoyed your stay with us. Our team works hard to create memorable experiences, and it's always rewarding to receive such positive feedback. We look forward to welcoming you back soon! - The Management Team",
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.815970Z"
+          "created_at": "2026-04-10T15:00:11.766602Z"
         },
         {
-          "id": "9b9da28f-1bb1-46d0-b256-a172fc23aedc",
+          "id": "19280288-8b32-4c7c-83d9-211b24fc634d",
           "platform": "expedia",
           "guest_name": "Emma Rodriguez",
           "guest_avatar": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 3,
           "review_text": "The hotel is decent but room service was quite slow and the air conditioning wasn't working properly. Front desk staff were helpful in trying to resolve issues. Pool area was nice.",
-          "review_date": "2026-04-10T14:45:41.815581Z",
+          "review_date": "2026-04-10T15:00:11.766367Z",
           "stay_date": "January 2026",
           "room_type": "Premium Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.815584Z"
+          "created_at": "2026-04-10T15:00:11.766369Z"
         },
         {
-          "id": "c26b9f86-4acd-45dc-b064-b8fdc9b1e8ed",
+          "id": "84fadcc6-64e2-4953-853b-7baee4c11842",
           "platform": "airbnb",
           "guest_name": "Michael Chen",
           "guest_avatar": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 4,
           "review_text": "Great location and comfortable beds. The check-in process was smooth. Only minor issue was the WiFi being a bit slow during peak hours. Otherwise, a pleasant experience overall.",
-          "review_date": "2026-04-10T14:45:41.815098Z",
+          "review_date": "2026-04-10T15:00:11.766039Z",
           "stay_date": "January 2026",
           "room_type": "Standard Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.815101Z"
+          "created_at": "2026-04-10T15:00:11.766042Z"
         },
         {
-          "id": "76e1c4da-8ee8-4294-83e9-16f5f718877d",
+          "id": "f4fefc39-1465-4635-ab49-5a0102099b6e",
           "platform": "booking.com",
           "guest_name": "Sarah Johnson",
           "guest_avatar": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 5,
           "review_text": "Absolutely wonderful stay! The room was immaculate, staff incredibly friendly, and the breakfast buffet exceeded all expectations. The location is perfect for exploring the city. Will definitely be back!",
-          "review_date": "2026-04-10T14:45:41.814403Z",
+          "review_date": "2026-04-10T15:00:11.765517Z",
           "stay_date": "December 2025",
           "room_type": "Deluxe Suite",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.814410Z"
+          "created_at": "2026-04-10T15:00:11.765523Z"
         }
       ]
     },
@@ -225,34 +230,34 @@
       "details": "Status: 200",
       "response_data": [
         {
-          "id": "b7988551-ca61-441d-bfd0-f94c11c4df22",
+          "id": "9d416d68-aa35-489c-a10a-185b949b4f4a",
           "platform": "booking.com",
           "guest_name": "Anna Martinez",
           "guest_avatar": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 5,
           "review_text": "Perfect family vacation! The kids loved the pool and the staff arranged wonderful activities. Rooms were spacious enough for our family of four. Breakfast had great variety for picky eaters.",
-          "review_date": "2026-04-10T14:45:41.817136Z",
+          "review_date": "2026-04-10T15:00:11.767252Z",
           "stay_date": "December 2025",
           "room_type": "Family Suite",
           "response_status": "responded",
           "response_text": "Dear Anna, what a pleasure it was to host your family! We're so glad the children had a wonderful time at the pool. Family happiness is our priority, and we're delighted we could contribute to your vacation memories. Can't wait to see you all again! - The Management Team",
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.817139Z"
+          "created_at": "2026-04-10T15:00:11.767254Z"
         },
         {
-          "id": "76e1c4da-8ee8-4294-83e9-16f5f718877d",
+          "id": "f4fefc39-1465-4635-ab49-5a0102099b6e",
           "platform": "booking.com",
           "guest_name": "Sarah Johnson",
           "guest_avatar": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 5,
           "review_text": "Absolutely wonderful stay! The room was immaculate, staff incredibly friendly, and the breakfast buffet exceeded all expectations. The location is perfect for exploring the city. Will definitely be back!",
-          "review_date": "2026-04-10T14:45:41.814403Z",
+          "review_date": "2026-04-10T15:00:11.765517Z",
           "stay_date": "December 2025",
           "room_type": "Deluxe Suite",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.814410Z"
+          "created_at": "2026-04-10T15:00:11.765523Z"
         }
       ]
     },
@@ -262,124 +267,124 @@
       "details": "Status: 200",
       "response_data": [
         {
-          "id": "7f33576b-575b-4720-8127-3b8a35e94b95",
+          "id": "4b0c78bd-ea6a-4c4d-9ed0-783b91bbf72d",
           "platform": "google",
           "guest_name": "Thomas Wright",
           "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
           "rating": 5,
           "review_text": "Celebrated our anniversary here and the team made it unforgettable! Champagne in the room, special dinner arrangement, and the most beautiful room decoration. True five-star service!",
-          "review_date": "2026-04-10T14:45:41.818263Z",
+          "review_date": "2026-04-10T15:00:11.768053Z",
           "stay_date": "December 2025",
           "room_type": "Honeymoon Suite",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.818266Z"
+          "created_at": "2026-04-10T15:00:11.768054Z"
         },
         {
-          "id": "3b44021c-8852-4c1b-88f2-9b2664920373",
+          "id": "d685d2de-9fb1-472f-b592-75bcd936a727",
           "platform": "tripadvisor",
           "guest_name": "Jennifer Lee",
           "guest_avatar": "https://images.pexels.com/photos/6627006/pexels-photo-6627006.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
           "rating": 4,
           "review_text": "Lovely boutique hotel with character. The room decor was charming and unique. Breakfast could use more healthy options. Staff remembered our names which was a nice personal touch.",
-          "review_date": "2026-04-10T14:45:41.817836Z",
+          "review_date": "2026-04-10T15:00:11.767756Z",
           "stay_date": "December 2025",
           "room_type": "Boutique Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.817839Z"
+          "created_at": "2026-04-10T15:00:11.767757Z"
         },
         {
-          "id": "1b607041-d956-49c1-9e82-38ced9bae6a8",
+          "id": "4da8b487-5003-4acd-9f31-81458b94ab6d",
           "platform": "airbnb",
           "guest_name": "Robert Brown",
           "guest_avatar": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 1,
           "review_text": "Very disappointing experience. Found hair in the bathroom, the minibar was missing items that were charged to my bill, and housekeeping never came despite multiple requests. Will not return.",
-          "review_date": "2026-04-10T14:45:41.817497Z",
+          "review_date": "2026-04-10T15:00:11.767530Z",
           "stay_date": "January 2026",
           "room_type": "Standard Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.817499Z"
+          "created_at": "2026-04-10T15:00:11.767532Z"
         },
         {
-          "id": "d90a2cca-56ac-4de5-a71e-e2342053f6f6",
+          "id": "4cdb5881-1656-49df-8a66-f90ee0816c65",
           "platform": "trip.com",
           "guest_name": "David Kim",
           "guest_avatar": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 4,
           "review_text": "Solid choice for business travelers. Clean rooms, fast WiFi, and convenient location near the business district. The gym is well-equipped. Would appreciate more power outlets near the desk.",
-          "review_date": "2026-04-10T14:45:41.816758Z",
+          "review_date": "2026-04-10T15:00:11.767019Z",
           "stay_date": "January 2026",
           "room_type": "Business Suite",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.816760Z"
+          "created_at": "2026-04-10T15:00:11.767020Z"
         },
         {
-          "id": "d5e9f2b4-df50-41d1-98ac-37afe9ec979c",
+          "id": "9b0938cd-3735-43e6-9cc5-dde1441a21fe",
           "platform": "google",
           "guest_name": "Lisa Anderson",
           "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
           "rating": 2,
           "review_text": "Disappointed with my stay. The room wasn't ready at check-in time despite confirming in advance. Noise from the street made it hard to sleep. Expected more for the price paid.",
-          "review_date": "2026-04-10T14:45:41.816378Z",
+          "review_date": "2026-04-10T15:00:11.766810Z",
           "stay_date": "January 2026",
           "room_type": "City View Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.816381Z"
+          "created_at": "2026-04-10T15:00:11.766811Z"
         },
         {
-          "id": "9b9da28f-1bb1-46d0-b256-a172fc23aedc",
+          "id": "19280288-8b32-4c7c-83d9-211b24fc634d",
           "platform": "expedia",
           "guest_name": "Emma Rodriguez",
           "guest_avatar": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 3,
           "review_text": "The hotel is decent but room service was quite slow and the air conditioning wasn't working properly. Front desk staff were helpful in trying to resolve issues. Pool area was nice.",
-          "review_date": "2026-04-10T14:45:41.815581Z",
+          "review_date": "2026-04-10T15:00:11.766367Z",
           "stay_date": "January 2026",
           "room_type": "Premium Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.815584Z"
+          "created_at": "2026-04-10T15:00:11.766369Z"
         },
         {
-          "id": "c26b9f86-4acd-45dc-b064-b8fdc9b1e8ed",
+          "id": "84fadcc6-64e2-4953-853b-7baee4c11842",
           "platform": "airbnb",
           "guest_name": "Michael Chen",
           "guest_avatar": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 4,
           "review_text": "Great location and comfortable beds. The check-in process was smooth. Only minor issue was the WiFi being a bit slow during peak hours. Otherwise, a pleasant experience overall.",
-          "review_date": "2026-04-10T14:45:41.815098Z",
+          "review_date": "2026-04-10T15:00:11.766039Z",
           "stay_date": "January 2026",
           "room_type": "Standard Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.815101Z"
+          "created_at": "2026-04-10T15:00:11.766042Z"
         },
         {
-          "id": "76e1c4da-8ee8-4294-83e9-16f5f718877d",
+          "id": "f4fefc39-1465-4635-ab49-5a0102099b6e",
           "platform": "booking.com",
           "guest_name": "Sarah Johnson",
           "guest_avatar": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 5,
           "review_text": "Absolutely wonderful stay! The room was immaculate, staff incredibly friendly, and the breakfast buffet exceeded all expectations. The location is perfect for exploring the city. Will definitely be back!",
-          "review_date": "2026-04-10T14:45:41.814403Z",
+          "review_date": "2026-04-10T15:00:11.765517Z",
           "stay_date": "December 2025",
           "room_type": "Deluxe Suite",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.814410Z"
+          "created_at": "2026-04-10T15:00:11.765523Z"
         }
       ]
     },
@@ -389,55 +394,55 @@
       "details": "Status: 200",
       "response_data": [
         {
-          "id": "1b607041-d956-49c1-9e82-38ced9bae6a8",
+          "id": "4da8b487-5003-4acd-9f31-81458b94ab6d",
           "platform": "airbnb",
           "guest_name": "Robert Brown",
           "guest_avatar": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 1,
           "review_text": "Very disappointing experience. Found hair in the bathroom, the minibar was missing items that were charged to my bill, and housekeeping never came despite multiple requests. Will not return.",
-          "review_date": "2026-04-10T14:45:41.817497Z",
+          "review_date": "2026-04-10T15:00:11.767530Z",
           "stay_date": "January 2026",
           "room_type": "Standard Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.817499Z"
+          "created_at": "2026-04-10T15:00:11.767532Z"
         },
         {
-          "id": "c26b9f86-4acd-45dc-b064-b8fdc9b1e8ed",
+          "id": "84fadcc6-64e2-4953-853b-7baee4c11842",
           "platform": "airbnb",
           "guest_name": "Michael Chen",
           "guest_avatar": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
           "rating": 4,
           "review_text": "Great location and comfortable beds. The check-in process was smooth. Only minor issue was the WiFi being a bit slow during peak hours. Otherwise, a pleasant experience overall.",
-          "review_date": "2026-04-10T14:45:41.815098Z",
+          "review_date": "2026-04-10T15:00:11.766039Z",
           "stay_date": "January 2026",
           "room_type": "Standard Room",
           "response_status": "pending",
           "response_text": null,
           "response_date": null,
-          "created_at": "2026-04-10T14:45:41.815101Z"
+          "created_at": "2026-04-10T15:00:11.766042Z"
         }
       ]
     },
     {
-      "test": "Get Review 7f33576b",
+      "test": "Get Review 4b0c78bd",
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "id": "7f33576b-575b-4720-8127-3b8a35e94b95",
+        "id": "4b0c78bd-ea6a-4c4d-9ed0-783b91bbf72d",
         "platform": "google",
         "guest_name": "Thomas Wright",
         "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
         "rating": 5,
         "review_text": "Celebrated our anniversary here and the team made it unforgettable! Champagne in the room, special dinner arrangement, and the most beautiful room decoration. True five-star service!",
-        "review_date": "2026-04-10T14:45:41.818263Z",
+        "review_date": "2026-04-10T15:00:11.768053Z",
         "stay_date": "December 2025",
         "room_type": "Honeymoon Suite",
         "response_status": "pending",
         "response_text": null,
         "response_date": null,
-        "created_at": "2026-04-10T14:45:41.818266Z"
+        "created_at": "2026-04-10T15:00:11.768054Z"
       }
     },
     {
@@ -445,7 +450,7 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "generated_text": "Dear Mr. Wright, thank you for taking the time to share your wonderful feedback and for choosing to celebrate your anniversary with us. We\u2019re delighted to hear that the champagne welcome, special dinner arrangements, and room decorations helped make your stay truly memorable.\n\nYour kind words about our team and service mean a great deal, and we\u2019ll be sure to share your compliments with everyone involved. We look forward to welcoming you back for another special occasion in the future.\n\nThe Management Team"
+        "generated_text": "Dear Mr. Wright, thank you for taking the time to share your wonderful feedback and for choosing to celebrate your anniversary with us.\n\nWe\u2019re delighted to hear that the champagne welcome, special dinner arrangements, and room decorations helped make your stay unforgettable, and we truly appreciate your kind words about our team\u2019s service. We look forward to welcoming you back for another special occasion in the future.\n\nThe Management Team"
       }
     },
     {
@@ -453,7 +458,7 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "generated_text": "Dear Thomas Wright, thank you so much for taking the time to share your wonderful feedback! We\u2019re truly delighted you chose to celebrate your anniversary with us, and it means a lot to hear that our team helped make it such an unforgettable occasion.\n\nWe\u2019re so pleased you enjoyed the champagne surprise, the special dinner arrangement, and the room decorations\u2014creating memorable moments like these is exactly what we strive for. We look forward to welcoming you back for your next celebration (or a well-deserved getaway)!\n\nWarm regards,  \nThe Management Team"
+        "generated_text": "Dear Thomas Wright, thank you so much for your wonderful feedback and for choosing to celebrate your anniversary with us. We\u2019re truly delighted to hear our team helped make it such an unforgettable occasion\u2014from the champagne surprise to the special dinner arrangement and room decorations.\n\nYour kind words about our service mean a great deal to us, and we\u2019ll be sure to share your compliments with the entire team. We hope to welcome you back again soon for another special celebration.\n\nThe Management Team"
       }
     },
     {
@@ -461,7 +466,7 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "generated_text": "Thank you, Thomas Wright, for your wonderful feedback and for choosing to celebrate your anniversary with us. We\u2019re truly delighted to hear the champagne welcome, special dinner arrangements, and room decorations helped make your stay unforgettable and reflected the five-star service you expected.\n\nIf there\u2019s anything we could have done even better, please don\u2019t hesitate to share it with us\u2014we\u2019re always looking for ways to improve and would be happy to assist with any future requests to make your next visit even more special. We look forward to welcoming you back again soon.\n\nThe Management Team"
+        "generated_text": "Thank you, Thomas Wright, for taking the time to share your wonderful feedback on Google. We\u2019re truly delighted you chose to celebrate your anniversary with us, and it means a great deal to hear that the champagne, special dinner arrangements, and room decorations helped make your stay unforgettable.\n\nWhile we\u2019re thrilled everything met your expectations, please know that if there\u2019s ever anything we can do to make a future visit even better, we\u2019d be grateful to hear from you directly so we can take care of it right away. We look forward to welcoming you back for your next special occasion.\n\nThe Management Team"
       }
     },
     {
@@ -469,19 +474,19 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "id": "7f33576b-575b-4720-8127-3b8a35e94b95",
+        "id": "4b0c78bd-ea6a-4c4d-9ed0-783b91bbf72d",
         "platform": "google",
         "guest_name": "Thomas Wright",
         "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
         "rating": 5,
         "review_text": "Celebrated our anniversary here and the team made it unforgettable! Champagne in the room, special dinner arrangement, and the most beautiful room decoration. True five-star service!",
-        "review_date": "2026-04-10T14:45:41.818263Z",
+        "review_date": "2026-04-10T15:00:11.768053Z",
         "stay_date": "December 2025",
         "room_type": "Honeymoon Suite",
         "response_status": "responded",
         "response_text": "Thank you for your feedback! We appreciate your review and look forward to welcoming you back. - The Management Team",
-        "response_date": "2026-04-10T14:45:52.210452Z",
-        "created_at": "2026-04-10T14:45:41.818266Z"
+        "response_date": "2026-04-10T15:00:19.820750Z",
+        "created_at": "2026-04-10T15:00:11.768054Z"
       }
     },
     {
@@ -489,19 +494,19 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "id": "8aa27524-7c53-4f4a-91d4-9639fdc5406f",
+        "id": "41de670b-a7c3-4e8f-9878-ed27caba5e7f",
         "platform": "booking.com",
         "guest_name": "Test Guest",
         "guest_avatar": null,
         "rating": 4,
         "review_text": "This is a test review for API testing purposes.",
-        "review_date": "2026-04-10T14:45:52.314448Z",
+        "review_date": "2026-04-10T15:00:19.931452Z",
         "stay_date": "January 2026",
         "room_type": "Test Suite",
         "response_status": "pending",
         "response_text": null,
         "response_date": null,
-        "created_at": "2026-04-10T14:45:52.314454Z"
+        "created_at": "2026-04-10T15:00:19.931458Z"
       }
     },
     {
@@ -515,12 +520,12 @@
         "response_rate": 27.3,
         "average_rating": 3.8,
         "by_platform": {
-          "trip.com": 1,
-          "tripadvisor": 2,
-          "google": 2,
-          "airbnb": 2,
           "expedia": 1,
-          "booking.com": 3
+          "google": 2,
+          "tripadvisor": 2,
+          "booking.com": 3,
+          "trip.com": 1,
+          "airbnb": 2
         }
       }
     },
@@ -530,10 +535,10 @@
       "details": "Status: 200",
       "response_data": {
         "id": "4cc2a60c-6610-4062-b8ce-a16f589d6329",
-        "email": "manager@testhotel.com",
+        "email": "test@hotel.com",
         "notify_negative_reviews": true,
-        "negative_threshold": 1,
-        "enabled": false,
+        "negative_threshold": 2,
+        "enabled": true,
         "created_at": "2026-04-10T13:38:55.841285+00:00"
       }
     },
@@ -556,6 +561,20 @@
       "details": "Status: 200",
       "response_data": [
         {
+          "id": "40cc862a-8328-4c74-86ae-08e8c9e6cb52",
+          "review_id": "test-notification",
+          "email": "test@hotel.com",
+          "status": "demo_logged",
+          "created_at": "2026-04-10T14:45:54.304578+00:00"
+        },
+        {
+          "id": "5f2908bb-9550-4ede-bfcd-742bda8c2021",
+          "review_id": "d21e7181-6f99-45a5-8f03-6e82f7edfe9d",
+          "email": "test@hotel.com",
+          "status": "demo_logged",
+          "created_at": "2026-04-10T14:45:52.975726+00:00"
+        },
+        {
           "id": "37500f55-7469-4816-a573-bcf70e9a6677",
           "review_id": "test-notification",
           "email": "test@hotel.com",
@@ -576,19 +595,19 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "id": "d21e7181-6f99-45a5-8f03-6e82f7edfe9d",
+        "id": "0bd34f55-b478-4f91-8cdc-14a3bb9a5073",
         "platform": "google",
         "guest_name": "Unhappy Guest",
         "guest_avatar": null,
         "rating": 2,
         "review_text": "Very disappointed with the service. Room was dirty and staff was unhelpful.",
-        "review_date": "2026-04-10T14:45:52.974258Z",
+        "review_date": "2026-04-10T15:00:20.557351Z",
         "stay_date": "January 2026",
         "room_type": "Standard Room",
         "response_status": "pending",
         "response_text": null,
         "response_date": null,
-        "created_at": "2026-04-10T14:45:52.974263Z"
+        "created_at": "2026-04-10T15:00:20.557356Z"
       }
     },
     {
@@ -596,6 +615,20 @@
       "success": true,
       "details": "Status: 200",
       "response_data": [
+        {
+          "id": "203608bd-c61f-48cf-89b4-c5e173f982e0",
+          "review_id": "0bd34f55-b478-4f91-8cdc-14a3bb9a5073",
+          "email": "test@hotel.com",
+          "status": "demo_logged",
+          "created_at": "2026-04-10T15:00:20.558728+00:00"
+        },
+        {
+          "id": "40cc862a-8328-4c74-86ae-08e8c9e6cb52",
+          "review_id": "test-notification",
+          "email": "test@hotel.com",
+          "status": "demo_logged",
+          "created_at": "2026-04-10T14:45:54.304578+00:00"
+        },
         {
           "id": "5f2908bb-9550-4ede-bfcd-742bda8c2021",
           "review_id": "d21e7181-6f99-45a5-8f03-6e82f7edfe9d",
@@ -646,7 +679,7 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "message": "Database already has 6 templates",
+        "message": "Database already has 7 templates",
         "seeded": false
       }
     },
@@ -661,7 +694,7 @@
           "category": "positive",
           "content": "Dear {guest_name},\n\nThank you so much for your wonderful review and for choosing to stay with us! We're absolutely delighted to hear that you had an excellent experience.\n\nYour kind words mean the world to our team, and we're thrilled that we could make your stay memorable. We truly appreciate you taking the time to share your feedback.\n\nWe look forward to welcoming you back soon!\n\nWarm regards,\nThe Management Team",
           "tone": "friendly",
-          "usage_count": 0,
+          "usage_count": 3,
           "created_at": "2026-04-10T14:43:48.123049Z"
         },
         {
@@ -708,6 +741,15 @@
           "tone": "professional",
           "usage_count": 0,
           "created_at": "2026-04-10T14:43:48.135183Z"
+        },
+        {
+          "id": "840802d1-b7f5-47b1-a4d0-9fdcdaa180a1",
+          "name": "Playwright Test Template",
+          "category": "negative",
+          "content": "Dear {guest_name},\n\nWe sincerely apologize for the issues you experienced during your stay. Your feedback is very important to us.\n\nWe are taking immediate steps to address these concerns and would appreciate the opportunity to make things right.\n\nPlease contact us directly so we can discuss how to improve your experience.\n\nWith our sincere apologies,\nThe Management Team",
+          "tone": "apologetic",
+          "usage_count": 0,
+          "created_at": "2026-04-10T14:47:40.585856Z"
         }
       ]
     },
@@ -722,7 +764,7 @@
           "category": "positive",
           "content": "Dear {guest_name},\n\nThank you so much for your wonderful review and for choosing to stay with us! We're absolutely delighted to hear that you had an excellent experience.\n\nYour kind words mean the world to our team, and we're thrilled that we could make your stay memorable. We truly appreciate you taking the time to share your feedback.\n\nWe look forward to welcoming you back soon!\n\nWarm regards,\nThe Management Team",
           "tone": "friendly",
-          "usage_count": 0,
+          "usage_count": 3,
           "created_at": "2026-04-10T14:43:48.123049Z"
         }
       ]
@@ -740,6 +782,15 @@
           "tone": "apologetic",
           "usage_count": 0,
           "created_at": "2026-04-10T14:43:48.134661Z"
+        },
+        {
+          "id": "840802d1-b7f5-47b1-a4d0-9fdcdaa180a1",
+          "name": "Playwright Test Template",
+          "category": "negative",
+          "content": "Dear {guest_name},\n\nWe sincerely apologize for the issues you experienced during your stay. Your feedback is very important to us.\n\nWe are taking immediate steps to address these concerns and would appreciate the opportunity to make things right.\n\nPlease contact us directly so we can discuss how to improve your experience.\n\nWith our sincere apologies,\nThe Management Team",
+          "tone": "apologetic",
+          "usage_count": 0,
+          "created_at": "2026-04-10T14:47:40.585856Z"
         }
       ]
     },
@@ -810,7 +861,7 @@
         "category": "positive",
         "content": "Dear {guest_name},\n\nThank you so much for your wonderful review and for choosing to stay with us! We're absolutely delighted to hear that you had an excellent experience.\n\nYour kind words mean the world to our team, and we're thrilled that we could make your stay memorable. We truly appreciate you taking the time to share your feedback.\n\nWe look forward to welcoming you back soon!\n\nWarm regards,\nThe Management Team",
         "tone": "friendly",
-        "usage_count": 0,
+        "usage_count": 3,
         "created_at": "2026-04-10T14:43:48.123049Z"
       }
     },
@@ -819,13 +870,13 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "id": "adffef1f-7833-4df4-8640-b061d23bced1",
+        "id": "ef852b37-04d8-4ad6-b41b-2ac5bc836933",
         "name": "Test Template",
         "category": "positive",
         "content": "Dear {guest_name},\n\nThank you for your wonderful review! We're delighted you enjoyed your stay.\n\nBest regards,\nThe Management Team",
         "tone": "friendly",
         "usage_count": 0,
-        "created_at": "2026-04-10T14:45:55.386103Z"
+        "created_at": "2026-04-10T15:00:22.911378Z"
       }
     },
     {
@@ -833,13 +884,13 @@
       "success": true,
       "details": "Status: 200",
       "response_data": {
-        "id": "adffef1f-7833-4df4-8640-b061d23bced1",
+        "id": "ef852b37-04d8-4ad6-b41b-2ac5bc836933",
         "name": "Updated Test Template",
         "category": "positive",
         "content": "Dear {guest_name},\n\nThank you for your updated review! We appreciate your feedback.\n\nBest regards,\nThe Management Team",
         "tone": "friendly",
         "usage_count": 0,
-        "created_at": "2026-04-10T14:45:55.386103Z"
+        "created_at": "2026-04-10T15:00:22.911378Z"
       }
     },
     {
@@ -848,7 +899,7 @@
       "details": "Status: 200",
       "response_data": {
         "message": "Template usage recorded",
-        "usage_count": 1
+        "usage_count": 4
       }
     },
     {
@@ -857,6 +908,686 @@
       "details": "Status: 200",
       "response_data": {
         "message": "Template deleted"
+      }
+    },
+    {
+      "test": "Get Reviews for Analysis",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": [
+        {
+          "id": "0bd34f55-b478-4f91-8cdc-14a3bb9a5073",
+          "platform": "google",
+          "guest_name": "Unhappy Guest",
+          "guest_avatar": null,
+          "rating": 2,
+          "review_text": "Very disappointed with the service. Room was dirty and staff was unhelpful.",
+          "review_date": "2026-04-10T15:00:20.557351Z",
+          "stay_date": "January 2026",
+          "room_type": "Standard Room",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:20.557356Z"
+        },
+        {
+          "id": "41de670b-a7c3-4e8f-9878-ed27caba5e7f",
+          "platform": "booking.com",
+          "guest_name": "Test Guest",
+          "guest_avatar": null,
+          "rating": 4,
+          "review_text": "This is a test review for API testing purposes.",
+          "review_date": "2026-04-10T15:00:19.931452Z",
+          "stay_date": "January 2026",
+          "room_type": "Test Suite",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:19.931458Z"
+        },
+        {
+          "id": "4b0c78bd-ea6a-4c4d-9ed0-783b91bbf72d",
+          "platform": "google",
+          "guest_name": "Thomas Wright",
+          "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+          "rating": 5,
+          "review_text": "Celebrated our anniversary here and the team made it unforgettable! Champagne in the room, special dinner arrangement, and the most beautiful room decoration. True five-star service!",
+          "review_date": "2026-04-10T15:00:11.768053Z",
+          "stay_date": "December 2025",
+          "room_type": "Honeymoon Suite",
+          "response_status": "responded",
+          "response_text": "Thank you for your feedback! We appreciate your review and look forward to welcoming you back. - The Management Team",
+          "response_date": "2026-04-10T15:00:19.820750Z",
+          "created_at": "2026-04-10T15:00:11.768054Z"
+        },
+        {
+          "id": "d685d2de-9fb1-472f-b592-75bcd936a727",
+          "platform": "tripadvisor",
+          "guest_name": "Jennifer Lee",
+          "guest_avatar": "https://images.pexels.com/photos/6627006/pexels-photo-6627006.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+          "rating": 4,
+          "review_text": "Lovely boutique hotel with character. The room decor was charming and unique. Breakfast could use more healthy options. Staff remembered our names which was a nice personal touch.",
+          "review_date": "2026-04-10T15:00:11.767756Z",
+          "stay_date": "December 2025",
+          "room_type": "Boutique Room",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.767757Z"
+        },
+        {
+          "id": "4da8b487-5003-4acd-9f31-81458b94ab6d",
+          "platform": "airbnb",
+          "guest_name": "Robert Brown",
+          "guest_avatar": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+          "rating": 1,
+          "review_text": "Very disappointing experience. Found hair in the bathroom, the minibar was missing items that were charged to my bill, and housekeeping never came despite multiple requests. Will not return.",
+          "review_date": "2026-04-10T15:00:11.767530Z",
+          "stay_date": "January 2026",
+          "room_type": "Standard Room",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.767532Z"
+        },
+        {
+          "id": "9d416d68-aa35-489c-a10a-185b949b4f4a",
+          "platform": "booking.com",
+          "guest_name": "Anna Martinez",
+          "guest_avatar": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+          "rating": 5,
+          "review_text": "Perfect family vacation! The kids loved the pool and the staff arranged wonderful activities. Rooms were spacious enough for our family of four. Breakfast had great variety for picky eaters.",
+          "review_date": "2026-04-10T15:00:11.767252Z",
+          "stay_date": "December 2025",
+          "room_type": "Family Suite",
+          "response_status": "responded",
+          "response_text": "Dear Anna, what a pleasure it was to host your family! We're so glad the children had a wonderful time at the pool. Family happiness is our priority, and we're delighted we could contribute to your vacation memories. Can't wait to see you all again! - The Management Team",
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.767254Z"
+        },
+        {
+          "id": "4cdb5881-1656-49df-8a66-f90ee0816c65",
+          "platform": "trip.com",
+          "guest_name": "David Kim",
+          "guest_avatar": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+          "rating": 4,
+          "review_text": "Solid choice for business travelers. Clean rooms, fast WiFi, and convenient location near the business district. The gym is well-equipped. Would appreciate more power outlets near the desk.",
+          "review_date": "2026-04-10T15:00:11.767019Z",
+          "stay_date": "January 2026",
+          "room_type": "Business Suite",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.767020Z"
+        },
+        {
+          "id": "9b0938cd-3735-43e6-9cc5-dde1441a21fe",
+          "platform": "google",
+          "guest_name": "Lisa Anderson",
+          "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+          "rating": 2,
+          "review_text": "Disappointed with my stay. The room wasn't ready at check-in time despite confirming in advance. Noise from the street made it hard to sleep. Expected more for the price paid.",
+          "review_date": "2026-04-10T15:00:11.766810Z",
+          "stay_date": "January 2026",
+          "room_type": "City View Room",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.766811Z"
+        },
+        {
+          "id": "c76b3de2-d3ea-4c21-96fe-2709b42197e4",
+          "platform": "tripadvisor",
+          "guest_name": "James Wilson",
+          "guest_avatar": "https://images.pexels.com/photos/6627006/pexels-photo-6627006.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+          "rating": 5,
+          "review_text": "Outstanding hotel! From the moment we arrived, we were treated like royalty. The spa facilities are world-class and the rooftop restaurant has amazing views. Highly recommend the seafood platter!",
+          "review_date": "2026-04-10T15:00:11.766601Z",
+          "stay_date": "December 2025",
+          "room_type": "Executive Suite",
+          "response_status": "responded",
+          "response_text": "Dear James, thank you so much for your wonderful review! We're thrilled to hear you enjoyed your stay with us. Our team works hard to create memorable experiences, and it's always rewarding to receive such positive feedback. We look forward to welcoming you back soon! - The Management Team",
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.766602Z"
+        },
+        {
+          "id": "19280288-8b32-4c7c-83d9-211b24fc634d",
+          "platform": "expedia",
+          "guest_name": "Emma Rodriguez",
+          "guest_avatar": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+          "rating": 3,
+          "review_text": "The hotel is decent but room service was quite slow and the air conditioning wasn't working properly. Front desk staff were helpful in trying to resolve issues. Pool area was nice.",
+          "review_date": "2026-04-10T15:00:11.766367Z",
+          "stay_date": "January 2026",
+          "room_type": "Premium Room",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.766369Z"
+        },
+        {
+          "id": "84fadcc6-64e2-4953-853b-7baee4c11842",
+          "platform": "airbnb",
+          "guest_name": "Michael Chen",
+          "guest_avatar": "https://images.unsplash.com/photo-1576997355598-a5a9def46291?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+          "rating": 4,
+          "review_text": "Great location and comfortable beds. The check-in process was smooth. Only minor issue was the WiFi being a bit slow during peak hours. Otherwise, a pleasant experience overall.",
+          "review_date": "2026-04-10T15:00:11.766039Z",
+          "stay_date": "January 2026",
+          "room_type": "Standard Room",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.766042Z"
+        },
+        {
+          "id": "f4fefc39-1465-4635-ab49-5a0102099b6e",
+          "platform": "booking.com",
+          "guest_name": "Sarah Johnson",
+          "guest_avatar": "https://images.unsplash.com/photo-1624300862338-94028d2603a5?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHwyfHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+          "rating": 5,
+          "review_text": "Absolutely wonderful stay! The room was immaculate, staff incredibly friendly, and the breakfast buffet exceeded all expectations. The location is perfect for exploring the city. Will definitely be back!",
+          "review_date": "2026-04-10T15:00:11.765517Z",
+          "stay_date": "December 2025",
+          "room_type": "Deluxe Suite",
+          "response_status": "pending",
+          "response_text": null,
+          "response_date": null,
+          "created_at": "2026-04-10T15:00:11.765523Z"
+        }
+      ]
+    },
+    {
+      "test": "Analyze Individual Review Sentiment",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "analysis": {
+          "sentiment": "negative",
+          "score": -0.85,
+          "urgency": "medium",
+          "topics": [
+            "cleanliness",
+            "staff",
+            "service",
+            "room"
+          ],
+          "suggested_tone": "apologetic",
+          "suggested_category": "complaint",
+          "key_issues": [
+            "Room was dirty",
+            "Staff was unhelpful",
+            "Disappointing service"
+          ],
+          "key_praises": []
+        },
+        "suggested_templates": [
+          {
+            "id": "24d45fe2-7540-41e6-a470-9ab77e291af1",
+            "name": "Apology - Service Issue",
+            "category": "complaint",
+            "content": "Dear {guest_name},\n\nThank you for taking the time to share your feedback. We sincerely apologize that your experience did not meet your expectations.\n\nYour concerns have been brought to the attention of our management team, and we are taking immediate steps to address the issues you've raised. We take all feedback seriously as it helps us improve.\n\nWe would appreciate the opportunity to make things right. Please contact us directly at your convenience so we can discuss how we can better serve you in the future.\n\nWith sincere apologies,\nThe Management Team",
+            "tone": "apologetic",
+            "usage_count": 0,
+            "created_at": "2026-04-10T14:43:48.134309+00:00"
+          },
+          {
+            "id": "ffc9dc02-a212-4ec0-8024-f52764fcc098",
+            "name": "Response - Room Issues",
+            "category": "complaint",
+            "content": "Dear {guest_name},\n\nThank you for your feedback regarding your recent stay. We apologize for any inconvenience caused by the room issues you mentioned.\n\nWe have immediately notified our maintenance team to inspect and resolve the problems you described. Guest comfort is our priority, and we regret that we did not meet your expectations.\n\nWe would love to welcome you back and show you the true quality of our accommodation. Please reach out to us directly if you'd like to discuss this further.\n\nSincerely,\nThe Management Team",
+            "tone": "apologetic",
+            "usage_count": 0,
+            "created_at": "2026-04-10T14:43:48.134927+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "test": "Run Batch Sentiment Analysis",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "message": "Analyzed 11 reviews",
+        "total": 11
+      }
+    },
+    {
+      "test": "Get Analytics Dashboard",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "overview": {
+          "total_reviews": 12,
+          "responded": 3,
+          "pending": 9,
+          "response_rate": 25.0,
+          "avg_rating": 3.67
+        },
+        "rating_distribution": {
+          "1": 1,
+          "2": 2,
+          "3": 1,
+          "4": 4,
+          "5": 4
+        },
+        "sentiment_distribution": {
+          "mixed": 2,
+          "positive": 6,
+          "negative": 3,
+          "neutral": 1
+        },
+        "urgency_distribution": {
+          "high": 1,
+          "low": 8,
+          "medium": 3
+        },
+        "platform_stats": [
+          {
+            "platform": "expedia",
+            "count": 1,
+            "avg_rating": 3.0
+          },
+          {
+            "platform": "google",
+            "count": 3,
+            "avg_rating": 3.0
+          },
+          {
+            "platform": "tripadvisor",
+            "count": 2,
+            "avg_rating": 4.5
+          },
+          {
+            "platform": "booking.com",
+            "count": 3,
+            "avg_rating": 4.67
+          },
+          {
+            "platform": "trip.com",
+            "count": 1,
+            "avg_rating": 4.0
+          },
+          {
+            "platform": "airbnb",
+            "count": 2,
+            "avg_rating": 2.5
+          }
+        ],
+        "top_topics": [
+          {
+            "topic": "amenities",
+            "count": 7
+          },
+          {
+            "topic": "staff",
+            "count": 7
+          },
+          {
+            "topic": "food",
+            "count": 5
+          },
+          {
+            "topic": "cleanliness",
+            "count": 4
+          },
+          {
+            "topic": "room",
+            "count": 4
+          },
+          {
+            "topic": "location",
+            "count": 3
+          },
+          {
+            "topic": "service",
+            "count": 3
+          },
+          {
+            "topic": "value",
+            "count": 3
+          },
+          {
+            "topic": "wifi",
+            "count": 2
+          },
+          {
+            "topic": "check-in",
+            "count": 2
+          }
+        ],
+        "common_issues": [
+          {
+            "issue": "Air conditioning wasn't working properly",
+            "count": 1
+          },
+          {
+            "issue": "Minibar items missing but still charged to the bill",
+            "count": 1
+          },
+          {
+            "issue": "Guest will not return",
+            "count": 1
+          },
+          {
+            "issue": "Room was dirty",
+            "count": 1
+          },
+          {
+            "issue": "Room was not ready at check-in time despite prior confirmation",
+            "count": 1
+          }
+        ],
+        "common_praises": [
+          {
+            "praise": "Staff incredibly friendly",
+            "count": 1
+          },
+          {
+            "praise": "Absolutely wonderful stay",
+            "count": 1
+          },
+          {
+            "praise": "Rooftop restaurant with amazing views",
+            "count": 1
+          },
+          {
+            "praise": "Breakfast buffet exceeded expectations",
+            "count": 1
+          },
+          {
+            "praise": "Front desk staff were helpful in trying to resolve issues",
+            "count": 1
+          }
+        ],
+        "priority_queue": [
+          {
+            "id": "4da8b487-5003-4acd-9f31-81458b94ab6d",
+            "platform": "airbnb",
+            "guest_name": "Robert Brown",
+            "guest_avatar": "https://images.unsplash.com/photo-1770058443069-e384cd001e9b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzOTB8MHwxfHNlYXJjaHw0fHxwZXJzb24lMjBwb3J0cmFpdCUyMG5ldXRyYWwlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTgyNjkzN3ww&ixlib=rb-4.1.0&q=85",
+            "rating": 1,
+            "review_text": "Very disappointing experience. Found hair in the bathroom, the minibar was missing items that were charged to my bill, and housekeeping never came despite multiple requests. Will not return.",
+            "review_date": "2026-04-10T15:00:11.767530+00:00",
+            "stay_date": "January 2026",
+            "room_type": "Standard Room",
+            "response_status": "pending",
+            "response_text": null,
+            "response_date": null,
+            "created_at": "2026-04-10T15:00:11.767532+00:00",
+            "sentiment_analysis": {
+              "sentiment": "negative",
+              "score": -0.9,
+              "urgency": "high",
+              "topics": [
+                "cleanliness",
+                "bathroom",
+                "amenities",
+                "minibar",
+                "billing",
+                "housekeeping",
+                "service"
+              ],
+              "suggested_tone": "apologetic",
+              "suggested_category": "complaint",
+              "key_issues": [
+                "Hair found in the bathroom",
+                "Minibar items missing but still charged to the bill",
+                "Housekeeping did not service the room despite multiple requests",
+                "Guest will not return"
+              ],
+              "key_praises": []
+            }
+          },
+          {
+            "id": "9b0938cd-3735-43e6-9cc5-dde1441a21fe",
+            "platform": "google",
+            "guest_name": "Lisa Anderson",
+            "guest_avatar": "https://images.pexels.com/photos/7719379/pexels-photo-7719379.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+            "rating": 2,
+            "review_text": "Disappointed with my stay. The room wasn't ready at check-in time despite confirming in advance. Noise from the street made it hard to sleep. Expected more for the price paid.",
+            "review_date": "2026-04-10T15:00:11.766810+00:00",
+            "stay_date": "January 2026",
+            "room_type": "City View Room",
+            "response_status": "pending",
+            "response_text": null,
+            "response_date": null,
+            "created_at": "2026-04-10T15:00:11.766811+00:00",
+            "sentiment_analysis": {
+              "sentiment": "negative",
+              "score": -0.65,
+              "urgency": "medium",
+              "topics": [
+                "check-in",
+                "noise",
+                "value",
+                "room readiness"
+              ],
+              "suggested_tone": "apologetic",
+              "suggested_category": "complaint",
+              "key_issues": [
+                "Room was not ready at check-in time despite prior confirmation",
+                "Street noise made it difficult to sleep",
+                "Stay did not meet expectations for the price paid"
+              ],
+              "key_praises": []
+            }
+          },
+          {
+            "id": "0bd34f55-b478-4f91-8cdc-14a3bb9a5073",
+            "platform": "google",
+            "guest_name": "Unhappy Guest",
+            "guest_avatar": null,
+            "rating": 2,
+            "review_text": "Very disappointed with the service. Room was dirty and staff was unhelpful.",
+            "review_date": "2026-04-10T15:00:20.557351+00:00",
+            "stay_date": "January 2026",
+            "room_type": "Standard Room",
+            "response_status": "pending",
+            "response_text": null,
+            "response_date": null,
+            "created_at": "2026-04-10T15:00:20.557356+00:00",
+            "sentiment_analysis": {
+              "sentiment": "negative",
+              "score": -0.85,
+              "urgency": "medium",
+              "topics": [
+                "cleanliness",
+                "staff",
+                "service",
+                "room"
+              ],
+              "suggested_tone": "apologetic",
+              "suggested_category": "complaint",
+              "key_issues": [
+                "Room was dirty",
+                "Staff was unhelpful",
+                "Disappointing service"
+              ],
+              "key_praises": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "test": "Seed Demo Competitors",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "message": "Database already has 5 competitors",
+        "seeded": false
+      }
+    },
+    {
+      "test": "Get All Competitors",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": [
+        {
+          "id": "c3a982ee-36a2-48c9-bf0a-0891e80d5d87",
+          "name": "Grand Hotel Plaza",
+          "platform": "all",
+          "avg_rating": 4.2,
+          "total_reviews": 1250,
+          "response_rate": 78.5,
+          "last_updated": "2026-04-10T14:57:06.485891+00:00"
+        },
+        {
+          "id": "d4ae4fc4-7b8e-4ebb-88f7-f34d6797c0d2",
+          "name": "Seaside Resort & Spa",
+          "platform": "all",
+          "avg_rating": 4.5,
+          "total_reviews": 890,
+          "response_rate": 92.0,
+          "last_updated": "2026-04-10T14:57:06.496966+00:00"
+        },
+        {
+          "id": "b93ef818-663e-4a3b-8ab0-88beea85957c",
+          "name": "City Center Inn",
+          "platform": "all",
+          "avg_rating": 3.8,
+          "total_reviews": 2100,
+          "response_rate": 45.0,
+          "last_updated": "2026-04-10T14:57:06.497519+00:00"
+        },
+        {
+          "id": "a999f3fd-cc6e-40f0-a7ec-0f7a6ec92df4",
+          "name": "Mountain View Lodge",
+          "platform": "all",
+          "avg_rating": 4.0,
+          "total_reviews": 560,
+          "response_rate": 85.0,
+          "last_updated": "2026-04-10T14:57:06.497810+00:00"
+        },
+        {
+          "id": "26d707cf-a096-4340-a888-ef7348f88105",
+          "name": "Airport Express Hotel",
+          "platform": "all",
+          "avg_rating": 3.5,
+          "total_reviews": 3200,
+          "response_rate": 30.0,
+          "last_updated": "2026-04-10T14:57:06.498026+00:00"
+        }
+      ]
+    },
+    {
+      "test": "Add New Competitor",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "id": "53344564-55ee-461a-9437-09fee7aa1751",
+        "name": "Test Competitor Hotel",
+        "platform": "all",
+        "avg_rating": 4.2,
+        "total_reviews": 500,
+        "response_rate": 75.0,
+        "last_updated": "2026-04-10T15:00:50.824947Z"
+      }
+    },
+    {
+      "test": "Update Competitor",
+      "success": false,
+      "details": "Expected 200, got 422",
+      "response_data": {
+        "detail": [
+          {
+            "type": "missing",
+            "loc": [
+              "body",
+              "platform"
+            ],
+            "msg": "Field required",
+            "input": {
+              "name": "Updated Test Competitor",
+              "avg_rating": 4.5,
+              "total_reviews": 600,
+              "response_rate": 80.0
+            },
+            "url": "https://errors.pydantic.dev/2.12/v/missing"
+          }
+        ]
+      }
+    },
+    {
+      "test": "Get Competitor Benchmark",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "your_hotel": {
+          "avg_rating": 3.7,
+          "total_reviews": 12,
+          "response_rate": 25.0
+        },
+        "competitors": [
+          {
+            "id": "c3a982ee-36a2-48c9-bf0a-0891e80d5d87",
+            "name": "Grand Hotel Plaza",
+            "platform": "all",
+            "avg_rating": 4.2,
+            "total_reviews": 1250,
+            "response_rate": 78.5,
+            "last_updated": "2026-04-10T14:57:06.485891+00:00"
+          },
+          {
+            "id": "d4ae4fc4-7b8e-4ebb-88f7-f34d6797c0d2",
+            "name": "Seaside Resort & Spa",
+            "platform": "all",
+            "avg_rating": 4.5,
+            "total_reviews": 890,
+            "response_rate": 92.0,
+            "last_updated": "2026-04-10T14:57:06.496966+00:00"
+          },
+          {
+            "id": "b93ef818-663e-4a3b-8ab0-88beea85957c",
+            "name": "City Center Inn",
+            "platform": "all",
+            "avg_rating": 3.8,
+            "total_reviews": 2100,
+            "response_rate": 45.0,
+            "last_updated": "2026-04-10T14:57:06.497519+00:00"
+          },
+          {
+            "id": "a999f3fd-cc6e-40f0-a7ec-0f7a6ec92df4",
+            "name": "Mountain View Lodge",
+            "platform": "all",
+            "avg_rating": 4.0,
+            "total_reviews": 560,
+            "response_rate": 85.0,
+            "last_updated": "2026-04-10T14:57:06.497810+00:00"
+          },
+          {
+            "id": "26d707cf-a096-4340-a888-ef7348f88105",
+            "name": "Airport Express Hotel",
+            "platform": "all",
+            "avg_rating": 3.5,
+            "total_reviews": 3200,
+            "response_rate": 30.0,
+            "last_updated": "2026-04-10T14:57:06.498026+00:00"
+          },
+          {
+            "id": "53344564-55ee-461a-9437-09fee7aa1751",
+            "name": "Test Competitor Hotel",
+            "platform": "all",
+            "avg_rating": 4.2,
+            "total_reviews": 500,
+            "response_rate": 75.0,
+            "last_updated": "2026-04-10T15:00:50.824947+00:00"
+          }
+        ],
+        "ranking": {
+          "rating_rank": 6,
+          "response_rate_rank": 7,
+          "total_competitors": 7
+        }
+      }
+    },
+    {
+      "test": "Delete Competitor",
+      "success": true,
+      "details": "Status: 200",
+      "response_data": {
+        "message": "Competitor deleted"
       }
     }
   ]

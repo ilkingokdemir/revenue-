@@ -122,6 +122,43 @@ class ResponseTemplateUpdate(BaseModel):
     content: Optional[str] = None
     tone: Optional[str] = None
 
+class SentimentAnalysis(BaseModel):
+    sentiment: str  # positive, negative, neutral, mixed
+    score: float  # -1 to 1
+    urgency: str  # low, medium, high, critical
+    topics: List[str]  # cleanliness, staff, amenities, location, value, food, noise, etc.
+    suggested_tone: str  # professional, friendly, apologetic
+    suggested_category: str  # matches template categories
+    key_issues: List[str]
+    key_praises: List[str]
+
+class CompetitorData(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    platform: str
+    avg_rating: float
+    total_reviews: int
+    response_rate: float
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CompetitorCreate(BaseModel):
+    name: str
+    platform: str
+    avg_rating: float
+    total_reviews: int
+    response_rate: float
+
+class AnalyticsData(BaseModel):
+    period: str
+    total_reviews: int
+    avg_rating: float
+    sentiment_distribution: dict
+    response_rate: float
+    avg_response_time_hours: float
+    top_topics: List[dict]
+    rating_trend: List[dict]
+
 # ==================== HELPER FUNCTIONS ====================
 
 def serialize_review(review: dict) -> dict:
@@ -137,6 +174,78 @@ def deserialize_review(review: dict) -> dict:
         if field in review and isinstance(review[field], str):
             review[field] = datetime.fromisoformat(review[field])
     return review
+
+async def analyze_sentiment(review_text: str, rating: int) -> dict:
+    """Analyze sentiment of a review using GPT-5.2"""
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        # Return basic analysis based on rating if no API key
+        sentiment = "positive" if rating >= 4 else "negative" if rating <= 2 else "neutral"
+        return {
+            "sentiment": sentiment,
+            "score": (rating - 3) / 2,  # -1 to 1 scale
+            "urgency": "critical" if rating == 1 else "high" if rating == 2 else "low",
+            "topics": [],
+            "suggested_tone": "apologetic" if rating <= 2 else "friendly" if rating >= 4 else "professional",
+            "suggested_category": "negative" if rating <= 2 else "positive" if rating >= 4 else "neutral",
+            "key_issues": [],
+            "key_praises": []
+        }
+    
+    system_message = """You are a hotel review sentiment analyzer. Analyze the given review and return a JSON object with:
+- sentiment: "positive", "negative", "neutral", or "mixed"
+- score: float from -1 (very negative) to 1 (very positive)
+- urgency: "low", "medium", "high", or "critical" (critical for reviews mentioning health/safety/legal issues)
+- topics: array of topics mentioned (cleanliness, staff, amenities, location, value, food, noise, parking, wifi, bathroom, bed, check-in, check-out, etc.)
+- suggested_tone: "professional", "friendly", or "apologetic" based on what response tone would work best
+- suggested_category: "positive", "negative", "neutral", "complaint", or "praise" for template matching
+- key_issues: array of specific problems mentioned
+- key_praises: array of specific compliments mentioned
+
+Return ONLY valid JSON, no other text."""
+
+    prompt = f"""Analyze this hotel review (rated {rating}/5 stars):
+
+"{review_text}"
+
+Return the sentiment analysis as JSON."""
+
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"sentiment-{uuid.uuid4()}",
+            system_message=system_message
+        ).with_model("openai", "gpt-5.2")
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse JSON from response
+        import json
+        # Clean response - remove markdown code blocks if present
+        cleaned = response.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("```")[1]
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:]
+        cleaned = cleaned.strip()
+        
+        result = json.loads(cleaned)
+        return result
+    except Exception as e:
+        logger.error(f"Sentiment analysis error: {str(e)}")
+        # Fallback to basic analysis
+        sentiment = "positive" if rating >= 4 else "negative" if rating <= 2 else "neutral"
+        return {
+            "sentiment": sentiment,
+            "score": (rating - 3) / 2,
+            "urgency": "critical" if rating == 1 else "high" if rating == 2 else "low",
+            "topics": [],
+            "suggested_tone": "apologetic" if rating <= 2 else "friendly" if rating >= 4 else "professional",
+            "suggested_category": "negative" if rating <= 2 else "positive" if rating >= 4 else "neutral",
+            "key_issues": [],
+            "key_praises": []
+        }
 
 async def send_negative_review_notification(review: dict):
     """Send email notification for negative reviews (1-2 stars)"""
@@ -758,6 +867,296 @@ async def seed_templates():
         await db.response_templates.insert_one(doc)
     
     return {"message": f"Seeded {len(default_templates)} default templates", "seeded": True}
+
+# ==================== SENTIMENT & ANALYTICS ROUTES ====================
+
+@api_router.post("/reviews/{review_id}/analyze")
+async def analyze_review_sentiment(review_id: str):
+    """Analyze sentiment of a specific review"""
+    review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    analysis = await analyze_sentiment(review['review_text'], review['rating'])
+    
+    # Store analysis with review
+    await db.reviews.update_one(
+        {"id": review_id},
+        {"$set": {"sentiment_analysis": analysis}}
+    )
+    
+    # Find matching templates based on suggested category
+    matching_templates = await db.response_templates.find(
+        {"category": analysis.get("suggested_category", "neutral")},
+        {"_id": 0}
+    ).sort("usage_count", -1).to_list(3)
+    
+    return {
+        "analysis": analysis,
+        "suggested_templates": matching_templates
+    }
+
+@api_router.post("/reviews/analyze-batch")
+async def analyze_reviews_batch():
+    """Analyze sentiment for all reviews without analysis"""
+    reviews = await db.reviews.find(
+        {"sentiment_analysis": {"$exists": False}},
+        {"_id": 0}
+    ).to_list(100)
+    
+    analyzed_count = 0
+    for review in reviews:
+        try:
+            analysis = await analyze_sentiment(review['review_text'], review['rating'])
+            await db.reviews.update_one(
+                {"id": review['id']},
+                {"$set": {"sentiment_analysis": analysis}}
+            )
+            analyzed_count += 1
+        except Exception as e:
+            logger.error(f"Error analyzing review {review['id']}: {str(e)}")
+    
+    return {"message": f"Analyzed {analyzed_count} reviews", "total": len(reviews)}
+
+@api_router.get("/analytics/dashboard")
+async def get_analytics_dashboard():
+    """Get comprehensive analytics dashboard data"""
+    # Basic stats
+    total_reviews = await db.reviews.count_documents({})
+    responded = await db.reviews.count_documents({"response_status": "responded"})
+    pending = await db.reviews.count_documents({"response_status": "pending"})
+    
+    # Average rating
+    rating_pipeline = [
+        {"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}}}
+    ]
+    rating_result = await db.reviews.aggregate(rating_pipeline).to_list(1)
+    avg_rating = round(rating_result[0]["avg_rating"], 2) if rating_result else 0
+    
+    # Rating distribution
+    rating_dist_pipeline = [
+        {"$group": {"_id": "$rating", "count": {"$sum": 1}}},
+        {"$sort": {"_id": 1}}
+    ]
+    rating_dist = await db.reviews.aggregate(rating_dist_pipeline).to_list(10)
+    rating_distribution = {item["_id"]: item["count"] for item in rating_dist}
+    
+    # Sentiment distribution (from analyzed reviews)
+    sentiment_pipeline = [
+        {"$match": {"sentiment_analysis": {"$exists": True}}},
+        {"$group": {"_id": "$sentiment_analysis.sentiment", "count": {"$sum": 1}}}
+    ]
+    sentiment_result = await db.reviews.aggregate(sentiment_pipeline).to_list(10)
+    sentiment_distribution = {item["_id"]: item["count"] for item in sentiment_result if item["_id"]}
+    
+    # Platform distribution
+    platform_pipeline = [
+        {"$group": {"_id": "$platform", "count": {"$sum": 1}, "avg_rating": {"$avg": "$rating"}}}
+    ]
+    platform_result = await db.reviews.aggregate(platform_pipeline).to_list(10)
+    platform_stats = [
+        {"platform": item["_id"], "count": item["count"], "avg_rating": round(item["avg_rating"], 2)}
+        for item in platform_result
+    ]
+    
+    # Urgency breakdown (from analyzed reviews)
+    urgency_pipeline = [
+        {"$match": {"sentiment_analysis.urgency": {"$exists": True}}},
+        {"$group": {"_id": "$sentiment_analysis.urgency", "count": {"$sum": 1}}}
+    ]
+    urgency_result = await db.reviews.aggregate(urgency_pipeline).to_list(10)
+    urgency_distribution = {item["_id"]: item["count"] for item in urgency_result if item["_id"]}
+    
+    # Top mentioned topics
+    topic_pipeline = [
+        {"$match": {"sentiment_analysis.topics": {"$exists": True}}},
+        {"$unwind": "$sentiment_analysis.topics"},
+        {"$group": {"_id": "$sentiment_analysis.topics", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 10}
+    ]
+    topic_result = await db.reviews.aggregate(topic_pipeline).to_list(10)
+    top_topics = [{"topic": item["_id"], "count": item["count"]} for item in topic_result]
+    
+    # Common issues and praises
+    issues_pipeline = [
+        {"$match": {"sentiment_analysis.key_issues": {"$exists": True}}},
+        {"$unwind": "$sentiment_analysis.key_issues"},
+        {"$group": {"_id": "$sentiment_analysis.key_issues", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 5}
+    ]
+    issues_result = await db.reviews.aggregate(issues_pipeline).to_list(5)
+    common_issues = [{"issue": item["_id"], "count": item["count"]} for item in issues_result]
+    
+    praises_pipeline = [
+        {"$match": {"sentiment_analysis.key_praises": {"$exists": True}}},
+        {"$unwind": "$sentiment_analysis.key_praises"},
+        {"$group": {"_id": "$sentiment_analysis.key_praises", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 5}
+    ]
+    praises_result = await db.reviews.aggregate(praises_pipeline).to_list(5)
+    common_praises = [{"praise": item["_id"], "count": item["count"]} for item in praises_result]
+    
+    # Response rate calculation
+    response_rate = round((responded / total_reviews * 100) if total_reviews > 0 else 0, 1)
+    
+    # Priority queue - urgent reviews needing attention
+    priority_reviews = await db.reviews.find(
+        {
+            "response_status": "pending",
+            "$or": [
+                {"rating": {"$lte": 2}},
+                {"sentiment_analysis.urgency": {"$in": ["high", "critical"]}}
+            ]
+        },
+        {"_id": 0}
+    ).sort("rating", 1).to_list(10)
+    
+    for review in priority_reviews:
+        deserialize_review(review)
+    
+    return {
+        "overview": {
+            "total_reviews": total_reviews,
+            "responded": responded,
+            "pending": pending,
+            "response_rate": response_rate,
+            "avg_rating": avg_rating
+        },
+        "rating_distribution": rating_distribution,
+        "sentiment_distribution": sentiment_distribution,
+        "urgency_distribution": urgency_distribution,
+        "platform_stats": platform_stats,
+        "top_topics": top_topics,
+        "common_issues": common_issues,
+        "common_praises": common_praises,
+        "priority_queue": priority_reviews
+    }
+
+# ==================== COMPETITOR ROUTES ====================
+
+@api_router.get("/competitors")
+async def get_competitors():
+    """Get all competitor data"""
+    competitors = await db.competitors.find({}, {"_id": 0}).to_list(100)
+    for comp in competitors:
+        if isinstance(comp.get('last_updated'), str):
+            comp['last_updated'] = datetime.fromisoformat(comp['last_updated'])
+    return competitors
+
+@api_router.post("/competitors")
+async def add_competitor(input: CompetitorCreate):
+    """Add a competitor for benchmarking"""
+    competitor = CompetitorData(**input.model_dump())
+    doc = competitor.model_dump()
+    doc['last_updated'] = doc['last_updated'].isoformat()
+    await db.competitors.insert_one(doc)
+    return competitor
+
+@api_router.put("/competitors/{competitor_id}")
+async def update_competitor(competitor_id: str, input: CompetitorCreate):
+    """Update competitor data"""
+    existing = await db.competitors.find_one({"id": competitor_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+    
+    update_data = input.model_dump()
+    update_data['last_updated'] = datetime.now(timezone.utc).isoformat()
+    
+    await db.competitors.update_one(
+        {"id": competitor_id},
+        {"$set": update_data}
+    )
+    
+    updated = await db.competitors.find_one({"id": competitor_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/competitors/{competitor_id}")
+async def delete_competitor(competitor_id: str):
+    """Delete a competitor"""
+    result = await db.competitors.delete_one({"id": competitor_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Competitor not found")
+    return {"message": "Competitor deleted"}
+
+@api_router.get("/competitors/benchmark")
+async def get_competitor_benchmark():
+    """Get benchmark comparison with competitors"""
+    # Get our stats
+    our_stats = await get_review_stats_internal()
+    
+    # Get competitors
+    competitors = await db.competitors.find({}, {"_id": 0}).to_list(100)
+    
+    benchmark = {
+        "your_hotel": {
+            "avg_rating": our_stats.get("average_rating", 0),
+            "total_reviews": our_stats.get("total_reviews", 0),
+            "response_rate": our_stats.get("response_rate", 0)
+        },
+        "competitors": competitors,
+        "ranking": {
+            "rating_rank": 1,
+            "response_rate_rank": 1
+        }
+    }
+    
+    # Calculate rankings
+    all_ratings = [our_stats.get("average_rating", 0)] + [c.get("avg_rating", 0) for c in competitors]
+    all_response_rates = [our_stats.get("response_rate", 0)] + [c.get("response_rate", 0) for c in competitors]
+    
+    all_ratings.sort(reverse=True)
+    all_response_rates.sort(reverse=True)
+    
+    benchmark["ranking"]["rating_rank"] = all_ratings.index(our_stats.get("average_rating", 0)) + 1
+    benchmark["ranking"]["response_rate_rank"] = all_response_rates.index(our_stats.get("response_rate", 0)) + 1
+    benchmark["ranking"]["total_competitors"] = len(competitors) + 1
+    
+    return benchmark
+
+@api_router.post("/competitors/seed")
+async def seed_competitors():
+    """Seed demo competitor data"""
+    existing = await db.competitors.count_documents({})
+    if existing > 0:
+        return {"message": f"Database already has {existing} competitors", "seeded": False}
+    
+    demo_competitors = [
+        {"name": "Grand Hotel Plaza", "platform": "all", "avg_rating": 4.2, "total_reviews": 1250, "response_rate": 78.5},
+        {"name": "Seaside Resort & Spa", "platform": "all", "avg_rating": 4.5, "total_reviews": 890, "response_rate": 92.0},
+        {"name": "City Center Inn", "platform": "all", "avg_rating": 3.8, "total_reviews": 2100, "response_rate": 45.0},
+        {"name": "Mountain View Lodge", "platform": "all", "avg_rating": 4.0, "total_reviews": 560, "response_rate": 85.0},
+        {"name": "Airport Express Hotel", "platform": "all", "avg_rating": 3.5, "total_reviews": 3200, "response_rate": 30.0}
+    ]
+    
+    for comp_data in demo_competitors:
+        competitor = CompetitorData(**comp_data)
+        doc = competitor.model_dump()
+        doc['last_updated'] = doc['last_updated'].isoformat()
+        await db.competitors.insert_one(doc)
+    
+    return {"message": f"Seeded {len(demo_competitors)} competitors", "seeded": True}
+
+# Helper function used by benchmark (renamed to avoid conflict with API endpoint)
+async def get_review_stats_internal():
+    """Get review statistics"""
+    total = await db.reviews.count_documents({})
+    responded = await db.reviews.count_documents({"response_status": "responded"})
+    
+    pipeline = [
+        {"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}}}
+    ]
+    result = await db.reviews.aggregate(pipeline).to_list(1)
+    avg_rating = result[0]["avg_rating"] if result else 0
+    
+    return {
+        "total_reviews": total,
+        "responded": responded,
+        "response_rate": round((responded / total * 100) if total > 0 else 0, 1),
+        "average_rating": round(avg_rating, 1) if avg_rating else 0
+    }
 
 # Include the router in the main app
 app.include_router(api_router)

@@ -235,6 +235,25 @@ class SyncResponse(BaseModel):
     errors: List[str]
     status: str
 
+class BrandingSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    app_name: str = "Review Hub"
+    subtitle: str = "Manage all your guest reviews in one place"
+    primary_color: str = "#3E5245"
+    accent_color: str = "#D4A373"
+    logo_url: Optional[str] = None
+    powered_by_text: str = ""
+    powered_by_visible: bool = False
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BrandingSettingsUpdate(BaseModel):
+    app_name: Optional[str] = None
+    subtitle: Optional[str] = None
+    primary_color: Optional[str] = None
+    accent_color: Optional[str] = None
+    powered_by_text: Optional[str] = None
+    powered_by_visible: Optional[bool] = None
+
 # ==================== HELPER FUNCTIONS ====================
 
 def serialize_review(review: dict) -> dict:
@@ -1656,6 +1675,91 @@ class PlatformService:
                 json={"comment": reply_text}
             )
             return response.status_code == 200
+
+# ==================== BRANDING ROUTES ====================
+
+@api_router.get("/branding")
+async def get_branding():
+    """Get current branding settings"""
+    branding = await db.branding_settings.find_one({}, {"_id": 0})
+    if not branding:
+        branding = {
+            "app_name": "Review Hub",
+            "subtitle": "Manage all your guest reviews in one place",
+            "primary_color": "#3E5245",
+            "accent_color": "#D4A373",
+            "logo_url": None,
+            "powered_by_text": "",
+            "powered_by_visible": False
+        }
+    if "updated_at" in branding and isinstance(branding["updated_at"], datetime):
+        branding["updated_at"] = branding["updated_at"].isoformat()
+    return branding
+
+@api_router.put("/branding")
+async def update_branding(settings: BrandingSettingsUpdate):
+    """Update branding settings"""
+    existing = await db.branding_settings.find_one({}, {"_id": 0})
+    update_data = {k: v for k, v in settings.model_dump().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    if existing:
+        await db.branding_settings.update_one({}, {"$set": update_data})
+    else:
+        new_settings = {
+            "app_name": "Review Hub",
+            "subtitle": "Manage all your guest reviews in one place",
+            "primary_color": "#3E5245",
+            "accent_color": "#D4A373",
+            "logo_url": None,
+            "powered_by_text": "",
+            "powered_by_visible": False,
+            **update_data
+        }
+        await db.branding_settings.insert_one(new_settings)
+    
+    branding = await db.branding_settings.find_one({}, {"_id": 0})
+    if "updated_at" in branding and isinstance(branding["updated_at"], datetime):
+        branding["updated_at"] = branding["updated_at"].isoformat()
+    return branding
+
+@api_router.post("/branding/logo")
+async def upload_logo(file: UploadFile = File(...)):
+    """Upload a logo image (stored as base64 in DB)"""
+    import base64
+    
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    contents = await file.read()
+    if len(contents) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image must be under 2MB")
+    
+    b64 = base64.b64encode(contents).decode("utf-8")
+    logo_url = f"data:{file.content_type};base64,{b64}"
+    
+    existing = await db.branding_settings.find_one({})
+    if existing:
+        await db.branding_settings.update_one({}, {"$set": {"logo_url": logo_url, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    else:
+        await db.branding_settings.insert_one({
+            "app_name": "Review Hub",
+            "subtitle": "Manage all your guest reviews in one place",
+            "primary_color": "#3E5245",
+            "accent_color": "#D4A373",
+            "logo_url": logo_url,
+            "powered_by_text": "",
+            "powered_by_visible": False,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return {"logo_url": logo_url}
+
+@api_router.delete("/branding/logo")
+async def delete_logo():
+    """Remove the custom logo"""
+    await db.branding_settings.update_one({}, {"$set": {"logo_url": None, "updated_at": datetime.now(timezone.utc).isoformat()}})
+    return {"message": "Logo removed"}
 
 # ==================== PLATFORM INTEGRATION ROUTES ====================
 

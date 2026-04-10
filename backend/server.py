@@ -1,13 +1,16 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import asyncio
+import httpx
+import csv
+import io
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional
+from pydantic import BaseModel, Field, ConfigDict
+from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
@@ -25,6 +28,14 @@ db = client[os.environ['DB_NAME']]
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', '')
+
+# Platform API configurations
+GOOGLE_BUSINESS_CLIENT_ID = os.environ.get('GOOGLE_BUSINESS_CLIENT_ID', '')
+GOOGLE_BUSINESS_CLIENT_SECRET = os.environ.get('GOOGLE_BUSINESS_CLIENT_SECRET', '')
+GOOGLE_BUSINESS_REFRESH_TOKEN = os.environ.get('GOOGLE_BUSINESS_REFRESH_TOKEN', '')
+BOOKING_API_USERNAME = os.environ.get('BOOKING_API_USERNAME', '')
+BOOKING_API_PASSWORD = os.environ.get('BOOKING_API_PASSWORD', '')
+TRIPADVISOR_API_KEY = os.environ.get('TRIPADVISOR_API_KEY', '')
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -64,6 +75,8 @@ class Review(BaseModel):
     response_status: str = "pending"  # pending, responded
     response_text: Optional[str] = None
     response_date: Optional[datetime] = None
+    external_review_id: Optional[str] = None  # ID from original platform
+    synced_to_platform: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ReviewCreate(BaseModel):
@@ -185,6 +198,42 @@ class AnalyticsData(BaseModel):
     avg_response_time_hours: float
     top_topics: List[dict]
     rating_trend: List[dict]
+
+class PlatformIntegration(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    platform: str  # google, booking, tripadvisor, airbnb, expedia, trip
+    status: str = "disconnected"  # connected, disconnected, error
+    credentials_configured: bool = False
+    last_sync: Optional[datetime] = None
+    sync_enabled: bool = False
+    location_id: Optional[str] = None  # Platform-specific location/property ID
+    property_name: Optional[str] = None
+    total_reviews_synced: int = 0
+    error_message: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class PlatformCredentials(BaseModel):
+    platform: str
+    credentials: Dict[str, str]  # Platform-specific credentials
+    location_id: Optional[str] = None
+    property_name: Optional[str] = None
+
+class ManualReviewImport(BaseModel):
+    platform: str
+    guest_name: str
+    rating: int
+    review_text: str
+    review_date: Optional[str] = None
+    stay_date: Optional[str] = None
+    room_type: Optional[str] = None
+    external_review_id: Optional[str] = None
+
+class SyncResponse(BaseModel):
+    platform: str
+    reviews_synced: int
+    errors: List[str]
+    status: str
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -1536,6 +1585,422 @@ async def get_report_log():
     """Get report sending history"""
     logs = await db.report_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
     return logs
+
+# ==================== PLATFORM INTEGRATION SERVICES ====================
+
+class PlatformService:
+    """Base class for platform integrations"""
+    
+    @staticmethod
+    async def get_google_access_token():
+        """Get Google OAuth access token from refresh token"""
+        if not GOOGLE_BUSINESS_REFRESH_TOKEN:
+            return None
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://oauth2.googleapis.com/token",
+                data={
+                    "client_id": GOOGLE_BUSINESS_CLIENT_ID,
+                    "client_secret": GOOGLE_BUSINESS_CLIENT_SECRET,
+                    "refresh_token": GOOGLE_BUSINESS_REFRESH_TOKEN,
+                    "grant_type": "refresh_token"
+                }
+            )
+            if response.status_code == 200:
+                return response.json().get("access_token")
+            return None
+    
+    @staticmethod
+    async def fetch_google_reviews(location_id: str) -> List[dict]:
+        """Fetch reviews from Google Business Profile API"""
+        access_token = await PlatformService.get_google_access_token()
+        if not access_token:
+            raise HTTPException(status_code=401, detail="Google authentication failed")
+        
+        reviews = []
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://mybusiness.googleapis.com/v4/{location_id}/reviews",
+                headers={"Authorization": f"Bearer {access_token}"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                for review in data.get("reviews", []):
+                    reviews.append({
+                        "external_id": review.get("reviewId"),
+                        "guest_name": review.get("reviewer", {}).get("displayName", "Google User"),
+                        "rating": {"ONE": 1, "TWO": 2, "THREE": 3, "FOUR": 4, "FIVE": 5}.get(review.get("starRating"), 3),
+                        "review_text": review.get("comment", ""),
+                        "review_date": review.get("createTime"),
+                        "has_reply": bool(review.get("reviewReply"))
+                    })
+        
+        return reviews
+    
+    @staticmethod
+    async def post_google_reply(location_id: str, review_id: str, reply_text: str) -> bool:
+        """Post reply to Google review"""
+        access_token = await PlatformService.get_google_access_token()
+        if not access_token:
+            raise HTTPException(status_code=401, detail="Google authentication failed")
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.put(
+                f"https://mybusiness.googleapis.com/v4/{location_id}/reviews/{review_id}/reply",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                },
+                json={"comment": reply_text}
+            )
+            return response.status_code == 200
+
+# ==================== PLATFORM INTEGRATION ROUTES ====================
+
+@api_router.get("/integrations")
+async def get_integrations():
+    """Get all platform integrations status"""
+    integrations = await db.platform_integrations.find({}, {"_id": 0}).to_list(100)
+    
+    # Ensure all platforms have an entry
+    platforms = ["google", "booking.com", "tripadvisor", "airbnb", "expedia", "trip.com"]
+    existing_platforms = {i["platform"] for i in integrations}
+    
+    for platform in platforms:
+        if platform not in existing_platforms:
+            default_integration = {
+                "id": str(uuid.uuid4()),
+                "platform": platform,
+                "status": "disconnected",
+                "credentials_configured": False,
+                "sync_enabled": False,
+                "total_reviews_synced": 0,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            # Create a copy for MongoDB insert (it will add _id to the dict)
+            insert_doc = dict(default_integration)
+            await db.platform_integrations.insert_one(insert_doc)
+            integrations.append(default_integration)
+    
+    # Check which have credentials configured via env vars
+    for integration in integrations:
+        if integration["platform"] == "google":
+            integration["credentials_configured"] = bool(GOOGLE_BUSINESS_CLIENT_ID and GOOGLE_BUSINESS_REFRESH_TOKEN)
+        elif integration["platform"] == "booking.com":
+            integration["credentials_configured"] = bool(BOOKING_API_USERNAME and BOOKING_API_PASSWORD)
+        elif integration["platform"] == "tripadvisor":
+            integration["credentials_configured"] = bool(TRIPADVISOR_API_KEY)
+    
+    return integrations
+
+@api_router.put("/integrations/{platform}/configure")
+async def configure_integration(platform: str, config: PlatformCredentials):
+    """Configure platform integration credentials"""
+    integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+    
+    if not integration:
+        integration = {
+            "id": str(uuid.uuid4()),
+            "platform": platform,
+            "status": "disconnected",
+            "credentials_configured": False,
+            "sync_enabled": False,
+            "total_reviews_synced": 0,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.platform_integrations.insert_one(integration)
+    
+    update_data = {
+        "credentials_configured": True,
+        "location_id": config.location_id,
+        "property_name": config.property_name,
+        "status": "configured"
+    }
+    
+    # Store credentials securely (in production, use a secrets manager)
+    await db.platform_credentials.update_one(
+        {"platform": platform},
+        {"$set": {
+            "platform": platform,
+            "credentials": config.credentials,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }},
+        upsert=True
+    )
+    
+    await db.platform_integrations.update_one(
+        {"platform": platform},
+        {"$set": update_data}
+    )
+    
+    return {"status": "configured", "message": f"{platform} integration configured successfully"}
+
+@api_router.post("/integrations/{platform}/sync")
+async def sync_platform_reviews(platform: str):
+    """Sync reviews from a specific platform"""
+    integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+    
+    if not integration:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    
+    if not integration.get("credentials_configured"):
+        raise HTTPException(status_code=400, detail="Platform credentials not configured")
+    
+    reviews_synced = 0
+    errors = []
+    
+    try:
+        if platform == "google":
+            location_id = integration.get("location_id")
+            if not location_id:
+                raise HTTPException(status_code=400, detail="Google location ID not configured")
+            
+            google_reviews = await PlatformService.fetch_google_reviews(location_id)
+            
+            for review_data in google_reviews:
+                # Check if review already exists
+                existing = await db.reviews.find_one({
+                    "external_review_id": review_data["external_id"],
+                    "platform": "google"
+                })
+                
+                if not existing:
+                    new_review = Review(
+                        platform="google",
+                        guest_name=review_data["guest_name"],
+                        rating=review_data["rating"],
+                        review_text=review_data["review_text"],
+                        response_status="responded" if review_data["has_reply"] else "pending",
+                        external_review_id=review_data["external_id"]
+                    )
+                    doc = new_review.model_dump()
+                    doc = serialize_review(doc)
+                    await db.reviews.insert_one(doc)
+                    reviews_synced += 1
+                    
+                    # Trigger notification for negative reviews
+                    if review_data["rating"] <= 2:
+                        await send_negative_review_notification(doc)
+        
+        else:
+            # For other platforms, return a helpful message about requirements
+            platform_info = {
+                "booking.com": "Requires Connectivity Partner approval. Apply at connect.booking.com",
+                "tripadvisor": "Requires Content API partner approval. Apply at developer.tripadvisor.com",
+                "airbnb": "API access requires Airbnb Partner program membership",
+                "expedia": "Requires Expedia Partner Central API access",
+                "trip.com": "Requires Trip.com Partner API credentials"
+            }
+            errors.append(f"Live sync not available. {platform_info.get(platform, 'Contact platform for API access.')}")
+        
+        # Update integration status
+        await db.platform_integrations.update_one(
+            {"platform": platform},
+            {"$set": {
+                "last_sync": datetime.now(timezone.utc).isoformat(),
+                "status": "connected" if reviews_synced > 0 else integration.get("status"),
+                "total_reviews_synced": integration.get("total_reviews_synced", 0) + reviews_synced
+            }}
+        )
+        
+        return SyncResponse(
+            platform=platform,
+            reviews_synced=reviews_synced,
+            errors=errors,
+            status="success" if not errors else "partial"
+        )
+    
+    except Exception as e:
+        logger.error(f"Sync error for {platform}: {str(e)}")
+        await db.platform_integrations.update_one(
+            {"platform": platform},
+            {"$set": {"status": "error", "error_message": str(e)}}
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/integrations/{platform}/post-reply")
+async def post_reply_to_platform(platform: str, review_id: str, reply_text: str):
+    """Post a reply to a review on the original platform"""
+    review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
+    
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    if review.get("platform") != platform:
+        raise HTTPException(status_code=400, detail="Review platform mismatch")
+    
+    integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+    
+    if not integration or not integration.get("credentials_configured"):
+        return {
+            "status": "logged",
+            "message": f"Reply saved locally. Platform sync not configured for {platform}.",
+            "synced_to_platform": False
+        }
+    
+    # Attempt to post to platform
+    success = False
+    if platform == "google" and review.get("external_review_id"):
+        location_id = integration.get("location_id")
+        success = await PlatformService.post_google_reply(
+            location_id,
+            review["external_review_id"],
+            reply_text
+        )
+    
+    return {
+        "status": "synced" if success else "logged",
+        "message": f"Reply {'posted to {platform}' if success else 'saved locally'}",
+        "synced_to_platform": success
+    }
+
+@api_router.post("/integrations/import")
+async def import_reviews_manually(reviews: List[ManualReviewImport]):
+    """Manually import reviews from CSV or manual entry"""
+    imported = 0
+    errors = []
+    
+    for review_data in reviews:
+        try:
+            new_review = Review(
+                platform=review_data.platform,
+                guest_name=review_data.guest_name,
+                rating=review_data.rating,
+                review_text=review_data.review_text,
+                stay_date=review_data.stay_date,
+                room_type=review_data.room_type,
+                response_status="pending",
+                external_review_id=review_data.external_review_id
+            )
+            
+            # Parse review_date if provided
+            if review_data.review_date:
+                try:
+                    new_review.review_date = datetime.fromisoformat(review_data.review_date.replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+            
+            doc = new_review.model_dump()
+            doc = serialize_review(doc)
+            await db.reviews.insert_one(doc)
+            imported += 1
+            
+            # Trigger notification for negative reviews
+            if review_data.rating <= 2:
+                await send_negative_review_notification(doc)
+        
+        except Exception as e:
+            errors.append(f"Error importing review from {review_data.guest_name}: {str(e)}")
+    
+    return {
+        "imported": imported,
+        "errors": errors,
+        "message": f"Successfully imported {imported} reviews"
+    }
+
+@api_router.post("/integrations/import-csv")
+async def import_reviews_from_csv(file: UploadFile = File(...)):
+    """Import reviews from CSV file"""
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="File must be a CSV")
+    
+    content = await file.read()
+    decoded = content.decode('utf-8')
+    reader = csv.DictReader(io.StringIO(decoded))
+    
+    reviews = []
+    for row in reader:
+        reviews.append(ManualReviewImport(
+            platform=row.get('platform', 'unknown'),
+            guest_name=row.get('guest_name', 'Guest'),
+            rating=int(row.get('rating', 3)),
+            review_text=row.get('review_text', ''),
+            review_date=row.get('review_date'),
+            stay_date=row.get('stay_date'),
+            room_type=row.get('room_type'),
+            external_review_id=row.get('external_id')
+        ))
+    
+    return await import_reviews_manually(reviews)
+
+@api_router.get("/integrations/requirements")
+async def get_integration_requirements():
+    """Get requirements for each platform integration"""
+    return {
+        "google": {
+            "name": "Google Business Profile",
+            "requirements": [
+                "Verified Google Business Profile",
+                "Google Cloud Project with Business Profile API enabled",
+                "OAuth 2.0 credentials (Client ID, Client Secret)",
+                "Refresh token with accounts.locations.reviews scope"
+            ],
+            "setup_url": "https://developers.google.com/my-business/content/review-data",
+            "fields_needed": ["client_id", "client_secret", "refresh_token", "location_id"]
+        },
+        "booking.com": {
+            "name": "Booking.com",
+            "requirements": [
+                "Approved Connectivity Partner status",
+                "Machine account credentials",
+                "Property ID in Booking.com system"
+            ],
+            "setup_url": "https://connect.booking.com",
+            "fields_needed": ["username", "password", "property_id"],
+            "note": "Requires partner approval - not available for direct hotel connections"
+        },
+        "tripadvisor": {
+            "name": "TripAdvisor",
+            "requirements": [
+                "Content API partner approval",
+                "API key",
+                "Location ID"
+            ],
+            "setup_url": "https://developer.tripadvisor.com",
+            "fields_needed": ["api_key", "location_id"]
+        },
+        "airbnb": {
+            "name": "Airbnb",
+            "requirements": [
+                "Airbnb Partner program membership",
+                "API credentials",
+                "Property listing ID"
+            ],
+            "setup_url": "https://www.airbnb.com/partner",
+            "fields_needed": ["api_key", "listing_id"],
+            "note": "Limited API access - mainly for property managers"
+        },
+        "expedia": {
+            "name": "Expedia",
+            "requirements": [
+                "Expedia Partner Central account",
+                "API credentials",
+                "Property ID"
+            ],
+            "setup_url": "https://expediapartnercentral.com",
+            "fields_needed": ["api_key", "secret_key", "property_id"]
+        },
+        "trip.com": {
+            "name": "Trip.com",
+            "requirements": [
+                "Trip.com Partner API access",
+                "API credentials",
+                "Hotel ID"
+            ],
+            "setup_url": "https://partner.trip.com",
+            "fields_needed": ["api_key", "hotel_id"]
+        },
+        "manual_import": {
+            "name": "Manual Import",
+            "description": "Import reviews via CSV file or manual entry when API access is not available",
+            "csv_format": {
+                "columns": ["platform", "guest_name", "rating", "review_text", "review_date", "stay_date", "room_type", "external_id"],
+                "example": "google,John Doe,5,Great stay!,2024-01-15,January 2024,Deluxe Room,abc123"
+            }
+        }
+    }
 
 # Include the router in the main app
 app.include_router(api_router)

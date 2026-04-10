@@ -39,7 +39,14 @@ import {
   SmileySad,
   CalendarBlank,
   PaperPlaneTilt as Send,
-  Eye
+  Eye,
+  PlugsConnected,
+  Link,
+  LinkBreak,
+  CloudArrowUp,
+  Database,
+  Info,
+  CaretRight
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -1758,6 +1765,370 @@ const ReportsSettings = ({ isOpen, onClose }) => {
   );
 };
 
+// Platform Integrations Component
+const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
+  const [integrations, setIntegrations] = useState([]);
+  const [requirements, setRequirements] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [syncingPlatform, setSyncingPlatform] = useState(null);
+  const [showManualImport, setShowManualImport] = useState(false);
+  const [manualReview, setManualReview] = useState({
+    platform: "google",
+    guest_name: "",
+    rating: 5,
+    review_text: "",
+    stay_date: "",
+    room_type: ""
+  });
+  const [selectedPlatformDetails, setSelectedPlatformDetails] = useState(null);
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [integrationsRes, requirementsRes] = await Promise.all([
+        axios.get(`${API}/integrations`),
+        axios.get(`${API}/integrations/requirements`)
+      ]);
+      setIntegrations(integrationsRes.data);
+      setRequirements(requirementsRes.data);
+    } catch (error) {
+      console.error("Error fetching integrations:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchData();
+    }
+  }, [isOpen, fetchData]);
+
+  const handleSync = async (platform) => {
+    setSyncingPlatform(platform);
+    try {
+      const response = await axios.post(`${API}/integrations/${platform}/sync`);
+      if (response.data.reviews_synced > 0) {
+        toast.success(`Synced ${response.data.reviews_synced} reviews from ${platform}!`);
+        if (onSyncComplete) onSyncComplete();
+      } else if (response.data.errors?.length > 0) {
+        toast.info(response.data.errors[0]);
+      }
+      await fetchData();
+    } catch (error) {
+      console.error("Sync error:", error);
+      toast.error(error.response?.data?.detail || "Sync failed");
+    } finally {
+      setSyncingPlatform(null);
+    }
+  };
+
+  const handleManualImport = async () => {
+    if (!manualReview.guest_name || !manualReview.review_text) {
+      toast.error("Please fill in guest name and review text");
+      return;
+    }
+    try {
+      await axios.post(`${API}/integrations/import`, [manualReview]);
+      toast.success("Review imported successfully!");
+      setManualReview({ platform: "google", guest_name: "", rating: 5, review_text: "", stay_date: "", room_type: "" });
+      setShowManualImport(false);
+      if (onSyncComplete) onSyncComplete();
+    } catch (error) {
+      console.error("Import error:", error);
+      toast.error("Failed to import review");
+    }
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    try {
+      const response = await axios.post(`${API}/integrations/import-csv`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      toast.success(`Imported ${response.data.imported} reviews!`);
+      if (onSyncComplete) onSyncComplete();
+    } catch (error) {
+      console.error("CSV import error:", error);
+      toast.error("Failed to import CSV");
+    }
+  };
+
+  const getPlatformIcon = (platform) => {
+    const icons = {
+      "google": "🔍",
+      "booking.com": "🅱️",
+      "tripadvisor": "🦉",
+      "airbnb": "🏠",
+      "expedia": "✈️",
+      "trip.com": "🌏"
+    };
+    return icons[platform] || "🌐";
+  };
+
+  const getStatusBadge = (status, configured) => {
+    if (status === "connected") {
+      return <Badge className="bg-[#5A6B50] text-white"><CheckCircle size={12} className="mr-1" />Connected</Badge>;
+    } else if (status === "error") {
+      return <Badge className="bg-[#C05A44] text-white"><WarningCircle size={12} className="mr-1" />Error</Badge>;
+    } else if (configured) {
+      return <Badge className="bg-[#D4A373] text-white"><Link size={12} className="mr-1" />Configured</Badge>;
+    }
+    return <Badge className="bg-stone-400 text-white"><LinkBreak size={12} className="mr-1" />Not Connected</Badge>;
+  };
+
+  return (
+    <DialogContent className="sm:max-w-[750px] max-h-[90vh] overflow-y-auto" data-testid="integrations-dialog">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
+          <PlugsConnected size={20} weight="fill" className="text-[#3E5245]" />
+          Platform Integrations
+        </DialogTitle>
+      </DialogHeader>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center h-48">
+          <ArrowsClockwise size={32} className="animate-spin text-[#3E5245]" />
+        </div>
+      ) : (
+        <Tabs defaultValue="platforms" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="platforms" data-testid="integrations-platforms-tab">Platforms</TabsTrigger>
+            <TabsTrigger value="import" data-testid="integrations-import-tab">Manual Import</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="platforms" className="space-y-4">
+            {/* Info Banner */}
+            <div className="p-3 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md">
+              <p className="text-sm text-[#57534E] flex items-center gap-2">
+                <Info size={16} className="text-[#3E5245]" />
+                Connect your review platforms to automatically sync reviews. Most platforms require partner API approval.
+              </p>
+            </div>
+
+            {/* Platforms List */}
+            <div className="space-y-3">
+              {integrations.map((integration) => {
+                const req = requirements[integration.platform] || {};
+                return (
+                  <div 
+                    key={integration.platform}
+                    className="border border-stone-200 rounded-md bg-white overflow-hidden"
+                    data-testid={`integration-${integration.platform}`}
+                  >
+                    <div className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">{getPlatformIcon(integration.platform)}</span>
+                        <div>
+                          <div className="font-medium text-[#1C1917] flex items-center gap-2">
+                            {req.name || integration.platform}
+                            {getStatusBadge(integration.status, integration.credentials_configured)}
+                          </div>
+                          <div className="text-xs text-[#57534E]">
+                            {integration.total_reviews_synced > 0 
+                              ? `${integration.total_reviews_synced} reviews synced` 
+                              : "No reviews synced yet"}
+                            {integration.last_sync && ` • Last: ${new Date(integration.last_sync).toLocaleDateString()}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setSelectedPlatformDetails(selectedPlatformDetails === integration.platform ? null : integration.platform)}
+                          className="p-2 hover:bg-stone-100 rounded-md transition-colors"
+                          data-testid={`details-${integration.platform}`}
+                        >
+                          <CaretRight size={16} className={`text-[#57534E] transition-transform ${selectedPlatformDetails === integration.platform ? 'rotate-90' : ''}`} />
+                        </button>
+                        <button
+                          onClick={() => handleSync(integration.platform)}
+                          disabled={syncingPlatform === integration.platform}
+                          className="bg-[#3E5245] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-1"
+                          data-testid={`sync-${integration.platform}`}
+                        >
+                          {syncingPlatform === integration.platform ? (
+                            <ArrowsClockwise size={14} className="animate-spin" />
+                          ) : (
+                            <CloudArrowUp size={14} />
+                          )}
+                          Sync
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded Details */}
+                    {selectedPlatformDetails === integration.platform && (
+                      <div className="px-4 pb-4 pt-2 border-t border-stone-100 bg-[#FAF9F6]">
+                        <h5 className="text-sm font-medium text-[#1C1917] mb-2">Requirements:</h5>
+                        <ul className="text-xs text-[#57534E] space-y-1 mb-3">
+                          {req.requirements?.map((r, idx) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-[#3E5245]">•</span> {r}
+                            </li>
+                          ))}
+                        </ul>
+                        {req.setup_url && (
+                          <a 
+                            href={req.setup_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-xs text-[#3E5245] hover:underline flex items-center gap-1"
+                          >
+                            <Link size={12} /> Setup Guide
+                          </a>
+                        )}
+                        {req.note && (
+                          <p className="mt-2 text-xs text-[#D4A373] bg-amber-50 p-2 rounded">
+                            ⚠️ {req.note}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="import" className="space-y-4">
+            {/* CSV Import */}
+            <div className="border border-stone-200 rounded-md p-4 bg-white">
+              <h4 className="font-medium text-[#1C1917] mb-3 flex items-center gap-2">
+                <Database size={18} className="text-[#3E5245]" />
+                Import from CSV
+              </h4>
+              <p className="text-sm text-[#57534E] mb-3">
+                Upload a CSV file with columns: platform, guest_name, rating, review_text, review_date, stay_date, room_type
+              </p>
+              <label className="block">
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileUpload}
+                  className="block w-full text-sm text-[#57534E] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#3E5245] file:text-white hover:file:bg-[#2A3B30] cursor-pointer"
+                  data-testid="csv-upload-input"
+                />
+              </label>
+            </div>
+
+            {/* Manual Entry */}
+            <div className="border border-stone-200 rounded-md p-4 bg-white">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-medium text-[#1C1917] flex items-center gap-2">
+                  <Plus size={18} className="text-[#3E5245]" />
+                  Add Review Manually
+                </h4>
+                <button
+                  onClick={() => setShowManualImport(!showManualImport)}
+                  className="text-sm text-[#3E5245] hover:underline"
+                >
+                  {showManualImport ? "Hide" : "Show Form"}
+                </button>
+              </div>
+
+              {showManualImport && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-[#57534E]">Platform</label>
+                      <Select
+                        value={manualReview.platform}
+                        onValueChange={(value) => setManualReview(prev => ({ ...prev, platform: value }))}
+                      >
+                        <SelectTrigger className="border-stone-200 mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(PLATFORMS).map(([key, config]) => (
+                            <SelectItem key={key} value={key}>{config.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-[#57534E]">Rating</label>
+                      <Select
+                        value={String(manualReview.rating)}
+                        onValueChange={(value) => setManualReview(prev => ({ ...prev, rating: parseInt(value) }))}
+                      >
+                        <SelectTrigger className="border-stone-200 mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[5, 4, 3, 2, 1].map((r) => (
+                            <SelectItem key={r} value={String(r)}>{r} Star{r !== 1 ? 's' : ''}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-[#57534E]">Guest Name</label>
+                    <Input
+                      value={manualReview.guest_name}
+                      onChange={(e) => setManualReview(prev => ({ ...prev, guest_name: e.target.value }))}
+                      placeholder="John Doe"
+                      className="border-stone-200 mt-1"
+                      data-testid="manual-guest-name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-[#57534E]">Review Text</label>
+                    <Textarea
+                      value={manualReview.review_text}
+                      onChange={(e) => setManualReview(prev => ({ ...prev, review_text: e.target.value }))}
+                      placeholder="Write the review text here..."
+                      className="border-stone-200 mt-1 min-h-[100px]"
+                      data-testid="manual-review-text"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-[#57534E]">Stay Date</label>
+                      <Input
+                        value={manualReview.stay_date}
+                        onChange={(e) => setManualReview(prev => ({ ...prev, stay_date: e.target.value }))}
+                        placeholder="January 2026"
+                        className="border-stone-200 mt-1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-[#57534E]">Room Type</label>
+                      <Input
+                        value={manualReview.room_type}
+                        onChange={(e) => setManualReview(prev => ({ ...prev, room_type: e.target.value }))}
+                        placeholder="Deluxe Room"
+                        className="border-stone-200 mt-1"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleManualImport}
+                    className="w-full bg-[#3E5245] text-white py-2 rounded-md hover:bg-[#2A3B30] transition-colors flex items-center justify-center gap-2"
+                    data-testid="import-manual-review-btn"
+                  >
+                    <Plus size={16} />
+                    Import Review
+                  </button>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
+    </DialogContent>
+  );
+};
+
 // Main Dashboard Component
 const Dashboard = () => {
   const [reviews, setReviews] = useState([]);
@@ -1768,6 +2139,7 @@ const Dashboard = () => {
   const [showTemplates, setShowTemplates] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showReports, setShowReports] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const [templateTextToApply, setTemplateTextToApply] = useState(null);
   const [filters, setFilters] = useState({
     platform: "all",
@@ -1776,6 +2148,11 @@ const Dashboard = () => {
 
   const handleApplyTemplate = (templateContent) => {
     setTemplateTextToApply(templateContent);
+  };
+
+  const handleSyncComplete = () => {
+    fetchReviews();
+    fetchStats();
   };
 
   const fetchReviews = useCallback(async () => {
@@ -1928,6 +2305,22 @@ const Dashboard = () => {
               <ReportsSettings 
                 isOpen={showReports} 
                 onClose={() => setShowReports(false)} 
+              />
+            </Dialog>
+            <Dialog open={showIntegrations} onOpenChange={setShowIntegrations}>
+              <DialogTrigger asChild>
+                <button
+                  className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
+                  data-testid="integrations-btn"
+                >
+                  <PlugsConnected size={18} />
+                  Integrations
+                </button>
+              </DialogTrigger>
+              <IntegrationsPanel 
+                isOpen={showIntegrations} 
+                onClose={() => setShowIntegrations(false)}
+                onSyncComplete={handleSyncComplete}
               />
             </Dialog>
             <button

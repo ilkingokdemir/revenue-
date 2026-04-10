@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Comprehensive Backend API Testing for Hotel Review Management System
-Tests all endpoints including AI response generation via GPT-5.2
+Tests all endpoints including AI response generation via GPT-5.2 and Platform Integrations
 """
 
 import requests
@@ -659,6 +659,130 @@ class ReviewAPITester:
         
         return True
 
+    def test_platform_integrations(self):
+        """Test platform integrations endpoints"""
+        print("   Testing platform integrations...")
+        
+        # Test 1: Get all integrations
+        success, response = self.run_test(
+            "Get Platform Integrations",
+            "GET", "integrations", 200
+        )
+        
+        if success:
+            platforms = [item.get('platform') for item in response]
+            expected_platforms = ["google", "booking.com", "tripadvisor", "airbnb", "expedia", "trip.com"]
+            
+            if all(platform in platforms for platform in expected_platforms):
+                self.log_test("Platform Integrations - All 6 platforms present", True, 
+                             f"Found platforms: {platforms}")
+            else:
+                missing = set(expected_platforms) - set(platforms)
+                self.log_test("Platform Integrations - Missing platforms", False, 
+                             f"Missing: {missing}")
+        else:
+            self.log_test("Platform Integrations - Get integrations", False, "API call failed")
+        
+        # Test 2: Get requirements
+        success, response = self.run_test(
+            "Get Integration Requirements",
+            "GET", "integrations/requirements", 200
+        )
+        
+        if success:
+            required_platforms = ["google", "booking.com", "tripadvisor", "airbnb", "expedia", "trip.com"]
+            all_present = all(platform in response for platform in required_platforms)
+            
+            if all_present:
+                self.log_test("Integration Requirements - All platforms", True, 
+                             f"Requirements for {len(response)} platforms")
+            else:
+                missing = set(required_platforms) - set(response.keys())
+                self.log_test("Integration Requirements - Missing platforms", False, 
+                             f"Missing requirements for: {missing}")
+                
+            # Check if each platform has required fields
+            for platform, req in response.items():
+                if platform != "manual_import":
+                    required_fields = ["name", "requirements", "fields_needed"]
+                    missing_fields = [field for field in required_fields if field not in req]
+                    if not missing_fields:
+                        self.log_test(f"Requirements Structure - {platform}", True, 
+                                     "All required fields present")
+                    else:
+                        self.log_test(f"Requirements Structure - {platform}", False, 
+                                     f"Missing fields: {missing_fields}")
+        else:
+            self.log_test("Integration Requirements - Get requirements", False, "API call failed")
+        
+        # Test 3: Manual import
+        test_review = {
+            "platform": "google",
+            "guest_name": "Test Integration Guest",
+            "rating": 4,
+            "review_text": "This is a test review imported manually for integration testing.",
+            "stay_date": "January 2026",
+            "room_type": "Test Room"
+        }
+        
+        success, response = self.run_test(
+            "Manual Review Import",
+            "POST", "integrations/import", 200,
+            data=[test_review]
+        )
+        
+        if success:
+            imported = response.get('imported', 0)
+            if imported > 0:
+                self.log_test("Manual Import - Import review", True, 
+                             f"Successfully imported {imported} review(s)")
+            else:
+                self.log_test("Manual Import - Import review", False, 
+                             "No reviews imported")
+        else:
+            self.log_test("Manual Import - Import review", False, "API call failed")
+        
+        # Test 4: Platform sync (test all platforms)
+        platforms_to_test = ["google", "booking.com", "tripadvisor", "airbnb", "expedia", "trip.com"]
+        
+        for platform in platforms_to_test:
+            success, response = self.run_test(
+                f"Platform Sync - {platform}",
+                "POST", f"integrations/{platform}/sync", None  # Don't expect specific status
+            )
+            
+            # For platforms without credentials, we expect 400 with helpful message
+            # For platforms with credentials, we expect 200 with sync results
+            if success and response.get('reviews_synced') is not None:
+                # Got 200 with sync response
+                reviews_synced = response.get('reviews_synced', 0)
+                errors = response.get('errors', [])
+                status = response.get('status', 'unknown')
+                
+                if errors and any("requires" in error.lower() or "approval" in error.lower() for error in errors):
+                    self.log_test(f"Platform Sync - {platform} (Expected)", True, 
+                                 f"Returned helpful message: {errors[0][:100]}...")
+                elif reviews_synced > 0:
+                    self.log_test(f"Platform Sync - {platform}", True, 
+                                 f"Synced {reviews_synced} reviews")
+                else:
+                    self.log_test(f"Platform Sync - {platform}", True, 
+                                 f"Sync completed with status: {status}")
+            else:
+                # Check if it's the expected 400 error for unconfigured credentials
+                try:
+                    import requests
+                    url = f"{self.api_url}/integrations/{platform}/sync"
+                    resp = requests.post(url, headers={'Content-Type': 'application/json'}, timeout=30)
+                    if resp.status_code == 400 and "credentials not configured" in resp.text.lower():
+                        self.log_test(f"Platform Sync - {platform} (Expected)", True, 
+                                     "Correctly returned 400 - credentials not configured")
+                    else:
+                        self.log_test(f"Platform Sync - {platform}", False, 
+                                     f"Unexpected response: {resp.status_code} - {resp.text[:100]}")
+                except Exception as e:
+                    self.log_test(f"Platform Sync - {platform}", False, f"Request failed: {str(e)}")
+
     def run_comprehensive_test(self):
         """Run all tests in sequence"""
         print("🏨 Hotel Review Management API Testing")
@@ -742,6 +866,10 @@ class ReviewAPITester:
         # 16. Test scheduled reports feature
         print("\n1️⃣6️⃣ Testing Scheduled Reports Feature...")
         self.test_scheduled_reports()
+
+        # 17. Test platform integrations feature
+        print("\n1️⃣7️⃣ Testing Platform Integrations Feature...")
+        self.test_platform_integrations()
 
         # Print summary
         print("\n" + "=" * 50)

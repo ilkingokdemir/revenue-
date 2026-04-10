@@ -5,52 +5,50 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 
 ## What's Been Implemented
 
+### MyHotelBox Integration Guide (April 2026)
+- Dedicated Integration Guide page with 5-step connection walkthrough
+- References MyHotelBox property mapping (e.g., ALDGATE FLATS)
+- 8 documented API endpoints with method/path/description
+- 4 code snippets: curl fetch reviews, curl AI response, Node.js webhook handler, Python webhook handler
+- Webhook payload example with headers documentation
+- Copy-to-clipboard on all code blocks
+
+### Webhook Delivery Log (April 2026)
+- Stores last 20 deliveries per webhook in MongoDB (webhook_deliveries collection)
+- Shows event type, HTTP status, response time (ms), timestamp
+- Auto-populates on test ping and webhook events
+- Refresh button for real-time log updates
+- Tracks success/failure for debugging MyHotelBox integration
+
+### Webhook Test Ping (April 2026)
+- POST /api/webhooks/{id}/test sends sample payload to endpoint
+- Shows HTTP status + response time in UI
+- Handles timeout, connection refused, and generic errors
+- Updates delivery count and logs to webhook_deliveries
+
 ### Left Sidebar Navigation (April 2026)
-- Full left sidebar layout with dark theme (stone-900)
-- 4 sections: Main, Workflow, Connections, Settings
-- 11 navigation items: Reviews, Analytics, Templates, Approvals, Integrations, API Connection, Webhooks, Alerts, Reports, Branding, Team
-- Active state with emerald accent border
-- User info + logout at bottom
+- 12 items across 4 sections: Main, Workflow, Connections, Settings
+- Connections: Integrations, API Connection, Webhooks, Integration Guide
 
 ### API Connection Panel (April 2026)
-- CRUD for API keys (create with label, list with masked keys, delete)
-- Keys prefixed with `rhk_` for easy identification
-- Quick Start documentation card with code sample
-- Link to Swagger API documentation
-- Admin-only access
+- CRUD for API keys with rhk_ prefix
+- Quick Start docs, Swagger link, admin-only
 
 ### Webhooks Panel (April 2026)
-- CRUD for webhooks (create with URL/label/events, list, toggle, delete)
-- 8 subscribable events: review.created, review.responded, review.approved, review.rejected, response.generated, response.published, rating.low, rating.high
-- Expandable details: secret, delivery count, failure count, last triggered, subscribed events
-- Toggle switch for active/paused state
-- **Test Ping**: Send test webhook to verify endpoint connectivity, shows HTTP status + response time
-- Admin-only creation/deletion, manager can view
+- CRUD with 8 event types, toggle, expand details
+- Secret management, delivery tracking, delivery log
 
 ### Multi-Property Support (April 2026)
-- Property CRUD API (create, read, update, delete)
-- 8 property types: hotel, resort, hostel, apartment, villa, boutique, motel, bed & breakfast
-- All reviews scoped by property_id
-- Property selector in dashboard header (auto-shown when >1 property)
-
-### API Documentation
-- Swagger UI: /api/docs
-- ReDoc: /api/redoc
-- OpenAPI JSON: /api/openapi.json
+- Property CRUD, 8 types, property_id scoping, selector
 
 ### Authentication & Team Management
-- JWT auth with httpOnly cookies + Bearer token
-- 3 roles: Admin, Manager, Receptionist
-- 7 departments: Front Desk, Management, Housekeeping, F&B, Maintenance, Spa, Concierge
-- Brute force protection
+- JWT auth, 3 roles (Admin/Manager/Receptionist), 7 departments, brute force protection
 
 ### Approval Workflow
 - Pending -> Draft -> Pending Approval -> Approved/Rejected -> Responded
-- Manager/Admin approval queue
 
-### Unique AI Response Engine
-- Personalized, non-repetitive responses using GPT-5.2
-- 16 languages, auto-detect, translate to English
+### AI Response Engine
+- GPT-5.2 personalized responses, 16 languages, auto-detect
 
 ### Platform Integrations (14)
 - Google, Booking.com, TripAdvisor, Airbnb, Expedia, Trip.com, Agoda, Hotels.com, Yelp, Facebook, MakeMyTrip, HRS, Despegar, Hostelworld
@@ -60,12 +58,12 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 
 ## Integration with MyHotelBox.com
 - All endpoints prefixed with /api/
-- JWT or Bearer token auth for server-to-server
-- property_id scopes all data per hotel
-- Full OpenAPI spec at /api/openapi.json
-- API keys (rhk_ prefix) for external integration
-- Webhooks for real-time event notifications with test ping
+- JWT or Bearer token auth (rhk_ API keys) for server-to-server
+- property_id maps to MyHotelBox branches (e.g., ALDGATE FLATS)
+- Webhooks send real-time events to MyHotelBox endpoints
+- Full OpenAPI spec at /api/docs
+- Integration Guide with code examples for Node.js and Python
 
 ## Next Tasks
 1. **P0** - Real bi-directional platform sync (currently MOCKED)
-2. **P2** - Continue component extraction from App.js (4000+ lines)
+2. **P2** - Break down App.js (4500+ lines) into components

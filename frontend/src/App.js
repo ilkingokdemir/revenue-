@@ -3537,6 +3537,8 @@ const WebhooksPanel = ({ user }) => {
   const [copiedId, setCopiedId] = useState(null);
   const [testingId, setTestingId] = useState(null);
   const [testResults, setTestResults] = useState({});
+  const [deliveryLogs, setDeliveryLogs] = useState({});
+  const [loadingLogs, setLoadingLogs] = useState({});
 
   const fetchWebhooks = useCallback(async () => {
     setIsLoading(true);
@@ -3615,11 +3617,33 @@ const WebhooksPanel = ({ user }) => {
         toast.error(data.message);
       }
       fetchWebhooks();
+      fetchDeliveryLog(whId);
     } catch (e) {
       setTestResults(prev => ({ ...prev, [whId]: { success: false, message: "Request failed" } }));
       toast.error("Failed to test webhook");
     } finally {
       setTestingId(null);
+    }
+  };
+
+  const fetchDeliveryLog = async (whId) => {
+    setLoadingLogs(prev => ({ ...prev, [whId]: true }));
+    try {
+      const { data } = await axios.get(`${API}/webhooks/${whId}/deliveries`);
+      setDeliveryLogs(prev => ({ ...prev, [whId]: data }));
+    } catch (e) {
+      toast.error("Failed to load delivery log");
+    } finally {
+      setLoadingLogs(prev => ({ ...prev, [whId]: false }));
+    }
+  };
+
+  // Fetch logs when expanding
+  const handleExpand = (whId) => {
+    const isExpanding = expandedId !== whId;
+    setExpandedId(isExpanding ? whId : null);
+    if (isExpanding && !deliveryLogs[whId]) {
+      fetchDeliveryLog(whId);
     }
   };
 
@@ -3728,7 +3752,7 @@ const WebhooksPanel = ({ user }) => {
                     onCheckedChange={() => handleToggle(wh)}
                     data-testid={`toggle-webhook-${wh.id}`}
                   />
-                  <button onClick={() => setExpandedId(expandedId === wh.id ? null : wh.id)} className="text-stone-400 hover:text-stone-600 p-1.5" data-testid={`expand-webhook-${wh.id}`}>
+                  <button onClick={() => handleExpand(wh.id)} className="text-stone-400 hover:text-stone-600 p-1.5" data-testid={`expand-webhook-${wh.id}`}>
                     <CaretRight size={14} className={`transition-transform ${expandedId === wh.id ? "rotate-90" : ""}`} />
                   </button>
                   {user?.role === "admin" && (
@@ -3815,6 +3839,33 @@ const WebhooksPanel = ({ user }) => {
                           </motion.div>
                         )}
                       </div>
+                      {/* Delivery Log */}
+                      <div className="mt-3 pt-3 border-t border-stone-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-stone-600">Delivery Log</span>
+                          <button onClick={() => fetchDeliveryLog(wh.id)} className="text-[10px] text-stone-400 hover:text-stone-600 flex items-center gap-1" data-testid={`refresh-logs-${wh.id}`}>
+                            <ArrowsClockwise size={10} className={loadingLogs[wh.id] ? "animate-spin" : ""} /> Refresh
+                          </button>
+                        </div>
+                        {loadingLogs[wh.id] ? (
+                          <div className="flex justify-center py-3"><ArrowsClockwise size={14} className="animate-spin text-stone-400" /></div>
+                        ) : !deliveryLogs[wh.id] || deliveryLogs[wh.id].length === 0 ? (
+                          <p className="text-[10px] text-stone-400 py-2">No deliveries yet. Send a test ping to see logs here.</p>
+                        ) : (
+                          <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar" data-testid={`delivery-log-${wh.id}`}>
+                            {deliveryLogs[wh.id].map((d) => (
+                              <div key={d.id} className={`flex items-center gap-2 text-[10px] px-2 py-1.5 rounded ${d.success ? "bg-emerald-50/50" : "bg-red-50/50"}`}>
+                                {d.success ? <CheckCircle size={10} className="text-emerald-600 flex-shrink-0" /> : <WarningCircle size={10} className="text-red-500 flex-shrink-0" />}
+                                <span className="text-stone-600 font-medium">{d.event}</span>
+                                {d.status_code && <span className="text-stone-400">HTTP {d.status_code}</span>}
+                                {d.response_time_ms && <span className="text-stone-400">{d.response_time_ms}ms</span>}
+                                {d.error && <span className="text-red-500">{d.error}</span>}
+                                <span className="text-stone-400 ml-auto">{new Date(d.timestamp).toLocaleTimeString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -3823,6 +3874,180 @@ const WebhooksPanel = ({ user }) => {
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+// ==================== INTEGRATION GUIDE PANEL ====================
+const IntegrationGuidePanel = () => {
+  const [guide, setGuide] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [copiedSnippet, setCopiedSnippet] = useState(null);
+
+  useEffect(() => {
+    const fetchGuide = async () => {
+      try {
+        const { data } = await axios.get(`${API}/integration-guide`);
+        setGuide(data);
+      } catch (e) {
+        console.error("Failed to load guide");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchGuide();
+  }, []);
+
+  const copyCode = (code, id) => {
+    navigator.clipboard.writeText(code);
+    setCopiedSnippet(id);
+    setTimeout(() => setCopiedSnippet(null), 2000);
+  };
+
+  if (isLoading) return <div className="flex justify-center py-20"><ArrowsClockwise size={24} className="animate-spin text-stone-400" /></div>;
+  if (!guide) return <div className="p-5 text-stone-500">Failed to load guide</div>;
+
+  const curlFetchReviews = `curl -X GET "${guide.base_url}/reviews?property_id=YOUR_PROPERTY_ID" \\
+  -H "Authorization: Bearer rhk_your_api_key" \\
+  -H "Content-Type: application/json"`;
+
+  const curlGenerateResponse = `curl -X POST "${guide.base_url}/reviews/generate-ai-response" \\
+  -H "Authorization: Bearer rhk_your_api_key" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "review_id": "REVIEW_ID",
+    "language": "en",
+    "tone": "professional"
+  }'`;
+
+  const webhookHandler = `// MyHotelBox.com — Webhook Handler Example (Node.js)
+app.post('/api/integrations/review-hub/webhook', (req, res) => {
+  const secret = req.headers['x-webhook-secret'];
+  if (secret !== process.env.REVIEW_HUB_WEBHOOK_SECRET) {
+    return res.status(401).json({ error: 'Invalid secret' });
+  }
+  
+  const { event, data } = req.body;
+  
+  switch (event) {
+    case 'review.created':
+      // New review received — show in MyHotelBox dashboard
+      console.log('New review from', data.platform, 'by', data.guest_name);
+      // Match with booking: find guest by name + property
+      break;
+    case 'review.responded':
+      // AI response was published to platform
+      break;
+    case 'rating.low':
+      // Alert: bad review received — notify hotel manager
+      break;
+  }
+  
+  res.json({ received: true });
+});`;
+
+  const pythonHandler = `# MyHotelBox.com — Webhook Handler Example (Python/FastAPI)
+@app.post("/api/integrations/review-hub/webhook")
+async def handle_review_webhook(request: Request):
+    secret = request.headers.get("X-Webhook-Secret")
+    if secret != os.environ["REVIEW_HUB_WEBHOOK_SECRET"]:
+        raise HTTPException(status_code=401, detail="Invalid secret")
+    
+    body = await request.json()
+    event = body["event"]
+    data = body["data"]
+    
+    if event == "review.created":
+        # New review — match with booking by guest name + property
+        guest = data["guest_name"]
+        property_id = data["property_id"]
+        # Find matching booking in your database
+        pass
+    elif event == "rating.low":
+        # Bad review alert — notify hotel manager
+        pass
+    
+    return {"received": True}`;
+
+  return (
+    <div className="p-5 max-w-4xl" data-testid="integration-guide-panel">
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold text-stone-800" data-testid="guide-title">MyHotelBox Integration Guide</h2>
+        <p className="text-sm text-stone-500 mt-0.5">Step-by-step instructions to connect Review Hub to your MyHotelBox.com software</p>
+      </div>
+
+      {/* Steps */}
+      <div className="space-y-3 mb-6">
+        {guide.steps.map((s) => (
+          <div key={s.step} className="flex gap-3 bg-white border border-stone-200 rounded-lg p-4" data-testid={`guide-step-${s.step}`}>
+            <div className="w-7 h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">{s.step}</div>
+            <div>
+              <h3 className="text-sm font-medium text-stone-800">{s.title}</h3>
+              <p className="text-xs text-stone-500 mt-0.5">{s.description}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* API Endpoints Reference */}
+      <div className="bg-white border border-stone-200 rounded-lg p-4 mb-4">
+        <h3 className="text-sm font-semibold text-stone-700 mb-3 flex items-center gap-2"><Database size={14} /> Available API Endpoints</h3>
+        <div className="space-y-1.5">
+          {guide.api_examples.endpoints.map((ep, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs py-1.5 border-b border-stone-50 last:border-0">
+              <span className={`font-mono font-bold px-1.5 py-0.5 rounded text-[10px] ${ep.method === "GET" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{ep.method}</span>
+              <code className="font-mono text-stone-700">{ep.path}</code>
+              <span className="text-stone-400 ml-auto">{ep.description}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Code Snippets */}
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold text-stone-700 flex items-center gap-2"><Code size={14} /> Code Examples</h3>
+
+        {[
+          { id: "fetch", label: "Fetch Reviews from Review Hub", code: curlFetchReviews, lang: "bash" },
+          { id: "generate", label: "Generate AI Response", code: curlGenerateResponse, lang: "bash" },
+          { id: "webhook-node", label: "Webhook Handler (Node.js)", code: webhookHandler, lang: "javascript" },
+          { id: "webhook-python", label: "Webhook Handler (Python)", code: pythonHandler, lang: "python" }
+        ].map(({ id, label, code }) => (
+          <div key={id} className="bg-stone-900 rounded-lg overflow-hidden" data-testid={`code-snippet-${id}`}>
+            <div className="flex items-center justify-between px-3 py-2 bg-stone-800">
+              <span className="text-[11px] text-stone-400 font-medium">{label}</span>
+              <button onClick={() => copyCode(code, id)} className="text-stone-500 hover:text-white text-[10px] flex items-center gap-1" data-testid={`copy-snippet-${id}`}>
+                {copiedSnippet === id ? <><CheckCircle size={10} className="text-emerald-400" /> Copied</> : <><Copy size={10} /> Copy</>}
+              </button>
+            </div>
+            <pre className="p-3 text-[11px] text-stone-200 font-mono leading-relaxed overflow-x-auto"><code>{code}</code></pre>
+          </div>
+        ))}
+      </div>
+
+      {/* Webhook Payload Example */}
+      <div className="mt-4 bg-stone-900 rounded-lg overflow-hidden" data-testid="webhook-payload-example">
+        <div className="flex items-center justify-between px-3 py-2 bg-stone-800">
+          <span className="text-[11px] text-stone-400 font-medium">Webhook Payload Example (review.created)</span>
+          <button onClick={() => copyCode(JSON.stringify(guide.webhook_payload_example, null, 2), "payload")} className="text-stone-500 hover:text-white text-[10px] flex items-center gap-1" data-testid="copy-payload">
+            {copiedSnippet === "payload" ? <><CheckCircle size={10} className="text-emerald-400" /> Copied</> : <><Copy size={10} /> Copy</>}
+          </button>
+        </div>
+        <pre className="p-3 text-[11px] text-stone-200 font-mono leading-relaxed overflow-x-auto"><code>{JSON.stringify(guide.webhook_payload_example, null, 2)}</code></pre>
+      </div>
+
+      {/* Webhook Headers */}
+      <div className="mt-4 bg-stone-50 border border-stone-200 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-stone-700 mb-2 flex items-center gap-2"><Info size={14} /> Webhook Request Headers</h3>
+        <div className="space-y-1">
+          {Object.entries(guide.webhook_headers).map(([key, val]) => (
+            <div key={key} className="flex gap-2 text-xs">
+              <code className="text-stone-600 font-mono font-medium">{key}:</code>
+              <span className="text-stone-500">{val}</span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
@@ -3994,6 +4219,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "integrations", icon: PlugsConnected, name: "Integrations", testId: "integrations-btn" },
         { id: "api", icon: Key, name: "API Connection", testId: "api-connection-btn" },
         { id: "webhooks", icon: Code, name: "Webhooks", testId: "webhooks-btn" },
+        { id: "guide", icon: ArrowSquareOut, name: "Integration Guide", testId: "integration-guide-btn" },
       ]
     },
     {
@@ -4191,6 +4417,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Webhooks View */}
         {activeView === "webhooks" && (
           <WebhooksPanel user={user} />
+        )}
+
+        {/* Integration Guide View */}
+        {activeView === "guide" && (
+          <IntegrationGuidePanel />
         )}
 
         {/* Alerts View */}

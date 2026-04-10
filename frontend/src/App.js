@@ -17,10 +17,14 @@ import {
   PaperPlaneTilt,
   PencilSimple,
   Bell,
-  Gear,
   X,
   EnvelopeSimple,
-  TestTube
+  TestTube,
+  FileText,
+  Plus,
+  Trash,
+  Copy,
+  Tag
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -41,6 +45,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -53,6 +58,15 @@ const PLATFORMS = {
   "tripadvisor": { name: "TripAdvisor", color: "#00AF87", bg: "bg-[#00AF87]" },
   "google": { name: "Google", color: "#4285F4", bg: "bg-[#4285F4]" },
   "trip.com": { name: "Trip.com", color: "#287DFA", bg: "bg-[#287DFA]" }
+};
+
+// Template categories
+const TEMPLATE_CATEGORIES = {
+  positive: { name: "Positive", color: "bg-[#5A6B50]", icon: "👍" },
+  negative: { name: "Negative", color: "bg-[#C05A44]", icon: "👎" },
+  neutral: { name: "Neutral", color: "bg-[#57534E]", icon: "➖" },
+  complaint: { name: "Complaint", color: "bg-[#D4A373]", icon: "⚠️" },
+  praise: { name: "Praise", color: "bg-[#3E5245]", icon: "⭐" }
 };
 
 // Star Rating Component
@@ -151,7 +165,7 @@ const ReviewCard = ({ review, isSelected, onClick }) => {
 };
 
 // AI Response Panel Component
-const AIResponsePanel = ({ review, onResponseSubmit, isLoading }) => {
+const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, onTemplateApplied }) => {
   const [responseText, setResponseText] = useState("");
   const [tone, setTone] = useState("professional");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -164,6 +178,16 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading }) => {
       setResponseText("");
     }
   }, [review]);
+
+  // Handle template application
+  useEffect(() => {
+    if (templateText && review) {
+      // Replace {guest_name} placeholder with actual guest name
+      const processedText = templateText.replace(/\{guest_name\}/g, review.guest_name);
+      setResponseText(processedText);
+      if (onTemplateApplied) onTemplateApplied();
+    }
+  }, [templateText, review, onTemplateApplied]);
 
   const generateAIResponse = async () => {
     if (!review) return;
@@ -548,6 +572,331 @@ const NotificationSettings = ({ isOpen, onClose }) => {
   );
 };
 
+// Templates Manager Component
+const TemplatesManager = ({ isOpen, onClose, onSelectTemplate }) => {
+  const [templates, setTemplates] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    category: "positive",
+    content: "",
+    tone: "professional"
+  });
+
+  const fetchTemplates = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get(`${API}/templates`);
+      setTemplates(response.data);
+    } catch (error) {
+      console.error("Error fetching templates:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const seedTemplates = useCallback(async () => {
+    try {
+      const response = await axios.post(`${API}/templates/seed`);
+      if (response.data.seeded) {
+        toast.success("Default templates loaded!");
+        await fetchTemplates();
+      }
+    } catch (error) {
+      console.error("Error seeding templates:", error);
+    }
+  }, [fetchTemplates]);
+
+  useEffect(() => {
+    if (isOpen) {
+      seedTemplates();
+      fetchTemplates();
+    }
+  }, [isOpen, fetchTemplates, seedTemplates]);
+
+  const handleCreateOrUpdate = async () => {
+    try {
+      if (editingTemplate) {
+        await axios.put(`${API}/templates/${editingTemplate.id}`, formData);
+        toast.success("Template updated!");
+      } else {
+        await axios.post(`${API}/templates`, formData);
+        toast.success("Template created!");
+      }
+      setShowCreateForm(false);
+      setEditingTemplate(null);
+      setFormData({ name: "", category: "positive", content: "", tone: "professional" });
+      await fetchTemplates();
+    } catch (error) {
+      console.error("Error saving template:", error);
+      toast.error("Failed to save template");
+    }
+  };
+
+  const handleDelete = async (templateId) => {
+    if (!window.confirm("Are you sure you want to delete this template?")) return;
+    try {
+      await axios.delete(`${API}/templates/${templateId}`);
+      toast.success("Template deleted!");
+      await fetchTemplates();
+    } catch (error) {
+      console.error("Error deleting template:", error);
+      toast.error("Failed to delete template");
+    }
+  };
+
+  const handleUseTemplate = async (template) => {
+    try {
+      await axios.post(`${API}/templates/${template.id}/use`);
+      onSelectTemplate(template.content);
+      onClose();
+      toast.success("Template applied!");
+    } catch (error) {
+      console.error("Error using template:", error);
+    }
+  };
+
+  const handleEdit = (template) => {
+    setEditingTemplate(template);
+    setFormData({
+      name: template.name,
+      category: template.category,
+      content: template.content,
+      tone: template.tone
+    });
+    setShowCreateForm(true);
+  };
+
+  const filteredTemplates = selectedCategory === "all" 
+    ? templates 
+    : templates.filter(t => t.category === selectedCategory);
+
+  return (
+    <DialogContent className="sm:max-w-[700px] max-h-[85vh]" data-testid="templates-dialog">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
+          <FileText size={20} weight="fill" className="text-[#3E5245]" />
+          Response Templates
+        </DialogTitle>
+      </DialogHeader>
+
+      <Tabs defaultValue="browse" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsTrigger value="browse" data-testid="templates-browse-tab">Browse Templates</TabsTrigger>
+          <TabsTrigger 
+            value="create" 
+            onClick={() => {
+              setShowCreateForm(true);
+              setEditingTemplate(null);
+              setFormData({ name: "", category: "positive", content: "", tone: "professional" });
+            }}
+            data-testid="templates-create-tab"
+          >
+            {editingTemplate ? "Edit Template" : "Create New"}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="browse" className="space-y-4">
+          {/* Category Filter */}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setSelectedCategory("all")}
+              className={`px-3 py-1 rounded-full text-sm transition-colors ${
+                selectedCategory === "all" 
+                  ? "bg-[#3E5245] text-white" 
+                  : "bg-[#E8EDE7] text-[#1C1917] hover:bg-[#D5DDD3]"
+              }`}
+              data-testid="category-filter-all"
+            >
+              All
+            </button>
+            {Object.entries(TEMPLATE_CATEGORIES).map(([key, cat]) => (
+              <button
+                key={key}
+                onClick={() => setSelectedCategory(key)}
+                className={`px-3 py-1 rounded-full text-sm transition-colors flex items-center gap-1 ${
+                  selectedCategory === key 
+                    ? `${cat.color} text-white` 
+                    : "bg-[#E8EDE7] text-[#1C1917] hover:bg-[#D5DDD3]"
+                }`}
+                data-testid={`category-filter-${key}`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Templates List */}
+          <ScrollArea className="h-[400px] pr-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <ArrowsClockwise size={24} className="animate-spin text-[#57534E]" />
+              </div>
+            ) : filteredTemplates.length === 0 ? (
+              <div className="text-center py-8 text-[#57534E]">
+                <FileText size={32} className="mx-auto mb-2 opacity-50" />
+                <p>No templates found</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredTemplates.map((template) => (
+                  <motion.div
+                    key={template.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="border border-stone-200 rounded-md p-4 bg-white hover:shadow-sm transition-shadow"
+                    data-testid={`template-card-${template.id}`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <h4 className="font-medium text-[#1C1917]">{template.name}</h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`${TEMPLATE_CATEGORIES[template.category]?.color || "bg-gray-500"} text-white px-2 py-0.5 rounded text-xs`}>
+                            {TEMPLATE_CATEGORIES[template.category]?.name || template.category}
+                          </span>
+                          <span className="text-xs text-[#57534E]">
+                            <Tag size={12} className="inline mr-1" />
+                            {template.tone}
+                          </span>
+                          <span className="text-xs text-[#57534E]">
+                            Used {template.usage_count || 0} times
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEdit(template)}
+                          className="p-2 hover:bg-stone-100 rounded-md transition-colors"
+                          title="Edit"
+                          data-testid={`edit-template-${template.id}`}
+                        >
+                          <PencilSimple size={16} className="text-[#57534E]" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(template.id)}
+                          className="p-2 hover:bg-red-50 rounded-md transition-colors"
+                          title="Delete"
+                          data-testid={`delete-template-${template.id}`}
+                        >
+                          <Trash size={16} className="text-[#C05A44]" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-[#57534E] line-clamp-3 mb-3">
+                      {template.content}
+                    </p>
+                    <button
+                      onClick={() => handleUseTemplate(template)}
+                      className="bg-[#3E5245] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#2A3B30] transition-colors flex items-center gap-1"
+                      data-testid={`use-template-${template.id}`}
+                    >
+                      <Copy size={14} />
+                      Use This Template
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="create" className="space-y-4">
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-[#1C1917] block mb-1">Template Name</label>
+              <Input
+                placeholder="e.g., Thank You - Great Stay"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                className="border-stone-200"
+                data-testid="template-name-input"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium text-[#1C1917] block mb-1">Category</label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
+                  data-testid="template-category-select"
+                >
+                  <SelectTrigger className="border-stone-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(TEMPLATE_CATEGORIES).map(([key, cat]) => (
+                      <SelectItem key={key} value={key}>{cat.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-[#1C1917] block mb-1">Tone</label>
+                <Select
+                  value={formData.tone}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, tone: value }))}
+                  data-testid="template-tone-select"
+                >
+                  <SelectTrigger className="border-stone-200">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="friendly">Friendly</SelectItem>
+                    <SelectItem value="apologetic">Apologetic</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-[#1C1917] block mb-1">
+                Template Content
+                <span className="text-xs text-[#57534E] ml-2">Use {"{guest_name}"} as placeholder</span>
+              </label>
+              <Textarea
+                placeholder="Dear {guest_name},&#10;&#10;Thank you for your feedback..."
+                value={formData.content}
+                onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                className="min-h-[200px] border-stone-200"
+                data-testid="template-content-textarea"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowCreateForm(false);
+                  setEditingTemplate(null);
+                  setFormData({ name: "", category: "positive", content: "", tone: "professional" });
+                }}
+                className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors"
+                data-testid="cancel-template-btn"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateOrUpdate}
+                disabled={!formData.name || !formData.content}
+                className="bg-[#3E5245] text-white px-4 py-2 rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
+                data-testid="save-template-btn"
+              >
+                <Plus size={16} />
+                {editingTemplate ? "Update Template" : "Create Template"}
+              </button>
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </DialogContent>
+  );
+};
+
 // Main Dashboard Component
 const Dashboard = () => {
   const [reviews, setReviews] = useState([]);
@@ -555,10 +904,16 @@ const Dashboard = () => {
   const [selectedReview, setSelectedReview] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [templateTextToApply, setTemplateTextToApply] = useState(null);
   const [filters, setFilters] = useState({
     platform: "all",
     status: "all"
   });
+
+  const handleApplyTemplate = (templateContent) => {
+    setTemplateTextToApply(templateContent);
+  };
 
   const fetchReviews = useCallback(async () => {
     try {
@@ -651,6 +1006,22 @@ const Dashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
+              <DialogTrigger asChild>
+                <button
+                  className="bg-white border border-stone-200 text-[#1C1917] px-4 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
+                  data-testid="templates-btn"
+                >
+                  <FileText size={18} />
+                  Templates
+                </button>
+              </DialogTrigger>
+              <TemplatesManager 
+                isOpen={showTemplates} 
+                onClose={() => setShowTemplates(false)}
+                onSelectTemplate={handleApplyTemplate}
+              />
+            </Dialog>
             <Dialog open={showNotificationSettings} onOpenChange={setShowNotificationSettings}>
               <DialogTrigger asChild>
                 <button
@@ -788,6 +1159,8 @@ const Dashboard = () => {
               review={selectedReview}
               onResponseSubmit={handleResponseSubmit}
               isLoading={isLoading}
+              templateText={templateTextToApply}
+              onTemplateApplied={() => setTemplateTextToApply(null)}
             />
           </div>
         </div>

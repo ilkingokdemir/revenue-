@@ -322,6 +322,82 @@ class ReviewAPITester:
         
         return success
 
+    def test_response_templates(self):
+        """Test response templates endpoints - NEW FEATURE"""
+        print(f"\n📝 Testing Response Templates Feature...")
+        
+        # 1. Seed default templates
+        success, response = self.run_test("Seed Default Templates", "POST", "templates/seed", 200)
+        
+        if success:
+            print(f"   📊 {response.get('message', 'Templates seeded')}")
+        
+        # 2. Get all templates
+        success, templates = self.run_test("Get All Templates", "GET", "templates", 200)
+        
+        template_id = None
+        if success and isinstance(templates, list) and len(templates) > 0:
+            print(f"   📋 Found {len(templates)} templates")
+            template_id = templates[0]["id"]
+            
+            # Test category filtering
+            categories = ["positive", "negative", "neutral", "complaint", "praise"]
+            for category in categories:
+                self.run_test(f"Filter Templates by {category}", "GET", "templates", 200, 
+                             params={"category": category})
+        
+        # 3. Get single template
+        if template_id:
+            success, template = self.run_test(f"Get Single Template", "GET", f"templates/{template_id}", 200)
+            
+            if success:
+                print(f"   📄 Template: {template.get('name', 'Unknown')}")
+                print(f"   🏷️ Category: {template.get('category', 'Unknown')}")
+                print(f"   📊 Usage count: {template.get('usage_count', 0)}")
+        
+        # 4. Create new template
+        new_template_data = {
+            "name": "Test Template",
+            "category": "positive",
+            "content": "Dear {guest_name},\n\nThank you for your wonderful review! We're delighted you enjoyed your stay.\n\nBest regards,\nThe Management Team",
+            "tone": "friendly"
+        }
+        
+        success, new_template = self.run_test("Create New Template", "POST", "templates", 200, data=new_template_data)
+        
+        created_template_id = None
+        if success and new_template.get("id"):
+            created_template_id = new_template["id"]
+            print(f"   ✅ Created template with ID: {created_template_id[:8]}...")
+        
+        # 5. Update template
+        if created_template_id:
+            update_data = {
+                "name": "Updated Test Template",
+                "content": "Dear {guest_name},\n\nThank you for your updated review! We appreciate your feedback.\n\nBest regards,\nThe Management Team"
+            }
+            
+            success, updated = self.run_test(f"Update Template", "PUT", f"templates/{created_template_id}", 200, data=update_data)
+            
+            if success:
+                print(f"   ✅ Template updated: {updated.get('name', 'Unknown')}")
+        
+        # 6. Use template (increment usage count)
+        if template_id:
+            success, usage_response = self.run_test(f"Use Template", "POST", f"templates/{template_id}/use", 200)
+            
+            if success:
+                print(f"   📈 Usage count incremented: {usage_response.get('usage_count', 0)}")
+        
+        # 7. Delete created template
+        if created_template_id:
+            success, delete_response = self.run_test(f"Delete Template", "DELETE", f"templates/{created_template_id}", 200)
+            
+            if success:
+                print(f"   🗑️ Template deleted: {delete_response.get('message', 'success')}")
+        
+        return True
+
     def run_comprehensive_test(self):
         """Run all tests in sequence"""
         print("🏨 Hotel Review Management API Testing")
@@ -385,6 +461,10 @@ class ReviewAPITester:
         # 11. Test notification test endpoint
         print("\n1️⃣1️⃣ Testing Test Notification...")
         self.test_notification_test_endpoint()
+
+        # 12. Test response templates feature
+        print("\n1️⃣2️⃣ Testing Response Templates Feature...")
+        self.test_response_templates()
 
         # Print summary
         print("\n" + "=" * 50)

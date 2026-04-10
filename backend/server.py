@@ -100,6 +100,28 @@ class NotificationSettingsUpdate(BaseModel):
     negative_threshold: Optional[int] = None
     enabled: Optional[bool] = None
 
+class ResponseTemplate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    category: str  # positive, negative, neutral, complaint, praise
+    content: str
+    tone: str = "professional"  # professional, friendly, apologetic
+    usage_count: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ResponseTemplateCreate(BaseModel):
+    name: str
+    category: str
+    content: str
+    tone: str = "professional"
+
+class ResponseTemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    category: Optional[str] = None
+    content: Optional[str] = None
+    tone: Optional[str] = None
+
 # ==================== HELPER FUNCTIONS ====================
 
 def serialize_review(review: dict) -> dict:
@@ -606,6 +628,136 @@ async def test_notification():
         return {"status": "success", "message": f"Test notification sent to {settings.get('email')}"}
     else:
         raise HTTPException(status_code=500, detail="Failed to send test notification")
+
+# ==================== RESPONSE TEMPLATES ROUTES ====================
+
+@api_router.get("/templates", response_model=List[ResponseTemplate])
+async def get_templates(category: Optional[str] = None):
+    """Get all response templates with optional category filter"""
+    query = {}
+    if category and category != "all":
+        query["category"] = category
+    
+    templates = await db.response_templates.find(query, {"_id": 0}).sort("usage_count", -1).to_list(100)
+    for template in templates:
+        if isinstance(template.get('created_at'), str):
+            template['created_at'] = datetime.fromisoformat(template['created_at'])
+    return templates
+
+@api_router.get("/templates/{template_id}", response_model=ResponseTemplate)
+async def get_template(template_id: str):
+    """Get a single template by ID"""
+    template = await db.response_templates.find_one({"id": template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    if isinstance(template.get('created_at'), str):
+        template['created_at'] = datetime.fromisoformat(template['created_at'])
+    return template
+
+@api_router.post("/templates", response_model=ResponseTemplate)
+async def create_template(input: ResponseTemplateCreate):
+    """Create a new response template"""
+    template = ResponseTemplate(**input.model_dump())
+    doc = template.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await db.response_templates.insert_one(doc)
+    return template
+
+@api_router.put("/templates/{template_id}", response_model=ResponseTemplate)
+async def update_template(template_id: str, input: ResponseTemplateUpdate):
+    """Update an existing template"""
+    template = await db.response_templates.find_one({"id": template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    update_data = {k: v for k, v in input.model_dump().items() if v is not None}
+    if update_data:
+        await db.response_templates.update_one(
+            {"id": template_id},
+            {"$set": update_data}
+        )
+    
+    updated = await db.response_templates.find_one({"id": template_id}, {"_id": 0})
+    if isinstance(updated.get('created_at'), str):
+        updated['created_at'] = datetime.fromisoformat(updated['created_at'])
+    return updated
+
+@api_router.delete("/templates/{template_id}")
+async def delete_template(template_id: str):
+    """Delete a template"""
+    result = await db.response_templates.delete_one({"id": template_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"message": "Template deleted"}
+
+@api_router.post("/templates/{template_id}/use")
+async def use_template(template_id: str):
+    """Increment usage count when a template is used"""
+    template = await db.response_templates.find_one({"id": template_id}, {"_id": 0})
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    await db.response_templates.update_one(
+        {"id": template_id},
+        {"$inc": {"usage_count": 1}}
+    )
+    
+    updated = await db.response_templates.find_one({"id": template_id}, {"_id": 0})
+    return {"message": "Template usage recorded", "usage_count": updated.get("usage_count", 0)}
+
+@api_router.post("/templates/seed")
+async def seed_templates():
+    """Seed database with default response templates"""
+    existing = await db.response_templates.count_documents({})
+    if existing > 0:
+        return {"message": f"Database already has {existing} templates", "seeded": False}
+    
+    default_templates = [
+        {
+            "name": "Thank You - Excellent Stay",
+            "category": "positive",
+            "tone": "friendly",
+            "content": "Dear {guest_name},\n\nThank you so much for your wonderful review and for choosing to stay with us! We're absolutely delighted to hear that you had an excellent experience.\n\nYour kind words mean the world to our team, and we're thrilled that we could make your stay memorable. We truly appreciate you taking the time to share your feedback.\n\nWe look forward to welcoming you back soon!\n\nWarm regards,\nThe Management Team"
+        },
+        {
+            "name": "Appreciation - Great Service",
+            "category": "praise",
+            "tone": "professional",
+            "content": "Dear {guest_name},\n\nThank you for your generous review and for recognizing our team's dedication to providing exceptional service.\n\nWe're committed to ensuring every guest feels valued and comfortable during their stay. Your feedback encourages us to continue striving for excellence.\n\nWe hope to have the pleasure of hosting you again in the future.\n\nBest regards,\nThe Management Team"
+        },
+        {
+            "name": "Apology - Service Issue",
+            "category": "complaint",
+            "tone": "apologetic",
+            "content": "Dear {guest_name},\n\nThank you for taking the time to share your feedback. We sincerely apologize that your experience did not meet your expectations.\n\nYour concerns have been brought to the attention of our management team, and we are taking immediate steps to address the issues you've raised. We take all feedback seriously as it helps us improve.\n\nWe would appreciate the opportunity to make things right. Please contact us directly at your convenience so we can discuss how we can better serve you in the future.\n\nWith sincere apologies,\nThe Management Team"
+        },
+        {
+            "name": "Apology - Cleanliness Concern",
+            "category": "negative",
+            "tone": "apologetic",
+            "content": "Dear {guest_name},\n\nThank you for bringing this matter to our attention. We sincerely apologize for the cleanliness issues you experienced during your stay.\n\nMaintaining high standards of cleanliness is a top priority for us, and we are deeply sorry that we fell short on this occasion. We have addressed this with our housekeeping team and implemented additional quality checks.\n\nWe value your feedback and would be grateful for another opportunity to provide you with the exceptional experience you deserve.\n\nWith our sincere apologies,\nThe Management Team"
+        },
+        {
+            "name": "Response - Room Issues",
+            "category": "complaint",
+            "tone": "apologetic",
+            "content": "Dear {guest_name},\n\nThank you for your feedback regarding your recent stay. We apologize for any inconvenience caused by the room issues you mentioned.\n\nWe have immediately notified our maintenance team to inspect and resolve the problems you described. Guest comfort is our priority, and we regret that we did not meet your expectations.\n\nWe would love to welcome you back and show you the true quality of our accommodation. Please reach out to us directly if you'd like to discuss this further.\n\nSincerely,\nThe Management Team"
+        },
+        {
+            "name": "Neutral - Mixed Review",
+            "category": "neutral",
+            "tone": "professional",
+            "content": "Dear {guest_name},\n\nThank you for sharing your balanced feedback about your stay with us. We appreciate you highlighting both the positives and areas where we can improve.\n\nWe're pleased that some aspects of your stay met your expectations, and we take your constructive feedback seriously. Our team is always working to enhance the guest experience.\n\nWe hope to welcome you back and exceed your expectations on your next visit.\n\nBest regards,\nThe Management Team"
+        }
+    ]
+    
+    for template_data in default_templates:
+        template = ResponseTemplate(**template_data)
+        doc = template.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        await db.response_templates.insert_one(doc)
+    
+    return {"message": f"Seeded {len(default_templates)} default templates", "seeded": True}
 
 # Include the router in the main app
 app.include_router(api_router)

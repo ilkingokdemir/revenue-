@@ -592,6 +592,73 @@ class ReviewAPITester:
         
         return True
 
+    def test_scheduled_reports(self):
+        """Test scheduled reports endpoints - NEW FEATURE"""
+        print(f"\n📊 Testing Scheduled Reports Feature...")
+        
+        # 1. Get current report settings
+        success, settings = self.run_test("Get Report Settings", "GET", "reports/settings", 200)
+        
+        if success:
+            print(f"   📋 Current settings: enabled={settings.get('enabled', False)}, email={settings.get('email', 'none')}")
+            print(f"   📅 Frequency: {settings.get('frequency', 'weekly')}")
+            print(f"   🏆 Include competitors: {settings.get('include_competitor_comparison', False)}")
+            print(f"   🧠 Include sentiment: {settings.get('include_sentiment_summary', False)}")
+            print(f"   📋 Include actions: {settings.get('include_action_items', False)}")
+        
+        # 2. Update report settings
+        settings_data = {
+            "email": "test@hotel.com",
+            "frequency": "weekly",
+            "include_competitor_comparison": True,
+            "include_sentiment_summary": True,
+            "include_action_items": True,
+            "enabled": True
+        }
+        
+        success, response = self.run_test(
+            "Update Report Settings", 
+            "PUT", 
+            "reports/settings", 
+            200, 
+            data=settings_data
+        )
+        
+        if success:
+            print(f"   ✅ Settings updated: enabled={response.get('enabled', False)}")
+            print(f"   📧 Email: {response.get('email', 'none')}")
+        
+        # 3. Get report preview
+        success, preview = self.run_test("Get Report Preview", "GET", "reports/preview", 200)
+        
+        if success and preview.get("html"):
+            html_content = preview["html"]
+            print(f"   📄 Preview generated: {len(html_content)} characters")
+            print(f"   📊 Contains metrics: {'total_reviews' in html_content}")
+            print(f"   ⭐ Contains ratings: {'Rating Distribution' in html_content}")
+            print(f"   🏆 Contains competitors: {'Competitive Position' in html_content}")
+            print(f"   📋 Contains actions: {'Action Items' in html_content}")
+        
+        # 4. Send report now
+        success, send_response = self.run_test("Send Report Now", "POST", "reports/send-now", 200)
+        
+        if success:
+            status = send_response.get("status", "unknown")
+            message = send_response.get("message", "")
+            print(f"   📤 Send status: {status}")
+            print(f"   💬 Message: {message}")
+        
+        # 5. Get report log
+        success, log = self.run_test("Get Report Log", "GET", "reports/log", 200)
+        
+        if success and isinstance(log, list):
+            print(f"   📜 Report log entries: {len(log)}")
+            if len(log) > 0:
+                latest = log[0]
+                print(f"   📧 Latest: {latest.get('email', 'unknown')} - {latest.get('status', 'unknown')}")
+        
+        return True
+
     def run_comprehensive_test(self):
         """Run all tests in sequence"""
         print("🏨 Hotel Review Management API Testing")
@@ -671,6 +738,10 @@ class ReviewAPITester:
         # 15. Test competitor benchmarking
         print("\n1️⃣5️⃣ Testing Competitor Benchmarking...")
         self.test_competitor_benchmarking()
+
+        # 16. Test scheduled reports feature
+        print("\n1️⃣6️⃣ Testing Scheduled Reports Feature...")
+        self.test_scheduled_reports()
 
         # Print summary
         print("\n" + "=" * 50)

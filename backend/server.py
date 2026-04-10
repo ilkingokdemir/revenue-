@@ -100,6 +100,26 @@ class NotificationSettingsUpdate(BaseModel):
     negative_threshold: Optional[int] = None
     enabled: Optional[bool] = None
 
+class ReportSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    frequency: str = "weekly"  # daily, weekly, monthly
+    include_competitor_comparison: bool = True
+    include_sentiment_summary: bool = True
+    include_action_items: bool = True
+    enabled: bool = True
+    last_sent: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ReportSettingsUpdate(BaseModel):
+    email: Optional[str] = None
+    frequency: Optional[str] = None
+    include_competitor_comparison: Optional[bool] = None
+    include_sentiment_summary: Optional[bool] = None
+    include_action_items: Optional[bool] = None
+    enabled: Optional[bool] = None
+
 class ResponseTemplate(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -1164,6 +1184,358 @@ async def get_review_stats_internal():
         "response_rate": round((responded / total * 100) if total > 0 else 0, 1),
         "average_rating": round(avg_rating, 1) if avg_rating else 0
     }
+
+# ==================== REPORT ROUTES ====================
+
+async def generate_report_html(settings: dict) -> str:
+    """Generate HTML report with performance summary"""
+    # Get analytics data
+    total_reviews = await db.reviews.count_documents({})
+    responded = await db.reviews.count_documents({"response_status": "responded"})
+    pending = await db.reviews.count_documents({"response_status": "pending"})
+    
+    # Average rating
+    rating_pipeline = [{"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}}}]
+    rating_result = await db.reviews.aggregate(rating_pipeline).to_list(1)
+    avg_rating = round(rating_result[0]["avg_rating"], 2) if rating_result else 0
+    
+    response_rate = round((responded / total_reviews * 100) if total_reviews > 0 else 0, 1)
+    
+    # Rating distribution
+    rating_dist_pipeline = [
+        {"$group": {"_id": "$rating", "count": {"$sum": 1}}},
+        {"$sort": {"_id": -1}}
+    ]
+    rating_dist = await db.reviews.aggregate(rating_dist_pipeline).to_list(10)
+    
+    # Sentiment distribution
+    sentiment_pipeline = [
+        {"$match": {"sentiment_analysis": {"$exists": True}}},
+        {"$group": {"_id": "$sentiment_analysis.sentiment", "count": {"$sum": 1}}}
+    ]
+    sentiment_result = await db.reviews.aggregate(sentiment_pipeline).to_list(10)
+    
+    # Platform stats (reserved for future use in detailed reports)
+    platform_pipeline = [
+        {"$group": {"_id": "$platform", "count": {"$sum": 1}, "avg_rating": {"$avg": "$rating"}}}
+    ]
+    _ = await db.reviews.aggregate(platform_pipeline).to_list(10)
+    
+    # Urgent reviews
+    urgent_count = await db.reviews.count_documents({
+        "response_status": "pending",
+        "$or": [
+            {"rating": {"$lte": 2}},
+            {"sentiment_analysis.urgency": {"$in": ["high", "critical"]}}
+        ]
+    })
+    
+    # Competitor benchmark
+    competitors = await db.competitors.find({}, {"_id": 0}).to_list(100)
+    our_stats = await get_review_stats_internal()
+    
+    # Calculate ranking
+    all_ratings = [our_stats.get("average_rating", 0)] + [c.get("avg_rating", 0) for c in competitors]
+    all_ratings.sort(reverse=True)
+    rating_rank = all_ratings.index(our_stats.get("average_rating", 0)) + 1
+    
+    # Generate HTML
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; background-color: #FAF9F6; margin: 0; padding: 20px; }}
+            .container {{ max-width: 700px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }}
+            .header {{ background: linear-gradient(135deg, #3E5245 0%, #2A3B30 100%); color: white; padding: 30px; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 28px; }}
+            .header p {{ margin: 10px 0 0; opacity: 0.9; }}
+            .content {{ padding: 30px; }}
+            .metrics {{ display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 30px; }}
+            .metric {{ background: #FAF9F6; border-radius: 8px; padding: 20px; text-align: center; }}
+            .metric-value {{ font-size: 32px; font-weight: bold; color: #3E5245; }}
+            .metric-label {{ font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #57534E; margin-top: 5px; }}
+            .section {{ margin-bottom: 25px; }}
+            .section-title {{ font-size: 16px; font-weight: 600; color: #1C1917; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #E8EDE7; }}
+            .competitor-row {{ display: flex; justify-content: space-between; padding: 12px; background: #FAF9F6; border-radius: 6px; margin-bottom: 8px; }}
+            .competitor-row.highlight {{ background: #E8EDE7; border-left: 3px solid #3E5245; }}
+            .badge {{ display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }}
+            .badge-success {{ background: #5A6B50; color: white; }}
+            .badge-warning {{ background: #D4A373; color: white; }}
+            .badge-danger {{ background: #C05A44; color: white; }}
+            .action-item {{ display: flex; align-items: center; gap: 10px; padding: 12px; background: #FEF3C7; border-radius: 6px; margin-bottom: 8px; }}
+            .action-icon {{ width: 24px; height: 24px; background: #D4A373; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; }}
+            .footer {{ background: #FAF9F6; padding: 20px; text-align: center; color: #57534E; font-size: 12px; }}
+            .rating-bar {{ display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }}
+            .rating-bar-fill {{ height: 8px; background: #D4A373; border-radius: 4px; }}
+            .rating-bar-track {{ flex: 1; height: 8px; background: #E7E5E4; border-radius: 4px; overflow: hidden; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>📊 Weekly Performance Report</h1>
+                <p>Review Hub Summary • {datetime.now(timezone.utc).strftime('%B %d, %Y')}</p>
+            </div>
+            
+            <div class="content">
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-value">{total_reviews}</div>
+                        <div class="metric-label">Total Reviews</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{avg_rating}/5</div>
+                        <div class="metric-label">Average Rating</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{response_rate}%</div>
+                        <div class="metric-label">Response Rate</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value">{pending}</div>
+                        <div class="metric-label">Pending Responses</div>
+                    </div>
+                </div>
+    """
+    
+    # Rating Distribution
+    html += """
+                <div class="section">
+                    <div class="section-title">⭐ Rating Distribution</div>
+    """
+    for item in sorted(rating_dist, key=lambda x: x["_id"], reverse=True):
+        pct = round((item["count"] / total_reviews * 100)) if total_reviews > 0 else 0
+        html += f"""
+                    <div class="rating-bar">
+                        <span style="width: 50px;">{item["_id"]} star</span>
+                        <div class="rating-bar-track">
+                            <div class="rating-bar-fill" style="width: {pct}%;"></div>
+                        </div>
+                        <span style="width: 60px; text-align: right;">{item["count"]} ({pct}%)</span>
+                    </div>
+        """
+    html += "</div>"
+    
+    # Sentiment Summary
+    if settings.get("include_sentiment_summary", True) and sentiment_result:
+        html += """
+                <div class="section">
+                    <div class="section-title">🎯 Sentiment Summary</div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        """
+        for sent in sentiment_result:
+            if sent["_id"]:
+                badge_class = "badge-success" if sent["_id"] == "positive" else "badge-danger" if sent["_id"] == "negative" else "badge-warning"
+                html += f'<span class="badge {badge_class}">{sent["_id"].capitalize()}: {sent["count"]}</span>'
+        html += "</div></div>"
+    
+    # Competitor Comparison
+    if settings.get("include_competitor_comparison", True) and competitors:
+        html += f"""
+                <div class="section">
+                    <div class="section-title">🏆 Competitive Position</div>
+                    <p style="margin-bottom: 15px;">You rank <strong>#{rating_rank}</strong> out of {len(competitors) + 1} hotels in your competitive set.</p>
+                    
+                    <div class="competitor-row highlight">
+                        <span><strong>Your Hotel</strong></span>
+                        <span>{avg_rating}/5 • {total_reviews} reviews • {response_rate}% response</span>
+                    </div>
+        """
+        for comp in sorted(competitors, key=lambda x: x.get("avg_rating", 0), reverse=True)[:5]:
+            html += f"""
+                    <div class="competitor-row">
+                        <span>{comp.get("name", "Unknown")}</span>
+                        <span>{comp.get("avg_rating", 0)}/5 • {comp.get("total_reviews", 0)} reviews • {comp.get("response_rate", 0)}% response</span>
+                    </div>
+            """
+        html += "</div>"
+    
+    # Action Items
+    if settings.get("include_action_items", True):
+        html += """
+                <div class="section">
+                    <div class="section-title">📋 Action Items</div>
+        """
+        if urgent_count > 0:
+            html += f"""
+                    <div class="action-item">
+                        <div class="action-icon">!</div>
+                        <span><strong>{urgent_count} urgent reviews</strong> need immediate attention (negative feedback)</span>
+                    </div>
+            """
+        if response_rate < 80:
+            html += f"""
+                    <div class="action-item">
+                        <div class="action-icon">↑</div>
+                        <span>Improve response rate from <strong>{response_rate}%</strong> to industry standard 80%+</span>
+                    </div>
+            """
+        if avg_rating < 4.0:
+            html += f"""
+                    <div class="action-item">
+                        <div class="action-icon">⭐</div>
+                        <span>Focus on service quality to improve rating from <strong>{avg_rating}</strong> to 4.0+</span>
+                    </div>
+            """
+        if urgent_count == 0 and response_rate >= 80 and avg_rating >= 4.0:
+            html += """
+                    <div class="action-item" style="background: #E8EDE7;">
+                        <div class="action-icon" style="background: #5A6B50;">✓</div>
+                        <span>Great job! All metrics are looking healthy. Keep up the excellent work!</span>
+                    </div>
+            """
+        html += "</div>"
+    
+    # Footer
+    html += """
+            </div>
+            
+            <div class="footer">
+                <p>This report was automatically generated by Review Hub.</p>
+                <p>Manage your report settings in the dashboard.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+
+@api_router.get("/reports/settings")
+async def get_report_settings():
+    """Get current report settings"""
+    settings = await db.report_settings.find_one({}, {"_id": 0})
+    if not settings:
+        return {
+            "id": None,
+            "email": NOTIFICATION_EMAIL or "",
+            "frequency": "weekly",
+            "include_competitor_comparison": True,
+            "include_sentiment_summary": True,
+            "include_action_items": True,
+            "enabled": False,
+            "last_sent": None,
+            "message": "Report settings not configured. Update to enable."
+        }
+    return settings
+
+@api_router.put("/reports/settings")
+async def update_report_settings(settings: ReportSettingsUpdate):
+    """Update report settings"""
+    existing = await db.report_settings.find_one({}, {"_id": 0})
+    
+    if existing:
+        update_data = {k: v for k, v in settings.model_dump().items() if v is not None}
+        if update_data:
+            await db.report_settings.update_one(
+                {"id": existing["id"]},
+                {"$set": update_data}
+            )
+        updated = await db.report_settings.find_one({}, {"_id": 0})
+        return updated
+    else:
+        new_settings = ReportSettings(
+            email=settings.email or NOTIFICATION_EMAIL or "",
+            frequency=settings.frequency or "weekly",
+            include_competitor_comparison=settings.include_competitor_comparison if settings.include_competitor_comparison is not None else True,
+            include_sentiment_summary=settings.include_sentiment_summary if settings.include_sentiment_summary is not None else True,
+            include_action_items=settings.include_action_items if settings.include_action_items is not None else True,
+            enabled=settings.enabled if settings.enabled is not None else True
+        )
+        doc = new_settings.model_dump()
+        doc['created_at'] = doc['created_at'].isoformat()
+        if doc.get('last_sent'):
+            doc['last_sent'] = doc['last_sent'].isoformat()
+        await db.report_settings.insert_one(doc)
+        return new_settings
+
+@api_router.post("/reports/send-now")
+async def send_report_now():
+    """Send a report immediately"""
+    settings = await db.report_settings.find_one({}, {"_id": 0})
+    
+    if not settings:
+        raise HTTPException(status_code=400, detail="Report settings not configured")
+    
+    email = settings.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="No email address configured")
+    
+    # Generate report HTML
+    report_html = await generate_report_html(settings)
+    
+    # Send email
+    if not resend.api_key or resend.api_key == 're_123456789':
+        # Demo mode - log but don't send
+        await db.report_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "status": "demo_logged",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Update last_sent
+        await db.report_settings.update_one(
+            {"id": settings["id"]},
+            {"$set": {"last_sent": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        return {
+            "status": "demo_logged",
+            "message": f"Report logged (demo mode). In production, would be sent to {email}",
+            "preview_available": True
+        }
+    
+    try:
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [email],
+            "subject": f"📊 Weekly Performance Report - Review Hub ({datetime.now(timezone.utc).strftime('%b %d, %Y')})",
+            "html": report_html
+        }
+        
+        email_result = await asyncio.to_thread(resend.Emails.send, params)
+        
+        # Log and update last_sent
+        await db.report_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "email": email,
+            "email_id": email_result.get('id'),
+            "status": "sent",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+        await db.report_settings.update_one(
+            {"id": settings["id"]},
+            {"$set": {"last_sent": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        return {"status": "sent", "message": f"Report sent to {email}"}
+    
+    except Exception as e:
+        logger.error(f"Failed to send report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send report: {str(e)}")
+
+@api_router.get("/reports/preview")
+async def preview_report():
+    """Preview the report without sending"""
+    settings = await db.report_settings.find_one({}, {"_id": 0})
+    if not settings:
+        settings = {
+            "include_competitor_comparison": True,
+            "include_sentiment_summary": True,
+            "include_action_items": True
+        }
+    
+    report_html = await generate_report_html(settings)
+    return {"html": report_html}
+
+@api_router.get("/reports/log")
+async def get_report_log():
+    """Get report sending history"""
+    logs = await db.report_log.find({}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return logs
 
 # Include the router in the main app
 app.include_router(api_router)

@@ -3,85 +3,51 @@
 ## Original Problem Statement
 Hotel management review module to receive all reviews from online platforms (Booking.com, Airbnb, Expedia, Trip.com, Google, TripAdvisor) and respond with AI-generated replies with manual edit capability.
 
-## Competitor Analysis (Based on Birdeye, TrustYou, ReviewTrackers)
-- AI-powered sentiment analysis ✅
-- Multi-platform review aggregation ✅
-- Response templates ✅
-- Analytics dashboards ✅
-- Competitor benchmarking ✅
-- Priority queues for urgent reviews ✅
-- Automated scheduled reports ✅
-- Platform API integrations ✅
-
 ## What's Been Implemented (January 2026)
 
-### Platform Integrations (NEW)
-- **Google Business Profile API** - Full integration ready (requires OAuth setup)
-- **Booking.com** - API structure ready (requires Connectivity Partner approval)
-- **TripAdvisor** - API structure ready (requires Content API partner approval)
-- **Airbnb, Expedia, Trip.com** - Integration stubs ready (requires partner credentials)
+### Platform Integrations
+- **Google Business Profile API** - Full 7-step setup guide with OAuth configuration wizard
+- **Booking.com** - 6-step partner program guide with credential wizard
+- **TripAdvisor** - 4-step Content API guide with configuration
+- **Airbnb, Expedia, Trip.com** - Setup guides and credential wizards ready
 - **Manual Import** - CSV upload and form entry for any platform
 - **Two-way sync** - Post replies back to platforms (when connected)
 
-### Backend (FastAPI + MongoDB)
-- Review CRUD API with filtering
-- AI response generation (OpenAI GPT-5.2)
-- Email notifications (Resend)
-- Response templates CRUD
-- AI Sentiment Analysis
-- Analytics Dashboard API
+### Setup Guides & Configuration Wizards (NEW)
+Each platform has:
+- **Numbered step-by-step instructions** (e.g., Google: 7 steps, Booking: 6 steps)
+- **Detailed descriptions** for each step
+- **External links** to platform developer portals
+- **Credential input forms** with platform-specific fields
+- **Save Configuration** button to store credentials securely
+
+### Google Business Profile Setup
+1. Verify Your Business at business.google.com
+2. Create Google Cloud Project
+3. Enable APIs (Business Information, Account Management)
+4. Create OAuth Credentials
+5. Configure OAuth Consent
+6. Get Location ID
+7. Generate Refresh Token
+
+### Booking.com Connectivity Partner Setup
+1. Apply for Partner Program at connect.booking.com
+2. Wait for Approval (2-4 weeks)
+3. Complete Technical Onboarding
+4. Get Machine Account Credentials
+5. Register Your Property
+6. Test in Sandbox
+
+### Core Features
+- AI Response Generation (GPT-5.2)
+- Response Templates (6 default templates)
+- AI Sentiment Analysis with auto-suggestions
+- Analytics Dashboard with priority queue
 - Competitor Benchmarking
-- Scheduled Reports
-- **Platform Integrations API**
-  - Integration status management
-  - Platform credential storage
-  - Review sync from platforms
-  - Reply posting to platforms
-  - Manual CSV import
-  - Requirements documentation
-
-### Frontend (React + Tailwind)
-- Organic & Earthy themed dashboard
-- Stats cards, filters, review list
-- AI Response Assistant with sentiment analysis
-- Email Notifications Settings
-- Response Templates Manager
-- Analytics & Insights Dialog
-- Scheduled Reports Dialog
-- **Platform Integrations Dialog**
-  - Platforms tab with all 6 platforms
-  - Status badges (Connected/Not Connected)
-  - Sync buttons per platform
-  - Expandable requirements details
-  - Setup guide links
-  - Manual Import tab
-  - CSV upload functionality
-  - Manual review entry form
-
-### Platforms Supported
-| Platform | API Status | Requirements |
-|----------|-----------|--------------|
-| Google | Ready | OAuth 2.0 credentials, Location ID |
-| Booking.com | Ready | Connectivity Partner approval |
-| TripAdvisor | Ready | Content API partner approval |
-| Airbnb | Stub | Partner program membership |
-| Expedia | Stub | Partner Central API access |
-| Trip.com | Stub | Partner API credentials |
-| Manual Import | ✅ Working | CSV or form entry |
-
-## Architecture
-```
-Frontend (React) → Backend (FastAPI) → MongoDB
-                         ↓
-              OpenAI GPT-5.2 (Sentiment + Responses)
-                         ↓
-              Resend (Notifications + Reports)
-                         ↓
-              Platform APIs (Google, Booking, etc.)
-```
+- Scheduled Reports (daily/weekly/monthly)
+- Email Notifications for negative reviews
 
 ## Next Tasks
-1. Obtain Google Business Profile OAuth credentials
-2. Apply for Booking.com Connectivity Partner status
-3. Configure production Resend key
-4. Add user authentication
+1. User obtains Google Business Profile OAuth credentials
+2. User applies for Booking.com Connectivity Partner status
+3. Add user authentication for team access

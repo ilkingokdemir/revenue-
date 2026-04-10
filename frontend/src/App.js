@@ -221,11 +221,34 @@ const ReviewCard = ({ review, isSelected, onClick }) => {
 const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, onTemplateApplied }) => {
   const [responseText, setResponseText] = useState("");
   const [tone, setTone] = useState("professional");
+  const [language, setLanguage] = useState("auto");
+  const [detectedLang, setDetectedLang] = useState(null);
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [sentimentData, setSentimentData] = useState(null);
   const [suggestedTemplates, setSuggestedTemplates] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const LANGUAGES = [
+    { code: "auto", name: "Auto-detect" },
+    { code: "en", name: "English" },
+    { code: "fr", name: "French" },
+    { code: "de", name: "German" },
+    { code: "es", name: "Spanish" },
+    { code: "it", name: "Italian" },
+    { code: "pt", name: "Portuguese" },
+    { code: "zh", name: "Chinese" },
+    { code: "ja", name: "Japanese" },
+    { code: "ko", name: "Korean" },
+    { code: "ar", name: "Arabic" },
+    { code: "ru", name: "Russian" },
+    { code: "nl", name: "Dutch" },
+    { code: "th", name: "Thai" },
+    { code: "hi", name: "Hindi" },
+    { code: "tr", name: "Turkish" }
+  ];
 
   useEffect(() => {
     if (review?.response_text) {
@@ -233,10 +256,48 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
     } else {
       setResponseText("");
     }
-    // Reset sentiment when review changes
     setSentimentData(review?.sentiment_analysis || null);
     setSuggestedTemplates([]);
+    setDetectedLang(null);
+    setLanguage("auto");
   }, [review]);
+
+  // Auto-detect language when review changes
+  useEffect(() => {
+    if (review && !review.response_text) {
+      detectLanguage();
+    }
+  }, [review?.id]);
+
+  const detectLanguage = async () => {
+    if (!review) return;
+    setIsDetecting(true);
+    try {
+      const response = await axios.post(`${API}/reviews/${review.id}/detect-language`);
+      setDetectedLang(response.data);
+    } catch (error) {
+      console.error("Language detection error:", error);
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
+  const translateToEnglish = async () => {
+    if (!responseText.trim()) return;
+    setIsTranslating(true);
+    try {
+      const response = await axios.post(`${API}/reviews/translate`, {
+        text: responseText,
+        target_language: "en"
+      });
+      setResponseText(response.data.translated_text);
+      toast.success("Translated to English");
+    } catch (error) {
+      toast.error("Translation failed");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   // Handle template application
   useEffect(() => {
@@ -283,7 +344,8 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
     try {
       const response = await axios.post(`${API}/reviews/generate-ai-response`, {
         review_id: review.id,
-        tone: tone
+        tone: tone,
+        language: language
       });
       
       // Typewriter effect
@@ -381,6 +443,24 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
           <p className="text-stone-700 leading-relaxed pl-6 text-sm" data-testid="review-text">
             {review.review_text}
           </p>
+          {/* Language Detection Badge */}
+          {detectedLang && (
+            <div className="mt-3 pt-3 border-t border-stone-200/60 flex items-center gap-2" data-testid="detected-language">
+              <span className="text-[11px] text-stone-400">Detected language:</span>
+              <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                {detectedLang.name}
+              </span>
+              {detectedLang.confidence && (
+                <span className="text-[10px] text-stone-300">{Math.round(detectedLang.confidence * 100)}% confidence</span>
+              )}
+            </div>
+          )}
+          {isDetecting && (
+            <div className="mt-3 pt-3 border-t border-stone-200/60 flex items-center gap-2">
+              <ArrowsClockwise size={12} className="animate-spin text-stone-300" />
+              <span className="text-[11px] text-stone-400">Detecting language...</span>
+            </div>
+          )}
         </div>
 
         {/* Sentiment Analysis Section */}
@@ -505,9 +585,22 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
             
             {!isResponded && (
               <div className="flex items-center gap-2">
-                <Select value={tone} onValueChange={setTone} data-testid="tone-select">
+                <Select value={language} onValueChange={setLanguage} data-testid="language-select">
                   <SelectTrigger className="w-[130px] bg-white/80 border-emerald-200 text-xs h-8">
-                    <SelectValue placeholder="Select tone" />
+                    <SelectValue placeholder="Language" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LANGUAGES.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.code === "auto" && detectedLang ? `Auto (${detectedLang.name})` : lang.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={tone} onValueChange={setTone} data-testid="tone-select">
+                  <SelectTrigger className="w-[120px] bg-white/80 border-emerald-200 text-xs h-8">
+                    <SelectValue placeholder="Tone" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="professional">Professional</SelectItem>
@@ -564,9 +657,26 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
           </div>
 
           <div className="flex items-center justify-between mt-4">
-            <p className="text-[11px] text-stone-400">
-              {isResponded ? "This review has been responded to." : "Edit the AI response before publishing."}
-            </p>
+            <div className="flex items-center gap-2">
+              {responseText.trim() && !isResponded && (
+                <button
+                  onClick={translateToEnglish}
+                  disabled={isTranslating}
+                  className="bg-white border border-emerald-200 text-emerald-800 px-2.5 py-1 rounded-lg hover:bg-emerald-50 transition-all text-xs font-medium flex items-center gap-1 disabled:opacity-50"
+                  data-testid="translate-to-english-btn"
+                >
+                  {isTranslating ? (
+                    <ArrowsClockwise size={12} className="animate-spin" />
+                  ) : (
+                    <span>EN</span>
+                  )}
+                  {isTranslating ? "Translating..." : "Translate to English"}
+                </button>
+              )}
+              <p className="text-[11px] text-stone-400">
+                {isResponded ? "This review has been responded to." : ""}
+              </p>
+            </div>
             
             {(!isResponded || isEditing) && (
               <div className="flex items-center gap-2">

@@ -94,9 +94,11 @@ class ReviewResponse(BaseModel):
 class AIGenerateRequest(BaseModel):
     review_id: str
     tone: str = "professional"  # professional, friendly, apologetic
+    language: str = "auto"  # auto = detect from review, or specific language code
 
 class AIGenerateResponse(BaseModel):
     generated_text: str
+    detected_language: Optional[str] = None
 
 class NotificationSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -542,9 +544,28 @@ async def respond_to_review(review_id: str, response: ReviewResponse):
     deserialize_review(updated_review)
     return updated_review
 
+SUPPORTED_LANGUAGES = {
+    "auto": "Auto-detect",
+    "en": "English",
+    "fr": "French",
+    "de": "German",
+    "es": "Spanish",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "zh": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "ar": "Arabic",
+    "ru": "Russian",
+    "nl": "Dutch",
+    "th": "Thai",
+    "hi": "Hindi",
+    "tr": "Turkish"
+}
+
 @api_router.post("/reviews/generate-ai-response", response_model=AIGenerateResponse)
 async def generate_ai_response(request: AIGenerateRequest):
-    """Generate AI response for a review using GPT-5.2"""
+    """Generate AI response for a review using GPT-5.2 with multi-language support"""
     review = await db.reviews.find_one({"id": request.review_id}, {"_id": 0})
     if not review:
         raise HTTPException(status_code=404, detail="Review not found")
@@ -561,12 +582,26 @@ async def generate_ai_response(request: AIGenerateRequest):
     
     tone = tone_instructions.get(request.tone, tone_instructions["professional"])
     
+    # Language handling
+    lang = request.language
+    language_instruction = ""
+    if lang == "auto":
+        language_instruction = """First, detect the language of the guest's review.
+Then write your entire response in that SAME language the guest used.
+If the review is in English, respond in English. If in French, respond in French. Etc."""
+    elif lang == "en":
+        language_instruction = "Write your response entirely in English."
+    else:
+        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+        language_instruction = f"Write your entire response in {lang_name}."
+    
     system_message = f"""You are a professional hotel manager responding to guest reviews. 
 Your responses should be {tone}.
 Keep responses concise (2-3 paragraphs max).
 Always thank the guest for their feedback.
 If the review is negative, acknowledge their concerns and offer to make things right.
 If positive, express gratitude and invite them back.
+{language_instruction}
 Sign off as 'The Management Team'."""
 
     prompt = f"""Please write a response to this hotel review:
@@ -576,22 +611,98 @@ Rating: {review['rating']}/5 stars
 Guest: {review['guest_name']}
 Review: {review['review_text']}
 
-Write a {tone} response to this review."""
+Write a {tone} response to this review. {language_instruction}"""
 
     try:
         chat = LlmChat(
             api_key=api_key,
-            session_id=f"review-{request.review_id}",
+            session_id=f"review-{request.review_id}-{lang}",
             system_message=system_message
         ).with_model("openai", "gpt-5.2")
         
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
         
-        return AIGenerateResponse(generated_text=response)
+        return AIGenerateResponse(generated_text=response, detected_language=lang if lang != "auto" else None)
     except Exception as e:
         logger.error(f"AI generation error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
+
+@api_router.post("/reviews/{review_id}/detect-language")
+async def detect_language(review_id: str):
+    """Detect the language of a review using AI"""
+    review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"lang-detect-{review_id}",
+            system_message="You are a language detection assistant. Respond ONLY with a JSON object."
+        ).with_model("openai", "gpt-5.2")
+        
+        prompt = f"""Detect the language of this text and respond ONLY with a JSON object in this exact format:
+{{"code": "en", "name": "English", "confidence": 0.95}}
+
+Use ISO 639-1 codes. Text:
+"{review['review_text']}" """
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        import json as json_module
+        # Parse the response - handle potential markdown wrapping
+        clean = response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        
+        result = json_module.loads(clean)
+        return {
+            "code": result.get("code", "en"),
+            "name": result.get("name", "English"),
+            "confidence": result.get("confidence", 0.9)
+        }
+    except Exception as e:
+        logger.error(f"Language detection error: {str(e)}")
+        return {"code": "en", "name": "English", "confidence": 0.5}
+
+class TranslateRequest(BaseModel):
+    text: str
+    target_language: str = "en"
+
+@api_router.post("/reviews/translate")
+async def translate_text(request: TranslateRequest):
+    """Translate text to a target language"""
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    target_name = SUPPORTED_LANGUAGES.get(request.target_language, "English")
+    
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"translate-{request.target_language}",
+            system_message=f"You are a professional translator. Translate the given text to {target_name}. Return ONLY the translated text, nothing else."
+        ).with_model("openai", "gpt-5.2")
+        
+        user_message = UserMessage(text=f"Translate this to {target_name}:\n\n{request.text}")
+        response = await chat.send_message(user_message)
+        
+        return {"translated_text": response, "target_language": request.target_language, "target_name": target_name}
+    except Exception as e:
+        logger.error(f"Translation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
+
+@api_router.get("/languages")
+async def get_languages():
+    """Get supported languages"""
+    return [{"code": k, "name": v} for k, v in SUPPORTED_LANGUAGES.items()]
 
 @api_router.get("/reviews/stats/summary")
 async def get_review_stats():

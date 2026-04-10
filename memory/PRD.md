@@ -24,6 +24,7 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 - 8 subscribable events: review.created, review.responded, review.approved, review.rejected, response.generated, response.published, rating.low, rating.high
 - Expandable details: secret, delivery count, failure count, last triggered, subscribed events
 - Toggle switch for active/paused state
+- **Test Ping**: Send test webhook to verify endpoint connectivity, shows HTTP status + response time
 - Admin-only creation/deletion, manager can view
 
 ### Multi-Property Support (April 2026)
@@ -31,8 +32,6 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 - 8 property types: hotel, resort, hostel, apartment, villa, boutique, motel, bed & breakfast
 - All reviews scoped by property_id
 - Property selector in dashboard header (auto-shown when >1 property)
-- Default property auto-created, migration for existing data
-- Stats/analytics filtered per property
 
 ### API Documentation
 - Swagger UI: /api/docs
@@ -59,19 +58,14 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 ### White-Label Branding
 - Custom logo, app name, colors, "Powered By" badge
 
-### Code Structure
-- /components/dashboard/ -- Extracted ReviewComponents, config
-- Backend: FastAPI + MongoDB + JWT
-- Frontend: React + Tailwind + Shadcn
-
 ## Integration with MyHotelBox.com
 - All endpoints prefixed with /api/
 - JWT or Bearer token auth for server-to-server
 - property_id scopes all data per hotel
 - Full OpenAPI spec at /api/openapi.json
 - API keys (rhk_ prefix) for external integration
-- Webhooks for real-time event notifications
+- Webhooks for real-time event notifications with test ping
 
 ## Next Tasks
 1. **P0** - Real bi-directional platform sync (currently MOCKED)
-2. **P2** - Continue component extraction from App.js (3800+ lines)
+2. **P2** - Continue component extraction from App.js (4000+ lines)

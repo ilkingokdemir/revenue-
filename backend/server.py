@@ -772,6 +772,79 @@ async def delete_webhook(webhook_id: str, current_user: dict = Depends(require_r
         raise HTTPException(status_code=404, detail="Webhook not found")
     return {"message": "Webhook deleted"}
 
+@api_router.post("/webhooks/{webhook_id}/test")
+async def test_webhook(webhook_id: str, current_user: dict = Depends(require_roles("admin"))):
+    """Send a test ping to a webhook URL"""
+    webhook = await db.webhooks.find_one({"id": webhook_id}, {"_id": 0})
+    if not webhook:
+        raise HTTPException(status_code=404, detail="Webhook not found")
+    
+    test_payload = {
+        "event": "webhook.test",
+        "test": True,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "data": {
+            "review_id": "test-review-001",
+            "platform": "google",
+            "guest_name": "Test Guest",
+            "rating": 5,
+            "review_text": "This is a test webhook delivery from Review Hub.",
+            "property_id": "default"
+        }
+    }
+    
+    import time
+    start = time.monotonic()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client_http:
+            resp = await client_http.post(
+                webhook["url"],
+                json=test_payload,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Webhook-Secret": webhook.get("secret", ""),
+                    "X-Webhook-Event": "webhook.test",
+                    "User-Agent": "ReviewHub-Webhook/1.0"
+                }
+            )
+        elapsed_ms = round((time.monotonic() - start) * 1000)
+        success = 200 <= resp.status_code < 300
+        
+        await db.webhooks.update_one({"id": webhook_id}, {"$set": {
+            "last_triggered": datetime.now(timezone.utc).isoformat(),
+            "last_test_result": {
+                "success": success,
+                "status_code": resp.status_code,
+                "response_time_ms": elapsed_ms,
+                "tested_at": datetime.now(timezone.utc).isoformat()
+            }
+        }, "$inc": {"delivery_count": 1, **({} if success else {"failure_count": 1})}})
+        
+        return {
+            "success": success,
+            "status_code": resp.status_code,
+            "response_time_ms": elapsed_ms,
+            "message": "Webhook delivered successfully" if success else f"Webhook returned {resp.status_code}"
+        }
+    except httpx.TimeoutException:
+        elapsed_ms = round((time.monotonic() - start) * 1000)
+        await db.webhooks.update_one({"id": webhook_id}, {"$set": {
+            "last_test_result": {"success": False, "error": "timeout", "tested_at": datetime.now(timezone.utc).isoformat()}
+        }, "$inc": {"failure_count": 1}})
+        return {"success": False, "status_code": None, "response_time_ms": elapsed_ms, "message": "Connection timed out (10s)"}
+    except httpx.ConnectError:
+        elapsed_ms = round((time.monotonic() - start) * 1000)
+        await db.webhooks.update_one({"id": webhook_id}, {"$set": {
+            "last_test_result": {"success": False, "error": "connection_refused", "tested_at": datetime.now(timezone.utc).isoformat()}
+        }, "$inc": {"failure_count": 1}})
+        return {"success": False, "status_code": None, "response_time_ms": elapsed_ms, "message": "Connection refused — check the URL"}
+    except Exception as e:
+        elapsed_ms = round((time.monotonic() - start) * 1000)
+        await db.webhooks.update_one({"id": webhook_id}, {"$set": {
+            "last_test_result": {"success": False, "error": str(e), "tested_at": datetime.now(timezone.utc).isoformat()}
+        }, "$inc": {"failure_count": 1}})
+        return {"success": False, "status_code": None, "response_time_ms": elapsed_ms, "message": f"Error: {str(e)[:100]}"}
+
 @api_router.get("/webhooks/events")
 async def get_webhook_events():
     """Get available webhook events"""

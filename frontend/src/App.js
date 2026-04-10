@@ -3535,6 +3535,8 @@ const WebhooksPanel = ({ user }) => {
   const [newWebhook, setNewWebhook] = useState({ url: "", label: "", events: [] });
   const [expandedId, setExpandedId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
+  const [testingId, setTestingId] = useState(null);
+  const [testResults, setTestResults] = useState({});
 
   const fetchWebhooks = useCallback(async () => {
     setIsLoading(true);
@@ -3599,6 +3601,26 @@ const WebhooksPanel = ({ user }) => {
     setCopiedId(id);
     toast.success("Secret copied");
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleTestWebhook = async (whId) => {
+    setTestingId(whId);
+    setTestResults(prev => ({ ...prev, [whId]: null }));
+    try {
+      const { data } = await axios.post(`${API}/webhooks/${whId}/test`);
+      setTestResults(prev => ({ ...prev, [whId]: data }));
+      if (data.success) {
+        toast.success(`Webhook test passed (${data.response_time_ms}ms)`);
+      } else {
+        toast.error(data.message);
+      }
+      fetchWebhooks();
+    } catch (e) {
+      setTestResults(prev => ({ ...prev, [whId]: { success: false, message: "Request failed" } }));
+      toast.error("Failed to test webhook");
+    } finally {
+      setTestingId(null);
+    }
   };
 
   return (
@@ -3751,6 +3773,47 @@ const WebhooksPanel = ({ user }) => {
                             <span key={ev} className="text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{ev}</span>
                           ))}
                         </div>
+                      </div>
+                      {/* Test Webhook Button & Result */}
+                      <div className="mt-4 pt-3 border-t border-stone-100">
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleTestWebhook(wh.id)}
+                            disabled={testingId === wh.id}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 text-white text-xs font-medium rounded-lg hover:bg-stone-900 transition-colors disabled:opacity-50"
+                            data-testid={`test-webhook-${wh.id}`}
+                          >
+                            {testingId === wh.id ? (
+                              <><ArrowsClockwise size={12} className="animate-spin" /> Sending...</>
+                            ) : (
+                              <><Lightning size={12} /> Send Test Ping</>
+                            )}
+                          </button>
+                          <span className="text-[10px] text-stone-400">Sends a sample review.test event to your endpoint</span>
+                        </div>
+                        {testResults[wh.id] && (
+                          <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className={`mt-2 p-3 rounded-lg text-xs flex items-center gap-2 ${testResults[wh.id].success ? "bg-emerald-50 border border-emerald-200" : "bg-red-50 border border-red-200"}`} data-testid={`test-result-${wh.id}`}>
+                            {testResults[wh.id].success ? (
+                              <CheckCircle size={14} className="text-emerald-600 flex-shrink-0" />
+                            ) : (
+                              <WarningCircle size={14} className="text-red-500 flex-shrink-0" />
+                            )}
+                            <div>
+                              <span className={`font-medium ${testResults[wh.id].success ? "text-emerald-800" : "text-red-800"}`}>
+                                {testResults[wh.id].success ? "Delivered" : "Failed"}
+                              </span>
+                              {testResults[wh.id].status_code && (
+                                <span className="text-stone-500 ml-2">HTTP {testResults[wh.id].status_code}</span>
+                              )}
+                              {testResults[wh.id].response_time_ms && (
+                                <span className="text-stone-500 ml-2">{testResults[wh.id].response_time_ms}ms</span>
+                              )}
+                              {!testResults[wh.id].success && testResults[wh.id].message && (
+                                <span className="text-red-600 ml-2">{testResults[wh.id].message}</span>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
                     </div>
                   </motion.div>

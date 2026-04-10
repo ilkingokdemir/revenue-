@@ -6,30 +6,26 @@ Hotel management review module to receive all reviews from online platforms (Boo
 ## What's Been Implemented (January-April 2026)
 
 ### Platform Integrations (14 Total)
-- **Google Business Profile API** - Full 7-step setup guide with OAuth configuration wizard
-- **Booking.com** - 6-step partner program guide with credential wizard
-- **TripAdvisor** - 4-step Content API guide with configuration
-- **Airbnb** - Setup guide and credential wizard
-- **Expedia** - Setup guide and credential wizard
-- **Trip.com** - 3-step partner API setup
-- **Agoda** - 4-step partner program setup (Booking Holdings)
-- **Hotels.com** - 4-step setup via Expedia Partner Central
-- **Yelp** - 3-step Fusion API setup
-- **Facebook Reviews** - 5-step Meta Graph API setup
-- **MakeMyTrip** - 3-step partner extranet setup
-- **HRS** - 4-step partner API setup (Europe/business travel)
-- **Despegar** - 3-step partner setup (Latin America)
-- **Hostelworld** - 3-step API setup (hostels/budget)
-- **Manual Import** - CSV upload and form entry for any platform
+- Google Business Profile, Booking.com, TripAdvisor, Airbnb, Expedia, Trip.com
+- Agoda, Hotels.com, Yelp, Facebook Reviews, MakeMyTrip, HRS, Despegar, Hostelworld
+- Manual Import (CSV + form entry)
+- Each platform has setup guides, config wizards, and credential forms
 
-### White-Label Branding (NEW - April 2026)
-- Custom logo upload (stored as base64 in MongoDB, max 2MB)
-- Customizable app name and subtitle
-- 6 color theme presets (Forest, Ocean, Midnight, Plum, Charcoal, Navy)
-- Custom primary & accent color pickers
-- "Powered By" footer badge (toggle + custom text)
-- Live preview banner showing real-time changes
-- All settings persisted to MongoDB
+### White-Label Branding
+- Custom logo upload (base64 in MongoDB, max 2MB)
+- App name, subtitle, primary/accent colors, 6 presets
+- "Powered By" footer badge (toggle + text)
+- Live preview, persisted to MongoDB
+
+### UI/UX Redesign (April 2026)
+- DM Sans font (Google Fonts CDN)
+- Organic & Earthy hospitality theme
+- Rounded-xl cards with subtle shadows
+- Slim header nav with lightweight nav links
+- Emerald-tinted AI Response panel
+- Pill-shaped platform badges
+- Custom scrollbar, review item hover/active states
+- Polished empty states
 
 ### Core Features
 - AI Response Generation (GPT-5.2 via Emergent Key)
@@ -39,7 +35,6 @@ Hotel management review module to receive all reviews from online platforms (Boo
 - Competitor Benchmarking
 - Scheduled Reports (daily/weekly/monthly)
 - Email Notifications for negative reviews (Resend)
-- Two-way sync framework (mocked - pending real API credentials)
 
 ## Architecture
 - Frontend: React + Tailwind CSS + Shadcn UI

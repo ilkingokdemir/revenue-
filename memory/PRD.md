@@ -3,51 +3,42 @@
 ## Original Problem Statement
 Hotel management review module to receive all reviews from online platforms (Booking.com, Airbnb, Expedia, Trip.com, Google, TripAdvisor) and respond with AI-generated replies with manual edit capability.
 
-## What's Been Implemented (January 2026)
+## What's Been Implemented (January-April 2026)
 
-### Platform Integrations
+### Platform Integrations (14 Total)
 - **Google Business Profile API** - Full 7-step setup guide with OAuth configuration wizard
 - **Booking.com** - 6-step partner program guide with credential wizard
 - **TripAdvisor** - 4-step Content API guide with configuration
-- **Airbnb, Expedia, Trip.com** - Setup guides and credential wizards ready
+- **Airbnb** - Setup guide and credential wizard
+- **Expedia** - Setup guide and credential wizard
+- **Trip.com** - 3-step partner API setup
+- **Agoda** - 4-step partner program setup (Booking Holdings)
+- **Hotels.com** - 4-step setup via Expedia Partner Central
+- **Yelp** - 3-step Fusion API setup
+- **Facebook Reviews** - 5-step Meta Graph API setup
+- **MakeMyTrip** - 3-step partner extranet setup
+- **HRS** - 4-step partner API setup (Europe/business travel)
+- **Despegar** - 3-step partner setup (Latin America)
+- **Hostelworld** - 3-step API setup (hostels/budget)
 - **Manual Import** - CSV upload and form entry for any platform
-- **Two-way sync** - Post replies back to platforms (when connected)
-
-### Setup Guides & Configuration Wizards (NEW)
-Each platform has:
-- **Numbered step-by-step instructions** (e.g., Google: 7 steps, Booking: 6 steps)
-- **Detailed descriptions** for each step
-- **External links** to platform developer portals
-- **Credential input forms** with platform-specific fields
-- **Save Configuration** button to store credentials securely
-
-### Google Business Profile Setup
-1. Verify Your Business at business.google.com
-2. Create Google Cloud Project
-3. Enable APIs (Business Information, Account Management)
-4. Create OAuth Credentials
-5. Configure OAuth Consent
-6. Get Location ID
-7. Generate Refresh Token
-
-### Booking.com Connectivity Partner Setup
-1. Apply for Partner Program at connect.booking.com
-2. Wait for Approval (2-4 weeks)
-3. Complete Technical Onboarding
-4. Get Machine Account Credentials
-5. Register Your Property
-6. Test in Sandbox
 
 ### Core Features
-- AI Response Generation (GPT-5.2)
+- AI Response Generation (GPT-5.2 via Emergent Key)
 - Response Templates (6 default templates)
 - AI Sentiment Analysis with auto-suggestions
 - Analytics Dashboard with priority queue
 - Competitor Benchmarking
 - Scheduled Reports (daily/weekly/monthly)
-- Email Notifications for negative reviews
+- Email Notifications for negative reviews (Resend)
+- Two-way sync framework (mocked - pending real API credentials)
 
-## Next Tasks
-1. User obtains Google Business Profile OAuth credentials
-2. User applies for Booking.com Connectivity Partner status
-3. Add user authentication for team access
+## Architecture
+- Frontend: React + Tailwind CSS + Shadcn UI
+- Backend: FastAPI + MongoDB
+- AI: OpenAI GPT-5.2 (Emergent LLM Key)
+- Email: Resend (Emergent Key)
+
+## Next Tasks (Prioritized)
+1. **P0** - Real bi-directional sync (requires platform API credentials/partner approvals)
+2. **P1** - Authentication system for team access
+3. **P2** - Refactor App.js (2800+ lines) into modular components

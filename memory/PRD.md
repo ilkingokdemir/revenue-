@@ -46,7 +46,12 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 ### Review Hub
 - 14-platform integration, AI responses, approval workflow, analytics, competitor benchmarking
 
-### Guest Experience (NEW — Competitive with Mews, Cloudbeds, Duve, HiJiffy)
+### Connections & Integrations
+- **Platform Setup Wizard** — Self-service step-by-step guides for Google Business, Booking.com, TripAdvisor, WhatsApp, Telegram with credential management, test connection, auto-sync to channel settings
+- **Digital Keys / Smart Locks** — 6 lock providers (TTLock, Nuki, August/Yale, Salto KS, ASSA ABLOY, Generic), digital key generation per booking with 6-digit access codes, public guest key endpoint, revoke support
+- **130+ Language AI Chat** — AI Concierge auto-detects guest language and responds in same language, AI messaging replies also multilingual
+
+### Guest Experience (Competitive with Mews, Cloudbeds, Duve, HiJiffy)
 - **Housekeeping Management** — Room status board (Clean/Dirty/Inspected/In Progress/Out of Order), task assignment, maintenance requests, seeding
 - **Guest Profiles / CRM** — Unified guest history synced from bookings, VIP toggle, loyalty tiers, search/sort, detailed view with booking/review/conversation history
 - **Campaign Manager** — Bulk messaging (Email/WhatsApp/SMS), guest segmentation filters (VIP, loyalty tier, stays, spend, tags), preview recipients, send tracking
@@ -94,7 +99,6 @@ backend/
 ```
 
 ## Backlog
-- P1: Real bi-directional outbound sync for review platforms (needs platform API credentials)
-- P2: Production WhatsApp/Telegram integration (needs user credentials)
-- P3: Real-time availability calendar integration
+- P1: Dynamic Pricing / Revenue Management (AI-driven rate optimization)
+- P2: Drag-and-drop reservation calendar (visual booking management)
 - Note: Channel Manager already exists on myhotelbox.com — NOT building

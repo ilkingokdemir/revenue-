@@ -176,4 +176,152 @@ def create_dashboard_router(db, require_roles):
             }
         }
 
+    # --- Action Notifications (Don't Forget!) ---
+
+    @router.get("/dashboard/notifications/{property_id}")
+    async def dashboard_notifications(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """All pending actions: reviews awaiting reply, messages awaiting answer, etc."""
+        prop_filter = {"property_id": property_id} if property_id != "all" else {}
+        notifications = []
+
+        # 1. Reviews waiting for reply (no response_text)
+        pending_reviews = await db.reviews.find(
+            {**prop_filter, "$or": [{"response_text": ""}, {"response_text": {"$exists": False}}], "status": {"$ne": "archived"}},
+            {"_id": 0, "id": 1, "guest_name": 1, "rating": 1, "platform": 1, "review_text": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(20)
+        for r in pending_reviews:
+            notifications.append({
+                "type": "review_reply",
+                "priority": "high" if r.get("rating", 5) <= 2 else ("medium" if r.get("rating", 5) <= 3 else "low"),
+                "title": f"Reply to {r.get('guest_name', 'Guest')}'s review",
+                "subtitle": f"{r.get('rating', 0)}/5 on {r.get('platform', 'Direct')} — \"{(r.get('review_text', '') or '')[:80]}...\"",
+                "action": "reviews",
+                "ref_id": r.get("id", ""),
+                "created_at": r.get("created_at", ""),
+                "icon": "star",
+            })
+
+        # 2. Reviews pending approval
+        pending_approvals = await db.reviews.find(
+            {**prop_filter, "status": "pending"},
+            {"_id": 0, "id": 1, "guest_name": 1, "rating": 1, "platform": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(10)
+        for r in pending_approvals:
+            notifications.append({
+                "type": "review_approval",
+                "priority": "medium",
+                "title": f"Approve {r.get('guest_name', 'Guest')}'s review response",
+                "subtitle": f"{r.get('rating', 0)}/5 on {r.get('platform', '')}",
+                "action": "approvals",
+                "ref_id": r.get("id", ""),
+                "created_at": r.get("created_at", ""),
+                "icon": "check",
+            })
+
+        # 3. Messages waiting for staff reply (guest sent last message)
+        open_convs = await db.conversations.find(
+            {**prop_filter, "status": {"$in": ["new", "in_progress"]}},
+            {"_id": 0, "id": 1, "guest_name": 1, "channel": 1, "last_message_preview": 1, "last_message_at": 1, "priority": 1, "unread_count": 1}
+        ).sort("last_message_at", -1).to_list(20)
+        for c in open_convs:
+            # Check if last message was from guest (needs reply)
+            last_msg = await db.messages.find_one(
+                {"conversation_id": c["id"]},
+                {"_id": 0, "sender_type": 1},
+                sort=[("created_at", -1)]
+            )
+            if last_msg and last_msg.get("sender_type") == "guest":
+                prio = c.get("priority", "normal")
+                notifications.append({
+                    "type": "message_reply",
+                    "priority": "high" if prio == "high" else ("medium" if prio == "medium" else "low"),
+                    "title": f"Reply to {c.get('guest_name', 'Guest')}",
+                    "subtitle": f"via {c.get('channel', 'email')} — \"{(c.get('last_message_preview', '') or '')[:80]}\"",
+                    "action": "messaging",
+                    "ref_id": c.get("id", ""),
+                    "created_at": c.get("last_message_at", ""),
+                    "icon": "chat",
+                    "unread": c.get("unread_count", 0),
+                })
+
+        # 4. Low stock alerts
+        low_stock = await db.stock_products.find(
+            {**prop_filter, "is_active": True, "par_level": {"$gt": 0}},
+            {"_id": 0, "id": 1, "name": 1, "current_stock": 1, "par_level": 1, "reorder_level": 1, "unit": 1}
+        ).to_list(500)
+        for p in low_stock:
+            if p.get("current_stock", 0) <= p.get("reorder_level", 0) and p.get("reorder_level", 0) > 0:
+                notifications.append({
+                    "type": "low_stock",
+                    "priority": "medium",
+                    "title": f"Low stock: {p['name']}",
+                    "subtitle": f"{p['current_stock']} {p.get('unit', '')} remaining (reorder at {p['reorder_level']})",
+                    "action": "stock-management",
+                    "ref_id": p.get("id", ""),
+                    "icon": "package",
+                })
+
+        # 5. Overdue invoices
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        overdue_invoices = await db.invoices.find(
+            {**prop_filter, "status": {"$in": ["draft", "sent"]}, "due_date": {"$lt": today, "$ne": ""}},
+            {"_id": 0, "id": 1, "invoice_number": 1, "counterparty": 1, "total": 1, "due_date": 1, "invoice_type": 1}
+        ).to_list(20)
+        for inv in overdue_invoices:
+            notifications.append({
+                "type": "overdue_invoice",
+                "priority": "high",
+                "title": f"Overdue: {inv.get('invoice_number', '')} — {inv.get('counterparty', '')}",
+                "subtitle": f"£{inv.get('total', 0)} due {inv.get('due_date', '')} ({inv.get('invoice_type', '')})",
+                "action": "accounting",
+                "ref_id": inv.get("id", ""),
+                "icon": "invoice",
+            })
+
+        # 6. Stock variances flagged
+        flagged_variances = await db.stock_variances.count_documents({**prop_filter, "status": "flagged"})
+        if flagged_variances > 0:
+            notifications.append({
+                "type": "stock_variance",
+                "priority": "high",
+                "title": f"{flagged_variances} stock variances flagged",
+                "subtitle": "Possible theft or unrecorded waste — review immediately",
+                "action": "stock-management",
+                "ref_id": "",
+                "icon": "warning",
+            })
+
+        # 7. Automation failures today
+        auto_failed = await db.automation_logs.count_documents({
+            **prop_filter, "status": "failed",
+            "created_at": {"$gte": today}
+        })
+        if auto_failed > 0:
+            notifications.append({
+                "type": "automation_failed",
+                "priority": "medium",
+                "title": f"{auto_failed} automation messages failed today",
+                "subtitle": "Check automation logs for details",
+                "action": "automation",
+                "ref_id": "",
+                "icon": "lightning",
+            })
+
+        # Sort: high → medium → low, then by date
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        notifications.sort(key=lambda n: (priority_order.get(n["priority"], 3), n.get("created_at", "") or ""))
+
+        # Counts
+        high_count = sum(1 for n in notifications if n["priority"] == "high")
+        medium_count = sum(1 for n in notifications if n["priority"] == "medium")
+        low_count = sum(1 for n in notifications if n["priority"] == "low")
+
+        return {
+            "notifications": notifications,
+            "total": len(notifications),
+            "high": high_count,
+            "medium": medium_count,
+            "low": low_count,
+        }
+
     return router

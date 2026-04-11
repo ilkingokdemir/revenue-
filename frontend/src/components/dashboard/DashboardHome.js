@@ -6,7 +6,7 @@ import {
   WhatsappLogo, TelegramLogo, DeviceMobile, Globe, ChatCircleDots,
   WarningCircle, ArrowUp, ArrowDown, Clock, SignIn, SignOut,
   PaperPlaneTilt, Robot, Gauge, Smiley, SmileySad, SmileyMeh,
-  TrendUp, TrendDown, CheckCircle,
+  TrendUp, TrendDown, CheckCircle, Bell, Package, Receipt,
 } from "@phosphor-icons/react";
 import { Progress } from "@/components/ui/progress";
 
@@ -43,18 +43,21 @@ function StatCard({ icon: Icon, iconColor, iconBg, label, value, sub, onClick, t
 export function DashboardHome({ properties, activePropertyId: propActivePropertyId, onNavigate }) {
   const [data, setData] = useState(null);
   const [gss, setGss] = useState(null);
+  const [notifications, setNotifications] = useState(null);
   const [loading, setLoading] = useState(true);
   const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashRes, gssRes] = await Promise.all([
+      const [dashRes, gssRes, notifRes] = await Promise.all([
         axios.get(`${API}/dashboard/overview/${propertyId}`),
         axios.get(`${API}/gss/${propertyId}?days=30`).catch(() => ({ data: null })),
+        axios.get(`${API}/dashboard/notifications/${propertyId}`).catch(() => ({ data: null })),
       ]);
       setData(dashRes.data);
       setGss(gssRes.data);
+      setNotifications(notifRes.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [propertyId]);
@@ -119,6 +122,60 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
           </button>
         ))}
       </div>
+
+      {/* Action Notifications — Don't Forget! */}
+      {notifications && notifications.total > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4 mb-6" data-testid="notifications-panel">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
+              <Bell size={15} className="text-red-500" weight="fill" />
+              Action Required
+              <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">{notifications.total}</span>
+            </h3>
+            <div className="flex items-center gap-2 text-[10px]">
+              {notifications.high > 0 && <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-semibold">{notifications.high} urgent</span>}
+              {notifications.medium > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">{notifications.medium} medium</span>}
+              {notifications.low > 0 && <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-600 font-semibold">{notifications.low} low</span>}
+            </div>
+          </div>
+          <div className="space-y-1.5 max-h-72 overflow-y-auto">
+            {notifications.notifications.map((n, i) => {
+              const priorityStyles = {
+                high: "border-l-red-500 bg-red-50/50",
+                medium: "border-l-amber-400 bg-amber-50/30",
+                low: "border-l-blue-300 bg-blue-50/20",
+              };
+              const iconMap = {
+                star: Star, chat: ChatText, check: CheckCircle,
+                package: Package, invoice: Receipt, warning: WarningCircle, lightning: Lightning,
+              };
+              const NIcon = iconMap[n.icon] || Bell;
+              const iconColors = {
+                high: "text-red-500 bg-red-100",
+                medium: "text-amber-500 bg-amber-100",
+                low: "text-blue-500 bg-blue-100",
+              };
+              return (
+                <button key={i} onClick={() => onNavigate?.(n.action)}
+                  className={`w-full text-left flex items-center gap-3 p-2.5 rounded-lg border-l-[3px] transition-all hover:shadow-sm ${priorityStyles[n.priority] || ""}`}
+                  data-testid={`notification-${n.type}-${i}`}>
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${iconColors[n.priority]}`}>
+                    <NIcon size={14} weight="fill" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-stone-800 truncate">{n.title}</div>
+                    <div className="text-[10px] text-stone-400 truncate">{n.subtitle}</div>
+                  </div>
+                  {n.unread > 0 && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold flex-shrink-0">{n.unread}</span>
+                  )}
+                  <CaretRight size={12} className="text-stone-300 flex-shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Guest Satisfaction Score */}
       {gss && gss.gss > 0 && (

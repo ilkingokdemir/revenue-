@@ -1005,3 +1005,81 @@ class SpaceBooking(BaseModel):
     notes: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+
+# ==================== GUEST MESSAGING HUB MODELS ====================
+
+MESSAGING_CHANNELS = ["whatsapp", "email", "sms", "internal", "booking.com", "airbnb", "expedia", "website_chat"]
+CONVERSATION_STATUSES = ["new", "in_progress", "waiting", "resolved"]
+CONVERSATION_PRIORITIES = ["low", "medium", "high", "urgent"]
+
+class Conversation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    guest_name: str
+    guest_email: str = ""
+    guest_phone: str = ""
+    channel: str = "internal"
+    status: str = "new"
+    priority: str = "medium"
+    sentiment: str = ""
+    assigned_to: str = ""
+    assigned_name: str = ""
+    tags: list = Field(default_factory=list)
+    booking_ref: str = ""
+    guest_booking_info: dict = Field(default_factory=dict)
+    last_message_preview: str = ""
+    last_message_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    unread_count: int = 1
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class Message(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    conversation_id: str
+    sender_type: str = "guest"  # guest, staff, ai, system
+    sender_name: str = ""
+    content: str
+    channel: str = "internal"
+    is_ai_suggested: bool = False
+    read: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class QuickReply(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str = "global"
+    name: str
+    content: str
+    category: str = "general"
+    shortcut: str = ""
+    usage_count: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ChannelSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    property_id: str
+    whatsapp_enabled: bool = False
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_whatsapp_number: str = ""
+    sms_enabled: bool = False
+    email_enabled: bool = True
+    auto_reply_enabled: bool = False
+    auto_reply_message: str = "Thank you for reaching out! Our team will respond shortly."
+    welcome_message: str = "Welcome! How can we help you today?"
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+QUICK_REPLY_TEMPLATES = [
+    {"name": "Welcome", "content": "Welcome to our hotel! How can I assist you today?", "category": "greeting", "shortcut": "/welcome"},
+    {"name": "Check-in Time", "content": "Check-in is available from 15:00 and check-out is by 11:00. Early check-in may be available upon request.", "category": "info", "shortcut": "/checkin"},
+    {"name": "WiFi Info", "content": "Our complimentary WiFi network is 'Hotel_Guest'. No password is needed — just accept the terms.", "category": "info", "shortcut": "/wifi"},
+    {"name": "Room Service", "content": "Room service is available 24/7. You can find the menu in your room or request it digitally through our guest portal.", "category": "service", "shortcut": "/roomservice"},
+    {"name": "Parking", "content": "We offer on-site parking at £15/day. Please let us know your vehicle registration and we'll reserve a spot.", "category": "info", "shortcut": "/parking"},
+    {"name": "Late Checkout", "content": "Late checkout is subject to availability. We can offer checkout until 14:00 for an additional £30. Shall I arrange this?", "category": "service", "shortcut": "/latecheckout"},
+    {"name": "Restaurant Hours", "content": "Our restaurant is open for breakfast (07:00-10:30), lunch (12:00-14:30), and dinner (18:00-22:00).", "category": "info", "shortcut": "/restaurant"},
+    {"name": "Thank You", "content": "Thank you for choosing to stay with us! We hope you enjoyed your visit and look forward to welcoming you again.", "category": "farewell", "shortcut": "/thanks"},
+    {"name": "Transfer Request", "content": "I'll connect you with the right team member who can help you with this. One moment please.", "category": "service", "shortcut": "/transfer"},
+    {"name": "Complaint Acknowledgement", "content": "I'm truly sorry to hear about this experience. Your feedback is important and I'm escalating this to our manager right away.", "category": "complaint", "shortcut": "/sorry"},
+]
+

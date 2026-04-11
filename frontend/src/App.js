@@ -22,6 +22,9 @@ import { TemplateCustomizer } from "./components/dashboard/TemplateCustomizer";
 import { PromoCodesPanel } from "./components/dashboard/PromoCodesPanel";
 import { AddOnsPanel } from "./components/dashboard/AddOnsPanel";
 import { PoliciesPanel } from "./components/dashboard/PoliciesPanel";
+import { MessagingHub } from "./components/dashboard/MessagingHub";
+import { SpaceBookingsPanel } from "./components/dashboard/SpaceBookingsPanel";
+import { ConciergeAnalyticsPanel } from "./components/dashboard/ConciergeAnalyticsPanel";
 import {
   Star,
   CheckCircle,
@@ -86,6 +89,10 @@ import {
   Layout,
   Package,
   Scroll,
+  WhatsappLogo,
+  Robot,
+  Envelope,
+  Door,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2441,11 +2448,19 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Booking Engine",
       items: [
         { id: "booking", icon: Bed, name: "Rooms & Bookings", testId: "booking-engine-btn" },
+        { id: "space-bookings", icon: Door, name: "Space Bookings", testId: "space-bookings-btn" },
         { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
         { id: "customize-template", icon: PaintBrush, name: "Customize Template", testId: "customize-template-btn" },
         { id: "promo-codes", icon: Tag, name: "Promo Codes", testId: "promo-codes-btn" },
         { id: "add-ons", icon: Package, name: "Add-on Services", testId: "add-ons-btn" },
         { id: "policies", icon: Scroll, name: "Policies & Facilities", testId: "policies-btn" },
+      ]
+    },
+    {
+      label: "Guest Messaging",
+      items: [
+        { id: "messaging", icon: Envelope, name: "Unified Inbox", testId: "messaging-btn" },
+        { id: "concierge-analytics", icon: Robot, name: "AI Concierge", testId: "concierge-analytics-btn" },
       ]
     },
     {
@@ -2523,6 +2538,7 @@ const Dashboard = ({ user, onLogout }) => {
                 <span className={`text-[10px] uppercase tracking-[0.15em] font-bold ${
                   section.label === "Review Hub" ? "text-emerald-500" :
                   section.label === "Booking Engine" ? "text-blue-400" :
+                  section.label === "Guest Messaging" ? "text-purple-400" :
                   "text-stone-500"
                 }`}>{section.label}</span>
               </div>
@@ -2742,6 +2758,21 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Policies & Facilities View */}
         {activeView === "policies" && (
           <PoliciesPanel properties={properties} />
+        )}
+
+        {/* Guest Messaging Hub */}
+        {activeView === "messaging" && (
+          <MessagingHub properties={properties} user={user} />
+        )}
+
+        {/* Space Bookings Admin */}
+        {activeView === "space-bookings" && (
+          <SpaceBookingsPanel properties={properties} />
+        )}
+
+        {/* AI Concierge Analytics */}
+        {activeView === "concierge-analytics" && (
+          <ConciergeAnalyticsPanel properties={properties} />
         )}
       </main>
 

@@ -60,7 +60,7 @@ SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', '')
 
 # Platform API configurations
-GOOGLE_BUSINESS_CLIENT_ID = os.environ.get('GOOGLE_BUSINESS_CLIENT_ID', '')
+GOOGLE_BUSINESS_CLIENT_ID = os.environ.get(' ', '')
 GOOGLE_BUSINESS_CLIENT_SECRET = os.environ.get('GOOGLE_BUSINESS_CLIENT_SECRET', '')
 GOOGLE_BUSINESS_REFRESH_TOKEN = os.environ.get('GOOGLE_BUSINESS_REFRESH_TOKEN', '')
 BOOKING_API_USERNAME = os.environ.get('BOOKING_API_USERNAME', '')
@@ -4267,6 +4267,347 @@ Answer naturally, recommending bookings when appropriate. Keep responses under 1
     await db.concierge_chats.insert_one({"session_id": session_id, "property_id": property_id, "role": "assistant", "content": reply, "created_at": datetime.now(timezone.utc).isoformat()})
 
     return {"reply": reply, "session_id": session_id}
+
+
+# ==================== GUEST MESSAGING HUB ====================
+
+@api_router.get("/messaging/conversations/{property_id}")
+async def list_conversations(
+    property_id: str, status: str = "", channel: str = "", assigned_to: str = "",
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    query = {"property_id": property_id}
+    if status: query["status"] = status
+    if channel: query["channel"] = channel
+    if assigned_to: query["assigned_to"] = assigned_to
+    docs = await db.conversations.find(query, {"_id": 0}).sort("last_message_at", -1).to_list(200)
+    return docs
+
+@api_router.get("/messaging/conversations/{property_id}/stats")
+async def conversation_stats(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    total = await db.conversations.count_documents({"property_id": property_id})
+    new_count = await db.conversations.count_documents({"property_id": property_id, "status": "new"})
+    in_progress = await db.conversations.count_documents({"property_id": property_id, "status": "in_progress"})
+    waiting = await db.conversations.count_documents({"property_id": property_id, "status": "waiting"})
+    resolved = await db.conversations.count_documents({"property_id": property_id, "status": "resolved"})
+    # Channel breakdown
+    pipeline = [
+        {"$match": {"property_id": property_id}},
+        {"$group": {"_id": "$channel", "count": {"$sum": 1}}}
+    ]
+    channel_counts = {}
+    async for doc in db.conversations.aggregate(pipeline):
+        channel_counts[doc["_id"]] = doc["count"]
+    # Unread
+    unread = await db.conversations.count_documents({"property_id": property_id, "unread_count": {"$gt": 0}})
+    return {
+        "total": total, "new": new_count, "in_progress": in_progress,
+        "waiting": waiting, "resolved": resolved, "unread": unread,
+        "by_channel": channel_counts
+    }
+
+@api_router.post("/messaging/conversations")
+async def create_conversation(
+    data: Dict,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    from models import Conversation
+    conv = Conversation(**data)
+    doc = conv.model_dump()
+    await db.conversations.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/messaging/conversations/{conv_id}")
+async def update_conversation(
+    conv_id: str, updates: Dict,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    updates.pop("_id", None)
+    updates.pop("id", None)
+    await db.conversations.update_one({"id": conv_id}, {"$set": updates})
+    doc = await db.conversations.find_one({"id": conv_id}, {"_id": 0})
+    return doc
+
+@api_router.post("/messaging/conversations/{conv_id}/assign")
+async def assign_conversation(
+    conv_id: str, user_id: str, user_name: str = "",
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    await db.conversations.update_one({"id": conv_id}, {"$set": {
+        "assigned_to": user_id, "assigned_name": user_name, "status": "in_progress"
+    }})
+    return {"status": "assigned"}
+
+@api_router.post("/messaging/conversations/{conv_id}/resolve")
+async def resolve_conversation(
+    conv_id: str,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    await db.conversations.update_one({"id": conv_id}, {"$set": {"status": "resolved"}})
+    return {"status": "resolved"}
+
+@api_router.get("/messaging/messages/{conv_id}")
+async def list_messages(
+    conv_id: str,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    # Mark as read
+    await db.conversations.update_one({"id": conv_id}, {"$set": {"unread_count": 0}})
+    docs = await db.messages.find({"conversation_id": conv_id}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    return docs
+
+@api_router.post("/messaging/messages")
+async def send_message(
+    data: Dict,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    from models import Message
+    msg = Message(**data, sender_type="staff", sender_name=current_user.get("name", "Staff"))
+    doc = msg.model_dump()
+    await db.messages.insert_one(doc)
+    doc.pop("_id", None)
+    # Update conversation
+    await db.conversations.update_one(
+        {"id": data["conversation_id"]},
+        {"$set": {
+            "last_message_preview": data["content"][:100],
+            "last_message_at": datetime.now(timezone.utc).isoformat(),
+            "status": "waiting"
+        }}
+    )
+    return doc
+
+@api_router.post("/messaging/messages/ai-suggest")
+async def ai_suggest_reply(
+    conversation_id: str, guest_message: str, property_id: str = "",
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """AI-suggest a reply based on conversation context"""
+    llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not llm_key:
+        raise HTTPException(status_code=500, detail="AI not configured")
+    # Get conversation context
+    recent_msgs = await db.messages.find({"conversation_id": conversation_id}, {"_id": 0}).sort("created_at", -1).to_list(6)
+    recent_msgs.reverse()
+    conv = await db.conversations.find_one({"id": conversation_id}, {"_id": 0})
+    # Get property info
+    prop_name = "Hotel"
+    if property_id or (conv and conv.get("property_id")):
+        pid = property_id or conv["property_id"]
+        ts = await db.template_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
+        prop_name = ts.get("hotel_name", pid)
+    history_text = "\n".join([f"{'Guest' if m['sender_type'] == 'guest' else 'Staff'}: {m['content']}" for m in recent_msgs])
+    system_msg = f"""You are a professional, friendly hotel concierge for {prop_name}. Generate a helpful reply to the guest's latest message. 
+Keep it concise (under 80 words), warm, and actionable. If the guest has a complaint, acknowledge it empathetically. Always offer to help further."""
+    try:
+        chat = LlmChat(api_key=llm_key, session_id=f"suggest-{conversation_id}", system_message=system_msg).with_model("openai", "gpt-5.2")
+        prompt = f"Conversation history:\n{history_text}\n\nGuest's latest message: {guest_message}\n\nGenerate a professional reply:"
+        reply = await chat.send_message(UserMessage(text=prompt))
+        return {"suggestion": reply.strip(), "conversation_id": conversation_id}
+    except Exception as e:
+        logger.error(f"AI suggest error: {e}")
+        return {"suggestion": "Thank you for your message. Let me look into this and get back to you shortly.", "conversation_id": conversation_id}
+
+@api_router.post("/messaging/messages/ai-sentiment")
+async def detect_sentiment(
+    text: str,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """Detect sentiment and priority of a guest message"""
+    llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
+    if not llm_key:
+        return {"sentiment": "neutral", "priority": "medium"}
+    try:
+        chat = LlmChat(api_key=llm_key, session_id=f"sentiment-{uuid.uuid4()}", system_message="You analyze hotel guest messages. Respond ONLY with JSON.").with_model("openai", "gpt-5.2")
+        prompt = f"""Analyze this guest message and respond with ONLY a JSON object:
+Message: "{text}"
+Format: {{"sentiment": "positive|negative|neutral", "priority": "low|medium|high|urgent", "category": "inquiry|complaint|request|booking|feedback|emergency"}}"""
+        reply = await chat.send_message(UserMessage(text=prompt))
+        import json
+        cleaned = reply.strip().strip("```json").strip("```")
+        return json.loads(cleaned)
+    except Exception:
+        return {"sentiment": "neutral", "priority": "medium", "category": "inquiry"}
+
+# --- Quick Reply Templates ---
+
+@api_router.get("/messaging/quick-replies")
+async def list_quick_replies(current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    docs = await db.quick_replies.find({}, {"_id": 0}).sort("usage_count", -1).to_list(50)
+    if not docs:
+        # Seed defaults
+        from models import QUICK_REPLY_TEMPLATES, QuickReply
+        for t in QUICK_REPLY_TEMPLATES:
+            qr = QuickReply(**t)
+            d = qr.model_dump()
+            await db.quick_replies.insert_one(d)
+        docs = await db.quick_replies.find({}, {"_id": 0}).sort("usage_count", -1).to_list(50)
+        for d in docs: d.pop("_id", None)
+    return docs
+
+@api_router.post("/messaging/quick-replies")
+async def create_quick_reply(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    from models import QuickReply
+    qr = QuickReply(**data)
+    doc = qr.model_dump()
+    await db.quick_replies.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.delete("/messaging/quick-replies/{reply_id}")
+async def delete_quick_reply(reply_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    await db.quick_replies.delete_one({"id": reply_id})
+    return {"status": "deleted"}
+
+@api_router.post("/messaging/quick-replies/{reply_id}/use")
+async def use_quick_reply(reply_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    await db.quick_replies.update_one({"id": reply_id}, {"$inc": {"usage_count": 1}})
+    return {"status": "incremented"}
+
+# --- Channel Settings ---
+
+@api_router.get("/messaging/channel-settings/{property_id}")
+async def get_channel_settings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    doc = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
+    if not doc:
+        from models import ChannelSettings
+        cs = ChannelSettings(property_id=property_id)
+        d = cs.model_dump()
+        await db.channel_settings.insert_one(d)
+        d.pop("_id", None)
+        return d
+    return doc
+
+@api_router.put("/messaging/channel-settings/{property_id}")
+async def update_channel_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    updates.pop("_id", None)
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.channel_settings.update_one({"property_id": property_id}, {"$set": updates}, upsert=True)
+    return await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
+
+# --- Seed Demo Conversations ---
+
+@api_router.post("/messaging/seed/{property_id}")
+async def seed_conversations(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    existing = await db.conversations.count_documents({"property_id": property_id})
+    if existing > 0:
+        return {"message": f"Already has {existing} conversations", "count": existing}
+    from models import Conversation, Message
+    demos = [
+        {"guest_name": "Sarah Mitchell", "guest_email": "sarah.m@gmail.com", "guest_phone": "+447700123456", "channel": "whatsapp",
+         "status": "new", "priority": "high", "sentiment": "negative", "tags": ["complaint", "room"],
+         "messages": [
+            {"sender_type": "guest", "content": "Hi, I just checked in to room 305 and the air conditioning isn't working. It's really hot in here."},
+            {"sender_type": "guest", "content": "Also, the minibar seems to be empty. Can someone look into this please?"},
+         ]},
+        {"guest_name": "James Chen", "guest_email": "jchen@yahoo.com", "channel": "email",
+         "status": "in_progress", "priority": "medium", "sentiment": "neutral", "tags": ["booking", "inquiry"],
+         "assigned_to": "admin", "assigned_name": "Admin",
+         "messages": [
+            {"sender_type": "guest", "content": "Hello, I'd like to extend my stay by 2 more nights. Currently booked until Friday. Is this possible and what would be the rate?"},
+            {"sender_type": "staff", "content": "Hi James, great to hear you're enjoying your stay! Let me check availability for those extra nights. I'll get back to you shortly with the best rate."},
+            {"sender_type": "guest", "content": "Thank you, looking forward to hearing back."},
+         ]},
+        {"guest_name": "Maria Rodriguez", "guest_email": "maria.r@outlook.com", "guest_phone": "+34612345678", "channel": "whatsapp",
+         "status": "new", "priority": "medium", "sentiment": "positive", "tags": ["inquiry", "restaurant"],
+         "messages": [
+            {"sender_type": "guest", "content": "Hola! We're celebrating our anniversary tonight. Can you recommend your best restaurant and help with a reservation?"},
+         ]},
+        {"guest_name": "David Thompson", "guest_email": "d.thompson@business.com", "channel": "booking.com",
+         "status": "waiting", "priority": "low", "sentiment": "positive", "tags": ["pre-arrival"],
+         "messages": [
+            {"sender_type": "guest", "content": "Hi there, arriving next Tuesday. Is early check-in possible around 11am? Also, do you have a gym?"},
+            {"sender_type": "staff", "content": "Welcome David! Early check-in at 11am is subject to availability — we'll do our best. Yes, our gym is open 24/7 on the ground floor. Would you like us to prepare anything special for your arrival?"},
+         ]},
+        {"guest_name": "Emily Watson", "guest_email": "emily.w@gmail.com", "guest_phone": "+447800654321", "channel": "sms",
+         "status": "new", "priority": "urgent", "sentiment": "negative", "tags": ["complaint", "urgent", "cleanliness"],
+         "messages": [
+            {"sender_type": "guest", "content": "I found hair on the bed sheets and the bathroom wasn't properly cleaned. This is unacceptable for the price we're paying. I want to speak to a manager."},
+         ]},
+        {"guest_name": "Ahmed Hassan", "guest_email": "a.hassan@mail.com", "channel": "website_chat",
+         "status": "resolved", "priority": "low", "sentiment": "positive", "tags": ["feedback"],
+         "messages": [
+            {"sender_type": "guest", "content": "Just wanted to say thank you for the amazing service during my stay. The staff were incredibly helpful and friendly. Will definitely come back!"},
+            {"sender_type": "staff", "content": "Thank you so much Ahmed! It was our pleasure hosting you. We truly appreciate your kind words and look forward to welcoming you again. Safe travels!"},
+         ]},
+    ]
+    count = 0
+    for d in demos:
+        msgs_data = d.pop("messages")
+        conv = Conversation(property_id=property_id, **{k: v for k, v in d.items()})
+        conv.last_message_preview = msgs_data[-1]["content"][:100]
+        conv.unread_count = sum(1 for m in msgs_data if m["sender_type"] == "guest")
+        doc = conv.model_dump()
+        await db.conversations.insert_one(doc)
+        for m in msgs_data:
+            msg = Message(conversation_id=conv.id, channel=d.get("channel", "internal"), **m)
+            md = msg.model_dump()
+            await db.messages.insert_one(md)
+        count += 1
+    return {"message": f"Seeded {count} demo conversations", "count": count}
+
+# --- AI Concierge Analytics ---
+
+@api_router.get("/concierge/analytics/{property_id}")
+async def concierge_analytics(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    total_chats = len(await db.concierge_chats.distinct("session_id", {"property_id": property_id}))
+    total_msgs = await db.concierge_chats.count_documents({"property_id": property_id})
+    user_msgs = await db.concierge_chats.count_documents({"property_id": property_id, "role": "user"})
+    # Recent sessions with first message
+    pipeline = [
+        {"$match": {"property_id": property_id, "role": "user"}},
+        {"$sort": {"created_at": -1}},
+        {"$group": {"_id": "$session_id", "first_message": {"$last": "$content"}, "last_active": {"$first": "$created_at"}, "msg_count": {"$sum": 1}}},
+        {"$sort": {"last_active": -1}},
+        {"$limit": 20}
+    ]
+    sessions = []
+    async for doc in db.concierge_chats.aggregate(pipeline):
+        sessions.append({"session_id": doc["_id"], "first_message": doc["first_message"][:80], "last_active": doc["last_active"], "messages": doc["msg_count"]})
+    return {
+        "total_sessions": total_chats, "total_messages": total_msgs,
+        "user_messages": user_msgs, "ai_messages": total_msgs - user_msgs,
+        "recent_sessions": sessions
+    }
+
+# --- Space Bookings Admin ---
+
+@api_router.get("/spaces/admin/bookings/{property_id}")
+async def admin_space_bookings(property_id: str, date: str = "", status: str = "", current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    query = {"property_id": property_id}
+    if date: query["booking_date"] = date
+    if status: query["status"] = status
+    docs = await db.space_bookings.find(query, {"_id": 0}).sort("booking_date", -1).to_list(200)
+    return docs
+
+@api_router.get("/spaces/admin/stats/{property_id}")
+async def space_booking_stats(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    total = await db.space_bookings.count_documents({"property_id": property_id})
+    confirmed = await db.space_bookings.count_documents({"property_id": property_id, "status": "confirmed"})
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_count = await db.space_bookings.count_documents({"property_id": property_id, "booking_date": today})
+    # Revenue
+    pipeline = [
+        {"$match": {"property_id": property_id, "status": "confirmed"}},
+        {"$group": {"_id": None, "total_revenue": {"$sum": "$total_price"}, "total_hours": {"$sum": "$hours"}}}
+    ]
+    rev = None
+    async for doc in db.space_bookings.aggregate(pipeline):
+        rev = doc
+    spaces_count = await db.property_spaces.count_documents({"property_id": property_id, "is_active": True})
+    return {
+        "total_bookings": total, "confirmed": confirmed, "today": today_count,
+        "total_revenue": rev["total_revenue"] if rev else 0,
+        "total_hours": rev["total_hours"] if rev else 0,
+        "spaces_count": spaces_count
+    }
+
+@api_router.put("/spaces/admin/bookings/{booking_id}/status")
+async def update_space_booking_status(booking_id: str, status: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    await db.space_bookings.update_one({"id": booking_id}, {"$set": {"status": status}})
+    return {"status": "updated"}
+
 
 # --- Template Settings ---
 

@@ -1,71 +1,56 @@
 # Hotel Review Management Module + Booking Engine - PRD
 
 ## Original Problem Statement
-Hotel management review module + booking engine for MyHotelBox.com PMS. Receive reviews from online platforms, respond with AI-generated unique replies. Booking engine like Mews/Cloudbeds/eviivo with Booking.com-style design for trust. Stripe payment processing for direct bookings.
+Hotel management PMS software (MyHotelBox.com) needs: review module for 14 platforms with AI responses, booking engine like Mews/Cloudbeds/eviivo with Booking.com-style trust design, Stripe payments, and 10 website templates mimicking Booking.com, Airbnb, Expedia, Hotels.com.
 
 ## What's Been Implemented
 
-### Booking Engine with Stripe Payments (April 2026)
-- **Public Booking Engine** at `/book?property={property_id}`:
-  - Booking.com-style blue UI with trust signals (SSL, security badges)
-  - Step-by-step flow: Search → Select Room → Guest Details → Payment → Confirmation
-  - Room cards with photos, amenities, pricing, "Free cancellation" and "Breakfast included" badges
-  - "Only X left on our site!" urgency cues
-  - **Payment Method Selection**: Pay Now with Card (Stripe) or Pay at Hotel
-  - Stripe Checkout integration with real Stripe redirect
-  - Payment status polling on return from Stripe
-  - Booking confirmation with MHB-XXXXXXXX reference number
-  - Mobile-responsive with sticky "Book Now" bar
+### 10 Website Templates (April 2026)
+Templates at `/book?property={id}&template={templateId}`:
+- **Booking.com Style (4)**: Classic Blue, Business Navy, Resort Paradise, Boutique Elegant
+- **Airbnb Style (2)**: Modern Stay (photo-grid layout), Experience Plus
+- **Expedia Style (2)**: Expedia Deals (yellow member pricing), Expedia VIP (gold luxury)
+- **Hotels.com Style (2)**: Hotels Rewards (red, stamps), Family Friendly (purple, kid badges)
 
-- **Stripe Payment Integration**:
-  - `POST /api/payments/create-checkout` — creates Stripe checkout session (amount from server-side only)
-  - `GET /api/payments/status/{session_id}` — polls payment status
-  - `POST /api/webhook/stripe` — handles Stripe webhook events
-  - `payment_transactions` collection for audit trail
-  - Prevents double-processing of payments
+Each template has: unique color scheme, header, hero style, platform badges, rating styles, border radius, trust signals. Airbnb templates use photo-grid layout instead of standard hero overlay.
 
-- **Admin Dashboard - Booking Engine Panel**:
-  - Room Types tab: Create, edit, delete room types
-  - Bookings tab with status management (Check In, Cancel, No Show, Check Out)
-  - Payment status badges (Paid/Unpaid/Processing)
-  - Copy Booking URL and Preview buttons
+Admin Template Gallery: filter by platform, preview/copy URL per template, active URL display.
 
-- **Sample Data**: 5 room types seeded for "aldgate-flats" (£89-£349)
+### Booking Engine with Stripe (April 2026)
+- Step flow: Search → Select Room → Guest Details → Payment → Confirmation
+- Stripe Checkout redirect (Pay Now) or Pay at Hotel option
+- Room cards with photos, amenities, urgency cues, free cancellation badges
+- Admin panel: Room Types CRUD + Bookings management with payment status
+- 5 seeded room types (£89–£349)
 
 ### Review Hub Module (Earlier)
-- Webhook inbound sync for 14 platforms
-- GPT-5.2 AI response generation in 16 languages
-- Role-based approval workflow
-- Real-time widget with notifications
-- Integration panel with connection testing
-- Multi-branch selector (9 branches)
-- Sync logging, property mapping, branding
+- 14 platform inbound webhook sync, GPT-5.2 AI responses (16 languages)
+- Role-based approval workflow, multi-branch selector (9 branches)
+- Real-time widget with red notification popups + sound
+- Integration panel with connection testing, property mapping
+- Sync logging, API keys, webhooks, branding
 
 ## Architecture
 ```
 frontend/src/
-├── App.js (~2770 lines)
-├── BookingEngine.js (Stripe + booking flow)
+├── App.js (~2780 lines)
+├── BookingEngine.js (Template-aware booking engine)
 ├── ReviewWidget.js
+├── templates/templateConfig.js (10 template configs)
 ├── components/dashboard/
-│   ├── BookingEnginePanel.js (admin room/booking management)
+│   ├── BookingEnginePanel.js, TemplateGallery.js
 │   ├── IntegrationsPanel.js, AnalyticsPanel.js, etc.
-│   └── index.js
 
-backend/server.py (~4100 lines)
- - Auth, Reviews, AI, Webhooks, Integrations
- - Booking Engine: rooms, availability, reservations
- - Stripe: checkout sessions, status polling, webhooks
+backend/server.py (~4200 lines)
 ```
 
 ## DB Collections
-reviews, users, properties, webhooks, webhook_deliveries, api_keys, 
+reviews, users, properties, webhooks, webhook_deliveries, api_keys,
 platform_integrations, sync_logs, branding_settings,
 room_types, bookings, payment_transactions
 
 ## Remaining Work
-- Hotel website landing page template with embeddable booking widget
-- Email confirmation for bookings (Resend integration)
-- Real outbound sync to review platforms (vendor credentials needed)
-- Google OAuth configuration (user needs to obtain credentials)
-- More website templates for different hotel styles
+- Email booking confirmation (Resend)
+- Real outbound sync to review platforms (vendor credentials)
+- Google OAuth for review platform connections
+- More room type photos (currently using Unsplash placeholders)

@@ -3,7 +3,7 @@
 ## Overview
 Hotel management software (www.myhotelbox.com) providing two core modules:
 1. **Review Hub** — Centralized review management across 14 platforms with AI-powered responses
-2. **Booking Engine** — Direct booking system with 10 website templates, Stripe payments, and email confirmations
+2. **Booking Engine** — Direct booking system with 10 website templates, Stripe payments, email confirmations, and competitive features matching Mews/Cloudbeds/Eviivo
 
 ## Tech Stack
 - **Frontend**: React, Tailwind CSS, Shadcn UI
@@ -27,16 +27,21 @@ Hotel management software (www.myhotelbox.com) providing two core modules:
   ReviewWidget.js   — Embeddable review widget
   templates/
     templateConfig.js    — 10 template configurations
-    HeroSection.js       — Hero/search section (extracted)
-    RoomCards.js         — Room preview & selection (extracted)
-    GuestDetailsStep.js  — Guest form & payment (extracted)
-    ConfirmationStep.js  — Booking confirmation (extracted)
-    SearchWidget.js      — Date/guest search widget (extracted)
-    PhotoCarousel.js     — Room photo carousel (extracted)
+    HeroSection.js       — Hero/search section
+    RoomCards.js         — Room preview & selection
+    GuestDetailsStep.js  — Guest form, add-ons, promo codes & payment
+    ConfirmationStep.js  — Booking confirmation
+    SearchWidget.js      — Date/guest search widget
+    PhotoCarousel.js     — Room photo carousel
   components/dashboard/
-    TemplateCustomizer.js — NEW: Per-property template customization with live preview
+    TemplateCustomizer.js — Per-property template customization with live preview
     TemplateGallery.js    — Template selection gallery
     BookingEnginePanel.js — Room & booking management
+    RoomEditor.js         — Room editor with unlimited photos & 160+ amenities
+    AmenityPicker.js      — Category-based amenity picker (10 categories)
+    PromoCodesPanel.js    — Promo code CRUD management
+    AddOnsPanel.js        — Add-on services CRUD management
+    PoliciesPanel.js      — Hotel policies & facilities management
     ...other panels
 ```
 
@@ -45,7 +50,11 @@ Hotel management software (www.myhotelbox.com) providing two core modules:
 - `api_keys`, `sync_logs`, `platform_integrations`, `notification_settings`
 - `report_settings`, `response_templates`, `competitors`, `branding`
 - `room_types`, `bookings`, `checkout_sessions`
-- `template_settings` — NEW: Per-property template customization
+- `template_settings` — Per-property template customization
+- `promo_codes` — Discount codes with validation rules
+- `add_ons` — Extra services (per_stay/per_night/per_person pricing)
+- `hotel_policies` — Check-in/out, cancellation, house rules, payment methods
+- `property_facilities` — Selected property-level facilities
 
 ## Completed Features
 
@@ -63,29 +72,27 @@ Hotel management software (www.myhotelbox.com) providing two core modules:
 - Sync log for monitoring inbound/outbound activity
 
 ### Booking Engine
-- 10 distinct website templates (Booking.com x4, Airbnb x2, Expedia x2, Hotels.com x2)
+- 10 distinct website templates
 - Full booking flow: search > room selection > guest details > payment > confirmation
-- Stripe Checkout integration for card payments
-- Pay-at-hotel option
+- Stripe Checkout integration + Pay-at-hotel
 - Resend email confirmations
 - Multi-property support (9 seeded branches, 45 room types)
 - Room photo carousel with multi-image galleries
 - Admin template gallery with preview
 - Admin rooms & bookings management panel
-- **Template Customization Panel** — NEW: Per-property customization with:
-  - Hotel Info (name, tagline, description, phone, email, address)
-  - Template selection (10 base templates)
-  - Color overrides (primary, accent, header bg/text, body bg)
-  - Images (logo, hero image, gallery)
-  - Feature toggles (rating badge, urgency alerts, free cancellation, security badges)
-  - Custom text (welcome message, booking button, footer)
-  - Social links (Facebook, Instagram, X, TripAdvisor) & SEO meta
-  - Live embedded preview
+- **Template Customization Panel** (tested iteration_28 - 100%)
+- **Promo Codes** — Create/toggle/delete codes, percentage/fixed discounts, min nights/amount, date validity, max uses, public validation endpoint (tested iteration_29 - 100%)
+- **Add-on Services** — CRUD with categories (transport, dining, experience, wellness, etc.), per_stay/per_night/per_person pricing, toggle active (tested iteration_29 - 100%)
+- **Hotel Policies** — Check-in/out times, cancellation (free/moderate/strict/custom), house rules, children/pet/smoking policies, payment methods, damage deposit (tested iteration_29 - 100%)
+- **Property Facilities** — 8 categories of property-level facilities (general, dining, wellness, business, transport, outdoor, family, laundry) (tested iteration_29 - 100%)
+- **Expanded Amenity Picker** — 10 categories, 160+ amenities with search and custom addition (tested iteration_29 - 100%)
+- **Room Editor** — 4 tabs (Details, Photos, Amenities, Pricing) with unlimited photo support (tested iteration_29 - 100%)
+- **Public Booking Engine Integration** — Facilities section, policies display, add-on selection in checkout, promo code validation in checkout (tested iteration_29 - 100%)
 
 ### Connections & Integrations
 - Platform credentials configuration with test connection
 - Outbound webhook events for reviews AND bookings (12 total events)
-- Enhanced bi-directional outbound review sync (Google, Booking.com, TripAdvisor, Expedia)
+- Enhanced bi-directional outbound review sync
 - Outbound sync status dashboard
 - Bulk sync for pending responses
 - Integration guide documentation panel
@@ -102,7 +109,8 @@ Hotel management software (www.myhotelbox.com) providing two core modules:
 - Email confirmations require Resend API configuration
 - Stripe in test mode
 
-## Backlog
+## Backlog (Prioritized)
+- P1: Real bi-directional outbound sync to review platforms (needs real vendor API credentials)
 - P2: Extract remaining route handlers from server.py into /routes/ modules
 - P2: Further App.js modularization
 - P3: Real-time availability calendar for booking engine

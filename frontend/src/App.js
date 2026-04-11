@@ -28,6 +28,7 @@ import { ConciergeAnalyticsPanel } from "./components/dashboard/ConciergeAnalyti
 import { AutomationPanel } from "./components/dashboard/AutomationPanel";
 import { ChannelSettingsPanel } from "./components/dashboard/ChannelSettingsPanel";
 import { DashboardHome } from "./components/dashboard/DashboardHome";
+import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePanel";
 import {
   Star,
   CheckCircle,
@@ -2472,6 +2473,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "automation", icon: Lightning, name: "Automation", testId: "automation-btn" },
         { id: "channel-settings", icon: Gear, name: "Channel Settings", testId: "channel-settings-btn" },
         { id: "concierge-analytics", icon: Robot, name: "AI Concierge", testId: "concierge-analytics-btn" },
+        { id: "staff-performance", icon: Trophy, name: "Staff Performance", testId: "staff-performance-btn" },
       ]
     },
     {
@@ -2801,6 +2803,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Channel Settings */}
         {activeView === "channel-settings" && (
           <ChannelSettingsPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Staff Performance */}
+        {activeView === "staff-performance" && (
+          <StaffPerformancePanel properties={properties} activePropertyId={activePropertyId} />
         )}
       </main>
 

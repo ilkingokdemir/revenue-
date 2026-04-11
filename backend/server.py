@@ -25,6 +25,7 @@ from bson import ObjectId
 from routes.messaging import create_messaging_router
 from routes.automation import create_automation_router
 from routes.dashboard import create_dashboard_router
+from routes.staff_performance import create_staff_performance_router
 
 # Import extracted modules
 from models import (
@@ -5052,6 +5053,9 @@ api_router.include_router(automation_router)
 
 dashboard_router = create_dashboard_router(db, require_roles)
 api_router.include_router(dashboard_router)
+
+staff_perf_router = create_staff_performance_router(db, require_roles)
+api_router.include_router(staff_perf_router)
 
 app.include_router(api_router)
 

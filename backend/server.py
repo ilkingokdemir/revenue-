@@ -3252,6 +3252,231 @@ async def get_integration_requirements():
         }
     }
 
+# ==================== P0: INBOUND PLATFORM WEBHOOKS ====================
+
+class InboundReviewPayload(BaseModel):
+    """Standard payload for platforms pushing reviews to Review Hub"""
+    model_config = ConfigDict(extra="ignore")
+    external_review_id: str
+    guest_name: str
+    rating: int
+    review_text: str
+    review_date: Optional[str] = None
+    stay_date: Optional[str] = None
+    room_type: Optional[str] = None
+    property_id: Optional[str] = "default"
+    language: Optional[str] = None
+    reviewer_avatar: Optional[str] = None
+
+@api_router.post("/platforms/{platform}/incoming")
+async def receive_platform_review(platform: str, payload: InboundReviewPayload, request: Request):
+    """Receive inbound review from a platform webhook.
+    Authenticate via X-Platform-Secret header or api_key query param."""
+    # Authenticate
+    secret = request.headers.get("X-Platform-Secret") or request.query_params.get("api_key")
+    if not secret:
+        raise HTTPException(status_code=401, detail="Authentication required: X-Platform-Secret header or api_key param")
+    
+    # Check API key
+    key_doc = await db.api_keys.find_one({"key": secret, "is_active": True})
+    if not key_doc:
+        # Also check platform-specific secrets
+        integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+        if not integration or integration.get("inbound_secret") != secret:
+            raise HTTPException(status_code=401, detail="Invalid authentication")
+    
+    # Deduplicate
+    existing = await db.reviews.find_one({
+        "external_review_id": payload.external_review_id,
+        "platform": platform
+    })
+    if existing:
+        # Log but don't create duplicate
+        await _log_sync(platform, "inbound", "skipped", "Duplicate review", payload.external_review_id)
+        return {"status": "skipped", "message": "Review already exists", "review_id": existing.get("id")}
+    
+    # Create review
+    new_review = Review(
+        platform=platform,
+        guest_name=payload.guest_name,
+        rating=payload.rating,
+        review_text=payload.review_text,
+        stay_date=payload.stay_date,
+        room_type=payload.room_type,
+        response_status="pending",
+        external_review_id=payload.external_review_id,
+        property_id=payload.property_id or "default"
+    )
+    doc = new_review.model_dump()
+    doc = serialize_review(doc)
+    await db.reviews.insert_one(doc)
+    
+    await _log_sync(platform, "inbound", "success", f"Review from {payload.guest_name}", payload.external_review_id)
+    
+    # Update integration stats
+    await db.platform_integrations.update_one(
+        {"platform": platform},
+        {"$set": {"last_sync": datetime.now(timezone.utc).isoformat(), "status": "connected"},
+         "$inc": {"total_reviews_synced": 1}}
+    )
+    
+    # Trigger low-rating alert
+    if payload.rating <= 2:
+        await send_negative_review_notification(doc)
+    
+    # Fire webhooks
+    await _fire_webhooks("review.created", doc)
+    
+    return {"status": "created", "review_id": doc["id"], "message": "Review received successfully"}
+
+@api_router.post("/platforms/{platform}/incoming/batch")
+async def receive_platform_reviews_batch(platform: str, request: Request):
+    """Receive batch of reviews from a platform"""
+    secret = request.headers.get("X-Platform-Secret") or request.query_params.get("api_key")
+    if not secret:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    key_doc = await db.api_keys.find_one({"key": secret, "is_active": True})
+    if not key_doc:
+        integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+        if not integration or integration.get("inbound_secret") != secret:
+            raise HTTPException(status_code=401, detail="Invalid authentication")
+    
+    body = await request.json()
+    reviews = body if isinstance(body, list) else body.get("reviews", [])
+    
+    created = 0
+    skipped = 0
+    for r in reviews:
+        existing = await db.reviews.find_one({"external_review_id": r.get("external_review_id"), "platform": platform})
+        if existing:
+            skipped += 1
+            continue
+        new_review = Review(
+            platform=platform, guest_name=r.get("guest_name", "Guest"),
+            rating=r.get("rating", 3), review_text=r.get("review_text", ""),
+            stay_date=r.get("stay_date"), room_type=r.get("room_type"),
+            response_status="pending", external_review_id=r.get("external_review_id"),
+            property_id=r.get("property_id", "default")
+        )
+        doc = new_review.model_dump()
+        doc = serialize_review(doc)
+        await db.reviews.insert_one(doc)
+        created += 1
+        if r.get("rating", 3) <= 2:
+            await send_negative_review_notification(doc)
+    
+    await _log_sync(platform, "inbound_batch", "success", f"Created {created}, skipped {skipped}")
+    return {"status": "success", "created": created, "skipped": skipped}
+
+@api_router.get("/platforms/{platform}/inbound-url")
+async def get_inbound_url(platform: str, request: Request, current_user: dict = Depends(require_roles("admin"))):
+    """Get the inbound webhook URL for a platform to POST reviews to"""
+    base_url = str(request.base_url).rstrip("/")
+    
+    # Generate or fetch platform-specific inbound secret
+    integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+    inbound_secret = None
+    if integration:
+        inbound_secret = integration.get("inbound_secret")
+    if not inbound_secret:
+        inbound_secret = f"psk_{uuid.uuid4().hex[:24]}"
+        await db.platform_integrations.update_one(
+            {"platform": platform},
+            {"$set": {"inbound_secret": inbound_secret}}, upsert=True
+        )
+    
+    return {
+        "webhook_url": f"{base_url}/api/platforms/{platform}/incoming",
+        "batch_url": f"{base_url}/api/platforms/{platform}/incoming/batch",
+        "secret": inbound_secret,
+        "headers": {"X-Platform-Secret": inbound_secret, "Content-Type": "application/json"},
+        "payload_format": {
+            "external_review_id": "string (unique ID from platform)",
+            "guest_name": "string",
+            "rating": "int (1-5)",
+            "review_text": "string",
+            "property_id": "string (optional, defaults to 'default')",
+            "review_date": "ISO date string (optional)",
+            "stay_date": "string (optional)",
+            "room_type": "string (optional)"
+        }
+    }
+
+# ==================== SYNC LOG ====================
+
+async def _log_sync(platform: str, direction: str, status: str, message: str = "", ref_id: str = ""):
+    """Log a sync event"""
+    await db.sync_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "platform": platform,
+        "direction": direction,
+        "status": status,
+        "message": message,
+        "ref_id": ref_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+
+async def _fire_webhooks(event: str, data: dict):
+    """Fire active webhooks for an event"""
+    clean_data = {k: v for k, v in data.items() if k != "_id"}
+    webhooks = await db.webhooks.find({"is_active": True}, {"_id": 0}).to_list(50)
+    for wh in webhooks:
+        if wh.get("events") and event not in wh["events"]:
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as c:
+                await c.post(wh["url"], json={"event": event, "data": clean_data, "timestamp": datetime.now(timezone.utc).isoformat()},
+                    headers={"X-Webhook-Secret": wh.get("secret", ""), "X-Webhook-Event": event})
+            await db.webhook_deliveries.insert_one({
+                "id": str(uuid.uuid4()), "webhook_id": wh["id"], "event": event,
+                "url": wh["url"], "status_code": 200, "success": True,
+                "response_time_ms": 0, "timestamp": datetime.now(timezone.utc).isoformat()
+            })
+        except Exception:
+            pass
+
+@api_router.get("/sync-logs")
+async def get_sync_logs(request: Request, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Get sync activity log"""
+    platform = request.query_params.get("platform")
+    limit = min(int(request.query_params.get("limit", "50")), 100)
+    query = {"platform": platform} if platform else {}
+    logs = await db.sync_logs.find(query, {"_id": 0}).sort("timestamp", -1).to_list(limit)
+    return logs
+
+# ==================== P1: PROPERTY MAPPING ====================
+
+@api_router.put("/properties/{property_id}/mapping")
+async def update_property_mapping(property_id: str, request: Request, current_user: dict = Depends(require_roles("admin"))):
+    """Map a Review Hub property to an external system (e.g., MyHotelBox branch)"""
+    body = await request.json()
+    external_id = body.get("external_id", "")
+    external_name = body.get("external_name", "")
+    external_system = body.get("external_system", "myhotelbox")
+    
+    result = await db.properties.update_one(
+        {"id": property_id},
+        {"$set": {
+            "external_id": external_id,
+            "external_name": external_name,
+            "external_system": external_system,
+            "mapping_updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Property not found")
+    updated = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    return updated
+
+@api_router.get("/properties/by-external/{external_id}")
+async def get_property_by_external_id(external_id: str):
+    """Lookup a property by its external system ID (for incoming webhooks)"""
+    prop = await db.properties.find_one({"external_id": external_id}, {"_id": 0})
+    if not prop:
+        raise HTTPException(status_code=404, detail="No property mapped to this external ID")
+    return prop
+
 # Include the router in the main app
 app.include_router(api_router)
 

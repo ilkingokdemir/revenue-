@@ -5,6 +5,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import ReviewWidget from "./ReviewWidget";
+import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
+import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
+import { ReportsSettings } from "./components/dashboard/ReportsSettings";
+import { LoginPage } from "./components/dashboard/LoginPage";
+import { BrandingPanel } from "./components/dashboard/BrandingPanel";
 import {
   Star,
   CheckCircle,
@@ -1249,1545 +1254,6 @@ const TemplatesManager = ({ isOpen, onClose, onSelectTemplate }) => {
   );
 };
 
-// Analytics Panel Component
-const AnalyticsPanel = ({ isOpen, onClose }) => {
-  const [analytics, setAnalytics] = useState(null);
-  const [competitors, setCompetitors] = useState([]);
-  const [benchmark, setBenchmark] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [newCompetitor, setNewCompetitor] = useState({ name: "", avg_rating: 4.0, total_reviews: 100, response_rate: 50 });
-
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [analyticsRes, competitorsRes, benchmarkRes] = await Promise.all([
-        axios.get(`${API}/analytics/dashboard`),
-        axios.get(`${API}/competitors`),
-        axios.get(`${API}/competitors/benchmark`)
-      ]);
-      setAnalytics(analyticsRes.data);
-      setCompetitors(competitorsRes.data);
-      setBenchmark(benchmarkRes.data);
-    } catch (error) {
-      console.error("Error fetching analytics:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const seedCompetitors = useCallback(async () => {
-    try {
-      await axios.post(`${API}/competitors/seed`);
-      await fetchData();
-    } catch (error) {
-      console.error("Error seeding competitors:", error);
-    }
-  }, [fetchData]);
-
-  useEffect(() => {
-    if (isOpen) {
-      seedCompetitors();
-      fetchData();
-    }
-  }, [isOpen, fetchData, seedCompetitors]);
-
-  const runBatchAnalysis = async () => {
-    setIsAnalyzing(true);
-    try {
-      const result = await axios.post(`${API}/reviews/analyze-batch`);
-      toast.success(`Analyzed ${result.data.analyzed} reviews!`);
-      await fetchData();
-    } catch (error) {
-      console.error("Error running analysis:", error);
-      toast.error("Failed to run analysis");
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
-  const addCompetitor = async () => {
-    if (!newCompetitor.name) return;
-    try {
-      await axios.post(`${API}/competitors`, {
-        ...newCompetitor,
-        platform: "all"
-      });
-      toast.success("Competitor added!");
-      setNewCompetitor({ name: "", avg_rating: 4.0, total_reviews: 100, response_rate: 50 });
-      await fetchData();
-    } catch (error) {
-      console.error("Error adding competitor:", error);
-      toast.error("Failed to add competitor");
-    }
-  };
-
-  const deleteCompetitor = async (id) => {
-    try {
-      await axios.delete(`${API}/competitors/${id}`);
-      toast.success("Competitor removed");
-      await fetchData();
-    } catch (error) {
-      console.error("Error deleting competitor:", error);
-    }
-  };
-
-  const getSentimentIcon = (sentiment) => {
-    switch (sentiment) {
-      case "positive": return <Smiley size={16} weight="fill" className="text-[#5A6B50]" />;
-      case "negative": return <SmileySad size={16} weight="fill" className="text-[#C05A44]" />;
-      default: return <SmileyMeh size={16} weight="fill" className="text-[#57534E]" />;
-    }
-  };
-
-  return (
-    <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto" data-testid="analytics-dialog">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
-          <ChartBar size={20} weight="fill" className="text-[#3E5245]" />
-          Analytics & Insights
-        </DialogTitle>
-      </DialogHeader>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <ArrowsClockwise size={32} className="animate-spin text-[#3E5245]" />
-        </div>
-      ) : (
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
-            <TabsTrigger value="overview" data-testid="analytics-overview-tab">Overview</TabsTrigger>
-            <TabsTrigger value="sentiment" data-testid="analytics-sentiment-tab">Sentiment</TabsTrigger>
-            <TabsTrigger value="competitors" data-testid="analytics-competitors-tab">Competitors</TabsTrigger>
-          </TabsList>
-
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-4">
-            {/* Key Metrics */}
-            <div className="grid grid-cols-4 gap-3">
-              <div className="bg-[#FAF9F6] border border-stone-200 rounded-md p-4">
-                <div className="flex items-center gap-2 text-[#57534E] mb-1">
-                  <ChatText size={16} />
-                  <span className="text-xs uppercase tracking-wider">Reviews</span>
-                </div>
-                <div className="text-2xl font-semibold text-[#1C1917]">{analytics?.overview?.total_reviews || 0}</div>
-              </div>
-              <div className="bg-[#FAF9F6] border border-stone-200 rounded-md p-4">
-                <div className="flex items-center gap-2 text-[#57534E] mb-1">
-                  <Star size={16} weight="fill" className="text-[#D4A373]" />
-                  <span className="text-xs uppercase tracking-wider">Avg Rating</span>
-                </div>
-                <div className="text-2xl font-semibold text-[#1C1917]">{analytics?.overview?.avg_rating || 0}/5</div>
-              </div>
-              <div className="bg-[#FAF9F6] border border-stone-200 rounded-md p-4">
-                <div className="flex items-center gap-2 text-[#57534E] mb-1">
-                  <CheckCircle size={16} className="text-[#5A6B50]" />
-                  <span className="text-xs uppercase tracking-wider">Response Rate</span>
-                </div>
-                <div className="text-2xl font-semibold text-[#1C1917]">{analytics?.overview?.response_rate || 0}%</div>
-              </div>
-              <div className="bg-[#FAF9F6] border border-stone-200 rounded-md p-4">
-                <div className="flex items-center gap-2 text-[#57534E] mb-1">
-                  <WarningCircle size={16} className="text-[#D4A373]" />
-                  <span className="text-xs uppercase tracking-wider">Pending</span>
-                </div>
-                <div className="text-2xl font-semibold text-[#1C1917]">{analytics?.overview?.pending || 0}</div>
-              </div>
-            </div>
-
-            {/* Rating Distribution */}
-            <div className="bg-white border border-stone-200 rounded-md p-4">
-              <h4 className="font-medium text-[#1C1917] mb-3 flex items-center gap-2">
-                <Star size={18} className="text-[#D4A373]" />
-                Rating Distribution
-              </h4>
-              <div className="space-y-2">
-                {[5, 4, 3, 2, 1].map((rating) => {
-                  const count = analytics?.rating_distribution?.[rating] || 0;
-                  const total = analytics?.overview?.total_reviews || 1;
-                  const percentage = Math.round((count / total) * 100);
-                  return (
-                    <div key={rating} className="flex items-center gap-3">
-                      <span className="w-12 text-sm text-[#57534E]">{rating} star</span>
-                      <Progress value={percentage} className="flex-1 h-2" />
-                      <span className="w-16 text-sm text-[#57534E] text-right">{count} ({percentage}%)</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Platform Stats */}
-            <div className="bg-white border border-stone-200 rounded-md p-4">
-              <h4 className="font-medium text-[#1C1917] mb-3">Platform Performance</h4>
-              <div className="grid grid-cols-3 gap-2">
-                {analytics?.platform_stats?.map((platform) => (
-                  <div key={platform.platform} className="flex items-center justify-between p-2 bg-[#FAF9F6] rounded">
-                    <span className="text-sm font-medium">{PLATFORMS[platform.platform]?.name || platform.platform}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-[#57534E]">{platform.count} reviews</span>
-                      <Badge className="bg-[#3E5245] text-white">{platform.avg_rating}/5</Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Priority Queue */}
-            {analytics?.priority_queue?.length > 0 && (
-              <div className="bg-red-50 border border-[#C05A44] rounded-md p-4">
-                <h4 className="font-medium text-[#C05A44] mb-3 flex items-center gap-2">
-                  <Fire size={18} weight="fill" />
-                  Priority Queue - Urgent Reviews
-                </h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {analytics.priority_queue.slice(0, 5).map((review) => (
-                    <div key={review.id} className="flex items-center justify-between p-2 bg-white rounded border border-stone-200">
-                      <div>
-                        <span className="font-medium text-sm">{review.guest_name}</span>
-                        <span className="text-xs text-[#57534E] ml-2">- {PLATFORMS[review.platform]?.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <StarRating rating={review.rating} size={12} />
-                        <Badge className={`${URGENCY_COLORS[review.sentiment_analysis?.urgency || 'high']} text-white`}>
-                          {review.sentiment_analysis?.urgency || 'urgent'}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Sentiment Tab */}
-          <TabsContent value="sentiment" className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h4 className="font-medium text-[#1C1917] flex items-center gap-2">
-                <Brain size={18} className="text-[#3E5245]" />
-                AI Sentiment Analysis
-              </h4>
-              <button
-                onClick={runBatchAnalysis}
-                disabled={isAnalyzing}
-                className="bg-[#3E5245] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
-                data-testid="run-analysis-btn"
-              >
-                {isAnalyzing ? <ArrowsClockwise size={14} className="animate-spin" /> : <Sparkle size={14} />}
-                {isAnalyzing ? "Analyzing..." : "Run Analysis"}
-              </button>
-            </div>
-
-            {/* Sentiment Distribution */}
-            <div className="grid grid-cols-4 gap-3">
-              {Object.entries(analytics?.sentiment_distribution || {}).map(([sentiment, count]) => (
-                <div key={sentiment} className={`${SENTIMENT_COLORS[sentiment]?.light || 'bg-stone-100'} border rounded-md p-4`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    {getSentimentIcon(sentiment)}
-                    <span className="text-sm font-medium capitalize">{sentiment}</span>
-                  </div>
-                  <div className="text-2xl font-semibold">{count}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Urgency Distribution */}
-            <div className="bg-white border border-stone-200 rounded-md p-4">
-              <h4 className="font-medium text-[#1C1917] mb-3 flex items-center gap-2">
-                <Lightning size={18} className="text-[#D4A373]" />
-                Urgency Breakdown
-              </h4>
-              <div className="flex gap-2">
-                {Object.entries(analytics?.urgency_distribution || {}).map(([urgency, count]) => (
-                  <div key={urgency} className="flex-1 text-center">
-                    <div className={`${URGENCY_COLORS[urgency]} text-white rounded-md p-3 mb-1`}>
-                      <div className="text-xl font-semibold">{count}</div>
-                    </div>
-                    <span className="text-xs text-[#57534E] capitalize">{urgency}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Top Topics */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white border border-stone-200 rounded-md p-4">
-                <h4 className="font-medium text-[#1C1917] mb-3 flex items-center gap-2">
-                  <Tag size={18} className="text-[#3E5245]" />
-                  Top Mentioned Topics
-                </h4>
-                <div className="space-y-2">
-                  {analytics?.top_topics?.slice(0, 6).map((topic, idx) => (
-                    <div key={topic.topic} className="flex items-center justify-between">
-                      <span className="text-sm capitalize">{topic.topic}</span>
-                      <Badge className="bg-[#E8EDE7] text-[#1C1917]">{topic.count}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {/* Common Issues */}
-                <div className="bg-red-50 border border-red-200 rounded-md p-4">
-                  <h4 className="font-medium text-[#C05A44] mb-2 flex items-center gap-2">
-                    <TrendDown size={16} />
-                    Common Issues
-                  </h4>
-                  <div className="space-y-1">
-                    {analytics?.common_issues?.slice(0, 3).map((item) => (
-                      <div key={item.issue} className="text-sm text-[#57534E] truncate">
-                        • {item.issue} ({item.count})
-                      </div>
-                    ))}
-                    {(!analytics?.common_issues || analytics.common_issues.length === 0) && (
-                      <div className="text-sm text-[#57534E]">Run analysis to see issues</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Common Praises */}
-                <div className="bg-[#E8EDE7] border border-[#D5DDD3] rounded-md p-4">
-                  <h4 className="font-medium text-[#3E5245] mb-2 flex items-center gap-2">
-                    <TrendUp size={16} />
-                    Common Praises
-                  </h4>
-                  <div className="space-y-1">
-                    {analytics?.common_praises?.slice(0, 3).map((item) => (
-                      <div key={item.praise} className="text-sm text-[#57534E] truncate">
-                        • {item.praise} ({item.count})
-                      </div>
-                    ))}
-                    {(!analytics?.common_praises || analytics.common_praises.length === 0) && (
-                      <div className="text-sm text-[#57534E]">Run analysis to see praises</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Competitors Tab */}
-          <TabsContent value="competitors" className="space-y-4">
-            {/* Your Ranking */}
-            {benchmark && (
-              <div className="bg-[#E8EDE7] border border-[#D5DDD3] rounded-md p-4">
-                <h4 className="font-medium text-[#1C1917] mb-3 flex items-center gap-2">
-                  <Trophy size={18} className="text-[#D4A373]" />
-                  Your Competitive Position
-                </h4>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-[#3E5245]">#{benchmark.ranking?.rating_rank}</div>
-                    <div className="text-sm text-[#57534E]">Rating Rank</div>
-                    <div className="text-xs text-[#57534E]">of {benchmark.ranking?.total_competitors}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-[#3E5245]">{benchmark.your_hotel?.avg_rating}/5</div>
-                    <div className="text-sm text-[#57534E]">Your Rating</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-[#3E5245]">{benchmark.your_hotel?.response_rate}%</div>
-                    <div className="text-sm text-[#57534E]">Response Rate</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Competitor List */}
-            <div className="bg-white border border-stone-200 rounded-md p-4">
-              <h4 className="font-medium text-[#1C1917] mb-3 flex items-center gap-2">
-                <Users size={18} className="text-[#3E5245]" />
-                Competitor Comparison
-              </h4>
-              <div className="space-y-2">
-                {/* Your Hotel Row */}
-                <div className="flex items-center justify-between p-3 bg-[#E8EDE7] rounded-md border-2 border-[#3E5245]">
-                  <div className="flex items-center gap-2">
-                    <Buildings size={20} className="text-[#3E5245]" />
-                    <span className="font-medium">Your Hotel</span>
-                    <Badge className="bg-[#3E5245] text-white">You</Badge>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-center">
-                      <div className="font-semibold">{benchmark?.your_hotel?.avg_rating}/5</div>
-                      <div className="text-xs text-[#57534E]">Rating</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-semibold">{benchmark?.your_hotel?.total_reviews}</div>
-                      <div className="text-xs text-[#57534E]">Reviews</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-semibold">{benchmark?.your_hotel?.response_rate}%</div>
-                      <div className="text-xs text-[#57534E]">Response</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Competitors */}
-                {competitors.map((comp) => (
-                  <div key={comp.id} className="flex items-center justify-between p-3 bg-[#FAF9F6] rounded-md">
-                    <div className="flex items-center gap-2">
-                      <Target size={20} className="text-[#57534E]" />
-                      <span className="font-medium">{comp.name}</span>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <div className="text-center">
-                        <div className="font-semibold">{comp.avg_rating}/5</div>
-                        <div className="text-xs text-[#57534E]">Rating</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold">{comp.total_reviews}</div>
-                        <div className="text-xs text-[#57534E]">Reviews</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-semibold">{comp.response_rate}%</div>
-                        <div className="text-xs text-[#57534E]">Response</div>
-                      </div>
-                      <button
-                        onClick={() => deleteCompetitor(comp.id)}
-                        className="p-1 hover:bg-red-50 rounded transition-colors"
-                        data-testid={`delete-competitor-${comp.id}`}
-                      >
-                        <Trash size={16} className="text-[#C05A44]" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Add Competitor */}
-              <div className="mt-4 pt-4 border-t border-stone-200">
-                <h5 className="text-sm font-medium text-[#1C1917] mb-2">Add Competitor</h5>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Hotel name"
-                    value={newCompetitor.name}
-                    onChange={(e) => setNewCompetitor(prev => ({ ...prev, name: e.target.value }))}
-                    className="flex-1"
-                    data-testid="competitor-name-input"
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Rating"
-                    value={newCompetitor.avg_rating}
-                    onChange={(e) => setNewCompetitor(prev => ({ ...prev, avg_rating: parseFloat(e.target.value) }))}
-                    className="w-20"
-                    step="0.1"
-                    min="1"
-                    max="5"
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Reviews"
-                    value={newCompetitor.total_reviews}
-                    onChange={(e) => setNewCompetitor(prev => ({ ...prev, total_reviews: parseInt(e.target.value) }))}
-                    className="w-24"
-                  />
-                  <Input
-                    type="number"
-                    placeholder="Resp %"
-                    value={newCompetitor.response_rate}
-                    onChange={(e) => setNewCompetitor(prev => ({ ...prev, response_rate: parseFloat(e.target.value) }))}
-                    className="w-20"
-                  />
-                  <button
-                    onClick={addCompetitor}
-                    disabled={!newCompetitor.name}
-                    className="bg-[#3E5245] text-white px-3 py-2 rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50"
-                    data-testid="add-competitor-btn"
-                  >
-                    <Plus size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-      )}
-    </DialogContent>
-  );
-};
-
-// Reports Settings Component
-const ReportsSettings = ({ isOpen, onClose }) => {
-  const [settings, setSettings] = useState({
-    email: "",
-    frequency: "weekly",
-    include_competitor_comparison: true,
-    include_sentiment_summary: true,
-    include_action_items: true,
-    enabled: false,
-    last_sent: null
-  });
-  const [isSaving, setIsSaving] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewHtml, setPreviewHtml] = useState("");
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchSettings();
-    }
-  }, [isOpen]);
-
-  const fetchSettings = async () => {
-    try {
-      const response = await axios.get(`${API}/reports/settings`);
-      setSettings(response.data);
-    } catch (error) {
-      console.error("Error fetching report settings:", error);
-    }
-  };
-
-  const saveSettings = async () => {
-    setIsSaving(true);
-    try {
-      await axios.put(`${API}/reports/settings`, settings);
-      toast.success("Report settings saved!");
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      toast.error("Failed to save settings");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const sendReportNow = async () => {
-    setIsSending(true);
-    try {
-      const result = await axios.post(`${API}/reports/send-now`);
-      toast.success(result.data.message);
-      await fetchSettings();
-    } catch (error) {
-      console.error("Error sending report:", error);
-      toast.error(error.response?.data?.detail || "Failed to send report");
-    } finally {
-      setIsSending(false);
-    }
-  };
-
-  const previewReport = async () => {
-    try {
-      const response = await axios.get(`${API}/reports/preview`);
-      setPreviewHtml(response.data.html);
-      setShowPreview(true);
-    } catch (error) {
-      console.error("Error loading preview:", error);
-      toast.error("Failed to load report preview");
-    }
-  };
-
-  return (
-    <DialogContent className="sm:max-w-[550px]" data-testid="reports-settings-dialog">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
-          <CalendarBlank size={20} weight="fill" className="text-[#3E5245]" />
-          Scheduled Reports
-        </DialogTitle>
-      </DialogHeader>
-      
-      <div className="space-y-6 py-4">
-        {/* Enable/Disable Toggle */}
-        <div className="flex items-center justify-between p-4 bg-[#FAF9F6] rounded-md border border-[#E7E5E4]">
-          <div>
-            <p className="font-medium text-[#1C1917]">Enable Scheduled Reports</p>
-            <p className="text-sm text-[#57534E]">Receive automated performance summaries</p>
-          </div>
-          <Switch
-            checked={settings.enabled}
-            onCheckedChange={(checked) => setSettings(prev => ({ ...prev, enabled: checked }))}
-            data-testid="reports-enable-switch"
-          />
-        </div>
-
-        {/* Email & Frequency */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[#1C1917] flex items-center gap-2">
-              <EnvelopeSimple size={16} className="text-[#57534E]" />
-              Email Address
-            </label>
-            <Input
-              type="email"
-              placeholder="hotel@example.com"
-              value={settings.email}
-              onChange={(e) => setSettings(prev => ({ ...prev, email: e.target.value }))}
-              className="border-stone-200"
-              data-testid="report-email-input"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-[#1C1917]">Frequency</label>
-            <Select
-              value={settings.frequency}
-              onValueChange={(value) => setSettings(prev => ({ ...prev, frequency: value }))}
-              data-testid="report-frequency-select"
-            >
-              <SelectTrigger className="border-stone-200">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Report Content Options */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-[#1C1917]">Report Contents</label>
-          
-          <div className="flex items-center justify-between p-3 bg-white border border-stone-200 rounded-md">
-            <span className="text-sm">Competitor Comparison</span>
-            <Switch
-              checked={settings.include_competitor_comparison}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, include_competitor_comparison: checked }))}
-              data-testid="include-competitors-switch"
-            />
-          </div>
-          
-          <div className="flex items-center justify-between p-3 bg-white border border-stone-200 rounded-md">
-            <span className="text-sm">Sentiment Summary</span>
-            <Switch
-              checked={settings.include_sentiment_summary}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, include_sentiment_summary: checked }))}
-              data-testid="include-sentiment-switch"
-            />
-          </div>
-          
-          <div className="flex items-center justify-between p-3 bg-white border border-stone-200 rounded-md">
-            <span className="text-sm">Action Items & Recommendations</span>
-            <Switch
-              checked={settings.include_action_items}
-              onCheckedChange={(checked) => setSettings(prev => ({ ...prev, include_action_items: checked }))}
-              data-testid="include-actions-switch"
-            />
-          </div>
-        </div>
-
-        {/* Last Sent Info */}
-        {settings.last_sent && (
-          <div className="p-3 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md">
-            <p className="text-sm text-[#57534E]">
-              Last report sent: <strong>{new Date(settings.last_sent).toLocaleString()}</strong>
-            </p>
-          </div>
-        )}
-
-        {/* Demo Mode Notice */}
-        <div className="p-3 bg-[#FAF9F6] border border-[#E7E5E4] rounded-md">
-          <p className="text-xs text-[#57534E]">
-            <strong>Note:</strong> In demo mode, reports are logged but not actually sent. 
-            Configure a production Resend API key to enable real email delivery.
-          </p>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between pt-4 border-t border-stone-200">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={previewReport}
-              className="bg-white border border-stone-200 text-[#1C1917] px-3 py-2 rounded-md hover:bg-stone-50 transition-colors flex items-center gap-2"
-              data-testid="preview-report-btn"
-            >
-              <Eye size={16} />
-              Preview
-            </button>
-            <button
-              onClick={sendReportNow}
-              disabled={!settings.email || isSending}
-              className="bg-white border border-stone-200 text-[#1C1917] px-3 py-2 rounded-md hover:bg-stone-50 transition-colors disabled:opacity-50 flex items-center gap-2"
-              data-testid="send-report-now-btn"
-            >
-              <Send size={16} />
-              {isSending ? "Sending..." : "Send Now"}
-            </button>
-          </div>
-          
-          <button
-            onClick={saveSettings}
-            disabled={isSaving}
-            className="bg-[#3E5245] text-white px-4 py-2 rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
-            data-testid="save-report-settings-btn"
-          >
-            {isSaving ? (
-              <>
-                <ArrowsClockwise size={16} className="animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <CheckCircle size={16} weight="fill" />
-                Save Settings
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* Preview Modal */}
-      {showPreview && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPreview(false)}>
-          <div className="bg-white rounded-lg max-w-3xl max-h-[90vh] overflow-auto m-4" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-stone-200 p-4 flex justify-between items-center">
-              <h3 className="font-medium">Report Preview</h3>
-              <button onClick={() => setShowPreview(false)} className="p-2 hover:bg-stone-100 rounded-md">
-                <X size={20} />
-              </button>
-            </div>
-            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-          </div>
-        </div>
-      )}
-    </DialogContent>
-  );
-};
-
-// Platform Integrations Component
-const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
-  const [integrations, setIntegrations] = useState([]);
-  const [requirements, setRequirements] = useState({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [syncingPlatform, setSyncingPlatform] = useState(null);
-  const [showManualImport, setShowManualImport] = useState(false);
-  const [manualReview, setManualReview] = useState({
-    platform: "google",
-    guest_name: "",
-    rating: 5,
-    review_text: "",
-    stay_date: "",
-    room_type: ""
-  });
-  const [selectedPlatformDetails, setSelectedPlatformDetails] = useState(null);
-  const [showConfigWizard, setShowConfigWizard] = useState(null);
-  const [configCredentials, setConfigCredentials] = useState({});
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
-
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [integrationsRes, requirementsRes] = await Promise.all([
-        axios.get(`${API}/integrations`),
-        axios.get(`${API}/integrations/requirements`)
-      ]);
-      setIntegrations(integrationsRes.data);
-      setRequirements(requirementsRes.data);
-    } catch (error) {
-      console.error("Error fetching integrations:", error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      fetchData();
-    }
-  }, [isOpen, fetchData]);
-
-  const handleSync = async (platform) => {
-    setSyncingPlatform(platform);
-    try {
-      const response = await axios.post(`${API}/integrations/${platform}/sync`);
-      if (response.data.reviews_synced > 0) {
-        toast.success(`Synced ${response.data.reviews_synced} reviews from ${platform}!`);
-        if (onSyncComplete) onSyncComplete();
-      } else if (response.data.errors?.length > 0) {
-        toast.info(response.data.errors[0]);
-      }
-      await fetchData();
-    } catch (error) {
-      console.error("Sync error:", error);
-      toast.error(error.response?.data?.detail || "Sync failed");
-    } finally {
-      setSyncingPlatform(null);
-    }
-  };
-
-  const handleManualImport = async () => {
-    if (!manualReview.guest_name || !manualReview.review_text) {
-      toast.error("Please fill in guest name and review text");
-      return;
-    }
-    try {
-      await axios.post(`${API}/integrations/import`, [manualReview]);
-      toast.success("Review imported successfully!");
-      setManualReview({ platform: "google", guest_name: "", rating: 5, review_text: "", stay_date: "", room_type: "" });
-      setShowManualImport(false);
-      if (onSyncComplete) onSyncComplete();
-    } catch (error) {
-      console.error("Import error:", error);
-      toast.error("Failed to import review");
-    }
-  };
-
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    const formData = new FormData();
-    formData.append("file", file);
-    
-    try {
-      const response = await axios.post(`${API}/integrations/import-csv`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-      toast.success(`Imported ${response.data.imported} reviews!`);
-      if (onSyncComplete) onSyncComplete();
-    } catch (error) {
-      console.error("CSV import error:", error);
-      toast.error("Failed to import CSV");
-    }
-  };
-
-  const getPlatformIcon = (platform) => {
-    const icons = {
-      "google": "🔍",
-      "booking.com": "🅱️",
-      "tripadvisor": "🦉",
-      "airbnb": "🏠",
-      "expedia": "✈️",
-      "trip.com": "🌏",
-      "agoda": "🏨",
-      "hotels.com": "🛏️",
-      "yelp": "📣",
-      "facebook": "👤",
-      "makemytrip": "🇮🇳",
-      "hrs": "💼",
-      "despegar": "🌎",
-      "hostelworld": "🎒"
-    };
-    return icons[platform] || "🌐";
-  };
-
-  const getStatusBadge = (status, configured) => {
-    if (status === "connected") {
-      return <Badge className="bg-[#5A6B50] text-white"><CheckCircle size={12} className="mr-1" />Connected</Badge>;
-    } else if (status === "error") {
-      return <Badge className="bg-[#C05A44] text-white"><WarningCircle size={12} className="mr-1" />Error</Badge>;
-    } else if (configured) {
-      return <Badge className="bg-[#D4A373] text-white"><Link size={12} className="mr-1" />Configured</Badge>;
-    }
-    return <Badge className="bg-stone-400 text-white"><LinkBreak size={12} className="mr-1" />Not Connected</Badge>;
-  };
-
-  const handleSaveConfig = async (platform) => {
-    setIsSavingConfig(true);
-    try {
-      await axios.put(`${API}/integrations/${platform}/configure`, {
-        platform: platform,
-        credentials: configCredentials,
-        location_id: configCredentials.location_id || configCredentials.property_id || configCredentials.hotel_id,
-        property_name: configCredentials.property_name
-      });
-      toast.success(`${platform} credentials saved!`);
-      setShowConfigWizard(null);
-      setConfigCredentials({});
-      await fetchData();
-    } catch (error) {
-      console.error("Config save error:", error);
-      toast.error("Failed to save configuration");
-    } finally {
-      setIsSavingConfig(false);
-    }
-  };
-
-  // Setup guides for each platform
-  const setupGuides = {
-    google: {
-      title: "Google Business Profile Setup Guide",
-      steps: [
-        { title: "1. Verify Your Business", description: "Go to business.google.com and claim/verify your hotel listing if you haven't already." },
-        { title: "2. Create Google Cloud Project", description: "Visit console.cloud.google.com → Create new project → Name it 'Review Hub Integration'" },
-        { title: "3. Enable APIs", description: "In your project, go to 'APIs & Services' → 'Enable APIs' → Search and enable 'My Business Business Information API' and 'My Business Account Management API'" },
-        { title: "4. Create OAuth Credentials", description: "Go to 'APIs & Services' → 'Credentials' → 'Create Credentials' → 'OAuth client ID' → Select 'Web application'" },
-        { title: "5. Configure OAuth Consent", description: "Set up OAuth consent screen with your business info. Add scopes for business.manage" },
-        { title: "6. Get Your Location ID", description: "Your location ID format is: accounts/{account_id}/locations/{location_id}. Find this in your Business Profile dashboard." },
-        { title: "7. Generate Refresh Token", description: "Use Google's OAuth Playground (developers.google.com/oauthplayground) to generate a refresh token with your credentials." }
-      ],
-      fields: [
-        { key: "client_id", label: "OAuth Client ID", placeholder: "xxxx.apps.googleusercontent.com", type: "text" },
-        { key: "client_secret", label: "OAuth Client Secret", placeholder: "GOCSPX-xxxxx", type: "password" },
-        { key: "refresh_token", label: "Refresh Token", placeholder: "1//xxxxx", type: "password" },
-        { key: "location_id", label: "Location ID", placeholder: "accounts/123/locations/456", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ]
-    },
-    "booking.com": {
-      title: "Booking.com Connectivity Partner Setup",
-      steps: [
-        { title: "1. Apply for Partner Program", description: "Visit connect.booking.com and apply for the Connectivity Partner program. This requires a formal business application." },
-        { title: "2. Wait for Approval", description: "Booking.com reviews applications and typically responds within 2-4 weeks. They evaluate your business and technical capabilities." },
-        { title: "3. Complete Technical Onboarding", description: "Once approved, you'll receive access to their Partner Portal and technical documentation." },
-        { title: "4. Get Machine Account Credentials", description: "Booking.com will provide you with a machine account username and password for API access." },
-        { title: "5. Register Your Property", description: "Link your hotel property ID from your Booking.com extranet to the API connection." },
-        { title: "6. Test in Sandbox", description: "Booking.com provides a sandbox environment to test your integration before going live." }
-      ],
-      fields: [
-        { key: "username", label: "Machine Account Username", placeholder: "your_machine_account", type: "text" },
-        { key: "password", label: "Machine Account Password", placeholder: "••••••••", type: "password" },
-        { key: "property_id", label: "Property ID", placeholder: "12345678", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Booking.com API access requires approved Connectivity Partner status. Apply at connect.booking.com"
-    },
-    tripadvisor: {
-      title: "TripAdvisor Content API Setup",
-      steps: [
-        { title: "1. Apply for Content API", description: "Visit developer.tripadvisor.com and register for the Content API partner program." },
-        { title: "2. Submit Business Details", description: "Provide your business information and explain your use case for review management." },
-        { title: "3. Receive API Key", description: "Once approved, you'll receive an API key for accessing TripAdvisor's Content API." },
-        { title: "4. Find Your Location ID", description: "Search for your hotel on TripAdvisor. The location ID is in the URL (e.g., Hotel_Review-g123-d456)." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", type: "password" },
-        { key: "location_id", label: "Location ID", placeholder: "d123456", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "TripAdvisor Content API requires partner approval. Apply at developer.tripadvisor.com"
-    },
-    airbnb: {
-      title: "Airbnb API Setup",
-      steps: [
-        { title: "1. Join Partner Program", description: "Visit airbnb.com/partner and apply for their technology partner program." },
-        { title: "2. Provide Business Documentation", description: "Submit required business documentation for partner verification." },
-        { title: "3. Complete Integration Review", description: "Airbnb will review your integration requirements and use case." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your Airbnb API key", type: "password" },
-        { key: "listing_id", label: "Listing ID", placeholder: "12345678", type: "text" },
-        { key: "property_name", label: "Property Name", placeholder: "Your Property Name", type: "text" }
-      ],
-      notice: "Airbnb API is primarily available to property management software partners."
-    },
-    expedia: {
-      title: "Expedia Partner Central Setup",
-      steps: [
-        { title: "1. Access Partner Central", description: "Log into your Expedia Partner Central account at expediapartnercentral.com" },
-        { title: "2. Request API Access", description: "Contact your Expedia market manager to request API access for review management." },
-        { title: "3. Receive Credentials", description: "Once approved, you'll receive API key and secret for authentication." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your Expedia API key", type: "password" },
-        { key: "secret_key", label: "Secret Key", placeholder: "Your secret key", type: "password" },
-        { key: "property_id", label: "Property ID", placeholder: "12345678", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Contact your Expedia market manager for API access."
-    },
-    "trip.com": {
-      title: "Trip.com Partner API Setup",
-      steps: [
-        { title: "1. Contact Trip.com Partner Team", description: "Reach out to Trip.com's partner team at partner.trip.com to request API access." },
-        { title: "2. Complete Partner Agreement", description: "Sign the necessary partner agreements and provide business documentation." },
-        { title: "3. Receive API Credentials", description: "Once approved, you'll receive your API key and hotel ID mapping." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your Trip.com API key", type: "password" },
-        { key: "hotel_id", label: "Hotel ID", placeholder: "Your Trip.com hotel ID", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Contact Trip.com partner support for API access."
-    },
-    "agoda": {
-      title: "Agoda Partner API Setup",
-      steps: [
-        { title: "1. Join Agoda Partner Program", description: "Visit partners.agoda.com and apply for the Agoda Partner Program with your business credentials." },
-        { title: "2. Access YCS (Yield Control System)", description: "Log into Agoda's YCS platform to manage your property and review settings." },
-        { title: "3. Request API Credentials", description: "Contact your Agoda market manager to request API access credentials for review management." },
-        { title: "4. Get Property ID", description: "Find your Property ID in the YCS dashboard under Property Settings." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your Agoda API key", type: "password" },
-        { key: "property_id", label: "Property ID", placeholder: "Your Agoda property ID", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Agoda is part of Booking Holdings. Contact your market manager for API access."
-    },
-    "hotels.com": {
-      title: "Hotels.com Partner Setup",
-      steps: [
-        { title: "1. Access Hotels.com Supplier Portal", description: "Visit hotels.com/hotel-supplier and log into your partner account." },
-        { title: "2. Use Expedia Partner Central", description: "Hotels.com uses Expedia's backend — access API settings via expediapartnercentral.com." },
-        { title: "3. Request API Credentials", description: "Apply for API access through Expedia Partner Central and receive your API key and secret." },
-        { title: "4. Get Property ID", description: "Find your Hotels.com Property ID in your Partner Central dashboard." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your Hotels.com API key", type: "password" },
-        { key: "secret_key", label: "Secret Key", placeholder: "Your secret key", type: "password" },
-        { key: "property_id", label: "Property ID", placeholder: "Your Hotels.com property ID", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Hotels.com is part of Expedia Group — use Expedia Partner Central for API access."
-    },
-    "yelp": {
-      title: "Yelp Fusion API Setup",
-      steps: [
-        { title: "1. Claim Your Business", description: "Go to biz.yelp.com and claim your business listing if you haven't already." },
-        { title: "2. Create a Yelp Fusion App", description: "Visit yelp.com/developers, create an app, and generate your Fusion API key." },
-        { title: "3. Get Business ID", description: "Use the Yelp Business Search API or find your Business ID in your Yelp business page URL." }
-      ],
-      fields: [
-        { key: "api_key", label: "Fusion API Key", placeholder: "Your Yelp Fusion API key", type: "password" },
-        { key: "business_id", label: "Business ID", placeholder: "your-hotel-city", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Yelp Fusion API is free for limited use — great for local discovery and reviews."
-    },
-    "facebook": {
-      title: "Facebook Reviews Setup",
-      steps: [
-        { title: "1. Set Up Facebook Business Page", description: "Ensure your hotel has a Facebook Business Page with reviews enabled." },
-        { title: "2. Access Meta Business Suite", description: "Go to business.facebook.com and set up Meta Business Suite for your page." },
-        { title: "3. Create a Facebook App", description: "Visit developers.facebook.com, create an app, and request pages_read_engagement permission." },
-        { title: "4. Generate Access Token", description: "Use the Graph API Explorer to generate a long-lived Page Access Token." },
-        { title: "5. Get Page ID", description: "Find your Page ID in your Facebook Page's About section or via the Graph API." }
-      ],
-      fields: [
-        { key: "access_token", label: "Page Access Token", placeholder: "Your Facebook page access token", type: "password" },
-        { key: "page_id", label: "Page ID", placeholder: "Your Facebook Page ID", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Use Meta Business Suite for managing reviews. Graph API required for automation."
-    },
-    "makemytrip": {
-      title: "MakeMyTrip Partner Setup",
-      steps: [
-        { title: "1. Access Partner Extranet", description: "Log into your MakeMyTrip Partner Extranet account at partner.makemytrip.com." },
-        { title: "2. Request API Access", description: "Contact your MakeMyTrip partner manager to request API access for review management." },
-        { title: "3. Get Property ID", description: "Find your Property ID in the MMT Extranet dashboard under property settings." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your MakeMyTrip API key", type: "password" },
-        { key: "property_id", label: "Property ID", placeholder: "Your MMT property ID", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "#1 platform in India — contact partner support for API access."
-    },
-    "hrs": {
-      title: "HRS Partner API Setup",
-      steps: [
-        { title: "1. Register as HRS Partner", description: "Visit hrs.com/hotel and register your property as an HRS hotel partner." },
-        { title: "2. Access Partner Portal", description: "Log into the HRS Partner Portal and navigate to API settings." },
-        { title: "3. Request API Credentials", description: "Apply for API credentials through your HRS account manager." },
-        { title: "4. Get Hotel ID", description: "Find your HRS Hotel ID in your partner dashboard." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your HRS API key", type: "password" },
-        { key: "hotel_id", label: "Hotel ID", placeholder: "Your HRS hotel ID", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Popular in Germany and Europe for business travel bookings."
-    },
-    "despegar": {
-      title: "Despegar Partner API Setup",
-      steps: [
-        { title: "1. Join Despegar Partner Program", description: "Visit despegar.com/hoteles and apply for the partner program." },
-        { title: "2. Complete Onboarding", description: "Work with the Despegar partner team to complete technical onboarding." },
-        { title: "3. Receive API Credentials", description: "Once approved, you'll receive API keys and property mapping from the Despegar team." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your Despegar API key", type: "password" },
-        { key: "property_id", label: "Property ID", placeholder: "Your Despegar property ID", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "#1 OTA in Latin America — contact partner team for API access."
-    },
-    "hostelworld": {
-      title: "Hostelworld API Setup",
-      steps: [
-        { title: "1. Register on Hostelworld", description: "Visit hostelworldgroup.com and register your property (hostels and budget accommodations)." },
-        { title: "2. Access Inbox Dashboard", description: "Log into your Hostelworld Inbox to manage reviews and guest communication." },
-        { title: "3. Request API Credentials", description: "Contact Hostelworld support to request API access for review integration." }
-      ],
-      fields: [
-        { key: "api_key", label: "API Key", placeholder: "Your Hostelworld API key", type: "password" },
-        { key: "property_id", label: "Property ID", placeholder: "Your Hostelworld property ID", type: "text" },
-        { key: "property_name", label: "Hotel Name", placeholder: "Your Hotel Name", type: "text" }
-      ],
-      notice: "Best for hostels and budget accommodations worldwide."
-    }
-  };
-
-  return (
-    <DialogContent className="sm:max-w-[750px] max-h-[90vh] overflow-y-auto" data-testid="integrations-dialog">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
-          <PlugsConnected size={20} weight="fill" className="text-[#3E5245]" />
-          Platform Integrations
-        </DialogTitle>
-      </DialogHeader>
-
-      {/* Configuration Wizard Modal */}
-      {showConfigWizard && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowConfigWizard(null)}>
-          <div className="bg-white rounded-lg max-w-2xl max-h-[90vh] overflow-auto m-4 w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-stone-200 p-4 flex justify-between items-center">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                <span className="text-2xl">{getPlatformIcon(showConfigWizard)}</span>
-                {setupGuides[showConfigWizard]?.title || `${showConfigWizard} Setup`}
-              </h3>
-              <button onClick={() => setShowConfigWizard(null)} className="p-2 hover:bg-stone-100 rounded-md">
-                <X size={20} />
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-6">
-              {/* Setup Steps */}
-              <div className="space-y-4">
-                <h4 className="font-medium text-[#1C1917] flex items-center gap-2">
-                  <Info size={18} className="text-[#3E5245]" />
-                  Setup Steps
-                </h4>
-                <div className="space-y-3">
-                  {setupGuides[showConfigWizard]?.steps.map((step, idx) => (
-                    <div key={idx} className="flex gap-3 p-3 bg-[#FAF9F6] rounded-md">
-                      <div className="w-6 h-6 bg-[#3E5245] text-white rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
-                        {idx + 1}
-                      </div>
-                      <div>
-                        <div className="font-medium text-sm text-[#1C1917]">{step.title.replace(/^\d+\.\s*/, '')}</div>
-                        <div className="text-xs text-[#57534E] mt-1">{step.description}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Notice if any */}
-              {setupGuides[showConfigWizard]?.notice && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
-                  <p className="text-sm text-amber-800 flex items-center gap-2">
-                    <WarningCircle size={16} />
-                    {setupGuides[showConfigWizard].notice}
-                  </p>
-                </div>
-              )}
-
-              {/* Credential Fields */}
-              <div className="space-y-4">
-                <h4 className="font-medium text-[#1C1917] flex items-center gap-2">
-                  <Link size={18} className="text-[#3E5245]" />
-                  Enter Your Credentials
-                </h4>
-                <div className="space-y-3">
-                  {setupGuides[showConfigWizard]?.fields.map((field) => (
-                    <div key={field.key}>
-                      <label className="text-sm font-medium text-[#57534E] block mb-1">{field.label}</label>
-                      <Input
-                        type={field.type}
-                        placeholder={field.placeholder}
-                        value={configCredentials[field.key] || ""}
-                        onChange={(e) => setConfigCredentials(prev => ({ ...prev, [field.key]: e.target.value }))}
-                        className="border-stone-200"
-                        data-testid={`config-${field.key}`}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-stone-200">
-                <button
-                  onClick={() => setShowConfigWizard(null)}
-                  className="px-4 py-2 border border-stone-200 rounded-md hover:bg-stone-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleSaveConfig(showConfigWizard)}
-                  disabled={isSavingConfig}
-                  className="px-4 py-2 bg-[#3E5245] text-white rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
-                  data-testid="save-config-btn"
-                >
-                  {isSavingConfig ? <ArrowsClockwise size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  Save Configuration
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="flex items-center justify-center h-48">
-          <ArrowsClockwise size={32} className="animate-spin text-[#3E5245]" />
-        </div>
-      ) : (
-        <Tabs defaultValue="platforms" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
-            <TabsTrigger value="platforms" data-testid="integrations-platforms-tab">Platforms</TabsTrigger>
-            <TabsTrigger value="guides" data-testid="integrations-guides-tab">Setup Guides</TabsTrigger>
-            <TabsTrigger value="import" data-testid="integrations-import-tab">Manual Import</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="platforms" className="space-y-4">
-            {/* Info Banner */}
-            <div className="p-3 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md">
-              <p className="text-sm text-[#57534E] flex items-center gap-2">
-                <Info size={16} className="text-[#3E5245]" />
-                Connect your review platforms to automatically sync reviews. Click "Configure" to enter your API credentials.
-              </p>
-            </div>
-
-            {/* Platforms List */}
-            <div className="space-y-3">
-              {integrations.map((integration) => {
-                const req = requirements[integration.platform] || {};
-                return (
-                  <div 
-                    key={integration.platform}
-                    className="border border-stone-200 rounded-md bg-white overflow-hidden"
-                    data-testid={`integration-${integration.platform}`}
-                  >
-                    <div className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{getPlatformIcon(integration.platform)}</span>
-                        <div>
-                          <div className="font-medium text-[#1C1917] flex items-center gap-2">
-                            {req.name || integration.platform}
-                            {getStatusBadge(integration.status, integration.credentials_configured)}
-                          </div>
-                          <div className="text-xs text-[#57534E]">
-                            {integration.total_reviews_synced > 0 
-                              ? `${integration.total_reviews_synced} reviews synced` 
-                              : "No reviews synced yet"}
-                            {integration.last_sync && ` • Last: ${new Date(integration.last_sync).toLocaleDateString()}`}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setShowConfigWizard(integration.platform)}
-                          className="bg-white border border-stone-200 text-[#1C1917] px-3 py-1.5 rounded-md text-sm hover:bg-stone-50 transition-colors flex items-center gap-1"
-                          data-testid={`configure-${integration.platform}`}
-                        >
-                          <Link size={14} />
-                          Configure
-                        </button>
-                        <button
-                          onClick={() => handleSync(integration.platform)}
-                          disabled={syncingPlatform === integration.platform}
-                          className="bg-[#3E5245] text-white px-3 py-1.5 rounded-md text-sm hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-1"
-                          data-testid={`sync-${integration.platform}`}
-                        >
-                          {syncingPlatform === integration.platform ? (
-                            <ArrowsClockwise size={14} className="animate-spin" />
-                          ) : (
-                            <CloudArrowUp size={14} />
-                          )}
-                          Sync
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Expanded Details */}
-                    {selectedPlatformDetails === integration.platform && (
-                      <div className="px-4 pb-4 pt-2 border-t border-stone-100 bg-[#FAF9F6]">
-                        <h5 className="text-sm font-medium text-[#1C1917] mb-2">Requirements:</h5>
-                        <ul className="text-xs text-[#57534E] space-y-1 mb-3">
-                          {req.requirements?.map((r, idx) => (
-                            <li key={idx} className="flex items-start gap-2">
-                              <span className="text-[#3E5245]">•</span> {r}
-                            </li>
-                          ))}
-                        </ul>
-                        {req.setup_url && (
-                          <a 
-                            href={req.setup_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-xs text-[#3E5245] hover:underline flex items-center gap-1"
-                          >
-                            <Link size={12} /> Setup Guide
-                          </a>
-                        )}
-                        {req.note && (
-                          <p className="mt-2 text-xs text-[#D4A373] bg-amber-50 p-2 rounded">
-                            ⚠️ {req.note}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </TabsContent>
-
-          {/* Setup Guides Tab */}
-          <TabsContent value="guides" className="space-y-4">
-            <div className="p-3 bg-[#E8EDE7] border border-[#D5DDD3] rounded-md">
-              <p className="text-sm text-[#57534E] flex items-center gap-2">
-                <Info size={16} className="text-[#3E5245]" />
-                Step-by-step guides to connect each platform. Click on a platform to see detailed setup instructions.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              {Object.entries(setupGuides).map(([platform, guide]) => (
-                <div 
-                  key={platform}
-                  className="border border-stone-200 rounded-md p-4 bg-white hover:shadow-md transition-shadow cursor-pointer"
-                  onClick={() => setShowConfigWizard(platform)}
-                  data-testid={`guide-${platform}`}
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-3xl">{getPlatformIcon(platform)}</span>
-                    <div>
-                      <h4 className="font-medium text-[#1C1917]">{guide.title.replace(' Setup Guide', '').replace(' Setup', '')}</h4>
-                      <p className="text-xs text-[#57534E]">{guide.steps.length} steps to connect</p>
-                    </div>
-                  </div>
-                  <div className="text-xs text-[#57534E] space-y-1">
-                    {guide.steps.slice(0, 2).map((step, idx) => (
-                      <div key={idx} className="flex items-start gap-2">
-                        <span className="text-[#3E5245] font-medium">{idx + 1}.</span>
-                        <span className="line-clamp-1">{step.title.replace(/^\d+\.\s*/, '')}</span>
-                      </div>
-                    ))}
-                    <div className="text-[#3E5245] font-medium">+ {guide.steps.length - 2} more steps...</div>
-                  </div>
-                  <button className="mt-3 w-full py-2 bg-[#FAF9F6] text-[#3E5245] rounded-md text-sm hover:bg-[#E8EDE7] transition-colors flex items-center justify-center gap-2">
-                    View Full Guide & Configure
-                    <CaretRight size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="import" className="space-y-4">
-            {/* CSV Import */}
-            <div className="border border-stone-200 rounded-md p-4 bg-white">
-              <h4 className="font-medium text-[#1C1917] mb-3 flex items-center gap-2">
-                <Database size={18} className="text-[#3E5245]" />
-                Import from CSV
-              </h4>
-              <p className="text-sm text-[#57534E] mb-3">
-                Upload a CSV file with columns: platform, guest_name, rating, review_text, review_date, stay_date, room_type
-              </p>
-              <label className="block">
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileUpload}
-                  className="block w-full text-sm text-[#57534E] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-[#3E5245] file:text-white hover:file:bg-[#2A3B30] cursor-pointer"
-                  data-testid="csv-upload-input"
-                />
-              </label>
-            </div>
-
-            {/* Manual Entry */}
-            <div className="border border-stone-200 rounded-md p-4 bg-white">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-[#1C1917] flex items-center gap-2">
-                  <Plus size={18} className="text-[#3E5245]" />
-                  Add Review Manually
-                </h4>
-                <button
-                  onClick={() => setShowManualImport(!showManualImport)}
-                  className="text-sm text-[#3E5245] hover:underline"
-                >
-                  {showManualImport ? "Hide" : "Show Form"}
-                </button>
-              </div>
-
-              {showManualImport && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-[#57534E]">Platform</label>
-                      <Select
-                        value={manualReview.platform}
-                        onValueChange={(value) => setManualReview(prev => ({ ...prev, platform: value }))}
-                      >
-                        <SelectTrigger className="border-stone-200 mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(PLATFORMS).map(([key, config]) => (
-                            <SelectItem key={key} value={key}>{config.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-[#57534E]">Rating</label>
-                      <Select
-                        value={String(manualReview.rating)}
-                        onValueChange={(value) => setManualReview(prev => ({ ...prev, rating: parseInt(value) }))}
-                      >
-                        <SelectTrigger className="border-stone-200 mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[5, 4, 3, 2, 1].map((r) => (
-                            <SelectItem key={r} value={String(r)}>{r} Star{r !== 1 ? 's' : ''}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-[#57534E]">Guest Name</label>
-                    <Input
-                      value={manualReview.guest_name}
-                      onChange={(e) => setManualReview(prev => ({ ...prev, guest_name: e.target.value }))}
-                      placeholder="John Doe"
-                      className="border-stone-200 mt-1"
-                      data-testid="manual-guest-name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-medium text-[#57534E]">Review Text</label>
-                    <Textarea
-                      value={manualReview.review_text}
-                      onChange={(e) => setManualReview(prev => ({ ...prev, review_text: e.target.value }))}
-                      placeholder="Write the review text here..."
-                      className="border-stone-200 mt-1 min-h-[100px]"
-                      data-testid="manual-review-text"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-medium text-[#57534E]">Stay Date</label>
-                      <Input
-                        value={manualReview.stay_date}
-                        onChange={(e) => setManualReview(prev => ({ ...prev, stay_date: e.target.value }))}
-                        placeholder="January 2026"
-                        className="border-stone-200 mt-1"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-[#57534E]">Room Type</label>
-                      <Input
-                        value={manualReview.room_type}
-                        onChange={(e) => setManualReview(prev => ({ ...prev, room_type: e.target.value }))}
-                        placeholder="Deluxe Room"
-                        className="border-stone-200 mt-1"
-                      />
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={handleManualImport}
-                    className="w-full bg-[#3E5245] text-white py-2 rounded-md hover:bg-[#2A3B30] transition-colors flex items-center justify-center gap-2"
-                    data-testid="import-manual-review-btn"
-                  >
-                    <Plus size={16} />
-                    Import Review
-                  </button>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-      )}
-    </DialogContent>
-  );
-};
-
-// Login Page Component
-const LoginPage = ({ onLogin }) => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError("");
-    try {
-      const { data } = await axios.post(`${API}/auth/login`, { email, password });
-      onLogin(data);
-    } catch (e) {
-      setError(formatApiErrorDetail(e.response?.data?.detail) || e.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-4" data-testid="login-page">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
-        <div className="bg-white rounded-2xl shadow-card border border-stone-200/80 overflow-hidden">
-          <div className="bg-[#3E5245] p-8 text-center">
-            <div className="w-14 h-14 bg-white/15 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Buildings size={28} className="text-white" weight="fill" />
-            </div>
-            <h1 className="text-xl font-semibold text-white">Review Hub</h1>
-            <p className="text-sm text-white/60 mt-1">Hotel Review Management</p>
-          </div>
-          
-          <form onSubmit={handleSubmit} className="p-8 space-y-5">
-            {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2.5 text-sm text-red-700" data-testid="login-error">
-                {error}
-              </div>
-            )}
-            
-            <div>
-              <label className="text-sm font-medium text-stone-700 mb-1.5 block">Email</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@hotelbox.com"
-                className="border-stone-200 h-11"
-                data-testid="login-email"
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-stone-700 mb-1.5 block">Password</label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                className="border-stone-200 h-11"
-                data-testid="login-password"
-                required
-              />
-            </div>
-            
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-[#3E5245] text-white py-2.5 rounded-lg hover:bg-[#2A3B30] transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
-              data-testid="login-submit-btn"
-            >
-              {isLoading ? (
-                <ArrowsClockwise size={16} className="animate-spin" />
-              ) : (
-                <SignIn size={16} />
-              )}
-              {isLoading ? "Signing in..." : "Sign In"}
-            </button>
-          </form>
-          
-          <div className="px-8 pb-6 text-center">
-            <p className="text-xs text-stone-400">Hotel staff accounts are created by administrators</p>
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  );
-};
-
 // User Management Panel
 const UserManagementPanel = ({ currentUser }) => {
   const [users, setUsers] = useState([]);
@@ -3059,298 +1525,6 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
   );
 };
 
-// Branding Panel Component
-const BrandingPanel = ({ isOpen, onClose, branding, onBrandingUpdate }) => {
-  const [form, setForm] = useState({
-    app_name: "",
-    subtitle: "",
-    primary_color: "#3E5245",
-    accent_color: "#D4A373",
-    powered_by_text: "",
-    powered_by_visible: false
-  });
-  const [isSaving, setIsSaving] = useState(false);
-  const [logoPreview, setLogoPreview] = useState(null);
-  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
-
-  useEffect(() => {
-    if (branding) {
-      setForm({
-        app_name: branding.app_name || "Review Hub",
-        subtitle: branding.subtitle || "Manage all your guest reviews in one place",
-        primary_color: branding.primary_color || "#3E5245",
-        accent_color: branding.accent_color || "#D4A373",
-        powered_by_text: branding.powered_by_text || "",
-        powered_by_visible: branding.powered_by_visible || false
-      });
-      setLogoPreview(branding.logo_url || null);
-    }
-  }, [branding]);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const response = await axios.put(`${API}/branding`, form);
-      onBrandingUpdate(response.data);
-      toast.success("Branding updated!");
-    } catch (error) {
-      toast.error("Failed to save branding");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleLogoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select an image file");
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Image must be under 2MB");
-      return;
-    }
-    setIsUploadingLogo(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await axios.post(`${API}/branding/logo`, formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-      setLogoPreview(response.data.logo_url);
-      onBrandingUpdate({ ...branding, logo_url: response.data.logo_url });
-      toast.success("Logo uploaded!");
-    } catch (error) {
-      toast.error("Failed to upload logo");
-    } finally {
-      setIsUploadingLogo(false);
-    }
-  };
-
-  const handleRemoveLogo = async () => {
-    try {
-      await axios.delete(`${API}/branding/logo`);
-      setLogoPreview(null);
-      onBrandingUpdate({ ...branding, logo_url: null });
-      toast.success("Logo removed");
-    } catch (error) {
-      toast.error("Failed to remove logo");
-    }
-  };
-
-  const presetColors = [
-    { name: "Forest", primary: "#3E5245", accent: "#D4A373" },
-    { name: "Ocean", primary: "#1E3A5F", accent: "#4ECDC4" },
-    { name: "Midnight", primary: "#1A1A2E", accent: "#E94560" },
-    { name: "Plum", primary: "#4A1942", accent: "#C47AFF" },
-    { name: "Charcoal", primary: "#2D2D2D", accent: "#FFB347" },
-    { name: "Navy", primary: "#003366", accent: "#F0C040" }
-  ];
-
-  return (
-    <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto" data-testid="branding-dialog">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
-          <PaintBrush size={22} className="text-[#3E5245]" />
-          White-Label Branding
-        </DialogTitle>
-      </DialogHeader>
-
-      <div className="space-y-6 mt-2">
-        {/* Live Preview */}
-        <div className="border border-stone-200 rounded-lg overflow-hidden" data-testid="branding-preview">
-          <div className="px-4 py-3 border-b border-stone-100" style={{ backgroundColor: form.primary_color }}>
-            <div className="flex items-center gap-3">
-              {logoPreview ? (
-                <img src={logoPreview} alt="Logo" className="w-9 h-9 rounded-md object-cover" />
-              ) : (
-                <div className="w-9 h-9 rounded-md flex items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
-                  <Buildings size={20} className="text-white" weight="fill" />
-                </div>
-              )}
-              <div>
-                <h3 className="text-sm font-semibold text-white font-['Work_Sans']">{form.app_name || "Review Hub"}</h3>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{form.subtitle || "Manage all your guest reviews in one place"}</p>
-              </div>
-            </div>
-          </div>
-          <div className="px-4 py-3 bg-[#FAF9F6] flex items-center gap-2">
-            <div className="h-2 w-16 rounded-full" style={{ backgroundColor: form.primary_color }}></div>
-            <div className="h-2 w-10 rounded-full" style={{ backgroundColor: form.accent_color }}></div>
-            <div className="h-2 w-12 rounded-full bg-stone-200"></div>
-            <span className="text-[10px] text-[#57534E] ml-auto italic">Live Preview</span>
-          </div>
-          {form.powered_by_visible && form.powered_by_text && (
-            <div className="px-4 py-1.5 bg-stone-50 border-t border-stone-100 text-center">
-              <span className="text-[10px] text-[#78716C]">Powered by {form.powered_by_text}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Logo Upload */}
-        <div>
-          <label className="text-sm font-medium text-[#1C1917] mb-2 block">Logo</label>
-          <div className="flex items-center gap-3">
-            {logoPreview ? (
-              <div className="relative group">
-                <img src={logoPreview} alt="Logo" className="w-14 h-14 rounded-lg object-cover border border-stone-200" data-testid="branding-logo-preview" />
-                <button
-                  onClick={handleRemoveLogo}
-                  className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  data-testid="remove-logo-btn"
-                >
-                  <X size={10} />
-                </button>
-              </div>
-            ) : (
-              <div className="w-14 h-14 rounded-lg border-2 border-dashed border-stone-300 flex items-center justify-center text-stone-400">
-                <Image size={24} />
-              </div>
-            )}
-            <div>
-              <label
-                className="inline-flex items-center gap-1.5 bg-white border border-stone-200 text-[#1C1917] px-3 py-1.5 rounded-md text-sm hover:bg-stone-50 transition-colors cursor-pointer"
-                data-testid="upload-logo-btn"
-              >
-                <Upload size={14} />
-                {isUploadingLogo ? "Uploading..." : "Upload Logo"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  className="hidden"
-                  disabled={isUploadingLogo}
-                />
-              </label>
-              <p className="text-[10px] text-[#78716C] mt-1">PNG, JPG, SVG. Max 2MB.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* App Name & Subtitle */}
-        <div className="grid grid-cols-1 gap-3">
-          <div>
-            <label className="text-sm font-medium text-[#1C1917] mb-1 block">App Name</label>
-            <Input
-              value={form.app_name}
-              onChange={(e) => setForm(prev => ({ ...prev, app_name: e.target.value }))}
-              placeholder="Review Hub"
-              className="border-stone-200"
-              data-testid="branding-app-name"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-[#1C1917] mb-1 block">Subtitle</label>
-            <Input
-              value={form.subtitle}
-              onChange={(e) => setForm(prev => ({ ...prev, subtitle: e.target.value }))}
-              placeholder="Manage all your guest reviews in one place"
-              className="border-stone-200"
-              data-testid="branding-subtitle"
-            />
-          </div>
-        </div>
-
-        {/* Color Presets */}
-        <div>
-          <label className="text-sm font-medium text-[#1C1917] mb-2 block">Color Theme</label>
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            {presetColors.map((preset) => (
-              <button
-                key={preset.name}
-                onClick={() => setForm(prev => ({ ...prev, primary_color: preset.primary, accent_color: preset.accent }))}
-                className={`flex items-center gap-2 p-2 rounded-md border text-xs transition-all ${
-                  form.primary_color === preset.primary ? "border-stone-800 bg-stone-50 ring-1 ring-stone-300" : "border-stone-200 hover:border-stone-300"
-                }`}
-                data-testid={`color-preset-${preset.name.toLowerCase()}`}
-              >
-                <div className="flex gap-0.5">
-                  <div className="w-4 h-4 rounded-sm" style={{ backgroundColor: preset.primary }}></div>
-                  <div className="w-4 h-4 rounded-sm" style={{ backgroundColor: preset.accent }}></div>
-                </div>
-                <span className="text-[#57534E]">{preset.name}</span>
-              </button>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-[#57534E] mb-1 block">Primary Color</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={form.primary_color}
-                  onChange={(e) => setForm(prev => ({ ...prev, primary_color: e.target.value }))}
-                  className="w-8 h-8 rounded border border-stone-200 cursor-pointer"
-                  data-testid="branding-primary-color"
-                />
-                <Input
-                  value={form.primary_color}
-                  onChange={(e) => setForm(prev => ({ ...prev, primary_color: e.target.value }))}
-                  className="border-stone-200 font-mono text-xs"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-[#57534E] mb-1 block">Accent Color</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={form.accent_color}
-                  onChange={(e) => setForm(prev => ({ ...prev, accent_color: e.target.value }))}
-                  className="w-8 h-8 rounded border border-stone-200 cursor-pointer"
-                  data-testid="branding-accent-color"
-                />
-                <Input
-                  value={form.accent_color}
-                  onChange={(e) => setForm(prev => ({ ...prev, accent_color: e.target.value }))}
-                  className="border-stone-200 font-mono text-xs"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Powered By */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-[#1C1917]">Powered By Badge</label>
-            <Switch
-              checked={form.powered_by_visible}
-              onCheckedChange={(checked) => setForm(prev => ({ ...prev, powered_by_visible: checked }))}
-              data-testid="branding-powered-by-toggle"
-            />
-          </div>
-          {form.powered_by_visible && (
-            <Input
-              value={form.powered_by_text}
-              onChange={(e) => setForm(prev => ({ ...prev, powered_by_text: e.target.value }))}
-              placeholder="MyHotelBox"
-              className="border-stone-200"
-              data-testid="branding-powered-by-text"
-            />
-          )}
-        </div>
-
-        {/* Save */}
-        <button
-          onClick={handleSave}
-          disabled={isSaving}
-          className="w-full text-white py-2.5 rounded-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50 font-medium"
-          style={{ backgroundColor: form.primary_color }}
-          data-testid="save-branding-btn"
-        >
-          {isSaving ? (
-            <ArrowsClockwise size={16} className="animate-spin" />
-          ) : (
-            <PaintBrush size={16} />
-          )}
-          {isSaving ? "Saving..." : "Save Branding"}
-        </button>
-      </div>
-    </DialogContent>
-  );
-};
 
 // ==================== API CONNECTION PANEL ====================
 const ApiConnectionPanel = ({ user }) => {
@@ -4076,6 +2250,267 @@ async def handle_review_webhook(request: Request):
   );
 };
 
+// ==================== SYNC LOG PANEL ====================
+const SyncLogPanel = () => {
+  const [logs, setLogs] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [filterPlatform, setFilterPlatform] = useState("");
+
+  const fetchLogs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      let url = `${API}/sync-logs?limit=50`;
+      if (filterPlatform) url += `&platform=${filterPlatform}`;
+      const { data } = await axios.get(url);
+      setLogs(data);
+    } catch (e) {
+      toast.error("Failed to load sync logs");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filterPlatform]);
+
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  return (
+    <div className="p-5" data-testid="sync-log-panel">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-800" data-testid="sync-log-title">Sync Log</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Real-time activity log of review syncing across platforms</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={filterPlatform}
+            onChange={(e) => setFilterPlatform(e.target.value)}
+            className="text-xs border border-stone-200 rounded-lg px-2 py-1.5 bg-white text-stone-700"
+            data-testid="sync-filter-platform"
+          >
+            <option value="">All Platforms</option>
+            {["google","booking.com","tripadvisor","airbnb","expedia","trip.com","agoda","hotels.com","yelp","facebook","makemytrip","hrs","despegar","hostelworld"].map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+          <button onClick={fetchLogs} className="p-1.5 text-stone-400 hover:text-stone-600" data-testid="refresh-sync-logs">
+            <ArrowsClockwise size={14} className={isLoading ? "animate-spin" : ""} />
+          </button>
+        </div>
+      </div>
+
+      {/* Inbound Webhook Info */}
+      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Info size={16} className="text-stone-500" />
+          <h3 className="text-sm font-medium text-stone-700">How Platform Sync Works</h3>
+        </div>
+        <div className="text-xs text-stone-600 space-y-1">
+          <p>Platforms push reviews to your unique inbound webhook URL. Each platform gets its own endpoint and secret for verification.</p>
+          <p>Go to <span className="font-medium text-emerald-700">Integrations</span> &rarr; select a platform &rarr; <span className="font-medium text-emerald-700">Setup Guide</span> to get your inbound URL.</p>
+        </div>
+      </div>
+
+      {/* Log Entries */}
+      {isLoading ? (
+        <div className="flex justify-center py-12"><ArrowsClockwise size={24} className="animate-spin text-stone-400" /></div>
+      ) : logs.length === 0 ? (
+        <div className="text-center py-12 bg-white border border-stone-200 rounded-lg" data-testid="no-sync-logs">
+          <ArrowsClockwise size={32} className="mx-auto text-stone-300 mb-3" />
+          <p className="text-sm text-stone-500">No sync activity yet</p>
+          <p className="text-xs text-stone-400 mt-1">Activity will appear here when platforms push reviews</p>
+        </div>
+      ) : (
+        <div className="space-y-1.5" data-testid="sync-logs-list">
+          {logs.map((log) => (
+            <div key={log.id} className="bg-white border border-stone-200 rounded-lg px-4 py-3 flex items-center gap-3" data-testid={`sync-log-${log.id}`}>
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${log.status === "success" ? "bg-emerald-500" : log.status === "skipped" ? "bg-amber-400" : "bg-red-500"}`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-stone-700 capitalize">{log.platform}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${log.direction === "inbound" ? "bg-blue-50 text-blue-700" : "bg-purple-50 text-purple-700"}`}>
+                    {log.direction}
+                  </span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${log.status === "success" ? "bg-emerald-50 text-emerald-700" : log.status === "skipped" ? "bg-amber-50 text-amber-700" : "bg-red-50 text-red-700"}`}>
+                    {log.status}
+                  </span>
+                </div>
+                {log.message && <p className="text-[10px] text-stone-500 mt-0.5">{log.message}</p>}
+              </div>
+              <span className="text-[10px] text-stone-400 flex-shrink-0">{new Date(log.timestamp).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== PROPERTY MAPPING PANEL ====================
+const PropertyMappingPanel = ({ user }) => {
+  const [properties, setProperties] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ external_id: "", external_name: "", external_system: "myhotelbox" });
+
+  const fetchProperties = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/properties`);
+      setProperties(data);
+    } catch (e) {
+      toast.error("Failed to load properties");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchProperties(); }, [fetchProperties]);
+
+  const handleSaveMapping = async (propertyId) => {
+    try {
+      await axios.put(`${API}/properties/${propertyId}/mapping`, editForm);
+      toast.success("Property mapping saved!");
+      setEditingId(null);
+      fetchProperties();
+    } catch (e) {
+      toast.error(formatApiErrorDetail(e.response?.data?.detail) || "Failed to save mapping");
+    }
+  };
+
+  const startEdit = (prop) => {
+    setEditingId(prop.id);
+    setEditForm({
+      external_id: prop.external_id || "",
+      external_name: prop.external_name || "",
+      external_system: prop.external_system || "myhotelbox"
+    });
+  };
+
+  return (
+    <div className="p-5" data-testid="property-mapping-panel">
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-800" data-testid="mapping-title">Property Mapping</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Link Review Hub properties to your MyHotelBox.com branches</p>
+        </div>
+      </div>
+
+      {/* Info Card */}
+      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          <Info size={16} className="text-emerald-700" />
+          <h3 className="text-sm font-medium text-emerald-800">How Property Mapping Works</h3>
+        </div>
+        <div className="text-xs text-emerald-700 space-y-1">
+          <p>Map each Review Hub property to a MyHotelBox branch ID. When reviews arrive via the inbound webhook with a matching <code className="bg-emerald-100 px-1 rounded">property_id</code>, they'll automatically route to the correct property.</p>
+          <p>Example: Map "Default Hotel" &rarr; MyHotelBox branch "ALDGATE FLATS" (ID: <code className="bg-emerald-100 px-1 rounded">aldgate-flats-001</code>)</p>
+        </div>
+      </div>
+
+      {/* Properties List */}
+      {isLoading ? (
+        <div className="flex justify-center py-12"><ArrowsClockwise size={24} className="animate-spin text-stone-400" /></div>
+      ) : (
+        <div className="space-y-3" data-testid="properties-mapping-list">
+          {properties.map((prop) => (
+            <div key={prop.id} className="bg-white border border-stone-200 rounded-lg p-4" data-testid={`property-${prop.id}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-stone-100 flex items-center justify-center">
+                    <Buildings size={16} className="text-stone-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-stone-800">{prop.name}</h3>
+                    <p className="text-[10px] text-stone-400">{prop.property_type} &middot; ID: {prop.id}</p>
+                  </div>
+                </div>
+                {prop.external_id ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">Mapped</span>
+                    {user?.role === "admin" && (
+                      <button onClick={() => startEdit(prop)} className="text-xs text-stone-400 hover:text-stone-600" data-testid={`edit-mapping-${prop.id}`}>Edit</button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">Not mapped</span>
+                )}
+              </div>
+
+              {/* Current Mapping */}
+              {prop.external_id && editingId !== prop.id && (
+                <div className="bg-stone-50 rounded-lg p-3 grid grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <span className="text-stone-400 block mb-0.5">External System</span>
+                    <span className="text-stone-700 font-medium capitalize">{prop.external_system || "myhotelbox"}</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block mb-0.5">External ID</span>
+                    <code className="text-stone-700 font-mono text-[11px]">{prop.external_id}</code>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block mb-0.5">External Name</span>
+                    <span className="text-stone-700">{prop.external_name || "—"}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Edit Form */}
+              {(editingId === prop.id || (!prop.external_id && user?.role === "admin")) && (
+                <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="border-t border-stone-100 pt-3 mt-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-stone-500 block mb-1">External System</label>
+                      <select
+                        value={editForm.external_system}
+                        onChange={(e) => setEditForm(p => ({ ...p, external_system: e.target.value }))}
+                        className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 bg-white"
+                        data-testid={`system-select-${prop.id}`}
+                      >
+                        <option value="myhotelbox">MyHotelBox</option>
+                        <option value="cloudbeds">Cloudbeds</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-stone-500 block mb-1">External ID</label>
+                      <Input
+                        value={editForm.external_id}
+                        onChange={(e) => setEditForm(p => ({ ...p, external_id: e.target.value }))}
+                        placeholder="e.g., aldgate-flats-001"
+                        className="text-xs h-8"
+                        data-testid={`external-id-${prop.id}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-stone-500 block mb-1">External Name</label>
+                      <Input
+                        value={editForm.external_name}
+                        onChange={(e) => setEditForm(p => ({ ...p, external_name: e.target.value }))}
+                        placeholder="e.g., ALDGATE FLATS"
+                        className="text-xs h-8"
+                        data-testid={`external-name-${prop.id}`}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => handleSaveMapping(prop.id)}
+                      className="px-3 py-1.5 bg-emerald-700 text-white text-xs font-medium rounded-lg hover:bg-emerald-800"
+                      data-testid={`save-mapping-${prop.id}`}
+                    >Save Mapping</button>
+                    {editingId === prop.id && (
+                      <button onClick={() => setEditingId(null)} className="px-3 py-1.5 border border-stone-300 text-stone-600 text-xs rounded-lg hover:bg-stone-50">Cancel</button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Main Dashboard Component
 const Dashboard = ({ user, onLogout }) => {
   const [reviews, setReviews] = useState([]);
@@ -4243,6 +2678,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "integrations", icon: PlugsConnected, name: "Integrations", testId: "integrations-btn" },
         { id: "api", icon: Key, name: "API Connection", testId: "api-connection-btn" },
         { id: "webhooks", icon: Code, name: "Webhooks", testId: "webhooks-btn" },
+        { id: "synclog", icon: ArrowsClockwise, name: "Sync Log", testId: "sync-log-btn" },
         { id: "guide", icon: ArrowSquareOut, name: "Integration Guide", testId: "integration-guide-btn" },
       ]
     },
@@ -4251,6 +2687,7 @@ const Dashboard = ({ user, onLogout }) => {
       items: [
         { id: "alerts", icon: Bell, name: "Alerts", testId: "notification-settings-btn" },
         { id: "reports", icon: CalendarBlank, name: "Reports", testId: "reports-btn" },
+        { id: "mapping", icon: Buildings, name: "Property Mapping", testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: "Branding", testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: "Team", testId: "team-btn" }] : []),
       ]
@@ -4474,6 +2911,16 @@ const Dashboard = ({ user, onLogout }) => {
           <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
             <UserManagementPanel currentUser={user} />
           </Dialog>
+        )}
+
+        {/* Sync Log View */}
+        {activeView === "synclog" && (
+          <SyncLogPanel />
+        )}
+
+        {/* Property Mapping View */}
+        {activeView === "mapping" && (
+          <PropertyMappingPanel user={user} />
         )}
       </main>
 

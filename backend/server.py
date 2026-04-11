@@ -23,6 +23,7 @@ from bson import ObjectId
 
 # Import extracted route modules
 from routes.messaging import create_messaging_router
+from routes.messaging_advanced import create_messaging_advanced_router
 from routes.automation import create_automation_router
 from routes.dashboard import create_dashboard_router
 from routes.staff_performance import create_staff_performance_router
@@ -228,6 +229,9 @@ async def stripe_webhook(request: Request):
 # Wire up extracted route modules
 messaging_router = create_messaging_router(db, require_roles, LlmChat, UserMessage, resend)
 api_router.include_router(messaging_router)
+
+messaging_adv_router = create_messaging_advanced_router(db, require_roles, LlmChat, UserMessage)
+api_router.include_router(messaging_adv_router)
 
 automation_router = create_automation_router(db, require_roles, resend)
 api_router.include_router(automation_router)

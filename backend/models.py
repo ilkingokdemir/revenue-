@@ -1009,7 +1009,7 @@ class SpaceBooking(BaseModel):
 # ==================== GUEST MESSAGING HUB MODELS ====================
 
 MESSAGING_CHANNELS = ["whatsapp", "email", "sms", "internal", "telegram", "booking.com", "airbnb", "expedia", "website_chat"]
-CONVERSATION_STATUSES = ["new", "in_progress", "waiting", "resolved"]
+CONVERSATION_STATUSES = ["new", "in_progress", "waiting", "resolved", "snoozed"]
 CONVERSATION_PRIORITIES = ["low", "medium", "high", "urgent"]
 
 class Conversation(BaseModel):

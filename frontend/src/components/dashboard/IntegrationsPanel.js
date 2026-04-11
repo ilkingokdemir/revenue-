@@ -31,6 +31,7 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
   const [showConfigWizard, setShowConfigWizard] = useState(null);
   const [configCredentials, setConfigCredentials] = useState({});
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [testingPlatform, setTestingPlatform] = useState(null);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -150,6 +151,20 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
         property_name: configCredentials.property_name
       });
       toast.success(`${platform} credentials saved!`);
+      
+      // Auto-test connection after saving
+      try {
+        const { data: testResult } = await axios.post(`${API}/integrations/${platform}/test-connection`);
+        if (testResult.success) {
+          toast.success(testResult.message);
+        } else {
+          toast.info(testResult.message);
+        }
+      } catch (testErr) {
+        // Non-blocking test failure
+        console.log("Connection test skipped:", testErr.message);
+      }
+      
       setShowConfigWizard(null);
       setConfigCredentials({});
       await fetchData();
@@ -158,6 +173,23 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
       toast.error("Failed to save configuration");
     } finally {
       setIsSavingConfig(false);
+    }
+  };
+
+  const handleTestConnection = async (platform) => {
+    setTestingPlatform(platform);
+    try {
+      const { data } = await axios.post(`${API}/integrations/${platform}/test-connection`);
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data.message);
+      }
+      await fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || "Connection test failed");
+    } finally {
+      setTestingPlatform(null);
     }
   };
 
@@ -465,13 +497,15 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleSaveConfig(showConfigWizard)}
+                  onClick={async () => {
+                    await handleSaveConfig(showConfigWizard);
+                  }}
                   disabled={isSavingConfig}
                   className="px-4 py-2 bg-[#3E5245] text-white rounded-md hover:bg-[#2A3B30] transition-colors disabled:opacity-50 flex items-center gap-2"
                   data-testid="save-config-btn"
                 >
                   {isSavingConfig ? <ArrowsClockwise size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                  Save Configuration
+                  Save & Test Connection
                 </button>
               </div>
             </div>
@@ -535,6 +569,21 @@ const IntegrationsPanel = ({ isOpen, onClose, onSyncComplete }) => {
                           <Link size={14} />
                           Configure
                         </button>
+                        {integration.credentials_configured && (
+                          <button
+                            onClick={() => handleTestConnection(integration.platform)}
+                            disabled={testingPlatform === integration.platform}
+                            className="bg-white border border-stone-200 text-[#1C1917] px-3 py-1.5 rounded-md text-sm hover:bg-stone-50 transition-colors disabled:opacity-50 flex items-center gap-1"
+                            data-testid={`test-${integration.platform}`}
+                          >
+                            {testingPlatform === integration.platform ? (
+                              <ArrowsClockwise size={14} className="animate-spin" />
+                            ) : (
+                              <CheckCircle size={14} />
+                            )}
+                            Test
+                          </button>
+                        )}
                         <button
                           onClick={() => handleSync(integration.platform)}
                           disabled={syncingPlatform === integration.platform}

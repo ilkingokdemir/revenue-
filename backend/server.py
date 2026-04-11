@@ -1429,9 +1429,37 @@ async def respond_to_review(review_id: str, response: ReviewResponse):
         {"$set": update_data}
     )
     
+    # Attempt outbound platform sync in the background
+    platform = review.get("platform")
+    if platform and review.get("external_review_id"):
+        asyncio.create_task(_attempt_outbound_sync(platform, review_id, review.get("external_review_id"), response.response_text))
+    
     updated_review = await db.reviews.find_one({"id": review_id}, {"_id": 0})
     deserialize_review(updated_review)
     return updated_review
+
+async def _attempt_outbound_sync(platform: str, review_id: str, external_review_id: str, reply_text: str):
+    """Attempt to post a reply back to the originating platform"""
+    try:
+        integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+        if not integration or not integration.get("credentials_configured"):
+            await _log_sync(platform, "outbound", "skipped", f"No credentials configured for {platform}", review_id)
+            return
+        
+        success = False
+        if platform == "google":
+            location_id = integration.get("location_id")
+            if location_id:
+                success = await PlatformService.post_google_reply(location_id, external_review_id, reply_text)
+        
+        if success:
+            await db.reviews.update_one({"id": review_id}, {"$set": {"synced_to_platform": True, "sync_date": datetime.now(timezone.utc).isoformat()}})
+            await _log_sync(platform, "outbound", "success", f"Reply posted to {platform}", review_id)
+        else:
+            await _log_sync(platform, "outbound", "skipped", f"Outbound sync to {platform} not yet supported or failed", review_id)
+    except Exception as e:
+        logger.error(f"Outbound sync error for {platform}: {e}")
+        await _log_sync(platform, "outbound", "error", str(e)[:200], review_id)
 
 SUPPORTED_LANGUAGES = {
     "auto": "Auto-detect",
@@ -2896,6 +2924,47 @@ async def configure_integration(platform: str, config: PlatformCredentials):
     )
     
     return {"status": "configured", "message": f"{platform} integration configured successfully"}
+
+@api_router.post("/integrations/{platform}/test-connection")
+async def test_platform_connection(platform: str):
+    """Test connection to a configured platform"""
+    integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+    
+    if not integration:
+        raise HTTPException(status_code=404, detail="Integration not found")
+    
+    if not integration.get("credentials_configured"):
+        return {"success": False, "message": "No credentials configured. Please configure the platform first."}
+    
+    if platform == "google":
+        try:
+            access_token = await PlatformService.get_google_access_token()
+            if access_token:
+                # Try to list accounts to verify the token works
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        "https://mybusiness.googleapis.com/v4/accounts",
+                        headers={"Authorization": f"Bearer {access_token}"}
+                    )
+                    if resp.status_code == 200:
+                        await db.platform_integrations.update_one(
+                            {"platform": "google"},
+                            {"$set": {"status": "connected", "last_test": datetime.now(timezone.utc).isoformat()}}
+                        )
+                        return {"success": True, "message": "Google Business Profile connected successfully!"}
+                    else:
+                        return {"success": False, "message": f"Google API returned status {resp.status_code}. Check your credentials."}
+            else:
+                return {"success": False, "message": "Failed to obtain access token. Check your Client ID, Secret, and Refresh Token."}
+        except Exception as e:
+            return {"success": False, "message": f"Connection test failed: {str(e)[:200]}"}
+    
+    # For platforms without direct API test, verify credentials are stored
+    creds = await db.platform_credentials.find_one({"platform": platform}, {"_id": 0})
+    if creds and creds.get("credentials"):
+        return {"success": True, "message": f"Credentials saved for {platform}. Platform will be synced when API access is available."}
+    
+    return {"success": False, "message": "No credentials found. Please configure the platform first."}
 
 @api_router.post("/integrations/{platform}/sync")
 async def sync_platform_reviews(platform: str):

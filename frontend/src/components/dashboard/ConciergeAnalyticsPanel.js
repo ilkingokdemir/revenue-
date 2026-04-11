@@ -6,10 +6,10 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export function ConciergeAnalyticsPanel({ properties }) {
+export function ConciergeAnalyticsPanel({ properties, activePropertyId: propActivePropertyId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const propertyId = properties?.[0]?.id || "aldgate-flats";
+  const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
   const fetch = useCallback(async () => {
     setLoading(true);

@@ -11,14 +11,14 @@ import {
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export function SpaceBookingsPanel({ properties }) {
+export function SpaceBookingsPanel({ properties, activePropertyId: propActivePropertyId }) {
   const [bookings, setBookings] = useState([]);
   const [stats, setStats] = useState(null);
   const [spaces, setSpaces] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterDate, setFilterDate] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
-  const propertyId = properties?.[0]?.id || "aldgate-flats";
+  const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
   const fetchAll = useCallback(async () => {
     setLoading(true);

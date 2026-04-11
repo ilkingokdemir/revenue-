@@ -1008,7 +1008,7 @@ class SpaceBooking(BaseModel):
 
 # ==================== GUEST MESSAGING HUB MODELS ====================
 
-MESSAGING_CHANNELS = ["whatsapp", "email", "sms", "internal", "booking.com", "airbnb", "expedia", "website_chat"]
+MESSAGING_CHANNELS = ["whatsapp", "email", "sms", "internal", "telegram", "booking.com", "airbnb", "expedia", "website_chat"]
 CONVERSATION_STATUSES = ["new", "in_progress", "waiting", "resolved"]
 CONVERSATION_PRIORITIES = ["low", "medium", "high", "urgent"]
 
@@ -1059,16 +1059,62 @@ class QuickReply(BaseModel):
 class ChannelSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
     property_id: str
+    # WhatsApp (Meta Cloud API)
     whatsapp_enabled: bool = False
-    twilio_account_sid: str = ""
-    twilio_auth_token: str = ""
-    twilio_whatsapp_number: str = ""
+    whatsapp_phone_number_id: str = ""
+    whatsapp_access_token: str = ""
+    whatsapp_business_id: str = ""
+    # Telegram Bot
+    telegram_enabled: bool = False
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = ""
+    # SMS (generic)
     sms_enabled: bool = False
+    sms_provider: str = ""
+    sms_api_key: str = ""
+    sms_sender_number: str = ""
+    # Email
     email_enabled: bool = True
+    # Auto-reply
     auto_reply_enabled: bool = False
     auto_reply_message: str = "Thank you for reaching out! Our team will respond shortly."
     welcome_message: str = "Welcome! How can we help you today?"
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class AutoReplyRule(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str = "global"
+    name: str
+    keywords: list = Field(default_factory=list)  # trigger keywords
+    response: str
+    category: str = "faq"
+    enabled: bool = True
+    match_count: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+AUTO_REPLY_DEFAULTS = [
+    {"name": "Check-in & Check-out Times", "keywords": ["check in", "checkin", "check-in", "check out", "checkout", "check-out", "what time"],
+     "response": "Our check-in time is from 15:00 (3 PM) and check-out is by 11:00 (11 AM). Early check-in and late check-out are subject to availability — feel free to ask!", "category": "faq"},
+    {"name": "WiFi Password", "keywords": ["wifi", "wi-fi", "internet", "password", "wireless"],
+     "response": "Our complimentary WiFi network is 'Hotel_Guest'. No password required — just connect and accept the terms. Enjoy!", "category": "faq"},
+    {"name": "Parking Information", "keywords": ["parking", "car park", "garage", "vehicle"],
+     "response": "We offer on-site parking at £15 per day. Please share your vehicle registration number and we'll reserve a spot for you.", "category": "faq"},
+    {"name": "Restaurant Hours", "keywords": ["restaurant", "breakfast", "lunch", "dinner", "food", "eat", "dining"],
+     "response": "Our restaurant hours: Breakfast 07:00-10:30, Lunch 12:00-14:30, Dinner 18:00-22:00. Room service is available 24/7.", "category": "faq"},
+    {"name": "Room Service", "keywords": ["room service", "order food", "menu", "in-room dining"],
+     "response": "Room service is available 24/7! You can find the menu in your room or request it through our guest portal. Just call reception to place your order.", "category": "faq"},
+    {"name": "Late Checkout", "keywords": ["late checkout", "late check-out", "extend stay", "stay longer"],
+     "response": "Late checkout is available subject to availability. We can offer checkout until 14:00 for an additional £30. Would you like me to arrange this?", "category": "faq"},
+    {"name": "Airport Transfer", "keywords": ["airport", "transfer", "taxi", "cab", "transport", "shuttle"],
+     "response": "We can arrange airport transfers for you! Please let us know your flight details and preferred pickup time, and we'll organise a comfortable ride.", "category": "faq"},
+    {"name": "Spa & Gym", "keywords": ["spa", "gym", "fitness", "pool", "swimming", "sauna", "massage"],
+     "response": "Our fitness centre is open 24/7 on the ground floor. Spa treatments are available by appointment from 09:00-21:00. Would you like to book a treatment?", "category": "faq"},
+    {"name": "Luggage Storage", "keywords": ["luggage", "bags", "storage", "store bags", "keep bags"],
+     "response": "Yes, we offer complimentary luggage storage! You can leave your bags at reception before check-in or after check-out. Just ask our front desk team.", "category": "faq"},
+    {"name": "Pet Policy", "keywords": ["pet", "dog", "cat", "animal", "pet friendly"],
+     "response": "We are pet-friendly! Well-behaved dogs are welcome with a small cleaning fee of £25 per stay. Please let us know in advance so we can prepare your room.", "category": "faq"},
+]
 
 QUICK_REPLY_TEMPLATES = [
     {"name": "Welcome", "content": "Welcome to our hotel! How can I assist you today?", "category": "greeting", "shortcut": "/welcome"},

@@ -2762,17 +2762,17 @@ const Dashboard = ({ user, onLogout }) => {
 
         {/* Guest Messaging Hub */}
         {activeView === "messaging" && (
-          <MessagingHub properties={properties} user={user} />
+          <MessagingHub properties={properties} user={user} activePropertyId={activePropertyId} />
         )}
 
         {/* Space Bookings Admin */}
         {activeView === "space-bookings" && (
-          <SpaceBookingsPanel properties={properties} />
+          <SpaceBookingsPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* AI Concierge Analytics */}
         {activeView === "concierge-analytics" && (
-          <ConciergeAnalyticsPanel properties={properties} />
+          <ConciergeAnalyticsPanel properties={properties} activePropertyId={activePropertyId} />
         )}
       </main>
 

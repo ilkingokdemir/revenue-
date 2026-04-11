@@ -4486,6 +4486,286 @@ async def update_channel_settings(property_id: str, updates: Dict, current_user:
     await db.channel_settings.update_one({"property_id": property_id}, {"$set": updates}, upsert=True)
     return await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
 
+
+# --- Guest Contact Directory ---
+
+@api_router.get("/messaging/guests/{property_id}")
+async def guest_directory(
+    property_id: str, search: str = "", filter_type: str = "all",
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """Get guest contacts from bookings with filters"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    query = {}
+    if property_id and property_id != "all":
+        query["property_id"] = property_id
+    if search:
+        query["$or"] = [
+            {"guest_name": {"$regex": search, "$options": "i"}},
+            {"guest_email": {"$regex": search, "$options": "i"}},
+            {"guest_phone": {"$regex": search, "$options": "i"}},
+        ]
+    if filter_type == "current":
+        query["check_in"] = {"$lte": today}
+        query["check_out"] = {"$gte": today}
+        query["status"] = {"$ne": "cancelled"}
+    elif filter_type == "arriving_today":
+        query["check_in"] = today
+        query["status"] = {"$ne": "cancelled"}
+    elif filter_type == "departing_today":
+        query["check_out"] = today
+        query["status"] = {"$ne": "cancelled"}
+    elif filter_type == "upcoming":
+        query["check_in"] = {"$gt": today}
+        query["status"] = {"$ne": "cancelled"}
+    elif filter_type == "past":
+        query["check_out"] = {"$lt": today}
+
+    bookings = await db.bookings.find(query, {"_id": 0}).sort("check_in", -1).to_list(200)
+    # Deduplicate by email, keep latest booking
+    seen = {}
+    guests = []
+    for b in bookings:
+        key = b.get("guest_email", "") or b.get("guest_phone", "") or b.get("guest_name", "")
+        if key and key not in seen:
+            seen[key] = True
+            guests.append({
+                "guest_name": b.get("guest_name", ""),
+                "guest_email": b.get("guest_email", ""),
+                "guest_phone": b.get("guest_phone", ""),
+                "check_in": b.get("check_in", ""),
+                "check_out": b.get("check_out", ""),
+                "booking_ref": b.get("booking_ref", ""),
+                "room_type_id": b.get("room_type_id", ""),
+                "status": b.get("status", ""),
+                "total_price": b.get("total_price", 0),
+                "currency": b.get("currency", "GBP"),
+            })
+    return guests
+
+@api_router.post("/messaging/new-conversation")
+async def create_conversation_from_guest(
+    data: Dict,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """Create a new conversation and send initial message to a guest"""
+    from models import Conversation, Message
+    channel = data.get("channel", "internal")
+    conv = Conversation(
+        property_id=data.get("property_id", ""),
+        guest_name=data.get("guest_name", ""),
+        guest_email=data.get("guest_email", ""),
+        guest_phone=data.get("guest_phone", ""),
+        channel=channel,
+        status="in_progress",
+        priority="medium",
+        assigned_to=current_user.get("id", ""),
+        assigned_name=current_user.get("name", "Staff"),
+        booking_ref=data.get("booking_ref", ""),
+        last_message_preview=data.get("message", "")[:100],
+        unread_count=0,
+    )
+    doc = conv.model_dump()
+    await db.conversations.insert_one(doc)
+    # Create the initial staff message
+    msg = Message(
+        conversation_id=conv.id, sender_type="staff",
+        sender_name=current_user.get("name", "Staff"),
+        content=data.get("message", ""), channel=channel,
+    )
+    md = msg.model_dump()
+    await db.messages.insert_one(md)
+    doc.pop("_id", None)
+    md.pop("_id", None)
+    return {"conversation": doc, "message": md}
+
+# --- Auto-Reply Rules ---
+
+@api_router.get("/messaging/auto-replies/{property_id}")
+async def list_auto_replies(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    docs = await db.auto_replies.find({"property_id": property_id}, {"_id": 0}).sort("name", 1).to_list(50)
+    if not docs:
+        # Seed defaults
+        from models import AUTO_REPLY_DEFAULTS, AutoReplyRule
+        for t in AUTO_REPLY_DEFAULTS:
+            ar = AutoReplyRule(property_id=property_id, **t)
+            d = ar.model_dump()
+            await db.auto_replies.insert_one(d)
+        docs = await db.auto_replies.find({"property_id": property_id}, {"_id": 0}).sort("name", 1).to_list(50)
+        for d in docs: d.pop("_id", None)
+    return docs
+
+@api_router.post("/messaging/auto-replies")
+async def create_auto_reply(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    from models import AutoReplyRule
+    ar = AutoReplyRule(**data)
+    doc = ar.model_dump()
+    await db.auto_replies.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/messaging/auto-replies/{rule_id}")
+async def update_auto_reply(rule_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    updates.pop("_id", None)
+    updates.pop("id", None)
+    await db.auto_replies.update_one({"id": rule_id}, {"$set": updates})
+    return await db.auto_replies.find_one({"id": rule_id}, {"_id": 0})
+
+@api_router.delete("/messaging/auto-replies/{rule_id}")
+async def delete_auto_reply(rule_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    await db.auto_replies.delete_one({"id": rule_id})
+    return {"status": "deleted"}
+
+@api_router.post("/messaging/auto-replies/check")
+async def check_auto_reply(
+    property_id: str, message: str,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """Check if a message matches any auto-reply keyword and return the response"""
+    rules = await db.auto_replies.find({"property_id": property_id, "enabled": True}, {"_id": 0}).to_list(50)
+    msg_lower = message.lower()
+    for rule in rules:
+        for kw in rule.get("keywords", []):
+            if kw.lower() in msg_lower:
+                await db.auto_replies.update_one({"id": rule["id"]}, {"$inc": {"match_count": 1}})
+                return {"matched": True, "rule_name": rule["name"], "response": rule["response"], "rule_id": rule["id"]}
+    return {"matched": False}
+
+# --- Calendar / Bookings for Messaging ---
+
+@api_router.get("/messaging/calendar/{property_id}")
+async def messaging_calendar(
+    property_id: str, month: str = "",
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """Get bookings for calendar view in messaging hub"""
+    if not month:
+        month = datetime.now(timezone.utc).strftime("%Y-%m")
+    year, m = month.split("-")
+    start = f"{year}-{m}-01"
+    end_m = int(m) + 1 if int(m) < 12 else 1
+    end_y = int(year) if int(m) < 12 else int(year) + 1
+    end = f"{end_y}-{str(end_m).zfill(2)}-01"
+    
+    bookings = await db.bookings.find({
+        "property_id": property_id,
+        "$or": [
+            {"check_in": {"$gte": start, "$lt": end}},
+            {"check_out": {"$gte": start, "$lt": end}},
+            {"check_in": {"$lt": start}, "check_out": {"$gte": end}},
+        ],
+        "status": {"$ne": "cancelled"}
+    }, {"_id": 0}).to_list(500)
+
+    # Build day-by-day summary
+    from collections import defaultdict
+    day_bookings = defaultdict(list)
+    for b in bookings:
+        ci = b.get("check_in", "")
+        co = b.get("check_out", "")
+        day_bookings[ci].append({"type": "check_in", "guest": b.get("guest_name", ""), "ref": b.get("booking_ref", ""), "room": b.get("room_type_id", "")})
+        day_bookings[co].append({"type": "check_out", "guest": b.get("guest_name", ""), "ref": b.get("booking_ref", ""), "room": b.get("room_type_id", "")})
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    stats = {
+        "total_bookings": len(bookings),
+        "today_checkins": len([b for b in bookings if b.get("check_in") == today]),
+        "today_checkouts": len([b for b in bookings if b.get("check_out") == today]),
+    }
+    return {"month": month, "bookings": bookings, "day_events": dict(day_bookings), "stats": stats}
+
+# --- Send via WhatsApp (Meta Cloud API) ---
+
+@api_router.post("/messaging/send/whatsapp")
+async def send_whatsapp_message(
+    data: Dict,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """Send WhatsApp message via Meta Cloud API"""
+    property_id = data.get("property_id", "")
+    settings = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
+    if not settings or not settings.get("whatsapp_enabled"):
+        return {"status": "sandbox", "message": "WhatsApp is in sandbox mode. Configure your Meta WhatsApp credentials in Settings to send real messages.", "sent": False}
+    
+    phone = data.get("phone", "").replace("+", "").replace(" ", "")
+    text = data.get("message", "")
+    access_token = settings.get("whatsapp_access_token", "")
+    phone_id = settings.get("whatsapp_phone_number_id", "")
+    
+    if not access_token or not phone_id:
+        return {"status": "sandbox", "message": "WhatsApp credentials not configured. Go to Settings > Channel Settings.", "sent": False}
+    
+    import httpx
+    try:
+        url = f"https://graph.facebook.com/v21.0/{phone_id}/messages"
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone,
+            "type": "text",
+            "text": {"body": text}
+        }
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json=payload, headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"})
+            if resp.status_code == 200:
+                return {"status": "sent", "message": "WhatsApp message sent successfully", "sent": True}
+            else:
+                return {"status": "error", "message": f"WhatsApp API error: {resp.text}", "sent": False}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "sent": False}
+
+# --- Send via Telegram (Bot API) ---
+
+@api_router.post("/messaging/send/telegram")
+async def send_telegram_message(
+    data: Dict,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """Send Telegram message via Bot API"""
+    property_id = data.get("property_id", "")
+    settings = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
+    if not settings or not settings.get("telegram_enabled"):
+        return {"status": "sandbox", "message": "Telegram is in sandbox mode. Configure your Telegram Bot token in Settings.", "sent": False}
+    
+    chat_id = data.get("chat_id", "")
+    text = data.get("message", "")
+    bot_token = settings.get("telegram_bot_token", "")
+    
+    if not bot_token or not chat_id:
+        return {"status": "sandbox", "message": "Telegram credentials not configured. Go to Settings > Channel Settings.", "sent": False}
+    
+    import httpx
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(url, json=payload)
+            if resp.status_code == 200:
+                return {"status": "sent", "message": "Telegram message sent successfully", "sent": True}
+            else:
+                return {"status": "error", "message": f"Telegram API error: {resp.text}", "sent": False}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "sent": False}
+
+# --- Send via Email (Resend) ---
+
+@api_router.post("/messaging/send/email")
+async def send_email_message(
+    data: Dict,
+    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
+):
+    """Send email to guest via Resend"""
+    to_email = data.get("email", "")
+    subject = data.get("subject", "Message from Hotel")
+    body = data.get("message", "")
+    sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+    
+    try:
+        resend.emails.send({"from": sender, "to": [to_email], "subject": subject, "html": f"<p>{body}</p>"})
+        return {"status": "sent", "message": "Email sent successfully", "sent": True}
+    except Exception as e:
+        return {"status": "error", "message": str(e), "sent": False}
+
+
 # --- Seed Demo Conversations ---
 
 @api_router.post("/messaging/seed/{property_id}")

@@ -1,0 +1,91 @@
+{
+  "summary": "Iteration 38 - Dashboard Home Testing Complete. All 16 backend tests passed (100%). All frontend features verified working via Playwright automation. Dashboard is now the default view after login.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration38_dashboard_home.py",
+    "/app/test_reports/pytest/pytest_iteration38_dashboard_home.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration38_dashboard_home.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "property_id": "aldgate-flats"
+  },
+  "seed_data_creation": "None - used existing seed data from previous iterations",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Dashboard Home is now the default view after login (changed from 'reviews'). All features working: 1) Greeting shows 'Good morning/afternoon/evening' based on time of day with today's date. 2) 6 stat cards: Arriving Today, Departing Today, In-House Guests, Revenue (Month), Unread Messages (clickable→messaging), Avg Rating (clickable→reviews). 3) Quick Actions row: Inbox, Run Automation, Reviews, Bookings - all navigate correctly. 4) 3-column activity feed: Recent Bookings, Unread Messages (with channel icons), Recent Reviews (with star ratings). 5) Bottom row: Automation Today + Revenue summary (week/month/total). 6) Dashboard is first item in sidebar with house icon. 7) Backend API GET /api/dashboard/overview/{property_id} returns all aggregated data including bookings, revenue, messaging, reviews, automation, and recent arrays (max 5 items each). 8) 'all' property_id aggregates data across all properties.",
+  "features_tested": {
+    "dashboard_overview_api": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "GET /api/dashboard/overview/aldgate-flats - returns 200 with all sections",
+        "GET /api/dashboard/overview/all - aggregates all properties",
+        "Dashboard overview requires authentication (401 without token)"
+      ],
+      "data_sections_verified": [
+        "bookings: today_checkins, today_checkouts, current_guests, tomorrow_checkins, total, total_rooms, occupancy",
+        "revenue: month_total, month_bookings, week_total, week_bookings",
+        "messaging: unread, open, total",
+        "reviews: total, pending, avg_rating",
+        "automation: sent_today, failed_today",
+        "recent: bookings (max 5), messages (max 5), reviews (max 5)"
+      ]
+    },
+    "dashboard_home_ui": {
+      "status": "PASS",
+      "features_tested": [
+        "Dashboard is default view after login (not Reviews)",
+        "Greeting shows 'Good afternoon' with today's date",
+        "6 stat cards visible with correct data",
+        "Quick Actions row: Inbox, Run Automation, Reviews, Bookings",
+        "3-column activity feed: Recent Bookings, Unread Messages, Recent Reviews",
+        "Unread Messages card shows channel icons (WhatsApp/Email/SMS)",
+        "Recent Reviews shows star ratings",
+        "Bottom row: Automation Today + Revenue summary",
+        "Dashboard is first item in sidebar with house icon"
+      ]
+    },
+    "navigation_tests": {
+      "status": "PASS",
+      "tests": [
+        "Clicking 'Unread Messages' stat card navigates to messaging inbox",
+        "Clicking 'Avg Rating' stat card navigates to reviews",
+        "Quick Action 'Inbox' navigates to messaging",
+        "Quick Action 'Run Automation' navigates to automation panel",
+        "Quick Action 'Reviews' navigates to reviews",
+        "Quick Action 'Bookings' navigates to booking panel"
+      ]
+    },
+    "regression_tests": {
+      "status": "PASS",
+      "features_verified": [
+        "Channel Settings panel still accessible and functional",
+        "Automation panel loads with 6 rules",
+        "Unified Inbox functional with all features",
+        "Reviews API working",
+        "Messaging conversations API working"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "whatsapp_meta_cloud_api": "SANDBOX MODE - No real credentials configured",
+    "telegram_bot_api": "SANDBOX MODE - No real credentials configured",
+    "resend_email": "RESEND_API_KEY is placeholder (re_123456789)"
+  }
+}

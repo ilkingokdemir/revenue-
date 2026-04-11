@@ -27,6 +27,7 @@ import { SpaceBookingsPanel } from "./components/dashboard/SpaceBookingsPanel";
 import { ConciergeAnalyticsPanel } from "./components/dashboard/ConciergeAnalyticsPanel";
 import { AutomationPanel } from "./components/dashboard/AutomationPanel";
 import { ChannelSettingsPanel } from "./components/dashboard/ChannelSettingsPanel";
+import { DashboardHome } from "./components/dashboard/DashboardHome";
 import {
   Star,
   CheckCircle,
@@ -2431,10 +2432,16 @@ const Dashboard = ({ user, onLogout }) => {
     }
   };
 
-  const [activeView, setActiveView] = useState("reviews");
+  const [activeView, setActiveView] = useState("dashboard");
 
   // Sidebar menu items
   const menuSections = [
+    {
+      label: "",
+      items: [
+        { id: "dashboard", icon: House, name: "Dashboard", testId: "dashboard-btn" },
+      ]
+    },
     {
       label: "Review Hub",
       items: [
@@ -2536,16 +2543,18 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 custom-scrollbar">
           {menuSections.map((section, sIdx) => (
-            <div key={section.label} className="mb-2">
+            <div key={section.label || `section-${sIdx}`} className="mb-2">
               {sIdx > 0 && <div className="mx-4 mb-2 border-t border-stone-800" />}
-              <div className="px-4 mb-1.5">
-                <span className={`text-[10px] uppercase tracking-[0.15em] font-bold ${
-                  section.label === "Review Hub" ? "text-emerald-500" :
-                  section.label === "Booking Engine" ? "text-blue-400" :
-                  section.label === "Guest Messaging" ? "text-purple-400" :
-                  "text-stone-500"
-                }`}>{section.label}</span>
-              </div>
+              {section.label && (
+                <div className="px-4 mb-1.5">
+                  <span className={`text-[10px] uppercase tracking-[0.15em] font-bold ${
+                    section.label === "Review Hub" ? "text-emerald-500" :
+                    section.label === "Booking Engine" ? "text-blue-400" :
+                    section.label === "Guest Messaging" ? "text-purple-400" :
+                    "text-stone-500"
+                  }`}>{section.label}</span>
+                </div>
+              )}
               {section.items.map((item) => (
                 <button
                   key={item.id}
@@ -2584,7 +2593,12 @@ const Dashboard = ({ user, onLogout }) => {
 
       {/* Main Content Area */}
       <main className="flex-1 ml-56">
-        {/* Reviews View (default) */}
+        {/* Dashboard Home */}
+        {activeView === "dashboard" && (
+          <DashboardHome properties={properties} activePropertyId={activePropertyId} onNavigate={setActiveView} />
+        )}
+
+        {/* Reviews View */}
         {activeView === "reviews" && (
           <div className="p-5">
             {/* Stats Row */}

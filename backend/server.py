@@ -5109,6 +5109,116 @@ async def update_space_booking_status(booking_id: str, status: str, current_user
     return {"status": "updated"}
 
 
+
+# ==================== DASHBOARD HOME ====================
+
+@api_router.get("/dashboard/overview/{property_id}")
+async def dashboard_overview(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    """Comprehensive dashboard overview for hotel managers"""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
+    week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
+    month_start = datetime.now(timezone.utc).strftime("%Y-%m-01")
+
+    prop_filter = {"property_id": property_id} if property_id != "all" else {}
+    booking_filter = {**prop_filter, "status": {"$ne": "cancelled"}}
+
+    # --- Bookings ---
+    today_checkins = await db.bookings.count_documents({**booking_filter, "check_in": today})
+    today_checkouts = await db.bookings.count_documents({**booking_filter, "check_out": today})
+    current_guests = await db.bookings.count_documents({**booking_filter, "check_in": {"$lte": today}, "check_out": {"$gte": today}})
+    tomorrow_checkins = await db.bookings.count_documents({**booking_filter, "check_in": tomorrow})
+    total_bookings = await db.bookings.count_documents(booking_filter)
+
+    # Revenue
+    revenue_pipeline = [
+        {"$match": {**booking_filter, "created_at": {"$gte": month_start}}},
+        {"$group": {"_id": None, "total": {"$sum": "$total_price"}, "count": {"$sum": 1}}}
+    ]
+    month_rev = None
+    async for doc in db.bookings.aggregate(revenue_pipeline):
+        month_rev = doc
+    
+    week_pipeline = [
+        {"$match": {**booking_filter, "created_at": {"$gte": week_ago}}},
+        {"$group": {"_id": None, "total": {"$sum": "$total_price"}, "count": {"$sum": 1}}}
+    ]
+    week_rev = None
+    async for doc in db.bookings.aggregate(week_pipeline):
+        week_rev = doc
+
+    # --- Room count for occupancy ---
+    total_rooms = 0
+    room_types = await db.room_types.find({**prop_filter}, {"_id": 0, "total_inventory": 1}).to_list(100)
+    for rt in room_types:
+        total_rooms += rt.get("total_inventory", 0)
+    occupancy = round((current_guests / total_rooms * 100) if total_rooms > 0 else 0, 1)
+
+    # --- Messaging ---
+    msg_filter = {"property_id": property_id} if property_id != "all" else {}
+    unread_msgs = await db.conversations.count_documents({**msg_filter, "unread_count": {"$gt": 0}})
+    open_convs = await db.conversations.count_documents({**msg_filter, "status": {"$in": ["new", "in_progress"]}})
+    total_convs = await db.conversations.count_documents(msg_filter)
+
+    # --- Reviews ---
+    total_reviews = await db.reviews.count_documents(prop_filter)
+    pending_reviews = await db.reviews.count_documents({**prop_filter, "status": "pending"})
+    avg_pipeline = [
+        {"$match": prop_filter},
+        {"$group": {"_id": None, "avg": {"$avg": "$rating"}}}
+    ]
+    avg_rating = 0
+    async for doc in db.reviews.aggregate(avg_pipeline):
+        avg_rating = round(doc["avg"], 1)
+
+    # --- Automation ---
+    auto_filter = {"property_id": property_id} if property_id != "all" else {}
+    auto_sent_today = await db.automation_logs.count_documents({**auto_filter, "created_at": {"$gte": today}})
+    auto_failed = await db.automation_logs.count_documents({**auto_filter, "status": "failed", "created_at": {"$gte": today}})
+
+    # --- Recent Activity ---
+    recent_bookings = await db.bookings.find(booking_filter, {"_id": 0, "guest_name": 1, "booking_ref": 1, "check_in": 1, "check_out": 1, "total_price": 1, "created_at": 1, "room_type_id": 1}).sort("created_at", -1).to_list(5)
+    recent_messages = await db.conversations.find({**msg_filter, "unread_count": {"$gt": 0}}, {"_id": 0, "id": 1, "guest_name": 1, "channel": 1, "last_message_preview": 1, "last_message_at": 1, "priority": 1}).sort("last_message_at", -1).to_list(5)
+    recent_reviews_list = await db.reviews.find(prop_filter, {"_id": 0, "guest_name": 1, "rating": 1, "platform": 1, "review_text": 1, "created_at": 1, "status": 1}).sort("created_at", -1).to_list(5)
+
+    return {
+        "bookings": {
+            "today_checkins": today_checkins,
+            "today_checkouts": today_checkouts,
+            "current_guests": current_guests,
+            "tomorrow_checkins": tomorrow_checkins,
+            "total": total_bookings,
+            "total_rooms": total_rooms,
+            "occupancy": occupancy,
+        },
+        "revenue": {
+            "month_total": month_rev["total"] if month_rev else 0,
+            "month_bookings": month_rev["count"] if month_rev else 0,
+            "week_total": week_rev["total"] if week_rev else 0,
+            "week_bookings": week_rev["count"] if week_rev else 0,
+        },
+        "messaging": {
+            "unread": unread_msgs,
+            "open": open_convs,
+            "total": total_convs,
+        },
+        "reviews": {
+            "total": total_reviews,
+            "pending": pending_reviews,
+            "avg_rating": avg_rating,
+        },
+        "automation": {
+            "sent_today": auto_sent_today,
+            "failed_today": auto_failed,
+        },
+        "recent": {
+            "bookings": recent_bookings,
+            "messages": recent_messages,
+            "reviews": recent_reviews_list,
+        }
+    }
+
+
 # --- Template Settings ---
 
 @api_router.get("/template-settings/{property_id}")

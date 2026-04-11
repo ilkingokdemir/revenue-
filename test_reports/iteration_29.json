@@ -1,0 +1,217 @@
+{
+  "summary": "Iteration 29 - Competitive Features Testing Complete. All 31 backend API tests passed (100%). Frontend UI testing verified all new admin panels (Promo Codes, Add-ons, Policies & Facilities), Room Editor with expanded amenity picker (160+ amenities in 10 categories) and unlimited photo support, and public Booking Engine integration with facilities, policies, add-ons display, and promo code validation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration29_competitive_features.py",
+    "/app/test_reports/pytest/pytest_iteration29_competitive.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration29_competitive_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (31/31 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Created test promo codes (TESTUI25, VALID*, TOGGLE*, DELETE*) and test add-ons (TEST Spa Package, TEST Airport Shuttle, TEST Toggle Addon) during testing. Property aldgate-flats has facilities saved: 24-hour front desk, Free WiFi, Restaurant, Gym/Fitness centre. Policies updated: check-in 14:00-22:00, check-out 08:00-12:00, moderate cancellation (48 hours).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All competitive features fully functional. Admin dashboard sidebar has BOOKING ENGINE section with: Rooms & Bookings, Website Templates, Customize Template, Promo Codes, Add-on Services, Policies & Facilities. Room Editor has 4 tabs (Details, Photos, Amenities, Pricing) with unlimited photo support and 160+ amenities in 10 categories. Public booking page at /book?property=aldgate-flats displays facilities, policies, and add-ons. Checkout flow has add-on selection and promo code validation.",
+  "features_verified": {
+    "admin_sidebar_navigation": {
+      "booking_engine_section": "PASS - Contains: Rooms & Bookings, Website Templates, Customize Template, Promo Codes, Add-on Services, Policies & Facilities",
+      "promo_codes_link": "PASS",
+      "add_ons_link": "PASS",
+      "policies_link": "PASS"
+    },
+    "promo_codes_panel": {
+      "panel_loads": "PASS - data-testid='promo-codes-panel'",
+      "create_button": "PASS - data-testid='create-promo-btn'",
+      "create_form": {
+        "code_input": "PASS - data-testid='promo-code-input'",
+        "description_input": "PASS - data-testid='promo-desc-input'",
+        "discount_type_select": "PASS - data-testid='promo-type-select'",
+        "discount_value_input": "PASS - data-testid='promo-value-input'",
+        "property_select": "PASS - data-testid='promo-property-select'",
+        "min_nights_input": "PASS - data-testid='promo-min-nights'",
+        "max_uses_input": "PASS - data-testid='promo-max-uses'",
+        "valid_from_input": "PASS - data-testid='promo-valid-from'",
+        "submit_button": "PASS - data-testid='promo-submit-btn'"
+      },
+      "list_display": "PASS - Shows code, status (Active/Inactive), discount value, min nights, usage count",
+      "toggle_active": "PASS - data-testid='toggle-promo-{CODE}'",
+      "delete": "PASS - data-testid='delete-promo-{CODE}'"
+    },
+    "add_ons_panel": {
+      "panel_loads": "PASS - data-testid='add-ons-panel'",
+      "property_selector": "PASS - data-testid='addons-property-select'",
+      "create_button": "PASS - data-testid='create-addon-btn'",
+      "create_form": {
+        "name_input": "PASS - data-testid='addon-name-input'",
+        "description_input": "PASS - data-testid='addon-desc-input'",
+        "category_select": "PASS - data-testid='addon-category-select' (transport, dining, experience, business, wellness, family, other)",
+        "price_input": "PASS - data-testid='addon-price-input'",
+        "price_type_select": "PASS - data-testid='addon-price-type' (per_stay, per_night, per_person, per_person_per_night)",
+        "submit_button": "PASS - data-testid='addon-submit-btn'"
+      },
+      "list_display": "PASS - Shows name, category icon, price, price type, status",
+      "toggle_active": "PASS - data-testid='toggle-addon-{ID}'",
+      "delete": "PASS - data-testid='delete-addon-{ID}'"
+    },
+    "policies_panel": {
+      "panel_loads": "PASS - data-testid='policies-panel'",
+      "property_selector": "PASS - data-testid='policies-property-select'",
+      "save_button": "PASS - data-testid='save-policies-btn'",
+      "tabs": {
+        "check_in_out": "PASS - data-testid='policy-tab-times'",
+        "cancellation": "PASS - data-testid='policy-tab-cancellation'",
+        "house_rules": "PASS - data-testid='policy-tab-rules'",
+        "payment": "PASS - data-testid='policy-tab-payment'",
+        "facilities": "PASS - data-testid='policy-tab-facilities'"
+      },
+      "check_in_out_tab": {
+        "check_in_from": "PASS - data-testid='check-in-from'",
+        "check_in_until": "PASS - data-testid='check-in-until'",
+        "check_out_from": "PASS - data-testid='check-out-from'",
+        "check_out_until": "PASS - data-testid='check-out-until'"
+      },
+      "cancellation_tab": {
+        "policy_type": "PASS - data-testid='cancellation-type' (free, moderate, strict, custom)",
+        "cancellation_hours": "PASS - data-testid='cancellation-hours'",
+        "cancellation_text": "PASS - data-testid='cancellation-text'"
+      },
+      "house_rules_tab": {
+        "children_policy": "PASS - data-testid='children-policy'",
+        "pet_policy": "PASS - data-testid='pet-policy'",
+        "smoking_policy": "PASS - data-testid='smoking-policy'",
+        "house_rule_input": "PASS - data-testid='house-rule-input'",
+        "add_rule_button": "PASS - data-testid='add-rule-btn'",
+        "extra_info": "PASS - data-testid='extra-info'"
+      },
+      "payment_tab": {
+        "payment_methods": "PASS - Visa, Mastercard, American Express, Apple Pay, Google Pay, PayPal, Bank Transfer, Cash",
+        "damage_deposit": "PASS - data-testid='damage-deposit'"
+      },
+      "facilities_tab": {
+        "amenity_picker": "PASS - data-testid='amenity-picker' in facility mode"
+      }
+    },
+    "room_editor": {
+      "editor_loads": "PASS - data-testid='room-editor'",
+      "tabs": {
+        "details": "PASS - data-testid='tab-details'",
+        "photos": "PASS - data-testid='tab-photos'",
+        "amenities": "PASS - data-testid='tab-amenities'",
+        "pricing": "PASS - data-testid='tab-pricing'"
+      },
+      "details_tab": {
+        "room_name": "PASS - data-testid='room-name-input'",
+        "bed_type": "PASS - data-testid='room-bed-type'",
+        "description": "PASS - data-testid='room-description'",
+        "max_guests": "PASS - data-testid='room-max-guests'",
+        "size": "PASS - data-testid='room-size'",
+        "total_rooms": "PASS - data-testid='room-total'"
+      },
+      "photos_tab": {
+        "unlimited_photos": "PASS - Shows 'Add unlimited photos' and 'no limit' text",
+        "photo_url_input": "PASS - data-testid='photo-url-input'",
+        "add_photo_button": "PASS - data-testid='add-photo-btn'",
+        "photo_reorder": "PASS - Move up/down buttons",
+        "photo_remove": "PASS - data-testid='photo-remove-{idx}'",
+        "cover_badge": "PASS - First photo shows COVER badge"
+      },
+      "amenities_tab": {
+        "amenity_picker": "PASS - data-testid='amenity-picker'",
+        "categories_count": "PASS - 10 categories with 160+ amenities",
+        "categories": [
+          "Bathroom (19)",
+          "Bedroom & Comfort (18)",
+          "Kitchen & Dining (23)",
+          "Technology & Connectivity (18)",
+          "Entertainment & Leisure (16)",
+          "Business & Work (10)",
+          "Safety & Security (12)",
+          "Accessibility (11)",
+          "Wellness & Spa (11)",
+          "Services & Extras (25)"
+        ],
+        "search_input": "PASS - data-testid='amenity-search'",
+        "custom_amenity_input": "PASS - data-testid='custom-amenity-input'",
+        "add_custom_button": "PASS - data-testid='add-custom-amenity-btn'"
+      },
+      "pricing_tab": {
+        "base_price": "PASS - data-testid='room-price'",
+        "currency": "PASS - data-testid='room-currency'",
+        "free_cancellation_toggle": "PASS - data-testid='toggle-free_cancellation'",
+        "breakfast_included_toggle": "PASS - data-testid='toggle-breakfast_included'",
+        "is_active_toggle": "PASS - data-testid='toggle-is_active'"
+      },
+      "save_button": "PASS - data-testid='room-save-btn'",
+      "cancel_button": "PASS - data-testid='room-cancel-btn'"
+    },
+    "public_booking_engine": {
+      "page_loads": "PASS - /book?property=aldgate-flats",
+      "hotel_name": "PASS - Shows 'Aldgate Luxury Flats'",
+      "tagline": "PASS - Shows 'Your Home in the Heart of London'",
+      "rating_badge": "PASS - Shows '8.0 Excellent · 2 reviews'",
+      "room_cards": "PASS - 5 room types displayed with prices, amenities, photos",
+      "facilities_section": "PASS - Shows 24-hour front desk, Free WiFi, Restaurant, Gym/Fitness centre",
+      "policies_section": "PASS - Shows check-in/check-out times"
+    },
+    "checkout_flow": {
+      "guest_details_step": "PASS - data-testid='guest-details-step'",
+      "guest_form": {
+        "name_input": "PASS - data-testid='guest-name-input'",
+        "email_input": "PASS - data-testid='guest-email-input'",
+        "phone_input": "PASS - data-testid='guest-phone-input'",
+        "special_requests": "PASS - data-testid='special-requests-input'"
+      },
+      "addons_section": "PASS - data-testid='addons-section' - Shows 'Enhance Your Stay' with all active add-ons",
+      "promo_section": {
+        "section": "PASS - data-testid='promo-section'",
+        "input": "PASS - data-testid='promo-code-input'",
+        "apply_button": "PASS - data-testid='apply-promo-btn'",
+        "applied_display": "PASS - data-testid='promo-applied'",
+        "remove_button": "PASS - data-testid='remove-promo-btn'"
+      },
+      "payment_method_section": "PASS - data-testid='payment-method-section'",
+      "booking_summary": "PASS - data-testid='booking-summary'",
+      "complete_booking_button": "PASS - data-testid='complete-booking-btn'"
+    },
+    "backend_api": {
+      "GET /api/amenities/catalog": "PASS - Returns 10 categories with 160+ amenities",
+      "GET /api/facilities/catalog": "PASS - Returns 8 categories with facilities",
+      "GET /api/property-facilities/{id}": "PASS - Public, returns property facilities",
+      "PUT /api/property-facilities/{id}": "PASS - Requires auth, saves facilities",
+      "GET /api/hotel-policies/{id}": "PASS - Public, returns policies",
+      "PUT /api/hotel-policies/{id}": "PASS - Requires auth, updates policies",
+      "GET /api/promo-codes": "PASS - Requires auth, lists all codes",
+      "POST /api/promo-codes": "PASS - Requires auth, creates code",
+      "DELETE /api/promo-codes/{id}": "PASS - Requires admin, deletes code",
+      "PUT /api/promo-codes/{id}/toggle": "PASS - Requires auth, toggles active",
+      "POST /api/promo-codes/validate": "PASS - Public, validates code with min_nights, min_amount, date checks",
+      "GET /api/add-ons/{property_id}": "PASS - Public, returns active add-ons",
+      "GET /api/add-ons": "PASS - Requires auth, lists all add-ons",
+      "POST /api/add-ons": "PASS - Requires auth, creates add-on",
+      "DELETE /api/add-ons/{id}": "PASS - Requires admin, deletes add-on",
+      "PUT /api/add-ons/{id}/toggle": "PASS - Requires auth, toggles active",
+      "GET /api/booking/property/{id}": "PASS - Includes template_settings, facilities, policies, add_ons"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

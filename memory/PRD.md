@@ -46,6 +46,15 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 ### Review Hub
 - 14-platform integration, AI responses, approval workflow, analytics, competitor benchmarking
 
+### Webhooks & Sync Logs (Production-Ready Audit Trail)
+- **Guest Profiles**: `guest.created`, `guest.updated`, `guest.vip_changed` webhooks + sync logs
+- **Campaigns**: `campaign.created`, `campaign.sent` webhooks + sync logs + auto-tags guest profiles
+- **Messaging Hub**: `conversation.created`, `conversation.resolved`, `message.sent` webhooks + sync logs
+- **Automation Engine**: `automation.triggered`, `automation.failed` webhooks + sync logs
+- **Digital Keys**: `key.generated`, `key.revoked`, `key.used` webhooks + sync logs
+- **Guest App**: `directory.updated` webhook + sync log
+- **Cross-Module Connections**: Booking→Guest Profile auto-update, Campaign→Guest Profile tagging, Review→Guest Profile linking
+
 ### Connections & Integrations
 - **Platform Setup Wizard** — Self-service step-by-step guides for Google Business, Booking.com, TripAdvisor, WhatsApp, Telegram with credential management, test connection, auto-sync to channel settings
 - **Digital Keys / Smart Locks** — 6 lock providers (TTLock, Nuki, August/Yale, Salto KS, ASSA ABLOY, Generic), digital key generation per booking with 6-digit access codes, public guest key endpoint, revoke support

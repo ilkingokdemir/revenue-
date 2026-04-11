@@ -4066,6 +4066,7 @@ async def seed_sample_room_types():
     # Room templates (reused across properties with price variations)
     room_templates = [
         {
+            "slug": "double",
             "name": "Standard Double Room",
             "description": "Comfortable room with a double bed, en-suite bathroom, and city views. Perfect for solo travellers or couples.",
             "max_guests": 2, "bed_type": "double", "size_sqm": 18, "photos": photos["standard"],
@@ -4073,6 +4074,7 @@ async def seed_sample_room_types():
             "base_price": 89, "total_rooms": 8, "free_cancellation": True, "breakfast_included": False,
         },
         {
+            "slug": "king",
             "name": "Deluxe King Room",
             "description": "Spacious room featuring a king-size bed, premium linens, work desk, and a luxurious rain shower.",
             "max_guests": 2, "bed_type": "king", "size_sqm": 28, "photos": photos["deluxe"],
@@ -4080,6 +4082,7 @@ async def seed_sample_room_types():
             "base_price": 149, "total_rooms": 4, "free_cancellation": True, "breakfast_included": True,
         },
         {
+            "slug": "suite",
             "name": "Family Suite",
             "description": "Generous two-room suite with a separate living area, perfect for families. Includes a king bed and two single beds.",
             "max_guests": 4, "bed_type": "suite", "size_sqm": 45, "photos": photos["suite"],
@@ -4087,6 +4090,7 @@ async def seed_sample_room_types():
             "base_price": 219, "total_rooms": 2, "free_cancellation": True, "breakfast_included": True,
         },
         {
+            "slug": "twin",
             "name": "Superior Twin Room",
             "description": "Bright and modern room with two single beds, ideal for friends or colleagues travelling together.",
             "max_guests": 2, "bed_type": "twin", "size_sqm": 22, "photos": photos["twin"],
@@ -4094,6 +4098,7 @@ async def seed_sample_room_types():
             "base_price": 109, "total_rooms": 5, "free_cancellation": True, "breakfast_included": False,
         },
         {
+            "slug": "exec",
             "name": "Executive Suite",
             "description": "Our finest accommodation with a separate lounge, premium amenities, complimentary minibar, and panoramic views.",
             "max_guests": 2, "bed_type": "king", "size_sqm": 55, "photos": photos["executive"],
@@ -4117,14 +4122,16 @@ async def seed_sample_room_types():
         mult = price_mult.get(prop["id"], 1.0)
         for tmpl in room_templates:
             room = {
-                **tmpl,
-                "id": f"{tmpl['bed_type']}-{prop['id']}",
+                k: v for k, v in tmpl.items() if k != "slug"
+            }
+            room.update({
+                "id": f"{tmpl['slug']}-{prop['id']}",
                 "property_id": prop["id"],
                 "base_price": round(tmpl["base_price"] * mult),
                 "currency": "GBP",
                 "is_active": True,
                 "created_at": now,
-            }
+            })
             await db.room_types.insert_one(room)
             count += 1
     

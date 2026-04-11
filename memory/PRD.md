@@ -46,6 +46,12 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 ### Review Hub
 - 14-platform integration, AI responses, approval workflow, analytics, competitor benchmarking
 
+### Guest Experience (NEW — Competitive with Mews, Cloudbeds, Duve, HiJiffy)
+- **Housekeeping Management** — Room status board (Clean/Dirty/Inspected/In Progress/Out of Order), task assignment, maintenance requests, seeding
+- **Guest Profiles / CRM** — Unified guest history synced from bookings, VIP toggle, loyalty tiers, search/sort, detailed view with booking/review/conversation history
+- **Campaign Manager** — Bulk messaging (Email/WhatsApp/SMS), guest segmentation filters (VIP, loyalty tier, stays, spend, tags), preview recipients, send tracking
+- **Guest App / Digital Directory** — WiFi credentials, hotel services (6 default), local recommendations (4 default), public guest-facing URL, editable via admin panel
+
 ### Admin Panels
 - Space Bookings management, AI Concierge analytics
 - Staff Performance Dashboard — Agent leaderboard, response times, resolution rates, channel breakdown, daily trends, performance scoring
@@ -77,7 +83,11 @@ backend/
 │   ├── automation.py      # Automation Rules, Logs, Stats (222 lines)
 │   ├── dashboard.py       # Dashboard Overview, Concierge, Space Bookings Admin (179 lines)
 │   ├── staff_performance.py # Staff Performance Dashboard (220 lines)
-│   └── calendar_gss.py    # Availability Calendar + Guest Satisfaction Score
+│   ├── calendar_gss.py    # Availability Calendar + Guest Satisfaction Score
+│   ├── housekeeping.py    # Room Status Board, Tasks, Maintenance
+│   ├── guest_profiles.py  # Guest CRM, Profile Sync, VIP Management
+│   ├── campaigns.py       # Campaign Manager, Segmentation, Bulk Send
+│   └── guest_app.py       # Guest App / Digital Directory (public + admin)
 ├── auth.py                # JWT auth, require_roles
 ├── database.py            # MongoDB connection
 └── models.py              # Pydantic models

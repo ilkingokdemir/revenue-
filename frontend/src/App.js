@@ -23,14 +23,11 @@ import { PromoCodesPanel } from "./components/dashboard/PromoCodesPanel";
 import { AddOnsPanel } from "./components/dashboard/AddOnsPanel";
 import { PoliciesPanel } from "./components/dashboard/PoliciesPanel";
 import { MessagingHub } from "./components/dashboard/MessagingHub";
-import { SpaceBookingsPanel } from "./components/dashboard/SpaceBookingsPanel";
 import { ConciergeAnalyticsPanel } from "./components/dashboard/ConciergeAnalyticsPanel";
 import { AutomationPanel } from "./components/dashboard/AutomationPanel";
 import { ChannelSettingsPanel } from "./components/dashboard/ChannelSettingsPanel";
 import { DashboardHome } from "./components/dashboard/DashboardHome";
 import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePanel";
-import { AvailabilityCalendar } from "./components/dashboard/AvailabilityCalendar";
-import { HousekeepingPanel } from "./components/dashboard/HousekeepingPanel";
 import { GuestProfilesPanel } from "./components/dashboard/GuestProfilesPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
@@ -101,8 +98,6 @@ import {
   WhatsappLogo,
   Robot,
   Envelope,
-  Door,
-  Broom,
   AddressBook,
   Megaphone,
   MapPin,
@@ -2467,8 +2462,6 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Booking Engine",
       items: [
         { id: "booking", icon: Bed, name: "Rooms & Bookings", testId: "booking-engine-btn" },
-        { id: "availability-calendar", icon: CalendarBlank, name: "Availability Calendar", testId: "availability-calendar-btn" },
-        { id: "space-bookings", icon: Door, name: "Space Bookings", testId: "space-bookings-btn" },
         { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
         { id: "customize-template", icon: PaintBrush, name: "Customize Template", testId: "customize-template-btn" },
         { id: "promo-codes", icon: Tag, name: "Promo Codes", testId: "promo-codes-btn" },
@@ -2482,7 +2475,6 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "guest-profiles", icon: AddressBook, name: "Guest Profiles", testId: "guest-profiles-btn" },
         { id: "guest-app", icon: MapPin, name: "Guest App", testId: "guest-app-btn" },
         { id: "campaigns", icon: Megaphone, name: "Campaigns", testId: "campaigns-btn" },
-        { id: "housekeeping", icon: Broom, name: "Housekeeping", testId: "housekeeping-btn" },
       ]
     },
     {
@@ -2805,11 +2797,6 @@ const Dashboard = ({ user, onLogout }) => {
           <MessagingHub properties={properties} user={user} activePropertyId={activePropertyId} />
         )}
 
-        {/* Space Bookings Admin */}
-        {activeView === "space-bookings" && (
-          <SpaceBookingsPanel properties={properties} activePropertyId={activePropertyId} />
-        )}
-
         {/* AI Concierge Analytics */}
         {activeView === "concierge-analytics" && (
           <ConciergeAnalyticsPanel properties={properties} activePropertyId={activePropertyId} />
@@ -2828,16 +2815,6 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Staff Performance */}
         {activeView === "staff-performance" && (
           <StaffPerformancePanel properties={properties} activePropertyId={activePropertyId} />
-        )}
-
-        {/* Availability Calendar */}
-        {activeView === "availability-calendar" && (
-          <AvailabilityCalendar properties={properties} activePropertyId={activePropertyId} />
-        )}
-
-        {/* Housekeeping */}
-        {activeView === "housekeeping" && (
-          <HousekeepingPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Guest Profiles */}

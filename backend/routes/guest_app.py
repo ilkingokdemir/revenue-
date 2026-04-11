@@ -5,7 +5,10 @@ Branded guest-facing page with hotel info, services, WiFi, recommendations
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from typing import Dict
+import asyncio
 import logging
+
+from routes.helpers import fire_webhooks, log_sync
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +60,8 @@ def create_guest_app_router(db, require_roles):
             {"property_id": property_id}, {"$set": updates}, upsert=True
         )
         doc = await db.guest_directories.find_one({"property_id": property_id}, {"_id": 0})
+        asyncio.create_task(fire_webhooks(db, "directory.updated", {"property_id": property_id}))
+        await log_sync(db, "guest-app", "internal", "success", f"Guest directory updated for {property_id}", property_id)
         return doc
 
     # === Public: Guest-facing endpoints ===

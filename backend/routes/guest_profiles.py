@@ -5,7 +5,10 @@ Unified guest profiles, history, segmentation
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from typing import Dict
+import asyncio
 import logging
+
+from routes.helpers import fire_webhooks, log_sync
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,8 @@ def create_guest_profiles_router(db, require_roles):
         doc = profile.model_dump()
         await db.guest_profiles.insert_one(doc)
         doc.pop("_id", None)
+        asyncio.create_task(fire_webhooks(db, "guest.created", {"name": doc.get("name"), "email": doc.get("email"), "id": doc.get("id")}))
+        await log_sync(db, "guest-profiles", "internal", "success", f"Guest profile created: {doc.get('name')}", doc.get("id", ""))
         return doc
 
     @router.put("/guests/profiles/{guest_id}")
@@ -82,6 +87,11 @@ def create_guest_profiles_router(db, require_roles):
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.guest_profiles.update_one({"id": guest_id}, {"$set": updates})
         doc = await db.guest_profiles.find_one({"id": guest_id}, {"_id": 0})
+        if "vip" in updates:
+            asyncio.create_task(fire_webhooks(db, "guest.vip_changed", {"guest_id": guest_id, "name": doc.get("name", ""), "vip": updates["vip"]}))
+            await log_sync(db, "guest-profiles", "internal", "success", f"VIP {'set' if updates['vip'] else 'removed'}: {doc.get('name', '')}", guest_id)
+        else:
+            asyncio.create_task(fire_webhooks(db, "guest.updated", {"guest_id": guest_id, "name": doc.get("name", "")}))
         return doc
 
     @router.delete("/guests/profiles/{guest_id}")
@@ -161,5 +171,25 @@ def create_guest_profiles_router(db, require_roles):
                 created += 1
 
         return {"message": f"Synced: {created} new, {updated} updated", "created": created, "updated": updated}
+
+    # --- Cross-module: auto-link reviews to guest profiles ---
+    @router.post("/guests/profiles/link-reviews/{property_id}")
+    async def link_reviews_to_profiles(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Link existing reviews to guest profiles by matching guest_name"""
+        reviews = await db.reviews.find({"property_id": property_id} if property_id != "all" else {}, {"_id": 0, "guest_name": 1, "rating": 1}).to_list(2000)
+        linked = 0
+        for r in reviews:
+            name = r.get("guest_name", "")
+            if not name:
+                continue
+            profile = await db.guest_profiles.find_one({"name": {"$regex": f"^{name}$", "$options": "i"}}, {"_id": 0, "id": 1})
+            if profile:
+                await db.guest_profiles.update_one(
+                    {"id": profile["id"]},
+                    {"$set": {"avg_rating_given": r.get("rating", 0), "updated_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                linked += 1
+        await log_sync(db, "guest-profiles", "internal", "success", f"Linked {linked} reviews to profiles", f"property:{property_id}")
+        return {"message": f"Linked {linked} reviews to guest profiles", "linked": linked}
 
     return router

@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from typing import Dict
 import os
+import asyncio
 import logging
+
+from routes.helpers import fire_webhooks, log_sync
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,8 @@ def create_campaigns_router(db, require_roles, resend):
         doc = camp.model_dump()
         await db.campaigns.insert_one(doc)
         doc.pop("_id", None)
+        asyncio.create_task(fire_webhooks(db, "campaign.created", {"id": doc.get("id"), "name": doc.get("name"), "channel": doc.get("channel")}))
+        await log_sync(db, "campaigns", "internal", "success", f"Campaign created: {doc.get('name')}", doc.get("id", ""))
         return doc
 
     @router.put("/campaigns/{campaign_id}")
@@ -100,6 +105,14 @@ def create_campaigns_router(db, require_roles, resend):
             "sent_at": datetime.now(timezone.utc).isoformat()
         }})
 
+        # Tag guest profiles who received this campaign
+        for r in recipients[:sent]:
+            if r.get("id"):
+                await db.guest_profiles.update_one(
+                    {"id": r["id"]},
+                    {"$addToSet": {"tags": f"campaign:{campaign.get('name', 'unnamed')}"}}
+                )
+
         # Log each send
         for r in recipients[:sent]:
             await db.campaign_logs.insert_one({
@@ -108,6 +121,9 @@ def create_campaigns_router(db, require_roles, resend):
                 "channel": channel, "status": "sent",
                 "sent_at": datetime.now(timezone.utc).isoformat()
             })
+
+        asyncio.create_task(fire_webhooks(db, "campaign.sent", {"id": campaign_id, "name": campaign.get("name"), "sent": sent, "total": len(recipients), "channel": channel}))
+        await log_sync(db, "campaigns", "outbound", "success", f"Campaign '{campaign.get('name')}' sent to {sent}/{len(recipients)} via {channel}", campaign_id)
 
         return {"message": f"Campaign sent to {sent}/{len(recipients)} recipients", "sent": sent, "total": len(recipients)}
 

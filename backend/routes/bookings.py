@@ -1136,6 +1136,32 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         asyncio.create_task(fire_webhooks(db, "booking.created", webhook_data))
         await log_sync(db, "booking-engine", "outbound", "success", f"Booking {doc.get('booking_ref')} created — webhook fired", doc.get("booking_ref", ""))
 
+        # Cross-module: auto-update guest profile
+        guest_email = doc.get("guest_email", "")
+        guest_phone = doc.get("guest_phone", "")
+        guest_name = doc.get("guest_name", "")
+        if guest_email or guest_phone:
+            profile_query = {"email": guest_email} if guest_email else {"phone": guest_phone}
+            existing_profile = await db.guest_profiles.find_one(profile_query, {"_id": 0, "id": 1})
+            if existing_profile:
+                await db.guest_profiles.update_one(
+                    {"id": existing_profile["id"]},
+                    {"$inc": {"total_stays": 1, "total_spend": doc.get("total_price", 0) or 0},
+                     "$set": {"last_stay": doc.get("check_in", ""), "updated_at": datetime.now(timezone.utc).isoformat()},
+                     "$addToSet": {"properties": doc.get("property_id", "")}}
+                )
+            elif guest_name:
+                from models import GuestProfile
+                profile = GuestProfile(
+                    name=guest_name, email=guest_email, phone=guest_phone,
+                    total_stays=1, total_spend=doc.get("total_price", 0) or 0,
+                    first_stay=doc.get("check_in", ""), last_stay=doc.get("check_in", ""),
+                    source="booking-engine",
+                )
+                pd = profile.model_dump()
+                pd["properties"] = [doc.get("property_id", "")]
+                await db.guest_profiles.insert_one(pd)
+
         return doc
 
     async def _send_booking_confirmation(booking: dict, room_name: str):

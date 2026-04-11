@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import os
+import asyncio
 import logging
+
+from routes.helpers import fire_webhooks, log_sync
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +164,14 @@ def create_automation_router(db, require_roles, resend):
                 await db.automation_rules.update_one({"id": rule["id"]}, {"$inc": {"total_sent": sent_for_rule}})
 
             results.append({"rule": rule["name"], "trigger": trigger, "channel": rule["channel"], "matched": len(bookings), "sent": sent_for_rule})
+
+        if total_sent > 0:
+            asyncio.create_task(fire_webhooks(db, "automation.triggered", {"property_id": property_id, "sent": total_sent, "rules_matched": len(results)}))
+            await log_sync(db, "automation", "outbound", "success", f"Automation run: {total_sent} messages sent across {len(results)} rules", property_id)
+
+        failed_count = sum(1 for r in results if r.get("sent", 0) == 0 and r.get("matched", 0) > 0)
+        if failed_count > 0:
+            asyncio.create_task(fire_webhooks(db, "automation.failed", {"property_id": property_id, "failed_rules": failed_count}))
 
         return {"message": f"Automation complete. {total_sent} messages sent.", "sent": total_sent, "results": results}
 

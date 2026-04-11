@@ -6,7 +6,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from typing import Dict
 import secrets
+import asyncio
 import logging
+
+from routes.helpers import fire_webhooks, log_sync
 
 logger = logging.getLogger(__name__)
 
@@ -158,11 +161,15 @@ def create_smart_locks_router(db, require_roles):
         doc = key.model_dump()
         await db.digital_keys.insert_one(doc)
         doc.pop("_id", None)
+        asyncio.create_task(fire_webhooks(db, "key.generated", {"booking_ref": booking_ref, "guest_name": doc.get("guest_name"), "room": doc.get("room_number"), "access_code": doc.get("access_code")}))
+        await log_sync(db, "digital-keys", "internal", "success", f"Key generated for {doc.get('guest_name')} (room {doc.get('room_number', 'TBD')})", booking_ref)
         return doc
 
     @router.put("/digital-keys/{key_id}/revoke")
     async def revoke_key(key_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
         await db.digital_keys.update_one({"id": key_id}, {"$set": {"status": "revoked"}})
+        asyncio.create_task(fire_webhooks(db, "key.revoked", {"key_id": key_id}))
+        await log_sync(db, "digital-keys", "internal", "success", f"Key {key_id} revoked", key_id)
         return {"status": "revoked"}
 
     @router.get("/digital-keys/guest/{booking_ref}")
@@ -176,6 +183,8 @@ def create_smart_locks_router(db, require_roles):
             {"id": key["id"]},
             {"$inc": {"used_count": 1}, "$set": {"last_used_at": datetime.now(timezone.utc).isoformat()}}
         )
+        asyncio.create_task(fire_webhooks(db, "key.used", {"booking_ref": booking_ref, "guest_name": key["guest_name"], "room": key["room_number"]}))
+        await log_sync(db, "digital-keys", "inbound", "success", f"Guest accessed key for room {key['room_number']}", booking_ref)
         return {
             "access_code": key["access_code"],
             "room_number": key["room_number"],

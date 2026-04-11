@@ -7,7 +7,10 @@ from datetime import datetime, timezone
 from typing import Dict
 import os
 import uuid
+import asyncio
 import logging
+
+from routes.helpers import fire_webhooks, log_sync
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +61,7 @@ def create_messaging_router(db, require_roles, LlmChat, UserMessage, resend):
         doc = conv.model_dump()
         await db.conversations.insert_one(doc)
         doc.pop("_id", None)
+        asyncio.create_task(fire_webhooks(db, "conversation.created", {"id": doc.get("id"), "guest_name": doc.get("guest_name"), "channel": doc.get("channel")}))
         return doc
 
     @router.put("/messaging/conversations/{conv_id}")
@@ -87,6 +91,8 @@ def create_messaging_router(db, require_roles, LlmChat, UserMessage, resend):
         current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))
     ):
         await db.conversations.update_one({"id": conv_id}, {"$set": {"status": "resolved"}})
+        asyncio.create_task(fire_webhooks(db, "conversation.resolved", {"id": conv_id}))
+        await log_sync(db, "messaging", "internal", "success", f"Conversation {conv_id} resolved", conv_id)
         return {"status": "resolved"}
 
     @router.get("/messaging/messages/{conv_id}")
@@ -116,6 +122,8 @@ def create_messaging_router(db, require_roles, LlmChat, UserMessage, resend):
                 "status": "waiting"
             }}
         )
+        asyncio.create_task(fire_webhooks(db, "message.sent", {"conversation_id": data["conversation_id"], "sender": current_user.get("name", "Staff"), "channel": doc.get("channel", "")}))
+        await log_sync(db, "messaging", "outbound", "success", f"Staff message in conv {data['conversation_id']}", data["conversation_id"])
         return doc
 
     @router.post("/messaging/messages/ai-suggest")
@@ -305,6 +313,8 @@ Format: {{"sentiment": "positive|negative|neutral", "priority": "low|medium|high
         await db.messages.insert_one(md)
         doc.pop("_id", None)
         md.pop("_id", None)
+        asyncio.create_task(fire_webhooks(db, "conversation.created", {"id": doc.get("id"), "guest_name": doc.get("guest_name"), "channel": channel}))
+        await log_sync(db, "messaging", "internal", "success", f"New conversation with {data.get('guest_name', '')}", doc.get("id", ""))
         return {"conversation": doc, "message": md}
 
     # Auto-Reply Rules

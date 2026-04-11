@@ -14,7 +14,7 @@ from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage, SystemMessage, AssistantMessage
 import resend
 import bcrypt
 import jwt
@@ -3929,7 +3929,8 @@ async def request_guest_portal_access(guest_email: str):
     doc = session.model_dump()
     await db.guest_portal_sessions.insert_one(doc)
     doc.pop("_id", None)
-    # In production, send email with magic link. Return token for dev.
+    # Send portal email with magic link
+    asyncio.create_task(_send_guest_portal_email(guest_email, doc["magic_token"]))
     return {"status": "sent", "message": "Check your email for the access link", "token": doc["magic_token"]}
 
 @api_router.post("/guest-portal/verify")
@@ -4022,6 +4023,44 @@ async def cart_abandonment_stats(property_id: str, current_user: dict = Depends(
     email_sent = await db.abandoned_carts.count_documents({"property_id": property_id, "status": "email_sent"})
     return {"total_abandoned": total, "recovered": recovered, "email_sent": email_sent, "recovery_rate": round(recovered / total * 100, 1) if total > 0 else 0}
 
+@api_router.post("/cart/send-recovery-emails/{property_id}")
+async def send_cart_recovery_emails(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Send recovery emails to all abandoned carts that haven't been emailed yet"""
+    # Find carts older than 1 hour that haven't been emailed
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    carts = await db.abandoned_carts.find({
+        "property_id": property_id, "status": "abandoned",
+        "guest_email": {"$ne": ""}, "created_at": {"$lte": cutoff}
+    }, {"_id": 0}).to_list(50)
+    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+    prop_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+    sent = 0
+    for cart in carts:
+        asyncio.create_task(_send_cart_recovery_email(cart, prop_name))
+        sent += 1
+    return {"sent": sent, "message": f"Sending recovery emails to {sent} guests"}
+
+@api_router.post("/review-collection/send/{property_id}")
+async def send_review_collection_emails(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Send review collection emails to guests who checked out but haven't been emailed"""
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    bookings_list = await db.bookings.find({
+        "property_id": property_id, "check_out": {"$lte": datetime.now(timezone.utc).strftime("%Y-%m-%d")},
+    }, {"_id": 0}).to_list(100)
+    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+    prop_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+    sent = 0
+    for b in bookings_list:
+        # Skip if already reviewed
+        existing = await db.guest_reviews.find_one({"booking_ref": b.get("booking_ref")})
+        if existing:
+            continue
+        asyncio.create_task(_send_review_collection_email(b, prop_name))
+        sent += 1
+    return {"sent": sent, "message": f"Sending review collection emails to {sent} guests"}
+
 # --- Multi-Currency ---
 
 @api_router.get("/currencies")
@@ -4069,6 +4108,170 @@ async def update_group_booking(booking_id: str, updates: Dict, current_user: dic
     await db.group_bookings.update_one({"id": booking_id}, {"$set": updates})
     doc = await db.group_bookings.find_one({"id": booking_id}, {"_id": 0})
     return doc
+
+# --- Hourly / Space Booking ---
+
+@api_router.get("/spaces/templates")
+async def get_space_templates():
+    from models import SPACE_TYPES
+    return SPACE_TYPES
+
+@api_router.get("/spaces/{property_id}")
+async def get_property_spaces(property_id: str):
+    """Public: Get available spaces for a property"""
+    spaces = await db.property_spaces.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(50)
+    return spaces
+
+@api_router.post("/spaces")
+async def create_space(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    from models import PropertySpace
+    space = PropertySpace(**data)
+    doc = space.model_dump()
+    await db.property_spaces.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.put("/spaces/{space_id}")
+async def update_space(space_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    updates.pop("_id", None); updates.pop("id", None)
+    await db.property_spaces.update_one({"id": space_id}, {"$set": updates})
+    return await db.property_spaces.find_one({"id": space_id}, {"_id": 0})
+
+@api_router.delete("/spaces/{space_id}")
+async def delete_space(space_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    await db.property_spaces.delete_one({"id": space_id})
+    return {"status": "deleted"}
+
+@api_router.post("/spaces/seed/{property_id}")
+async def seed_spaces(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    from models import SPACE_TYPES, PropertySpace
+    existing = await db.property_spaces.count_documents({"property_id": property_id})
+    if existing > 0:
+        return {"message": f"Already has {existing} spaces", "count": existing}
+    items = []
+    for t in SPACE_TYPES:
+        space = PropertySpace(property_id=property_id, name=t["name"], category=t["category"], hourly_rate=t["hourly_rate"], capacity=t["capacity"], icon=t["icon"])
+        doc = space.model_dump()
+        items.append(doc)
+    if items:
+        await db.property_spaces.insert_many(items)
+        for i in items: i.pop("_id", None)
+    return {"message": f"Seeded {len(items)} spaces", "items": items}
+
+@api_router.post("/spaces/book")
+async def book_space(
+    property_id: str, space_id: str, guest_name: str, guest_email: str,
+    booking_date: str, start_time: str, end_time: str,
+    guest_phone: str = "", notes: str = ""
+):
+    """Public: Book a space/room by the hour"""
+    space = await db.property_spaces.find_one({"id": space_id, "property_id": property_id}, {"_id": 0})
+    if not space:
+        raise HTTPException(status_code=404, detail="Space not found")
+    # Calculate hours
+    try:
+        sh, sm = map(int, start_time.split(":"))
+        eh, em = map(int, end_time.split(":"))
+        hours = (eh * 60 + em - sh * 60 - sm) / 60
+        if hours <= 0:
+            raise HTTPException(status_code=400, detail="End time must be after start time")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid time format. Use HH:MM")
+    total_price = round(space["hourly_rate"] * hours, 2)
+    # Check for half/full day rates
+    if hours >= 8 and space.get("full_day_rate", 0) > 0:
+        total_price = space["full_day_rate"]
+    elif hours >= 4 and space.get("half_day_rate", 0) > 0:
+        total_price = space["half_day_rate"]
+    from models import SpaceBooking
+    booking = SpaceBooking(
+        property_id=property_id, space_id=space_id, space_name=space["name"],
+        guest_name=guest_name, guest_email=guest_email, guest_phone=guest_phone,
+        booking_date=booking_date, start_time=start_time, end_time=end_time,
+        hours=hours, total_price=total_price, notes=notes,
+    )
+    doc = booking.model_dump()
+    await db.space_bookings.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.get("/spaces/bookings/{property_id}")
+async def list_space_bookings(property_id: str, date: str = "", current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    query = {"property_id": property_id}
+    if date:
+        query["booking_date"] = date
+    docs = await db.space_bookings.find(query, {"_id": 0}).sort("booking_date", -1).to_list(200)
+    return docs
+
+# --- AI Concierge Chat ---
+
+@api_router.post("/concierge/chat")
+async def concierge_chat(property_id: str, message: str, session_id: str = ""):
+    """Public: AI concierge answers guest questions about the property"""
+    # Gather property context
+    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+    policies = await db.hotel_policies.find_one({"property_id": property_id}, {"_id": 0}) or {}
+    facilities = await db.property_facilities.find_one({"property_id": property_id}, {"_id": 0})
+    rooms = await db.room_types.find({"property_id": property_id}, {"_id": 0, "name": 1, "base_price": 1, "max_guests": 1, "amenities": 1}).to_list(10)
+    spaces = await db.property_spaces.find({"property_id": property_id, "is_active": True}, {"_id": 0, "name": 1, "hourly_rate": 1, "capacity": 1}).to_list(10)
+    
+    prop_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+    fac_list = (facilities or {}).get("selected_facilities", [])
+    
+    context = f"""You are a friendly concierge for {prop_name}. Answer questions helpfully and concisely.
+Property info:
+- Name: {prop_name}
+- Address: {ts.get('address', (prop or {}).get('city', 'London'))}
+- Contact: {ts.get('contact_phone', '')} / {ts.get('contact_email', '')}
+- Check-in: {policies.get('check_in_from', '15:00')} - {policies.get('check_in_until', '22:00')}
+- Check-out: {policies.get('check_out_from', '07:00')} - {policies.get('check_out_until', '11:00')}
+- Cancellation: {policies.get('cancellation_policy', 'flexible')}
+- Children: {policies.get('children_policy', 'Welcome')}
+- Pets: {policies.get('pet_policy', 'Not allowed')}
+- Facilities: {', '.join(fac_list[:15]) if fac_list else 'Standard hotel facilities'}
+- Rooms: {'; '.join([f"{r['name']} (£{r['base_price']}/night, {r['max_guests']} guests)" for r in rooms[:5]])}
+- Spaces/Meeting Rooms: {'; '.join([f"{s['name']} (£{s['hourly_rate']}/hr, {s['capacity']} people)" for s in spaces]) if spaces else 'None available'}
+- House rules: {', '.join(policies.get('house_rules', [])[:5]) if policies.get('house_rules') else 'Standard'}
+
+Answer naturally, recommending bookings when appropriate. Keep responses under 150 words."""
+
+    # Get conversation history if session exists
+    history = []
+    if session_id:
+        hist_docs = await db.concierge_chats.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(10)
+        for h in hist_docs:
+            history.append({"role": h["role"], "content": h["content"]})
+
+    try:
+        llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not llm_key:
+            raise HTTPException(status_code=500, detail="AI not configured")
+        chat = LlmChat(emergent_api_key=llm_key, model="gpt-5.2")
+        # Build messages
+        messages = [SystemMessage(content=context)]
+        for h in history[-6:]:  # Last 6 messages for context
+            if h["role"] == "user":
+                messages.append(UserMessage(content=h["content"]))
+            else:
+                messages.append(AssistantMessage(content=h["content"]))
+        messages.append(UserMessage(content=message))
+        
+        response = await chat.send_message(messages[-1], history=messages[:-1])
+        reply = response.content.strip()
+    except Exception as e:
+        logger.error(f"Concierge chat error: {e}")
+        reply = f"I apologize, I'm having trouble connecting right now. Please contact us directly at {ts.get('contact_phone', '')} or {ts.get('contact_email', '')} for assistance."
+
+    # Generate session_id if not provided
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    # Save both messages
+    await db.concierge_chats.insert_one({"session_id": session_id, "property_id": property_id, "role": "user", "content": message, "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.concierge_chats.insert_one({"session_id": session_id, "property_id": property_id, "role": "assistant", "content": reply, "created_at": datetime.now(timezone.utc).isoformat()})
+
+    return {"reply": reply, "session_id": session_id}
 
 # --- Template Settings ---
 
@@ -4281,7 +4484,10 @@ async def create_booking(booking_data: BookingCreate):
     doc.pop("_id", None)
     
     # Send confirmation email in background
+    prop_name_for_email = property.get("name", "Hotel") if property else "Hotel"
     asyncio.create_task(_send_booking_confirmation(doc, room.get("name", "Room")))
+    # Send check-in email in background
+    asyncio.create_task(_send_checkin_email(doc, prop_name_for_email))
     
     # Fire booking webhooks
     webhook_data = {
@@ -4357,6 +4563,152 @@ async def _send_booking_confirmation(booking: dict, room_name: str):
         logger.info(f"Confirmation email sent for {booking.get('booking_ref','')}")
     except Exception as e:
         logger.error(f"Failed to send confirmation email: {e}")
+
+# Get base URL for email links
+def _get_base_url():
+    return os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", "https://review-hub-108.preview.emergentagent.com"))
+
+async def _send_review_collection_email(booking: dict, property_name: str):
+    """Send post-stay review collection email"""
+    if not resend.api_key or resend.api_key == 're_123456789':
+        logger.info("No Resend API key, skipping review collection email")
+        return
+    base_url = _get_base_url()
+    review_link = f"{base_url}/review?property={booking.get('property_id','')}&ref={booking.get('booking_ref','')}"
+    try:
+        ci = datetime.fromisoformat(booking["check_in"]).strftime("%d %B") if booking.get("check_in") else ""
+        co = datetime.fromisoformat(booking["check_out"]).strftime("%d %B %Y") if booking.get("check_out") else ""
+    except Exception:
+        ci, co = booking.get("check_in", ""), booking.get("check_out", "")
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+      <div style="background:linear-gradient(135deg,#1e293b,#334155);color:#fff;padding:32px;text-align:center;">
+        <h1 style="margin:0;font-size:24px;">How was your stay?</h1>
+        <p style="margin:8px 0 0;opacity:0.7;font-size:14px;">{property_name}</p>
+      </div>
+      <div style="padding:32px;">
+        <p style="font-size:15px;color:#475569;line-height:1.6;">Hi {booking.get('guest_name','')},</p>
+        <p style="font-size:15px;color:#475569;line-height:1.6;">Thank you for staying with us ({ci} — {co}). We'd love to hear about your experience — your feedback helps us improve and helps other travellers.</p>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="{review_link}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px;">Leave a Review</a>
+        </div>
+        <p style="font-size:13px;color:#94a3b8;text-align:center;">It only takes 2 minutes</p>
+        <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:16px;text-align:center;font-size:12px;color:#94a3b8;">
+          <p>Powered by MyHotelBox</p>
+        </div>
+      </div>
+    </div>"""
+    try:
+        await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [booking.get("guest_email", "")], "subject": f"How was your stay at {property_name}?", "html": html})
+        logger.info(f"Review collection email sent for {booking.get('booking_ref','')}")
+    except Exception as e:
+        logger.error(f"Failed to send review collection email: {e}")
+
+async def _send_checkin_email(booking: dict, property_name: str):
+    """Send pre-arrival self check-in email"""
+    if not resend.api_key or resend.api_key == 're_123456789':
+        logger.info("No Resend API key, skipping check-in email")
+        return
+    base_url = _get_base_url()
+    checkin_link = f"{base_url}/checkin?ref={booking.get('booking_ref','')}"
+    try:
+        ci = datetime.fromisoformat(booking["check_in"]).strftime("%A, %d %B %Y") if booking.get("check_in") else ""
+    except Exception:
+        ci = booking.get("check_in", "")
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+      <div style="background:linear-gradient(135deg,#059669,#10b981);color:#fff;padding:32px;text-align:center;">
+        <h1 style="margin:0;font-size:24px;">Online Check-in Available</h1>
+        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">Skip the queue at {property_name}</p>
+      </div>
+      <div style="padding:32px;">
+        <p style="font-size:15px;color:#475569;line-height:1.6;">Hi {booking.get('guest_name','')},</p>
+        <p style="font-size:15px;color:#475569;line-height:1.6;">Your stay is approaching! Complete your online check-in now so you can head straight to your room on arrival.</p>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0;">
+          <table style="width:100%;font-size:14px;">
+            <tr><td style="color:#6b7280;padding:4px 0;">Booking Ref</td><td style="text-align:right;font-weight:600;">{booking.get('booking_ref','')}</td></tr>
+            <tr><td style="color:#6b7280;padding:4px 0;">Check-in Date</td><td style="text-align:right;font-weight:600;">{ci}</td></tr>
+          </table>
+        </div>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="{checkin_link}" style="display:inline-block;background:#059669;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px;">Check-in Now</a>
+        </div>
+        <p style="font-size:13px;color:#94a3b8;text-align:center;">Takes less than 2 minutes</p>
+        <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:16px;text-align:center;font-size:12px;color:#94a3b8;">
+          <p>Powered by MyHotelBox</p>
+        </div>
+      </div>
+    </div>"""
+    try:
+        await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [booking.get("guest_email", "")], "subject": f"Check-in online for your stay at {property_name}", "html": html})
+        logger.info(f"Check-in email sent for {booking.get('booking_ref','')}")
+    except Exception as e:
+        logger.error(f"Failed to send check-in email: {e}")
+
+async def _send_cart_recovery_email(cart: dict, property_name: str):
+    """Send cart abandonment recovery email"""
+    if not resend.api_key or resend.api_key == 're_123456789':
+        logger.info("No Resend API key, skipping cart recovery email")
+        return
+    base_url = _get_base_url()
+    recovery_link = f"{base_url}/book?property={cart.get('property_id','')}&recover={cart.get('recovery_token','')}"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+      <div style="background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff;padding:32px;text-align:center;">
+        <h1 style="margin:0;font-size:24px;">You left something behind!</h1>
+        <p style="margin:8px 0 0;opacity:0.8;font-size:14px;">{property_name}</p>
+      </div>
+      <div style="padding:32px;">
+        <p style="font-size:15px;color:#475569;line-height:1.6;">Hi {cart.get('guest_name','there')},</p>
+        <p style="font-size:15px;color:#475569;line-height:1.6;">We noticed you were looking at our <strong>{cart.get('room_name','')}</strong> but didn't complete your booking. Your room is still available!</p>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:20px 0;text-align:center;">
+          <p style="margin:0;font-size:14px;color:#dc2626;font-weight:600;">Room availability is limited — book now to secure your dates</p>
+          <p style="margin:8px 0 0;font-size:12px;color:#6b7280;">{cart.get('check_in','')} — {cart.get('check_out','')}</p>
+        </div>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="{recovery_link}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px;">Complete Your Booking</a>
+        </div>
+        <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:16px;text-align:center;font-size:12px;color:#94a3b8;">
+          <p>Powered by MyHotelBox</p>
+        </div>
+      </div>
+    </div>"""
+    try:
+        await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [cart.get("guest_email", "")], "subject": f"Complete your booking at {property_name}", "html": html})
+        await db.abandoned_carts.update_one({"recovery_token": cart["recovery_token"]}, {"$set": {"status": "email_sent", "email_sent_at": datetime.now(timezone.utc).isoformat()}})
+        logger.info(f"Cart recovery email sent to {cart.get('guest_email','')}")
+    except Exception as e:
+        logger.error(f"Failed to send cart recovery email: {e}")
+
+async def _send_guest_portal_email(guest_email: str, magic_token: str):
+    """Send guest portal magic link email"""
+    if not resend.api_key or resend.api_key == 're_123456789':
+        logger.info("No Resend API key, skipping portal email")
+        return
+    base_url = _get_base_url()
+    portal_link = f"{base_url}/guest-portal?token={magic_token}"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+      <div style="background:linear-gradient(135deg,#1e293b,#475569);color:#fff;padding:32px;text-align:center;">
+        <h1 style="margin:0;font-size:24px;">Your Guest Portal Access</h1>
+      </div>
+      <div style="padding:32px;">
+        <p style="font-size:15px;color:#475569;line-height:1.6;">Hi,</p>
+        <p style="font-size:15px;color:#475569;line-height:1.6;">Click below to securely access your booking history and manage your stays.</p>
+        <div style="text-align:center;margin:28px 0;">
+          <a href="{portal_link}" style="display:inline-block;background:#1e293b;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:15px;">Access Guest Portal</a>
+        </div>
+        <p style="font-size:13px;color:#94a3b8;text-align:center;">This link expires in 24 hours</p>
+        <div style="border-top:1px solid #e2e8f0;margin-top:24px;padding-top:16px;text-align:center;font-size:12px;color:#94a3b8;">
+          <p>Powered by MyHotelBox</p>
+        </div>
+      </div>
+    </div>"""
+    try:
+        await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [guest_email], "subject": "Your Guest Portal Access Link", "html": html})
+        logger.info(f"Portal email sent to {guest_email}")
+    except Exception as e:
+        logger.error(f"Failed to send portal email: {e}")
 
 @api_router.get("/booking/reservation/{booking_ref}")
 async def get_booking_by_ref(booking_ref: str):

@@ -955,3 +955,53 @@ class GroupBooking(BaseModel):
     admin_notes: str = ""
     quoted_price: float = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== HOURLY / SPACE BOOKING ====================
+
+SPACE_TYPES = [
+    {"name": "Meeting Room", "category": "business", "icon": "presentation-chart", "hourly_rate": 25, "capacity": 10},
+    {"name": "Conference Room", "category": "business", "icon": "users", "hourly_rate": 50, "capacity": 30},
+    {"name": "Boardroom", "category": "business", "icon": "crown", "hourly_rate": 75, "capacity": 12},
+    {"name": "Co-working Desk", "category": "workspace", "icon": "desktop", "hourly_rate": 8, "capacity": 1},
+    {"name": "Private Office", "category": "workspace", "icon": "door", "hourly_rate": 20, "capacity": 4},
+    {"name": "Event Hall", "category": "events", "icon": "confetti", "hourly_rate": 150, "capacity": 100},
+    {"name": "Parking Space", "category": "parking", "icon": "car", "hourly_rate": 3, "capacity": 1},
+    {"name": "Spa Treatment Room", "category": "wellness", "icon": "flower-lotus", "hourly_rate": 40, "capacity": 2},
+]
+
+class PropertySpace(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    category: str = "business"
+    description: str = ""
+    capacity: int = 1
+    hourly_rate: float = 0
+    half_day_rate: float = 0
+    full_day_rate: float = 0
+    icon: str = ""
+    amenities: list = Field(default_factory=list)
+    photos: list = Field(default_factory=list)
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class SpaceBooking(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    space_id: str
+    space_name: str = ""
+    guest_name: str
+    guest_email: str
+    guest_phone: str = ""
+    booking_date: str
+    start_time: str
+    end_time: str
+    hours: float = 1
+    total_price: float = 0
+    status: str = "confirmed"
+    notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+

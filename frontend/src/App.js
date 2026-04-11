@@ -25,6 +25,7 @@ import { PoliciesPanel } from "./components/dashboard/PoliciesPanel";
 import { MessagingHub } from "./components/dashboard/MessagingHub";
 import { SpaceBookingsPanel } from "./components/dashboard/SpaceBookingsPanel";
 import { ConciergeAnalyticsPanel } from "./components/dashboard/ConciergeAnalyticsPanel";
+import { AutomationPanel } from "./components/dashboard/AutomationPanel";
 import {
   Star,
   CheckCircle,
@@ -2460,6 +2461,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Guest Messaging",
       items: [
         { id: "messaging", icon: Envelope, name: "Unified Inbox", testId: "messaging-btn" },
+        { id: "automation", icon: Lightning, name: "Automation", testId: "automation-btn" },
         { id: "concierge-analytics", icon: Robot, name: "AI Concierge", testId: "concierge-analytics-btn" },
       ]
     },
@@ -2773,6 +2775,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* AI Concierge Analytics */}
         {activeView === "concierge-analytics" && (
           <ConciergeAnalyticsPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Automation */}
+        {activeView === "automation" && (
+          <AutomationPanel properties={properties} activePropertyId={activePropertyId} />
         )}
       </main>
 

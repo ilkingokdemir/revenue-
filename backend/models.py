@@ -1129,3 +1129,90 @@ QUICK_REPLY_TEMPLATES = [
     {"name": "Complaint Acknowledgement", "content": "I'm truly sorry to hear about this experience. Your feedback is important and I'm escalating this to our manager right away.", "category": "complaint", "shortcut": "/sorry"},
 ]
 
+
+# ==================== AUTOMATION ENGINE MODELS ====================
+
+AUTOMATION_TRIGGERS = ["pre_arrival", "day_of_arrival", "during_stay", "post_checkout", "cart_abandonment"]
+AUTOMATION_CHANNELS = ["email", "whatsapp", "sms", "telegram", "internal"]
+
+class AutomationRule(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    trigger: str  # pre_arrival, day_of_arrival, during_stay, post_checkout, cart_abandonment
+    timing_hours: int = -24  # negative = before event, positive = after. e.g. -24 = 24h before check-in
+    channel: str = "email"
+    subject: str = ""  # for email
+    message_template: str = ""
+    enabled: bool = True
+    total_sent: int = 0
+    total_opened: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class AutomationLog(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    rule_id: str
+    rule_name: str = ""
+    property_id: str
+    guest_name: str
+    guest_email: str = ""
+    guest_phone: str = ""
+    booking_ref: str = ""
+    channel: str
+    message: str
+    status: str = "sent"  # sent, failed, opened
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+AUTOMATION_DEFAULTS = [
+    {
+        "name": "Pre-Arrival Welcome",
+        "trigger": "pre_arrival",
+        "timing_hours": -24,
+        "channel": "email",
+        "subject": "We're looking forward to welcoming you!",
+        "message_template": "Dear {guest_name},\n\nWe're excited to welcome you to {hotel_name} tomorrow!\n\nHere are some useful details:\n- Check-in: from 15:00\n- Address: {hotel_address}\n- Your booking ref: {booking_ref}\n\nYou can also use our online self check-in to save time at reception:\n{checkin_link}\n\nIf you need anything before your arrival, simply reply to this message.\n\nWarm regards,\n{hotel_name} Team",
+    },
+    {
+        "name": "Day-of-Arrival Reminder",
+        "trigger": "day_of_arrival",
+        "timing_hours": 0,
+        "channel": "whatsapp",
+        "subject": "",
+        "message_template": "Hello {guest_name}! Welcome to {hotel_name} today. Check-in is from 15:00. WiFi: Hotel_Guest (no password). Need anything? Just reply here!",
+    },
+    {
+        "name": "Mid-Stay Satisfaction Check",
+        "trigger": "during_stay",
+        "timing_hours": 24,
+        "channel": "whatsapp",
+        "subject": "",
+        "message_template": "Hi {guest_name}, how is your stay at {hotel_name} so far? Is there anything we can do to make it even better? We're here to help!",
+    },
+    {
+        "name": "Post-Checkout Thank You & Review",
+        "trigger": "post_checkout",
+        "timing_hours": 2,
+        "channel": "email",
+        "subject": "Thank you for staying with us!",
+        "message_template": "Dear {guest_name},\n\nThank you for choosing {hotel_name}! We hope you had a wonderful stay.\n\nWe'd love to hear your feedback — it takes just 2 minutes:\n{review_link}\n\nYour review helps us improve and helps other travellers find the right place to stay.\n\nWe look forward to welcoming you again!\n\nWarm regards,\n{hotel_name} Team",
+    },
+    {
+        "name": "Post-Checkout WhatsApp Follow-up",
+        "trigger": "post_checkout",
+        "timing_hours": 4,
+        "channel": "whatsapp",
+        "subject": "",
+        "message_template": "Hi {guest_name}, thank you for staying at {hotel_name}! We'd love a quick review: {review_link} Safe travels!",
+    },
+    {
+        "name": "Cart Abandonment Recovery",
+        "trigger": "cart_abandonment",
+        "timing_hours": 1,
+        "channel": "email",
+        "subject": "You left something behind...",
+        "message_template": "Hi {guest_name},\n\nWe noticed you were looking at rooms at {hotel_name} but didn't complete your booking.\n\nYour selected room is still available — book now before it's gone!\n\n{cart_link}\n\nNeed help? Just reply to this message.\n\n{hotel_name} Team",
+    },
+]
+

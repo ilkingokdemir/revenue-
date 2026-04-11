@@ -30,6 +30,10 @@ import { ChannelSettingsPanel } from "./components/dashboard/ChannelSettingsPane
 import { DashboardHome } from "./components/dashboard/DashboardHome";
 import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePanel";
 import { AvailabilityCalendar } from "./components/dashboard/AvailabilityCalendar";
+import { HousekeepingPanel } from "./components/dashboard/HousekeepingPanel";
+import { GuestProfilesPanel } from "./components/dashboard/GuestProfilesPanel";
+import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
+import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import {
   Star,
   CheckCircle,
@@ -98,6 +102,10 @@ import {
   Robot,
   Envelope,
   Door,
+  Broom,
+  AddressBook,
+  Megaphone,
+  MapPin,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2469,6 +2477,15 @@ const Dashboard = ({ user, onLogout }) => {
       ]
     },
     {
+      label: "Guest Experience",
+      items: [
+        { id: "guest-profiles", icon: AddressBook, name: "Guest Profiles", testId: "guest-profiles-btn" },
+        { id: "guest-app", icon: MapPin, name: "Guest App", testId: "guest-app-btn" },
+        { id: "campaigns", icon: Megaphone, name: "Campaigns", testId: "campaigns-btn" },
+        { id: "housekeeping", icon: Broom, name: "Housekeeping", testId: "housekeeping-btn" },
+      ]
+    },
+    {
       label: "Guest Messaging",
       items: [
         { id: "messaging", icon: Envelope, name: "Unified Inbox", testId: "messaging-btn" },
@@ -2555,6 +2572,7 @@ const Dashboard = ({ user, onLogout }) => {
                     section.label === "Review Hub" ? "text-emerald-500" :
                     section.label === "Booking Engine" ? "text-blue-400" :
                     section.label === "Guest Messaging" ? "text-purple-400" :
+                    section.label === "Guest Experience" ? "text-rose-400" :
                     "text-stone-500"
                   }`}>{section.label}</span>
                 </div>
@@ -2815,6 +2833,26 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Availability Calendar */}
         {activeView === "availability-calendar" && (
           <AvailabilityCalendar properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Housekeeping */}
+        {activeView === "housekeeping" && (
+          <HousekeepingPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Guest Profiles */}
+        {activeView === "guest-profiles" && (
+          <GuestProfilesPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Campaigns */}
+        {activeView === "campaigns" && (
+          <CampaignsPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Guest App */}
+        {activeView === "guest-app" && (
+          <GuestAppPanel properties={properties} activePropertyId={activePropertyId} />
         )}
       </main>
 

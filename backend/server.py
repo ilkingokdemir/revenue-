@@ -27,6 +27,10 @@ from routes.automation import create_automation_router
 from routes.dashboard import create_dashboard_router
 from routes.staff_performance import create_staff_performance_router
 from routes.calendar_gss import create_calendar_gss_router
+from routes.housekeeping import create_housekeeping_router
+from routes.guest_profiles import create_guest_profiles_router
+from routes.campaigns import create_campaigns_router
+from routes.guest_app import create_guest_app_router
 from routes.auth_routes import create_auth_router
 from routes.connections import create_connections_router
 from routes.reviews import create_reviews_router
@@ -232,6 +236,18 @@ api_router.include_router(staff_perf_router)
 
 calendar_gss_router = create_calendar_gss_router(db, require_roles)
 api_router.include_router(calendar_gss_router)
+
+housekeeping_router = create_housekeeping_router(db, require_roles)
+api_router.include_router(housekeeping_router)
+
+guest_profiles_router = create_guest_profiles_router(db, require_roles)
+api_router.include_router(guest_profiles_router)
+
+campaigns_router = create_campaigns_router(db, require_roles, resend)
+api_router.include_router(campaigns_router)
+
+guest_app_router = create_guest_app_router(db, require_roles)
+api_router.include_router(guest_app_router)
 
 auth_routes_router = create_auth_router(db, require_roles, get_current_user, hash_password, verify_password,
                                          create_access_token, create_refresh_token, get_jwt_secret, JWT_ALGORITHM)

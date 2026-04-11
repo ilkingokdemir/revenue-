@@ -1216,3 +1216,130 @@ AUTOMATION_DEFAULTS = [
     },
 ]
 
+
+# ==================== HOUSEKEEPING MODELS ====================
+
+ROOM_STATUSES = ["clean", "dirty", "inspected", "out_of_order", "in_progress"]
+TASK_PRIORITIES = ["low", "normal", "high", "urgent"]
+TASK_TYPES = ["cleaning", "deep_clean", "turnover", "maintenance", "inspection", "amenity_restock"]
+
+class HousekeepingTask(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    room_number: str = ""
+    room_type_id: str = ""
+    task_type: str = "cleaning"
+    priority: str = "normal"
+    status: str = "pending"  # pending, in_progress, completed, cancelled
+    assigned_to: str = ""
+    assigned_name: str = ""
+    notes: str = ""
+    checklist: list = Field(default_factory=list)
+    due_date: str = ""
+    completed_at: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class RoomStatus(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    room_number: str
+    room_type_id: str = ""
+    floor: str = ""
+    status: str = "clean"  # clean, dirty, inspected, out_of_order, in_progress
+    guest_name: str = ""
+    booking_ref: str = ""
+    check_in: str = ""
+    check_out: str = ""
+    last_cleaned_at: str = ""
+    last_cleaned_by: str = ""
+    maintenance_notes: str = ""
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class MaintenanceRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    room_number: str = ""
+    category: str = "general"  # plumbing, electrical, hvac, furniture, general
+    description: str
+    priority: str = "normal"
+    status: str = "open"  # open, assigned, in_progress, resolved, closed
+    assigned_to: str = ""
+    reported_by: str = ""
+    photos: list = Field(default_factory=list)
+    resolution_notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    resolved_at: str = ""
+
+
+# ==================== GUEST PROFILE / CRM MODELS ====================
+
+class GuestProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str = ""
+    phone: str = ""
+    name: str
+    vip: bool = False
+    tags: list = Field(default_factory=list)
+    preferences: dict = Field(default_factory=dict)  # room_type, floor, pillows, dietary, etc.
+    notes: str = ""
+    total_stays: int = 0
+    total_spend: float = 0
+    avg_rating_given: float = 0
+    first_stay: str = ""
+    last_stay: str = ""
+    loyalty_tier: str = "standard"  # standard, silver, gold, platinum
+    source: str = ""  # direct, booking.com, expedia, etc.
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== CAMPAIGN MANAGER MODELS ====================
+
+CAMPAIGN_CHANNELS = ["email", "whatsapp", "sms", "telegram"]
+CAMPAIGN_STATUSES = ["draft", "scheduled", "sending", "sent", "cancelled"]
+
+class Campaign(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    channel: str = "email"
+    status: str = "draft"
+    subject: str = ""
+    message: str = ""
+    segment: dict = Field(default_factory=dict)  # filters: vip, tags, last_stay, etc.
+    scheduled_at: str = ""
+    sent_at: str = ""
+    total_recipients: int = 0
+    total_sent: int = 0
+    total_delivered: int = 0
+    total_opened: int = 0
+    total_clicked: int = 0
+    created_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== GUEST APP / DIGITAL DIRECTORY MODELS ====================
+
+class GuestDirectory(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    wifi_name: str = ""
+    wifi_password: str = ""
+    welcome_message: str = ""
+    checkout_time: str = "11:00"
+    checkin_time: str = "15:00"
+    front_desk_phone: str = ""
+    front_desk_email: str = ""
+    emergency_phone: str = ""
+    address: str = ""
+    sections: list = Field(default_factory=list)  # [{title, content, icon}]
+    services: list = Field(default_factory=list)  # [{name, description, hours, price, category}]
+    local_recommendations: list = Field(default_factory=list)  # [{name, type, distance, description, map_link}]
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+

@@ -33,6 +33,12 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - **Cart Abandonment Recovery** — Save/recover abandoned carts with tokens (iter 32)
 - **Multi-Currency** — 18 currencies with conversion (iter 32)
 - **Group Booking Engine** — Corporate/wedding/conference request form (iter 32)
+- **AI Concierge Chat** — GPT-5.2 powered floating chat widget, property context, session tracking (iter 33)
+- **Hourly/Space Bookings** — 8 space types, hourly/half-day/full-day rates, booking form (iter 33)
+
+### Email Triggers (Resend)
+- Booking confirmation, review collection, self-check-in link, cart abandonment recovery, guest portal magic link
+- Note: RESEND_API_KEY is placeholder (re_123456789) — functional in production with real key
 
 ### Review Hub
 - 14-platform integration, AI responses (GPT-5.2), approval workflow
@@ -52,7 +58,7 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - `/guest-portal` — Guest portal (magic link login)
 
 ## Backlog
-- P2: Hourly/Space Booking (meeting rooms, parking by hour)
-- P2: AI Concierge Chat (pre-booking Q&A chatbot)
-- P2: Extract server.py into /routes/ modules
+- P1: Channel Manager integration (sync availability across OTAs)
+- P1: Real bi-directional outbound sync for review platforms
+- P2: Extract server.py (~5,000 lines) into /routes/ modules
 - P3: Real-time availability calendar integration

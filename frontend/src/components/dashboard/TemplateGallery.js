@@ -15,10 +15,10 @@ const platformStyles = {
 
 const TemplateGallery = ({ properties }) => {
   const [selectedTemplate, setSelectedTemplate] = useState("booking-classic");
+  const [selectedProperty, setSelectedProperty] = useState(properties?.[0]?.id || "aldgate-flats");
   const [activeGroup, setActiveGroup] = useState("all");
 
-  const propertyId = properties?.[0]?.id || "aldgate-flats";
-  const bookingUrl = (templateId) => `${window.location.origin}/book?property=${propertyId}&template=${templateId}`;
+  const bookingUrl = (templateId) => `${window.location.origin}/book?property=${selectedProperty}&template=${templateId}`;
 
   const filteredTemplates = activeGroup === "all"
     ? TEMPLATE_LIST
@@ -38,9 +38,19 @@ const TemplateGallery = ({ properties }) => {
 
       {/* Active template URL */}
       <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-5">
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-2">
           <Lightning size={16} className="text-emerald-600" />
           <span className="text-xs font-medium text-emerald-800">Active booking page:</span>
+          <select
+            value={selectedProperty}
+            onChange={(e) => setSelectedProperty(e.target.value)}
+            className="text-xs border border-emerald-300 rounded-lg px-2 py-1 bg-white text-emerald-800 font-medium ml-auto"
+            data-testid="template-property-select"
+          >
+            {properties?.filter(p => p.id !== "default").map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
         </div>
         <div className="flex items-center gap-2">
           <code className="text-xs text-emerald-700 font-mono flex-1 break-all" data-testid="active-template-url">{bookingUrl(selectedTemplate)}</code>

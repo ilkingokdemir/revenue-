@@ -3769,7 +3769,61 @@ async def create_booking(booking_data: BookingCreate):
     await db.bookings.insert_one(doc)
     doc.pop("_id", None)
     
+    # Send confirmation email in background
+    asyncio.create_task(_send_booking_confirmation(doc, room.get("name", "Room")))
+    
     return doc
+
+async def _send_booking_confirmation(booking: dict, room_name: str):
+    """Send booking confirmation email to guest"""
+    if not resend.api_key:
+        logger.info("No Resend API key, skipping booking confirmation email")
+        return
+    try:
+        ci = datetime.fromisoformat(booking["check_in"]).strftime("%A, %d %B %Y") if booking.get("check_in") else booking.get("check_in", "")
+        co = datetime.fromisoformat(booking["check_out"]).strftime("%A, %d %B %Y") if booking.get("check_out") else booking.get("check_out", "")
+    except Exception:
+        ci = booking.get("check_in", "")
+        co = booking.get("check_out", "")
+    
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+      <div style="background:#003B95;color:#fff;padding:24px;text-align:center;">
+        <h1 style="margin:0;font-size:24px;">Booking Confirmed</h1>
+        <p style="margin:8px 0 0;opacity:0.8;">Thank you for your reservation</p>
+      </div>
+      <div style="padding:24px;">
+        <div style="background:#F5F7FA;border-radius:8px;padding:20px;text-align:center;margin-bottom:20px;">
+          <p style="margin:0;font-size:12px;color:#666;text-transform:uppercase;letter-spacing:1px;">Booking Reference</p>
+          <p style="margin:8px 0 0;font-size:28px;font-weight:bold;color:#003B95;letter-spacing:2px;">{booking.get('booking_ref','')}</p>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">
+          <tr><td style="padding:8px 0;color:#666;font-size:14px;">Guest Name</td><td style="padding:8px 0;font-weight:600;font-size:14px;text-align:right;">{booking.get('guest_name','')}</td></tr>
+          <tr><td style="padding:8px 0;color:#666;font-size:14px;">Room</td><td style="padding:8px 0;font-weight:600;font-size:14px;text-align:right;">{room_name}</td></tr>
+          <tr><td style="padding:8px 0;color:#666;font-size:14px;">Check-in</td><td style="padding:8px 0;font-weight:600;font-size:14px;text-align:right;">{ci}</td></tr>
+          <tr><td style="padding:8px 0;color:#666;font-size:14px;">Check-out</td><td style="padding:8px 0;font-weight:600;font-size:14px;text-align:right;">{co}</td></tr>
+          <tr><td style="padding:8px 0;color:#666;font-size:14px;">Guests</td><td style="padding:8px 0;font-weight:600;font-size:14px;text-align:right;">{booking.get('adults',1)} adult(s){f", {booking.get('children',0)} child(ren)" if booking.get('children',0)>0 else ''}</td></tr>
+          <tr style="border-top:2px solid #e5e7eb;"><td style="padding:12px 0;font-weight:700;font-size:16px;">Total</td><td style="padding:12px 0;font-weight:700;font-size:20px;text-align:right;">&pound;{booking.get('total_price',0):.0f}</td></tr>
+        </table>
+        {f'<div style="background:#F0FFF4;border:1px solid #C6F6D5;border-radius:8px;padding:12px;margin-top:16px;font-size:13px;color:#2F855A;">Special requests: {booking.get("special_requests","")}</div>' if booking.get("special_requests") else ''}
+        <div style="margin-top:24px;padding:16px;background:#F5F7FA;border-radius:8px;text-align:center;font-size:12px;color:#666;">
+          <p style="margin:0;">Powered by <strong>MyHotelBox</strong> Booking Engine</p>
+          <p style="margin:4px 0 0;">If you have questions, please contact the property directly.</p>
+        </div>
+      </div>
+    </div>
+    """
+    
+    try:
+        await asyncio.to_thread(resend.Emails.send, {
+            "from": SENDER_EMAIL,
+            "to": [booking.get("guest_email", "")],
+            "subject": f"Booking Confirmed - {booking.get('booking_ref','')}",
+            "html": html,
+        })
+        logger.info(f"Confirmation email sent for {booking.get('booking_ref','')}")
+    except Exception as e:
+        logger.error(f"Failed to send confirmation email: {e}")
 
 @api_router.get("/booking/reservation/{booking_ref}")
 async def get_booking_by_ref(booking_ref: str):
@@ -4105,108 +4159,105 @@ async def seed_myhotelbox_branches():
     logger.info("MyHotelBox branches seeded")
 
 async def seed_sample_room_types():
-    """Seed sample room types for demo properties"""
+    """Seed room types for ALL properties with multiple photos"""
     existing = await db.room_types.count_documents({})
     if existing > 0:
         return
     
-    sample_rooms = [
+    # Photo library
+    photos = {
+        "standard": [
+            "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800",
+            "https://images.unsplash.com/photo-1629140727571-9b5c6f6267b4?w=800",
+            "https://images.pexels.com/photos/97083/pexels-photo-97083.jpeg?w=800",
+        ],
+        "deluxe": [
+            "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800",
+            "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800",
+            "https://images.pexels.com/photos/6466490/pexels-photo-6466490.jpeg?w=800",
+        ],
+        "suite": [
+            "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800",
+            "https://images.unsplash.com/photo-1741506131058-533fcf894483?w=800",
+            "https://images.unsplash.com/photo-1561912774-79769a0a0a7a?w=800",
+        ],
+        "twin": [
+            "https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800",
+            "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800",
+        ],
+        "executive": [
+            "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800",
+            "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800",
+            "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800",
+        ],
+    }
+    
+    # Room templates (reused across properties with price variations)
+    room_templates = [
         {
-            "id": "room-standard-double",
-            "property_id": "aldgate-flats",
             "name": "Standard Double Room",
             "description": "Comfortable room with a double bed, en-suite bathroom, and city views. Perfect for solo travellers or couples.",
-            "max_guests": 2,
-            "bed_type": "double",
-            "size_sqm": 18,
+            "max_guests": 2, "bed_type": "double", "size_sqm": 18, "photos": photos["standard"],
             "amenities": ["Free WiFi", "Air conditioning", "Flat-screen TV", "Tea/coffee maker", "Hair dryer", "Safe", "Daily housekeeping"],
-            "photos": ["https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800"],
-            "base_price": 89,
-            "currency": "GBP",
-            "total_rooms": 8,
-            "free_cancellation": True,
-            "breakfast_included": False,
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "base_price": 89, "total_rooms": 8, "free_cancellation": True, "breakfast_included": False,
         },
         {
-            "id": "room-deluxe-king",
-            "property_id": "aldgate-flats",
             "name": "Deluxe King Room",
-            "description": "Spacious room featuring a king-size bed, premium linens, work desk, and a luxurious rain shower. Stunning views of the city skyline.",
-            "max_guests": 2,
-            "bed_type": "king",
-            "size_sqm": 28,
+            "description": "Spacious room featuring a king-size bed, premium linens, work desk, and a luxurious rain shower.",
+            "max_guests": 2, "bed_type": "king", "size_sqm": 28, "photos": photos["deluxe"],
             "amenities": ["Free WiFi", "Air conditioning", "55\" Smart TV", "Nespresso machine", "Mini bar", "Bathrobes & slippers", "Rain shower", "Safe", "Work desk", "Room service"],
-            "photos": ["https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800"],
-            "base_price": 149,
-            "currency": "GBP",
-            "total_rooms": 4,
-            "free_cancellation": True,
-            "breakfast_included": True,
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "base_price": 149, "total_rooms": 4, "free_cancellation": True, "breakfast_included": True,
         },
         {
-            "id": "room-family-suite",
-            "property_id": "aldgate-flats",
             "name": "Family Suite",
-            "description": "Generous two-room suite with a separate living area, perfect for families. Includes a king bed and two single beds in the adjoining room.",
-            "max_guests": 4,
-            "bed_type": "suite",
-            "size_sqm": 45,
+            "description": "Generous two-room suite with a separate living area, perfect for families. Includes a king bed and two single beds.",
+            "max_guests": 4, "bed_type": "suite", "size_sqm": 45, "photos": photos["suite"],
             "amenities": ["Free WiFi", "Air conditioning", "2 TVs", "Kitchenette", "Microwave", "Sofa bed", "Bathtub", "Cot available", "Safe", "Laundry service"],
-            "photos": ["https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800"],
-            "base_price": 219,
-            "currency": "GBP",
-            "total_rooms": 2,
-            "free_cancellation": True,
-            "breakfast_included": True,
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "base_price": 219, "total_rooms": 2, "free_cancellation": True, "breakfast_included": True,
         },
         {
-            "id": "room-superior-twin",
-            "property_id": "aldgate-flats",
             "name": "Superior Twin Room",
             "description": "Bright and modern room with two single beds, ideal for friends or colleagues travelling together.",
-            "max_guests": 2,
-            "bed_type": "twin",
-            "size_sqm": 22,
+            "max_guests": 2, "bed_type": "twin", "size_sqm": 22, "photos": photos["twin"],
             "amenities": ["Free WiFi", "Air conditioning", "Flat-screen TV", "Tea/coffee maker", "Hair dryer", "Iron", "Safe"],
-            "photos": ["https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800"],
-            "base_price": 109,
-            "currency": "GBP",
-            "total_rooms": 5,
-            "free_cancellation": True,
-            "breakfast_included": False,
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "base_price": 109, "total_rooms": 5, "free_cancellation": True, "breakfast_included": False,
         },
         {
-            "id": "room-executive-suite",
-            "property_id": "aldgate-flats",
             "name": "Executive Suite",
-            "description": "Our finest accommodation with a separate lounge, premium amenities, complimentary minibar, and panoramic city views. Includes priority check-in and late checkout.",
-            "max_guests": 2,
-            "bed_type": "king",
-            "size_sqm": 55,
+            "description": "Our finest accommodation with a separate lounge, premium amenities, complimentary minibar, and panoramic views.",
+            "max_guests": 2, "bed_type": "king", "size_sqm": 55, "photos": photos["executive"],
             "amenities": ["Free WiFi", "Air conditioning", "65\" Smart TV", "Nespresso machine", "Complimentary minibar", "Bathrobes & slippers", "Jacuzzi bath", "Work desk", "Lounge area", "Priority check-in", "Late checkout", "Room service", "Turndown service"],
-            "photos": ["https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800"],
-            "base_price": 349,
-            "currency": "GBP",
-            "total_rooms": 2,
-            "free_cancellation": True,
-            "breakfast_included": True,
-            "is_active": True,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }
+            "base_price": 349, "total_rooms": 2, "free_cancellation": True, "breakfast_included": True,
+        },
     ]
     
-    for room in sample_rooms:
-        await db.room_types.insert_one(room)
+    # Price multipliers per property type
+    price_mult = {
+        "aldgate-flats": 1.0, "camden-suites": 1.15, "city-gate": 1.2,
+        "city-rooms": 0.9, "london-suites": 1.1, "ryam-suites": 0.95,
+        "whitechapel-hotel": 1.05, "vilenza-hotel": 1.25, "whitechapel-grand": 1.3,
+    }
     
-    logger.info(f"Seeded {len(sample_rooms)} sample room types")
+    properties = await db.properties.find({"id": {"$ne": "default"}}, {"_id": 0, "id": 1, "name": 1}).to_list(20)
+    count = 0
+    now = datetime.now(timezone.utc).isoformat()
+    
+    for prop in properties:
+        mult = price_mult.get(prop["id"], 1.0)
+        for tmpl in room_templates:
+            room = {
+                **tmpl,
+                "id": f"{tmpl['bed_type']}-{prop['id']}",
+                "property_id": prop["id"],
+                "base_price": round(tmpl["base_price"] * mult),
+                "currency": "GBP",
+                "is_active": True,
+                "created_at": now,
+            }
+            await db.room_types.insert_one(room)
+            count += 1
+    
+    logger.info(f"Seeded {count} room types across {len(properties)} properties")
 
 @app.on_event("startup")
 async def startup_event():

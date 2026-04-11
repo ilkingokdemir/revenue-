@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { PaintBrush, Palette, Upload, Image, ArrowsClockwise } from "@phosphor-icons/react";
+import { PaintBrush, Palette, Upload, Image, ArrowsClockwise, Buildings } from "@phosphor-icons/react";
 import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";

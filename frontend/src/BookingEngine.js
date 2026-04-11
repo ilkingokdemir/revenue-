@@ -8,9 +8,9 @@ import "@fontsource/manrope/500.css";
 import "@fontsource/manrope/600.css";
 import {
   Star, MagnifyingGlass, CalendarBlank, Users, Bed, ShieldCheck, CheckCircle,
-  ArrowRight, MapPin, WifiHigh, Snowflake, Television, Coffee, Bathtub,
-  Lock, Lightning, CaretDown, Check, Phone, EnvelopeSimple, User, CreditCard,
-  Buildings, Heart, Sparkle, Medal, Crown, TreePalm, Briefcase, Baby,
+  ArrowRight, ArrowLeft, MapPin, WifiHigh, Snowflake, Television, Coffee, Bathtub,
+  Lock, Lightning, CaretDown, CaretLeft, CaretRight, Check, Phone, EnvelopeSimple, User, CreditCard,
+  Buildings, Heart, Sparkle, Medal, Crown, TreePalm, Briefcase, Baby, X,
 } from "@phosphor-icons/react";
 import { getTemplate, TEMPLATES } from "./templates/templateConfig";
 
@@ -27,6 +27,32 @@ const amenityIcons = {
 const platformIcons = {
   "Booking.com": Buildings, "Airbnb": Heart, "Expedia": Sparkle, "Hotels.com": Medal,
 };
+
+// Mini photo carousel for room cards
+function PhotoCarousel({ photos, borderRadius }) {
+  const [idx, setIdx] = useState(0);
+  if (!photos || photos.length === 0) return <div className="w-full h-full flex items-center justify-center bg-slate-200"><Bed size={48} className="text-slate-300" /></div>;
+  return (
+    <div className="relative w-full h-full group overflow-hidden">
+      <img src={photos[idx]} alt="" className="w-full h-full object-cover transition-opacity duration-300" loading="lazy" />
+      {photos.length > 1 && (
+        <>
+          <button onClick={(e) => { e.stopPropagation(); setIdx(i => (i - 1 + photos.length) % photos.length); }}
+            className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/90 rounded-full flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
+            <CaretLeft size={14} weight="bold" className="text-slate-700" />
+          </button>
+          <button onClick={(e) => { e.stopPropagation(); setIdx(i => (i + 1) % photos.length); }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 bg-white/90 rounded-full flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white">
+            <CaretRight size={14} weight="bold" className="text-slate-700" />
+          </button>
+          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex gap-1">
+            {photos.map((_, i) => <div key={i} className={`w-1.5 h-1.5 rounded-full transition-colors ${i === idx ? "bg-white" : "bg-white/40"}`} />)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function BookingEngine() {
   const params = new URLSearchParams(window.location.search);
@@ -348,7 +374,7 @@ export default function BookingEngine() {
                 {property.room_types.slice(0, 6).map((room) => (
                   <div key={room.id} className="bg-white border border-gray-200 overflow-hidden hover:shadow-lg transition-all hover:-translate-y-1" style={{ borderRadius: t.borderRadius }} data-testid={`room-preview-${room.id}`}>
                     <div className="h-48 bg-slate-200 relative overflow-hidden">
-                      {room.photos?.[0] ? <img src={room.photos[0]} alt={room.name} className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center"><Bed size={48} className="text-slate-300" /></div>}
+                      <PhotoCarousel photos={room.photos} borderRadius={t.borderRadius} />
                       {t.showFreeCancellation && room.free_cancellation && (
                         <div className="absolute top-3 left-3 text-xs font-semibold px-2 py-1 rounded flex items-center gap-1" style={{ background: t.colors.badgeBg, color: t.colors.success, border: `1px solid ${t.colors.success}20` }}>
                           <CheckCircle size={12} weight="fill" /> Free cancellation
@@ -489,8 +515,8 @@ export default function BookingEngine() {
               {rooms.map((room) => (
                 <div key={room.id} className="bg-white border border-gray-200 overflow-hidden hover:shadow-md transition-shadow" style={{ borderRadius: t.borderRadius }} data-testid={`room-card-${room.id}`}>
                   <div className="flex flex-col md:flex-row">
-                    <div className="md:w-72 h-48 md:h-auto bg-slate-200 flex-shrink-0 overflow-hidden">
-                      {room.photos?.[0] ? <img src={room.photos[0]} alt={room.name} className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center"><Bed size={48} className="text-slate-300" /></div>}
+                    <div className="md:w-72 h-48 md:h-auto bg-slate-200 flex-shrink-0 overflow-hidden" style={{ minHeight: "180px" }}>
+                      <PhotoCarousel photos={room.photos} borderRadius="0" />
                     </div>
                     <div className="flex-1 p-5">
                       <div className="flex items-start justify-between mb-3">

@@ -30,6 +30,7 @@ const BookingEnginePanel = ({ properties }) => {
   const [activeTab, setActiveTab] = useState("rooms"); // rooms, bookings, settings
   const [editingRoom, setEditingRoom] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [filterProperty, setFilterProperty] = useState("");
   const [roomForm, setRoomForm] = useState({
     property_id: "",
     name: "",
@@ -170,7 +171,9 @@ const BookingEnginePanel = ({ properties }) => {
     }
   };
 
-  const bookingUrl = `${window.location.origin}/book?property=${properties?.[0]?.id || "aldgate-flats"}`;
+  const filteredRooms = filterProperty ? rooms.filter(r => r.property_id === filterProperty) : rooms;
+  const filteredBookings = filterProperty ? bookings.filter(b => b.property_id === filterProperty) : bookings;
+  const bookingUrl = `${window.location.origin}/book?property=${filterProperty || properties?.[0]?.id || "aldgate-flats"}`;
 
   const statusColors = {
     confirmed: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -188,6 +191,17 @@ const BookingEnginePanel = ({ properties }) => {
           <p className="text-sm text-stone-500 mt-0.5">Manage room types, view bookings, and configure your booking engine</p>
         </div>
         <div className="flex items-center gap-2">
+          <select
+            value={filterProperty}
+            onChange={(e) => setFilterProperty(e.target.value)}
+            className="text-xs border border-stone-200 rounded-lg px-2 py-1.5 bg-white text-stone-700"
+            data-testid="booking-property-filter"
+          >
+            <option value="">All Properties</option>
+            {properties?.filter(p => p.id !== "default").map(p => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
           <button
             onClick={() => {
               navigator.clipboard.writeText(bookingUrl);
@@ -197,7 +211,7 @@ const BookingEnginePanel = ({ properties }) => {
             data-testid="copy-booking-url"
           >
             <Copy size={13} />
-            Copy Booking URL
+            Copy URL
           </button>
           <a
             href={bookingUrl}
@@ -224,8 +238,8 @@ const BookingEnginePanel = ({ properties }) => {
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-stone-200 mb-5">
         {[
-          { id: "rooms", label: "Room Types", count: rooms.length },
-          { id: "bookings", label: "Bookings", count: bookings.length },
+          { id: "rooms", label: "Room Types", count: filteredRooms.length },
+          { id: "bookings", label: "Bookings", count: filteredBookings.length },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -369,7 +383,7 @@ const BookingEnginePanel = ({ properties }) => {
 
           {/* Room Types List */}
           <div className="space-y-3" data-testid="room-types-list">
-            {rooms.map((room) => (
+            {filteredRooms.map((room) => (
               <div key={room.id} className="bg-white border border-stone-200 rounded-lg overflow-hidden" data-testid={`admin-room-${room.id}`}>
                 <div className="flex">
                   <div className="w-32 h-24 bg-stone-200 flex-shrink-0 overflow-hidden">
@@ -420,7 +434,7 @@ const BookingEnginePanel = ({ properties }) => {
                 </div>
               </div>
             ))}
-            {rooms.length === 0 && (
+            {filteredRooms.length === 0 && (
               <div className="text-center py-12 bg-white border border-stone-200 rounded-lg">
                 <Bed size={32} className="mx-auto text-stone-300 mb-3" />
                 <p className="text-sm text-stone-500">No room types yet</p>
@@ -432,13 +446,13 @@ const BookingEnginePanel = ({ properties }) => {
       ) : (
         /* Bookings Tab */
         <div className="space-y-2" data-testid="bookings-list">
-          {bookings.length === 0 ? (
+          {filteredBookings.length === 0 ? (
             <div className="text-center py-12 bg-white border border-stone-200 rounded-lg">
               <CreditCard size={32} className="mx-auto text-stone-300 mb-3" />
               <p className="text-sm text-stone-500">No bookings yet</p>
               <p className="text-xs text-stone-400 mt-1">Bookings will appear here when guests reserve rooms</p>
             </div>
-          ) : bookings.map((booking) => (
+          ) : filteredBookings.map((booking) => (
             <div key={booking.id} className="bg-white border border-stone-200 rounded-lg p-4" data-testid={`booking-${booking.id}`}>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">

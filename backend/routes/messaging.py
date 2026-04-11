@@ -135,7 +135,8 @@ def create_messaging_router(db, require_roles, LlmChat, UserMessage, resend):
             ts = await db.template_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
             prop_name = ts.get("hotel_name", pid)
         history_text = "\n".join([f"{'Guest' if m['sender_type'] == 'guest' else 'Staff'}: {m['content']}" for m in recent_msgs])
-        system_msg = f"""You are a professional, friendly hotel concierge for {prop_name}. Generate a helpful reply to the guest's latest message. 
+        system_msg = f"""You are a professional, friendly hotel concierge for {prop_name}. Generate a helpful reply to the guest's latest message.
+IMPORTANT: Detect the guest's language and ALWAYS reply in the SAME language. Support 130+ languages natively.
 Keep it concise (under 80 words), warm, and actionable. If the guest has a complaint, acknowledge it empathetically. Always offer to help further."""
         try:
             chat = LlmChat(api_key=llm_key, session_id=f"suggest-{conversation_id}", system_message=system_msg).with_model("openai", "gpt-5.2")

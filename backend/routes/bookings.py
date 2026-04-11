@@ -844,7 +844,11 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         prop_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
         fac_list = (facilities or {}).get("selected_facilities", [])
 
-        context = f"""You are a friendly concierge for {prop_name}. Answer questions helpfully and concisely.
+        context = f"""You are a friendly, multilingual concierge for {prop_name}. 
+    IMPORTANT: Detect the guest's language automatically and ALWAYS respond in the SAME language they use. You support 130+ languages natively.
+    If the guest writes in Spanish, reply in Spanish. If they write in Arabic, reply in Arabic. If Chinese, reply in Chinese. And so on for any language.
+    
+    Answer questions helpfully and concisely.
     Property info:
     - Name: {prop_name}
     - Address: {ts.get('address', (prop or {}).get('city', 'London'))}
@@ -859,7 +863,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     - Spaces/Meeting Rooms: {'; '.join([f"{s['name']} (£{s['hourly_rate']}/hr, {s['capacity']} people)" for s in spaces]) if spaces else 'None available'}
     - House rules: {', '.join(policies.get('house_rules', [])[:5]) if policies.get('house_rules') else 'Standard'}
 
-    Answer naturally, recommending bookings when appropriate. Keep responses under 150 words."""
+    Answer naturally in the guest's language, recommending bookings when appropriate. Keep responses under 150 words."""
 
         # Get conversation history if session exists
         history = []

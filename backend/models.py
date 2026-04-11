@@ -1334,6 +1334,41 @@ class GuestDirectory(BaseModel):
     welcome_message: str = ""
     checkout_time: str = "11:00"
     checkin_time: str = "15:00"
+
+
+# ==================== SMART LOCK / DIGITAL KEY MODELS ====================
+
+LOCK_PROVIDERS = ["ttlock", "nuki", "august_yale", "salto", "assa_abloy", "generic"]
+
+class SmartLockConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    provider: str = "generic"
+    api_key: str = ""
+    api_secret: str = ""
+    api_url: str = ""
+    is_active: bool = False
+    rooms: list = Field(default_factory=list)  # [{room_number, lock_id, lock_name}]
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class DigitalKey(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    booking_ref: str
+    guest_name: str = ""
+    guest_email: str = ""
+    room_number: str = ""
+    lock_id: str = ""
+    access_code: str = Field(default_factory=lambda: str(secrets.randbelow(900000) + 100000))
+    valid_from: str = ""
+    valid_until: str = ""
+    status: str = "active"  # active, expired, revoked
+    used_count: int = 0
+    last_used_at: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
     front_desk_phone: str = ""
     front_desk_email: str = ""
     emergency_phone: str = ""

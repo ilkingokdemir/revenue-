@@ -31,6 +31,8 @@ import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePa
 import { GuestProfilesPanel } from "./components/dashboard/GuestProfilesPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
+import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
+import { SetupWizardPanel } from "./components/dashboard/SetupWizardPanel";
 import {
   Star,
   CheckCircle,
@@ -2474,6 +2476,7 @@ const Dashboard = ({ user, onLogout }) => {
       items: [
         { id: "guest-profiles", icon: AddressBook, name: "Guest Profiles", testId: "guest-profiles-btn" },
         { id: "guest-app", icon: MapPin, name: "Guest App", testId: "guest-app-btn" },
+        { id: "smart-locks", icon: Key, name: "Digital Keys", testId: "smart-locks-btn" },
         { id: "campaigns", icon: Megaphone, name: "Campaigns", testId: "campaigns-btn" },
       ]
     },
@@ -2490,6 +2493,7 @@ const Dashboard = ({ user, onLogout }) => {
     {
       label: "Connections",
       items: [
+        { id: "setup-wizard", icon: Gear, name: "Setup Wizard", testId: "setup-wizard-btn" },
         { id: "integrations", icon: PlugsConnected, name: "Integrations", testId: "integrations-btn" },
         { id: "api", icon: Key, name: "API Connection", testId: "api-connection-btn" },
         { id: "webhooks", icon: Code, name: "Webhooks", testId: "webhooks-btn" },
@@ -2830,6 +2834,16 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Guest App */}
         {activeView === "guest-app" && (
           <GuestAppPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Smart Locks / Digital Keys */}
+        {activeView === "smart-locks" && (
+          <SmartLocksPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Setup Wizard */}
+        {activeView === "setup-wizard" && (
+          <SetupWizardPanel properties={properties} activePropertyId={activePropertyId} />
         )}
       </main>
 

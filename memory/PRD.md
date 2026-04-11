@@ -1,80 +1,56 @@
-# Hotel Review Management Module - PRD
+# Hotel Review Management Module + Booking Engine - PRD
 
 ## Original Problem Statement
-Hotel management review module for MyHotelBox.com integration. Receive reviews from online platforms, respond with AI-generated unique replies. Role-based team access, approval workflow, multi-property support.
+Hotel management review module for MyHotelBox.com integration. Receive reviews from online platforms, respond with AI-generated unique replies. Role-based team access, approval workflow, multi-property support. Additionally, a Booking Engine module like Mews/Cloudbeds/eviivo with Booking.com-style design that hotel clients can embed on their websites.
 
 ## What's Been Implemented
 
-### P0: Real Platform Sync — Inbound Webhooks (April 2026)
-- `POST /api/platforms/{platform}/incoming` — receive reviews from any of 14 platforms
-- `POST /api/platforms/{platform}/incoming/batch` — batch import reviews
-- `GET /api/platforms/{platform}/inbound-url` — get webhook URL + secret for platform config
-- Auth: X-Platform-Secret header or API key (rhk_/psk_ prefix)
-- Deduplication by external_review_id + platform
-- Auto-triggers low-rating alerts and webhook events on new review
-- Sync Log: real-time activity log with platform, direction, status, timestamp
+### Booking Engine Module (April 2026)
+- **Public Booking Engine** at `/book?property={property_id}`:
+  - Booking.com-style blue UI with trust signals (SSL, security badges, verified property)
+  - Hero section with property name, rating, and search widget
+  - Step-by-step booking flow: Search → Select Room → Guest Details → Confirmation
+  - Room cards with photos, amenities, pricing, "Free cancellation" and "Breakfast included" badges
+  - "Only X left on our site!" urgency cues for limited availability rooms
+  - Guest details form with booking summary sidebar and price breakdown
+  - Booking confirmation with MHB-XXXXXXX reference number
+  - Mobile-responsive with sticky "Book Now" bar
+  - Guest picker (adults, children, rooms)
+  - Reviews section displaying verified guest reviews
 
-### P1: Property Mapping (April 2026)
-- `PUT /api/properties/{id}/mapping` — link Review Hub property to MyHotelBox branch
-- `GET /api/properties/by-external/{id}` — lookup property by external system ID
-- Maps external_id, external_name, external_system (myhotelbox/cloudbeds/other)
-- UI: Property Mapping panel in sidebar with edit forms
+- **Admin Dashboard - Booking Engine Panel**:
+  - Room Types tab: Create, edit, delete room types with photos, amenities, pricing
+  - Bookings tab: View all bookings with status management (Check In, Cancel, No Show, Check Out)
+  - Copy Booking URL and Preview buttons
+  - Live booking URL display
 
-### P1: Outbound Sync Attempt (April 2026)
-- When responding to a review, backend attempts to post reply to originating platform
-- Google Business Profile: Full OAuth token + PUT reply API implemented
-- Other platforms: Logged as "skipped" until vendor credentials are configured
-- All sync attempts logged in sync_logs collection (visible in Sync Log panel)
-- `POST /api/integrations/{platform}/test-connection` — test connection to configured platform
+- **Backend API Endpoints**:
+  - Public: `/api/booking/property/{id}`, `/api/booking/rooms/{id}`, `/api/booking/availability/{id}`, `/api/booking/reserve`, `/api/booking/reservation/{ref}`, `/api/booking/reviews/{id}`
+  - Admin: CRUD `/api/room-types`, `/api/bookings`, `/api/bookings/{id}/status`
 
-### P2: App.js Refactoring (April 2026)
-- Reduced from 4600 to ~2760 lines
-- Extracted 7 components to /components/dashboard/:
-  - IntegrationsPanel.js (800 lines)
-  - AnalyticsPanel.js (471 lines)
-  - ReportsSettings.js (248 lines)
-  - BrandingPanel.js (303 lines)
-  - LoginPage.js (103 lines)
-  - SyncLogPanel.js (105 lines)
-  - PropertyMappingPanel.js (165 lines)
-- Barrel exports via index.js
-- Shared config.js for API, platformColors, formatApiErrorDetail
+- **Sample Data**: 5 room types seeded for "aldgate-flats" (Standard Double £89, Deluxe King £149, Family Suite £219, Superior Twin £109, Executive Suite £349)
 
-### Notification System (April 2026)
-- Low-rating alerts: larger popup, warning icon, alarm sound, 15s display
-- Normal review alerts: bell icon, chime sound, 8s display
-- Red notification badge with unread count
-- 20-second polling for new reviews
-
-### Embeddable Widget (April 2026)
-- /widget?api_key=rhk_xxx — standalone iframe-embeddable review dashboard
-- Stats, review list, AI response generation, filters, dark mode
-
-### Integration Infrastructure (April 2026)
-- API keys (rhk_), webhooks (8 events), delivery log, test ping
-- Integration Guide with code snippets for Node.js and Python
-- Left sidebar with 14+ navigation items
-- Platform connection test functionality with Test Connection button
-- Save & Test Connection workflow in config wizard
-
-### Multi-Branch Support (April 2026)
-- 9 MyHotelBox branches seeded on startup
-- "All Branches" dropdown selector in sidebar
-- Reviews and stats filter by selected branch
-
-### Core Features
-- JWT auth, 3 roles, 7 departments, approval workflow
-- GPT-5.2 AI responses, 16 languages
-- 14 platform integrations with inbound webhook sync
-- Multi-property, white-label branding
+### Review Hub Module (Earlier - April 2026)
+- Webhook inbound sync for 14 platforms
+- GPT-5.2 AI response generation in 16 languages
+- Role-based approval workflow (3 roles, 7 departments)
+- Real-time widget with red notification popups + sound alerts
+- Integration panel with connection testing
+- Multi-branch selector with 9 MyHotelBox branches
+- Platform sync logging (inbound + outbound attempts)
+- Property mapping to MyHotelBox branches
+- Embeddable review widget at `/widget`
+- API keys, webhooks, delivery logs
+- White-label branding
 
 ## Architecture
 ```
 frontend/src/
-├── App.js (~2760 lines — Dashboard, Sidebar, core views)
-├── ReviewWidget.js (widget)
+├── App.js (~2770 lines — Dashboard, Sidebar, core views)
+├── BookingEngine.js (NEW — Public booking engine page)
+├── ReviewWidget.js (Embeddable widget)
 ├── components/dashboard/
-│   ├── config.js (shared constants)
+│   ├── config.js
 │   ├── ReviewComponents.js
 │   ├── IntegrationsPanel.js
 │   ├── AnalyticsPanel.js
@@ -83,10 +59,19 @@ frontend/src/
 │   ├── LoginPage.js
 │   ├── SyncLogPanel.js
 │   ├── PropertyMappingPanel.js
+│   ├── BookingEnginePanel.js (NEW — Admin room/booking management)
 │   └── index.js (barrel)
+
+backend/
+├── server.py (~3800 lines — All API routes, models, auth, webhooks, booking engine)
 ```
 
+## Key Database Collections
+- `reviews`, `users`, `properties`, `webhooks`, `webhook_deliveries`, `api_keys`, `platform_integrations`, `sync_logs`, `branding_settings`
+- NEW: `room_types`, `bookings`
+
 ## Remaining Work
-- Real outbound API calls to Booking.com, Expedia, TripAdvisor, etc. (requires vendor partner credentials)
-- Configure Resend API key for email notifications
-- Google OAuth: user needs to obtain Client ID, Secret, and Refresh Token from Google Cloud Console
+- Stripe payment integration for booking engine (currently pay-at-hotel only)
+- Real outbound API calls to review platforms (requires vendor credentials)
+- Google OAuth configuration (user needs to obtain credentials)
+- Hotel website template with embeddable booking widget (beyond standalone /book page)

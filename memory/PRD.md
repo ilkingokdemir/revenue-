@@ -48,6 +48,7 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 
 ### Admin Panels
 - Space Bookings management, AI Concierge analytics
+- Staff Performance Dashboard — Agent leaderboard, response times, resolution rates, channel breakdown, daily trends, performance scoring
 
 ### Infrastructure
 - JWT auth (admin/manager/receptionist), white-label branding, outbound webhooks
@@ -66,7 +67,8 @@ backend/
 ├── routes/
 │   ├── messaging.py   # 17 endpoints (517 lines) — Conversations, Messages, Quick Replies, Channel Settings, Auto-Replies, Calendar, Send
 │   ├── automation.py  # 9 endpoints (222 lines) — Rules CRUD, Toggle, Run, Logs, Stats, Preview
-│   └── dashboard.py   # 5 endpoints (179 lines) — Dashboard Overview, Concierge Analytics, Space Bookings Admin
+│   ├── dashboard.py   # 5 endpoints (179 lines) — Dashboard Overview, Concierge Analytics, Space Bookings Admin
+│   └── staff_performance.py # 1 endpoint — Staff performance metrics, leaderboard, trends
 ├── auth.py            # JWT auth, require_roles
 ├── database.py        # MongoDB connection
 └── models.py          # Pydantic models

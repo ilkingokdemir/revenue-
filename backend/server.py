@@ -3581,6 +3581,73 @@ async def toggle_add_on(addon_id: str, current_user: dict = Depends(require_role
     await db.add_on_services.update_one({"id": addon_id}, {"$set": {"is_active": new_status}})
     return {"is_active": new_status}
 
+# --- Translations ---
+
+class TranslationOverride(BaseModel):
+    property_id: str
+    lang_code: str
+    overrides: Dict[str, str] = {}
+
+@api_router.get("/translations/{property_id}/{lang_code}")
+async def get_property_translations(property_id: str, lang_code: str):
+    """Public: Get custom translation overrides for a property and language"""
+    doc = await db.translation_overrides.find_one(
+        {"property_id": property_id, "lang_code": lang_code}, {"_id": 0}
+    )
+    return doc or {"property_id": property_id, "lang_code": lang_code, "overrides": {}}
+
+@api_router.put("/translations/{property_id}/{lang_code}")
+async def save_property_translations(
+    property_id: str, lang_code: str,
+    overrides: Dict[str, str],
+    current_user: dict = Depends(require_roles("admin", "manager"))
+):
+    """Admin: Save custom translation overrides for a property"""
+    await db.translation_overrides.update_one(
+        {"property_id": property_id, "lang_code": lang_code},
+        {"$set": {
+            "property_id": property_id,
+            "lang_code": lang_code,
+            "overrides": overrides,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True
+    )
+    doc = await db.translation_overrides.find_one(
+        {"property_id": property_id, "lang_code": lang_code}, {"_id": 0}
+    )
+    return doc
+
+@api_router.get("/translations/{property_id}")
+async def list_property_translations(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: List all translation overrides for a property"""
+    docs = await db.translation_overrides.find({"property_id": property_id}, {"_id": 0}).to_list(20)
+    return docs
+
+@api_router.post("/translations/ai-translate")
+async def ai_translate_text(
+    texts: Dict[str, str],
+    target_lang: str,
+    current_user: dict = Depends(require_roles("admin", "manager"))
+):
+    """Admin: AI-translate custom hotel texts to target language"""
+    try:
+        llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not llm_key:
+            raise HTTPException(status_code=500, detail="LLM key not configured")
+        chat = LlmChat(emergent_api_key=llm_key, model="gpt-5.2")
+        text_list = "\n".join([f"- {k}: {v}" for k, v in texts.items()])
+        prompt = f"Translate the following hotel/booking texts to {target_lang}. Return ONLY a JSON object with the same keys and translated values. No explanation.\n\n{text_list}"
+        response = await chat.send_message(UserMessage(content=prompt))
+        import json
+        try:
+            translated = json.loads(response.content.strip().strip("```json").strip("```"))
+        except Exception:
+            translated = {}
+        return {"translations": translated, "target_lang": target_lang}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
+
 # --- Template Settings ---
 
 @api_router.get("/template-settings/{property_id}")

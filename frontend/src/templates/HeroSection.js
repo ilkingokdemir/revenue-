@@ -3,13 +3,14 @@ import {
   Sparkle, Medal, Baby, Briefcase, TreePalm, Crown, Buildings,
 } from "@phosphor-icons/react";
 import { SearchWidget } from "./SearchWidget";
+import { useLanguage } from "../i18n/LanguageContext";
 
 const platformIcons = {
   "Booking.com": Buildings, "Airbnb": Heart, "Expedia": Sparkle, "Hotels.com": Medal,
 };
 
 export function HeroSection({ t, property, ratingScore, getRatingLabel, searchProps }) {
-  const PlatformIcon = platformIcons[t.platform] || Buildings;
+  const { t: tr } = useLanguage();
 
   if (t.layout === "airbnb") {
     const defaultImages = [
@@ -46,7 +47,7 @@ export function HeroSection({ t, property, ratingScore, getRatingLabel, searchPr
                   <span className="text-slate-500 text-sm">{getRatingLabel(parseFloat(ratingScore))}</span>
                 </div>
                 <span className="text-slate-400">&middot;</span>
-                <span className="text-sm text-slate-500">{property?.total_reviews || 0} reviews</span>
+                <span className="text-sm text-slate-500">{property?.total_reviews || 0} {tr("hero.reviews")}</span>
               </div>
             </div>
             <div className="flex gap-2">
@@ -63,8 +64,8 @@ export function HeroSection({ t, property, ratingScore, getRatingLabel, searchPr
 
   // Standard hero (Booking.com, Expedia, Hotels.com styles)
   const heroImage = t.custom?.heroImageUrl || "https://images.pexels.com/photos/9119725/pexels-photo-9119725.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940";
-  const displayName = t.custom?.hotelName || property?.name || "Book Your Stay";
-  const subtitle = t.custom?.tagline || (property?.city ? `${property.city}, ${property.country}` : "Find your perfect room at the best price");
+  const displayName = t.custom?.hotelName || property?.name || tr("hero.bookYourStay");
+  const subtitle = t.custom?.tagline || (property?.city ? `${property.city}, ${property.country}` : tr("hero.findPerfectRoom"));
   return (
     <section className="relative bg-cover bg-center" style={{ backgroundImage: `url(${heroImage})`, minHeight: "480px" }} data-testid="hero-section">
       <div className="absolute inset-0" style={{ background: t.colors.heroOverlay }} />
@@ -85,49 +86,49 @@ export function HeroSection({ t, property, ratingScore, getRatingLabel, searchPr
                 {ratingScore}
               </div>
               <span className="font-semibold text-white">{getRatingLabel(parseFloat(ratingScore))}</span>
-              <span style={{ opacity: 0.7 }}>&middot; {property.total_reviews} reviews</span>
+              <span style={{ opacity: 0.7 }}>&middot; {property.total_reviews} {tr("hero.reviews")}</span>
             </div>
           )}
           {/* Platform-specific badges */}
           {t.platform === "Expedia" && (
             <div className="flex items-center justify-center gap-2 mt-3">
               <span className="text-xs px-3 py-1 rounded-full font-semibold" style={{ background: t.colors.accent, color: t.colors.primary }}>
-                <Sparkle size={12} weight="fill" className="inline mr-1" />Member Price Available
+                <Sparkle size={12} weight="fill" className="inline mr-1" />{tr("hero.memberPrice")}
               </span>
             </div>
           )}
           {t.platform === "Hotels.com" && t.id === "hotels-rewards" && (
             <div className="flex items-center justify-center gap-2 mt-3">
               <span className="text-xs px-3 py-1 rounded-full font-semibold bg-white/20 text-white">
-                <Medal size={12} weight="fill" className="inline mr-1" />Collect stamps with every stay
+                <Medal size={12} weight="fill" className="inline mr-1" />{tr("hero.collectStamps")}
               </span>
             </div>
           )}
           {t.id === "hotels-family" && (
             <div className="flex items-center justify-center gap-2 mt-3">
               <span className="text-xs px-3 py-1 rounded-full font-semibold bg-white/20 text-white">
-                <Baby size={12} weight="fill" className="inline mr-1" />Family Friendly Property
+                <Baby size={12} weight="fill" className="inline mr-1" />{tr("hero.familyFriendly")}
               </span>
             </div>
           )}
           {t.id === "booking-business" && (
             <div className="flex items-center justify-center gap-2 mt-3">
               <span className="text-xs px-3 py-1 rounded-full font-semibold bg-white/20 text-white">
-                <Briefcase size={12} weight="fill" className="inline mr-1" />Business Travel Ready
+                <Briefcase size={12} weight="fill" className="inline mr-1" />{tr("hero.businessReady")}
               </span>
             </div>
           )}
           {t.id === "booking-resort" && (
             <div className="flex items-center justify-center gap-2 mt-3">
               <span className="text-xs px-3 py-1 rounded-full font-semibold bg-white/20 text-white">
-                <TreePalm size={12} weight="fill" className="inline mr-1" />Resort & Spa
+                <TreePalm size={12} weight="fill" className="inline mr-1" />{tr("hero.resortSpa")}
               </span>
             </div>
           )}
           {t.id === "booking-boutique" && (
             <div className="flex items-center justify-center gap-2 mt-3">
               <span className="text-xs px-3 py-1 rounded-full font-semibold bg-white/20 text-white">
-                <Crown size={12} weight="fill" className="inline mr-1" />Boutique Collection
+                <Crown size={12} weight="fill" className="inline mr-1" />{tr("hero.boutique")}
               </span>
             </div>
           )}

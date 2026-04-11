@@ -14,12 +14,15 @@ import { HeroSection } from "./templates/HeroSection";
 import { RoomPreviewCards, RoomSelectionStep } from "./templates/RoomCards";
 import { GuestDetailsStep } from "./templates/GuestDetailsStep";
 import { ConfirmationStep } from "./templates/ConfirmationStep";
+import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
+import { LanguageSelector } from "./i18n/LanguageSelector";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 const STEPS = { SEARCH: 0, ROOMS: 1, DETAILS: 2, PAYMENT: 3, CONFIRM: 4 };
 
-export default function BookingEngine() {
+function BookingEngineInner() {
+  const { t, isRTL } = useLanguage();
   const params = new URLSearchParams(window.location.search);
   const propertyId = params.get("property") || "aldgate-flats";
   const templateId = params.get("template") || "booking-classic";
@@ -47,9 +50,8 @@ export default function BookingEngine() {
   const [selectedAddOns, setSelectedAddOns] = useState([]);
 
   // Merge template defaults with custom overrides
-  const t = (() => {
+  const tmpl = (() => {
     const cs = customSettings || {};
-    // If the custom settings specify a different template, use that base
     const base = cs.template_id && cs.template_id !== templateId ? getTemplate(cs.template_id) : baseTemplate;
     return {
       ...base,
@@ -65,7 +67,6 @@ export default function BookingEngine() {
       showUrgency: cs.show_urgency ?? base.showUrgency,
       showFreeCancellation: cs.show_free_cancellation ?? base.showFreeCancellation,
       showSecurityBadges: cs.show_security_badges ?? base.showSecurityBadges,
-      // Custom details (consumed by components that need them)
       custom: {
         hotelName: cs.hotel_name || "",
         tagline: cs.tagline || "",
@@ -234,44 +235,45 @@ export default function BookingEngine() {
 
   if (loading && !property) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: t.colors.bodyBg, fontFamily: t.fonts.body }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: tmpl.colors.bodyBg, fontFamily: tmpl.fonts.body }}>
         <div className="text-center">
-          <div className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: t.colors.accent, borderTopColor: "transparent" }} />
-          <p className="text-slate-500">Loading...</p>
+          <div className="w-10 h-10 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: tmpl.colors.accent, borderTopColor: "transparent" }} />
+          <p className="text-slate-500">{t("loading")}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ background: t.colors.bodyBg, fontFamily: t.fonts.body }} data-testid="booking-engine" data-template={templateId}>
+    <div className="min-h-screen" dir={isRTL ? "rtl" : "ltr"} style={{ background: tmpl.colors.bodyBg, fontFamily: tmpl.fonts.body }} data-testid="booking-engine" data-template={templateId}>
 
       {/* Header */}
-      <header className="sticky top-0 z-50 shadow-sm" style={{ background: t.colors.headerBg, color: t.colors.headerText }} data-testid="booking-header">
+      <header className="sticky top-0 z-50 shadow-sm" style={{ background: tmpl.colors.headerBg, color: tmpl.colors.headerText }} data-testid="booking-header">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {t.custom?.logoUrl ? <img src={t.custom.logoUrl} alt="" className="h-8 object-contain" /> : <Buildings size={22} weight="fill" />}
-            <span className="font-semibold text-lg" style={{ fontFamily: t.fonts.heading }}>{t.custom?.hotelName || property?.name || "Hotel"}</span>
-            {!t.custom?.hotelName && t.platform !== "Booking.com" && (
-              <span className="text-xs opacity-60 hidden sm:inline">Powered by MyHotelBox</span>
+            {tmpl.custom?.logoUrl ? <img src={tmpl.custom.logoUrl} alt="" className="h-8 object-contain" /> : <Buildings size={22} weight="fill" />}
+            <span className="font-semibold text-lg" style={{ fontFamily: tmpl.fonts.heading }}>{tmpl.custom?.hotelName || property?.name || "Hotel"}</span>
+            {!tmpl.custom?.hotelName && tmpl.platform !== "Booking.com" && (
+              <span className="text-xs opacity-60 hidden sm:inline">{t("header.poweredBy")}</span>
             )}
           </div>
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-3 text-sm">
             <div className="hidden sm:flex items-center gap-1.5">
-              <ShieldCheck size={16} weight="fill" style={{ color: t.colors.success }} />
-              <span style={{ opacity: 0.7 }}>Secure Booking</span>
+              <ShieldCheck size={16} weight="fill" style={{ color: tmpl.colors.success }} />
+              <span style={{ opacity: 0.7 }}>{t("header.secureBooking")}</span>
             </div>
-            {t.custom?.contactPhone ? (
-              <a href={`tel:${t.custom.contactPhone}`} className="flex items-center gap-1.5 hover:opacity-80">
+            {tmpl.custom?.contactPhone ? (
+              <a href={`tel:${tmpl.custom.contactPhone}`} className="flex items-center gap-1.5 hover:opacity-80">
                 <Phone size={15} />
-                <span className="hidden sm:inline" style={{ opacity: 0.7 }}>{t.custom.contactPhone}</span>
+                <span className="hidden sm:inline" style={{ opacity: 0.7 }}>{tmpl.custom.contactPhone}</span>
               </a>
             ) : (
               <div className="flex items-center gap-1.5">
                 <Phone size={15} />
-                <span className="hidden sm:inline" style={{ opacity: 0.7 }}>24/7 Support</span>
+                <span className="hidden sm:inline" style={{ opacity: 0.7 }}>{t("header.support")}</span>
               </div>
             )}
+            <LanguageSelector variant="minimal" />
           </div>
         </div>
       </header>
@@ -281,11 +283,11 @@ export default function BookingEngine() {
         <div className="bg-white border-b border-gray-200" data-testid="step-indicator">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
             <div className="flex items-center gap-2 text-sm">
-              {["Search", "Select Room", "Your Details"].map((label, i) => (
-                <div key={label} className="flex items-center gap-2">
-                  <button onClick={() => i < step && setStep(i)} className="flex items-center gap-1.5" style={{ color: i === step ? t.colors.accent : i < step ? t.colors.success : "#94a3b8", fontWeight: i === step ? 600 : 400, cursor: i < step ? "pointer" : "default" }} data-testid={`step-${i}`}>
-                    {i < step ? <CheckCircle size={18} weight="fill" style={{ color: t.colors.success }} /> : (
-                      <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: i === step ? t.colors.accent : "#e2e8f0", color: i === step ? "#fff" : "#64748b" }}>{i + 1}</span>
+              {[t("step.search"), t("step.selectRoom"), t("step.yourDetails")].map((label, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <button onClick={() => i < step && setStep(i)} className="flex items-center gap-1.5" style={{ color: i === step ? tmpl.colors.accent : i < step ? tmpl.colors.success : "#94a3b8", fontWeight: i === step ? 600 : 400, cursor: i < step ? "pointer" : "default" }} data-testid={`step-${i}`}>
+                    {i < step ? <CheckCircle size={18} weight="fill" style={{ color: tmpl.colors.success }} /> : (
+                      <span className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold" style={{ background: i === step ? tmpl.colors.accent : "#e2e8f0", color: i === step ? "#fff" : "#64748b" }}>{i + 1}</span>
                     )}
                     {label}
                   </button>
@@ -300,16 +302,16 @@ export default function BookingEngine() {
       {/* Step 0: Landing / Search */}
       {step === STEPS.SEARCH && (
         <>
-          <HeroSection t={t} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} searchProps={searchProps} />
-          <RoomPreviewCards t={t} rooms={property?.room_types} searchRooms={searchRooms} />
+          <HeroSection t={tmpl} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} searchProps={searchProps} />
+          <RoomPreviewCards t={tmpl} rooms={property?.room_types} searchRooms={searchRooms} />
           {/* Facilities */}
           {property?.facilities?.length > 0 && (
             <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12" data-testid="facilities-section">
-              <h2 className="text-2xl font-semibold text-slate-900 mb-6" style={{ fontFamily: t.fonts.heading }}>Property Facilities</h2>
+              <h2 className="text-2xl font-semibold text-slate-900 mb-6" style={{ fontFamily: tmpl.fonts.heading }}>{t("facilities.title")}</h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {property.facilities.map(f => (
-                  <div key={f} className="flex items-center gap-2 text-sm text-slate-700 bg-white border border-gray-200 rounded-lg px-3 py-2.5" style={{ borderRadius: t.borderRadius }}>
-                    <CheckCircle size={14} weight="fill" style={{ color: t.colors.success }} />
+                  <div key={f} className="flex items-center gap-2 text-sm text-slate-700 bg-white border border-gray-200 rounded-lg px-3 py-2.5" style={{ borderRadius: tmpl.borderRadius }}>
+                    <CheckCircle size={14} weight="fill" style={{ color: tmpl.colors.success }} />
                     <span>{f}</span>
                   </div>
                 ))}
@@ -320,23 +322,23 @@ export default function BookingEngine() {
           {property?.policies && (
             <section className="bg-white border-t border-gray-200 py-12" data-testid="policies-section">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <h2 className="text-2xl font-semibold text-slate-900 mb-6" style={{ fontFamily: t.fonts.heading }}>Hotel Policies</h2>
+                <h2 className="text-2xl font-semibold text-slate-900 mb-6" style={{ fontFamily: tmpl.fonts.heading }}>{t("policies.title")}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="rounded-lg p-4" style={{ background: t.colors.bodyBg, borderRadius: t.borderRadius }}>
-                    <h3 className="font-semibold text-slate-800 text-sm mb-2">Check-in / Check-out</h3>
+                  <div className="rounded-lg p-4" style={{ background: tmpl.colors.bodyBg, borderRadius: tmpl.borderRadius }}>
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">{t("policies.checkInOut")}</h3>
                     <div className="text-sm text-slate-600 space-y-1">
-                      <p>Check-in: {property.policies.check_in_from} — {property.policies.check_in_until}</p>
-                      <p>Check-out: {property.policies.check_out_from} — {property.policies.check_out_until}</p>
+                      <p>{t("policies.checkIn")}: {property.policies.check_in_from} — {property.policies.check_in_until}</p>
+                      <p>{t("policies.checkOut")}: {property.policies.check_out_from} — {property.policies.check_out_until}</p>
                     </div>
                   </div>
-                  <div className="rounded-lg p-4" style={{ background: t.colors.bodyBg, borderRadius: t.borderRadius }}>
-                    <h3 className="font-semibold text-slate-800 text-sm mb-2">Cancellation</h3>
+                  <div className="rounded-lg p-4" style={{ background: tmpl.colors.bodyBg, borderRadius: tmpl.borderRadius }}>
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">{t("policies.cancellation")}</h3>
                     <p className="text-sm text-slate-600">
-                      {property.policies.cancellation_text || (property.policies.cancellation_policy === "free" ? "Free cancellation" : property.policies.cancellation_policy === "moderate" ? `Free cancellation up to ${property.policies.cancellation_hours}h before check-in` : "Non-refundable")}
+                      {property.policies.cancellation_text || (property.policies.cancellation_policy === "free" ? t("policies.freeCancellation") : property.policies.cancellation_policy === "moderate" ? t("policies.moderateCancellation", { hours: property.policies.cancellation_hours }) : t("policies.nonRefundable"))}
                     </p>
                   </div>
-                  <div className="rounded-lg p-4" style={{ background: t.colors.bodyBg, borderRadius: t.borderRadius }}>
-                    <h3 className="font-semibold text-slate-800 text-sm mb-2">Good to Know</h3>
+                  <div className="rounded-lg p-4" style={{ background: tmpl.colors.bodyBg, borderRadius: tmpl.borderRadius }}>
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">{t("policies.goodToKnow")}</h3>
                     <div className="text-sm text-slate-600 space-y-1">
                       <p>{property.policies.children_policy}</p>
                       <p>{property.policies.pet_policy}</p>
@@ -344,8 +346,8 @@ export default function BookingEngine() {
                   </div>
                 </div>
                 {property.policies.house_rules?.length > 0 && (
-                  <div className="mt-6 rounded-lg p-4" style={{ background: t.colors.bodyBg, borderRadius: t.borderRadius }}>
-                    <h3 className="font-semibold text-slate-800 text-sm mb-2">House Rules</h3>
+                  <div className="mt-6 rounded-lg p-4" style={{ background: tmpl.colors.bodyBg, borderRadius: tmpl.borderRadius }}>
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">{t("policies.houseRules")}</h3>
                     <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
                       {property.policies.house_rules.map((r, i) => <li key={i}>{r}</li>)}
                     </ul>
@@ -354,20 +356,20 @@ export default function BookingEngine() {
               </div>
             </section>
           )}
-          <ReviewsSection t={t} reviews={reviews} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} />
-          <TrustFooter t={t} />
+          <ReviewsSection t={tmpl} reviews={reviews} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} />
+          <TrustFooter t={tmpl} />
         </>
       )}
 
       {/* Step 1: Room Selection */}
       {step === STEPS.ROOMS && (
-        <RoomSelectionStep t={t} rooms={rooms} loading={loading} nights={nights} adults={adults} children={children} roomCount={roomCount}
+        <RoomSelectionStep t={tmpl} rooms={rooms} loading={loading} nights={nights} adults={adults} children={children} roomCount={roomCount}
           checkIn={checkIn} checkOut={checkOut} onSelectRoom={handleSelectRoom} onChangeSearch={() => setStep(STEPS.SEARCH)} />
       )}
 
       {/* Step 2: Guest Details */}
       {step === STEPS.DETAILS && selectedRoom && (
-        <GuestDetailsStep t={t} selectedRoom={selectedRoom} property={property} guestForm={guestForm} setGuestForm={setGuestForm}
+        <GuestDetailsStep t={tmpl} selectedRoom={selectedRoom} property={property} guestForm={guestForm} setGuestForm={setGuestForm}
           paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} onBook={handleBooking} bookingLoading={bookingLoading}
           totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount}
           promoCode={promoCode} setPromoCode={setPromoCode} promoDiscount={promoDiscount} applyPromo={applyPromo} setPromoDiscount={setPromoDiscount}
@@ -378,47 +380,46 @@ export default function BookingEngine() {
       {/* Step 3: Payment Processing */}
       {step === STEPS.PAYMENT && (
         <div className="max-w-lg mx-auto px-4 py-20" data-testid="payment-processing-step">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-lg p-10 text-center" style={{ borderRadius: t.borderRadius }}>
-            <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-6" style={{ borderColor: t.colors.accent, borderTopColor: "transparent" }} />
-            <h2 className="text-xl font-bold text-slate-900 mb-2" style={{ fontFamily: t.fonts.heading }}>Processing Your Payment</h2>
-            <p className="text-slate-500">Please wait while we confirm your payment...</p>
+          <div className="bg-white rounded-xl border border-gray-200 shadow-lg p-10 text-center" style={{ borderRadius: tmpl.borderRadius }}>
+            <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-6" style={{ borderColor: tmpl.colors.accent, borderTopColor: "transparent" }} />
+            <h2 className="text-xl font-bold text-slate-900 mb-2" style={{ fontFamily: tmpl.fonts.heading }}>{t("processing.title")}</h2>
+            <p className="text-slate-500">{t("processing.wait")}</p>
           </div>
         </div>
       )}
 
       {/* Step 4: Confirmation */}
-      {step === STEPS.CONFIRM && <ConfirmationStep t={t} confirmation={confirmation} onBookAnother={handleBookAnother} />}
+      {step === STEPS.CONFIRM && <ConfirmationStep t={tmpl} confirmation={confirmation} onBookAnother={handleBookAnother} />}
 
       {/* Mobile Sticky Search */}
       {step === STEPS.SEARCH && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-3 sm:hidden z-50" data-testid="mobile-sticky-bar">
-          <button onClick={searchRooms} className="w-full text-white py-3.5 rounded-lg font-bold text-base flex items-center justify-center gap-2" style={{ background: t.colors.accent }}>
-            <MagnifyingGlass size={18} weight="bold" /> Search Rooms
+          <button onClick={searchRooms} className="w-full text-white py-3.5 rounded-lg font-bold text-base flex items-center justify-center gap-2" style={{ background: tmpl.colors.accent }}>
+            <MagnifyingGlass size={18} weight="bold" /> {t("search.searchRooms")}
           </button>
         </div>
       )}
 
       {/* Footer */}
-      <footer className="py-8 text-center text-sm" style={{ background: t.colors.primary, color: `${t.colors.headerText}99` }}>
+      <footer className="py-8 text-center text-sm" style={{ background: tmpl.colors.primary, color: `${tmpl.colors.headerText}99` }}>
         <div className="max-w-7xl mx-auto px-4">
-          {t.custom?.footerText ? (
-            <p className="font-medium" style={{ color: t.colors.headerText }}>{t.custom.footerText}</p>
+          {tmpl.custom?.footerText ? (
+            <p className="font-medium" style={{ color: tmpl.colors.headerText }}>{tmpl.custom.footerText}</p>
           ) : (
-            <p>Powered by <span className="font-semibold" style={{ color: t.colors.headerText }}>MyHotelBox</span> Booking Engine</p>
+            <p>{t("footer.poweredBy", { name: "MyHotelBox" })}</p>
           )}
-          {/* Social Links */}
-          {t.custom?.socialLinks && Object.values(t.custom.socialLinks).some(v => v) && (
+          {tmpl.custom?.socialLinks && Object.values(tmpl.custom.socialLinks).some(v => v) && (
             <div className="flex items-center justify-center gap-4 mt-3">
-              {t.custom.socialLinks.facebook && <a href={t.custom.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-facebook">Facebook</a>}
-              {t.custom.socialLinks.instagram && <a href={t.custom.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-instagram">Instagram</a>}
-              {t.custom.socialLinks.twitter && <a href={t.custom.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-twitter">X / Twitter</a>}
-              {t.custom.socialLinks.tripadvisor && <a href={t.custom.socialLinks.tripadvisor} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-tripadvisor">TripAdvisor</a>}
+              {tmpl.custom.socialLinks.facebook && <a href={tmpl.custom.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-facebook">Facebook</a>}
+              {tmpl.custom.socialLinks.instagram && <a href={tmpl.custom.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-instagram">Instagram</a>}
+              {tmpl.custom.socialLinks.twitter && <a href={tmpl.custom.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-twitter">X / Twitter</a>}
+              {tmpl.custom.socialLinks.tripadvisor && <a href={tmpl.custom.socialLinks.tripadvisor} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-tripadvisor">TripAdvisor</a>}
             </div>
           )}
           <div className="flex items-center justify-center gap-4 mt-3 text-xs">
-            <span className="flex items-center gap-1"><ShieldCheck size={12} /> SSL Secure</span>
-            <span className="flex items-center gap-1"><Lock size={12} /> PCI Compliant</span>
-            <span className="flex items-center gap-1"><CheckCircle size={12} /> Verified Property</span>
+            <span className="flex items-center gap-1"><ShieldCheck size={12} /> {t("footer.sslSecure")}</span>
+            <span className="flex items-center gap-1"><Lock size={12} /> {t("footer.pciCompliant")}</span>
+            <span className="flex items-center gap-1"><CheckCircle size={12} /> {t("footer.verifiedProperty")}</span>
           </div>
         </div>
       </footer>
@@ -429,6 +430,7 @@ export default function BookingEngine() {
 /* ========================= INLINE SUB-COMPONENTS ========================= */
 
 function ReviewsSection({ t, reviews, property, ratingScore, getRatingLabel }) {
+  const { t: tr } = useLanguage();
   if (!reviews || reviews.length === 0) return null;
   return (
     <section className="bg-white border-t border-gray-200 py-16" data-testid="reviews-section">
@@ -439,14 +441,14 @@ function ReviewsSection({ t, reviews, property, ratingScore, getRatingLabel }) {
               <Star size={24} weight="fill" style={{ color: t.colors.accent }} />
               <span className="text-2xl font-bold text-slate-900">{ratingScore}</span>
               <span className="text-slate-400">&middot;</span>
-              <span className="text-lg text-slate-700">{property?.total_reviews || reviews.length} reviews</span>
+              <span className="text-lg text-slate-700">{property?.total_reviews || reviews.length} {tr("hero.reviews")}</span>
             </div>
           ) : (
             <>
               <div className="font-bold px-3 py-2 rounded-tl-lg rounded-br-lg rounded-tr-sm rounded-bl-sm text-xl" style={{ background: t.colors.ratingBg, color: t.colors.ratingText }}>{ratingScore}</div>
               <div>
                 <h2 className="text-xl font-semibold text-slate-900" style={{ fontFamily: t.fonts.heading }}>{getRatingLabel(parseFloat(ratingScore))}</h2>
-                <p className="text-sm text-slate-500">{property?.total_reviews || reviews.length} verified guest reviews</p>
+                <p className="text-sm text-slate-500">{property?.total_reviews || reviews.length} {tr("reviews.verifiedReviews")}</p>
               </div>
             </>
           )}
@@ -475,16 +477,17 @@ function ReviewsSection({ t, reviews, property, ratingScore, getRatingLabel }) {
 }
 
 function TrustFooter({ t }) {
+  const { t: tr } = useLanguage();
   if (!t.showSecurityBadges) return null;
   return (
     <section className="py-10 text-white" style={{ background: t.colors.primary }} data-testid="trust-footer">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
           {[
-            { icon: ShieldCheck, label: "Secure Booking", sub: "SSL encrypted" },
-            { icon: CheckCircle, label: "Free Cancellation", sub: "On most rooms" },
-            { icon: CreditCard, label: "Best Price Guarantee", sub: "Direct booking discount" },
-            { icon: Phone, label: "24/7 Support", sub: "We're here to help" },
+            { icon: ShieldCheck, label: tr("trust.secureBooking"), sub: tr("trust.sslEncrypted") },
+            { icon: CheckCircle, label: tr("trust.freeCancellation"), sub: tr("trust.onMostRooms") },
+            { icon: CreditCard, label: tr("trust.bestPrice"), sub: tr("trust.directDiscount") },
+            { icon: Phone, label: tr("trust.support"), sub: tr("trust.hereToHelp") },
           ].map(({ icon: Icon, label, sub }) => (
             <div key={label} className="flex flex-col items-center gap-2">
               <Icon size={28} weight="fill" style={{ opacity: 0.7 }} />
@@ -495,5 +498,14 @@ function TrustFooter({ t }) {
         </div>
       </div>
     </section>
+  );
+}
+
+/* ========================= WRAPPER WITH PROVIDER ========================= */
+export default function BookingEngine() {
+  return (
+    <LanguageProvider>
+      <BookingEngineInner />
+    </LanguageProvider>
   );
 }

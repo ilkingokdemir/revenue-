@@ -14,7 +14,7 @@ from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
-from emergentintegrations.llm.chat import LlmChat, UserMessage, SystemMessage, AssistantMessage
+from emergentintegrations.llm.chat import LlmChat, UserMessage
 import resend
 import bcrypt
 import jwt
@@ -794,9 +794,9 @@ Review: {review.get('review_text', '')}
 Keep it unique, warm, and under 150 words."""
     
     try:
-        chat = LlmChat(api_key=api_key, model="gpt-5.2")
-        response = chat.send_message(UserMessage(content=prompt))
-        response_text = response.content.strip()
+        chat = LlmChat(api_key=api_key, session_id=f"widget-{uuid.uuid4()}", system_message="You are a hotel review response assistant.").with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=prompt))
+        response_text = response.strip()
         
         await db.reviews.update_one({"id": review_id}, {"$set": {
             "response_text": response_text,
@@ -3637,13 +3637,13 @@ async def ai_translate_text(
         llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
         if not llm_key:
             raise HTTPException(status_code=500, detail="LLM key not configured")
-        chat = LlmChat(emergent_api_key=llm_key, model="gpt-5.2")
+        chat = LlmChat(api_key=llm_key, session_id=f"translate-{uuid.uuid4()}", system_message="You are a professional hotel content translator.").with_model("openai", "gpt-5.2")
         text_list = "\n".join([f"- {k}: {v}" for k, v in texts.items()])
         prompt = f"Translate the following hotel/booking texts to {target_lang}. Return ONLY a JSON object with the same keys and translated values. No explanation.\n\n{text_list}"
-        response = await chat.send_message(UserMessage(content=prompt))
+        response = await chat.send_message(UserMessage(text=prompt))
         import json
         try:
-            translated = json.loads(response.content.strip().strip("```json").strip("```"))
+            translated = json.loads(response.strip().strip("```json").strip("```"))
         except Exception:
             translated = {}
         return {"translations": translated, "target_lang": target_lang}
@@ -4247,18 +4247,13 @@ Answer naturally, recommending bookings when appropriate. Keep responses under 1
         llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
         if not llm_key:
             raise HTTPException(status_code=500, detail="AI not configured")
-        chat = LlmChat(emergent_api_key=llm_key, model="gpt-5.2")
-        # Build messages
-        messages = [SystemMessage(content=context)]
-        for h in history[-6:]:  # Last 6 messages for context
-            if h["role"] == "user":
-                messages.append(UserMessage(content=h["content"]))
-            else:
-                messages.append(AssistantMessage(content=h["content"]))
-        messages.append(UserMessage(content=message))
-        
-        response = await chat.send_message(messages[-1], history=messages[:-1])
-        reply = response.content.strip()
+        # Build initial_messages from history
+        initial_msgs = [{"role": "system", "content": context}]
+        for h in history[-6:]:
+            initial_msgs.append({"role": h["role"], "content": h["content"]})
+        chat = LlmChat(api_key=llm_key, session_id=session_id or "new", system_message=context, initial_messages=initial_msgs)
+        chat = chat.with_model("openai", "gpt-5.2")
+        reply = await chat.send_message(UserMessage(text=message))
     except Exception as e:
         logger.error(f"Concierge chat error: {e}")
         reply = f"I apologize, I'm having trouble connecting right now. Please contact us directly at {ts.get('contact_phone', '')} or {ts.get('contact_email', '')} for assistance."

@@ -22,6 +22,8 @@ import { SocialProofNotifications } from "./templates/SocialProofNotifications";
 import { GoogleHotelStructuredData } from "./templates/GoogleHotelStructuredData";
 import { useCurrency, CurrencySelector } from "./i18n/CurrencySelector";
 import { GroupBookingModal } from "./templates/GroupBookingModal";
+import { AIConciergeChat } from "./templates/AIConciergeChat";
+import { SpaceBookingSection } from "./templates/SpaceBookingSection";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -418,6 +420,8 @@ function BookingEngineInner() {
             </div>
           </section>
           <ReviewsSection t={tmpl} reviews={reviews} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} />
+          {/* Hourly/Space Bookings */}
+          <SpaceBookingSection propertyId={propertyId} tmpl={tmpl} />
           <TrustFooter t={tmpl} />
         </>
       )}
@@ -490,6 +494,9 @@ function BookingEngineInner() {
       {/* Group Booking Modal */}
       <GroupBookingModal isOpen={showGroupBooking} onClose={() => setShowGroupBooking(false)}
         propertyId={propertyId} propertyName={tmpl.custom?.hotelName || property?.name || "Hotel"} tmpl={tmpl} />
+
+      {/* AI Concierge Floating Chat */}
+      <AIConciergeChat propertyId={propertyId} tmpl={tmpl} />
     </div>
   );
 }

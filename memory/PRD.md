@@ -3,7 +3,7 @@
 ## Overview
 Hotel management software (www.myhotelbox.com) providing two core modules:
 1. **Review Hub** — Centralized review management across 14 platforms with AI-powered responses
-2. **Booking Engine** — Direct booking system with 10 website templates, Stripe payments, email confirmations, and competitive features matching Mews/Cloudbeds/Eviivo
+2. **Booking Engine** — Direct booking system with 10 website templates, Stripe payments, email confirmations, competitive features, and multi-language support
 
 ## Tech Stack
 - **Frontend**: React, Tailwind CSS, Shadcn UI
@@ -23,15 +23,19 @@ Hotel management software (www.myhotelbox.com) providing two core modules:
 
 /app/frontend/src/
   App.js            — Admin dashboard (auth, sidebar, panels)
-  BookingEngine.js  — Public booking page coordinator
+  BookingEngine.js  — Public booking page coordinator (with LanguageProvider)
   ReviewWidget.js   — Embeddable review widget
+  i18n/
+    translations.js     — 12-language translation dictionary (~100 keys each)
+    LanguageContext.js   — React context providing t() function, lang, isRTL
+    LanguageSelector.js  — Dropdown component with flags
   templates/
     templateConfig.js    — 10 template configurations
-    HeroSection.js       — Hero/search section
-    RoomCards.js         — Room preview & selection
-    GuestDetailsStep.js  — Guest form, add-ons, promo codes & payment
-    ConfirmationStep.js  — Booking confirmation
-    SearchWidget.js      — Date/guest search widget
+    HeroSection.js       — Hero/search section (i18n)
+    RoomCards.js         — Room preview & selection (i18n)
+    GuestDetailsStep.js  — Guest form, add-ons, promo codes & payment (i18n)
+    ConfirmationStep.js  — Booking confirmation (i18n)
+    SearchWidget.js      — Date/guest search widget (i18n)
     PhotoCarousel.js     — Room photo carousel
   components/dashboard/
     TemplateCustomizer.js — Per-property template customization with live preview
@@ -55,6 +59,7 @@ Hotel management software (www.myhotelbox.com) providing two core modules:
 - `add_ons` — Extra services (per_stay/per_night/per_person pricing)
 - `hotel_policies` — Check-in/out, cancellation, house rules, payment methods
 - `property_facilities` — Selected property-level facilities
+- `translation_overrides` — Custom per-property per-language translation overrides
 
 ## Completed Features
 
@@ -80,14 +85,14 @@ Hotel management software (www.myhotelbox.com) providing two core modules:
 - Room photo carousel with multi-image galleries
 - Admin template gallery with preview
 - Admin rooms & bookings management panel
-- **Template Customization Panel** (tested iteration_28 - 100%)
-- **Promo Codes** — Create/toggle/delete codes, percentage/fixed discounts, min nights/amount, date validity, max uses, public validation endpoint (tested iteration_29 - 100%)
-- **Add-on Services** — CRUD with categories (transport, dining, experience, wellness, etc.), per_stay/per_night/per_person pricing, toggle active (tested iteration_29 - 100%)
-- **Hotel Policies** — Check-in/out times, cancellation (free/moderate/strict/custom), house rules, children/pet/smoking policies, payment methods, damage deposit (tested iteration_29 - 100%)
-- **Property Facilities** — 8 categories of property-level facilities (general, dining, wellness, business, transport, outdoor, family, laundry) (tested iteration_29 - 100%)
-- **Expanded Amenity Picker** — 10 categories, 160+ amenities with search and custom addition (tested iteration_29 - 100%)
-- **Room Editor** — 4 tabs (Details, Photos, Amenities, Pricing) with unlimited photo support (tested iteration_29 - 100%)
-- **Public Booking Engine Integration** — Facilities section, policies display, add-on selection in checkout, promo code validation in checkout (tested iteration_29 - 100%)
+- Template Customization Panel (tested iteration_28 - 100%)
+- Promo Codes (tested iteration_29 - 100%)
+- Add-on Services (tested iteration_29 - 100%)
+- Hotel Policies (tested iteration_29 - 100%)
+- Property Facilities (tested iteration_29 - 100%)
+- Expanded Amenity Picker — 160+ amenities in 10 categories (tested iteration_29 - 100%)
+- Room Editor with unlimited photos (tested iteration_29 - 100%)
+- **Multi-Language Support** — 12 languages (EN, FR, DE, ES, IT, PT, AR, ZH, JA, KO, NL, RU) with RTL for Arabic, language selector in header, URL param persistence, localStorage save, backend admin translation overrides, AI auto-translate (tested iteration_30 - 100%)
 
 ### Connections & Integrations
 - Platform credentials configuration with test connection
@@ -110,7 +115,8 @@ Hotel management software (www.myhotelbox.com) providing two core modules:
 - Stripe in test mode
 
 ## Backlog (Prioritized)
-- P1: Real bi-directional outbound sync to review platforms (needs real vendor API credentials)
+- P1: Channel Manager integration (sync availability across OTAs)
+- P1: Guest Review Collection (post-stay email with review form)
 - P2: Extract remaining route handlers from server.py into /routes/ modules
 - P2: Further App.js modularization
 - P3: Real-time availability calendar for booking engine

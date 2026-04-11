@@ -1397,9 +1397,16 @@ class StockProduct(BaseModel):
     cost_price: float = 0
     sell_price: float = 0
     supplier: str = ""
+    supplier_id: str = ""
     sku: str = ""
     reorder_level: float = 0
+    par_level: float = 0
     current_stock: float = 0
+    yield_pct: float = 100  # e.g., 70 means 1kg raw → 0.7kg usable
+    expiry_days: int = 0  # shelf life in days, 0 = non-perishable
+    allergens: list = Field(default_factory=list)  # ["gluten","dairy","nuts","shellfish","eggs","soy","fish","sesame"]
+    storage_temp: str = ""  # ambient, chilled, frozen
+    price_history: list = Field(default_factory=list)  # [{date, price, supplier}]
     is_active: bool = True
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -1412,8 +1419,15 @@ class Recipe(BaseModel):
     category: str = "food"
     sell_price: float = 0
     ingredients: list = Field(default_factory=list)  # [{product_id, product_name, quantity, unit}]
+    sub_recipe_ids: list = Field(default_factory=list)  # sub-recipes used in this recipe
     total_cost: float = 0
     margin_pct: float = 0
+    allergens: list = Field(default_factory=list)
+    nutrition: dict = Field(default_factory=dict)  # {calories, protein_g, carbs_g, fat_g, fiber_g}
+    total_sales: int = 0
+    total_revenue: float = 0
+    popularity_rank: int = 0
+    menu_class: str = ""  # star, puzzle, plowhorse, dog (menu engineering)
     is_active: bool = True
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

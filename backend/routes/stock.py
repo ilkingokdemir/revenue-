@@ -659,4 +659,430 @@ def create_stock_router(db, require_roles):
             "margin_pct": round(((revenue - total_cogs) / revenue * 100) if revenue > 0 else 0, 1),
         }
 
+    # === 1. MENU ENGINEERING (Stars/Puzzles/Plowhorses/Dogs) ===
+
+    @router.get("/stock/menu-engineering/{property_id}")
+    async def menu_engineering(property_id: str, outlet: str = "",
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Profitability matrix: classify recipes as Star/Puzzle/Plowhorse/Dog"""
+        query = {"property_id": property_id, "is_active": True}
+        if outlet: query["outlet"] = outlet
+        recipes = await db.stock_recipes.find(query, {"_id": 0}).to_list(200)
+        if not recipes:
+            return {"recipes": [], "summary": {}}
+
+        avg_margin = sum(r.get("margin_pct", 0) for r in recipes) / len(recipes) if recipes else 0
+        avg_sales = sum(r.get("total_sales", 0) for r in recipes) / len(recipes) if recipes else 0
+
+        classified = []
+        for r in recipes:
+            margin = r.get("margin_pct", 0)
+            sales = r.get("total_sales", 0)
+            high_margin = margin >= avg_margin
+            high_sales = sales >= avg_sales
+            if high_margin and high_sales:
+                menu_class = "star"
+            elif high_margin and not high_sales:
+                menu_class = "puzzle"
+            elif not high_margin and high_sales:
+                menu_class = "plowhorse"
+            else:
+                menu_class = "dog"
+            r["menu_class"] = menu_class
+            r["contribution"] = round(r.get("sell_price", 0) - r.get("total_cost", 0), 2)
+            classified.append(r)
+            await db.stock_recipes.update_one({"id": r["id"]}, {"$set": {"menu_class": menu_class}})
+
+        stars = [r for r in classified if r["menu_class"] == "star"]
+        puzzles = [r for r in classified if r["menu_class"] == "puzzle"]
+        plowhorses = [r for r in classified if r["menu_class"] == "plowhorse"]
+        dogs = [r for r in classified if r["menu_class"] == "dog"]
+
+        return {
+            "recipes": classified,
+            "summary": {
+                "stars": len(stars), "puzzles": len(puzzles),
+                "plowhorses": len(plowhorses), "dogs": len(dogs),
+                "avg_margin": round(avg_margin, 1), "avg_sales": round(avg_sales, 1),
+            },
+            "recommendations": {
+                "promote": [r["name"] for r in puzzles[:3]],
+                "reprice": [r["name"] for r in plowhorses[:3]],
+                "remove_or_rework": [r["name"] for r in dogs[:3]],
+            }
+        }
+
+    # === 2. FOOD COST % DASHBOARD ===
+
+    @router.get("/stock/food-cost-dashboard/{property_id}")
+    async def food_cost_dashboard(property_id: str, days: int = 30,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Real-time food cost % with COGS formula and per-outlet breakdown"""
+        cutoff = (datetime.now(timezone.utc) - __import__('datetime').timedelta(days=days)).isoformat()
+
+        # Beginning inventory value
+        begin_pipeline = [
+            {"$match": {"property_id": property_id, "is_active": True}},
+            {"$group": {"_id": None, "value": {"$sum": {"$multiply": ["$current_stock", "$cost_price"]}}}}
+        ]
+        begin_inv = 0
+        async for doc in db.stock_products.aggregate(begin_pipeline):
+            begin_inv = round(doc["value"], 2)
+
+        # Purchases in period
+        purch_pipeline = [
+            {"$match": {"property_id": property_id, "movement_type": "purchase", "created_at": {"$gte": cutoff}}},
+            {"$group": {"_id": None, "total": {"$sum": "$cost"}}}
+        ]
+        purchases = 0
+        async for doc in db.stock_movements.aggregate(purch_pipeline):
+            purchases = round(doc["total"], 2)
+
+        # Ending inventory = current stock value
+        ending_inv = begin_inv  # simplified: current stock IS ending
+
+        # COGS = Beginning + Purchases - Ending
+        cogs = round(begin_inv + purchases - ending_inv, 2)
+        # Simplified: COGS ≈ purchases (for period-based)
+        cogs = purchases
+
+        # Food sales from recipe sales
+        sales_pipeline = [
+            {"$match": {"property_id": property_id, "movement_type": "usage", "reference": {"$regex": "^recipe_sale:"}, "created_at": {"$gte": cutoff}}},
+            {"$group": {"_id": None, "total_cost": {"$sum": "$cost"}}}
+        ]
+        recipe_cogs = 0
+        async for doc in db.stock_movements.aggregate(sales_pipeline):
+            recipe_cogs = round(doc["total_cost"], 2)
+
+        # Estimate revenue from recipes
+        total_fb_revenue = 0
+        recipes = await db.stock_recipes.find({"property_id": property_id}, {"_id": 0, "total_sales": 1, "sell_price": 1}).to_list(200)
+        for r in recipes:
+            total_fb_revenue += (r.get("total_sales", 0) or 0) * (r.get("sell_price", 0) or 0)
+
+        # Also check booking F&B income
+        fb_income_pipeline = [
+            {"$match": {"property_id": property_id, "category": "food_beverage", "date": {"$gte": cutoff[:10]}}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+        ]
+        async for doc in db.income_entries.aggregate(fb_income_pipeline):
+            total_fb_revenue += round(doc["total"], 2)
+
+        food_cost_pct = round((cogs / total_fb_revenue * 100) if total_fb_revenue > 0 else 0, 1)
+
+        # Per-outlet breakdown
+        outlet_pipeline = [
+            {"$match": {"property_id": property_id, "movement_type": {"$in": ["usage", "waste"]}, "created_at": {"$gte": cutoff}}},
+            {"$group": {"_id": "$outlet", "cost": {"$sum": "$cost"}, "count": {"$sum": 1}}}
+        ]
+        by_outlet = {}
+        async for doc in db.stock_movements.aggregate(outlet_pipeline):
+            by_outlet[doc["_id"] or "unassigned"] = {"cost": round(doc["cost"], 2), "movements": doc["count"]}
+
+        target_min, target_max = 28, 35
+        status = "on_target" if target_min <= food_cost_pct <= target_max else ("high" if food_cost_pct > target_max else "low")
+
+        return {
+            "food_cost_pct": food_cost_pct,
+            "target_range": {"min": target_min, "max": target_max},
+            "status": status,
+            "cogs": cogs, "revenue": round(total_fb_revenue, 2),
+            "beginning_inventory": begin_inv, "purchases": purchases, "ending_inventory": ending_inv,
+            "by_outlet": by_outlet,
+            "period_days": days,
+        }
+
+    # === 3. PAR LEVEL AUTO-ORDERING ===
+
+    @router.post("/stock/auto-order/{property_id}")
+    async def generate_auto_orders(property_id: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Auto-generate purchase orders for products below par level"""
+        from models import PurchaseOrder
+        products = await db.stock_products.find(
+            {"property_id": property_id, "is_active": True, "par_level": {"$gt": 0}},
+            {"_id": 0}
+        ).to_list(500)
+
+        # Group by supplier
+        by_supplier = {}
+        for p in products:
+            if p["current_stock"] < p["par_level"]:
+                supplier = p.get("supplier_id") or p.get("supplier", "unknown")
+                supplier_name = p.get("supplier", "Unknown Supplier")
+                if supplier not in by_supplier:
+                    by_supplier[supplier] = {"name": supplier_name, "items": []}
+                order_qty = round(p["par_level"] - p["current_stock"], 2)
+                by_supplier[supplier]["items"].append({
+                    "product_id": p["id"], "product_name": p["name"],
+                    "quantity": order_qty, "unit": p.get("unit", ""),
+                    "unit_cost": p.get("cost_price", 0),
+                    "total": round(order_qty * p.get("cost_price", 0), 2),
+                })
+
+        created_pos = []
+        for supplier_id, data in by_supplier.items():
+            total = round(sum(i["total"] for i in data["items"]), 2)
+            po = PurchaseOrder(
+                property_id=property_id, supplier_id=supplier_id,
+                supplier_name=data["name"], status="draft",
+                items=data["items"], total_amount=total,
+                order_date=datetime.now(timezone.utc).isoformat()[:10],
+                created_by=current_user.get("name", "Auto"),
+                notes="Auto-generated from par levels",
+            )
+            doc = po.model_dump()
+            await db.purchase_orders.insert_one(doc)
+            doc.pop("_id", None)
+            created_pos.append({"supplier": data["name"], "items": len(data["items"]), "total": total, "id": doc["id"]})
+
+        if created_pos:
+            await log_sync(db, "stock", "internal", "success", f"Auto-order: {len(created_pos)} POs generated", property_id)
+            asyncio.create_task(fire_webhooks(db, "stock.auto_order", {"property_id": property_id, "orders": len(created_pos)}))
+
+        return {"message": f"{len(created_pos)} purchase orders generated", "orders": created_pos}
+
+    # === 4. ALLERGEN & NUTRITION TRACKING ===
+
+    @router.get("/stock/allergens/{property_id}")
+    async def allergen_report(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """List all recipes with their allergen flags"""
+        recipes = await db.stock_recipes.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(200)
+        result = []
+        for r in recipes:
+            allergens = set(r.get("allergens", []))
+            for ing in r.get("ingredients", []):
+                prod = await db.stock_products.find_one({"id": ing.get("product_id")}, {"_id": 0, "allergens": 1})
+                if prod:
+                    allergens.update(prod.get("allergens", []))
+            result.append({
+                "recipe_id": r["id"], "name": r["name"], "outlet": r.get("outlet", ""),
+                "allergens": sorted(list(allergens)),
+                "nutrition": r.get("nutrition", {}),
+            })
+        return result
+
+    # === 5. SUPPLIER PRICE HISTORY ===
+
+    @router.get("/stock/price-history/{product_id}")
+    async def price_history(product_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        prod = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
+        if not prod:
+            raise HTTPException(status_code=404, detail="Product not found")
+        # Also get from purchase movements
+        pipeline = [
+            {"$match": {"product_id": product_id, "movement_type": "purchase", "cost": {"$gt": 0}}},
+            {"$project": {"_id": 0, "date": "$created_at", "cost": 1, "quantity": 1, "reference": 1}},
+            {"$sort": {"date": -1}},
+            {"$limit": 50}
+        ]
+        purchase_prices = []
+        async for doc in db.stock_movements.aggregate(pipeline):
+            unit_cost = round(doc["cost"] / doc["quantity"], 2) if doc.get("quantity", 0) > 0 else 0
+            purchase_prices.append({"date": doc["date"][:10], "unit_cost": unit_cost, "reference": doc.get("reference", "")})
+
+        return {
+            "product": prod["name"], "current_price": prod.get("cost_price", 0),
+            "price_history": prod.get("price_history", []),
+            "purchase_prices": purchase_prices,
+        }
+
+    @router.post("/stock/price-update/{product_id}")
+    async def update_price(product_id: str, data: Dict,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Update product price and log history"""
+        new_price = data.get("cost_price", 0)
+        prod = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
+        if not prod:
+            raise HTTPException(status_code=404, detail="Product not found")
+        old_price = prod.get("cost_price", 0)
+        history_entry = {"date": datetime.now(timezone.utc).isoformat()[:10], "price": new_price, "old_price": old_price, "supplier": data.get("supplier", "")}
+        await db.stock_products.update_one({"id": product_id}, {
+            "$set": {"cost_price": new_price},
+            "$push": {"price_history": history_entry}
+        })
+        pct_change = round(((new_price - old_price) / old_price * 100) if old_price > 0 else 0, 1)
+        await log_sync(db, "stock", "internal", "info", f"Price update: {prod['name']} £{old_price} → £{new_price} ({pct_change}%)", product_id)
+        return {"product": prod["name"], "old_price": old_price, "new_price": new_price, "change_pct": pct_change}
+
+    # === 6. YIELD MANAGEMENT ===
+
+    @router.get("/stock/yield-analysis/{property_id}")
+    async def yield_analysis(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Analyze ingredient yields — raw vs usable quantities"""
+        products = await db.stock_products.find(
+            {"property_id": property_id, "is_active": True, "yield_pct": {"$lt": 100, "$gt": 0}},
+            {"_id": 0}
+        ).to_list(200)
+        result = []
+        for p in products:
+            yield_pct = p.get("yield_pct", 100)
+            raw_cost = p.get("cost_price", 0)
+            effective_cost = round(raw_cost / (yield_pct / 100), 2) if yield_pct > 0 else raw_cost
+            waste_pct = round(100 - yield_pct, 1)
+            result.append({
+                "product_id": p["id"], "name": p["name"], "unit": p.get("unit", ""),
+                "raw_cost_per_unit": raw_cost, "yield_pct": yield_pct,
+                "effective_cost_per_unit": effective_cost,
+                "waste_pct": waste_pct,
+                "cost_increase": round(effective_cost - raw_cost, 2),
+            })
+        result.sort(key=lambda x: x["cost_increase"], reverse=True)
+        return result
+
+    # === 7. PERISHABLE FORECASTING (FIFO / Expiry) ===
+
+    @router.get("/stock/perishable-alerts/{property_id}")
+    async def perishable_alerts(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Track expiry dates and FIFO alerts for perishable items"""
+        products = await db.stock_products.find(
+            {"property_id": property_id, "is_active": True, "expiry_days": {"$gt": 0}},
+            {"_id": 0}
+        ).to_list(200)
+
+        alerts = []
+        for p in products:
+            # Get last purchase date
+            last_purchase = await db.stock_movements.find_one(
+                {"product_id": p["id"], "movement_type": "purchase"},
+                {"_id": 0, "created_at": 1},
+                sort=[("created_at", -1)]
+            )
+            if last_purchase:
+                try:
+                    purchase_date = datetime.fromisoformat(last_purchase["created_at"].replace("Z", "+00:00"))
+                    expiry_date = purchase_date + __import__('datetime').timedelta(days=p["expiry_days"])
+                    days_left = (expiry_date - datetime.now(timezone.utc)).days
+                    status = "expired" if days_left < 0 else ("critical" if days_left <= 2 else ("warning" if days_left <= 5 else "ok"))
+                    if status != "ok":
+                        alerts.append({
+                            "product_id": p["id"], "name": p["name"],
+                            "shelf_life_days": p["expiry_days"],
+                            "last_purchased": last_purchase["created_at"][:10],
+                            "estimated_expiry": expiry_date.isoformat()[:10],
+                            "days_remaining": days_left,
+                            "current_stock": p["current_stock"], "unit": p.get("unit", ""),
+                            "stock_value": round(p["current_stock"] * p.get("cost_price", 0), 2),
+                            "status": status, "storage": p.get("storage_temp", ""),
+                        })
+                except (ValueError, TypeError):
+                    pass
+
+        alerts.sort(key=lambda x: x["days_remaining"])
+        total_at_risk = round(sum(a["stock_value"] for a in alerts), 2)
+        return {"alerts": alerts, "total_at_risk_value": total_at_risk, "count": len(alerts)}
+
+    # === 8. MULTI-OUTLET TRANSFERS ===
+
+    @router.post("/stock/transfer")
+    async def transfer_stock(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Transfer stock between outlets with full tracking"""
+        from models import StockMovement
+        product_id = data.get("product_id", "")
+        from_outlet = data.get("from_outlet", "")
+        to_outlet = data.get("to_outlet", "")
+        quantity = abs(data.get("quantity", 0))
+        property_id = data.get("property_id", "")
+
+        product = await db.stock_products.find_one({"id": product_id}, {"_id": 0})
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        cost = round(product.get("cost_price", 0) * quantity, 2)
+
+        # Out from source
+        mv_out = StockMovement(
+            property_id=property_id, product_id=product_id, product_name=product["name"],
+            movement_type="transfer_out", quantity=quantity, unit=product.get("unit", ""),
+            cost=cost, outlet=from_outlet, from_outlet=from_outlet, to_outlet=to_outlet,
+            reference=f"transfer:{from_outlet}→{to_outlet}",
+            recorded_by=current_user.get("name", "Staff"),
+        )
+        d1 = mv_out.model_dump()
+        await db.stock_movements.insert_one(d1)
+
+        # In to destination
+        mv_in = StockMovement(
+            property_id=property_id, product_id=product_id, product_name=product["name"],
+            movement_type="transfer_in", quantity=quantity, unit=product.get("unit", ""),
+            cost=cost, outlet=to_outlet, from_outlet=from_outlet, to_outlet=to_outlet,
+            reference=f"transfer:{from_outlet}→{to_outlet}",
+            recorded_by=current_user.get("name", "Staff"),
+        )
+        d2 = mv_in.model_dump()
+        await db.stock_movements.insert_one(d2)
+
+        await log_sync(db, "stock", "internal", "success", f"Transfer: {product['name']} x{quantity} {from_outlet} → {to_outlet}", f"{d1['id']},{d2['id']}")
+        asyncio.create_task(fire_webhooks(db, "stock.transfer", {"product": product["name"], "quantity": quantity, "from": from_outlet, "to": to_outlet}))
+
+        return {"status": "transferred", "product": product["name"], "quantity": quantity, "from": from_outlet, "to": to_outlet, "cost": cost}
+
+    # === 9. INVENTORY TURNOVER RATE ===
+
+    @router.get("/stock/turnover-rate/{property_id}")
+    async def inventory_turnover(property_id: str, days: int = 30,
+                                  current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Calculate inventory turnover rate (target: 4-8x monthly)"""
+        cutoff = (datetime.now(timezone.utc) - __import__('datetime').timedelta(days=days)).isoformat()
+
+        # COGS in period (usage + waste)
+        cogs_pipeline = [
+            {"$match": {"property_id": property_id, "movement_type": {"$in": ["usage", "waste"]}, "created_at": {"$gte": cutoff}}},
+            {"$group": {"_id": None, "total": {"$sum": "$cost"}}}
+        ]
+        cogs = 0
+        async for doc in db.stock_movements.aggregate(cogs_pipeline):
+            cogs = round(doc["total"], 2)
+
+        # Average inventory value
+        inv_pipeline = [
+            {"$match": {"property_id": property_id, "is_active": True}},
+            {"$group": {"_id": None, "value": {"$sum": {"$multiply": ["$current_stock", "$cost_price"]}}}}
+        ]
+        avg_inv = 0
+        async for doc in db.stock_products.aggregate(inv_pipeline):
+            avg_inv = round(doc["value"], 2)
+
+        turnover = round(cogs / avg_inv, 2) if avg_inv > 0 else 0
+        # Annualize
+        monthly_turnover = round(turnover * (30 / days), 2)
+
+        status = "optimal" if 4 <= monthly_turnover <= 8 else ("slow" if monthly_turnover < 4 else "fast")
+
+        # Per-product turnover
+        product_turnovers = []
+        products = await db.stock_products.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(200)
+        for p in products:
+            prod_cogs_pipeline = [
+                {"$match": {"product_id": p["id"], "movement_type": {"$in": ["usage", "waste"]}, "created_at": {"$gte": cutoff}}},
+                {"$group": {"_id": None, "total": {"$sum": "$cost"}}}
+            ]
+            prod_cogs = 0
+            async for doc in db.stock_movements.aggregate(prod_cogs_pipeline):
+                prod_cogs = round(doc["total"], 2)
+            prod_value = round(p.get("current_stock", 0) * p.get("cost_price", 0), 2)
+            prod_turnover = round(prod_cogs / prod_value, 2) if prod_value > 0 else 0
+            if prod_value > 0:
+                product_turnovers.append({
+                    "product": p["name"], "turnover": prod_turnover,
+                    "stock_value": prod_value, "cogs": prod_cogs,
+                    "status": "optimal" if 4 <= prod_turnover * (30 / days) <= 8 else ("slow" if prod_turnover * (30 / days) < 4 else "fast"),
+                })
+
+        product_turnovers.sort(key=lambda x: x["turnover"])
+        slow_movers = [p for p in product_turnovers if p["status"] == "slow"]
+
+        return {
+            "turnover_rate": turnover,
+            "monthly_turnover": monthly_turnover,
+            "target": {"min": 4, "max": 8},
+            "status": status,
+            "cogs": cogs, "avg_inventory_value": avg_inv,
+            "period_days": days,
+            "products": product_turnovers[:20],
+            "slow_movers_count": len(slow_movers),
+            "slow_movers_value": round(sum(p["stock_value"] for p in slow_movers), 2),
+        }
+
     return router

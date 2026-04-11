@@ -187,6 +187,153 @@ function TheoVsActualTab({ propertyId }) {
   );
 }
 
+function FoodCostDashboardTab({ propertyId }) {
+  const [data, setData] = useState(null);
+  useEffect(() => { axios.get(`${API}/stock/food-cost-dashboard/${propertyId}`).then(r => setData(r.data)).catch(() => {}); }, [propertyId]);
+  if (!data) return <div className="flex justify-center py-16"><ArrowsClockwise size={24} className="animate-spin text-stone-300" /></div>;
+  const statusColor = data.status === "on_target" ? "text-emerald-600 bg-emerald-50 border-emerald-200" : data.status === "high" ? "text-red-600 bg-red-50 border-red-200" : "text-amber-600 bg-amber-50 border-amber-200";
+  return (
+    <div className="space-y-4" data-testid="food-cost-tab">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className={`border rounded-xl p-4 text-center ${statusColor}`}>
+          <div className="text-3xl font-black">{data.food_cost_pct}%</div>
+          <div className="text-[10px] uppercase font-semibold">Food Cost %</div>
+          <div className="text-[9px] mt-1">Target: {data.target_range.min}-{data.target_range.max}%</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+          <div className="text-xl font-bold text-stone-800">£{data.cogs}</div><div className="text-[10px] text-stone-500 uppercase">COGS</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+          <div className="text-xl font-bold text-emerald-600">£{data.revenue}</div><div className="text-[10px] text-stone-500 uppercase">F&B Revenue</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+          <div className="text-xl font-bold text-stone-800">£{data.purchases}</div><div className="text-[10px] text-stone-500 uppercase">Purchases</div>
+        </div>
+      </div>
+      {Object.keys(data.by_outlet || {}).length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
+          <div className="text-sm font-semibold text-stone-800 mb-2">Cost by Outlet</div>
+          {Object.entries(data.by_outlet).map(([outlet, d]) => (
+            <div key={outlet} className="flex justify-between text-xs py-1.5 border-b border-stone-50">
+              <span className="text-stone-600">{outlet}</span><span className="font-medium text-stone-800">£{d.cost} ({d.movements} movements)</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MenuEngineeringTab({ propertyId }) {
+  const [data, setData] = useState(null);
+  useEffect(() => { axios.get(`${API}/stock/menu-engineering/${propertyId}`).then(r => setData(r.data)).catch(() => {}); }, [propertyId]);
+  if (!data) return <div className="flex justify-center py-16"><ArrowsClockwise size={24} className="animate-spin text-stone-300" /></div>;
+  const classColors = { star: "bg-amber-100 text-amber-700 border-amber-200", puzzle: "bg-blue-100 text-blue-700 border-blue-200", plowhorse: "bg-stone-100 text-stone-600 border-stone-200", dog: "bg-red-100 text-red-600 border-red-200" };
+  const classEmoji = { star: "High margin + High sales", puzzle: "High margin + Low sales", plowhorse: "Low margin + High sales", dog: "Low margin + Low sales" };
+  return (
+    <div className="space-y-4" data-testid="menu-eng-tab">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {["star", "puzzle", "plowhorse", "dog"].map(c => (
+          <div key={c} className={`border rounded-xl p-3 text-center ${classColors[c]}`}>
+            <div className="text-2xl font-bold">{data.summary?.[c + "s"] || 0}</div>
+            <div className="text-[10px] uppercase font-semibold">{c}s</div>
+            <div className="text-[8px] mt-0.5 opacity-70">{classEmoji[c]}</div>
+          </div>
+        ))}
+      </div>
+      {data.recommendations && (data.recommendations.promote?.length > 0 || data.recommendations.reprice?.length > 0) && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
+          <div className="text-sm font-semibold text-stone-800 mb-2">Recommendations</div>
+          {data.recommendations.promote?.length > 0 && <div className="text-xs text-blue-600 mb-1">Promote (puzzles): {data.recommendations.promote.join(", ")}</div>}
+          {data.recommendations.reprice?.length > 0 && <div className="text-xs text-amber-600 mb-1">Reprice (plowhorses): {data.recommendations.reprice.join(", ")}</div>}
+          {data.recommendations.remove_or_rework?.length > 0 && <div className="text-xs text-red-500">Rework/remove (dogs): {data.recommendations.remove_or_rework.join(", ")}</div>}
+        </div>
+      )}
+      <div className="space-y-1.5">
+        {data.recipes?.map(r => (
+          <div key={r.id} className={`bg-white border rounded-lg p-2.5 flex justify-between text-xs ${classColors[r.menu_class] || "border-stone-200"}`}>
+            <div><span className="font-semibold">{r.name}</span> <Badge className="text-[8px] ml-1">{r.menu_class}</Badge></div>
+            <div className="flex gap-3 text-stone-500">
+              <span>Cost: £{r.total_cost}</span><span>Sell: £{r.sell_price}</span><span>Margin: {r.margin_pct}%</span><span>Sales: {r.total_sales || 0}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TurnoverTab({ propertyId }) {
+  const [data, setData] = useState(null);
+  useEffect(() => { axios.get(`${API}/stock/turnover-rate/${propertyId}`).then(r => setData(r.data)).catch(() => {}); }, [propertyId]);
+  if (!data) return <div className="flex justify-center py-16"><ArrowsClockwise size={24} className="animate-spin text-stone-300" /></div>;
+  const statusColor = data.status === "optimal" ? "text-emerald-600 bg-emerald-50 border-emerald-200" : data.status === "slow" ? "text-red-600 bg-red-50 border-red-200" : "text-amber-600 bg-amber-50 border-amber-200";
+  return (
+    <div className="space-y-4" data-testid="turnover-tab">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className={`border rounded-xl p-4 text-center ${statusColor}`}>
+          <div className="text-3xl font-black">{data.monthly_turnover}x</div>
+          <div className="text-[10px] uppercase font-semibold">Monthly Turnover</div>
+          <div className="text-[9px] mt-1">Target: {data.target.min}-{data.target.max}x</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+          <div className="text-xl font-bold text-stone-800">£{data.cogs}</div><div className="text-[10px] text-stone-500 uppercase">COGS (period)</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+          <div className="text-xl font-bold text-stone-800">£{data.avg_inventory_value}</div><div className="text-[10px] text-stone-500 uppercase">Avg Inventory</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+          <div className="text-xl font-bold text-red-500">{data.slow_movers_count}</div><div className="text-[10px] text-stone-500 uppercase">Slow Movers (£{data.slow_movers_value})</div>
+        </div>
+      </div>
+      {data.products?.length > 0 && (
+        <div className="space-y-1">
+          {data.products.map((p, i) => (
+            <div key={i} className="bg-white border border-stone-200 rounded-lg p-2 flex justify-between text-xs">
+              <span className="font-medium text-stone-700">{p.product}</span>
+              <div className="flex gap-3 text-stone-500">
+                <span>Turnover: {p.turnover}x</span><span>Value: £{p.stock_value}</span>
+                <Badge className={`text-[8px] ${p.status === "optimal" ? "bg-emerald-50 text-emerald-700" : p.status === "slow" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>{p.status}</Badge>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PerishableTab({ propertyId }) {
+  const [data, setData] = useState(null);
+  useEffect(() => { axios.get(`${API}/stock/perishable-alerts/${propertyId}`).then(r => setData(r.data)).catch(() => {}); }, [propertyId]);
+  if (!data) return <div className="flex justify-center py-16"><ArrowsClockwise size={24} className="animate-spin text-stone-300" /></div>;
+  return (
+    <div className="space-y-3" data-testid="perishable-tab">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-red-500">{data.count}</div><div className="text-[10px] text-stone-500 uppercase">Expiry Alerts</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-red-600">£{data.total_at_risk_value}</div><div className="text-[10px] text-stone-500 uppercase">At-Risk Value</div>
+        </div>
+      </div>
+      {data.alerts?.length === 0 ? <div className="text-center py-12 text-stone-400 text-sm">No perishable alerts. Set expiry_days on products to enable tracking.</div> :
+        data.alerts?.map((a, i) => (
+          <div key={i} className={`bg-white border rounded-xl p-3 flex justify-between ${a.status === "expired" ? "border-red-300 bg-red-50" : a.status === "critical" ? "border-amber-300 bg-amber-50" : "border-stone-200"}`}>
+            <div>
+              <div className="text-xs font-semibold text-stone-800">{a.name}</div>
+              <div className="text-[10px] text-stone-400">Stock: {a.current_stock} {a.unit} · Purchased: {a.last_purchased} · Shelf life: {a.shelf_life_days}d</div>
+            </div>
+            <div className="text-right">
+              <div className={`text-sm font-bold ${a.days_remaining < 0 ? "text-red-600" : "text-amber-600"}`}>{a.days_remaining}d</div>
+              <Badge className={`text-[8px] ${a.status === "expired" ? "bg-red-100 text-red-700" : a.status === "critical" ? "bg-amber-100 text-amber-700" : "bg-yellow-100 text-yellow-700"}`}>{a.status}</Badge>
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
 export function StockManagementPanel({ properties, activePropertyId }) {
   const [tab, setTab] = useState("products");
   const [products, setProducts] = useState([]);
@@ -255,8 +402,11 @@ export function StockManagementPanel({ properties, activePropertyId }) {
     { id: "movements", label: "Movements", icon: ShoppingCart },
     { id: "suppliers", label: "Suppliers & POs", icon: ShoppingCart },
     { id: "counts", label: "Stock Counts", icon: ChartBar },
-    { id: "cost", label: "Cost Analysis", icon: ChartBar },
+    { id: "cost", label: "Cost %", icon: CurrencyGbp },
+    { id: "menu-eng", label: "Menu Engineering", icon: ChartBar },
     { id: "theo", label: "Theo vs Actual", icon: WarningCircle },
+    { id: "turnover", label: "Turnover", icon: ArrowsClockwise },
+    { id: "perishable", label: "Expiry Alerts", icon: WarningCircle },
     { id: "variances", label: `Variances (${variances.length})`, icon: WarningCircle },
   ];
 
@@ -414,46 +564,12 @@ export function StockManagementPanel({ properties, activePropertyId }) {
           <StockCountsTab propertyId={propertyId} />
         )}
 
-        {tab === "cost" && aiCost && (
-          <div className="space-y-4" data-testid="cost-analysis">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4 text-center">
-                <div className="text-2xl font-bold text-emerald-700">£{aiCost.cost_per_guest_night}</div>
-                <div className="text-[10px] text-emerald-600 uppercase font-semibold">Cost / Guest / Night</div>
-              </div>
-              <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
-                <div className="text-xl font-bold text-stone-800">£{aiCost.total_fb_cost}</div>
-                <div className="text-[10px] text-stone-500 uppercase">Total F&B Cost</div>
-              </div>
-              <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
-                <div className="text-xl font-bold text-red-500">£{aiCost.total_waste_cost}</div>
-                <div className="text-[10px] text-stone-500 uppercase">Waste Cost</div>
-              </div>
-              <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
-                <div className="text-xl font-bold text-stone-800">{aiCost.total_guest_nights}</div>
-                <div className="text-[10px] text-stone-500 uppercase">Guest Nights</div>
-              </div>
-            </div>
-            {Object.keys(aiCost.by_category || {}).length > 0 && (
-              <div className="bg-white border border-stone-200 rounded-xl p-4">
-                <div className="text-sm font-semibold text-stone-800 mb-2">Cost by Category</div>
-                {Object.entries(aiCost.by_category).map(([cat, val]) => (
-                  <div key={cat} className="flex justify-between text-xs py-1 border-b border-stone-50">
-                    <span className="text-stone-600">{cat}</span>
-                    <span className="font-medium text-stone-800">£{val}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {aiCost.low_stock_alerts?.length > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                <div className="text-sm font-semibold text-red-700 mb-2 flex items-center gap-1"><WarningCircle size={14} /> Low Stock Alerts</div>
-                {aiCost.low_stock_alerts.map((a, i) => (
-                  <div key={i} className="text-xs text-red-600 py-0.5">{a.name}: {a.current_stock} {a.unit} (reorder at {a.reorder_level})</div>
-                ))}
-              </div>
-            )}
-          </div>
+        {tab === "cost" && (
+          <FoodCostDashboardTab propertyId={propertyId} />
+        )}
+
+        {tab === "menu-eng" && (
+          <MenuEngineeringTab propertyId={propertyId} />
         )}
 
         {tab === "theo" && (
@@ -479,6 +595,14 @@ export function StockManagementPanel({ properties, activePropertyId }) {
                 </div>
               ))}
           </div>
+        )}
+
+        {tab === "turnover" && (
+          <TurnoverTab propertyId={propertyId} />
+        )}
+
+        {tab === "perishable" && (
+          <PerishableTab propertyId={propertyId} />
         )}
       </>)}
 

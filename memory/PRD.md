@@ -1,7 +1,7 @@
 # MyHotelBox — Product Requirements Document
 
 ## Overview
-Hotel management software (www.myhotelbox.com) — Booking Engine + Review Hub + Guest Messaging + Automation modules. Competitive with Mews, Cloudbeds, eviivo, HiJiffy, Bookboost, Duve.
+Hotel management software (www.myhotelbox.com) — Booking Engine + Review Hub + Guest Messaging + Automation modules. Competitive with Mews, Cloudbeds, eviivo, HiJiffy, Bookboost, Duve, **Chatlyn**.
 
 ## Tech Stack
 React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stripe | Resend | Meta WhatsApp Cloud API | Telegram Bot API
@@ -28,12 +28,19 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - Guest Reviews, Self-Check-in, Guest Portal, Cart Recovery, Group Bookings
 - AI Concierge Chat (GPT-5.2), Hourly/Space Bookings (8 types)
 
-### Guest Messaging Hub
-- **Unified Inbox**: Multi-channel (WhatsApp/Telegram/Email/SMS/OTA), ticket workflow, priority, sentiment
+### Guest Messaging Hub (Chatlyn Parity — iter 50)
+- **Unified Inbox**: Multi-channel (WhatsApp/Telegram/Email/SMS/OTA/Webchat), ticket workflow, priority, sentiment
 - **AI-Suggested Replies** (GPT-5.2), Quick Reply Templates (10), Auto-Reply FAQ Bot (10 rules)
 - **Guest Contact Directory**: From bookings, filters, one-click messaging
 - **Bookings Calendar**: Monthly check-in/out events
 - **New Conversation Modal**: Channel selector with pre-fill
+- **Internal Notes / Private Comments** — Staff-only notes on conversations with @mention support (invisible to guests)
+- **Conversation Snooze** — Snooze conversations with 5 duration options (30m, 1h, 2h, 4h, tomorrow 9AM), auto-wake when timer expires
+- **1-Click Translate** — AI-powered translation for guest messages and staff replies across 20+ languages using GPT-5.2
+- **Guest Booking Data Sidebar** — View guest profile, VIP status, loyalty tier, total stays, total spent, and full booking history right next to the conversation
+- **Conversation Analytics Dashboard** — Activity heatmap (day × hour), First Response Time, Resolution Time, resolution rate, volume by channel/agent/tag, sentiment breakdown
+- **Webchat Widget Configurator** — Full settings panel for embeddable live chat widget (color, position, welcome/offline messages, AI toggle, require name/email), live preview, embed code generator
+- **Contact Lists** — Static and dynamic lists for targeted WhatsApp/Email campaigns. Dynamic lists auto-populate from guest profiles using filters (VIP, loyalty tier, min stays, tags, min spend)
 
 ### Automation Engine
 - 6 Pre-built Journey Rules (Pre-Arrival, Arrival Day, Mid-Stay, Post-Checkout x2, Cart Recovery)
@@ -61,7 +68,6 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - **130+ Language AI Chat** — AI Concierge auto-detects guest language and responds in same language, AI messaging replies also multilingual
 
 ### Guest Experience (Competitive with Mews, Cloudbeds, Duve, HiJiffy)
-- **Housekeeping Management** — Room status board (Clean/Dirty/Inspected/In Progress/Out of Order), task assignment, maintenance requests, seeding
 - **Guest Profiles / CRM** — Unified guest history synced from bookings, VIP toggle, loyalty tiers, search/sort, detailed view with booking/review/conversation history
 - **Campaign Manager** — Bulk messaging (Email/WhatsApp/SMS), guest segmentation filters (VIP, loyalty tier, stays, spend, tags), preview recipients, send tracking
 - **Guest App / Digital Directory** — WiFi credentials, hotel services (6 default), local recommendations (4 default), public guest-facing URL, editable via admin panel
@@ -90,20 +96,20 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 ## Code Architecture (Fully Refactored)
 ```
 backend/
-├── server.py              # App setup, Stripe webhook, seeds (406 lines — was 6,400)
+├── server.py              # App setup, Stripe webhook, seeds (446 lines)
 ├── routes/
-│   ├── helpers.py         # Shared: serialize_review, log_sync, fire_webhooks (55 lines)
-│   ├── auth_routes.py     # Auth, Users, Properties (243 lines)
-│   ├── connections.py     # API Keys, Webhooks, Integration Guide (337 lines)
-│   ├── reviews.py         # Reviews, Templates, Sentiment, Competitors, Widget (1,399 lines)
-│   ├── integrations.py    # Reports, Branding, Platform Integrations, Sync (1,417 lines)
-│   ├── bookings.py        # Booking Engine, Room Types, Stripe (1,451 lines)
-│   ├── messaging.py       # Conversations, Messages, Quick Replies (517 lines)
-│   ├── automation.py      # Automation Rules, Logs, Stats (222 lines)
-│   ├── dashboard.py       # Dashboard Overview, Concierge, Space Bookings Admin (179 lines)
-│   ├── staff_performance.py # Staff Performance Dashboard (220 lines)
-│   ├── calendar_gss.py    # Availability Calendar + Guest Satisfaction Score
-│   ├── housekeeping.py    # Room Status Board, Tasks, Maintenance
+│   ├── helpers.py         # Shared: serialize_review, log_sync, fire_webhooks
+│   ├── auth_routes.py     # Auth, Users, Properties
+│   ├── connections.py     # API Keys, Webhooks, Integration Guide
+│   ├── reviews.py         # Reviews, Templates, Sentiment, Competitors, Widget
+│   ├── integrations.py    # Reports, Branding, Platform Integrations, Sync
+│   ├── bookings.py        # Booking Engine, Room Types, Stripe
+│   ├── messaging.py       # Conversations, Messages, Quick Replies, Calendar
+│   ├── messaging_advanced.py  # Internal Notes, Snooze, Translate, Booking Data, Analytics, Webchat Config, Contact Lists
+│   ├── automation.py      # Automation Rules, Logs, Stats
+│   ├── dashboard.py       # Dashboard Overview, Concierge, Space Bookings Admin
+│   ├── staff_performance.py # Staff Performance Dashboard
+│   ├── calendar_gss.py    # Guest Satisfaction Score
 │   ├── guest_profiles.py  # Guest CRM, Profile Sync, VIP Management
 │   ├── campaigns.py       # Campaign Manager, Segmentation, Bulk Send
 │   ├── guest_app.py       # Guest App / Digital Directory (public + admin)
@@ -119,3 +125,9 @@ backend/
 ## Backlog
 - Note: Dynamic Pricing, Drag-and-drop Calendar, Channel Manager — all exist on myhotelbox.com, NOT building
 - Note: Space Bookings, Availability Calendar, Housekeeping — removed from sidebar per user request (backend routes still exist)
+- Real bi-directional outbound sync for review platforms (P1)
+- Real outbound messaging for WhatsApp, Telegram, SMS — currently Sandbox mode (P1)
+
+## Testing
+- Iteration 49: 100% pass (51 backend tests) — Full regression before chatlyn features
+- Iteration 50: 100% pass (39 backend tests + frontend) — All 7 chatlyn competitor features verified

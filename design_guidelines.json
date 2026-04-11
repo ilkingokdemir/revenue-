@@ -1,124 +1,94 @@
 {
   "theme": "Light",
-  "archetype": "Organic & Earthy (Hospitality/Luxury)",
+  "archetype": "4 (Swiss & High-Contrast) optimized for High-Conversion Travel Utility",
+  "vibe": "Secure, authoritative, urgent, high-conversion",
   "colors": {
-    "background": "bg-stone-50",
-    "surface": "bg-white",
-    "surface_hover": "bg-stone-100",
-    "primary": "bg-emerald-800",
-    "primary_hover": "bg-emerald-900",
-    "primary_text": "text-white",
-    "text_main": "text-stone-900",
-    "text_muted": "text-stone-500",
-    "border": "border-stone-200",
-    "accent_warning": "text-amber-600 bg-amber-50",
-    "accent_danger": "text-rose-600 bg-rose-50",
-    "accent_success": "text-emerald-700 bg-emerald-50",
-    "star_active": "text-amber-400",
-    "star_inactive": "text-stone-200"
+    "background_primary": "#FFFFFF",
+    "background_secondary": "#F5F7FA",
+    "primary": "#0A4297",
+    "primary_hover": "#083375",
+    "action": "#006CE4",
+    "action_hover": "#0056B3",
+    "accent_warning": "#FFB703",
+    "accent_urgency": "#D32F2F",
+    "accent_success": "#008009",
+    "text_main": "#1A1A1A",
+    "text_muted": "#4A5568",
+    "border": "#E5E7EB"
   },
   "typography": {
-    "heading_font": "font-sans",
-    "body_font": "font-sans",
-    "h1": "text-3xl sm:text-4xl font-semibold tracking-tight text-stone-900",
-    "h2": "text-xl sm:text-2xl font-medium tracking-tight text-stone-900",
-    "h3": "text-lg font-medium text-stone-900",
-    "body": "text-sm text-stone-600 leading-relaxed",
-    "label": "text-xs font-semibold uppercase tracking-wider text-stone-500",
-    "metric_value": "text-3xl font-semibold tracking-tight text-stone-900"
+    "font_heading": "Outfit",
+    "font_body": "Manrope",
+    "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-slate-900",
+    "h2": "text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-slate-900",
+    "h3": "text-xl sm:text-2xl font-semibold text-slate-900",
+    "body": "text-base text-slate-600 leading-relaxed",
+    "small_label": "text-xs font-bold tracking-[0.2em] uppercase text-slate-500",
+    "price": "text-2xl font-bold text-slate-900",
+    "urgency_text": "text-sm font-semibold text-[#D32F2F]"
   },
-  "spacing_and_layout": {
-    "page_padding": "p-4 sm:p-6 lg:p-8",
-    "card_padding": "p-5 sm:p-6",
-    "gap_standard": "gap-4 sm:gap-6",
-    "border_radius": "rounded-xl",
-    "button_radius": "rounded-lg",
-    "grid_bento": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6",
-    "sidebar_width": "w-full md:w-[380px] lg:w-[420px]",
-    "content_layout": "flex flex-col h-screen overflow-hidden bg-stone-50",
-    "main_area_layout": "flex-1 flex flex-col md:flex-row overflow-hidden gap-6 px-4 sm:px-6 lg:px-8 pb-6 pt-2"
-  },
-  "shadows_and_borders": {
-    "card_shadow": "shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)]",
-    "card_border": "border border-stone-200/80",
-    "focus_ring": "focus:ring-2 focus:ring-emerald-800/20 focus:outline-none"
-  },
-  "animations": {
-    "hover_transition": "transition-all duration-200 ease-out",
-    "card_hover": "hover:shadow-md hover:border-stone-300",
-    "button_active": "active:scale-[0.98]"
+  "layout_spacing": {
+    "container_padding": "px-4 sm:px-6 lg:px-8",
+    "section_spacing": "py-16 sm:py-24 lg:py-32",
+    "element_gap": "gap-6 lg:gap-8",
+    "booking_widget": "p-6 sm:p-8 bg-white border border-gray-200 shadow-xl rounded-xl"
   },
   "components": {
-    "Header": {
-      "style": "bg-white border-b border-stone-200 px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm",
-      "nav_links": "text-sm font-medium text-stone-600 hover:text-emerald-800 transition-colors px-3 py-2 rounded-md hover:bg-stone-50"
+    "buttons": {
+      "primary": "bg-[#006CE4] text-white hover:bg-[#0056B3] font-semibold rounded-md px-6 py-3 transition-colors",
+      "secondary": "bg-white text-[#0A4297] border border-[#0A4297] hover:bg-[#F5F7FA] font-semibold rounded-md px-6 py-3 transition-colors"
     },
-    "StatsCard": {
-      "style": "bg-white border border-stone-200 rounded-xl p-5 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col gap-2 relative overflow-hidden",
-      "trend_positive": "text-emerald-600 flex items-center gap-1 text-sm font-medium",
-      "trend_negative": "text-rose-600 flex items-center gap-1 text-sm font-medium"
-    },
-    "ReviewListPanel": {
-      "style": "bg-white border border-stone-200 rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col h-full overflow-hidden shrink-0",
-      "header_style": "p-4 border-b border-stone-200 flex items-center justify-between bg-stone-50/50",
-      "list_container": "flex-1 overflow-y-auto p-3 flex flex-col gap-2"
-    },
-    "ReviewCard": {
-      "style": "p-4 rounded-lg border border-transparent hover:border-stone-200 hover:bg-stone-50/80 cursor-pointer transition-all duration-200 group",
-      "active_style": "bg-stone-50 border-stone-200 shadow-sm ring-1 ring-emerald-800/10"
-    },
-    "ReviewDetailPanel": {
-      "style": "bg-white border border-stone-200 rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] flex flex-col h-full overflow-hidden flex-1",
-      "header_style": "px-6 py-5 border-b border-stone-200 bg-white sticky top-0 z-10",
-      "content_style": "flex-1 overflow-y-auto p-6 space-y-8"
-    },
-    "AIResponseBox": {
-      "style": "bg-emerald-50/50 border border-emerald-100/80 rounded-xl p-5 shadow-sm relative overflow-hidden",
-      "header": "flex items-center gap-2 text-emerald-800 font-semibold mb-3 tracking-tight",
-      "textarea": "w-full bg-white border border-emerald-200 rounded-lg p-3 text-stone-700 text-sm min-h-[120px] focus:ring-2 focus:ring-emerald-800/20 focus:border-emerald-800/30 transition-shadow",
-      "actions": "mt-3 flex items-center justify-end gap-2"
-    },
-    "Dialogs": {
-      "overlay": "fixed inset-0 bg-stone-900/40 backdrop-blur-sm z-50",
-      "content": "fixed left-[50%] top-[50%] z-50 grid w-full max-w-2xl translate-x-[-50%] translate-y-[-50%] gap-4 border border-stone-200 bg-white p-0 shadow-2xl sm:rounded-2xl overflow-hidden",
-      "header": "px-6 py-4 border-b border-stone-100 bg-stone-50/50",
-      "body": "p-6"
-    },
-    "Badges": {
-      "platform": "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-stone-200 bg-white text-stone-800 shadow-sm"
+    "cards": "bg-white border border-gray-200 rounded-lg overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1",
+    "badges": {
+      "cancellation": "bg-green-50 text-[#008009] border border-green-200 text-xs font-semibold px-2 py-1 rounded",
+      "rating": "bg-[#0A4297] text-white font-bold px-2 py-1 text-sm rounded-tl-lg rounded-br-lg"
     }
   },
-  "media": {
-    "images": [
-      {
-        "category": "branding_preview",
-        "url": "https://static.prod-images.emergentagent.com/jobs/f284f94c-059d-4721-a5db-def78e330cac/images/c8b2851ce1c51bfc7d4e003b8b73f3afa3debca378195a2f703204163c4a1609.png",
-        "description": "Luxury hotel lobby for Branding Panel live preview background to showcase branded widgets over."
-      },
-      {
-        "category": "guest_avatar_1",
-        "url": "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMGhlYWRzaG90JTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc1ODQ2NTI0fDA&ixlib=rb-4.1.0&q=85",
-        "description": "Professional business headshot for guest avatar (User review)"
-      },
-      {
-        "category": "guest_avatar_2",
-        "url": "https://images.unsplash.com/photo-1689600944138-da3b150d9cb8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2OTV8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBidXNpbmVzcyUyMGhlYWRzaG90JTIwcG9ydHJhaXR8ZW58MHx8fHwxNzc1ODQ2NTI0fDA&ixlib=rb-4.1.0&q=85",
-        "description": "Professional business headshot for guest avatar 2 (User review)"
-      }
+  "trust_and_urgency": {
+    "trust_signals": [
+      "Lock icon + 'Secure Booking' near checkout button",
+      "CheckCircle + 'Free Cancellation' in green text on room cards",
+      "Star icon + Rating bubble (e.g. 8.9 Excellent) prominently displayed"
+    ],
+    "urgency_patterns": [
+      "'Only X rooms left on our site!' in red",
+      "'In high demand - booked X times in the last 24 hours'",
+      "Strike-through original pricing to show savings"
     ]
   },
   "icons": {
-    "library": "lucide-react",
-    "instructions": "Use Lucide React for all icons. Keep icon sizes consistent (e.g., w-4 h-4 for buttons, w-5 h-5 for metric cards). Color them according to their context (emerald for positive, rose for negative, stone-400 for neutral, text-amber-400 for review stars)."
+    "library": "@phosphor-icons/react",
+    "style": "weight='fill' for ratings/badges, weight='regular' for UI actions",
+    "installation": "yarn add @phosphor-icons/react"
+  },
+  "media": {
+    "hero_background": {
+      "url": "https://images.pexels.com/photos/9119725/pexels-photo-9119725.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Tranquil luxury hotel paradise with mountain backdrop and inviting poolside setting.",
+      "usage": "Hero section background with dark blue/black gradient overlay (bg-black/40) so the white booking widget pops."
+    },
+    "rooms": [
+      {
+        "url": "https://images.unsplash.com/photo-1766928210443-0be92ed5884a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsdXh1cnklMjBob3RlbCUyMHJvb20lMjBpbnRlcmlvciUyMGJlZHxlbnwwfHx8fDE3NzU4ODU3NTh8MA&ixlib=rb-4.1.0&q=85",
+        "name": "Deluxe Ocean View Room",
+        "description": "Modern bedroom with large window and artwork"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1759264244726-adde4e4318fc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBsdXh1cnklMjBob3RlbCUyMHJvb20lMjBpbnRlcmlvciUyMGJlZHxlbnwwfHx8fDE3NzU4ODU3NTh8MA&ixlib=rb-4.1.0&q=85",
+        "name": "Executive Suite",
+        "description": "A neatly made bed with white linens and pillows."
+      }
+    ]
   },
   "instructions_to_main_agent": [
-    "1. STRUCTURE: The app should be full height (h-screen). Layout: Top sticky Header. Below it, a row of 4 Stats Cards. Below that, flex-1 container split into Left Panel (List) and Right Panel (Detail). Use overflow-hidden on the main wrapper and overflow-y-auto on the internal list/detail content areas to ensure fixed panels.",
-    "2. TYPOGRAPHY: Do not use default Inter for headings if possible, use standard sans but style it with tracking-tight and font-semibold for a premium feel. Metric values should be very large (text-3xl font-semibold).",
-    "3. COMPONENT STYLING: Apply the specified styling classes from the components section. Panels should have a clean white background, soft borders, and very subtle shadow.",
-    "4. AI RESPONSE: The AI Response area in the right panel is a key feature. Make it stand out with the emerald tint (bg-emerald-50/50), add a Sparkles icon to the header, and ensure the textarea looks highly polished.",
-    "5. DATA-TESTID: ALL interactive elements (buttons, inputs, review list items, dialog triggers) MUST include a kebab-case data-testid attribute.",
-    "6. BRANDING DIALOG: For the Branding settings live preview, use the 'branding_preview' image URL as a background layer to simulate the hotel website.",
-    "7. INTERFACES: Use Shadcn components for Tabs, Dropdowns, Dialogs, and Selects, but override their border/radius classes to match this premium 'Organic & Earthy' theme (e.g., rounded-xl for Dialogs, subtle borders).",
-    "8. EMPTY STATES: If no review is selected, show a beautiful, centered empty state in the right panel with a soft text color (text-stone-400) and an icon."
+    "Build a White-Label Hotel Booking Engine module suitable for MyHotelBox PMS.",
+    "CRITICAL: Adhere strictly to the color palette. Use #0A4297 (Deep Blue) for trust elements/header and #006CE4 (Action Blue) for CTAs to mimic the Booking.com secure feel. Do NOT use default tailwind blues.",
+    "Implement a step-by-step booking flow (Search -> Room Selection -> Guest Details -> Confirm). Use a sticky 'Book Now' bar at the bottom for mobile.",
+    "For the Search Widget, use Shadcn Calendar for date selection and Shadcn Select/Popover for Guest/Room counts. Make the widget stark white with a crisp 1px border and strong shadow against the hero image.",
+    "Include 'Trust Signals' aggressively: ShieldCheck icons next to checkout, 'Free Cancellation' green badges on room cards, and secure payment logos.",
+    "Include 'Urgency Signals': Hardcode some realistic urgency text like 'Only 2 rooms left on our site!' in #D32F2F (Red).",
+    "For the Landing Page Template, structure it: Hero (with embedded widget) -> Rooms (Cards) -> Amenities -> Location/Map (placeholder) -> Reviews.",
+    "All interactive elements MUST have data-testid attributes (e.g., data-testid='room-search-button').",
+    "Use @phosphor-icons/react for all icons."
   ]
 }

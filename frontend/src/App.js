@@ -29,6 +29,7 @@ import { AutomationPanel } from "./components/dashboard/AutomationPanel";
 import { ChannelSettingsPanel } from "./components/dashboard/ChannelSettingsPanel";
 import { DashboardHome } from "./components/dashboard/DashboardHome";
 import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePanel";
+import { AvailabilityCalendar } from "./components/dashboard/AvailabilityCalendar";
 import {
   Star,
   CheckCircle,
@@ -2458,6 +2459,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Booking Engine",
       items: [
         { id: "booking", icon: Bed, name: "Rooms & Bookings", testId: "booking-engine-btn" },
+        { id: "availability-calendar", icon: CalendarBlank, name: "Availability Calendar", testId: "availability-calendar-btn" },
         { id: "space-bookings", icon: Door, name: "Space Bookings", testId: "space-bookings-btn" },
         { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
         { id: "customize-template", icon: PaintBrush, name: "Customize Template", testId: "customize-template-btn" },
@@ -2808,6 +2810,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Staff Performance */}
         {activeView === "staff-performance" && (
           <StaffPerformancePanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Availability Calendar */}
+        {activeView === "availability-calendar" && (
+          <AvailabilityCalendar properties={properties} activePropertyId={activePropertyId} />
         )}
       </main>
 

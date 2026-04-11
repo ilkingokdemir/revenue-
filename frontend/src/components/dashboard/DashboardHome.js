@@ -5,8 +5,10 @@ import {
   ArrowsClockwise, Envelope, Lightning, CaretRight,
   WhatsappLogo, TelegramLogo, DeviceMobile, Globe, ChatCircleDots,
   WarningCircle, ArrowUp, ArrowDown, Clock, SignIn, SignOut,
-  PaperPlaneTilt, Robot,
+  PaperPlaneTilt, Robot, Gauge, Smiley, SmileySad, SmileyMeh,
+  TrendUp, TrendDown, CheckCircle,
 } from "@phosphor-icons/react";
+import { Progress } from "@/components/ui/progress";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -40,14 +42,19 @@ function StatCard({ icon: Icon, iconColor, iconBg, label, value, sub, onClick, t
 
 export function DashboardHome({ properties, activePropertyId: propActivePropertyId, onNavigate }) {
   const [data, setData] = useState(null);
+  const [gss, setGss] = useState(null);
   const [loading, setLoading] = useState(true);
   const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: d } = await axios.get(`${API}/dashboard/overview/${propertyId}`);
-      setData(d);
+      const [dashRes, gssRes] = await Promise.all([
+        axios.get(`${API}/dashboard/overview/${propertyId}`),
+        axios.get(`${API}/gss/${propertyId}?days=30`).catch(() => ({ data: null })),
+      ]);
+      setData(dashRes.data);
+      setGss(gssRes.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [propertyId]);
@@ -112,6 +119,73 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
           </button>
         ))}
       </div>
+
+      {/* Guest Satisfaction Score */}
+      {gss && gss.gss > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4 mb-6" data-testid="gss-widget">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
+              <Gauge size={15} className="text-indigo-500" weight="fill" />
+              Guest Satisfaction Score
+            </h3>
+            <span className="text-[10px] text-stone-400">Last 30 days</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            {/* Main GSS */}
+            <div className="flex flex-col items-center justify-center p-3 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl">
+              <div className="text-3xl font-black text-indigo-700">{gss.gss}</div>
+              <div className="text-xs font-semibold text-indigo-500 mt-0.5">{gss.gss_label}</div>
+              {gss.trend !== 0 && (
+                <div className={`flex items-center gap-0.5 mt-1 text-[11px] font-medium ${gss.trend > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  {gss.trend > 0 ? <TrendUp size={12} /> : <TrendDown size={12} />}
+                  {gss.trend > 0 ? "+" : ""}{gss.trend}
+                </div>
+              )}
+            </div>
+            {/* Component Scores */}
+            <div className="space-y-2.5">
+              <div className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">Review Score</div>
+              <div className="flex items-center gap-2">
+                <Star size={14} className="text-amber-500" weight="fill" />
+                <div className="flex-1">
+                  <Progress value={gss.components.review_score} className="h-2" />
+                </div>
+                <span className="text-xs font-bold text-stone-700 w-8 text-right">{gss.components.review_score}</span>
+              </div>
+              <div className="text-[10px] text-stone-400">{gss.reviews.avg_rating}/5 avg ({gss.reviews.count} reviews)</div>
+            </div>
+            <div className="space-y-2.5">
+              <div className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">Sentiment</div>
+              <div className="flex items-center gap-2">
+                <Smiley size={14} className="text-emerald-500" weight="fill" />
+                <div className="flex-1">
+                  <Progress value={gss.components.sentiment_score} className="h-2" />
+                </div>
+                <span className="text-xs font-bold text-stone-700 w-8 text-right">{gss.components.sentiment_score}</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-stone-400">
+                <span className="text-emerald-500">{gss.messaging.positive} pos</span>
+                <span className="text-stone-400">{gss.messaging.neutral} neut</span>
+                <span className="text-red-400">{gss.messaging.negative} neg</span>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              <div className="text-[10px] font-semibold text-stone-500 uppercase tracking-wider">Response Speed</div>
+              <div className="flex items-center gap-2">
+                <Clock size={14} className="text-blue-500" weight="fill" />
+                <div className="flex-1">
+                  <Progress value={gss.components.response_score} className="h-2" />
+                </div>
+                <span className="text-xs font-bold text-stone-700 w-8 text-right">{gss.components.response_score}</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-stone-400">
+                <span>{gss.response.avg_response_min > 0 ? `${Math.round(gss.response.avg_response_min)}m avg` : "N/A"}</span>
+                <span>{gss.messaging.resolution_rate}% resolved</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Three Column Activity Feed */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

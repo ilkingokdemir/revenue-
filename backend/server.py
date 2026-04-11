@@ -26,6 +26,7 @@ from routes.messaging import create_messaging_router
 from routes.automation import create_automation_router
 from routes.dashboard import create_dashboard_router
 from routes.staff_performance import create_staff_performance_router
+from routes.calendar_gss import create_calendar_gss_router
 from routes.auth_routes import create_auth_router
 from routes.connections import create_connections_router
 from routes.reviews import create_reviews_router
@@ -228,6 +229,9 @@ api_router.include_router(dashboard_router)
 
 staff_perf_router = create_staff_performance_router(db, require_roles)
 api_router.include_router(staff_perf_router)
+
+calendar_gss_router = create_calendar_gss_router(db, require_roles)
+api_router.include_router(calendar_gss_router)
 
 auth_routes_router = create_auth_router(db, require_roles, get_current_user, hash_password, verify_password,
                                          create_access_token, create_refresh_token, get_jwt_secret, JWT_ALGORITHM)

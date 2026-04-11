@@ -77,7 +77,7 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
       </div>
 
       {/* Today's Snapshot */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <StatCard icon={SignIn} iconColor="text-emerald-600" iconBg="bg-emerald-50"
           label="Arriving Today" value={data.bookings.today_checkins}
           sub={`${data.bookings.tomorrow_checkins} tomorrow`} testId="stat-checkins" />
@@ -86,9 +86,6 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
         <StatCard icon={Users} iconColor="text-blue-600" iconBg="bg-blue-50"
           label="In-House Guests" value={data.bookings.current_guests}
           sub={data.bookings.total_rooms > 0 ? `${data.bookings.occupancy}% occupancy` : ""} testId="stat-guests" />
-        <StatCard icon={CurrencyGbp} iconColor="text-emerald-600" iconBg="bg-emerald-50"
-          label="Revenue (Month)" value={`£${Math.round(data.revenue.month_total).toLocaleString()}`}
-          sub={`${data.revenue.month_bookings} bookings`} testId="stat-revenue" />
         <StatCard icon={ChatText} iconColor="text-purple-600" iconBg="bg-purple-50"
           label="Unread Messages" value={data.messaging.unread}
           sub={`${data.messaging.open} open conversations`}
@@ -221,66 +218,6 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
               ))}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Bottom Row - Automation + Revenue Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-        {/* Automation Status */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="automation-status-card">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-              <Lightning size={14} className="text-amber-500" weight="fill" /> Automation Today
-            </h3>
-            <button onClick={() => onNavigate?.("automation")} className="text-[10px] text-amber-600 hover:text-amber-700 font-medium flex items-center gap-0.5">
-              Manage <CaretRight size={10} />
-            </button>
-          </div>
-          <div className="flex items-center gap-6">
-            <div>
-              <div className="text-2xl font-bold text-stone-900">{data.automation.sent_today}</div>
-              <div className="text-[10px] text-stone-400">Messages sent</div>
-            </div>
-            {data.automation.failed_today > 0 && (
-              <div>
-                <div className="text-2xl font-bold text-red-500">{data.automation.failed_today}</div>
-                <div className="text-[10px] text-red-400">Failed (check config)</div>
-              </div>
-            )}
-            <div className="ml-auto text-right">
-              <div className="text-[11px] text-stone-400">Tomorrow</div>
-              <div className="text-sm font-bold text-blue-600">{data.bookings.tomorrow_checkins} check-ins</div>
-              <div className="text-[10px] text-stone-400">Pre-arrival messages will fire</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Revenue */}
-        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="revenue-summary-card">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
-              <CurrencyGbp size={14} className="text-emerald-600" weight="fill" /> Revenue
-            </h3>
-          </div>
-          <div className="flex items-center gap-8">
-            <div>
-              <div className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">This Week</div>
-              <div className="text-2xl font-bold text-stone-900">£{Math.round(data.revenue.week_total).toLocaleString()}</div>
-              <div className="text-[10px] text-stone-400">{data.revenue.week_bookings} bookings</div>
-            </div>
-            <div className="h-10 w-px bg-stone-200" />
-            <div>
-              <div className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">This Month</div>
-              <div className="text-2xl font-bold text-stone-900">£{Math.round(data.revenue.month_total).toLocaleString()}</div>
-              <div className="text-[10px] text-stone-400">{data.revenue.month_bookings} bookings</div>
-            </div>
-            <div className="h-10 w-px bg-stone-200" />
-            <div>
-              <div className="text-[10px] text-stone-400 uppercase tracking-wider font-semibold">Total Bookings</div>
-              <div className="text-2xl font-bold text-stone-900">{data.bookings.total}</div>
-              <div className="text-[10px] text-stone-400">all time</div>
-            </div>
-          </div>
         </div>
       </div>
     </div>

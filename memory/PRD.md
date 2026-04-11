@@ -1,10 +1,10 @@
 # MyHotelBox — Product Requirements Document
 
 ## Overview
-Hotel management software (www.myhotelbox.com) — Booking Engine + Review Hub + Guest Messaging modules. Competitive with Mews, Cloudbeds, eviivo, HiJiffy, Bookboost.
+Hotel management software (www.myhotelbox.com) — Booking Engine + Review Hub + Guest Messaging modules. Competitive with Mews, Cloudbeds, eviivo, HiJiffy, Bookboost, Duve.
 
 ## Tech Stack
-React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stripe | Resend | Meta WhatsApp Cloud API (sandbox) | Telegram Bot API (sandbox)
+React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stripe | Resend | Meta WhatsApp Cloud API | Telegram Bot API
 
 ## Completed Features
 
@@ -22,36 +22,42 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 ### Guest Messaging Hub (iter 34-35)
 - **Unified Inbox** — Multi-channel (WhatsApp/Telegram/Email/SMS/OTA), ticket workflow, priority, sentiment
 - **AI-Suggested Replies** (GPT-5.2), Quick Reply Templates (10), Auto-Reply FAQ Bot (10 rules)
-- **Guest Contact Directory** — From bookings, filters (All/In-House/Arriving/Departing/Upcoming/Past)
-- **Bookings Calendar** — Monthly view with check-in/out events
-- **New Conversation Modal** — Channel selector (WhatsApp/Telegram/Email/SMS/Internal)
-- **Platform Sending** — WhatsApp (Meta Cloud API), Telegram (Bot API), Email (Resend) — all sandbox mode
+- **Guest Contact Directory** — From bookings, filters, one-click messaging
+- **Bookings Calendar** — Monthly check-in/out events
+- **New Conversation Modal** — Channel selector with pre-fill from contacts
 
 ### Automation Engine (iter 36)
-- **6 Pre-built Journey Rules:**
-  1. Pre-Arrival Welcome (email, 24h before)
-  2. Day-of-Arrival Reminder (WhatsApp, same day)
-  3. Mid-Stay Satisfaction Check (WhatsApp, 24h after check-in)
-  4. Post-Checkout Thank You & Review (email, 2h after)
-  5. Post-Checkout WhatsApp Follow-up (WhatsApp, 4h after)
-  6. Cart Abandonment Recovery (email, 1h after)
-- **Rule Editor** — Trigger selector, timing, channel, template with variables ({guest_name}, {hotel_name}, {booking_ref}, {checkin_link}, {review_link} etc.)
-- **Template Preview** — Live preview with sample data
-- **Run Now** — Manual execution matches bookings against rules
-- **Execution Logs** — Full history with status (sent/failed/queued)
-- **Stats Dashboard** — Active rules, total sent, today, failed, queued, by channel
+- 6 Pre-built Journey Rules (Pre-Arrival, Arrival Day, Mid-Stay, Post-Checkout x2, Cart Recovery)
+- Rule editor with template variables, trigger/timing/channel config
+- Run Now execution, execution logs, stats dashboard
 
-### Admin Panels
-- Space Bookings management, AI Concierge analytics
+### Channel Settings (iter 37)
+- **WhatsApp Business** — Meta Cloud API config (Phone Number ID, Access Token, Business ID)
+- **Telegram Bot** — Bot Token + Username config
+- **SMS** — Provider, API Key, Sender Number
+- **Email** — Resend (active by default)
+- **Auto-Reply** — Welcome message + auto-reply when staff unavailable
+- Setup guides with step-by-step instructions
+- Test Connection buttons for each channel
+- All channels in sandbox mode until credentials added
 
 ### Review Hub
 - 14-platform integration, AI responses, approval workflow, analytics, competitor benchmarking
 
+### Admin Panels
+- Space Bookings management, AI Concierge analytics
+
 ### Infrastructure
 - JWT auth (admin/manager/receptionist), white-label branding, outbound webhooks
+
+## Sidebar Structure
+- Review Hub: Reviews, Analytics, Response Templates, Approvals, Alerts, Reports
+- Booking Engine: Rooms & Bookings, Space Bookings, Website Templates, Customize Template, Promo Codes, Add-on Services, Policies & Facilities
+- Guest Messaging: Unified Inbox, Automation, Channel Settings, AI Concierge
+- Connections: Integrations, API Connection, Webhooks
 
 ## Backlog
 - P1: Channel Manager integration (sync availability across OTAs)
 - P1: Real bi-directional outbound sync for review platforms
-- P2: Extract server.py (~6,000 lines) into /routes/ modules
+- P2: Extract server.py (~6,200 lines) into /routes/ modules
 - P3: Real-time availability calendar integration

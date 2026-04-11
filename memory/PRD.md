@@ -82,6 +82,10 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - Guest Messaging: Unified Inbox, Automation, Channel Settings, AI Concierge
 - Connections: Integrations, API Connection, Webhooks
 
+### Operations
+- **Stock Management** — Product catalog (13 categories, 9 units), portion-based recipes with auto-costed ingredients & margin calculation, stock movements (purchase/usage/waste/transfer/stocktake), outlets (auto-seeds 4), all-inclusive cost per guest per night, variance/theft detection alerts, low stock alerts
+- **Hotel Accounting** — Income tracking (auto-pulls booking revenue from Booking Engine), expense tracking by category & department, P&L statement (monthly/yearly), department cost centers, budget vs actual comparison, sync bookings button
+
 ## Code Architecture (Fully Refactored)
 ```
 backend/
@@ -101,7 +105,11 @@ backend/
 │   ├── housekeeping.py    # Room Status Board, Tasks, Maintenance
 │   ├── guest_profiles.py  # Guest CRM, Profile Sync, VIP Management
 │   ├── campaigns.py       # Campaign Manager, Segmentation, Bulk Send
-│   └── guest_app.py       # Guest App / Digital Directory (public + admin)
+│   ├── guest_app.py       # Guest App / Digital Directory (public + admin)
+│   ├── smart_locks.py     # Smart Lock Providers + Digital Keys
+│   ├── setup_wizard.py    # Platform Setup Wizard (5 platforms)
+│   ├── stock.py           # Stock Management (F&B inventory, recipes, variance)
+│   └── accounting.py      # Hotel Accounting (P&L, income, expenses, budgets)
 ├── auth.py                # JWT auth, require_roles
 ├── database.py            # MongoDB connection
 └── models.py              # Pydantic models

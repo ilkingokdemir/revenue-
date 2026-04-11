@@ -83,8 +83,8 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - Connections: Integrations, API Connection, Webhooks
 
 ### Operations
-- **Stock Management** — Product catalog (13 categories, 9 units), portion-based recipes with auto-costed ingredients & margin calculation, stock movements (purchase/usage/waste/transfer/stocktake), outlets (auto-seeds 4), all-inclusive cost per guest per night, variance/theft detection alerts, low stock alerts
-- **Hotel Accounting** — Income tracking (auto-pulls booking revenue from Booking Engine), expense tracking by category & department, P&L statement (monthly/yearly), department cost centers, budget vs actual comparison, sync bookings button
+- **Stock Management (Apicbase-level)** — Product catalog, portion-based recipes, sub-recipes (recipe-in-recipe), automatic COGS per sale, theoretical vs actual consumption tracking (theft-proof), wastage with reason codes (expired/spoiled/theft_suspected/etc), supplier management, purchase orders with auto-receive→stock, stock count sheets with variance calculation, all-inclusive cost per guest per night, low stock alerts, variance/theft detection
+- **Hotel Accounting (M3/Xero-level)** — USALI Chart of Accounts (19 auto-seeded accounts), invoicing with automatic VAT calculation (20%), receivable & payable invoices, VAT reports (output vs input), 6-month financial trends, P&L statement with department cost centers, budget vs actual comparison, CSV export, auto-pull booking revenue from Booking Engine
 
 ## Code Architecture (Fully Refactored)
 ```

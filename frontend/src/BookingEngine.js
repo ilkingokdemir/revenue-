@@ -16,6 +16,10 @@ import { GuestDetailsStep } from "./templates/GuestDetailsStep";
 import { ConfirmationStep } from "./templates/ConfirmationStep";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import { LanguageSelector } from "./i18n/LanguageSelector";
+import { SmartUpsellEngine } from "./templates/SmartUpsellEngine";
+import { PriceComparisonWidget } from "./templates/PriceComparisonWidget";
+import { SocialProofNotifications } from "./templates/SocialProofNotifications";
+import { GoogleHotelStructuredData } from "./templates/GoogleHotelStructuredData";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -48,6 +52,7 @@ function BookingEngineInner() {
   const [promoCode, setPromoCode] = useState("");
   const [promoDiscount, setPromoDiscount] = useState(null);
   const [selectedAddOns, setSelectedAddOns] = useState([]);
+  const [selectedUpsells, setSelectedUpsells] = useState([]);
 
   // Merge template defaults with custom overrides
   const tmpl = (() => {
@@ -171,9 +176,16 @@ function BookingEngineInner() {
     return sum + ao.price;
   }, 0);
 
+  const upsellsTotal = selectedUpsells.reduce((sum, u) => {
+    if (u.price_type === "per_night") return sum + u.price * nights;
+    if (u.price_type === "per_person") return sum + u.price * adults;
+    if (u.price_type === "per_person_per_night") return sum + u.price * adults * nights;
+    return sum + u.price;
+  }, 0);
+
   const subtotal = selectedRoom ? selectedRoom.base_price * nights * roomCount : 0;
   const discountAmount = promoDiscount ? promoDiscount.discount_amount : 0;
-  const totalPrice = Math.max(0, subtotal + addOnsTotal - discountAmount);
+  const totalPrice = Math.max(0, subtotal + addOnsTotal + upsellsTotal - discountAmount);
 
   const applyPromo = async () => {
     if (!promoCode.trim()) return;
@@ -189,6 +201,12 @@ function BookingEngineInner() {
   const toggleAddOn = (addon) => {
     setSelectedAddOns(prev =>
       prev.find(a => a.id === addon.id) ? prev.filter(a => a.id !== addon.id) : [...prev, addon]
+    );
+  };
+
+  const toggleUpsell = (upsell) => {
+    setSelectedUpsells(prev =>
+      prev.find(u => u.id === upsell.id) ? prev.filter(u => u.id !== upsell.id) : [...prev, upsell]
     );
   };
 
@@ -246,6 +264,16 @@ function BookingEngineInner() {
 
   return (
     <div className="min-h-screen" dir={isRTL ? "rtl" : "ltr"} style={{ background: tmpl.colors.bodyBg, fontFamily: tmpl.fonts.body }} data-testid="booking-engine" data-template={templateId}>
+
+      {/* Google Hotel Structured Data (SEO) */}
+      <GoogleHotelStructuredData property={property} rooms={rooms.length > 0 ? rooms : property?.room_types} reviews={reviews} templateSettings={customSettings} />
+
+      {/* Social Proof Floating Notifications */}
+      <SocialProofNotifications
+        settings={property?.social_proof?.settings}
+        recentBookings={property?.social_proof?.recent_bookings_24h || 0}
+        roomsData={rooms}
+      />
 
       {/* Header */}
       <header className="sticky top-0 z-50 shadow-sm" style={{ background: tmpl.colors.headerBg, color: tmpl.colors.headerText }} data-testid="booking-header">
@@ -371,10 +399,12 @@ function BookingEngineInner() {
       {step === STEPS.DETAILS && selectedRoom && (
         <GuestDetailsStep t={tmpl} selectedRoom={selectedRoom} property={property} guestForm={guestForm} setGuestForm={setGuestForm}
           paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} onBook={handleBooking} bookingLoading={bookingLoading}
-          totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount}
+          totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal + upsellsTotal} discountAmount={discountAmount}
           promoCode={promoCode} setPromoCode={setPromoCode} promoDiscount={promoDiscount} applyPromo={applyPromo} setPromoDiscount={setPromoDiscount}
           addOns={property?.add_ons || []} selectedAddOns={selectedAddOns} toggleAddOn={toggleAddOn}
-          nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} />
+          upsells={property?.upsells || []} selectedUpsells={selectedUpsells} toggleUpsell={toggleUpsell}
+          nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut}
+          socialProofSettings={property?.social_proof?.settings} />
       )}
 
       {/* Step 3: Payment Processing */}

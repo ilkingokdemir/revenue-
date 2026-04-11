@@ -40,6 +40,7 @@ from models import (
     AddOnService, AddOnServiceCreate,
     HotelPolicies, HotelPoliciesUpdate,
     PropertyFacilities,
+    UpsellItem, UpsellItemCreate, SocialProofSettings,
 )
 from database import db, client
 from auth import (
@@ -3648,6 +3649,116 @@ async def ai_translate_text(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
 
+# --- Upsell Items ---
+
+@api_router.get("/upsell-templates")
+async def get_upsell_templates():
+    """Get predefined upsell templates for quick setup"""
+    from models import UPSELL_TEMPLATES
+    return UPSELL_TEMPLATES
+
+@api_router.get("/upsells/{property_id}")
+async def get_upsells(property_id: str):
+    """Public: Get active upsell items for a property"""
+    items = await db.upsell_items.find(
+        {"property_id": property_id, "is_active": True}, {"_id": 0}
+    ).sort("sort_order", 1).to_list(50)
+    return items
+
+@api_router.get("/upsells/admin/{property_id}")
+async def get_all_upsells(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Get all upsell items including inactive"""
+    items = await db.upsell_items.find({"property_id": property_id}, {"_id": 0}).sort("sort_order", 1).to_list(50)
+    return items
+
+@api_router.post("/upsells")
+async def create_upsell(data: UpsellItemCreate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    from models import UpsellItem
+    item = UpsellItem(**data.model_dump())
+    doc = item.model_dump()
+    await db.upsell_items.insert_one(doc)
+    del doc["_id"]
+    return doc
+
+@api_router.put("/upsells/{upsell_id}")
+async def update_upsell(upsell_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    updates.pop("_id", None)
+    updates.pop("id", None)
+    await db.upsell_items.update_one({"id": upsell_id}, {"$set": updates})
+    doc = await db.upsell_items.find_one({"id": upsell_id}, {"_id": 0})
+    return doc
+
+@api_router.delete("/upsells/{upsell_id}")
+async def delete_upsell(upsell_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    await db.upsell_items.delete_one({"id": upsell_id})
+    return {"status": "deleted"}
+
+@api_router.post("/upsells/seed/{property_id}")
+async def seed_upsells(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Seed default upsell items from templates"""
+    from models import UPSELL_TEMPLATES, UpsellItem
+    existing = await db.upsell_items.count_documents({"property_id": property_id})
+    if existing > 0:
+        return {"message": f"Property already has {existing} upsells", "count": existing}
+    items = []
+    for i, tmpl in enumerate(UPSELL_TEMPLATES):
+        item = UpsellItem(property_id=property_id, sort_order=i, **tmpl)
+        doc = item.model_dump()
+        items.append(doc)
+    if items:
+        await db.upsell_items.insert_many(items)
+        for item in items:
+            item.pop("_id", None)
+    return {"message": f"Seeded {len(items)} upsell items", "items": items}
+
+# --- Social Proof & Price Comparison ---
+
+@api_router.get("/social-proof/{property_id}")
+async def get_social_proof_data(property_id: str):
+    """Public: Get social proof data for booking page"""
+    # Get recent bookings count (last 24h)
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    recent_bookings = await db.bookings.count_documents({
+        "property_id": property_id,
+        "created_at": {"$gte": cutoff}
+    })
+    # Get total bookings this month
+    month_start = datetime.now(timezone.utc).replace(day=1, hour=0, minute=0, second=0).isoformat()
+    monthly_bookings = await db.bookings.count_documents({
+        "property_id": property_id,
+        "created_at": {"$gte": month_start}
+    })
+    # Get settings
+    settings = await db.social_proof_settings.find_one({"property_id": property_id}, {"_id": 0})
+    if not settings:
+        from models import SocialProofSettings
+        settings = SocialProofSettings(property_id=property_id).model_dump()
+
+    return {
+        "recent_bookings_24h": recent_bookings,
+        "monthly_bookings": monthly_bookings,
+        "settings": settings
+    }
+
+@api_router.get("/social-proof/settings/{property_id}")
+async def get_social_proof_settings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    settings = await db.social_proof_settings.find_one({"property_id": property_id}, {"_id": 0})
+    if not settings:
+        from models import SocialProofSettings
+        settings = SocialProofSettings(property_id=property_id).model_dump()
+    return settings
+
+@api_router.put("/social-proof/settings/{property_id}")
+async def update_social_proof_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    updates.pop("_id", None)
+    updates["property_id"] = property_id
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.social_proof_settings.update_one(
+        {"property_id": property_id}, {"$set": updates}, upsert=True
+    )
+    doc = await db.social_proof_settings.find_one({"property_id": property_id}, {"_id": 0})
+    return doc
+
 # --- Template Settings ---
 
 @api_router.get("/template-settings/{property_id}")
@@ -3712,6 +3823,18 @@ async def get_booking_property_info(property_id: str):
     # Get add-on services
     add_ons = await db.add_on_services.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(50)
     
+    # Get upsell items
+    upsells = await db.upsell_items.find({"property_id": property_id, "is_active": True}, {"_id": 0}).sort("sort_order", 1).to_list(50)
+    
+    # Get social proof settings
+    sp_settings = await db.social_proof_settings.find_one({"property_id": property_id}, {"_id": 0})
+    if not sp_settings:
+        sp_settings = SocialProofSettings(property_id=property_id).model_dump()
+    
+    # Get recent booking count for social proof
+    cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+    recent_bookings = await db.bookings.count_documents({"property_id": property_id, "created_at": {"$gte": cutoff_24h}})
+    
     # Get average rating from reviews
     reviews = await db.reviews.find({"property_id": property_id}, {"_id": 0, "rating": 1}).to_list(1000)
     if not reviews:
@@ -3730,6 +3853,11 @@ async def get_booking_property_info(property_id: str):
         "facilities": facilities,
         "policies": policies,
         "add_ons": add_ons,
+        "upsells": upsells,
+        "social_proof": {
+            "settings": sp_settings,
+            "recent_bookings_24h": recent_bookings,
+        },
         "avg_rating": round(avg_rating, 1),
         "total_reviews": total_reviews,
         "room_types": rooms

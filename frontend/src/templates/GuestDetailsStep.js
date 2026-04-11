@@ -3,8 +3,10 @@ import {
   Lock, Buildings, CheckCircle, Bed, Tag, Plus, X, Sparkle,
 } from "@phosphor-icons/react";
 import { useLanguage } from "../i18n/LanguageContext";
+import { SmartUpsellEngine } from "./SmartUpsellEngine";
+import { PriceComparisonWidget } from "./PriceComparisonWidget";
 
-export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, nights, adults, children, roomCount, checkIn, checkOut }) {
+export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings }) {
   const { t: tr } = useLanguage();
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="guest-details-step">
@@ -38,6 +40,11 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
               </div>
             </div>
           </div>
+
+          {/* Smart Upsell Engine */}
+          {upsells?.length > 0 && (
+            <SmartUpsellEngine t={t} upsells={upsells} selectedUpsells={selectedUpsells || []} onToggle={toggleUpsell} nights={nights} adults={adults} />
+          )}
 
           {/* Add-on Services */}
           {addOns?.length > 0 && (
@@ -139,15 +146,17 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
         </div>
 
         {/* Booking Summary Sidebar */}
-        <div className="lg:col-span-1">
-          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} />
+        <div className="lg:col-span-1 space-y-4">
+          {/* Price Comparison Widget */}
+          <PriceComparisonWidget t={t} roomPrice={selectedRoom.base_price * nights} settings={socialProofSettings} />
+          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} />
         </div>
       </div>
     </div>
   );
 }
 
-function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, nights, adults, children, roomCount, checkIn, checkOut }) {
+function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut }) {
   const { t: tr } = useLanguage();
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5 sticky top-20" style={{ borderRadius: t.borderRadius }} data-testid="booking-summary">
@@ -174,6 +183,9 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
         <div className="flex justify-between"><span className="text-slate-500">&pound;{room.base_price} x {nights} {nights !== 1 ? tr("room.nights") : tr("room.night")}</span><span>&pound;{subtotal?.toFixed(0) || (room.base_price * nights * roomCount).toFixed(0)}</span></div>
         {selectedAddOns?.length > 0 && selectedAddOns.map(ao => (
           <div key={ao.id} className="flex justify-between text-xs"><span className="text-slate-500">{ao.name}</span><span>&pound;{ao.price}</span></div>
+        ))}
+        {selectedUpsells?.length > 0 && selectedUpsells.map(u => (
+          <div key={u.id} className="flex justify-between text-xs"><span className="text-amber-600">{u.name}</span><span>&pound;{u.price}</span></div>
         ))}
         {discountAmount > 0 && (
           <div className="flex justify-between" style={{ color: t.colors.success }}>

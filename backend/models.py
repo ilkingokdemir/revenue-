@@ -740,3 +740,63 @@ class PropertyFacilities(BaseModel):
     property_id: str
     facilities: List[str] = []
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+
+# ==================== UPSELL ITEMS ====================
+
+UPSELL_TEMPLATES = [
+    {"name": "Early Check-in", "description": "Arrive early and settle in from 12:00 PM", "category": "convenience", "price": 25, "price_type": "per_stay", "icon": "clock"},
+    {"name": "Late Check-out", "description": "Enjoy a relaxed departure until 3:00 PM", "category": "convenience", "price": 25, "price_type": "per_stay", "icon": "clock-afternoon"},
+    {"name": "Breakfast Package", "description": "Full English breakfast served daily", "category": "dining", "price": 15, "price_type": "per_person_per_night", "icon": "coffee"},
+    {"name": "Airport Transfer", "description": "Private car to/from the airport", "category": "transport", "price": 45, "price_type": "per_stay", "icon": "car"},
+    {"name": "Welcome Champagne", "description": "Bottle of champagne waiting in your room", "category": "experience", "price": 35, "price_type": "per_stay", "icon": "champagne"},
+    {"name": "Spa Access", "description": "Full access to spa and wellness facilities", "category": "wellness", "price": 20, "price_type": "per_person_per_night", "icon": "flower-lotus"},
+    {"name": "Room Upgrade", "description": "Upgrade to the next room category (subject to availability)", "category": "upgrade", "price": 40, "price_type": "per_night", "icon": "arrow-up"},
+    {"name": "Parking Space", "description": "Secure on-site parking for your vehicle", "category": "convenience", "price": 15, "price_type": "per_night", "icon": "car-simple"},
+    {"name": "Pet Fee", "description": "Bring your furry friend along", "category": "convenience", "price": 20, "price_type": "per_night", "icon": "paw-print"},
+    {"name": "Romantic Package", "description": "Rose petals, candles, and a bottle of wine", "category": "experience", "price": 55, "price_type": "per_stay", "icon": "heart"},
+]
+
+class UpsellItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    description: str = ""
+    category: str = "convenience"
+    price: float = 0
+    price_type: str = "per_stay"  # per_stay, per_night, per_person, per_person_per_night
+    icon: str = ""
+    is_active: bool = True
+    auto_suggest: bool = True  # Whether to auto-show during booking
+    sort_order: int = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class UpsellItemCreate(BaseModel):
+    property_id: str
+    name: str
+    description: str = ""
+    category: str = "convenience"
+    price: float = 0
+    price_type: str = "per_stay"
+    icon: str = ""
+    auto_suggest: bool = True
+    sort_order: int = 0
+
+
+# ==================== SOCIAL PROOF SETTINGS ====================
+
+class SocialProofSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    property_id: str
+    enabled: bool = True
+    show_viewing_count: bool = True
+    show_recent_bookings: bool = True
+    show_rooms_left: bool = True
+    show_price_comparison: bool = True
+    ota_markup_percent: float = 18  # How much more OTAs charge vs direct
+    direct_saving_label: str = "Book direct & save {percent}%"
+    booking_com_label: str = "Booking.com"
+    expedia_label: str = "Expedia"
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

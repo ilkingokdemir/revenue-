@@ -415,6 +415,91 @@ VALID_ROLES = ["admin", "manager", "receptionist"]
 VALID_DEPARTMENTS = ["front_desk", "management", "housekeeping", "food_beverage", "maintenance", "spa_wellness", "concierge"]
 VALID_PROPERTY_TYPES = ["hotel", "resort", "hostel", "apartment", "villa", "boutique", "motel", "bed_breakfast"]
 
+# ==================== BOOKING ENGINE MODELS ====================
+
+class RoomType(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    description: str = ""
+    max_guests: int = 2
+    bed_type: str = "double"  # single, double, twin, queen, king, suite
+    size_sqm: int = 0
+    amenities: List[str] = []
+    photos: List[str] = []
+    base_price: float = 0
+    currency: str = "GBP"
+    is_active: bool = True
+    total_rooms: int = 1
+    free_cancellation: bool = True
+    breakfast_included: bool = False
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class RoomTypeCreate(BaseModel):
+    property_id: str
+    name: str
+    description: str = ""
+    max_guests: int = 2
+    bed_type: str = "double"
+    size_sqm: int = 0
+    amenities: List[str] = []
+    photos: List[str] = []
+    base_price: float = 0
+    currency: str = "GBP"
+    total_rooms: int = 1
+    free_cancellation: bool = True
+    breakfast_included: bool = False
+
+class RoomTypeUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    max_guests: Optional[int] = None
+    bed_type: Optional[str] = None
+    size_sqm: Optional[int] = None
+    amenities: Optional[List[str]] = None
+    photos: Optional[List[str]] = None
+    base_price: Optional[float] = None
+    currency: Optional[str] = None
+    is_active: Optional[bool] = None
+    total_rooms: Optional[int] = None
+    free_cancellation: Optional[bool] = None
+    breakfast_included: Optional[bool] = None
+
+class Booking(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    room_type_id: str
+    guest_name: str
+    guest_email: str
+    guest_phone: str = ""
+    check_in: str
+    check_out: str
+    adults: int = 1
+    children: int = 0
+    rooms: int = 1
+    total_price: float = 0
+    currency: str = "GBP"
+    status: str = "confirmed"  # confirmed, cancelled, checked_in, checked_out, no_show
+    payment_status: str = "pending"  # pending, paid, refunded
+    special_requests: str = ""
+    booking_ref: str = Field(default_factory=lambda: f"MHB-{secrets.token_hex(4).upper()}")
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class BookingCreate(BaseModel):
+    property_id: str
+    room_type_id: str
+    guest_name: str
+    guest_email: str
+    guest_phone: str = ""
+    check_in: str
+    check_out: str
+    adults: int = 1
+    children: int = 0
+    rooms: int = 1
+    special_requests: str = ""
+
 # ==================== HELPER FUNCTIONS ====================
 
 def serialize_review(review: dict) -> dict:
@@ -3546,6 +3631,239 @@ async def get_property_by_external_id(external_id: str):
         raise HTTPException(status_code=404, detail="No property mapped to this external ID")
     return prop
 
+# ==================== BOOKING ENGINE ROUTES ====================
+
+@api_router.get("/booking/property/{property_id}")
+async def get_booking_property_info(property_id: str):
+    """Public endpoint: Get property info for booking engine"""
+    prop = await db.properties.find_one({"id": property_id, "is_active": True}, {"_id": 0})
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Get property branding
+    branding = await db.branding_settings.find_one({}, {"_id": 0}) or {}
+    
+    # Get average rating from reviews
+    reviews = await db.reviews.find({"property_id": property_id}, {"_id": 0, "rating": 1}).to_list(1000)
+    if not reviews:
+        reviews = await db.reviews.find({}, {"_id": 0, "rating": 1}).to_list(1000)
+    
+    avg_rating = sum(r.get("rating", 0) for r in reviews) / len(reviews) if reviews else 0
+    total_reviews = len(reviews)
+    
+    # Get room types
+    rooms = await db.room_types.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(50)
+    
+    return {
+        **prop,
+        "branding": branding,
+        "avg_rating": round(avg_rating, 1),
+        "total_reviews": total_reviews,
+        "room_types": rooms
+    }
+
+@api_router.get("/booking/rooms/{property_id}")
+async def get_booking_rooms(property_id: str, check_in: str = "", check_out: str = "", adults: int = 2, children: int = 0):
+    """Public endpoint: Get available room types for a property"""
+    rooms = await db.room_types.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(50)
+    
+    if check_in and check_out:
+        # Check availability for each room type
+        for room in rooms:
+            bookings_count = await db.bookings.count_documents({
+                "room_type_id": room["id"],
+                "status": {"$nin": ["cancelled"]},
+                "$or": [
+                    {"check_in": {"$lt": check_out}, "check_out": {"$gt": check_in}}
+                ]
+            })
+            room["available_rooms"] = max(0, room.get("total_rooms", 1) - bookings_count)
+            room["is_available"] = room["available_rooms"] > 0
+    else:
+        for room in rooms:
+            room["available_rooms"] = room.get("total_rooms", 1)
+            room["is_available"] = True
+    
+    return rooms
+
+@api_router.get("/booking/availability/{property_id}")
+async def check_availability(property_id: str, check_in: str = "", check_out: str = ""):
+    """Public endpoint: Check property availability summary"""
+    rooms = await db.room_types.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(50)
+    
+    available_rooms = []
+    for room in rooms:
+        if check_in and check_out:
+            bookings_count = await db.bookings.count_documents({
+                "room_type_id": room["id"],
+                "status": {"$nin": ["cancelled"]},
+                "$or": [
+                    {"check_in": {"$lt": check_out}, "check_out": {"$gt": check_in}}
+                ]
+            })
+            avail = max(0, room.get("total_rooms", 1) - bookings_count)
+        else:
+            avail = room.get("total_rooms", 1)
+        
+        available_rooms.append({
+            "room_type_id": room["id"],
+            "name": room["name"],
+            "available": avail,
+            "total": room.get("total_rooms", 1),
+            "base_price": room.get("base_price", 0)
+        })
+    
+    return {"property_id": property_id, "rooms": available_rooms}
+
+@api_router.post("/booking/reserve")
+async def create_booking(booking_data: BookingCreate):
+    """Public endpoint: Create a new booking reservation"""
+    # Validate room type exists
+    room = await db.room_types.find_one({"id": booking_data.room_type_id, "is_active": True}, {"_id": 0})
+    if not room:
+        raise HTTPException(status_code=404, detail="Room type not found")
+    
+    # Check availability
+    bookings_count = await db.bookings.count_documents({
+        "room_type_id": booking_data.room_type_id,
+        "status": {"$nin": ["cancelled"]},
+        "$or": [
+            {"check_in": {"$lt": booking_data.check_out}, "check_out": {"$gt": booking_data.check_in}}
+        ]
+    })
+    
+    available = max(0, room.get("total_rooms", 1) - bookings_count)
+    if available < booking_data.rooms:
+        raise HTTPException(status_code=400, detail="Not enough rooms available for the selected dates")
+    
+    # Calculate price
+    try:
+        ci = datetime.fromisoformat(booking_data.check_in)
+        co = datetime.fromisoformat(booking_data.check_out)
+        nights = max(1, (co - ci).days)
+    except ValueError:
+        nights = 1
+    
+    total_price = room.get("base_price", 0) * nights * booking_data.rooms
+    
+    booking = Booking(
+        property_id=booking_data.property_id,
+        room_type_id=booking_data.room_type_id,
+        guest_name=booking_data.guest_name,
+        guest_email=booking_data.guest_email,
+        guest_phone=booking_data.guest_phone,
+        check_in=booking_data.check_in,
+        check_out=booking_data.check_out,
+        adults=booking_data.adults,
+        children=booking_data.children,
+        rooms=booking_data.rooms,
+        total_price=total_price,
+        currency=room.get("currency", "GBP"),
+        special_requests=booking_data.special_requests,
+        status="confirmed",
+        payment_status="pending"
+    )
+    
+    doc = booking.model_dump()
+    await db.bookings.insert_one(doc)
+    doc.pop("_id", None)
+    
+    return doc
+
+@api_router.get("/booking/reservation/{booking_ref}")
+async def get_booking_by_ref(booking_ref: str):
+    """Public endpoint: Get booking details by reference"""
+    booking = await db.bookings.find_one({"booking_ref": booking_ref}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    room = await db.room_types.find_one({"id": booking["room_type_id"]}, {"_id": 0})
+    prop = await db.properties.find_one({"id": booking["property_id"]}, {"_id": 0})
+    
+    return {**booking, "room_type": room, "property": prop}
+
+@api_router.get("/booking/reviews/{property_id}")
+async def get_booking_reviews(property_id: str, limit: int = 10):
+    """Public endpoint: Get recent positive reviews for booking engine display"""
+    reviews = await db.reviews.find(
+        {"property_id": property_id, "rating": {"$gte": 3}},
+        {"_id": 0, "id": 1, "guest_name": 1, "rating": 1, "review_text": 1, "platform": 1, "created_at": 1}
+    ).sort("created_at", -1).to_list(limit)
+    
+    if not reviews:
+        reviews = await db.reviews.find(
+            {"rating": {"$gte": 3}},
+            {"_id": 0, "id": 1, "guest_name": 1, "rating": 1, "review_text": 1, "platform": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(limit)
+    
+    return reviews
+
+# Admin: Room Types CRUD
+@api_router.post("/room-types")
+async def create_room_type(room: RoomTypeCreate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Create a new room type"""
+    room_type = RoomType(**room.model_dump())
+    doc = room_type.model_dump()
+    await db.room_types.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.get("/room-types")
+async def list_room_types(property_id: str = ""):
+    """List room types, optionally filtered by property"""
+    query = {"property_id": property_id} if property_id else {}
+    rooms = await db.room_types.find(query, {"_id": 0}).to_list(100)
+    return rooms
+
+@api_router.put("/room-types/{room_id}")
+async def update_room_type(room_id: str, update: RoomTypeUpdate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Update a room type"""
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No update data provided")
+    
+    result = await db.room_types.update_one({"id": room_id}, {"$set": update_data})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Room type not found")
+    
+    updated = await db.room_types.find_one({"id": room_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/room-types/{room_id}")
+async def delete_room_type(room_id: str, current_user: dict = Depends(require_roles("admin"))):
+    """Delete a room type"""
+    result = await db.room_types.delete_one({"id": room_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Room type not found")
+    return {"status": "deleted"}
+
+# Admin: Bookings management
+@api_router.get("/bookings")
+async def list_bookings(property_id: str = "", status: str = "", current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    """List bookings with optional filters"""
+    query = {}
+    if property_id:
+        query["property_id"] = property_id
+    if status:
+        query["status"] = status
+    
+    bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return bookings
+
+@api_router.put("/bookings/{booking_id}/status")
+async def update_booking_status(booking_id: str, status: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    """Update booking status"""
+    valid = ["confirmed", "cancelled", "checked_in", "checked_out", "no_show"]
+    if status not in valid:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid}")
+    
+    result = await db.bookings.update_one({"id": booking_id}, {"$set": {"status": status}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    
+    updated = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    return updated
+
 # Include the router in the main app
 app.include_router(api_router)
 
@@ -3582,10 +3900,115 @@ async def seed_myhotelbox_branches():
             })
     logger.info("MyHotelBox branches seeded")
 
+async def seed_sample_room_types():
+    """Seed sample room types for demo properties"""
+    existing = await db.room_types.count_documents({})
+    if existing > 0:
+        return
+    
+    sample_rooms = [
+        {
+            "id": "room-standard-double",
+            "property_id": "aldgate-flats",
+            "name": "Standard Double Room",
+            "description": "Comfortable room with a double bed, en-suite bathroom, and city views. Perfect for solo travellers or couples.",
+            "max_guests": 2,
+            "bed_type": "double",
+            "size_sqm": 18,
+            "amenities": ["Free WiFi", "Air conditioning", "Flat-screen TV", "Tea/coffee maker", "Hair dryer", "Safe", "Daily housekeeping"],
+            "photos": ["https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800"],
+            "base_price": 89,
+            "currency": "GBP",
+            "total_rooms": 8,
+            "free_cancellation": True,
+            "breakfast_included": False,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        },
+        {
+            "id": "room-deluxe-king",
+            "property_id": "aldgate-flats",
+            "name": "Deluxe King Room",
+            "description": "Spacious room featuring a king-size bed, premium linens, work desk, and a luxurious rain shower. Stunning views of the city skyline.",
+            "max_guests": 2,
+            "bed_type": "king",
+            "size_sqm": 28,
+            "amenities": ["Free WiFi", "Air conditioning", "55\" Smart TV", "Nespresso machine", "Mini bar", "Bathrobes & slippers", "Rain shower", "Safe", "Work desk", "Room service"],
+            "photos": ["https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800"],
+            "base_price": 149,
+            "currency": "GBP",
+            "total_rooms": 4,
+            "free_cancellation": True,
+            "breakfast_included": True,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        },
+        {
+            "id": "room-family-suite",
+            "property_id": "aldgate-flats",
+            "name": "Family Suite",
+            "description": "Generous two-room suite with a separate living area, perfect for families. Includes a king bed and two single beds in the adjoining room.",
+            "max_guests": 4,
+            "bed_type": "suite",
+            "size_sqm": 45,
+            "amenities": ["Free WiFi", "Air conditioning", "2 TVs", "Kitchenette", "Microwave", "Sofa bed", "Bathtub", "Cot available", "Safe", "Laundry service"],
+            "photos": ["https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800"],
+            "base_price": 219,
+            "currency": "GBP",
+            "total_rooms": 2,
+            "free_cancellation": True,
+            "breakfast_included": True,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        },
+        {
+            "id": "room-superior-twin",
+            "property_id": "aldgate-flats",
+            "name": "Superior Twin Room",
+            "description": "Bright and modern room with two single beds, ideal for friends or colleagues travelling together.",
+            "max_guests": 2,
+            "bed_type": "twin",
+            "size_sqm": 22,
+            "amenities": ["Free WiFi", "Air conditioning", "Flat-screen TV", "Tea/coffee maker", "Hair dryer", "Iron", "Safe"],
+            "photos": ["https://images.unsplash.com/photo-1566665797739-1674de7a421a?w=800"],
+            "base_price": 109,
+            "currency": "GBP",
+            "total_rooms": 5,
+            "free_cancellation": True,
+            "breakfast_included": False,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        },
+        {
+            "id": "room-executive-suite",
+            "property_id": "aldgate-flats",
+            "name": "Executive Suite",
+            "description": "Our finest accommodation with a separate lounge, premium amenities, complimentary minibar, and panoramic city views. Includes priority check-in and late checkout.",
+            "max_guests": 2,
+            "bed_type": "king",
+            "size_sqm": 55,
+            "amenities": ["Free WiFi", "Air conditioning", "65\" Smart TV", "Nespresso machine", "Complimentary minibar", "Bathrobes & slippers", "Jacuzzi bath", "Work desk", "Lounge area", "Priority check-in", "Late checkout", "Room service", "Turndown service"],
+            "photos": ["https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800"],
+            "base_price": 349,
+            "currency": "GBP",
+            "total_rooms": 2,
+            "free_cancellation": True,
+            "breakfast_included": True,
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+    ]
+    
+    for room in sample_rooms:
+        await db.room_types.insert_one(room)
+    
+    logger.info(f"Seeded {len(sample_rooms)} sample room types")
+
 @app.on_event("startup")
 async def startup_event():
     await seed_admin()
     await seed_myhotelbox_branches()
+    await seed_sample_room_types()
     # Migrate: ensure all reviews have property_id
     await db.reviews.update_many(
         {"property_id": {"$exists": False}},

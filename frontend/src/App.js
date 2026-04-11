@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import ReviewWidget from "./ReviewWidget";
+import BookingEngine from "./BookingEngine";
 import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
 import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
 import { ReportsSettings } from "./components/dashboard/ReportsSettings";
@@ -12,6 +13,7 @@ import { LoginPage } from "./components/dashboard/LoginPage";
 import { BrandingPanel } from "./components/dashboard/BrandingPanel";
 import { SyncLogPanel } from "./components/dashboard/SyncLogPanel";
 import { PropertyMappingPanel } from "./components/dashboard/PropertyMappingPanel";
+import { BookingEnginePanel } from "./components/dashboard/BookingEnginePanel";
 import {
   Star,
   CheckCircle,
@@ -71,7 +73,8 @@ import {
   House,
   ArrowSquareOut,
   Code,
-  CopySimple
+  CopySimple,
+  Bed
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2426,6 +2429,7 @@ const Dashboard = ({ user, onLogout }) => {
     {
       label: "Settings",
       items: [
+        { id: "booking", icon: Bed, name: "Booking Engine", testId: "booking-engine-btn" },
         { id: "alerts", icon: Bell, name: "Alerts", testId: "notification-settings-btn" },
         { id: "reports", icon: CalendarBlank, name: "Reports", testId: "reports-btn" },
         { id: "mapping", icon: Buildings, name: "Property Mapping", testId: "property-mapping-btn" },
@@ -2675,6 +2679,11 @@ const Dashboard = ({ user, onLogout }) => {
         {activeView === "mapping" && (
           <PropertyMappingPanel user={user} />
         )}
+
+        {/* Booking Engine View */}
+        {activeView === "booking" && (
+          <BookingEnginePanel properties={properties} />
+        )}
       </main>
 
       {/* Powered By Footer */}
@@ -2755,6 +2764,9 @@ function MainApp() {
 function App() {
   if (window.location.pathname === "/widget") {
     return <ReviewWidget />;
+  }
+  if (window.location.pathname === "/book") {
+    return <BookingEngine />;
   }
   return <MainApp />;
 }

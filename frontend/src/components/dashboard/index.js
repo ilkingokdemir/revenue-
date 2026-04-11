@@ -7,3 +7,4 @@ export { LoginPage } from "./LoginPage";
 export { BrandingPanel } from "./BrandingPanel";
 export { SyncLogPanel } from "./SyncLogPanel";
 export { PropertyMappingPanel } from "./PropertyMappingPanel";
+export { BookingEnginePanel } from "./BookingEnginePanel";

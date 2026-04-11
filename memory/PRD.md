@@ -5,44 +5,70 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 
 ## What's Been Implemented
 
-### Low-Rating Alerts (April 2026)
-- When review rating <= 2 stars: extra-prominent popup with:
-  - Darker red gradient (#991B1B), 2px red border, urgentPulse animation
-  - Warning triangle icon (replaces bell), "LOW RATING ALERT" badge + "NEEDS ATTENTION"
-  - Larger size (420px max-width, 40px icon), 3-line review preview
-  - "Respond quickly to protect your reputation" action prompt
-  - Alarm sound (descending square wave: 880→660→440Hz)
-  - Stays on screen 15 seconds (vs 8s for normal)
-- Email notification logged to DB (Resend integration ready, needs API key)
-- Normal reviews (3+ stars): standard bell icon, ascending chime, 8s dismiss
+### P0: Real Platform Sync — Inbound Webhooks (April 2026)
+- `POST /api/platforms/{platform}/incoming` — receive reviews from any of 14 platforms
+- `POST /api/platforms/{platform}/incoming/batch` — batch import reviews
+- `GET /api/platforms/{platform}/inbound-url` — get webhook URL + secret for platform config
+- Auth: X-Platform-Secret header or API key (rhk_/psk_ prefix)
+- Deduplication by external_review_id + platform
+- Auto-triggers low-rating alerts and webhook events on new review
+- Sync Log: real-time activity log with platform, direction, status, timestamp
 
-### Real-time Notification Popups with Sound (April 2026)
-- Red popup slides from top-right, polls every 20s
-- Bell icon + sound for normal, alarm for low-rating
-- Dismiss individual or all, auto-dismiss
+### P1: Property Mapping (April 2026)
+- `PUT /api/properties/{id}/mapping` — link Review Hub property to MyHotelBox branch
+- `GET /api/properties/by-external/{id}` — lookup property by external system ID
+- Maps external_id, external_name, external_system (myhotelbox/cloudbeds/other)
+- UI: Property Mapping panel in sidebar with edit forms
 
-### Red Notification Badge (April 2026)
-- Pulsing red unread count, red dots, mark read/all
+### P2: App.js Refactoring (April 2026)
+- Reduced from 4600 to 3000 lines
+- Extracted 5 components to /components/dashboard/:
+  - IntegrationsPanel.js (765 lines)
+  - AnalyticsPanel.js (471 lines)
+  - ReportsSettings.js (248 lines)
+  - BrandingPanel.js (303 lines)
+  - LoginPage.js (103 lines)
+- Barrel exports via index.js
+- Shared config.js for API, platformColors, formatApiErrorDetail
 
-### Embeddable Reviews Widget (April 2026)
-- /widget?api_key=rhk_xxx&property_id=xxx, no login, iframe embeddable
+### Notification System (April 2026)
+- Low-rating alerts: larger popup, warning icon, alarm sound, 15s display
+- Normal review alerts: bell icon, chime sound, 8s display
+- Red notification badge with unread count
+- 20-second polling for new reviews
 
-### Webhook System (April 2026)
-- CRUD, 8 event types, delivery log (last 20), test ping
+### Embeddable Widget (April 2026)
+- /widget?api_key=rhk_xxx — standalone iframe-embeddable review dashboard
+- Stats, review list, AI response generation, filters, dark mode
 
-### Integration Guide (April 2026)
-- 5-step MyHotelBox walkthrough, code snippets, iframe embed code
-
-### Left Sidebar + API Keys (April 2026)
-- 12 nav items, API key CRUD (rhk_ prefix)
+### Integration Infrastructure (April 2026)
+- API keys (rhk_), webhooks (8 events), delivery log, test ping
+- Integration Guide with code snippets for Node.js and Python
+- Left sidebar with 14+ navigation items
 
 ### Core Features
 - JWT auth, 3 roles, 7 departments, approval workflow
 - GPT-5.2 AI responses, 16 languages
-- 14 platform integrations (UI, sync MOCKED)
+- 14 platform integrations with inbound webhook sync
 - Multi-property, white-label branding
 
-## Next Tasks
-1. **P0** - Real bi-directional platform sync (currently MOCKED)
-2. **P1** - Property mapping (MyHotelBox branches <-> Review Hub)
-3. **P2** - Break down App.js into components
+## Architecture
+```
+frontend/src/
+├── App.js (3000 lines — Dashboard, Sidebar, core views)
+├── ReviewWidget.js (widget)
+├── components/dashboard/
+│   ├── config.js (shared constants)
+│   ├── ReviewComponents.js
+│   ├── IntegrationsPanel.js
+│   ├── AnalyticsPanel.js
+│   ├── ReportsSettings.js
+│   ├── BrandingPanel.js
+│   ├── LoginPage.js
+│   └── index.js (barrel)
+```
+
+## Remaining Work
+- Outbound response posting to platforms (currently mocked — responses are generated but not pushed back)
+- Configure Resend API key for email notifications
+- Further App.js extraction (still 3000 lines)

@@ -4,7 +4,7 @@ Extracted from server.py for maintainability.
 """
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 import secrets
 
@@ -800,3 +800,158 @@ class SocialProofSettings(BaseModel):
     booking_com_label: str = "Booking.com"
     expedia_label: str = "Expedia"
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+
+# ==================== GUEST REVIEW COLLECTION ====================
+
+class ReviewCollectionSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    property_id: str
+    enabled: bool = True
+    delay_hours: int = 24  # Hours after checkout to send email
+    email_subject: str = "How was your stay at {hotel_name}?"
+    email_heading: str = "We'd love to hear from you"
+    email_body: str = "Thank you for staying with us. Your feedback helps us improve and helps other travellers make informed decisions."
+    reminder_enabled: bool = True
+    reminder_delay_hours: int = 72
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class GuestReview(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    booking_ref: str
+    guest_name: str
+    guest_email: str
+    rating: int  # 1-5
+    title: str = ""
+    review_text: str = ""
+    room_type: str = ""
+    stay_dates: str = ""
+    status: str = "published"  # published, pending, hidden
+    source: str = "direct"  # direct collection
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== SELF CHECK-IN ====================
+
+class CheckInSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    property_id: str
+    enabled: bool = True
+    send_hours_before: int = 24  # Hours before check-in to send link
+    require_id_upload: bool = True
+    require_terms_acceptance: bool = True
+    terms_text: str = "I agree to the hotel's terms and conditions and house rules."
+    welcome_message: str = "Welcome! Please complete your check-in before arrival."
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class GuestCheckIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    booking_ref: str
+    property_id: str
+    guest_name: str
+    guest_email: str
+    status: str = "pending"  # pending, completed, expired
+    id_uploaded: bool = False
+    terms_accepted: bool = False
+    room_assignment: str = ""
+    special_notes: str = ""
+    completed_at: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== GUEST PORTAL ====================
+
+class GuestPortalSession(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    guest_email: str
+    magic_token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    expires_at: str = Field(default_factory=lambda: (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat())
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== CART ABANDONMENT ====================
+
+class AbandonedCart(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    guest_email: str = ""
+    guest_name: str = ""
+    room_type_id: str = ""
+    room_name: str = ""
+    check_in: str = ""
+    check_out: str = ""
+    adults: int = 2
+    total_price: float = 0
+    recovery_token: str = Field(default_factory=lambda: secrets.token_urlsafe(16))
+    status: str = "abandoned"  # abandoned, recovered, expired, email_sent
+    email_sent_at: str = ""
+    recovered_at: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== MULTI-CURRENCY ====================
+
+CURRENCY_CONFIG = {
+    "GBP": {"symbol": "£", "code": "GBP", "name": "British Pound"},
+    "USD": {"symbol": "$", "code": "USD", "name": "US Dollar"},
+    "EUR": {"symbol": "€", "code": "EUR", "name": "Euro"},
+    "AED": {"symbol": "د.إ", "code": "AED", "name": "UAE Dirham"},
+    "SAR": {"symbol": "﷼", "code": "SAR", "name": "Saudi Riyal"},
+    "JPY": {"symbol": "¥", "code": "JPY", "name": "Japanese Yen"},
+    "CNY": {"symbol": "¥", "code": "CNY", "name": "Chinese Yuan"},
+    "KRW": {"symbol": "₩", "code": "KRW", "name": "South Korean Won"},
+    "INR": {"symbol": "₹", "code": "INR", "name": "Indian Rupee"},
+    "BRL": {"symbol": "R$", "code": "BRL", "name": "Brazilian Real"},
+    "RUB": {"symbol": "₽", "code": "RUB", "name": "Russian Ruble"},
+    "AUD": {"symbol": "A$", "code": "AUD", "name": "Australian Dollar"},
+    "CAD": {"symbol": "C$", "code": "CAD", "name": "Canadian Dollar"},
+    "CHF": {"symbol": "CHF", "code": "CHF", "name": "Swiss Franc"},
+    "SGD": {"symbol": "S$", "code": "SGD", "name": "Singapore Dollar"},
+    "THB": {"symbol": "฿", "code": "THB", "name": "Thai Baht"},
+    "MYR": {"symbol": "RM", "code": "MYR", "name": "Malaysian Ringgit"},
+    "TRY": {"symbol": "₺", "code": "TRY", "name": "Turkish Lira"},
+}
+
+# ==================== GROUP BOOKING ====================
+
+class GroupBookingRequest(BaseModel):
+    property_id: str
+    contact_name: str
+    contact_email: str
+    contact_phone: str = ""
+    company_name: str = ""
+    event_type: str = ""  # corporate, wedding, conference, tour_group, other
+    check_in: str
+    check_out: str
+    total_rooms: int = 1
+    total_guests: int = 1
+    room_preferences: str = ""
+    special_requirements: str = ""
+    budget_range: str = ""
+
+class GroupBooking(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    contact_name: str
+    contact_email: str
+    contact_phone: str = ""
+    company_name: str = ""
+    event_type: str = ""
+    check_in: str
+    check_out: str
+    total_rooms: int = 1
+    total_guests: int = 1
+    room_preferences: str = ""
+    special_requirements: str = ""
+    budget_range: str = ""
+    status: str = "pending"  # pending, quoted, confirmed, cancelled
+    admin_notes: str = ""
+    quoted_price: float = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

@@ -20,6 +20,8 @@ import { SmartUpsellEngine } from "./templates/SmartUpsellEngine";
 import { PriceComparisonWidget } from "./templates/PriceComparisonWidget";
 import { SocialProofNotifications } from "./templates/SocialProofNotifications";
 import { GoogleHotelStructuredData } from "./templates/GoogleHotelStructuredData";
+import { useCurrency, CurrencySelector } from "./i18n/CurrencySelector";
+import { GroupBookingModal } from "./templates/GroupBookingModal";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -27,6 +29,7 @@ const STEPS = { SEARCH: 0, ROOMS: 1, DETAILS: 2, PAYMENT: 3, CONFIRM: 4 };
 
 function BookingEngineInner() {
   const { t, isRTL } = useLanguage();
+  const { currency, setCurrency, format: formatPrice, currencies, symbol: currSymbol } = useCurrency();
   const params = new URLSearchParams(window.location.search);
   const propertyId = params.get("property") || "aldgate-flats";
   const templateId = params.get("template") || "booking-classic";
@@ -53,6 +56,8 @@ function BookingEngineInner() {
   const [promoDiscount, setPromoDiscount] = useState(null);
   const [selectedAddOns, setSelectedAddOns] = useState([]);
   const [selectedUpsells, setSelectedUpsells] = useState([]);
+  const [showGroupBooking, setShowGroupBooking] = useState(false);
+  const [cartSaved, setCartSaved] = useState(false);
 
   // Merge template defaults with custom overrides
   const tmpl = (() => {
@@ -210,6 +215,18 @@ function BookingEngineInner() {
     );
   };
 
+  // Cart abandonment: save when user has email but navigates away
+  useEffect(() => {
+    const saveCart = () => {
+      if (step === STEPS.DETAILS && guestForm.guest_email && selectedRoom && !cartSaved) {
+        navigator.sendBeacon(`${API}/cart/save?property_id=${propertyId}&room_type_id=${selectedRoom.id}&room_name=${encodeURIComponent(selectedRoom.name)}&guest_email=${encodeURIComponent(guestForm.guest_email)}&guest_name=${encodeURIComponent(guestForm.guest_name)}&check_in=${checkIn}&check_out=${checkOut}&adults=${adults}&total_price=${totalPrice}`);
+        setCartSaved(true);
+      }
+    };
+    window.addEventListener("beforeunload", saveCart);
+    return () => window.removeEventListener("beforeunload", saveCart);
+  }, [step, guestForm.guest_email, guestForm.guest_name, selectedRoom, cartSaved, propertyId, checkIn, checkOut, adults, totalPrice]);
+
   const handleBooking = async () => {
     if (!guestForm.guest_name || !guestForm.guest_email) return;
     setBookingLoading(true);
@@ -302,6 +319,7 @@ function BookingEngineInner() {
               </div>
             )}
             <LanguageSelector variant="minimal" />
+            <CurrencySelector currency={currency} setCurrency={setCurrency} currencies={currencies} />
           </div>
         </div>
       </header>
@@ -384,6 +402,21 @@ function BookingEngineInner() {
               </div>
             </section>
           )}
+          {/* Group Booking CTA */}
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="group-booking-cta">
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-4" style={{ borderRadius: tmpl.borderRadius }}>
+              <div className="text-white text-center sm:text-left">
+                <h3 className="text-lg font-bold mb-1">Planning a Group Stay?</h3>
+                <p className="text-sm opacity-70">Corporate events, weddings, conferences — get a custom quote for 5+ rooms</p>
+              </div>
+              <button onClick={() => setShowGroupBooking(true)}
+                className="px-6 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition-transform hover:scale-105"
+                style={{ background: tmpl.colors.accent, color: "#fff", borderRadius: tmpl.borderRadius }}
+                data-testid="group-booking-btn">
+                Request Group Quote
+              </button>
+            </div>
+          </section>
           <ReviewsSection t={tmpl} reviews={reviews} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} />
           <TrustFooter t={tmpl} />
         </>
@@ -453,6 +486,10 @@ function BookingEngineInner() {
           </div>
         </div>
       </footer>
+
+      {/* Group Booking Modal */}
+      <GroupBookingModal isOpen={showGroupBooking} onClose={() => setShowGroupBooking(false)}
+        propertyId={propertyId} propertyName={tmpl.custom?.hotelName || property?.name || "Hotel"} tmpl={tmpl} />
     </div>
   );
 }

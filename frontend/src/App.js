@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import ReviewWidget from "./ReviewWidget";
 import BookingEngine from "./BookingEngine";
+import ReviewCollectionPage from "./ReviewCollectionPage";
+import SelfCheckInPage from "./SelfCheckInPage";
+import GuestPortalPage from "./GuestPortalPage";
 import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
 import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
 import { ReportsSettings } from "./components/dashboard/ReportsSettings";
@@ -2823,6 +2826,15 @@ function App() {
   }
   if (window.location.pathname === "/book") {
     return <BookingEngine />;
+  }
+  if (window.location.pathname === "/review") {
+    return <ReviewCollectionPage />;
+  }
+  if (window.location.pathname === "/checkin") {
+    return <SelfCheckInPage />;
+  }
+  if (window.location.pathname === "/guest-portal") {
+    return <GuestPortalPage />;
   }
   return <MainApp />;
 }

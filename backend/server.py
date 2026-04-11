@@ -41,6 +41,7 @@ from models import (
     HotelPolicies, HotelPoliciesUpdate,
     PropertyFacilities,
     UpsellItem, UpsellItemCreate, SocialProofSettings,
+    GroupBookingRequest, GroupBooking,
 )
 from database import db, client
 from auth import (
@@ -3757,6 +3758,316 @@ async def update_social_proof_settings(property_id: str, updates: Dict, current_
         {"property_id": property_id}, {"$set": updates}, upsert=True
     )
     doc = await db.social_proof_settings.find_one({"property_id": property_id}, {"_id": 0})
+    return doc
+
+# --- Guest Review Collection ---
+
+@api_router.get("/review-collection/settings/{property_id}")
+async def get_review_collection_settings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    doc = await db.review_collection_settings.find_one({"property_id": property_id}, {"_id": 0})
+    if not doc:
+        from models import ReviewCollectionSettings
+        doc = ReviewCollectionSettings(property_id=property_id).model_dump()
+    return doc
+
+@api_router.put("/review-collection/settings/{property_id}")
+async def update_review_collection_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    updates.pop("_id", None)
+    updates["property_id"] = property_id
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.review_collection_settings.update_one({"property_id": property_id}, {"$set": updates}, upsert=True)
+    return await db.review_collection_settings.find_one({"property_id": property_id}, {"_id": 0})
+
+@api_router.get("/review-collection/reviews/{property_id}")
+async def get_collected_reviews(property_id: str, status: str = "", current_user: dict = Depends(require_roles("admin", "manager"))):
+    query = {"property_id": property_id, "source": "direct"}
+    if status:
+        query["status"] = status
+    docs = await db.guest_reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return docs
+
+@api_router.post("/review-collection/submit")
+async def submit_guest_review(
+    property_id: str, booking_ref: str, rating: int,
+    title: str = "", review_text: str = "", guest_name: str = "", guest_email: str = ""
+):
+    """Public: Guest submits a review via the collection link"""
+    booking = await db.bookings.find_one({"booking_ref": booking_ref, "property_id": property_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    # Check if already reviewed
+    existing = await db.guest_reviews.find_one({"booking_ref": booking_ref}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Review already submitted for this booking")
+    from models import GuestReview
+    review = GuestReview(
+        property_id=property_id, booking_ref=booking_ref,
+        guest_name=guest_name or booking.get("guest_name", ""),
+        guest_email=guest_email or booking.get("guest_email", ""),
+        rating=max(1, min(5, rating)), title=title, review_text=review_text,
+        room_type=booking.get("room_type_id", ""),
+        stay_dates=f"{booking.get('check_in', '')} to {booking.get('check_out', '')}",
+    )
+    doc = review.model_dump()
+    await db.guest_reviews.insert_one(doc)
+    doc.pop("_id", None)
+    # Also add to main reviews collection for Review Hub
+    hub_review = {
+        "id": str(uuid.uuid4()), "property_id": property_id,
+        "platform": "Direct", "guest_name": doc["guest_name"],
+        "rating": doc["rating"], "review_text": doc["review_text"],
+        "review_date": doc["created_at"], "response_status": "new",
+        "sentiment": "positive" if doc["rating"] >= 4 else "neutral" if doc["rating"] >= 3 else "negative",
+        "source": "guest_collection", "booking_ref": booking_ref,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.reviews.insert_one(hub_review)
+    return {"status": "success", "message": "Thank you for your review!"}
+
+@api_router.get("/review-collection/page/{property_id}/{booking_ref}")
+async def get_review_page_data(property_id: str, booking_ref: str):
+    """Public: Get data for review collection page"""
+    booking = await db.bookings.find_one({"booking_ref": booking_ref, "property_id": property_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+    ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+    existing = await db.guest_reviews.find_one({"booking_ref": booking_ref}, {"_id": 0})
+    return {
+        "booking": {"booking_ref": booking["booking_ref"], "guest_name": booking["guest_name"], "check_in": booking["check_in"], "check_out": booking["check_out"]},
+        "property": {"name": ts.get("hotel_name") or (prop or {}).get("name", "Hotel"), "id": property_id},
+        "already_reviewed": existing is not None,
+    }
+
+# --- Self Check-In ---
+
+@api_router.get("/checkin/settings/{property_id}")
+async def get_checkin_settings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    doc = await db.checkin_settings.find_one({"property_id": property_id}, {"_id": 0})
+    if not doc:
+        from models import CheckInSettings
+        doc = CheckInSettings(property_id=property_id).model_dump()
+    return doc
+
+@api_router.put("/checkin/settings/{property_id}")
+async def update_checkin_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    updates.pop("_id", None)
+    updates["property_id"] = property_id
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.checkin_settings.update_one({"property_id": property_id}, {"$set": updates}, upsert=True)
+    return await db.checkin_settings.find_one({"property_id": property_id}, {"_id": 0})
+
+@api_router.get("/checkin/status/{booking_ref}")
+async def get_checkin_status(booking_ref: str):
+    """Public: Get check-in status for a booking"""
+    doc = await db.guest_checkins.find_one({"booking_ref": booking_ref}, {"_id": 0})
+    if not doc:
+        booking = await db.bookings.find_one({"booking_ref": booking_ref}, {"_id": 0})
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        return {"booking_ref": booking_ref, "status": "not_started"}
+    return doc
+
+@api_router.post("/checkin/start/{booking_ref}")
+async def start_checkin(booking_ref: str):
+    """Public: Initialize or get check-in for a booking"""
+    booking = await db.bookings.find_one({"booking_ref": booking_ref}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    existing = await db.guest_checkins.find_one({"booking_ref": booking_ref}, {"_id": 0})
+    if existing:
+        return existing
+    from models import GuestCheckIn
+    checkin = GuestCheckIn(
+        booking_ref=booking_ref, property_id=booking["property_id"],
+        guest_name=booking["guest_name"], guest_email=booking["guest_email"],
+    )
+    doc = checkin.model_dump()
+    await db.guest_checkins.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.post("/checkin/complete/{booking_ref}")
+async def complete_checkin(booking_ref: str, terms_accepted: bool = True, special_notes: str = ""):
+    """Public: Complete the check-in process"""
+    checkin = await db.guest_checkins.find_one({"booking_ref": booking_ref})
+    if not checkin:
+        raise HTTPException(status_code=404, detail="Check-in not found. Please start check-in first.")
+    await db.guest_checkins.update_one(
+        {"booking_ref": booking_ref},
+        {"$set": {
+            "status": "completed", "terms_accepted": terms_accepted,
+            "special_notes": special_notes,
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    await db.bookings.update_one({"booking_ref": booking_ref}, {"$set": {"checkin_status": "completed"}})
+    doc = await db.guest_checkins.find_one({"booking_ref": booking_ref}, {"_id": 0})
+    return doc
+
+@api_router.get("/checkin/admin/{property_id}")
+async def admin_list_checkins(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    docs = await db.guest_checkins.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return docs
+
+@api_router.put("/checkin/assign-room/{booking_ref}")
+async def assign_room(booking_ref: str, room_assignment: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    await db.guest_checkins.update_one({"booking_ref": booking_ref}, {"$set": {"room_assignment": room_assignment}})
+    doc = await db.guest_checkins.find_one({"booking_ref": booking_ref}, {"_id": 0})
+    return doc
+
+# --- Guest Portal ---
+
+@api_router.post("/guest-portal/request-access")
+async def request_guest_portal_access(guest_email: str):
+    """Public: Send magic link to guest's email"""
+    bookings = await db.bookings.find({"guest_email": guest_email}, {"_id": 0}).to_list(1)
+    if not bookings:
+        return {"status": "sent"}  # Don't reveal if email exists
+    from models import GuestPortalSession
+    session = GuestPortalSession(guest_email=guest_email)
+    doc = session.model_dump()
+    await db.guest_portal_sessions.insert_one(doc)
+    doc.pop("_id", None)
+    # In production, send email with magic link. Return token for dev.
+    return {"status": "sent", "message": "Check your email for the access link", "token": doc["magic_token"]}
+
+@api_router.post("/guest-portal/verify")
+async def verify_guest_portal(token: str):
+    """Public: Verify magic link token"""
+    session = await db.guest_portal_sessions.find_one({"magic_token": token}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid or expired link")
+    if datetime.fromisoformat(session["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Link has expired. Please request a new one.")
+    return {"status": "verified", "guest_email": session["guest_email"]}
+
+@api_router.get("/guest-portal/bookings")
+async def get_guest_bookings(token: str):
+    """Public: Get all bookings for a verified guest"""
+    session = await db.guest_portal_sessions.find_one({"magic_token": token}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    if datetime.fromisoformat(session["expires_at"]) < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Session expired")
+    bookings = await db.bookings.find({"guest_email": session["guest_email"]}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    # Enrich with room names
+    for b in bookings:
+        room = await db.room_types.find_one({"id": b.get("room_type_id")}, {"_id": 0, "name": 1, "photos": 1})
+        b["room_name"] = room.get("name", "Room") if room else "Room"
+        b["room_photo"] = (room.get("photos") or [""])[0] if room else ""
+        prop = await db.properties.find_one({"id": b.get("property_id")}, {"_id": 0, "name": 1})
+        b["property_name"] = prop.get("name", "") if prop else ""
+    return bookings
+
+@api_router.post("/guest-portal/rebook")
+async def rebook_from_portal(token: str, booking_ref: str):
+    """Public: Get rebooking data from a previous booking"""
+    session = await db.guest_portal_sessions.find_one({"magic_token": token}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    booking = await db.bookings.find_one({"booking_ref": booking_ref, "guest_email": session["guest_email"]}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return {
+        "property_id": booking["property_id"],
+        "room_type_id": booking.get("room_type_id"),
+        "adults": booking.get("adults", 2),
+        "children": booking.get("children", 0),
+        "guest_name": booking.get("guest_name", ""),
+        "guest_email": booking.get("guest_email", ""),
+        "guest_phone": booking.get("guest_phone", ""),
+    }
+
+# --- Cart Abandonment Recovery ---
+
+@api_router.post("/cart/save")
+async def save_abandoned_cart(
+    property_id: str, room_type_id: str = "", room_name: str = "",
+    guest_email: str = "", guest_name: str = "",
+    check_in: str = "", check_out: str = "", adults: int = 2, total_price: float = 0
+):
+    """Public: Save cart state when guest starts but doesn't complete booking"""
+    if not guest_email:
+        return {"status": "skipped", "message": "No email provided"}
+    from models import AbandonedCart
+    cart = AbandonedCart(
+        property_id=property_id, guest_email=guest_email, guest_name=guest_name,
+        room_type_id=room_type_id, room_name=room_name,
+        check_in=check_in, check_out=check_out, adults=adults, total_price=total_price,
+    )
+    doc = cart.model_dump()
+    await db.abandoned_carts.insert_one(doc)
+    doc.pop("_id", None)
+    return {"status": "saved", "recovery_token": doc["recovery_token"]}
+
+@api_router.get("/cart/recover/{token}")
+async def recover_cart(token: str):
+    """Public: Recover an abandoned cart via email link"""
+    cart = await db.abandoned_carts.find_one({"recovery_token": token, "status": {"$in": ["abandoned", "email_sent"]}}, {"_id": 0})
+    if not cart:
+        raise HTTPException(status_code=404, detail="Cart not found or already recovered")
+    await db.abandoned_carts.update_one({"recovery_token": token}, {"$set": {"status": "recovered", "recovered_at": datetime.now(timezone.utc).isoformat()}})
+    return cart
+
+@api_router.get("/cart/abandoned/{property_id}")
+async def list_abandoned_carts(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    carts = await db.abandoned_carts.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return carts
+
+@api_router.get("/cart/stats/{property_id}")
+async def cart_abandonment_stats(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    total = await db.abandoned_carts.count_documents({"property_id": property_id})
+    recovered = await db.abandoned_carts.count_documents({"property_id": property_id, "status": "recovered"})
+    email_sent = await db.abandoned_carts.count_documents({"property_id": property_id, "status": "email_sent"})
+    return {"total_abandoned": total, "recovered": recovered, "email_sent": email_sent, "recovery_rate": round(recovered / total * 100, 1) if total > 0 else 0}
+
+# --- Multi-Currency ---
+
+@api_router.get("/currencies")
+async def get_supported_currencies():
+    from models import CURRENCY_CONFIG
+    return CURRENCY_CONFIG
+
+@api_router.get("/currency/convert")
+async def convert_currency(amount: float, from_currency: str = "GBP", to_currency: str = "USD"):
+    """Public: Convert price between currencies (approximate rates)"""
+    # Approximate exchange rates from GBP (updated periodically in production)
+    rates_from_gbp = {
+        "GBP": 1.0, "USD": 1.27, "EUR": 1.17, "AED": 4.67, "SAR": 4.76,
+        "JPY": 192.5, "CNY": 9.21, "KRW": 1750, "INR": 106.5, "BRL": 7.35,
+        "RUB": 118.0, "AUD": 1.95, "CAD": 1.73, "CHF": 1.12, "SGD": 1.71,
+        "THB": 44.2, "MYR": 5.65, "TRY": 41.5,
+    }
+    if from_currency not in rates_from_gbp or to_currency not in rates_from_gbp:
+        raise HTTPException(status_code=400, detail="Unsupported currency")
+    gbp_amount = amount / rates_from_gbp[from_currency]
+    converted = gbp_amount * rates_from_gbp[to_currency]
+    return {"original": amount, "from": from_currency, "to": to_currency, "converted": round(converted, 2), "rate": round(rates_from_gbp[to_currency] / rates_from_gbp[from_currency], 4)}
+
+# --- Group Bookings ---
+
+@api_router.post("/group-booking/request")
+async def submit_group_booking(data: GroupBookingRequest):
+    """Public: Submit a group/corporate booking request"""
+    from models import GroupBooking
+    group = GroupBooking(**data.model_dump())
+    doc = group.model_dump()
+    await db.group_bookings.insert_one(doc)
+    doc.pop("_id", None)
+    return {"status": "submitted", "id": doc["id"], "message": "Your group booking request has been submitted. Our team will contact you within 24 hours."}
+
+@api_router.get("/group-booking/requests/{property_id}")
+async def list_group_bookings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    docs = await db.group_bookings.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return docs
+
+@api_router.put("/group-booking/{booking_id}")
+async def update_group_booking(booking_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    updates.pop("_id", None)
+    updates.pop("id", None)
+    await db.group_bookings.update_one({"id": booking_id}, {"$set": updates})
+    doc = await db.group_bookings.find_one({"id": booking_id}, {"_id": 0})
     return doc
 
 # --- Template Settings ---

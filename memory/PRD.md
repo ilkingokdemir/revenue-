@@ -67,20 +67,21 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - **Guest App / Digital Directory** — WiFi credentials, hotel services (6 default), local recommendations (4 default), public guest-facing URL, editable via admin panel
 
 ### Admin Panels
-- Space Bookings management, AI Concierge analytics
 - Staff Performance Dashboard — Agent leaderboard, response times, resolution rates, channel breakdown, daily trends, performance scoring
-- Real-time Availability Calendar — Month grid, color-coded occupancy, day detail panel, room type breakdown
 - Guest Satisfaction Score (GSS) — Composite KPI (Reviews 50% + Sentiment 25% + Response Speed 25%), shown on Dashboard Home
 
 ### Infrastructure
 - JWT auth (admin/manager/receptionist), white-label branding, outbound webhooks
 
 ## Sidebar Structure
-- Dashboard (home icon — default landing)
-- Review Hub: Reviews, Analytics, Response Templates, Approvals, Alerts, Reports
-- Booking Engine: Rooms & Bookings, Space Bookings, Website Templates, Customize, Promos, Add-ons, Policies
-- Guest Messaging: Unified Inbox, Automation, Channel Settings, AI Concierge
-- Connections: Integrations, API Connection, Webhooks
+- **Dashboard** (home icon — default landing)
+- **Review Hub**: Reviews, Analytics, Response Templates, Approvals, Alerts, Reports
+- **Booking Engine**: Rooms & Bookings, Website Templates, Customize, Promos, Add-ons, Policies
+- **Guest Experience**: Guest Profiles, Guest App, Digital Keys, Campaigns
+- **Operations**: Stock / F&B, Accounting
+- **Guest Messaging**: Unified Inbox, Automation, Channel Settings, AI Concierge, Staff Performance
+- **Connections**: Setup Wizard, Integrations, API Connection, Webhooks, Sync Log, Integration Guide
+- **Settings**: Property Mapping, Branding, Team
 
 ### Operations
 - **Stock Management (Best-in-class, Apicbase-level)** — Product catalog (13 categories, 9 units, allergens, yield %, expiry tracking, par levels), portion-based recipes with sub-recipes, automatic COGS per sale, Menu Engineering (Stars/Puzzles/Plowhorses/Dogs profitability matrix), Food Cost % Dashboard (target 28-35%, per-outlet breakdown), Par Level Auto-Ordering (auto-generate POs), Allergen & Nutrition tracking, Supplier Price History, Yield Management (raw vs usable cost), Perishable Forecasting (FIFO expiry alerts), Multi-Outlet Transfers, Inventory Turnover Rate (target 4-8x), theoretical vs actual consumption (theft-proof), wastage with reason codes, supplier management, purchase orders, stock count sheets, variance detection — **11 tabs in UI**
@@ -116,6 +117,5 @@ backend/
 ```
 
 ## Backlog
-- P1: Dynamic Pricing / Revenue Management (AI-driven rate optimization)
-- P2: Drag-and-drop reservation calendar (visual booking management)
-- Note: Channel Manager already exists on myhotelbox.com — NOT building
+- Note: Dynamic Pricing, Drag-and-drop Calendar, Channel Manager — all exist on myhotelbox.com, NOT building
+- Note: Space Bookings, Availability Calendar, Housekeeping — removed from sidebar per user request (backend routes still exist)

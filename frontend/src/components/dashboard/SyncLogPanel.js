@@ -40,7 +40,7 @@ const SyncLogPanel = () => {
             data-testid="sync-filter-platform"
           >
             <option value="">All Platforms</option>
-            {["google","booking.com","tripadvisor","airbnb","expedia","trip.com","agoda","hotels.com","yelp","facebook","makemytrip","hrs","despegar","hostelworld"].map(p => (
+            {["google","booking.com","tripadvisor","airbnb","expedia","trip.com","agoda","hotels.com","yelp","facebook","makemytrip","hrs","despegar","hostelworld","booking-engine"].map(p => (
               <option key={p} value={p}>{p}</option>
             ))}
           </select>

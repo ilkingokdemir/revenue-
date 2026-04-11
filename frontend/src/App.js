@@ -1868,19 +1868,32 @@ const WebhooksPanel = ({ user }) => {
             />
             <div>
               <p className="text-xs font-medium text-stone-600 mb-2">Events to subscribe (leave empty for all)</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {availableEvents.map((ev) => (
-                  <label key={ev.id} className="flex items-center gap-2 text-xs text-stone-600 p-1.5 rounded hover:bg-stone-50 cursor-pointer" data-testid={`event-${ev.id}`}>
-                    <input
-                      type="checkbox"
-                      checked={newWebhook.events.includes(ev.id)}
-                      onChange={() => toggleEvent(ev.id)}
-                      className="rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span>{ev.name}</span>
-                  </label>
-                ))}
-              </div>
+              {/* Group events by category */}
+              {Object.entries(
+                availableEvents.reduce((groups, ev) => {
+                  const cat = ev.category || "general";
+                  if (!groups[cat]) groups[cat] = [];
+                  groups[cat].push(ev);
+                  return groups;
+                }, {})
+              ).map(([category, events]) => (
+                <div key={category} className="mb-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-1.5">{category}</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {events.map((ev) => (
+                      <label key={ev.id} className="flex items-center gap-2 text-xs text-stone-600 p-1.5 rounded hover:bg-stone-50 cursor-pointer" data-testid={`event-${ev.id}`}>
+                        <input
+                          type="checkbox"
+                          checked={newWebhook.events.includes(ev.id)}
+                          onChange={() => toggleEvent(ev.id)}
+                          className="rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>{ev.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
             <div className="flex gap-2 pt-1">
               <button onClick={handleCreate} className="px-4 py-2 bg-emerald-700 text-white text-xs font-medium rounded-lg hover:bg-emerald-800 transition-colors" data-testid="confirm-create-webhook-btn">Create Webhook</button>
@@ -1976,7 +1989,7 @@ const WebhooksPanel = ({ user }) => {
                         <span className="text-stone-400 text-xs block mb-1.5">Subscribed Events</span>
                         <div className="flex flex-wrap gap-1">
                           {wh.events?.map(ev => (
-                            <span key={ev} className="text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{ev}</span>
+                            <span key={ev} className={`text-[10px] px-2 py-0.5 rounded-full ${ev.startsWith("booking.") ? "bg-blue-50 text-blue-700" : "bg-stone-100 text-stone-600"}`}>{ev}</span>
                           ))}
                         </div>
                       </div>

@@ -21,13 +21,30 @@ import jwt
 import secrets
 from bson import ObjectId
 
+# Import extracted modules
+from models import (
+    StatusCheck, StatusCheckCreate, Review, ReviewCreate, ReviewResponse,
+    AIGenerateRequest, AIGenerateResponse, NotificationSettings, NotificationSettingsUpdate,
+    ReportSettings, ReportSettingsUpdate, ResponseTemplate, ResponseTemplateCreate, ResponseTemplateUpdate,
+    SentimentAnalysis, CompetitorData, CompetitorCreate, CompetitorUpdate, AnalyticsData,
+    PlatformIntegration, PlatformCredentials, ManualReviewImport, SyncResponse,
+    BrandingSettings, BrandingSettingsUpdate,
+    UserRegister, UserLogin, UserUpdate, ApprovalAction,
+    Property, PropertyCreate, PropertyUpdate,
+    VALID_ROLES, VALID_DEPARTMENTS, VALID_PROPERTY_TYPES,
+    RoomType, RoomTypeCreate, RoomTypeUpdate, Booking, BookingCreate,
+    InboundReviewPayload,
+)
+from database import db, client
+from auth import (
+    get_jwt_secret, hash_password, verify_password,
+    create_access_token, create_refresh_token,
+    get_current_user, require_roles, verify_api_key,
+    JWT_ALGORITHM,
+)
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
-
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
 
 # Resend configuration
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
@@ -79,427 +96,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ==================== AUTH UTILITIES ====================
+# ==================== AUTH (imported from auth.py) ====================
+# get_jwt_secret, hash_password, verify_password, create_access_token,
+# create_refresh_token, get_current_user, require_roles, verify_api_key
+# are all imported from auth.py
 
-JWT_ALGORITHM = "HS256"
-
-def get_jwt_secret():
-    return os.environ["JWT_SECRET"]
-
-def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
-
-def create_access_token(user_id: str, email: str) -> str:
-    payload = {"sub": user_id, "email": email, "exp": datetime.now(timezone.utc) + timedelta(hours=24), "type": "access"}
-    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
-
-def create_refresh_token(user_id: str) -> str:
-    payload = {"sub": user_id, "exp": datetime.now(timezone.utc) + timedelta(days=7), "type": "refresh"}
-    return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
-
-async def get_current_user(request: Request) -> dict:
-    token = request.cookies.get("access_token")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, get_jwt_secret(), algorithms=[JWT_ALGORITHM])
-        if payload.get("type") != "access":
-            raise HTTPException(status_code=401, detail="Invalid token type")
-        user = await db.users.find_one({"_id": ObjectId(payload["sub"])})
-        if not user:
-            raise HTTPException(status_code=401, detail="User not found")
-        user["_id"] = str(user["_id"])
-        user.pop("password_hash", None)
-        return user
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-def require_roles(*roles):
-    async def role_checker(request: Request):
-        user = await get_current_user(request)
-        if user["role"] not in roles:
-            raise HTTPException(status_code=403, detail="Insufficient permissions")
-        return user
-    return role_checker
-
-async def verify_api_key(request: Request) -> dict:
-    """Authenticate via API key (for widget/external access)"""
-    api_key = request.query_params.get("api_key")
-    if not api_key:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer rhk_"):
-            api_key = auth_header[7:]
-    if not api_key or not api_key.startswith("rhk_"):
-        raise HTTPException(status_code=401, detail="Valid API key required")
-    key_doc = await db.api_keys.find_one({"key": api_key, "is_active": True}, {"_id": 0})
-    if not key_doc:
-        raise HTTPException(status_code=401, detail="Invalid or inactive API key")
-    await db.api_keys.update_one({"key": api_key}, {
-        "$set": {"last_used": datetime.now(timezone.utc).isoformat()},
-        "$inc": {"request_count": 1}
-    })
-    return key_doc
-
-# ==================== MODELS ====================
-
-class StatusCheck(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    client_name: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class StatusCheckCreate(BaseModel):
-    client_name: str
-
-class Review(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    property_id: str = "default"  # Hotel property identifier
-    platform: str  # booking.com, airbnb, expedia, tripadvisor, google, trip.com
-    guest_name: str
-    guest_avatar: Optional[str] = None
-    rating: int  # 1-5
-    review_text: str
-    review_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    stay_date: Optional[str] = None
-    room_type: Optional[str] = None
-    response_status: str = "pending"  # pending, draft, pending_approval, approved, responded, rejected
-    response_text: Optional[str] = None
-    response_date: Optional[datetime] = None
-    drafted_by: Optional[str] = None
-    approved_by: Optional[str] = None
-    approval_notes: Optional[str] = None
-    external_review_id: Optional[str] = None  # ID from original platform
-    synced_to_platform: bool = False
-    response_uniqueness_hash: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class ReviewCreate(BaseModel):
-    property_id: str = "default"
-    platform: str
-    guest_name: str
-    guest_avatar: Optional[str] = None
-    rating: int
-    review_text: str
-    stay_date: Optional[str] = None
-    room_type: Optional[str] = None
-
-class ReviewResponse(BaseModel):
-    response_text: str
-
-class AIGenerateRequest(BaseModel):
-    review_id: str
-    tone: str = "professional"  # professional, friendly, apologetic
-    language: str = "auto"  # auto = detect from review, or specific language code
-
-class AIGenerateResponse(BaseModel):
-    generated_text: str
-    detected_language: Optional[str] = None
-
-class NotificationSettings(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    email: str
-    notify_negative_reviews: bool = True
-    negative_threshold: int = 2  # Reviews with rating <= this value trigger notification
-    enabled: bool = True
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class NotificationSettingsUpdate(BaseModel):
-    email: Optional[str] = None
-    notify_negative_reviews: Optional[bool] = None
-    negative_threshold: Optional[int] = None
-    enabled: Optional[bool] = None
-
-class ReportSettings(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    email: str
-    frequency: str = "weekly"  # daily, weekly, monthly
-    include_competitor_comparison: bool = True
-    include_sentiment_summary: bool = True
-    include_action_items: bool = True
-    enabled: bool = True
-    last_sent: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class ReportSettingsUpdate(BaseModel):
-    email: Optional[str] = None
-    frequency: Optional[str] = None
-    include_competitor_comparison: Optional[bool] = None
-    include_sentiment_summary: Optional[bool] = None
-    include_action_items: Optional[bool] = None
-    enabled: Optional[bool] = None
-
-class ResponseTemplate(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    category: str  # positive, negative, neutral, complaint, praise
-    content: str
-    tone: str = "professional"  # professional, friendly, apologetic
-    usage_count: int = 0
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class ResponseTemplateCreate(BaseModel):
-    name: str
-    category: str
-    content: str
-    tone: str = "professional"
-
-class ResponseTemplateUpdate(BaseModel):
-    name: Optional[str] = None
-    category: Optional[str] = None
-    content: Optional[str] = None
-    tone: Optional[str] = None
-
-class SentimentAnalysis(BaseModel):
-    sentiment: str  # positive, negative, neutral, mixed
-    score: float  # -1 to 1
-    urgency: str  # low, medium, high, critical
-    topics: List[str]  # cleanliness, staff, amenities, location, value, food, noise, etc.
-    suggested_tone: str  # professional, friendly, apologetic
-    suggested_category: str  # matches template categories
-    key_issues: List[str]
-    key_praises: List[str]
-
-class CompetitorData(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    platform: str
-    avg_rating: float
-    total_reviews: int
-    response_rate: float
-    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class CompetitorCreate(BaseModel):
-    name: str
-    platform: str
-    avg_rating: float
-    total_reviews: int
-    response_rate: float
-
-class CompetitorUpdate(BaseModel):
-    name: Optional[str] = None
-    platform: Optional[str] = None
-    avg_rating: Optional[float] = None
-    total_reviews: Optional[int] = None
-    response_rate: Optional[float] = None
-
-class AnalyticsData(BaseModel):
-    period: str
-    total_reviews: int
-    avg_rating: float
-    sentiment_distribution: dict
-    response_rate: float
-    avg_response_time_hours: float
-    top_topics: List[dict]
-    rating_trend: List[dict]
-
-class PlatformIntegration(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    platform: str  # google, booking, tripadvisor, airbnb, expedia, trip
-    status: str = "disconnected"  # connected, disconnected, error
-    credentials_configured: bool = False
-    last_sync: Optional[datetime] = None
-    sync_enabled: bool = False
-    location_id: Optional[str] = None  # Platform-specific location/property ID
-    property_name: Optional[str] = None
-    total_reviews_synced: int = 0
-    error_message: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class PlatformCredentials(BaseModel):
-    platform: str
-    credentials: Dict[str, str]  # Platform-specific credentials
-    location_id: Optional[str] = None
-    property_name: Optional[str] = None
-
-class ManualReviewImport(BaseModel):
-    platform: str
-    guest_name: str
-    rating: int
-    review_text: str
-    review_date: Optional[str] = None
-    stay_date: Optional[str] = None
-    room_type: Optional[str] = None
-    external_review_id: Optional[str] = None
-
-class SyncResponse(BaseModel):
-    platform: str
-    reviews_synced: int
-    errors: List[str]
-    status: str
-
-class BrandingSettings(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    app_name: str = "Review Hub"
-    subtitle: str = "Manage all your guest reviews in one place"
-    primary_color: str = "#3E5245"
-    accent_color: str = "#D4A373"
-    logo_url: Optional[str] = None
-    powered_by_text: str = ""
-    powered_by_visible: bool = False
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class BrandingSettingsUpdate(BaseModel):
-    app_name: Optional[str] = None
-    subtitle: Optional[str] = None
-    primary_color: Optional[str] = None
-    accent_color: Optional[str] = None
-    powered_by_text: Optional[str] = None
-    powered_by_visible: Optional[bool] = None
-
-# Auth Models
-class UserRegister(BaseModel):
-    email: str
-    password: str
-    name: str
-    role: str = "receptionist"
-    department: str = "front_desk"
-
-class UserLogin(BaseModel):
-    email: str
-    password: str
-
-class UserUpdate(BaseModel):
-    name: Optional[str] = None
-    role: Optional[str] = None
-    department: Optional[str] = None
-    is_active: Optional[bool] = None
-
-# Approval Workflow Models
-class ApprovalAction(BaseModel):
-    action: str  # approve, reject
-    notes: Optional[str] = None
-
-# Property Model
-class Property(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    address: Optional[str] = None
-    city: Optional[str] = None
-    country: Optional[str] = None
-    property_type: str = "hotel"  # hotel, resort, hostel, apartment, villa
-    is_active: bool = True
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-class PropertyCreate(BaseModel):
-    name: str
-    address: Optional[str] = None
-    city: Optional[str] = None
-    country: Optional[str] = None
-    property_type: str = "hotel"
-
-class PropertyUpdate(BaseModel):
-    name: Optional[str] = None
-    address: Optional[str] = None
-    city: Optional[str] = None
-    country: Optional[str] = None
-    property_type: Optional[str] = None
-    is_active: Optional[bool] = None
-
-VALID_ROLES = ["admin", "manager", "receptionist"]
-VALID_DEPARTMENTS = ["front_desk", "management", "housekeeping", "food_beverage", "maintenance", "spa_wellness", "concierge"]
-VALID_PROPERTY_TYPES = ["hotel", "resort", "hostel", "apartment", "villa", "boutique", "motel", "bed_breakfast"]
-
-# ==================== BOOKING ENGINE MODELS ====================
-
-class RoomType(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    property_id: str
-    name: str
-    description: str = ""
-    max_guests: int = 2
-    bed_type: str = "double"  # single, double, twin, queen, king, suite
-    size_sqm: int = 0
-    amenities: List[str] = []
-    photos: List[str] = []
-    base_price: float = 0
-    currency: str = "GBP"
-    is_active: bool = True
-    total_rooms: int = 1
-    free_cancellation: bool = True
-    breakfast_included: bool = False
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-class RoomTypeCreate(BaseModel):
-    property_id: str
-    name: str
-    description: str = ""
-    max_guests: int = 2
-    bed_type: str = "double"
-    size_sqm: int = 0
-    amenities: List[str] = []
-    photos: List[str] = []
-    base_price: float = 0
-    currency: str = "GBP"
-    total_rooms: int = 1
-    free_cancellation: bool = True
-    breakfast_included: bool = False
-
-class RoomTypeUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    max_guests: Optional[int] = None
-    bed_type: Optional[str] = None
-    size_sqm: Optional[int] = None
-    amenities: Optional[List[str]] = None
-    photos: Optional[List[str]] = None
-    base_price: Optional[float] = None
-    currency: Optional[str] = None
-    is_active: Optional[bool] = None
-    total_rooms: Optional[int] = None
-    free_cancellation: Optional[bool] = None
-    breakfast_included: Optional[bool] = None
-
-class Booking(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    property_id: str
-    room_type_id: str
-    guest_name: str
-    guest_email: str
-    guest_phone: str = ""
-    check_in: str
-    check_out: str
-    adults: int = 1
-    children: int = 0
-    rooms: int = 1
-    total_price: float = 0
-    currency: str = "GBP"
-    status: str = "confirmed"  # confirmed, cancelled, checked_in, checked_out, no_show
-    payment_status: str = "pending"  # pending, paid, refunded
-    special_requests: str = ""
-    booking_ref: str = Field(default_factory=lambda: f"MHB-{secrets.token_hex(4).upper()}")
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
-class BookingCreate(BaseModel):
-    property_id: str
-    room_type_id: str
-    guest_name: str
-    guest_email: str
-    guest_phone: str = ""
-    check_in: str
-    check_out: str
-    adults: int = 1
-    children: int = 0
-    rooms: int = 1
-    special_requests: str = ""
+# ==================== MODELS (imported from models.py) ====================
+# All Pydantic models imported from models.py
 
 # ==================== HELPER FUNCTIONS ====================
 
@@ -828,7 +431,8 @@ async def create_webhook(request: Request, current_user: dict = Depends(require_
     valid_events = [
         "review.created", "review.responded", "review.approved", "review.rejected",
         "response.generated", "response.published",
-        "rating.low", "rating.high"
+        "rating.low", "rating.high",
+        "booking.created", "booking.confirmed", "booking.cancelled", "booking.payment_received"
     ]
     
     for e in events:
@@ -995,14 +599,18 @@ async def get_webhook_deliveries(webhook_id: str, current_user: dict = Depends(r
 async def get_webhook_events():
     """Get available webhook events"""
     return [
-        {"id": "review.created", "name": "New Review", "description": "When a new review is received"},
-        {"id": "review.responded", "name": "Review Responded", "description": "When a response is published"},
-        {"id": "review.approved", "name": "Response Approved", "description": "When a response is approved by manager"},
-        {"id": "review.rejected", "name": "Response Rejected", "description": "When a response is rejected"},
-        {"id": "response.generated", "name": "AI Response Generated", "description": "When AI generates a response draft"},
-        {"id": "response.published", "name": "Response Published", "description": "When response is synced to platform"},
-        {"id": "rating.low", "name": "Low Rating Alert", "description": "When a review with rating <= 2 is received"},
-        {"id": "rating.high", "name": "High Rating", "description": "When a review with rating >= 4 is received"}
+        {"id": "review.created", "name": "New Review", "description": "When a new review is received", "category": "reviews"},
+        {"id": "review.responded", "name": "Review Responded", "description": "When a response is published", "category": "reviews"},
+        {"id": "review.approved", "name": "Response Approved", "description": "When a response is approved by manager", "category": "reviews"},
+        {"id": "review.rejected", "name": "Response Rejected", "description": "When a response is rejected", "category": "reviews"},
+        {"id": "response.generated", "name": "AI Response Generated", "description": "When AI generates a response draft", "category": "reviews"},
+        {"id": "response.published", "name": "Response Published", "description": "When response is synced to platform", "category": "reviews"},
+        {"id": "rating.low", "name": "Low Rating Alert", "description": "When a review with rating <= 2 is received", "category": "reviews"},
+        {"id": "rating.high", "name": "High Rating", "description": "When a review with rating >= 4 is received", "category": "reviews"},
+        {"id": "booking.created", "name": "New Booking", "description": "When a new direct booking reservation is created", "category": "bookings"},
+        {"id": "booking.confirmed", "name": "Booking Confirmed", "description": "When a booking is confirmed after payment", "category": "bookings"},
+        {"id": "booking.cancelled", "name": "Booking Cancelled", "description": "When a booking is cancelled by guest or staff", "category": "bookings"},
+        {"id": "booking.payment_received", "name": "Payment Received", "description": "When payment is successfully processed for a booking", "category": "bookings"},
     ]
 
 @api_router.get("/integration-guide")
@@ -3149,6 +2757,14 @@ async def post_reply_to_platform(platform: str, review_id: str, reply_text: str)
     integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
     
     if not integration or not integration.get("credentials_configured"):
+        # Save reply locally and log
+        await db.reviews.update_one({"id": review_id}, {"$set": {
+            "response_text": reply_text,
+            "response_status": "responded",
+            "response_date": datetime.now(timezone.utc).isoformat(),
+            "synced_to_platform": False
+        }})
+        await _log_sync(platform, "outbound", "skipped", f"Reply saved locally — {platform} credentials not configured", review_id)
         return {
             "status": "logged",
             "message": f"Reply saved locally. Platform sync not configured for {platform}.",
@@ -3157,19 +2773,187 @@ async def post_reply_to_platform(platform: str, review_id: str, reply_text: str)
     
     # Attempt to post to platform
     success = False
-    if platform == "google" and review.get("external_review_id"):
-        location_id = integration.get("location_id")
-        success = await PlatformService.post_google_reply(
-            location_id,
-            review["external_review_id"],
-            reply_text
-        )
+    error_msg = ""
+    
+    try:
+        if platform == "google" and review.get("external_review_id"):
+            location_id = integration.get("location_id")
+            success = await PlatformService.post_google_reply(
+                location_id,
+                review["external_review_id"],
+                reply_text
+            )
+        elif platform == "booking.com" and review.get("external_review_id"):
+            # Booking.com Connectivity Partner API v3
+            credentials = integration.get("credentials", {})
+            api_user = credentials.get("username") or BOOKING_API_USERNAME
+            api_pass = credentials.get("password") or BOOKING_API_PASSWORD
+            hotel_id = integration.get("hotel_id", "")
+            if api_user and api_pass and hotel_id:
+                async with httpx.AsyncClient(timeout=15.0) as c:
+                    resp = await c.post(
+                        f"https://supply-xml.booking.com/hotels/xml/reviews",
+                        auth=(api_user, api_pass),
+                        json={
+                            "hotel_id": hotel_id,
+                            "review_id": review["external_review_id"],
+                            "response": {"text": reply_text}
+                        },
+                        headers={"Content-Type": "application/json"}
+                    )
+                    success = 200 <= resp.status_code < 300
+                    if not success:
+                        error_msg = f"Booking.com API returned {resp.status_code}"
+            else:
+                error_msg = "Booking.com credentials incomplete"
+        elif platform == "tripadvisor" and review.get("external_review_id"):
+            # TripAdvisor Content API
+            ta_key = integration.get("credentials", {}).get("api_key") or TRIPADVISOR_API_KEY
+            location_id = integration.get("location_id", "")
+            if ta_key and location_id:
+                async with httpx.AsyncClient(timeout=15.0) as c:
+                    resp = await c.post(
+                        f"https://api.tripadvisor.com/api/partner/2.0/location/{location_id}/reviews/{review['external_review_id']}/response",
+                        headers={"X-TripAdvisor-API-Key": ta_key, "Content-Type": "application/json"},
+                        json={"response_text": reply_text}
+                    )
+                    success = 200 <= resp.status_code < 300
+                    if not success:
+                        error_msg = f"TripAdvisor API returned {resp.status_code}"
+            else:
+                error_msg = "TripAdvisor credentials incomplete"
+        elif platform == "expedia" and review.get("external_review_id"):
+            # Expedia Partner Central API
+            credentials = integration.get("credentials", {})
+            api_key = credentials.get("api_key", "")
+            api_secret = credentials.get("api_secret", "")
+            if api_key and api_secret:
+                async with httpx.AsyncClient(timeout=15.0) as c:
+                    resp = await c.post(
+                        f"https://services.expediapartnercentral.com/reviews/v1/reviews/{review['external_review_id']}/respond",
+                        headers={"Authorization": f"Basic {api_key}", "Content-Type": "application/json"},
+                        json={"body": reply_text}
+                    )
+                    success = 200 <= resp.status_code < 300
+                    if not success:
+                        error_msg = f"Expedia API returned {resp.status_code}"
+            else:
+                error_msg = "Expedia credentials incomplete"
+        else:
+            # Platform-specific sync not yet supported
+            error_msg = f"Outbound sync for {platform} requires platform API credentials"
+    except httpx.TimeoutException:
+        error_msg = f"Timeout connecting to {platform} API"
+    except httpx.ConnectError:
+        error_msg = f"Could not connect to {platform} API"
+    except Exception as e:
+        error_msg = str(e)[:200]
+    
+    # Update review sync status
+    if success:
+        await db.reviews.update_one({"id": review_id}, {"$set": {
+            "response_text": reply_text,
+            "response_status": "responded",
+            "response_date": datetime.now(timezone.utc).isoformat(),
+            "synced_to_platform": True,
+            "sync_timestamp": datetime.now(timezone.utc).isoformat()
+        }})
+        await _log_sync(platform, "outbound", "success", f"Reply posted to {platform} for review {review_id}", review_id)
+        # Fire response.published webhook
+        asyncio.create_task(_fire_webhooks("response.published", {
+            "review_id": review_id,
+            "platform": platform,
+            "reply_text": reply_text[:200],
+            "synced_at": datetime.now(timezone.utc).isoformat()
+        }))
+    else:
+        await db.reviews.update_one({"id": review_id}, {"$set": {
+            "response_text": reply_text,
+            "response_status": "responded",
+            "response_date": datetime.now(timezone.utc).isoformat(),
+            "synced_to_platform": False,
+            "sync_error": error_msg
+        }})
+        await _log_sync(platform, "outbound", "error" if error_msg else "skipped", error_msg or f"Reply saved locally for {platform}", review_id)
     
     return {
         "status": "synced" if success else "logged",
-        "message": f"Reply {'posted to {platform}' if success else 'saved locally'}",
-        "synced_to_platform": success
+        "message": f"Reply {'posted to ' + platform if success else 'saved locally' + (': ' + error_msg if error_msg else '')}",
+        "synced_to_platform": success,
+        "error": error_msg if not success else None
     }
+
+@api_router.get("/integrations/outbound-status")
+async def get_outbound_sync_status(current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Get outbound sync status — how many responses are pending sync to platforms"""
+    # Count responses by sync status
+    responded_total = await db.reviews.count_documents({"response_status": "responded"})
+    synced = await db.reviews.count_documents({"synced_to_platform": True})
+    pending_sync = await db.reviews.count_documents({"response_status": "responded", "synced_to_platform": {"$ne": True}})
+    
+    # Group by platform
+    pipeline = [
+        {"$match": {"response_status": "responded"}},
+        {"$group": {
+            "_id": "$platform",
+            "total": {"$sum": 1},
+            "synced": {"$sum": {"$cond": [{"$eq": ["$synced_to_platform", True]}, 1, 0]}},
+            "pending": {"$sum": {"$cond": [{"$ne": ["$synced_to_platform", True]}, 1, 0]}},
+        }}
+    ]
+    by_platform = await db.reviews.aggregate(pipeline).to_list(50)
+    
+    # Recent sync logs (outbound)
+    recent_logs = await db.sync_logs.find(
+        {"direction": "outbound"}, {"_id": 0}
+    ).sort("timestamp", -1).to_list(20)
+    
+    return {
+        "total_responded": responded_total,
+        "synced_to_platform": synced,
+        "pending_sync": pending_sync,
+        "by_platform": [{
+            "platform": p["_id"],
+            "total": p["total"],
+            "synced": p["synced"],
+            "pending": p["pending"]
+        } for p in by_platform],
+        "recent_activity": recent_logs,
+    }
+
+@api_router.post("/integrations/sync-all-outbound")
+async def sync_all_pending_replies(current_user: dict = Depends(require_roles("admin"))):
+    """Attempt to post all unsynchronised approved responses to their platforms"""
+    pending = await db.reviews.find(
+        {"response_status": "responded", "response_text": {"$ne": None}, "synced_to_platform": {"$ne": True}},
+        {"_id": 0}
+    ).to_list(100)
+    
+    results = {"synced": 0, "failed": 0, "skipped": 0, "details": []}
+    
+    for review in pending:
+        platform = review.get("platform", "")
+        integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
+        
+        if not integration or not integration.get("credentials_configured"):
+            results["skipped"] += 1
+            results["details"].append({"review_id": review["id"], "platform": platform, "status": "skipped", "reason": "No credentials configured"})
+            continue
+        
+        # Attempt sync via the post-reply endpoint logic
+        try:
+            reply_result = await post_reply_to_platform(platform, review["id"], review["response_text"])
+            if reply_result.get("synced_to_platform"):
+                results["synced"] += 1
+                results["details"].append({"review_id": review["id"], "platform": platform, "status": "synced"})
+            else:
+                results["failed"] += 1
+                results["details"].append({"review_id": review["id"], "platform": platform, "status": "failed", "error": reply_result.get("error", "")})
+        except Exception as e:
+            results["failed"] += 1
+            results["details"].append({"review_id": review["id"], "platform": platform, "status": "error", "error": str(e)[:100]})
+    
+    return results
 
 @api_router.post("/integrations/import")
 async def import_reviews_manually(reviews: List[ManualReviewImport]):
@@ -3408,20 +3192,7 @@ async def get_integration_requirements():
     }
 
 # ==================== P0: INBOUND PLATFORM WEBHOOKS ====================
-
-class InboundReviewPayload(BaseModel):
-    """Standard payload for platforms pushing reviews to Review Hub"""
-    model_config = ConfigDict(extra="ignore")
-    external_review_id: str
-    guest_name: str
-    rating: int
-    review_text: str
-    review_date: Optional[str] = None
-    stay_date: Optional[str] = None
-    room_type: Optional[str] = None
-    property_id: Optional[str] = "default"
-    language: Optional[str] = None
-    reviewer_avatar: Optional[str] = None
+# InboundReviewPayload imported from models.py
 
 @api_router.post("/platforms/{platform}/incoming")
 async def receive_platform_review(platform: str, payload: InboundReviewPayload, request: Request):
@@ -3772,6 +3543,28 @@ async def create_booking(booking_data: BookingCreate):
     # Send confirmation email in background
     asyncio.create_task(_send_booking_confirmation(doc, room.get("name", "Room")))
     
+    # Fire booking webhooks
+    webhook_data = {
+        "booking_ref": doc.get("booking_ref"),
+        "property_id": doc.get("property_id"),
+        "room_type_id": doc.get("room_type_id"),
+        "room_name": room.get("name", ""),
+        "guest_name": doc.get("guest_name"),
+        "guest_email": doc.get("guest_email"),
+        "check_in": doc.get("check_in"),
+        "check_out": doc.get("check_out"),
+        "adults": doc.get("adults"),
+        "children": doc.get("children"),
+        "rooms": doc.get("rooms"),
+        "total_price": doc.get("total_price"),
+        "currency": doc.get("currency"),
+        "status": doc.get("status"),
+        "payment_status": doc.get("payment_status"),
+        "created_at": doc.get("created_at"),
+    }
+    asyncio.create_task(_fire_webhooks("booking.created", webhook_data))
+    await _log_sync("booking-engine", "outbound", "success", f"Booking {doc.get('booking_ref')} created — webhook fired", doc.get("booking_ref", ""))
+    
     return doc
 
 async def _send_booking_confirmation(booking: dict, room_name: str):
@@ -3912,11 +3705,31 @@ async def update_booking_status(booking_id: str, status: str, current_user: dict
     if status not in valid:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid}")
     
-    result = await db.bookings.update_one({"id": booking_id}, {"$set": {"status": status}})
+    result = await db.bookings.update_one({"id": booking_id}, {"$set": {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Booking not found")
     
     updated = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    
+    # Fire webhooks for status changes
+    wh_data = {
+        "booking_ref": updated.get("booking_ref"),
+        "property_id": updated.get("property_id"),
+        "guest_name": updated.get("guest_name"),
+        "guest_email": updated.get("guest_email"),
+        "check_in": updated.get("check_in"),
+        "check_out": updated.get("check_out"),
+        "total_price": updated.get("total_price"),
+        "currency": updated.get("currency"),
+        "status": status,
+        "updated_by": current_user.get("name", current_user.get("email")),
+    }
+    if status == "cancelled":
+        asyncio.create_task(_fire_webhooks("booking.cancelled", wh_data))
+        await _log_sync("booking-engine", "outbound", "success", f"Booking {updated.get('booking_ref')} cancelled — webhook fired", updated.get("booking_ref", ""))
+    elif status == "confirmed":
+        asyncio.create_task(_fire_webhooks("booking.confirmed", wh_data))
+    
     return updated
 
 # Include the router in the main app
@@ -4073,6 +3886,20 @@ async def get_payment_status(session_id: str, request: Request):
                 {"id": booking_id},
                 {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
             )
+            # Fire payment webhook
+            paid_booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+            if paid_booking:
+                asyncio.create_task(_fire_webhooks("booking.payment_received", {
+                    "booking_ref": paid_booking.get("booking_ref"),
+                    "property_id": paid_booking.get("property_id"),
+                    "guest_name": paid_booking.get("guest_name"),
+                    "guest_email": paid_booking.get("guest_email"),
+                    "total_price": paid_booking.get("total_price"),
+                    "currency": paid_booking.get("currency"),
+                    "payment_method": "stripe",
+                    "paid_at": datetime.now(timezone.utc).isoformat(),
+                }))
+                await _log_sync("booking-engine", "outbound", "success", f"Payment received for {paid_booking.get('booking_ref')} — webhook fired", paid_booking.get("booking_ref", ""))
     elif checkout_status.status == "expired":
         booking_id = existing.get("booking_id") if existing else checkout_status.metadata.get("booking_id")
         if booking_id:

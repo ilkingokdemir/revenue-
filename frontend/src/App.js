@@ -14,6 +14,7 @@ import { BrandingPanel } from "./components/dashboard/BrandingPanel";
 import { SyncLogPanel } from "./components/dashboard/SyncLogPanel";
 import { PropertyMappingPanel } from "./components/dashboard/PropertyMappingPanel";
 import { BookingEnginePanel } from "./components/dashboard/BookingEnginePanel";
+import { TemplateGallery } from "./components/dashboard/TemplateGallery";
 import {
   Star,
   CheckCircle,
@@ -74,7 +75,8 @@ import {
   ArrowSquareOut,
   Code,
   CopySimple,
-  Bed
+  Bed,
+  Layout
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2430,6 +2432,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Settings",
       items: [
         { id: "booking", icon: Bed, name: "Booking Engine", testId: "booking-engine-btn" },
+        { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
         { id: "alerts", icon: Bell, name: "Alerts", testId: "notification-settings-btn" },
         { id: "reports", icon: CalendarBlank, name: "Reports", testId: "reports-btn" },
         { id: "mapping", icon: Buildings, name: "Property Mapping", testId: "property-mapping-btn" },
@@ -2683,6 +2686,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Booking Engine View */}
         {activeView === "booking" && (
           <BookingEnginePanel properties={properties} />
+        )}
+
+        {/* Templates Gallery View */}
+        {activeView === "website-templates" && (
+          <TemplateGallery properties={properties} />
         )}
       </main>
 

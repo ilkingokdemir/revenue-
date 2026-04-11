@@ -352,6 +352,11 @@ export function StockManagementPanel({ properties, activePropertyId }) {
   const [newMovement, setNewMovement] = useState({ product_id: "", movement_type: "purchase", quantity: 0, outlet: "", notes: "" });
   const [newRecipe, setNewRecipe] = useState({ name: "", outlet: "restaurant", sell_price: 0, ingredients: [] });
 
+  const [showCatalog, setShowCatalog] = useState(false);
+  const [catalog, setCatalog] = useState(null);
+  const [selectedCatalogItems, setSelectedCatalogItems] = useState([]);
+  const [catalogFilter, setCatalogFilter] = useState("all");
+
   const propertyId = activePropertyId && activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "city-gate");
 
   const fetchData = useCallback(async () => {
@@ -396,6 +401,28 @@ export function StockManagementPanel({ properties, activePropertyId }) {
   };
   const runVariance = async () => { await axios.post(`${API}/stock/variance/${propertyId}`); fetchData(); };
 
+  const openCatalog = async () => {
+    const res = await axios.get(`${API}/stock/catalog`);
+    setCatalog(res.data);
+    setSelectedCatalogItems([]);
+    setCatalogFilter("all");
+    setShowCatalog(true);
+  };
+  const toggleCatalogItem = (name) => {
+    setSelectedCatalogItems(prev => prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]);
+  };
+  const addSelectedFromCatalog = async () => {
+    if (selectedCatalogItems.length === 0) return;
+    await axios.post(`${API}/stock/catalog/add`, { property_id: propertyId, products: selectedCatalogItems });
+    setShowCatalog(false);
+    fetchData();
+  };
+  const addAllCategory = async (category) => {
+    await axios.post(`${API}/stock/catalog/add-all`, { property_id: propertyId, category });
+    setShowCatalog(false);
+    fetchData();
+  };
+
   const TABS = [
     { id: "products", label: "Products", icon: Package },
     { id: "recipes", label: "Recipes", icon: ForkKnife },
@@ -420,6 +447,9 @@ export function StockManagementPanel({ properties, activePropertyId }) {
           <p className="text-sm text-stone-500 mt-0.5">F&B inventory, recipes, cost control & theft prevention</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={openCatalog} className="text-xs px-3 py-1.5 bg-violet-50 text-violet-700 rounded-lg hover:bg-violet-100 font-medium" data-testid="browse-catalog-btn">
+            <Package size={12} className="inline mr-1" /> Browse Catalog
+          </button>
           <button onClick={() => setShowMovement(true)} className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium" data-testid="record-movement-btn">
             <ShoppingCart size={12} className="inline mr-1" /> Record Movement
           </button>
@@ -668,6 +698,48 @@ export function StockManagementPanel({ properties, activePropertyId }) {
               <Input type="number" placeholder="Sell price" value={newRecipe.sell_price || ""} onChange={e => setNewRecipe(p => ({...p, sell_price: parseFloat(e.target.value) || 0}))} />
             </div>
             <button onClick={addRecipe} className="w-full text-xs py-2 bg-emerald-500 text-white rounded-lg font-medium" data-testid="save-recipe">Save Recipe</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Browse Catalog Dialog */}
+      <Dialog open={showCatalog} onOpenChange={setShowCatalog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Product Catalog ({catalog?.total || 0} items)</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-1 flex-wrap">
+              <button onClick={() => setCatalogFilter("all")} className={`text-[10px] px-2 py-1 rounded-lg ${catalogFilter === "all" ? "bg-violet-500 text-white" : "bg-stone-100 text-stone-600"}`}>All</button>
+              {catalog && Object.keys(catalog.categories || {}).map(cat => (
+                <button key={cat} onClick={() => setCatalogFilter(cat)} className={`text-[10px] px-2 py-1 rounded-lg capitalize ${catalogFilter === cat ? "bg-violet-500 text-white" : "bg-stone-100 text-stone-600"}`}>
+                  {cat.replace(/_/g, " ")}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={addSelectedFromCatalog} disabled={selectedCatalogItems.length === 0}
+                className="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-medium disabled:opacity-40" data-testid="add-selected-catalog">
+                Add Selected ({selectedCatalogItems.length})
+              </button>
+              {catalogFilter !== "all" && (
+                <button onClick={() => addAllCategory(catalogFilter)} className="text-xs px-3 py-1.5 bg-violet-500 text-white rounded-lg font-medium" data-testid="add-all-category">
+                  Add All {catalogFilter.replace(/_/g, " ")}
+                </button>
+              )}
+            </div>
+            {catalog && Object.entries(catalog.categories || {}).filter(([cat]) => catalogFilter === "all" || cat === catalogFilter).map(([cat, items]) => (
+              <div key={cat}>
+                <div className="text-xs font-semibold text-stone-700 capitalize mb-1.5 mt-2">{cat.replace(/_/g, " ")} ({items.length})</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                  {items.map(item => (
+                    <button key={item.name} onClick={() => toggleCatalogItem(item.name)}
+                      className={`text-left p-2 rounded-lg border text-xs transition-all ${selectedCatalogItems.includes(item.name) ? "border-violet-300 bg-violet-50 ring-1 ring-violet-200" : "border-stone-200 hover:border-stone-300"}`}>
+                      <div className="font-medium text-stone-800">{item.name}</div>
+                      <div className="text-[10px] text-stone-400">£{item.cost_price}/{item.unit}{item.expiry_days ? ` · ${item.expiry_days}d shelf` : ""}{item.allergens?.length ? ` · ${item.allergens.join(",")}` : ""}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </DialogContent>
       </Dialog>

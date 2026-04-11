@@ -16,6 +16,204 @@ logger = logging.getLogger(__name__)
 def create_stock_router(db, require_roles):
     router = APIRouter()
 
+    # === Pre-Built Product Catalog ===
+
+    PRODUCT_CATALOG = [
+        # === SPIRITS ===
+        {"name": "Vodka (Absolut)", "category": "spirits", "unit": "bottles", "cost_price": 18.50, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Vodka (Grey Goose)", "category": "spirits", "unit": "bottles", "cost_price": 32.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "Gin (Bombay Sapphire)", "category": "spirits", "unit": "bottles", "cost_price": 20.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Gin (Hendrick's)", "category": "spirits", "unit": "bottles", "cost_price": 28.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "Rum (Bacardi White)", "category": "spirits", "unit": "bottles", "cost_price": 15.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Rum (Captain Morgan)", "category": "spirits", "unit": "bottles", "cost_price": 16.50, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Whisky (Jack Daniel's)", "category": "spirits", "unit": "bottles", "cost_price": 22.00, "reorder_level": 4, "storage_temp": "ambient"},
+        {"name": "Whisky (Johnnie Walker Black)", "category": "spirits", "unit": "bottles", "cost_price": 28.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "Whisky (Glenfiddich 12yr)", "category": "spirits", "unit": "bottles", "cost_price": 35.00, "reorder_level": 2, "storage_temp": "ambient"},
+        {"name": "Tequila (Jose Cuervo)", "category": "spirits", "unit": "bottles", "cost_price": 18.00, "reorder_level": 4, "storage_temp": "ambient"},
+        {"name": "Tequila (Patron Silver)", "category": "spirits", "unit": "bottles", "cost_price": 38.00, "reorder_level": 2, "storage_temp": "ambient"},
+        {"name": "Brandy (Hennessy VS)", "category": "spirits", "unit": "bottles", "cost_price": 30.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "Amaretto (Disaronno)", "category": "spirits", "unit": "bottles", "cost_price": 18.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "Triple Sec (Cointreau)", "category": "spirits", "unit": "bottles", "cost_price": 22.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "Baileys Irish Cream", "category": "spirits", "unit": "bottles", "cost_price": 16.00, "reorder_level": 4, "storage_temp": "chilled"},
+        {"name": "Jägermeister", "category": "spirits", "unit": "bottles", "cost_price": 17.00, "reorder_level": 3, "storage_temp": "ambient"},
+        # === WINE ===
+        {"name": "House Red Wine", "category": "wine", "unit": "bottles", "cost_price": 5.50, "reorder_level": 20, "storage_temp": "ambient"},
+        {"name": "House White Wine", "category": "wine", "unit": "bottles", "cost_price": 5.50, "reorder_level": 20, "storage_temp": "chilled"},
+        {"name": "Rosé Wine", "category": "wine", "unit": "bottles", "cost_price": 6.00, "reorder_level": 15, "storage_temp": "chilled"},
+        {"name": "Prosecco", "category": "wine", "unit": "bottles", "cost_price": 7.00, "reorder_level": 15, "storage_temp": "chilled"},
+        {"name": "Champagne (Moët)", "category": "wine", "unit": "bottles", "cost_price": 35.00, "reorder_level": 5, "storage_temp": "chilled"},
+        {"name": "Pinot Grigio", "category": "wine", "unit": "bottles", "cost_price": 6.50, "reorder_level": 12, "storage_temp": "chilled"},
+        {"name": "Sauvignon Blanc", "category": "wine", "unit": "bottles", "cost_price": 7.00, "reorder_level": 12, "storage_temp": "chilled"},
+        {"name": "Merlot", "category": "wine", "unit": "bottles", "cost_price": 6.50, "reorder_level": 12, "storage_temp": "ambient"},
+        {"name": "Cabernet Sauvignon", "category": "wine", "unit": "bottles", "cost_price": 8.00, "reorder_level": 10, "storage_temp": "ambient"},
+        # === BEER ===
+        {"name": "Lager (Heineken)", "category": "beer", "unit": "cases", "cost_price": 18.00, "reorder_level": 10, "storage_temp": "chilled"},
+        {"name": "Lager (Peroni)", "category": "beer", "unit": "cases", "cost_price": 20.00, "reorder_level": 8, "storage_temp": "chilled"},
+        {"name": "Ale (London Pride)", "category": "beer", "unit": "cases", "cost_price": 22.00, "reorder_level": 5, "storage_temp": "chilled"},
+        {"name": "Craft IPA", "category": "beer", "unit": "cases", "cost_price": 28.00, "reorder_level": 4, "storage_temp": "chilled"},
+        {"name": "Non-Alcoholic Beer", "category": "beer", "unit": "cases", "cost_price": 15.00, "reorder_level": 5, "storage_temp": "chilled"},
+        {"name": "Guinness Draught Cans", "category": "beer", "unit": "cases", "cost_price": 24.00, "reorder_level": 5, "storage_temp": "chilled"},
+        # === SOFT DRINKS ===
+        {"name": "Coca-Cola 330ml", "category": "soft_drinks", "unit": "cases", "cost_price": 8.00, "reorder_level": 15, "storage_temp": "ambient"},
+        {"name": "Diet Coke 330ml", "category": "soft_drinks", "unit": "cases", "cost_price": 8.00, "reorder_level": 15, "storage_temp": "ambient"},
+        {"name": "Sprite 330ml", "category": "soft_drinks", "unit": "cases", "cost_price": 8.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Tonic Water (Fever-Tree)", "category": "soft_drinks", "unit": "cases", "cost_price": 14.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Soda Water", "category": "soft_drinks", "unit": "cases", "cost_price": 6.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Orange Juice (fresh)", "category": "soft_drinks", "unit": "l", "cost_price": 2.50, "reorder_level": 20, "expiry_days": 5, "storage_temp": "chilled"},
+        {"name": "Apple Juice", "category": "soft_drinks", "unit": "l", "cost_price": 2.00, "reorder_level": 15, "expiry_days": 7, "storage_temp": "chilled"},
+        {"name": "Cranberry Juice", "category": "soft_drinks", "unit": "l", "cost_price": 2.50, "reorder_level": 10, "storage_temp": "chilled"},
+        {"name": "Still Water (Evian) 500ml", "category": "soft_drinks", "unit": "cases", "cost_price": 6.00, "reorder_level": 20, "storage_temp": "ambient"},
+        {"name": "Sparkling Water (S.Pellegrino)", "category": "soft_drinks", "unit": "cases", "cost_price": 8.00, "reorder_level": 15, "storage_temp": "ambient"},
+        {"name": "Red Bull", "category": "soft_drinks", "unit": "cases", "cost_price": 18.00, "reorder_level": 5, "storage_temp": "chilled"},
+        {"name": "Ginger Beer", "category": "soft_drinks", "unit": "cases", "cost_price": 10.00, "reorder_level": 8, "storage_temp": "ambient"},
+        # === DAIRY ===
+        {"name": "Full Fat Milk", "category": "dairy", "unit": "l", "cost_price": 1.10, "reorder_level": 30, "expiry_days": 7, "storage_temp": "chilled"},
+        {"name": "Semi-Skimmed Milk", "category": "dairy", "unit": "l", "cost_price": 1.00, "reorder_level": 40, "expiry_days": 7, "storage_temp": "chilled"},
+        {"name": "Oat Milk", "category": "dairy", "unit": "l", "cost_price": 1.80, "reorder_level": 15, "expiry_days": 14, "storage_temp": "chilled"},
+        {"name": "Butter (unsalted)", "category": "dairy", "unit": "kg", "cost_price": 6.00, "reorder_level": 10, "expiry_days": 30, "storage_temp": "chilled"},
+        {"name": "Double Cream", "category": "dairy", "unit": "l", "cost_price": 3.50, "reorder_level": 10, "expiry_days": 5, "storage_temp": "chilled"},
+        {"name": "Cheddar Cheese", "category": "dairy", "unit": "kg", "cost_price": 8.00, "reorder_level": 5, "expiry_days": 21, "storage_temp": "chilled"},
+        {"name": "Parmesan Cheese", "category": "dairy", "unit": "kg", "cost_price": 16.00, "reorder_level": 3, "storage_temp": "chilled"},
+        {"name": "Greek Yoghurt", "category": "dairy", "unit": "kg", "cost_price": 4.00, "reorder_level": 8, "expiry_days": 14, "storage_temp": "chilled"},
+        {"name": "Eggs (free range)", "category": "dairy", "unit": "cases", "cost_price": 8.00, "reorder_level": 10, "expiry_days": 21, "storage_temp": "chilled"},
+        # === MEAT & FISH ===
+        {"name": "Chicken Breast", "category": "meat", "unit": "kg", "cost_price": 7.50, "reorder_level": 15, "expiry_days": 3, "yield_pct": 85, "storage_temp": "chilled", "allergens": []},
+        {"name": "Chicken Thighs", "category": "meat", "unit": "kg", "cost_price": 5.00, "reorder_level": 10, "expiry_days": 3, "yield_pct": 75, "storage_temp": "chilled"},
+        {"name": "Beef Sirloin Steak", "category": "meat", "unit": "kg", "cost_price": 22.00, "reorder_level": 5, "expiry_days": 3, "yield_pct": 90, "storage_temp": "chilled"},
+        {"name": "Beef Mince", "category": "meat", "unit": "kg", "cost_price": 8.00, "reorder_level": 10, "expiry_days": 2, "yield_pct": 80, "storage_temp": "chilled"},
+        {"name": "Lamb Rack", "category": "meat", "unit": "kg", "cost_price": 25.00, "reorder_level": 3, "expiry_days": 3, "yield_pct": 70, "storage_temp": "chilled"},
+        {"name": "Pork Belly", "category": "meat", "unit": "kg", "cost_price": 9.00, "reorder_level": 5, "expiry_days": 3, "yield_pct": 75, "storage_temp": "chilled"},
+        {"name": "Salmon Fillet", "category": "meat", "unit": "kg", "cost_price": 18.00, "reorder_level": 5, "expiry_days": 2, "yield_pct": 85, "storage_temp": "chilled", "allergens": ["fish"]},
+        {"name": "Cod Fillet", "category": "meat", "unit": "kg", "cost_price": 14.00, "reorder_level": 5, "expiry_days": 2, "yield_pct": 80, "storage_temp": "chilled", "allergens": ["fish"]},
+        {"name": "King Prawns", "category": "meat", "unit": "kg", "cost_price": 16.00, "reorder_level": 3, "expiry_days": 2, "yield_pct": 60, "storage_temp": "frozen", "allergens": ["shellfish"]},
+        {"name": "Smoked Salmon", "category": "meat", "unit": "kg", "cost_price": 28.00, "reorder_level": 3, "expiry_days": 5, "storage_temp": "chilled", "allergens": ["fish"]},
+        {"name": "Bacon (streaky)", "category": "meat", "unit": "kg", "cost_price": 7.00, "reorder_level": 10, "expiry_days": 7, "storage_temp": "chilled"},
+        {"name": "Sausages (pork)", "category": "meat", "unit": "kg", "cost_price": 6.00, "reorder_level": 8, "expiry_days": 5, "storage_temp": "chilled"},
+        # === PRODUCE ===
+        {"name": "Tomatoes", "category": "produce", "unit": "kg", "cost_price": 2.50, "reorder_level": 10, "expiry_days": 5, "storage_temp": "chilled"},
+        {"name": "Onions", "category": "produce", "unit": "kg", "cost_price": 1.00, "reorder_level": 15, "expiry_days": 14, "storage_temp": "ambient"},
+        {"name": "Garlic", "category": "produce", "unit": "kg", "cost_price": 5.00, "reorder_level": 3, "expiry_days": 21, "storage_temp": "ambient"},
+        {"name": "Potatoes", "category": "produce", "unit": "kg", "cost_price": 0.80, "reorder_level": 25, "expiry_days": 14, "yield_pct": 85, "storage_temp": "ambient"},
+        {"name": "Mixed Salad Leaves", "category": "produce", "unit": "kg", "cost_price": 6.00, "reorder_level": 5, "expiry_days": 3, "storage_temp": "chilled"},
+        {"name": "Lemons", "category": "produce", "unit": "kg", "cost_price": 3.00, "reorder_level": 5, "expiry_days": 10, "storage_temp": "chilled"},
+        {"name": "Limes", "category": "produce", "unit": "kg", "cost_price": 4.00, "reorder_level": 5, "expiry_days": 10, "storage_temp": "chilled"},
+        {"name": "Fresh Herbs (mixed)", "category": "produce", "unit": "packs", "cost_price": 1.50, "reorder_level": 10, "expiry_days": 3, "storage_temp": "chilled"},
+        {"name": "Mushrooms", "category": "produce", "unit": "kg", "cost_price": 4.00, "reorder_level": 5, "expiry_days": 3, "storage_temp": "chilled"},
+        {"name": "Avocados", "category": "produce", "unit": "pcs", "cost_price": 0.80, "reorder_level": 20, "expiry_days": 4, "storage_temp": "ambient"},
+        {"name": "Berries (mixed)", "category": "produce", "unit": "kg", "cost_price": 10.00, "reorder_level": 3, "expiry_days": 3, "storage_temp": "chilled"},
+        {"name": "Bananas", "category": "produce", "unit": "kg", "cost_price": 1.20, "reorder_level": 10, "expiry_days": 5, "storage_temp": "ambient"},
+        # === DRY GOODS ===
+        {"name": "Olive Oil (Extra Virgin)", "category": "dry_goods", "unit": "l", "cost_price": 8.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Vegetable Oil", "category": "dry_goods", "unit": "l", "cost_price": 2.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Basmati Rice", "category": "dry_goods", "unit": "kg", "cost_price": 2.50, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Pasta (Penne)", "category": "dry_goods", "unit": "kg", "cost_price": 1.50, "reorder_level": 10, "storage_temp": "ambient", "allergens": ["gluten"]},
+        {"name": "Pasta (Spaghetti)", "category": "dry_goods", "unit": "kg", "cost_price": 1.50, "reorder_level": 10, "storage_temp": "ambient", "allergens": ["gluten"]},
+        {"name": "Plain Flour", "category": "dry_goods", "unit": "kg", "cost_price": 0.80, "reorder_level": 10, "storage_temp": "ambient", "allergens": ["gluten"]},
+        {"name": "Sugar (caster)", "category": "dry_goods", "unit": "kg", "cost_price": 1.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Salt (Maldon)", "category": "dry_goods", "unit": "kg", "cost_price": 6.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "Black Pepper", "category": "dry_goods", "unit": "kg", "cost_price": 12.00, "reorder_level": 2, "storage_temp": "ambient"},
+        {"name": "Tinned Tomatoes", "category": "dry_goods", "unit": "cases", "cost_price": 6.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Soy Sauce", "category": "dry_goods", "unit": "l", "cost_price": 3.00, "reorder_level": 5, "storage_temp": "ambient", "allergens": ["soy"]},
+        {"name": "Balsamic Vinegar", "category": "dry_goods", "unit": "bottles", "cost_price": 5.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "Bread (white loaves)", "category": "dry_goods", "unit": "pcs", "cost_price": 1.20, "reorder_level": 15, "expiry_days": 3, "storage_temp": "ambient", "allergens": ["gluten"]},
+        {"name": "Bread (sourdough)", "category": "dry_goods", "unit": "pcs", "cost_price": 2.50, "reorder_level": 10, "expiry_days": 3, "storage_temp": "ambient", "allergens": ["gluten"]},
+        {"name": "Croissants", "category": "dry_goods", "unit": "pcs", "cost_price": 0.60, "reorder_level": 20, "expiry_days": 2, "storage_temp": "ambient", "allergens": ["gluten", "dairy"]},
+        # === COFFEE & TEA ===
+        {"name": "Coffee Beans (espresso)", "category": "beverage", "unit": "kg", "cost_price": 18.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Decaf Coffee Beans", "category": "beverage", "unit": "kg", "cost_price": 20.00, "reorder_level": 3, "storage_temp": "ambient"},
+        {"name": "English Breakfast Tea", "category": "beverage", "unit": "packs", "cost_price": 3.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Earl Grey Tea", "category": "beverage", "unit": "packs", "cost_price": 3.50, "reorder_level": 8, "storage_temp": "ambient"},
+        {"name": "Green Tea", "category": "beverage", "unit": "packs", "cost_price": 4.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Hot Chocolate Powder", "category": "beverage", "unit": "kg", "cost_price": 8.00, "reorder_level": 3, "storage_temp": "ambient", "allergens": ["dairy"]},
+        # === CLEANING & HOUSEKEEPING ===
+        {"name": "All-Purpose Cleaner (5L)", "category": "cleaning", "unit": "pcs", "cost_price": 4.50, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Glass Cleaner (5L)", "category": "cleaning", "unit": "pcs", "cost_price": 5.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Bathroom Disinfectant (5L)", "category": "cleaning", "unit": "pcs", "cost_price": 6.00, "reorder_level": 8, "storage_temp": "ambient"},
+        {"name": "Bleach (5L)", "category": "cleaning", "unit": "pcs", "cost_price": 3.00, "reorder_level": 8, "storage_temp": "ambient"},
+        {"name": "Floor Cleaner (5L)", "category": "cleaning", "unit": "pcs", "cost_price": 5.50, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Laundry Detergent (10kg)", "category": "cleaning", "unit": "pcs", "cost_price": 12.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Fabric Softener (5L)", "category": "cleaning", "unit": "pcs", "cost_price": 4.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Stain Remover", "category": "cleaning", "unit": "bottles", "cost_price": 3.50, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Hand Soap (bulk 5L)", "category": "cleaning", "unit": "pcs", "cost_price": 4.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Toilet Paper (48 rolls)", "category": "cleaning", "unit": "packs", "cost_price": 15.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Paper Towels (6 rolls)", "category": "cleaning", "unit": "packs", "cost_price": 6.00, "reorder_level": 8, "storage_temp": "ambient"},
+        {"name": "Facial Tissues (box)", "category": "cleaning", "unit": "pcs", "cost_price": 1.20, "reorder_level": 30, "storage_temp": "ambient"},
+        {"name": "Bin Bags (200 pack)", "category": "cleaning", "unit": "packs", "cost_price": 8.00, "reorder_level": 5, "storage_temp": "ambient"},
+        {"name": "Disposable Gloves (box)", "category": "cleaning", "unit": "pcs", "cost_price": 5.00, "reorder_level": 10, "storage_temp": "ambient"},
+        # === GUEST AMENITIES ===
+        {"name": "Shampoo (guest size 30ml)", "category": "supplies", "unit": "pcs", "cost_price": 0.35, "reorder_level": 100, "storage_temp": "ambient"},
+        {"name": "Conditioner (guest size 30ml)", "category": "supplies", "unit": "pcs", "cost_price": 0.35, "reorder_level": 100, "storage_temp": "ambient"},
+        {"name": "Body Wash (guest size 30ml)", "category": "supplies", "unit": "pcs", "cost_price": 0.30, "reorder_level": 100, "storage_temp": "ambient"},
+        {"name": "Body Lotion (guest size)", "category": "supplies", "unit": "pcs", "cost_price": 0.30, "reorder_level": 80, "storage_temp": "ambient"},
+        {"name": "Soap Bar (wrapped)", "category": "supplies", "unit": "pcs", "cost_price": 0.20, "reorder_level": 100, "storage_temp": "ambient"},
+        {"name": "Shower Cap", "category": "supplies", "unit": "pcs", "cost_price": 0.08, "reorder_level": 100, "storage_temp": "ambient"},
+        {"name": "Dental Kit", "category": "supplies", "unit": "pcs", "cost_price": 0.25, "reorder_level": 50, "storage_temp": "ambient"},
+        {"name": "Shaving Kit", "category": "supplies", "unit": "pcs", "cost_price": 0.30, "reorder_level": 50, "storage_temp": "ambient"},
+        {"name": "Sewing Kit", "category": "supplies", "unit": "pcs", "cost_price": 0.20, "reorder_level": 50, "storage_temp": "ambient"},
+        {"name": "Vanity Kit (cotton buds/pads)", "category": "supplies", "unit": "pcs", "cost_price": 0.15, "reorder_level": 80, "storage_temp": "ambient"},
+        {"name": "Guest Slippers (pair)", "category": "supplies", "unit": "pcs", "cost_price": 0.80, "reorder_level": 50, "storage_temp": "ambient"},
+        {"name": "Bathrobe", "category": "supplies", "unit": "pcs", "cost_price": 12.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Laundry Bag", "category": "supplies", "unit": "pcs", "cost_price": 0.10, "reorder_level": 100, "storage_temp": "ambient"},
+        {"name": "Do Not Disturb Sign", "category": "supplies", "unit": "pcs", "cost_price": 0.15, "reorder_level": 50, "storage_temp": "ambient"},
+        # === MAINTENANCE ===
+        {"name": "Light Bulbs (LED)", "category": "supplies", "unit": "pcs", "cost_price": 2.50, "reorder_level": 20, "storage_temp": "ambient"},
+        {"name": "Batteries (AA pack)", "category": "supplies", "unit": "packs", "cost_price": 3.00, "reorder_level": 10, "storage_temp": "ambient"},
+        {"name": "Air Freshener", "category": "supplies", "unit": "pcs", "cost_price": 2.00, "reorder_level": 20, "storage_temp": "ambient"},
+    ]
+
+    @router.get("/stock/catalog")
+    async def get_product_catalog(current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Pre-built product catalog — browse and add with one click"""
+        categories = {}
+        for p in PRODUCT_CATALOG:
+            cat = p["category"]
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(p)
+        return {"categories": categories, "total": len(PRODUCT_CATALOG)}
+
+    @router.post("/stock/catalog/add")
+    async def add_from_catalog(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Add products from catalog to a property's inventory"""
+        from models import StockProduct
+        property_id = data.get("property_id", "")
+        product_names = data.get("products", [])
+        added = 0
+        skipped = 0
+        for catalog_item in PRODUCT_CATALOG:
+            if catalog_item["name"] in product_names:
+                existing = await db.stock_products.find_one({"property_id": property_id, "name": catalog_item["name"]}, {"_id": 0})
+                if existing:
+                    skipped += 1
+                    continue
+                prod = StockProduct(property_id=property_id, **catalog_item)
+                doc = prod.model_dump()
+                await db.stock_products.insert_one(doc)
+                added += 1
+        if added > 0:
+            await log_sync(db, "stock", "internal", "success", f"Added {added} products from catalog", property_id)
+        return {"message": f"Added {added} products, skipped {skipped} (already exist)", "added": added, "skipped": skipped}
+
+    @router.post("/stock/catalog/add-all")
+    async def add_all_from_catalog(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Add ALL products from catalog at once"""
+        from models import StockProduct
+        property_id = data.get("property_id", "")
+        category = data.get("category", "")
+        items = PRODUCT_CATALOG if not category else [p for p in PRODUCT_CATALOG if p["category"] == category]
+        added = 0
+        for catalog_item in items:
+            existing = await db.stock_products.find_one({"property_id": property_id, "name": catalog_item["name"]}, {"_id": 0})
+            if existing:
+                continue
+            prod = StockProduct(property_id=property_id, **catalog_item)
+            doc = prod.model_dump()
+            await db.stock_products.insert_one(doc)
+            added += 1
+        if added > 0:
+            await log_sync(db, "stock", "internal", "success", f"Bulk added {added} catalog products (cat: {category or 'all'})", property_id)
+        return {"message": f"Added {added} products from catalog", "added": added}
+
     # === Products ===
 
     @router.get("/stock/products/{property_id}")

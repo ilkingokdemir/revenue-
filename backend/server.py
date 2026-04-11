@@ -35,6 +35,11 @@ from models import (
     RoomType, RoomTypeCreate, RoomTypeUpdate, Booking, BookingCreate,
     InboundReviewPayload,
     TemplateSettings, TemplateSettingsUpdate,
+    AMENITY_CATALOG, FACILITY_CATALOG,
+    PromoCode, PromoCodeCreate,
+    AddOnService, AddOnServiceCreate,
+    HotelPolicies, HotelPoliciesUpdate,
+    PropertyFacilities,
 )
 from database import db, client
 from auth import (
@@ -3408,6 +3413,176 @@ async def get_property_by_external_id(external_id: str):
 
 # --- Template Customization ---
 
+# ==================== AMENITY & FACILITY CATALOGS ====================
+
+@api_router.get("/amenities/catalog")
+async def get_amenity_catalog():
+    """Public: Get the full categorized amenity catalog"""
+    return AMENITY_CATALOG
+
+@api_router.get("/facilities/catalog")
+async def get_facility_catalog():
+    """Public: Get the full categorized facility catalog"""
+    return FACILITY_CATALOG
+
+# ==================== PROPERTY FACILITIES ====================
+
+@api_router.get("/property-facilities/{property_id}")
+async def get_property_facilities(property_id: str):
+    """Public: Get property facilities"""
+    doc = await db.property_facilities.find_one({"property_id": property_id}, {"_id": 0})
+    return doc or {"property_id": property_id, "facilities": []}
+
+@api_router.put("/property-facilities/{property_id}")
+async def save_property_facilities(property_id: str, facilities: List[str], current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Save property facilities"""
+    existing = await db.property_facilities.find_one({"property_id": property_id})
+    data = {"facilities": facilities, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if existing:
+        await db.property_facilities.update_one({"property_id": property_id}, {"$set": data})
+    else:
+        data["property_id"] = property_id
+        data["id"] = str(uuid.uuid4())
+        await db.property_facilities.insert_one(data)
+    result = await db.property_facilities.find_one({"property_id": property_id}, {"_id": 0})
+    return result
+
+# ==================== HOTEL POLICIES ====================
+
+@api_router.get("/hotel-policies/{property_id}")
+async def get_hotel_policies(property_id: str):
+    """Public: Get hotel policies"""
+    doc = await db.hotel_policies.find_one({"property_id": property_id}, {"_id": 0})
+    if doc:
+        return doc
+    return HotelPolicies(property_id=property_id).model_dump()
+
+@api_router.put("/hotel-policies/{property_id}")
+async def save_hotel_policies(property_id: str, update: HotelPoliciesUpdate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Save hotel policies"""
+    existing = await db.hotel_policies.find_one({"property_id": property_id})
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    if existing:
+        await db.hotel_policies.update_one({"property_id": property_id}, {"$set": update_data})
+    else:
+        pol = HotelPolicies(property_id=property_id, **update_data)
+        doc = pol.model_dump()
+        await db.hotel_policies.insert_one(doc)
+        doc.pop("_id", None)
+    result = await db.hotel_policies.find_one({"property_id": property_id}, {"_id": 0})
+    return result
+
+# ==================== PROMO CODES ====================
+
+@api_router.get("/promo-codes")
+async def list_promo_codes(property_id: str = "", current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: List promo codes"""
+    q = {"property_id": property_id} if property_id else {}
+    codes = await db.promo_codes.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return codes
+
+@api_router.post("/promo-codes")
+async def create_promo_code(data: PromoCodeCreate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Create promo code"""
+    existing = await db.promo_codes.find_one({"code": data.code.upper()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Promo code already exists")
+    promo_data = data.model_dump()
+    promo_data["code"] = data.code.upper()
+    promo = PromoCode(**promo_data)
+    doc = promo.model_dump()
+    await db.promo_codes.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.delete("/promo-codes/{code_id}")
+async def delete_promo_code(code_id: str, current_user: dict = Depends(require_roles("admin"))):
+    """Admin: Delete promo code"""
+    await db.promo_codes.delete_one({"id": code_id})
+    return {"status": "deleted"}
+
+@api_router.put("/promo-codes/{code_id}/toggle")
+async def toggle_promo_code(code_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Toggle promo code active status"""
+    code = await db.promo_codes.find_one({"id": code_id})
+    if not code:
+        raise HTTPException(status_code=404, detail="Promo code not found")
+    new_status = not code.get("is_active", True)
+    await db.promo_codes.update_one({"id": code_id}, {"$set": {"is_active": new_status}})
+    return {"is_active": new_status}
+
+@api_router.post("/promo-codes/validate")
+async def validate_promo_code(code: str, property_id: str = "", nights: int = 1, subtotal: float = 0):
+    """Public: Validate a promo code"""
+    promo = await db.promo_codes.find_one({"code": code.upper(), "is_active": True}, {"_id": 0})
+    if not promo:
+        raise HTTPException(status_code=404, detail="Invalid or expired promo code")
+    if promo.get("property_id") and promo["property_id"] != property_id:
+        raise HTTPException(status_code=400, detail="This code is not valid for this property")
+    if promo.get("max_uses") and promo.get("used_count", 0) >= promo["max_uses"]:
+        raise HTTPException(status_code=400, detail="This code has reached its usage limit")
+    if promo.get("min_nights") and nights < promo["min_nights"]:
+        raise HTTPException(status_code=400, detail=f"Minimum {promo['min_nights']} nights required")
+    if promo.get("min_amount") and subtotal < promo["min_amount"]:
+        raise HTTPException(status_code=400, detail=f"Minimum spend of {promo['min_amount']} required")
+    now = datetime.now(timezone.utc).isoformat()
+    if promo.get("valid_from") and now < promo["valid_from"]:
+        raise HTTPException(status_code=400, detail="This code is not yet active")
+    if promo.get("valid_until") and now > promo["valid_until"]:
+        raise HTTPException(status_code=400, detail="This code has expired")
+    discount = promo["discount_value"] if promo["discount_type"] == "fixed" else round(subtotal * promo["discount_value"] / 100, 2)
+    return {
+        "valid": True,
+        "code": promo["code"],
+        "description": promo.get("description", ""),
+        "discount_type": promo["discount_type"],
+        "discount_value": promo["discount_value"],
+        "discount_amount": min(discount, subtotal),
+    }
+
+# ==================== ADD-ON SERVICES ====================
+
+@api_router.get("/add-ons/{property_id}")
+async def get_add_ons(property_id: str):
+    """Public: Get add-on services for a property"""
+    addons = await db.add_on_services.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(50)
+    return addons
+
+@api_router.get("/add-ons")
+async def list_all_add_ons(property_id: str = "", current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: List all add-ons"""
+    q = {"property_id": property_id} if property_id else {}
+    addons = await db.add_on_services.find(q, {"_id": 0}).to_list(200)
+    return addons
+
+@api_router.post("/add-ons")
+async def create_add_on(data: AddOnServiceCreate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Create add-on service"""
+    addon = AddOnService(**data.model_dump())
+    doc = addon.model_dump()
+    await db.add_on_services.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+@api_router.delete("/add-ons/{addon_id}")
+async def delete_add_on(addon_id: str, current_user: dict = Depends(require_roles("admin"))):
+    """Admin: Delete add-on service"""
+    await db.add_on_services.delete_one({"id": addon_id})
+    return {"status": "deleted"}
+
+@api_router.put("/add-ons/{addon_id}/toggle")
+async def toggle_add_on(addon_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Toggle add-on active status"""
+    addon = await db.add_on_services.find_one({"id": addon_id})
+    if not addon:
+        raise HTTPException(status_code=404, detail="Add-on not found")
+    new_status = not addon.get("is_active", True)
+    await db.add_on_services.update_one({"id": addon_id}, {"$set": {"is_active": new_status}})
+    return {"is_active": new_status}
+
+# --- Template Settings ---
+
 @api_router.get("/template-settings/{property_id}")
 async def get_template_settings(property_id: str):
     """Public endpoint: Get template customization settings for a property"""
@@ -3458,6 +3633,18 @@ async def get_booking_property_info(property_id: str):
     # Get template customization
     template_settings = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
     
+    # Get property facilities
+    facilities_doc = await db.property_facilities.find_one({"property_id": property_id}, {"_id": 0})
+    facilities = facilities_doc.get("facilities", []) if facilities_doc else []
+    
+    # Get hotel policies
+    policies = await db.hotel_policies.find_one({"property_id": property_id}, {"_id": 0})
+    if not policies:
+        policies = HotelPolicies(property_id=property_id).model_dump()
+    
+    # Get add-on services
+    add_ons = await db.add_on_services.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(50)
+    
     # Get average rating from reviews
     reviews = await db.reviews.find({"property_id": property_id}, {"_id": 0, "rating": 1}).to_list(1000)
     if not reviews:
@@ -3473,6 +3660,9 @@ async def get_booking_property_info(property_id: str):
         **prop,
         "branding": branding,
         "template_settings": template_settings,
+        "facilities": facilities,
+        "policies": policies,
+        "add_ons": add_ons,
         "avg_rating": round(avg_rating, 1),
         "total_reviews": total_reviews,
         "room_types": rooms

@@ -1,9 +1,9 @@
 import {
   User, EnvelopeSimple, Phone, CreditCard, ShieldCheck,
-  Lock, Buildings, CheckCircle, Bed,
+  Lock, Buildings, CheckCircle, Bed, Tag, Plus, X, Sparkle,
 } from "@phosphor-icons/react";
 
-export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, nights, adults, children, roomCount, checkIn, checkOut }) {
+export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, nights, adults, children, roomCount, checkIn, checkOut }) {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="guest-details-step">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -25,7 +25,7 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
                     <Icon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input type={type} value={guestForm[field]} onChange={e => setGuestForm(p => ({ ...p, [field]: e.target.value }))}
                       placeholder={placeholder} className="w-full border border-gray-300 rounded-lg pl-10 pr-3 py-3 focus:ring-2 focus:border-transparent"
-                      style={{ "--tw-ring-color": t.colors.accent }} data-testid={testId} />
+                      data-testid={testId} />
                   </div>
                 </div>
               ))}
@@ -35,6 +35,62 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
                   placeholder="Any special requirements?" rows={3} className="w-full border border-gray-300 rounded-lg px-3 py-3 resize-none" data-testid="special-requests-input" />
               </div>
             </div>
+          </div>
+
+          {/* Add-on Services */}
+          {addOns?.length > 0 && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }} data-testid="addons-section">
+              <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2" style={{ fontFamily: t.fonts.heading }}>
+                <Sparkle size={22} style={{ color: t.colors.accent }} /> Enhance Your Stay
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {addOns.map(addon => {
+                  const isSelected = selectedAddOns.find(a => a.id === addon.id);
+                  return (
+                    <button key={addon.id} onClick={() => toggleAddOn(addon)}
+                      className="flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all"
+                      style={{ borderColor: isSelected ? t.colors.accent : "#e5e7eb", background: isSelected ? `${t.colors.accent}08` : "transparent", borderRadius: t.borderRadius }}
+                      data-testid={`addon-${addon.id}`}>
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: isSelected ? `${t.colors.accent}20` : "#f1f5f9" }}>
+                        {isSelected ? <CheckCircle size={16} weight="fill" style={{ color: t.colors.accent }} /> : <Plus size={14} className="text-slate-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-semibold text-slate-800 block">{addon.name}</span>
+                        {addon.description && <span className="text-xs text-slate-500 block truncate">{addon.description}</span>}
+                      </div>
+                      <span className="text-sm font-bold text-slate-800 flex-shrink-0">&pound;{addon.price}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Promo Code */}
+          <div className="bg-white rounded-lg border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }} data-testid="promo-section">
+            <h2 className="text-lg font-semibold text-slate-900 mb-3 flex items-center gap-2" style={{ fontFamily: t.fonts.heading }}>
+              <Tag size={20} style={{ color: t.colors.accent }} /> Promo Code
+            </h2>
+            <div className="flex gap-2">
+              <input value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())}
+                placeholder="Enter promo code" className="flex-1 border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono uppercase"
+                onKeyDown={e => e.key === "Enter" && applyPromo()} data-testid="promo-code-input" />
+              <button onClick={applyPromo} className="px-4 py-2.5 text-white rounded-lg text-sm font-semibold"
+                style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="apply-promo-btn">
+                Apply
+              </button>
+            </div>
+            {promoDiscount && (
+              <div className="flex items-center justify-between mt-3 px-3 py-2 rounded-lg" style={{ background: `${t.colors.success}10` }} data-testid="promo-applied">
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={16} weight="fill" style={{ color: t.colors.success }} />
+                  <span className="text-sm font-medium" style={{ color: t.colors.success }}>{promoDiscount.code} — {promoDiscount.description || `${promoDiscount.discount_value}${promoDiscount.discount_type === "percentage" ? "%" : "£"} off`}</span>
+                </div>
+                <button onClick={() => { setPromoDiscount(null); setPromoCode(""); }} className="text-slate-400 hover:text-slate-600" data-testid="remove-promo-btn">
+                  <X size={16} />
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Payment Method */}
@@ -82,14 +138,14 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
 
         {/* Booking Summary Sidebar */}
         <div className="lg:col-span-1">
-          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} />
+          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} />
         </div>
       </div>
     </div>
   );
 }
 
-function BookingSummary({ t, room, property, totalPrice, nights, adults, children, roomCount, checkIn, checkOut }) {
+function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, nights, adults, children, roomCount, checkIn, checkOut }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5 sticky top-20" style={{ borderRadius: t.borderRadius }} data-testid="booking-summary">
       <h3 className="font-semibold text-slate-900 mb-4" style={{ fontFamily: t.fonts.heading }}>Booking Summary</h3>
@@ -112,7 +168,16 @@ function BookingSummary({ t, room, property, totalPrice, nights, adults, childre
         ].map(([l, v]) => <div key={l} className="flex justify-between"><span className="text-slate-500">{l}</span><span className="font-medium text-slate-800">{v}</span></div>)}
       </div>
       <div className="space-y-2 text-sm mb-4 pb-4 border-b border-gray-100">
-        <div className="flex justify-between"><span className="text-slate-500">&pound;{room.base_price} x {nights} night{nights !== 1 ? "s" : ""}</span><span>&pound;{totalPrice.toFixed(0)}</span></div>
+        <div className="flex justify-between"><span className="text-slate-500">&pound;{room.base_price} x {nights} night{nights !== 1 ? "s" : ""}</span><span>&pound;{subtotal?.toFixed(0) || (room.base_price * nights * roomCount).toFixed(0)}</span></div>
+        {selectedAddOns?.length > 0 && selectedAddOns.map(ao => (
+          <div key={ao.id} className="flex justify-between text-xs"><span className="text-slate-500">{ao.name}</span><span>&pound;{ao.price}</span></div>
+        ))}
+        {discountAmount > 0 && (
+          <div className="flex justify-between" style={{ color: t.colors.success }}>
+            <span>Promo ({promoDiscount?.code})</span>
+            <span>-&pound;{discountAmount.toFixed(0)}</span>
+          </div>
+        )}
         <div className="flex justify-between"><span className="text-slate-500">Taxes & fees</span><span>Included</span></div>
       </div>
       <div className="flex justify-between items-baseline">

@@ -42,6 +42,9 @@ export default function BookingEngine() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [guestForm, setGuestForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" });
+  const [promoCode, setPromoCode] = useState("");
+  const [promoDiscount, setPromoDiscount] = useState(null);
+  const [selectedAddOns, setSelectedAddOns] = useState([]);
 
   // Merge template defaults with custom overrides
   const t = (() => {
@@ -103,7 +106,6 @@ export default function BookingEngine() {
         ]);
         setProperty(propRes.data);
         setReviews(revRes.data);
-        // Apply custom template settings if available
         if (propRes.data.template_settings && Object.keys(propRes.data.template_settings).length > 1) {
           setCustomSettings(propRes.data.template_settings);
         }
@@ -161,7 +163,33 @@ export default function BookingEngine() {
     return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
   })();
 
-  const totalPrice = selectedRoom ? selectedRoom.base_price * nights * roomCount : 0;
+  const addOnsTotal = selectedAddOns.reduce((sum, ao) => {
+    if (ao.price_type === "per_night") return sum + ao.price * nights;
+    if (ao.price_type === "per_person") return sum + ao.price * adults;
+    if (ao.price_type === "per_person_per_night") return sum + ao.price * adults * nights;
+    return sum + ao.price;
+  }, 0);
+
+  const subtotal = selectedRoom ? selectedRoom.base_price * nights * roomCount : 0;
+  const discountAmount = promoDiscount ? promoDiscount.discount_amount : 0;
+  const totalPrice = Math.max(0, subtotal + addOnsTotal - discountAmount);
+
+  const applyPromo = async () => {
+    if (!promoCode.trim()) return;
+    try {
+      const { data } = await axios.post(`${API}/promo-codes/validate?code=${promoCode}&property_id=${propertyId}&nights=${nights}&subtotal=${subtotal}`);
+      setPromoDiscount(data);
+    } catch (e) {
+      setPromoDiscount(null);
+      alert(e.response?.data?.detail || "Invalid promo code");
+    }
+  };
+
+  const toggleAddOn = (addon) => {
+    setSelectedAddOns(prev =>
+      prev.find(a => a.id === addon.id) ? prev.filter(a => a.id !== addon.id) : [...prev, addon]
+    );
+  };
 
   const handleBooking = async () => {
     if (!guestForm.guest_name || !guestForm.guest_email) return;
@@ -274,6 +302,58 @@ export default function BookingEngine() {
         <>
           <HeroSection t={t} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} searchProps={searchProps} />
           <RoomPreviewCards t={t} rooms={property?.room_types} searchRooms={searchRooms} />
+          {/* Facilities */}
+          {property?.facilities?.length > 0 && (
+            <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12" data-testid="facilities-section">
+              <h2 className="text-2xl font-semibold text-slate-900 mb-6" style={{ fontFamily: t.fonts.heading }}>Property Facilities</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                {property.facilities.map(f => (
+                  <div key={f} className="flex items-center gap-2 text-sm text-slate-700 bg-white border border-gray-200 rounded-lg px-3 py-2.5" style={{ borderRadius: t.borderRadius }}>
+                    <CheckCircle size={14} weight="fill" style={{ color: t.colors.success }} />
+                    <span>{f}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+          {/* Policies */}
+          {property?.policies && (
+            <section className="bg-white border-t border-gray-200 py-12" data-testid="policies-section">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <h2 className="text-2xl font-semibold text-slate-900 mb-6" style={{ fontFamily: t.fonts.heading }}>Hotel Policies</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="rounded-lg p-4" style={{ background: t.colors.bodyBg, borderRadius: t.borderRadius }}>
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">Check-in / Check-out</h3>
+                    <div className="text-sm text-slate-600 space-y-1">
+                      <p>Check-in: {property.policies.check_in_from} — {property.policies.check_in_until}</p>
+                      <p>Check-out: {property.policies.check_out_from} — {property.policies.check_out_until}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg p-4" style={{ background: t.colors.bodyBg, borderRadius: t.borderRadius }}>
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">Cancellation</h3>
+                    <p className="text-sm text-slate-600">
+                      {property.policies.cancellation_text || (property.policies.cancellation_policy === "free" ? "Free cancellation" : property.policies.cancellation_policy === "moderate" ? `Free cancellation up to ${property.policies.cancellation_hours}h before check-in` : "Non-refundable")}
+                    </p>
+                  </div>
+                  <div className="rounded-lg p-4" style={{ background: t.colors.bodyBg, borderRadius: t.borderRadius }}>
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">Good to Know</h3>
+                    <div className="text-sm text-slate-600 space-y-1">
+                      <p>{property.policies.children_policy}</p>
+                      <p>{property.policies.pet_policy}</p>
+                    </div>
+                  </div>
+                </div>
+                {property.policies.house_rules?.length > 0 && (
+                  <div className="mt-6 rounded-lg p-4" style={{ background: t.colors.bodyBg, borderRadius: t.borderRadius }}>
+                    <h3 className="font-semibold text-slate-800 text-sm mb-2">House Rules</h3>
+                    <ul className="text-sm text-slate-600 space-y-1 list-disc list-inside">
+                      {property.policies.house_rules.map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
           <ReviewsSection t={t} reviews={reviews} property={property} ratingScore={ratingScore} getRatingLabel={getRatingLabel} />
           <TrustFooter t={t} />
         </>
@@ -289,7 +369,10 @@ export default function BookingEngine() {
       {step === STEPS.DETAILS && selectedRoom && (
         <GuestDetailsStep t={t} selectedRoom={selectedRoom} property={property} guestForm={guestForm} setGuestForm={setGuestForm}
           paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} onBook={handleBooking} bookingLoading={bookingLoading}
-          totalPrice={totalPrice} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} />
+          totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount}
+          promoCode={promoCode} setPromoCode={setPromoCode} promoDiscount={promoDiscount} applyPromo={applyPromo} setPromoDiscount={setPromoDiscount}
+          addOns={property?.add_ons || []} selectedAddOns={selectedAddOns} toggleAddOn={toggleAddOn}
+          nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} />
       )}
 
       {/* Step 3: Payment Processing */}

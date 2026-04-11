@@ -460,3 +460,283 @@ class TemplateSettingsUpdate(BaseModel):
     tripadvisor_url: Optional[str] = None
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
+
+
+
+# ==================== AMENITY CATALOG ====================
+
+AMENITY_CATALOG = {
+    "bathroom": {
+        "label": "Bathroom",
+        "items": [
+            "En-suite bathroom", "Shared bathroom", "Rain shower", "Walk-in shower", "Bathtub",
+            "Jacuzzi bath", "Bidet", "Hair dryer", "Bathrobes", "Slippers",
+            "Toiletries", "Premium toiletries", "Shampoo", "Conditioner", "Body wash",
+            "Towels", "Heated towel rail", "Magnifying mirror", "Scales",
+        ]
+    },
+    "bedroom": {
+        "label": "Bedroom & Comfort",
+        "items": [
+            "Air conditioning", "Heating", "Ceiling fan", "Blackout curtains",
+            "Premium bedding", "Hypoallergenic bedding", "Extra pillows", "Pillow menu",
+            "Soundproofing", "Wardrobe", "Walk-in wardrobe", "Iron & ironing board",
+            "Clothes rack", "Hangers", "Full-length mirror", "Alarm clock",
+            "Crib available", "Extra bed available",
+        ]
+    },
+    "kitchen": {
+        "label": "Kitchen & Dining",
+        "items": [
+            "Kitchenette", "Full kitchen", "Microwave", "Refrigerator", "Mini fridge",
+            "Minibar", "Complimentary minibar", "Oven", "Hob / Stovetop", "Dishwasher",
+            "Toaster", "Kettle", "Coffee machine", "Nespresso machine", "Tea/coffee maker",
+            "Dining area", "Dining table", "Cookware & utensils", "Plates & cutlery",
+            "Wine glasses", "Washing machine", "Dryer", "Washer/dryer combo",
+        ]
+    },
+    "technology": {
+        "label": "Technology & Connectivity",
+        "items": [
+            "Free WiFi", "High-speed WiFi", "Wired internet", "Smart TV",
+            "Flat-screen TV", "55\" Smart TV", "65\" Smart TV", "Cable TV", "Netflix",
+            "Streaming services", "Bluetooth speaker", "USB charging ports",
+            "Universal power sockets", "Telephone", "Tablet", "Smart home controls",
+            "Chromecast", "HDMI input",
+        ]
+    },
+    "entertainment": {
+        "label": "Entertainment & Leisure",
+        "items": [
+            "Books & magazines", "Board games", "Gaming console",
+            "DVD player", "Music system", "Balcony", "Terrace", "Patio",
+            "Garden view", "Sea view", "City view", "Pool view", "Mountain view",
+            "Private pool", "Hot tub", "BBQ facilities",
+        ]
+    },
+    "business": {
+        "label": "Business & Work",
+        "items": [
+            "Work desk", "Ergonomic chair", "Desk lamp", "Stationery",
+            "Printer access", "Fax machine", "Meeting room access",
+            "Co-working space access", "Business centre", "Scanner",
+        ]
+    },
+    "safety": {
+        "label": "Safety & Security",
+        "items": [
+            "In-room safe", "Laptop-size safe", "Smoke detector",
+            "Carbon monoxide detector", "Fire extinguisher", "First aid kit",
+            "Electronic door lock", "Security camera (common areas)",
+            "24-hour security", "CCTV", "Peephole", "Door chain",
+        ]
+    },
+    "accessibility": {
+        "label": "Accessibility",
+        "items": [
+            "Wheelchair accessible", "Roll-in shower", "Grab bars",
+            "Lowered sink", "Lowered peephole", "Wide doorways",
+            "Step-free access", "Elevator access", "Visual fire alarm",
+            "Hearing-accessible", "Braille signage",
+        ]
+    },
+    "wellness": {
+        "label": "Wellness & Spa",
+        "items": [
+            "Spa access", "Sauna", "Steam room", "Gym access",
+            "Fitness equipment", "Yoga mat", "Massage available",
+            "Indoor pool access", "Outdoor pool access",
+            "Rooftop pool", "Beach access",
+        ]
+    },
+    "services": {
+        "label": "Services & Extras",
+        "items": [
+            "Room service", "24-hour room service", "Daily housekeeping",
+            "Turndown service", "Concierge", "Laundry service", "Dry cleaning",
+            "Luggage storage", "Wake-up service", "Breakfast included",
+            "Airport shuttle", "Car hire", "Bicycle rental", "Tour desk",
+            "Babysitting", "Pet friendly", "Parking available",
+            "Free parking", "Valet parking", "EV charging",
+            "Late checkout", "Early check-in", "Express check-in/out",
+            "Priority check-in", "Newspaper delivery",
+        ]
+    },
+}
+
+FACILITY_CATALOG = {
+    "general": {
+        "label": "General",
+        "items": [
+            "24-hour front desk", "Concierge service", "Luggage storage",
+            "Tour desk", "Currency exchange", "ATM on-site", "Gift shop",
+            "Elevator / Lift", "Non-smoking property", "Smoking area",
+        ]
+    },
+    "dining": {
+        "label": "Food & Drink",
+        "items": [
+            "Restaurant", "Bar / Lounge", "Breakfast buffet", "Room service",
+            "Coffee shop / Cafe", "Vending machines", "Packed lunches",
+            "Special diet menus", "BBQ area", "Shared kitchen",
+        ]
+    },
+    "wellness": {
+        "label": "Wellness & Recreation",
+        "items": [
+            "Swimming pool (indoor)", "Swimming pool (outdoor)", "Rooftop pool",
+            "Gym / Fitness centre", "Spa", "Sauna", "Steam room",
+            "Hot tub / Jacuzzi", "Massage services", "Yoga studio",
+            "Tennis court", "Golf course", "Kids' playground",
+            "Game room", "Library", "Cinema room",
+        ]
+    },
+    "business": {
+        "label": "Business",
+        "items": [
+            "Business centre", "Meeting rooms", "Conference facilities",
+            "Banquet hall", "Co-working space", "Fax / Photocopy services",
+        ]
+    },
+    "transport": {
+        "label": "Transport & Parking",
+        "items": [
+            "Free parking", "Paid parking", "Underground parking",
+            "Valet parking", "EV charging station", "Airport shuttle (free)",
+            "Airport shuttle (paid)", "Car hire desk", "Bicycle rental",
+            "Bicycle storage",
+        ]
+    },
+    "outdoor": {
+        "label": "Outdoor & Views",
+        "items": [
+            "Garden", "Terrace", "Rooftop terrace", "Sun terrace",
+            "Sun loungers", "Beach access", "Private beach",
+            "Waterfront", "Courtyard",
+        ]
+    },
+    "family": {
+        "label": "Family & Accessibility",
+        "items": [
+            "Family rooms", "Kids' club", "Babysitting service",
+            "Baby changing facilities", "High chairs", "Crib / Cot available",
+            "Wheelchair accessible", "Accessible parking",
+            "Step-free access", "Pet friendly",
+        ]
+    },
+    "laundry": {
+        "label": "Laundry & Housekeeping",
+        "items": [
+            "Laundry service", "Self-service laundry", "Dry cleaning",
+            "Ironing service", "Daily housekeeping", "Shoe shine",
+        ]
+    },
+}
+
+
+# ==================== PROMO CODE MODELS ====================
+
+class PromoCode(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str = ""
+    code: str
+    description: str = ""
+    discount_type: str = "percentage"
+    discount_value: float = 10
+    min_nights: int = 0
+    min_amount: float = 0
+    max_uses: int = 0
+    used_count: int = 0
+    valid_from: str = ""
+    valid_until: str = ""
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class PromoCodeCreate(BaseModel):
+    property_id: str = ""
+    code: str
+    description: str = ""
+    discount_type: str = "percentage"
+    discount_value: float = 10
+    min_nights: int = 0
+    min_amount: float = 0
+    max_uses: int = 0
+    valid_from: str = ""
+    valid_until: str = ""
+
+
+# ==================== ADD-ON SERVICES ====================
+
+class AddOnService(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    description: str = ""
+    category: str = "experience"
+    price: float = 0
+    price_type: str = "per_stay"
+    icon: str = ""
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class AddOnServiceCreate(BaseModel):
+    property_id: str
+    name: str
+    description: str = ""
+    category: str = "experience"
+    price: float = 0
+    price_type: str = "per_stay"
+    icon: str = ""
+
+
+# ==================== HOTEL POLICIES ====================
+
+class HotelPolicies(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    check_in_from: str = "15:00"
+    check_in_until: str = "23:00"
+    check_out_from: str = "07:00"
+    check_out_until: str = "11:00"
+    cancellation_policy: str = "free"
+    cancellation_hours: int = 24
+    cancellation_text: str = ""
+    children_policy: str = "Children of all ages are welcome."
+    pet_policy: str = "Pets are not allowed."
+    smoking_policy: str = "Smoking is not permitted anywhere on the property."
+    payment_methods: List[str] = ["Visa", "Mastercard", "American Express"]
+    accepted_currencies: List[str] = ["GBP"]
+    damage_deposit: float = 0
+    house_rules: List[str] = []
+    extra_info: str = ""
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class HotelPoliciesUpdate(BaseModel):
+    check_in_from: Optional[str] = None
+    check_in_until: Optional[str] = None
+    check_out_from: Optional[str] = None
+    check_out_until: Optional[str] = None
+    cancellation_policy: Optional[str] = None
+    cancellation_hours: Optional[int] = None
+    cancellation_text: Optional[str] = None
+    children_policy: Optional[str] = None
+    pet_policy: Optional[str] = None
+    smoking_policy: Optional[str] = None
+    payment_methods: Optional[List[str]] = None
+    accepted_currencies: Optional[List[str]] = None
+    damage_deposit: Optional[float] = None
+    house_rules: Optional[List[str]] = None
+    extra_info: Optional[str] = None
+
+
+# ==================== PROPERTY FACILITIES ====================
+
+class PropertyFacilities(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    facilities: List[str] = []
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

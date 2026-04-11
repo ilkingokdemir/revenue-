@@ -16,6 +16,9 @@ import { PropertyMappingPanel } from "./components/dashboard/PropertyMappingPane
 import { BookingEnginePanel } from "./components/dashboard/BookingEnginePanel";
 import { TemplateGallery } from "./components/dashboard/TemplateGallery";
 import { TemplateCustomizer } from "./components/dashboard/TemplateCustomizer";
+import { PromoCodesPanel } from "./components/dashboard/PromoCodesPanel";
+import { AddOnsPanel } from "./components/dashboard/AddOnsPanel";
+import { PoliciesPanel } from "./components/dashboard/PoliciesPanel";
 import {
   Star,
   CheckCircle,
@@ -77,7 +80,9 @@ import {
   Code,
   CopySimple,
   Bed,
-  Layout
+  Layout,
+  Package,
+  Scroll,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2435,6 +2440,9 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "booking", icon: Bed, name: "Rooms & Bookings", testId: "booking-engine-btn" },
         { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
         { id: "customize-template", icon: PaintBrush, name: "Customize Template", testId: "customize-template-btn" },
+        { id: "promo-codes", icon: Tag, name: "Promo Codes", testId: "promo-codes-btn" },
+        { id: "add-ons", icon: Package, name: "Add-on Services", testId: "add-ons-btn" },
+        { id: "policies", icon: Scroll, name: "Policies & Facilities", testId: "policies-btn" },
       ]
     },
     {
@@ -2716,6 +2724,21 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Template Customizer View */}
         {activeView === "customize-template" && (
           <TemplateCustomizer properties={properties} />
+        )}
+
+        {/* Promo Codes View */}
+        {activeView === "promo-codes" && (
+          <PromoCodesPanel properties={properties} />
+        )}
+
+        {/* Add-ons View */}
+        {activeView === "add-ons" && (
+          <AddOnsPanel properties={properties} />
+        )}
+
+        {/* Policies & Facilities View */}
+        {activeView === "policies" && (
+          <PoliciesPanel properties={properties} />
         )}
       </main>
 

@@ -60,22 +60,28 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - Guest Messaging: Unified Inbox, Automation, Channel Settings, AI Concierge
 - Connections: Integrations, API Connection, Webhooks
 
-## Code Architecture (Refactored)
+## Code Architecture (Fully Refactored)
 ```
 backend/
-├── server.py          # Core routes (~5,200 lines, down from 6,400)
+├── server.py              # App setup, Stripe webhook, seeds (406 lines — was 6,400)
 ├── routes/
-│   ├── messaging.py   # 17 endpoints (517 lines) — Conversations, Messages, Quick Replies, Channel Settings, Auto-Replies, Calendar, Send
-│   ├── automation.py  # 9 endpoints (222 lines) — Rules CRUD, Toggle, Run, Logs, Stats, Preview
-│   ├── dashboard.py   # 5 endpoints (179 lines) — Dashboard Overview, Concierge Analytics, Space Bookings Admin
-│   └── staff_performance.py # 1 endpoint — Staff performance metrics, leaderboard, trends
-├── auth.py            # JWT auth, require_roles
-├── database.py        # MongoDB connection
-└── models.py          # Pydantic models
+│   ├── helpers.py         # Shared: serialize_review, log_sync, fire_webhooks (55 lines)
+│   ├── auth_routes.py     # Auth, Users, Properties (243 lines)
+│   ├── connections.py     # API Keys, Webhooks, Integration Guide (337 lines)
+│   ├── reviews.py         # Reviews, Templates, Sentiment, Competitors, Widget (1,399 lines)
+│   ├── integrations.py    # Reports, Branding, Platform Integrations, Sync (1,417 lines)
+│   ├── bookings.py        # Booking Engine, Room Types, Stripe (1,451 lines)
+│   ├── messaging.py       # Conversations, Messages, Quick Replies (517 lines)
+│   ├── automation.py      # Automation Rules, Logs, Stats (222 lines)
+│   ├── dashboard.py       # Dashboard Overview, Concierge, Space Bookings Admin (179 lines)
+│   └── staff_performance.py # Staff Performance Dashboard (220 lines)
+├── auth.py                # JWT auth, require_roles
+├── database.py            # MongoDB connection
+└── models.py              # Pydantic models
 ```
 
 ## Backlog
-- P1: Real bi-directional outbound sync for review platforms
-- P2: Continue server.py modularization (bookings, reviews, auth routes)
+- P1: Real bi-directional outbound sync for review platforms (needs platform API credentials)
+- P2: Production WhatsApp/Telegram integration (needs user credentials)
 - P3: Real-time availability calendar integration
 - Note: Channel Manager already exists on myhotelbox.com — NOT building

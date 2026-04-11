@@ -156,7 +156,7 @@ function RoomCard({ room, t, nights, adults, roomCount, onSelect }) {
             className="mt-4 w-full py-3 rounded-lg font-semibold text-sm transition-colors text-white disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed"
             style={{ background: room.is_available ? t.colors.accent : undefined, borderRadius: t.borderRadius }}
             data-testid={`select-room-${room.id}`}>
-            {room.is_available ? "Reserve" : "Sold out"}
+            {room.is_available ? (t.custom?.bookingButtonText || "Reserve") : "Sold out"}
           </button>
           <div className="mt-2 text-center text-[10px] text-slate-400 flex items-center justify-center gap-1">Secure booking</div>
         </div>

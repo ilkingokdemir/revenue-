@@ -23,10 +23,11 @@ export default function BookingEngine() {
   const params = new URLSearchParams(window.location.search);
   const propertyId = params.get("property") || "aldgate-flats";
   const templateId = params.get("template") || "booking-classic";
-  const t = getTemplate(templateId);
+  const baseTemplate = getTemplate(templateId);
 
   const [step, setStep] = useState(STEPS.SEARCH);
   const [property, setProperty] = useState(null);
+  const [customSettings, setCustomSettings] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,49 @@ export default function BookingEngine() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [guestForm, setGuestForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" });
+
+  // Merge template defaults with custom overrides
+  const t = (() => {
+    const cs = customSettings || {};
+    // If the custom settings specify a different template, use that base
+    const base = cs.template_id && cs.template_id !== templateId ? getTemplate(cs.template_id) : baseTemplate;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        ...(cs.primary_color ? { primary: cs.primary_color } : {}),
+        ...(cs.accent_color ? { accent: cs.accent_color, accentHover: cs.accent_color } : {}),
+        ...(cs.header_bg_color ? { headerBg: cs.header_bg_color } : {}),
+        ...(cs.header_text_color ? { headerText: cs.header_text_color } : {}),
+        ...(cs.body_bg_color ? { bodyBg: cs.body_bg_color } : {}),
+      },
+      showRatingBadge: cs.show_rating_badge ?? base.showRatingBadge,
+      showUrgency: cs.show_urgency ?? base.showUrgency,
+      showFreeCancellation: cs.show_free_cancellation ?? base.showFreeCancellation,
+      showSecurityBadges: cs.show_security_badges ?? base.showSecurityBadges,
+      // Custom details (consumed by components that need them)
+      custom: {
+        hotelName: cs.hotel_name || "",
+        tagline: cs.tagline || "",
+        description: cs.description || "",
+        contactPhone: cs.contact_phone || "",
+        contactEmail: cs.contact_email || "",
+        address: cs.address || "",
+        logoUrl: cs.logo_url || "",
+        heroImageUrl: cs.hero_image_url || "",
+        galleryImages: cs.gallery_images || [],
+        footerText: cs.footer_text || "",
+        bookingButtonText: cs.booking_button_text || "",
+        welcomeMessage: cs.welcome_message || "",
+        socialLinks: {
+          facebook: cs.facebook_url || "",
+          instagram: cs.instagram_url || "",
+          twitter: cs.twitter_url || "",
+          tripadvisor: cs.tripadvisor_url || "",
+        },
+      },
+    };
+  })();
 
   useEffect(() => {
     const today = new Date();
@@ -59,6 +103,10 @@ export default function BookingEngine() {
         ]);
         setProperty(propRes.data);
         setReviews(revRes.data);
+        // Apply custom template settings if available
+        if (propRes.data.template_settings && Object.keys(propRes.data.template_settings).length > 1) {
+          setCustomSettings(propRes.data.template_settings);
+        }
       } catch (e) { console.error("Load error:", e); }
       finally { setLoading(false); }
     };
@@ -174,9 +222,9 @@ export default function BookingEngine() {
       <header className="sticky top-0 z-50 shadow-sm" style={{ background: t.colors.headerBg, color: t.colors.headerText }} data-testid="booking-header">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Buildings size={22} weight="fill" />
-            <span className="font-semibold text-lg" style={{ fontFamily: t.fonts.heading }}>{property?.name || "Hotel"}</span>
-            {t.platform !== "Booking.com" && (
+            {t.custom?.logoUrl ? <img src={t.custom.logoUrl} alt="" className="h-8 object-contain" /> : <Buildings size={22} weight="fill" />}
+            <span className="font-semibold text-lg" style={{ fontFamily: t.fonts.heading }}>{t.custom?.hotelName || property?.name || "Hotel"}</span>
+            {!t.custom?.hotelName && t.platform !== "Booking.com" && (
               <span className="text-xs opacity-60 hidden sm:inline">Powered by MyHotelBox</span>
             )}
           </div>
@@ -185,10 +233,17 @@ export default function BookingEngine() {
               <ShieldCheck size={16} weight="fill" style={{ color: t.colors.success }} />
               <span style={{ opacity: 0.7 }}>Secure Booking</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Phone size={15} />
-              <span className="hidden sm:inline" style={{ opacity: 0.7 }}>24/7 Support</span>
-            </div>
+            {t.custom?.contactPhone ? (
+              <a href={`tel:${t.custom.contactPhone}`} className="flex items-center gap-1.5 hover:opacity-80">
+                <Phone size={15} />
+                <span className="hidden sm:inline" style={{ opacity: 0.7 }}>{t.custom.contactPhone}</span>
+              </a>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <Phone size={15} />
+                <span className="hidden sm:inline" style={{ opacity: 0.7 }}>24/7 Support</span>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -263,7 +318,20 @@ export default function BookingEngine() {
       {/* Footer */}
       <footer className="py-8 text-center text-sm" style={{ background: t.colors.primary, color: `${t.colors.headerText}99` }}>
         <div className="max-w-7xl mx-auto px-4">
-          <p>Powered by <span className="font-semibold" style={{ color: t.colors.headerText }}>MyHotelBox</span> Booking Engine</p>
+          {t.custom?.footerText ? (
+            <p className="font-medium" style={{ color: t.colors.headerText }}>{t.custom.footerText}</p>
+          ) : (
+            <p>Powered by <span className="font-semibold" style={{ color: t.colors.headerText }}>MyHotelBox</span> Booking Engine</p>
+          )}
+          {/* Social Links */}
+          {t.custom?.socialLinks && Object.values(t.custom.socialLinks).some(v => v) && (
+            <div className="flex items-center justify-center gap-4 mt-3">
+              {t.custom.socialLinks.facebook && <a href={t.custom.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-facebook">Facebook</a>}
+              {t.custom.socialLinks.instagram && <a href={t.custom.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-instagram">Instagram</a>}
+              {t.custom.socialLinks.twitter && <a href={t.custom.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-twitter">X / Twitter</a>}
+              {t.custom.socialLinks.tripadvisor && <a href={t.custom.socialLinks.tripadvisor} target="_blank" rel="noopener noreferrer" className="hover:opacity-100 opacity-60 transition-opacity" data-testid="social-tripadvisor">TripAdvisor</a>}
+            </div>
+          )}
           <div className="flex items-center justify-center gap-4 mt-3 text-xs">
             <span className="flex items-center gap-1"><ShieldCheck size={12} /> SSL Secure</span>
             <span className="flex items-center gap-1"><Lock size={12} /> PCI Compliant</span>

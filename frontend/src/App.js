@@ -15,6 +15,7 @@ import { SyncLogPanel } from "./components/dashboard/SyncLogPanel";
 import { PropertyMappingPanel } from "./components/dashboard/PropertyMappingPanel";
 import { BookingEnginePanel } from "./components/dashboard/BookingEnginePanel";
 import { TemplateGallery } from "./components/dashboard/TemplateGallery";
+import { TemplateCustomizer } from "./components/dashboard/TemplateCustomizer";
 import {
   Star,
   CheckCircle,
@@ -2433,6 +2434,7 @@ const Dashboard = ({ user, onLogout }) => {
       items: [
         { id: "booking", icon: Bed, name: "Rooms & Bookings", testId: "booking-engine-btn" },
         { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
+        { id: "customize-template", icon: PaintBrush, name: "Customize Template", testId: "customize-template-btn" },
       ]
     },
     {
@@ -2709,6 +2711,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Templates Gallery View */}
         {activeView === "website-templates" && (
           <TemplateGallery properties={properties} />
+        )}
+
+        {/* Template Customizer View */}
+        {activeView === "customize-template" && (
+          <TemplateCustomizer properties={properties} />
         )}
       </main>
 

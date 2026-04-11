@@ -34,6 +34,7 @@ from models import (
     VALID_ROLES, VALID_DEPARTMENTS, VALID_PROPERTY_TYPES,
     RoomType, RoomTypeCreate, RoomTypeUpdate, Booking, BookingCreate,
     InboundReviewPayload,
+    TemplateSettings, TemplateSettingsUpdate,
 )
 from database import db, client
 from auth import (
@@ -3405,6 +3406,45 @@ async def get_property_by_external_id(external_id: str):
 
 # ==================== BOOKING ENGINE ROUTES ====================
 
+# --- Template Customization ---
+
+@api_router.get("/template-settings/{property_id}")
+async def get_template_settings(property_id: str):
+    """Public endpoint: Get template customization settings for a property"""
+    settings = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0})
+    return settings or {"property_id": property_id, "template_id": "booking-classic"}
+
+@api_router.get("/template-settings")
+async def list_all_template_settings(current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: List all template settings"""
+    settings = await db.template_settings.find({}, {"_id": 0}).to_list(100)
+    return settings
+
+@api_router.put("/template-settings/{property_id}")
+async def save_template_settings(property_id: str, update: TemplateSettingsUpdate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    """Admin: Save template customization for a property (upsert)"""
+    existing = await db.template_settings.find_one({"property_id": property_id})
+    
+    update_data = {k: v for k, v in update.model_dump().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    if existing:
+        await db.template_settings.update_one({"property_id": property_id}, {"$set": update_data})
+    else:
+        new_settings = TemplateSettings(property_id=property_id, **update_data)
+        doc = new_settings.model_dump()
+        await db.template_settings.insert_one(doc)
+        doc.pop("_id", None)
+    
+    result = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0})
+    return result
+
+@api_router.delete("/template-settings/{property_id}")
+async def delete_template_settings(property_id: str, current_user: dict = Depends(require_roles("admin"))):
+    """Admin: Reset template settings for a property"""
+    await db.template_settings.delete_one({"property_id": property_id})
+    return {"status": "deleted"}
+
 @api_router.get("/booking/property/{property_id}")
 async def get_booking_property_info(property_id: str):
     """Public endpoint: Get property info for booking engine"""
@@ -3414,6 +3454,9 @@ async def get_booking_property_info(property_id: str):
     
     # Get property branding
     branding = await db.branding_settings.find_one({}, {"_id": 0}) or {}
+    
+    # Get template customization
+    template_settings = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
     
     # Get average rating from reviews
     reviews = await db.reviews.find({"property_id": property_id}, {"_id": 0, "rating": 1}).to_list(1000)
@@ -3429,6 +3472,7 @@ async def get_booking_property_info(property_id: str):
     return {
         **prop,
         "branding": branding,
+        "template_settings": template_settings,
         "avg_rating": round(avg_rating, 1),
         "total_reviews": total_reviews,
         "room_types": rooms

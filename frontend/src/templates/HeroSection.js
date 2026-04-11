@@ -12,18 +12,23 @@ export function HeroSection({ t, property, ratingScore, getRatingLabel, searchPr
   const PlatformIcon = platformIcons[t.platform] || Buildings;
 
   if (t.layout === "airbnb") {
+    const defaultImages = [
+      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800",
+      "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=400",
+      "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=400",
+      "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=400",
+      "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=400",
+    ];
+    const galleryImgs = t.custom?.galleryImages?.length >= 5 ? t.custom.galleryImages : defaultImages;
+    const mainImg = t.custom?.heroImageUrl || galleryImgs[0];
     return (
       <>
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8" data-testid="hero-section">
           <div className="grid grid-cols-4 grid-rows-2 gap-2 h-[400px] rounded-2xl overflow-hidden mb-6" style={{ borderRadius: t.borderRadius }}>
             <div className="col-span-2 row-span-2 bg-slate-200 relative overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800" alt="Hotel" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+              <img src={mainImg} alt="Hotel" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
             </div>
-            {["https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=400",
-              "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=400",
-              "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=400",
-              "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=400"
-            ].map((src, i) => (
+            {galleryImgs.slice(1, 5).map((src, i) => (
               <div key={i} className="bg-slate-200 overflow-hidden relative">
                 <img src={src} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" loading="lazy" />
               </div>
@@ -31,8 +36,9 @@ export function HeroSection({ t, property, ratingScore, getRatingLabel, searchPr
           </div>
           <div className="flex items-start justify-between pb-6 border-b border-gray-200">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900" style={{ fontFamily: t.fonts.heading }}>{property?.name}</h1>
-              <p className="text-slate-500 mt-1 flex items-center gap-1"><MapPin size={14} /> {property?.city || "London"}, {property?.country || "United Kingdom"}</p>
+              <h1 className="text-3xl font-bold text-slate-900" style={{ fontFamily: t.fonts.heading }}>{t.custom?.hotelName || property?.name}</h1>
+              <p className="text-slate-500 mt-1 flex items-center gap-1"><MapPin size={14} /> {t.custom?.address || `${property?.city || "London"}, ${property?.country || "United Kingdom"}`}</p>
+              {t.custom?.tagline && <p className="text-slate-600 text-sm mt-1">{t.custom.tagline}</p>}
               <div className="flex items-center gap-3 mt-2">
                 <div className="flex items-center gap-1">
                   <Star size={16} weight="fill" style={{ color: t.colors.accent }} />
@@ -56,17 +62,23 @@ export function HeroSection({ t, property, ratingScore, getRatingLabel, searchPr
   }
 
   // Standard hero (Booking.com, Expedia, Hotels.com styles)
+  const heroImage = t.custom?.heroImageUrl || "https://images.pexels.com/photos/9119725/pexels-photo-9119725.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940";
+  const displayName = t.custom?.hotelName || property?.name || "Book Your Stay";
+  const subtitle = t.custom?.tagline || (property?.city ? `${property.city}, ${property.country}` : "Find your perfect room at the best price");
   return (
-    <section className="relative bg-cover bg-center" style={{ backgroundImage: `url(https://images.pexels.com/photos/9119725/pexels-photo-9119725.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940)`, minHeight: "480px" }} data-testid="hero-section">
+    <section className="relative bg-cover bg-center" style={{ backgroundImage: `url(${heroImage})`, minHeight: "480px" }} data-testid="hero-section">
       <div className="absolute inset-0" style={{ background: t.colors.heroOverlay }} />
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24">
         <div className="text-center text-white mb-10">
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-3" style={{ fontFamily: t.fonts.heading }} data-testid="hero-title">
-            {property?.name || "Book Your Stay"}
+            {displayName}
           </h1>
           <p className="text-lg sm:text-xl max-w-2xl mx-auto" style={{ opacity: 0.8 }}>
-            {property?.city ? `${property.city}, ${property.country}` : "Find your perfect room at the best price"}
+            {subtitle}
           </p>
+          {t.custom?.welcomeMessage && (
+            <p className="text-base max-w-xl mx-auto mt-2" style={{ opacity: 0.7 }}>{t.custom.welcomeMessage}</p>
+          )}
           {property?.avg_rating > 0 && t.showRatingBadge && (
             <div className="flex items-center justify-center gap-3 mt-4">
               <div className="font-bold px-2.5 py-1 rounded-tl-lg rounded-br-lg rounded-tr-sm rounded-bl-sm text-sm" style={{ background: t.colors.ratingBg, color: t.colors.ratingText }}>

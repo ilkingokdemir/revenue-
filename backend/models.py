@@ -386,3 +386,77 @@ class InboundReviewPayload(BaseModel):
     property_id: Optional[str] = "default"
     language: Optional[str] = None
     reviewer_avatar: Optional[str] = None
+
+
+# ==================== TEMPLATE CUSTOMIZATION MODELS ====================
+
+class TemplateSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    template_id: str = "booking-classic"
+    # Hotel info overrides
+    hotel_name: str = ""
+    tagline: str = ""
+    description: str = ""
+    contact_phone: str = ""
+    contact_email: str = ""
+    address: str = ""
+    # Branding
+    logo_url: str = ""
+    hero_image_url: str = ""
+    gallery_images: List[str] = []
+    # Color overrides (empty = use template defaults)
+    primary_color: str = ""
+    accent_color: str = ""
+    header_bg_color: str = ""
+    header_text_color: str = ""
+    body_bg_color: str = ""
+    # Feature toggles
+    show_rating_badge: Optional[bool] = None
+    show_urgency: Optional[bool] = None
+    show_free_cancellation: Optional[bool] = None
+    show_security_badges: Optional[bool] = None
+    # Custom text
+    footer_text: str = ""
+    booking_button_text: str = ""
+    welcome_message: str = ""
+    # Social links
+    facebook_url: str = ""
+    instagram_url: str = ""
+    twitter_url: str = ""
+    tripadvisor_url: str = ""
+    # SEO
+    meta_title: str = ""
+    meta_description: str = ""
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class TemplateSettingsUpdate(BaseModel):
+    template_id: Optional[str] = None
+    hotel_name: Optional[str] = None
+    tagline: Optional[str] = None
+    description: Optional[str] = None
+    contact_phone: Optional[str] = None
+    contact_email: Optional[str] = None
+    address: Optional[str] = None
+    logo_url: Optional[str] = None
+    hero_image_url: Optional[str] = None
+    gallery_images: Optional[List[str]] = None
+    primary_color: Optional[str] = None
+    accent_color: Optional[str] = None
+    header_bg_color: Optional[str] = None
+    header_text_color: Optional[str] = None
+    body_bg_color: Optional[str] = None
+    show_rating_badge: Optional[bool] = None
+    show_urgency: Optional[bool] = None
+    show_free_cancellation: Optional[bool] = None
+    show_security_badges: Optional[bool] = None
+    footer_text: Optional[str] = None
+    booking_button_text: Optional[str] = None
+    welcome_message: Optional[str] = None
+    facebook_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    twitter_url: Optional[str] = None
+    tripadvisor_url: Optional[str] = None
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None

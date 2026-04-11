@@ -1378,3 +1378,133 @@ class DigitalKey(BaseModel):
     local_recommendations: list = Field(default_factory=list)  # [{name, type, distance, description, map_link}]
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
+
+
+# ==================== STOCK MANAGEMENT MODELS ====================
+
+STOCK_CATEGORIES = ["food", "beverage", "spirits", "wine", "beer", "soft_drinks", "dairy", "meat", "produce", "dry_goods", "cleaning", "supplies", "other"]
+STOCK_UNITS = ["kg", "g", "l", "ml", "pcs", "bottles", "cases", "portions", "packs"]
+MOVEMENT_TYPES = ["purchase", "usage", "waste", "transfer_in", "transfer_out", "adjustment", "stocktake"]
+OUTLET_TYPES = ["restaurant", "bar", "cafe", "room_service", "kitchen", "main_store"]
+
+class StockProduct(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    category: str = "other"
+    unit: str = "pcs"
+    cost_price: float = 0
+    sell_price: float = 0
+    supplier: str = ""
+    sku: str = ""
+    reorder_level: float = 0
+    current_stock: float = 0
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class Recipe(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    outlet: str = "restaurant"
+    category: str = "food"
+    sell_price: float = 0
+    ingredients: list = Field(default_factory=list)  # [{product_id, product_name, quantity, unit}]
+    total_cost: float = 0
+    margin_pct: float = 0
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class StockMovement(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    product_id: str
+    product_name: str = ""
+    movement_type: str  # purchase, usage, waste, transfer, adjustment, stocktake
+    quantity: float
+    unit: str = ""
+    cost: float = 0
+    outlet: str = ""
+    from_outlet: str = ""
+    to_outlet: str = ""
+    reference: str = ""
+    notes: str = ""
+    recorded_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class Outlet(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    outlet_type: str = "restaurant"
+    is_active: bool = True
+
+class StockVariance(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    product_id: str
+    product_name: str = ""
+    expected_stock: float = 0
+    actual_stock: float = 0
+    variance: float = 0
+    variance_pct: float = 0
+    variance_cost: float = 0
+    status: str = "flagged"  # flagged, reviewed, resolved
+    notes: str = ""
+    recorded_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== HOTEL ACCOUNTING MODELS ====================
+
+INCOME_CATEGORIES = ["room_revenue", "food_beverage", "spa_wellness", "events_meetings", "parking", "laundry", "minibar", "late_checkout", "cancellation_fees", "other"]
+EXPENSE_CATEGORIES = ["staff_wages", "food_cost", "beverage_cost", "utilities", "maintenance", "marketing", "insurance", "rent_lease", "supplies", "technology", "commissions", "taxes", "depreciation", "other"]
+DEPARTMENTS = ["rooms", "food_beverage", "spa", "events", "front_office", "housekeeping", "maintenance", "admin", "marketing", "other"]
+
+class IncomeEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    category: str
+    amount: float
+    currency: str = "GBP"
+    description: str = ""
+    department: str = ""
+    date: str = ""
+    source: str = "manual"  # manual, booking_engine, auto
+    reference: str = ""
+    created_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ExpenseEntry(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    category: str
+    amount: float
+    currency: str = "GBP"
+    description: str = ""
+    department: str = ""
+    vendor: str = ""
+    date: str = ""
+    receipt_ref: str = ""
+    approved_by: str = ""
+    created_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class Budget(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    department: str
+    category: str
+    month: str  # YYYY-MM
+    budgeted_amount: float = 0
+    actual_amount: float = 0
+    variance: float = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

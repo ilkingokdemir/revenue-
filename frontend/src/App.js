@@ -33,6 +33,8 @@ import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
 import { SetupWizardPanel } from "./components/dashboard/SetupWizardPanel";
+import { StockManagementPanel } from "./components/dashboard/StockManagementPanel";
+import { AccountingPanel } from "./components/dashboard/AccountingPanel";
 import {
   Star,
   CheckCircle,
@@ -103,6 +105,7 @@ import {
   AddressBook,
   Megaphone,
   MapPin,
+  Wallet,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2481,6 +2484,13 @@ const Dashboard = ({ user, onLogout }) => {
       ]
     },
     {
+      label: "Operations",
+      items: [
+        { id: "stock-management", icon: Package, name: "Stock / F&B", testId: "stock-management-btn" },
+        { id: "accounting", icon: Wallet, name: "Accounting", testId: "accounting-btn" },
+      ]
+    },
+    {
       label: "Guest Messaging",
       items: [
         { id: "messaging", icon: Envelope, name: "Unified Inbox", testId: "messaging-btn" },
@@ -2569,6 +2579,7 @@ const Dashboard = ({ user, onLogout }) => {
                     section.label === "Booking Engine" ? "text-blue-400" :
                     section.label === "Guest Messaging" ? "text-purple-400" :
                     section.label === "Guest Experience" ? "text-rose-400" :
+                    section.label === "Operations" ? "text-emerald-400" :
                     "text-stone-500"
                   }`}>{section.label}</span>
                 </div>
@@ -2844,6 +2855,16 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Setup Wizard */}
         {activeView === "setup-wizard" && (
           <SetupWizardPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Stock Management */}
+        {activeView === "stock-management" && (
+          <StockManagementPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Accounting */}
+        {activeView === "accounting" && (
+          <AccountingPanel properties={properties} activePropertyId={activePropertyId} />
         )}
       </main>
 

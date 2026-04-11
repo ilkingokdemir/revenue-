@@ -2405,17 +2405,21 @@ const Dashboard = ({ user, onLogout }) => {
   // Sidebar menu items
   const menuSections = [
     {
-      label: "Main",
+      label: "Review Hub",
       items: [
         { id: "reviews", icon: ChatText, name: "Reviews", testId: "nav-reviews" },
         { id: "analytics", icon: ChartBar, name: "Analytics", testId: "analytics-btn" },
+        { id: "templates", icon: FileText, name: "Response Templates", testId: "templates-btn" },
+        ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: "Approvals", testId: "approval-queue-btn" }] : []),
+        { id: "alerts", icon: Bell, name: "Alerts", testId: "notification-settings-btn" },
+        { id: "reports", icon: CalendarBlank, name: "Reports", testId: "reports-btn" },
       ]
     },
     {
-      label: "Workflow",
+      label: "Booking Engine",
       items: [
-        { id: "templates", icon: FileText, name: "Templates", testId: "templates-btn" },
-        ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: "Approvals", testId: "approval-queue-btn" }] : []),
+        { id: "booking", icon: Bed, name: "Rooms & Bookings", testId: "booking-engine-btn" },
+        { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
       ]
     },
     {
@@ -2431,10 +2435,6 @@ const Dashboard = ({ user, onLogout }) => {
     {
       label: "Settings",
       items: [
-        { id: "booking", icon: Bed, name: "Booking Engine", testId: "booking-engine-btn" },
-        { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
-        { id: "alerts", icon: Bell, name: "Alerts", testId: "notification-settings-btn" },
-        { id: "reports", icon: CalendarBlank, name: "Reports", testId: "reports-btn" },
         { id: "mapping", icon: Buildings, name: "Property Mapping", testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: "Branding", testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: "Team", testId: "team-btn" }] : []),
@@ -2490,10 +2490,15 @@ const Dashboard = ({ user, onLogout }) => {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 custom-scrollbar">
-          {menuSections.map((section) => (
-            <div key={section.label} className="mb-3">
-              <div className="px-4 mb-1">
-                <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-stone-600">{section.label}</span>
+          {menuSections.map((section, sIdx) => (
+            <div key={section.label} className="mb-2">
+              {sIdx > 0 && <div className="mx-4 mb-2 border-t border-stone-800" />}
+              <div className="px-4 mb-1.5">
+                <span className={`text-[10px] uppercase tracking-[0.15em] font-bold ${
+                  section.label === "Review Hub" ? "text-emerald-500" :
+                  section.label === "Booking Engine" ? "text-blue-400" :
+                  "text-stone-500"
+                }`}>{section.label}</span>
               </div>
               {section.items.map((item) => (
                 <button

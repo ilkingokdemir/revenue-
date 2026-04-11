@@ -20,14 +20,23 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 - Maps external_id, external_name, external_system (myhotelbox/cloudbeds/other)
 - UI: Property Mapping panel in sidebar with edit forms
 
+### P1: Outbound Sync Attempt (April 2026)
+- When responding to a review, backend attempts to post reply to originating platform
+- Google Business Profile: Full OAuth token + PUT reply API implemented
+- Other platforms: Logged as "skipped" until vendor credentials are configured
+- All sync attempts logged in sync_logs collection (visible in Sync Log panel)
+- `POST /api/integrations/{platform}/test-connection` — test connection to configured platform
+
 ### P2: App.js Refactoring (April 2026)
-- Reduced from 4600 to 3000 lines
-- Extracted 5 components to /components/dashboard/:
-  - IntegrationsPanel.js (765 lines)
+- Reduced from 4600 to ~2760 lines
+- Extracted 7 components to /components/dashboard/:
+  - IntegrationsPanel.js (800 lines)
   - AnalyticsPanel.js (471 lines)
   - ReportsSettings.js (248 lines)
   - BrandingPanel.js (303 lines)
   - LoginPage.js (103 lines)
+  - SyncLogPanel.js (105 lines)
+  - PropertyMappingPanel.js (165 lines)
 - Barrel exports via index.js
 - Shared config.js for API, platformColors, formatApiErrorDetail
 
@@ -45,6 +54,13 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 - API keys (rhk_), webhooks (8 events), delivery log, test ping
 - Integration Guide with code snippets for Node.js and Python
 - Left sidebar with 14+ navigation items
+- Platform connection test functionality with Test Connection button
+- Save & Test Connection workflow in config wizard
+
+### Multi-Branch Support (April 2026)
+- 9 MyHotelBox branches seeded on startup
+- "All Branches" dropdown selector in sidebar
+- Reviews and stats filter by selected branch
 
 ### Core Features
 - JWT auth, 3 roles, 7 departments, approval workflow
@@ -55,7 +71,7 @@ Hotel management review module for MyHotelBox.com integration. Receive reviews f
 ## Architecture
 ```
 frontend/src/
-├── App.js (3000 lines — Dashboard, Sidebar, core views)
+├── App.js (~2760 lines — Dashboard, Sidebar, core views)
 ├── ReviewWidget.js (widget)
 ├── components/dashboard/
 │   ├── config.js (shared constants)
@@ -65,10 +81,12 @@ frontend/src/
 │   ├── ReportsSettings.js
 │   ├── BrandingPanel.js
 │   ├── LoginPage.js
+│   ├── SyncLogPanel.js
+│   ├── PropertyMappingPanel.js
 │   └── index.js (barrel)
 ```
 
 ## Remaining Work
-- Outbound response posting to platforms (currently mocked — responses are generated but not pushed back)
+- Real outbound API calls to Booking.com, Expedia, TripAdvisor, etc. (requires vendor partner credentials)
 - Configure Resend API key for email notifications
-- Further App.js extraction (still 3000 lines)
+- Google OAuth: user needs to obtain Client ID, Secret, and Refresh Token from Google Cloud Console

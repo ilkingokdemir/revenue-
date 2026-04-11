@@ -446,6 +446,13 @@ const BookingEnginePanel = ({ properties }) => {
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${statusColors[booking.status] || "bg-stone-50 text-stone-700"}`}>
                     {booking.status}
                   </span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
+                    booking.payment_status === "paid" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : 
+                    booking.payment_status === "processing" ? "bg-blue-50 text-blue-700 border-blue-200" : 
+                    "bg-amber-50 text-amber-700 border-amber-200"
+                  }`}>
+                    {booking.payment_status === "paid" ? "Paid" : booking.payment_status === "processing" ? "Processing" : "Unpaid"}
+                  </span>
                 </div>
                 <span className="text-xs text-stone-400">{new Date(booking.created_at).toLocaleDateString()}</span>
               </div>

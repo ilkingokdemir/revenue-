@@ -41,7 +41,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
 // Step constants
-const STEPS = { SEARCH: 0, ROOMS: 1, DETAILS: 2, CONFIRM: 3 };
+const STEPS = { SEARCH: 0, ROOMS: 1, DETAILS: 2, PAYMENT: 3, CONFIRM: 4 };
 
 const amenityIcons = {
   "Free WiFi": WifiHigh,
@@ -146,10 +146,65 @@ export default function BookingEngine() {
     return Math.max(1, Math.round((co - ci) / (1000 * 60 * 60 * 24)));
   };
 
+  const [paymentMethod, setPaymentMethod] = useState("card"); // card or hotel
+
+  // Check if returning from Stripe payment
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get("session_id");
+    const paymentStatus = urlParams.get("payment");
+    
+    if (sessionId && paymentStatus === "success") {
+      setStep(STEPS.PAYMENT);
+      pollPaymentStatus(sessionId);
+    } else if (paymentStatus === "cancelled") {
+      setStep(STEPS.SEARCH);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pollPaymentStatus = async (sessionId, attempts = 0) => {
+    const maxAttempts = 10;
+    const pollInterval = 2000;
+    
+    if (attempts >= maxAttempts) {
+      setStep(STEPS.CONFIRM);
+      return;
+    }
+    
+    try {
+      const { data } = await axios.get(`${API}/payments/status/${sessionId}`);
+      
+      if (data.payment_status === "paid") {
+        // Fetch the updated booking
+        if (data.booking_ref) {
+          const { data: bookingData } = await axios.get(`${API}/booking/reservation/${data.booking_ref}`);
+          setConfirmation(bookingData);
+        }
+        setStep(STEPS.CONFIRM);
+        // Clean URL
+        window.history.replaceState({}, "", `${window.location.pathname}?property=${propertyId}`);
+        return;
+      } else if (data.status === "expired") {
+        alert("Payment session expired. Please try again.");
+        setStep(STEPS.SEARCH);
+        window.history.replaceState({}, "", `${window.location.pathname}?property=${propertyId}`);
+        return;
+      }
+      
+      // Continue polling
+      setTimeout(() => pollPaymentStatus(sessionId, attempts + 1), pollInterval);
+    } catch (e) {
+      console.error("Payment status check error:", e);
+      setTimeout(() => pollPaymentStatus(sessionId, attempts + 1), pollInterval);
+    }
+  };
+
   const handleBooking = async () => {
     if (!guestForm.guest_name || !guestForm.guest_email) return;
     setBookingLoading(true);
     try {
+      // Step 1: Create the booking reservation
       const { data } = await axios.post(`${API}/booking/reserve`, {
         property_id: propertyId,
         room_type_id: selectedRoom.id,
@@ -163,9 +218,24 @@ export default function BookingEngine() {
         rooms: roomCount,
         special_requests: guestForm.special_requests,
       });
-      setConfirmation(data);
-      setStep(STEPS.CONFIRM);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      
+      if (paymentMethod === "card") {
+        // Step 2: Create Stripe checkout session
+        const originUrl = window.location.origin;
+        const { data: paymentData } = await axios.post(`${API}/payments/create-checkout`, null, {
+          params: { booking_id: data.id, origin_url: originUrl }
+        });
+        
+        // Step 3: Redirect to Stripe
+        if (paymentData.url) {
+          window.location.href = paymentData.url;
+        }
+      } else {
+        // Pay at hotel — go directly to confirmation
+        setConfirmation(data);
+        setStep(STEPS.CONFIRM);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     } catch (e) {
       alert(e.response?.data?.detail || "Booking failed. Please try again.");
     } finally {
@@ -657,6 +727,46 @@ export default function BookingEngine() {
                 </div>
               </div>
 
+              {/* Payment Method Selection */}
+              <div className="bg-white rounded-lg border border-gray-200 p-6" data-testid="payment-method-section">
+                <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2" style={{ fontFamily: "Outfit, sans-serif" }}>
+                  <CreditCard size={22} className="text-[#006CE4]" />
+                  Payment Method
+                </h2>
+                <div className="space-y-3">
+                  <label className={`flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${paymentMethod === "card" ? "border-[#006CE4] bg-blue-50" : "border-gray-200 hover:border-gray-300"}`} data-testid="payment-card-option">
+                    <input type="radio" name="payment" value="card" checked={paymentMethod === "card"} onChange={() => setPaymentMethod("card")} className="sr-only" />
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${paymentMethod === "card" ? "border-[#006CE4]" : "border-gray-300"}`}>
+                      {paymentMethod === "card" && <div className="w-2.5 h-2.5 rounded-full bg-[#006CE4]" />}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <CreditCard size={18} className="text-[#006CE4]" />
+                        <span className="font-semibold text-slate-800 text-sm">Pay Now with Card</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">Secure payment via Stripe. Your booking is instantly confirmed.</p>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-slate-400">
+                      <ShieldCheck size={14} weight="fill" className="text-green-500" />
+                      <span>Secure</span>
+                    </div>
+                  </label>
+                  <label className={`flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors ${paymentMethod === "hotel" ? "border-[#006CE4] bg-blue-50" : "border-gray-200 hover:border-gray-300"}`} data-testid="payment-hotel-option">
+                    <input type="radio" name="payment" value="hotel" checked={paymentMethod === "hotel"} onChange={() => setPaymentMethod("hotel")} className="sr-only" />
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${paymentMethod === "hotel" ? "border-[#006CE4]" : "border-gray-300"}`}>
+                      {paymentMethod === "hotel" && <div className="w-2.5 h-2.5 rounded-full bg-[#006CE4]" />}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Buildings size={18} className="text-slate-600" />
+                        <span className="font-semibold text-slate-800 text-sm">Pay at Hotel</span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5">Pay when you arrive at the property. No payment required now.</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               {/* Complete Booking Button */}
               <button
                 onClick={handleBooking}
@@ -666,10 +776,15 @@ export default function BookingEngine() {
               >
                 {bookingLoading ? (
                   <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
+                ) : paymentMethod === "card" ? (
+                  <>
+                    <CreditCard size={20} weight="fill" />
+                    Pay &pound;{totalPrice.toFixed(0)} &amp; Complete Booking
+                  </>
                 ) : (
                   <>
                     <Lock size={20} weight="fill" />
-                    Complete Booking
+                    Complete Booking — Pay at Hotel
                   </>
                 )}
               </button>
@@ -743,7 +858,22 @@ export default function BookingEngine() {
         </div>
       )}
 
-      {/* CONFIRMATION (Step 3) */}
+      {/* PAYMENT PROCESSING (Step 3) */}
+      {step === STEPS.PAYMENT && (
+        <div className="max-w-lg mx-auto px-4 sm:px-6 lg:px-8 py-20" data-testid="payment-processing-step">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-lg p-10 text-center">
+            <div className="w-16 h-16 border-4 border-[#006CE4] border-t-transparent rounded-full animate-spin mx-auto mb-6" />
+            <h2 className="text-xl font-bold text-slate-900 mb-2" style={{ fontFamily: "Outfit, sans-serif" }}>Processing Your Payment</h2>
+            <p className="text-slate-500">Please wait while we confirm your payment...</p>
+            <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-400">
+              <ShieldCheck size={14} weight="fill" className="text-green-500" />
+              <span>Secured by Stripe</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRMATION (Step 4) */}
       {step === STEPS.CONFIRM && confirmation && (
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12" data-testid="confirmation-step">
           <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden">
@@ -751,7 +881,11 @@ export default function BookingEngine() {
             <div className="bg-[#008009] text-white px-8 py-6 text-center">
               <CheckCircle size={48} weight="fill" className="mx-auto mb-3" />
               <h2 className="text-2xl font-bold mb-1" style={{ fontFamily: "Outfit, sans-serif" }}>Booking Confirmed!</h2>
-              <p className="text-green-100">Your reservation has been successfully created</p>
+              <p className="text-green-100">
+                {confirmation.payment_status === "paid"
+                  ? "Payment received — your reservation is confirmed"
+                  : "Your reservation has been successfully created"}
+              </p>
             </div>
             {/* Booking Details */}
             <div className="p-8">

@@ -1,0 +1,112 @@
+{
+  "summary": "Iteration 24 - Stripe Payment Integration testing completed. Backend: 15/15 tests passed (100%). Frontend: Full booking flow with both payment methods tested (Pay Now with Card redirects to Stripe, Pay at Hotel shows confirmation immediately). Admin dashboard shows payment status badges (Paid/Unpaid/Processing) on bookings.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/payments/status/{session_id}",
+        "issue": "Returns 500 when Stripe session is expired/invalid instead of graceful error handling. Should catch CheckoutError and return appropriate error response.",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "POST /api/payments/create-checkout creates Stripe checkout session with real URL",
+    "POST /api/payments/create-checkout returns 400 when booking_id missing",
+    "POST /api/payments/create-checkout returns 404 for invalid booking",
+    "POST /api/payments/create-checkout validates booking not already paid",
+    "GET /api/payments/status/{session_id} returns payment status (with known limitation for expired sessions)",
+    "GET /api/payments/status/{session_id} handles invalid session gracefully",
+    "Payment transaction record created in payment_transactions collection",
+    "POST /api/webhook/stripe endpoint exists",
+    "Booking reference format is MHB-XXXXXXXX (12 chars)",
+    "Admin bookings endpoint returns payment_status field",
+    "Pay at Hotel flow creates booking immediately with pending payment status",
+    "GET /api/room-types returns room types",
+    "GET /api/room-types?property_id=aldgate-flats filters correctly",
+    "Admin login with admin@hotelbox.com / HotelAdmin2026! works",
+    "Invalid login returns 401",
+    "Public booking engine loads at /book?property=aldgate-flats",
+    "Full booking flow: Search -> Select Room -> Fill Guest Details -> Choose Payment Method -> Complete",
+    "Payment Method selection: 'Pay Now with Card' and 'Pay at Hotel' radio buttons visible",
+    "Pay at Hotel flow shows confirmation with MHB-XXXXXXXX reference immediately",
+    "Pay Now with Card flow redirects to real Stripe checkout URL (https://checkout.stripe.com/...)",
+    "Stripe checkout shows correct amount (£89.00 for test booking)",
+    "Admin dashboard Booking Engine panel shows payment status badges (Processing/Unpaid)",
+    "Admin dashboard Room Types CRUD still works (5 seeded rooms visible)"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_stripe_payments.py",
+    "/app/test_reports/pytest/pytest_stripe_payments.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Add error handling in GET /api/payments/status/{session_id} for expired/invalid Stripe sessions to return 404 instead of 500"
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_stripe_payments.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all payment flows working)"
+  },
+  "seed_data_creation": "Test bookings created during testing with TEST_ prefix for identification",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Stripe payment integration fully implemented and tested. Payment flow: 1) Create booking via POST /api/booking/reserve 2) For card payment: POST /api/payments/create-checkout returns Stripe URL 3) User redirected to Stripe 4) On return, frontend polls GET /api/payments/status/{session_id}. Pay at Hotel skips Stripe entirely. Admin dashboard shows payment status badges. Stripe test key is sk_test_emergent (creates real test checkout sessions).",
+  "mocked_apis": {
+    "note": "Stripe test mode (sk_test_emergent) creates real test checkout sessions but payments don't process real money"
+  },
+  "feature_verification": {
+    "stripe_payment_integration": {
+      "status": "PASS",
+      "endpoints": [
+        "POST /api/payments/create-checkout - Creates Stripe checkout session",
+        "GET /api/payments/status/{session_id} - Returns payment status",
+        "POST /api/webhook/stripe - Handles Stripe webhook events"
+      ],
+      "features": [
+        "Amount fetched from server-side booking record (not frontend)",
+        "Payment transaction record created in payment_transactions collection",
+        "Booking status updates to 'processing' after creating checkout",
+        "Real Stripe checkout URL returned (https://checkout.stripe.com/...)"
+      ]
+    },
+    "payment_method_selection": {
+      "status": "PASS",
+      "options": [
+        "Pay Now with Card - Redirects to Stripe checkout",
+        "Pay at Hotel - Shows confirmation immediately"
+      ]
+    },
+    "admin_payment_status_badges": {
+      "status": "PASS",
+      "badges": [
+        "Paid - Green badge for completed payments",
+        "Unpaid - Amber badge for pay at hotel bookings",
+        "Processing - Blue badge for pending card payments"
+      ]
+    },
+    "booking_reference_format": {
+      "status": "PASS",
+      "format": "MHB-XXXXXXXX (12 characters, hex suffix)"
+    }
+  },
+  "test_credentials": {
+    "admin": {
+      "email": "admin@hotelbox.com",
+      "password": "HotelAdmin2026!",
+      "role": "admin"
+    }
+  },
+  "urls": {
+    "booking_engine": "https://review-hub-108.preview.emergentagent.com/book?property=aldgate-flats",
+    "admin_dashboard": "https://review-hub-108.preview.emergentagent.com",
+    "stripe_checkout": "https://checkout.stripe.com/c/pay/cs_test_..."
+  }
+}

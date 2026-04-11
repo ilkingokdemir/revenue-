@@ -3965,6 +3965,23 @@ async def get_payment_status(session_id: str, request: Request):
     webhook_url = f"{host_url}api/webhook/stripe"
     stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
     
+    try:
+        checkout_status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
+    except Exception as e:
+        logger.error(f"Stripe status check error: {e}")
+        # Check if we have a local record
+        existing = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+        if existing:
+            return {
+                "payment_status": existing.get("payment_status", "unknown"),
+                "status": existing.get("status", "unknown"),
+                "amount": existing.get("amount", 0),
+                "currency": existing.get("currency", ""),
+                "booking_ref": existing.get("booking_ref", ""),
+                "booking_id": existing.get("booking_id", "")
+            }
+        raise HTTPException(status_code=404, detail="Payment session not found or expired")
+    
     checkout_status: CheckoutStatusResponse = await stripe_checkout.get_checkout_status(session_id)
     
     # Check if already processed to prevent double processing

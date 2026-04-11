@@ -1,77 +1,71 @@
 # Hotel Review Management Module + Booking Engine - PRD
 
 ## Original Problem Statement
-Hotel management review module for MyHotelBox.com integration. Receive reviews from online platforms, respond with AI-generated unique replies. Role-based team access, approval workflow, multi-property support. Additionally, a Booking Engine module like Mews/Cloudbeds/eviivo with Booking.com-style design that hotel clients can embed on their websites.
+Hotel management review module + booking engine for MyHotelBox.com PMS. Receive reviews from online platforms, respond with AI-generated unique replies. Booking engine like Mews/Cloudbeds/eviivo with Booking.com-style design for trust. Stripe payment processing for direct bookings.
 
 ## What's Been Implemented
 
-### Booking Engine Module (April 2026)
+### Booking Engine with Stripe Payments (April 2026)
 - **Public Booking Engine** at `/book?property={property_id}`:
-  - Booking.com-style blue UI with trust signals (SSL, security badges, verified property)
-  - Hero section with property name, rating, and search widget
-  - Step-by-step booking flow: Search → Select Room → Guest Details → Confirmation
+  - Booking.com-style blue UI with trust signals (SSL, security badges)
+  - Step-by-step flow: Search → Select Room → Guest Details → Payment → Confirmation
   - Room cards with photos, amenities, pricing, "Free cancellation" and "Breakfast included" badges
-  - "Only X left on our site!" urgency cues for limited availability rooms
-  - Guest details form with booking summary sidebar and price breakdown
-  - Booking confirmation with MHB-XXXXXXX reference number
+  - "Only X left on our site!" urgency cues
+  - **Payment Method Selection**: Pay Now with Card (Stripe) or Pay at Hotel
+  - Stripe Checkout integration with real Stripe redirect
+  - Payment status polling on return from Stripe
+  - Booking confirmation with MHB-XXXXXXXX reference number
   - Mobile-responsive with sticky "Book Now" bar
-  - Guest picker (adults, children, rooms)
-  - Reviews section displaying verified guest reviews
+
+- **Stripe Payment Integration**:
+  - `POST /api/payments/create-checkout` — creates Stripe checkout session (amount from server-side only)
+  - `GET /api/payments/status/{session_id}` — polls payment status
+  - `POST /api/webhook/stripe` — handles Stripe webhook events
+  - `payment_transactions` collection for audit trail
+  - Prevents double-processing of payments
 
 - **Admin Dashboard - Booking Engine Panel**:
-  - Room Types tab: Create, edit, delete room types with photos, amenities, pricing
-  - Bookings tab: View all bookings with status management (Check In, Cancel, No Show, Check Out)
+  - Room Types tab: Create, edit, delete room types
+  - Bookings tab with status management (Check In, Cancel, No Show, Check Out)
+  - Payment status badges (Paid/Unpaid/Processing)
   - Copy Booking URL and Preview buttons
-  - Live booking URL display
 
-- **Backend API Endpoints**:
-  - Public: `/api/booking/property/{id}`, `/api/booking/rooms/{id}`, `/api/booking/availability/{id}`, `/api/booking/reserve`, `/api/booking/reservation/{ref}`, `/api/booking/reviews/{id}`
-  - Admin: CRUD `/api/room-types`, `/api/bookings`, `/api/bookings/{id}/status`
+- **Sample Data**: 5 room types seeded for "aldgate-flats" (£89-£349)
 
-- **Sample Data**: 5 room types seeded for "aldgate-flats" (Standard Double £89, Deluxe King £149, Family Suite £219, Superior Twin £109, Executive Suite £349)
-
-### Review Hub Module (Earlier - April 2026)
+### Review Hub Module (Earlier)
 - Webhook inbound sync for 14 platforms
 - GPT-5.2 AI response generation in 16 languages
-- Role-based approval workflow (3 roles, 7 departments)
-- Real-time widget with red notification popups + sound alerts
+- Role-based approval workflow
+- Real-time widget with notifications
 - Integration panel with connection testing
-- Multi-branch selector with 9 MyHotelBox branches
-- Platform sync logging (inbound + outbound attempts)
-- Property mapping to MyHotelBox branches
-- Embeddable review widget at `/widget`
-- API keys, webhooks, delivery logs
-- White-label branding
+- Multi-branch selector (9 branches)
+- Sync logging, property mapping, branding
 
 ## Architecture
 ```
 frontend/src/
-├── App.js (~2770 lines — Dashboard, Sidebar, core views)
-├── BookingEngine.js (NEW — Public booking engine page)
-├── ReviewWidget.js (Embeddable widget)
+├── App.js (~2770 lines)
+├── BookingEngine.js (Stripe + booking flow)
+├── ReviewWidget.js
 ├── components/dashboard/
-│   ├── config.js
-│   ├── ReviewComponents.js
-│   ├── IntegrationsPanel.js
-│   ├── AnalyticsPanel.js
-│   ├── ReportsSettings.js
-│   ├── BrandingPanel.js
-│   ├── LoginPage.js
-│   ├── SyncLogPanel.js
-│   ├── PropertyMappingPanel.js
-│   ├── BookingEnginePanel.js (NEW — Admin room/booking management)
-│   └── index.js (barrel)
+│   ├── BookingEnginePanel.js (admin room/booking management)
+│   ├── IntegrationsPanel.js, AnalyticsPanel.js, etc.
+│   └── index.js
 
-backend/
-├── server.py (~3800 lines — All API routes, models, auth, webhooks, booking engine)
+backend/server.py (~4100 lines)
+ - Auth, Reviews, AI, Webhooks, Integrations
+ - Booking Engine: rooms, availability, reservations
+ - Stripe: checkout sessions, status polling, webhooks
 ```
 
-## Key Database Collections
-- `reviews`, `users`, `properties`, `webhooks`, `webhook_deliveries`, `api_keys`, `platform_integrations`, `sync_logs`, `branding_settings`
-- NEW: `room_types`, `bookings`
+## DB Collections
+reviews, users, properties, webhooks, webhook_deliveries, api_keys, 
+platform_integrations, sync_logs, branding_settings,
+room_types, bookings, payment_transactions
 
 ## Remaining Work
-- Stripe payment integration for booking engine (currently pay-at-hotel only)
-- Real outbound API calls to review platforms (requires vendor credentials)
+- Hotel website landing page template with embeddable booking widget
+- Email confirmation for bookings (Resend integration)
+- Real outbound sync to review platforms (vendor credentials needed)
 - Google OAuth configuration (user needs to obtain credentials)
-- Hotel website template with embeddable booking widget (beyond standalone /book page)
+- More website templates for different hotel styles

@@ -3488,9 +3488,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+async def seed_myhotelbox_branches():
+    """Seed all MyHotelBox branches as properties"""
+    branches = [
+        {"id": "aldgate-flats", "name": "ALDGATE FLATS", "property_type": "apartment", "external_id": "aldgate-flats-001", "external_name": "ALDGATE FLATS", "external_system": "myhotelbox"},
+        {"id": "camden-suites", "name": "CAMDEN SUITES", "property_type": "apartment", "external_id": "camden-suites-001", "external_name": "CAMDEN SUITES", "external_system": "myhotelbox"},
+        {"id": "city-gate", "name": "CITY GATE", "property_type": "hotel", "external_id": "city-gate-001", "external_name": "CITY GATE", "external_system": "myhotelbox"},
+        {"id": "city-rooms", "name": "CITY ROOMS", "property_type": "hotel", "external_id": "city-rooms-001", "external_name": "CITY ROOMS", "external_system": "myhotelbox"},
+        {"id": "london-suites", "name": "LONDON SUITES", "property_type": "apartment", "external_id": "london-suites-001", "external_name": "LONDON SUITES", "external_system": "myhotelbox"},
+        {"id": "ryam-suites", "name": "Ryam Suites", "property_type": "apartment", "external_id": "ryam-suites-001", "external_name": "Ryam Suites", "external_system": "myhotelbox"},
+        {"id": "whitechapel-hotel", "name": "THE WHITECHAPEL HOTEL", "property_type": "hotel", "external_id": "whitechapel-hotel-001", "external_name": "THE WHITECHAPEL HOTEL", "external_system": "myhotelbox"},
+        {"id": "vilenza-hotel", "name": "VILENZA HOTEL", "property_type": "hotel", "external_id": "vilenza-hotel-001", "external_name": "VILENZA HOTEL", "external_system": "myhotelbox"},
+        {"id": "whitechapel-grand", "name": "Whitechapel Grand", "property_type": "hotel", "external_id": "whitechapel-grand-001", "external_name": "Whitechapel Grand", "external_system": "myhotelbox"},
+    ]
+    for branch in branches:
+        existing = await db.properties.find_one({"id": branch["id"]})
+        if not existing:
+            await db.properties.insert_one({
+                **branch,
+                "address": "", "city": "London", "country": "UK",
+                "is_active": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "mapping_updated_at": datetime.now(timezone.utc).isoformat()
+            })
+    logger.info("MyHotelBox branches seeded")
+
 @app.on_event("startup")
 async def startup_event():
     await seed_admin()
+    await seed_myhotelbox_branches()
     # Migrate: ensure all reviews have property_id
     await db.reviews.update_many(
         {"property_id": {"$exists": False}},

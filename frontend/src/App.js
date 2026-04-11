@@ -2528,7 +2528,7 @@ const Dashboard = ({ user, onLogout }) => {
   const [branding, setBranding] = useState(null);
   const [templateTextToApply, setTemplateTextToApply] = useState(null);
   const [properties, setProperties] = useState([]);
-  const [activePropertyId, setActivePropertyId] = useState("default");
+  const [activePropertyId, setActivePropertyId] = useState("all");
   const [filters, setFilters] = useState({
     platform: "all",
     status: "all"
@@ -2555,7 +2555,7 @@ const Dashboard = ({ user, onLogout }) => {
   const fetchReviews = useCallback(async () => {
     try {
       const params = new URLSearchParams();
-      if (activePropertyId) params.append("property_id", activePropertyId);
+      if (activePropertyId && activePropertyId !== "all") params.append("property_id", activePropertyId);
       if (filters.platform !== "all") params.append("platform", filters.platform);
       if (filters.status !== "all") params.append("status", filters.status);
       
@@ -2569,7 +2569,7 @@ const Dashboard = ({ user, onLogout }) => {
 
   const fetchStats = useCallback(async () => {
     try {
-      const params = activePropertyId ? `?property_id=${activePropertyId}` : "";
+      const params = activePropertyId && activePropertyId !== "all" ? `?property_id=${activePropertyId}` : "";
       const response = await axios.get(`${API}/reviews/stats/summary${params}`);
       setStats(response.data);
     } catch (error) {
@@ -2713,19 +2713,31 @@ const Dashboard = ({ user, onLogout }) => {
               <p className="text-[10px] text-stone-500 truncate" data-testid="header-subtitle">{branding?.subtitle || "Review Management"}</p>
             </div>
           </div>
-          {/* Property Selector */}
-          {properties.length > 1 && (
+          {/* Branch Selector — always visible */}
+          <div className="mt-3" data-testid="branch-selector-container">
+            <label className="text-[9px] uppercase tracking-[0.15em] font-semibold text-stone-600 mb-1 block px-0.5">Branch</label>
             <Select value={activePropertyId} onValueChange={(v) => setActivePropertyId(v)} data-testid="property-selector">
-              <SelectTrigger className="w-full bg-stone-800 border-stone-700 text-stone-300 h-7 text-[11px] mt-3">
-                <SelectValue placeholder="Select property" />
+              <SelectTrigger className="w-full bg-stone-800 border-stone-700 text-stone-200 h-8 text-xs font-medium hover:bg-stone-750 transition-colors">
+                <div className="flex items-center gap-2 truncate">
+                  <Buildings size={13} className="text-emerald-500 flex-shrink-0" />
+                  <SelectValue placeholder="Select branch" />
+                </div>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-[300px]">
+                <SelectItem value="all" data-testid="branch-all">
+                  <span className="font-medium">All Branches</span>
+                </SelectItem>
                 {properties.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  <SelectItem key={p.id} value={p.id} data-testid={`branch-${p.id}`}>
+                    <div className="flex items-center gap-2">
+                      <span>{p.name}</span>
+                      {p.external_id && <span className="text-[9px] text-emerald-600 ml-1">linked</span>}
+                    </div>
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          )}
+          </div>
         </div>
 
         {/* Navigation */}

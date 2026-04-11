@@ -1,0 +1,102 @@
+{
+  "summary": "Iteration 21 testing completed. Backend: 15/15 tests passed (100%). Frontend: All branch selector features working. 9 MyHotelBox branches seeded correctly with 'linked' badges. Branch filtering works for reviews and stats.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "Admin login with admin@hotelbox.com / HotelAdmin2026!",
+    "GET /api/properties returns 10 properties (My Hotel + 9 branches)",
+    "All 9 branches have external_id, external_name, external_system=myhotelbox",
+    "Branch names match: ALDGATE FLATS, CAMDEN SUITES, CITY GATE, CITY ROOMS, LONDON SUITES, Ryam Suites, THE WHITECHAPEL HOTEL, VILENZA HOTEL, Whitechapel Grand",
+    "GET /api/reviews without property_id returns all reviews (41 total)",
+    "GET /api/reviews?property_id=aldgate-flats returns only that branch's reviews",
+    "GET /api/reviews?property_id=default returns only default property reviews",
+    "POST /api/platforms/booking.com/incoming with property_id=aldgate-flats creates review under that branch",
+    "POST /api/platforms/booking.com/incoming with property_id=camden-suites creates review under that branch",
+    "GET /api/reviews/stats/summary returns stats for all reviews",
+    "GET /api/reviews/stats/summary?property_id=aldgate-flats returns filtered stats",
+    "GET /api/widget/reviews?api_key=xxx&property_id=aldgate-flats returns filtered reviews",
+    "GET /api/widget/stats?api_key=xxx&property_id=aldgate-flats returns filtered stats",
+    "All seeded branches have external_id (9 mapped properties)",
+    "GET /api/sync-logs returns sync activity",
+    "Frontend: Branch selector shows in sidebar with 'All Branches' selected by default",
+    "Frontend: Branch dropdown lists all 10 properties (My Hotel + 9 branches)",
+    "Frontend: Each branch shows 'linked' badge when external_id exists",
+    "Frontend: Selecting a branch filters reviews to that branch",
+    "Frontend: Stats cards update when switching branches",
+    "Frontend: Widget loads at /widget?api_key=rhk_xxx showing 37 reviews, 3.6/5 rating"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21_branches.py",
+    "/app/test_reports/pytest/pytest_iteration21_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration21_branches.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all branch selector features working)"
+  },
+  "seed_data_creation": "Created test reviews via inbound webhook: TEST_branch_*, TEST_camden_* under aldgate-flats and camden-suites properties",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 21 adds 9 MyHotelBox branches seeded on startup via seed_myhotelbox_branches(). Branch selector in sidebar uses activePropertyId state with 'all' as default. When 'all' is selected, property_id is not sent in API calls. Branches: aldgate-flats, camden-suites, city-gate, city-rooms, london-suites, ryam-suites, whitechapel-hotel, vilenza-hotel, whitechapel-grand. Plus 'default' (My Hotel) for backward compat. All branches have external_id, external_name, external_system=myhotelbox fields. Test API key: rhk_17354979397db960bcb68db21ed42b7acc103e7940715667.",
+  "mocked_apis": {
+    "note": "Outbound response posting to platforms is MOCKED. Resend email notifications are LOGGED but not sent (no API key). Inbound webhooks, sync logs, property mapping, auth, API keys, webhooks, widget API, and AI generation are REAL."
+  },
+  "feature_verification": {
+    "branch_selector": {
+      "status": "PASS",
+      "default_value": "All Branches (value='all')",
+      "properties_count": 10,
+      "linked_badges": "All 9 branches show 'linked' badge"
+    },
+    "branch_filtering": {
+      "status": "PASS",
+      "reviews_filter": "GET /api/reviews?property_id=xxx",
+      "stats_filter": "GET /api/reviews/stats/summary?property_id=xxx",
+      "widget_filter": "GET /api/widget/reviews?property_id=xxx"
+    },
+    "seeded_branches": {
+      "status": "PASS",
+      "count": 9,
+      "branches": [
+        {"id": "aldgate-flats", "name": "ALDGATE FLATS"},
+        {"id": "camden-suites", "name": "CAMDEN SUITES"},
+        {"id": "city-gate", "name": "CITY GATE"},
+        {"id": "city-rooms", "name": "CITY ROOMS"},
+        {"id": "london-suites", "name": "LONDON SUITES"},
+        {"id": "ryam-suites", "name": "Ryam Suites"},
+        {"id": "whitechapel-hotel", "name": "THE WHITECHAPEL HOTEL"},
+        {"id": "vilenza-hotel", "name": "VILENZA HOTEL"},
+        {"id": "whitechapel-grand", "name": "Whitechapel Grand"}
+      ]
+    },
+    "inbound_webhook_with_property": {
+      "status": "PASS",
+      "endpoint": "POST /api/platforms/{platform}/incoming",
+      "property_id_field": "property_id in payload routes review to correct branch"
+    },
+    "widget": {
+      "status": "PASS",
+      "url": "/widget?api_key=rhk_xxx",
+      "stats": "37 reviews, 3.6/5 rating, 18.9% response rate"
+    }
+  },
+  "test_credentials": {
+    "admin": {
+      "email": "admin@hotelbox.com",
+      "password": "HotelAdmin2026!",
+      "role": "admin"
+    },
+    "test_api_key": "rhk_17354979397db960bcb68db21ed42b7acc103e7940715667"
+  }
+}

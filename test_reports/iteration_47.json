@@ -1,0 +1,95 @@
+{
+  "summary": "Iteration 47 - Stock Management & Accounting Upgrade Testing COMPLETE. All 27 backend tests passed (100%). Frontend verified with all 8 tabs in Stock panel and 8 tabs in Accounting panel working correctly. New Apicbase-level stock features (sub-recipes, COGS, theo vs actual, waste reasons, suppliers, POs, count sheets) and M3/Xero-level accounting features (USALI chart of accounts, invoicing with VAT, VAT reports, trends, CSV export) all functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Accounting Trends", "issues": ["Minor React warning: duplicate keys for month '2026-01' - cosmetic only, does not affect functionality"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration47_stock_accounting_upgrade.py",
+    "/app/test_reports/pytest/pytest_iteration47.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All new Stock Management endpoints working: sub-recipes, waste with reasons, theo vs actual, suppliers, POs, count sheets, record-sale COGS",
+    "All new Accounting endpoints working: chart of accounts (auto-seeds 19 USALI accounts), invoicing with VAT, VAT report, 6-month trends, CSV export",
+    "Stock panel has 8 tabs: Products, Recipes, Movements, Suppliers & POs, Stock Counts, Cost Analysis, Theo vs Actual, Variances",
+    "Accounting panel has 8 tabs: P&L Overview, Income, Expenses, Invoices, VAT, Trends, Budget vs Actual, Chart of Accounts",
+    "COGS per sale auto-deducts ingredients from stock when recipe is sold",
+    "PO receive auto-creates purchase movements and updates stock levels",
+    "Stock count sheets pre-populate with all products and calculate variance on completion",
+    "Invoices auto-calculate VAT (20% default) and generate invoice numbers",
+    "VAT report shows output vs input VAT with net payable calculation"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration47_stock_accounting_upgrade.py"
+  ],
+  "success_rate": {
+    "backend": "100% (27/27 tests passed)",
+    "frontend": "100% (all panels and tabs verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test data created with TEST_ prefix for products, sub-recipes, suppliers, POs, count sheets, invoices - used for testing only",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 47 upgraded Stock Management with Apicbase-level features and Accounting with M3/Xero-level features. Stock now has 8 tabs including Suppliers & POs, Stock Counts, Theo vs Actual. Accounting now has 8 tabs including Invoices, VAT, Trends, Chart of Accounts. Use property_id 'city-gate' for testing. All APIs require admin authentication.",
+  "features_tested": {
+    "backend_api_tests": {
+      "status": "PASS",
+      "tests_passed": 27,
+      "tests_failed": 0,
+      "endpoints_tested": [
+        {"endpoint": "POST /api/auth/login", "status": "PASS", "notes": "Admin login successful"},
+        {"endpoint": "POST /api/stock/sub-recipes", "status": "PASS", "notes": "Create sub-recipe with cost calculation"},
+        {"endpoint": "GET /api/stock/sub-recipes/{property_id}", "status": "PASS", "notes": "List sub-recipes"},
+        {"endpoint": "POST /api/stock/waste", "status": "PASS", "notes": "Record waste with reason code (expired/spoiled/etc)"},
+        {"endpoint": "GET /api/stock/waste-report/{property_id}", "status": "PASS", "notes": "Waste breakdown by reason and top products"},
+        {"endpoint": "GET /api/stock/theoretical-vs-actual/{property_id}", "status": "PASS", "notes": "Theo vs actual comparison with flagging"},
+        {"endpoint": "POST /api/stock/suppliers", "status": "PASS", "notes": "Create supplier"},
+        {"endpoint": "GET /api/stock/suppliers/{property_id}", "status": "PASS", "notes": "List suppliers"},
+        {"endpoint": "POST /api/stock/purchase-orders", "status": "PASS", "notes": "Create PO with items and total calculation"},
+        {"endpoint": "PUT /api/stock/purchase-orders/{id}/receive", "status": "PASS", "notes": "Receive PO and auto-stock items"},
+        {"endpoint": "POST /api/stock/count-sheets", "status": "PASS", "notes": "Create count sheet pre-populated with products"},
+        {"endpoint": "PUT /api/stock/count-sheets/{id}", "status": "PASS", "notes": "Update counted values with variance calculation"},
+        {"endpoint": "POST /api/stock/count-sheets/{id}/complete", "status": "PASS", "notes": "Finalize count and update stock levels"},
+        {"endpoint": "POST /api/stock/record-sale", "status": "PASS", "notes": "Record recipe sale with COGS auto-deduction"},
+        {"endpoint": "GET /api/accounting/chart-of-accounts/{property_id}", "status": "PASS", "notes": "Auto-seeds 19 USALI accounts on first call"},
+        {"endpoint": "POST /api/accounting/invoices", "status": "PASS", "notes": "Create invoice with VAT calculation (20% default)"},
+        {"endpoint": "PUT /api/accounting/invoices/{id}", "status": "PASS", "notes": "Mark invoice as paid with auto paid_date"},
+        {"endpoint": "GET /api/accounting/vat-report/{property_id}", "status": "PASS", "notes": "VAT report with output/input/net payable"},
+        {"endpoint": "GET /api/accounting/trends/{property_id}", "status": "PASS", "notes": "6-month P&L trends"},
+        {"endpoint": "GET /api/accounting/export/{property_id}?type=income", "status": "PASS", "notes": "CSV export for income"},
+        {"endpoint": "GET /api/accounting/export/{property_id}?type=expenses", "status": "PASS", "notes": "CSV export for expenses"},
+        {"endpoint": "GET /api/accounting/export/{property_id}?type=invoices", "status": "PASS", "notes": "CSV export for invoices"},
+        {"endpoint": "GET /api/accounting/export/{property_id}?type=pnl", "status": "PASS", "notes": "P&L statement export"}
+      ],
+      "regression_tests": [
+        {"endpoint": "Stock products CRUD", "status": "PASS"},
+        {"endpoint": "GET /api/stock/stats/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/pnl/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/stats/{property_id}", "status": "PASS"}
+      ]
+    },
+    "frontend_tests": {
+      "status": "PASS",
+      "panels_verified": [
+        {"panel": "Stock Management", "status": "PASS", "tabs": ["Products", "Recipes", "Movements", "Suppliers & POs", "Stock Counts", "Cost Analysis", "Theo vs Actual", "Variances"]},
+        {"panel": "Accounting", "status": "PASS", "tabs": ["P&L Overview", "Income", "Expenses", "Invoices", "VAT", "Trends", "Budget vs Actual", "Chart of Accounts"]}
+      ],
+      "sidebar_section": "OPERATIONS section visible with Stock / F&B and Accounting links",
+      "data_testids_verified": ["stock-panel", "stock-title", "accounting-panel", "accounting-title", "tab-products", "tab-recipes", "tab-movements", "tab-suppliers", "tab-counts", "tab-cost", "tab-theo", "tab-variances", "tab-overview", "tab-income", "tab-expenses", "tab-invoices", "tab-vat", "tab-trends", "tab-budgets", "tab-accounts"]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

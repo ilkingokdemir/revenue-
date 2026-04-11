@@ -16,6 +16,177 @@ const CATEGORIES = ["food","beverage","spirits","wine","beer","soft_drinks","dai
 const UNITS = ["kg","g","l","ml","pcs","bottles","cases","portions","packs"];
 const MOVEMENT_TYPES = ["purchase","usage","waste","transfer_in","transfer_out","adjustment","stocktake"];
 
+const WASTE_REASONS = ["expired","spoiled","overproduction","damaged","spillage","theft_suspected","quality_issue","other"];
+
+function SuppliersPOsTab({ propertyId }) {
+  const [suppliers, setSuppliers] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [showAddPO, setShowAddPO] = useState(false);
+  const [newSupplier, setNewSupplier] = useState({ name: "", email: "", phone: "" });
+  const [newPO, setNewPO] = useState({ supplier_name: "", items: [{ product_name: "", quantity: 0, unit: "pcs", unit_cost: 0 }] });
+
+  const fetch = useCallback(async () => {
+    const [sR, oR] = await Promise.all([
+      axios.get(`${API}/stock/suppliers/${propertyId}`),
+      axios.get(`${API}/stock/purchase-orders/${propertyId}`),
+    ]);
+    setSuppliers(sR.data); setOrders(oR.data);
+  }, [propertyId]);
+  useEffect(() => { fetch(); }, [fetch]);
+
+  const addSupplier = async () => {
+    await axios.post(`${API}/stock/suppliers`, { ...newSupplier, property_id: propertyId });
+    setShowAddSupplier(false); setNewSupplier({ name: "", email: "", phone: "" }); fetch();
+  };
+  const addPO = async () => {
+    await axios.post(`${API}/stock/purchase-orders`, { ...newPO, property_id: propertyId });
+    setShowAddPO(false); fetch();
+  };
+  const receivePO = async (id) => { await axios.put(`${API}/stock/purchase-orders/${id}/receive`); fetch(); };
+
+  return (
+    <div className="space-y-4" data-testid="suppliers-tab">
+      <div className="flex gap-2 justify-end">
+        <button onClick={() => setShowAddSupplier(true)} className="text-xs px-3 py-1.5 bg-stone-100 text-stone-700 rounded-lg font-medium"><Plus size={12} className="inline mr-1" />Supplier</button>
+        <button onClick={() => setShowAddPO(true)} className="text-xs px-3 py-1.5 bg-blue-500 text-white rounded-lg font-medium"><Plus size={12} className="inline mr-1" />Purchase Order</button>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <div className="text-sm font-semibold text-stone-700 mb-2">Suppliers ({suppliers.length})</div>
+          {suppliers.map(s => (
+            <div key={s.id} className="bg-white border border-stone-200 rounded-lg p-3 mb-1.5">
+              <div className="text-xs font-semibold text-stone-800">{s.name}</div>
+              <div className="text-[10px] text-stone-400">{s.email} · {s.phone} · {s.payment_terms}</div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div className="text-sm font-semibold text-stone-700 mb-2">Purchase Orders ({orders.length})</div>
+          {orders.map(o => (
+            <div key={o.id} className="bg-white border border-stone-200 rounded-lg p-3 mb-1.5 flex justify-between items-center">
+              <div>
+                <div className="text-xs font-semibold text-stone-800">{o.supplier_name} — £{o.total_amount}</div>
+                <div className="text-[10px] text-stone-400">{o.items?.length || 0} items · {o.created_at?.slice(0, 10)}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className={`text-[9px] ${o.status === "received" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{o.status}</Badge>
+                {o.status === "draft" && <button onClick={() => receivePO(o.id)} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded">Receive</button>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <Dialog open={showAddSupplier} onOpenChange={setShowAddSupplier}>
+        <DialogContent className="max-w-sm"><DialogHeader><DialogTitle>Add Supplier</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Input placeholder="Supplier name" value={newSupplier.name} onChange={e => setNewSupplier(p => ({...p, name: e.target.value}))} />
+            <Input placeholder="Email" value={newSupplier.email} onChange={e => setNewSupplier(p => ({...p, email: e.target.value}))} />
+            <Input placeholder="Phone" value={newSupplier.phone} onChange={e => setNewSupplier(p => ({...p, phone: e.target.value}))} />
+            <button onClick={addSupplier} className="w-full text-xs py-2 bg-emerald-500 text-white rounded-lg font-medium">Save</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showAddPO} onOpenChange={setShowAddPO}>
+        <DialogContent className="max-w-md"><DialogHeader><DialogTitle>Create Purchase Order</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Input placeholder="Supplier name" value={newPO.supplier_name} onChange={e => setNewPO(p => ({...p, supplier_name: e.target.value}))} />
+            {newPO.items.map((item, i) => (
+              <div key={i} className="grid grid-cols-4 gap-1">
+                <Input placeholder="Product" className="col-span-2 text-xs" value={item.product_name} onChange={e => { const items = [...newPO.items]; items[i].product_name = e.target.value; setNewPO(p => ({...p, items})); }} />
+                <Input type="number" placeholder="Qty" className="text-xs" value={item.quantity || ""} onChange={e => { const items = [...newPO.items]; items[i].quantity = parseFloat(e.target.value) || 0; setNewPO(p => ({...p, items})); }} />
+                <Input type="number" placeholder="£/unit" className="text-xs" value={item.unit_cost || ""} onChange={e => { const items = [...newPO.items]; items[i].unit_cost = parseFloat(e.target.value) || 0; setNewPO(p => ({...p, items})); }} />
+              </div>
+            ))}
+            <button onClick={() => setNewPO(p => ({...p, items: [...p.items, { product_name: "", quantity: 0, unit: "pcs", unit_cost: 0 }]}))} className="text-[10px] text-blue-600">+ Add item</button>
+            <button onClick={addPO} className="w-full text-xs py-2 bg-blue-500 text-white rounded-lg font-medium">Create PO</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StockCountsTab({ propertyId }) {
+  const [sheets, setSheets] = useState([]);
+  const fetch = useCallback(async () => {
+    const r = await axios.get(`${API}/stock/count-sheets/${propertyId}`);
+    setSheets(r.data);
+  }, [propertyId]);
+  useEffect(() => { fetch(); }, [fetch]);
+  const createSheet = async () => { await axios.post(`${API}/stock/count-sheets`, { property_id: propertyId }); fetch(); };
+  const completeSheet = async (id) => { await axios.post(`${API}/stock/count-sheets/${id}/complete`); fetch(); };
+
+  return (
+    <div className="space-y-3" data-testid="counts-tab">
+      <div className="flex justify-end">
+        <button onClick={createSheet} className="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-medium" data-testid="new-count-btn"><Plus size={12} className="inline mr-1" />New Stock Count</button>
+      </div>
+      {sheets.length === 0 ? <div className="text-center py-12 text-stone-400 text-sm">No stock counts yet</div> :
+        sheets.map(s => (
+          <div key={s.id} className="bg-white border border-stone-200 rounded-xl p-4">
+            <div className="flex justify-between items-center mb-2">
+              <div>
+                <div className="text-xs font-semibold text-stone-800">{s.name}</div>
+                <div className="text-[10px] text-stone-400">{s.items?.length || 0} products · by {s.counted_by} · {s.created_at?.slice(0, 16)}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className={`text-[9px] ${s.status === "completed" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{s.status}</Badge>
+                {s.total_variance_cost > 0 && <span className="text-[10px] text-red-500 font-bold">£{s.total_variance_cost} variance</span>}
+                {s.status !== "completed" && <button onClick={() => completeSheet(s.id)} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded">Complete</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+function TheoVsActualTab({ propertyId }) {
+  const [data, setData] = useState(null);
+  const fetch = useCallback(async () => {
+    const r = await axios.get(`${API}/stock/theoretical-vs-actual/${propertyId}`);
+    setData(r.data);
+  }, [propertyId]);
+  useEffect(() => { fetch(); }, [fetch]);
+
+  if (!data) return <div className="flex justify-center py-16"><ArrowsClockwise size={24} className="animate-spin text-stone-300" /></div>;
+
+  return (
+    <div className="space-y-3" data-testid="theo-tab">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-stone-800">{data.products?.length || 0}</div>
+          <div className="text-[10px] text-stone-500 uppercase">Products Checked</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-red-500">{data.flagged_count}</div>
+          <div className="text-[10px] text-stone-500 uppercase">Flagged</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-red-600">£{data.total_variance_cost}</div>
+          <div className="text-[10px] text-stone-500 uppercase">Variance Cost</div>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        {data.products?.map(p => (
+          <div key={p.product_id} className={`bg-white border rounded-lg p-2.5 flex justify-between text-xs ${p.flag !== "ok" ? "border-red-200" : "border-stone-200"}`}>
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-stone-700">{p.product_name}</span>
+              {p.flag !== "ok" && <Badge className="text-[8px] bg-red-100 text-red-700">{p.flag.replace("_", " ")}</Badge>}
+            </div>
+            <div className="flex items-center gap-4 text-stone-500">
+              <span>Theo: {p.theoretical}</span>
+              <span>Actual: {p.actual}</span>
+              <span className={p.difference_cost > 0 ? "text-red-500 font-bold" : ""}>£{p.difference_cost}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function StockManagementPanel({ properties, activePropertyId }) {
   const [tab, setTab] = useState("products");
   const [products, setProducts] = useState([]);
@@ -82,7 +253,10 @@ export function StockManagementPanel({ properties, activePropertyId }) {
     { id: "products", label: "Products", icon: Package },
     { id: "recipes", label: "Recipes", icon: ForkKnife },
     { id: "movements", label: "Movements", icon: ShoppingCart },
+    { id: "suppliers", label: "Suppliers & POs", icon: ShoppingCart },
+    { id: "counts", label: "Stock Counts", icon: ChartBar },
     { id: "cost", label: "Cost Analysis", icon: ChartBar },
+    { id: "theo", label: "Theo vs Actual", icon: WarningCircle },
     { id: "variances", label: `Variances (${variances.length})`, icon: WarningCircle },
   ];
 
@@ -232,6 +406,14 @@ export function StockManagementPanel({ properties, activePropertyId }) {
           </div>
         )}
 
+        {tab === "suppliers" && (
+          <SuppliersPOsTab propertyId={propertyId} />
+        )}
+
+        {tab === "counts" && (
+          <StockCountsTab propertyId={propertyId} />
+        )}
+
         {tab === "cost" && aiCost && (
           <div className="space-y-4" data-testid="cost-analysis">
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -272,6 +454,10 @@ export function StockManagementPanel({ properties, activePropertyId }) {
               </div>
             )}
           </div>
+        )}
+
+        {tab === "theo" && (
+          <TheoVsActualTab propertyId={propertyId} />
         )}
 
         {tab === "variances" && (

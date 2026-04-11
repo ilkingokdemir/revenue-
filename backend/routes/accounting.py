@@ -342,4 +342,186 @@ def create_accounting_router(db, require_roles):
             "total_expense_entries": await db.expense_entries.count_documents({"property_id": property_id}),
         }
 
+    # === Chart of Accounts (USALI standard) ===
+
+    @router.get("/accounting/chart-of-accounts/{property_id}")
+    async def get_chart_of_accounts(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        docs = await db.chart_of_accounts.find({"property_id": property_id}, {"_id": 0}).sort("code", 1).to_list(200)
+        if not docs:
+            from models import ChartOfAccount, USALI_ACCOUNTS
+            for acct_type, accounts in USALI_ACCOUNTS.items():
+                for acc in accounts:
+                    code, name = acc.split("-", 1)
+                    coa = ChartOfAccount(property_id=property_id, code=code, name=name.replace("_", " ").title(), account_type=acct_type)
+                    d = coa.model_dump()
+                    await db.chart_of_accounts.insert_one(d)
+            docs = await db.chart_of_accounts.find({"property_id": property_id}, {"_id": 0}).sort("code", 1).to_list(200)
+        return docs
+
+    @router.post("/accounting/chart-of-accounts")
+    async def create_account(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        from models import ChartOfAccount
+        coa = ChartOfAccount(**data)
+        doc = coa.model_dump()
+        await db.chart_of_accounts.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    # === Invoicing ===
+
+    @router.get("/accounting/invoices/{property_id}")
+    async def list_invoices(property_id: str, invoice_type: str = "", status: str = "",
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        query = {"property_id": property_id}
+        if invoice_type: query["invoice_type"] = invoice_type
+        if status: query["status"] = status
+        docs = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+        return docs
+
+    @router.post("/accounting/invoices")
+    async def create_invoice(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        from models import Invoice
+        items = data.get("items", [])
+        subtotal = 0
+        vat_total = 0
+        for item in items:
+            qty = item.get("quantity", 1)
+            price = item.get("unit_price", 0)
+            vat_rate = item.get("vat_rate", 20)
+            line_total = round(qty * price, 2)
+            line_vat = round(line_total * vat_rate / 100, 2)
+            item["total"] = line_total
+            item["vat"] = line_vat
+            subtotal += line_total
+            vat_total += line_vat
+        data["subtotal"] = round(subtotal, 2)
+        data["vat_amount"] = round(vat_total, 2)
+        data["total"] = round(subtotal + vat_total, 2)
+        data["created_by"] = current_user.get("name", "Admin")
+        if not data.get("invoice_number"):
+            count = await db.invoices.count_documents({"property_id": data.get("property_id", "")})
+            data["invoice_number"] = f"INV-{count + 1:05d}"
+        inv = Invoice(**data)
+        doc = inv.model_dump()
+        await db.invoices.insert_one(doc)
+        doc.pop("_id", None)
+        await log_sync(db, "accounting", "internal", "success", f"Invoice {doc['invoice_number']} created: £{doc['total']}", doc["id"])
+        return doc
+
+    @router.put("/accounting/invoices/{invoice_id}")
+    async def update_invoice(invoice_id: str, updates: Dict,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        updates.pop("_id", None)
+        updates.pop("id", None)
+        if updates.get("status") == "paid" and not updates.get("paid_date"):
+            updates["paid_date"] = datetime.now(timezone.utc).isoformat()[:10]
+        await db.invoices.update_one({"id": invoice_id}, {"$set": updates})
+        doc = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+        return doc
+
+    # === VAT Report ===
+
+    @router.get("/accounting/vat-report/{property_id}")
+    async def vat_report(property_id: str, period: str = "",
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        if not period:
+            period = datetime.now(timezone.utc).strftime("%Y-%m")
+        # Output VAT (on sales/income)
+        out_pipeline = [
+            {"$match": {"property_id": property_id, "created_at": {"$regex": f"^{period}"}}},
+            {"$group": {"_id": None, "total_vat": {"$sum": "$vat_amount"}, "total_sales": {"$sum": "$subtotal"}, "count": {"$sum": 1}}}
+        ]
+        output_vat = 0
+        output_sales = 0
+        inv_count = 0
+        async for doc in db.invoices.aggregate([{"$match": {"property_id": property_id, "invoice_type": "receivable", "created_at": {"$regex": f"^{period}"}}}, {"$group": {"_id": None, "vat": {"$sum": "$vat_amount"}, "sales": {"$sum": "$subtotal"}, "count": {"$sum": 1}}}]):
+            output_vat = round(doc["vat"], 2)
+            output_sales = round(doc["sales"], 2)
+            inv_count = doc["count"]
+
+        # Input VAT (on purchases/expenses)
+        input_vat = 0
+        input_purchases = 0
+        async for doc in db.invoices.aggregate([{"$match": {"property_id": property_id, "invoice_type": "payable", "created_at": {"$regex": f"^{period}"}}}, {"$group": {"_id": None, "vat": {"$sum": "$vat_amount"}, "purchases": {"$sum": "$subtotal"}}}]):
+            input_vat = round(doc["vat"], 2)
+            input_purchases = round(doc["purchases"], 2)
+
+        net_vat = round(output_vat - input_vat, 2)
+        return {
+            "period": period,
+            "output_vat": output_vat, "output_sales": output_sales,
+            "input_vat": input_vat, "input_purchases": input_purchases,
+            "net_vat_payable": net_vat, "invoice_count": inv_count,
+        }
+
+    # === Multi-Period Comparison ===
+
+    @router.get("/accounting/trends/{property_id}")
+    async def financial_trends(property_id: str, months: int = 6,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Month-over-month P&L trends"""
+        results = []
+        now = datetime.now(timezone.utc)
+        for i in range(months):
+            dt = now.replace(day=1) - timedelta(days=30 * i)
+            m = dt.strftime("%Y-%m")
+
+            inc_pipeline = [
+                {"$match": {"property_id": property_id, "date": {"$regex": f"^{m}"}}},
+                {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+            ]
+            exp_pipeline = [
+                {"$match": {"property_id": property_id, "date": {"$regex": f"^{m}"}}},
+                {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+            ]
+            income = 0
+            async for doc in db.income_entries.aggregate(inc_pipeline):
+                income = round(doc["total"], 2)
+            # Also add booking revenue
+            bk_pipeline = [
+                {"$match": {"property_id": property_id, "status": {"$ne": "cancelled"}, "created_at": {"$regex": f"^{m}"}}},
+                {"$group": {"_id": None, "total": {"$sum": "$total_price"}}}
+            ]
+            async for doc in db.bookings.aggregate(bk_pipeline):
+                income += round(doc["total"], 2)
+
+            expenses = 0
+            async for doc in db.expense_entries.aggregate(exp_pipeline):
+                expenses = round(doc["total"], 2)
+
+            results.append({
+                "month": m, "income": round(income, 2), "expenses": round(expenses, 2),
+                "net_profit": round(income - expenses, 2),
+                "margin": round(((income - expenses) / income * 100) if income > 0 else 0, 1),
+            })
+
+        results.reverse()
+        return results
+
+    # === CSV Export ===
+
+    @router.get("/accounting/export/{property_id}")
+    async def export_data(property_id: str, type: str = "pnl", period: str = "",
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Export accounting data as CSV-ready JSON"""
+        if not period:
+            period = datetime.now(timezone.utc).strftime("%Y-%m")
+
+        if type == "income":
+            docs = await db.income_entries.find({"property_id": property_id, "date": {"$regex": f"^{period}"}}, {"_id": 0}).to_list(1000)
+            headers = ["date", "category", "department", "amount", "currency", "description", "source", "reference"]
+        elif type == "expenses":
+            docs = await db.expense_entries.find({"property_id": property_id, "date": {"$regex": f"^{period}"}}, {"_id": 0}).to_list(1000)
+            headers = ["date", "category", "department", "amount", "currency", "description", "vendor", "receipt_ref"]
+        elif type == "invoices":
+            docs = await db.invoices.find({"property_id": property_id, "created_at": {"$regex": f"^{period}"}}, {"_id": 0}).to_list(1000)
+            headers = ["invoice_number", "invoice_type", "counterparty", "subtotal", "vat_amount", "total", "status", "due_date"]
+        else:
+            return await profit_and_loss(property_id, period=period, current_user=current_user)
+
+        rows = []
+        for doc in docs:
+            rows.append({h: doc.get(h, "") for h in headers})
+        return {"headers": headers, "rows": rows, "period": period, "type": type, "count": len(rows)}
+
     return router

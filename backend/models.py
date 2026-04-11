@@ -1508,3 +1508,103 @@ class Budget(BaseModel):
     actual_amount: float = 0
     variance: float = 0
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+
+# ==================== ENHANCED STOCK MODELS (Apicbase-level) ====================
+
+WASTE_REASONS = ["expired", "spoiled", "overproduction", "damaged", "spillage", "theft_suspected", "quality_issue", "other"]
+
+class SubRecipe(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    yield_qty: float = 1
+    yield_unit: str = "portions"
+    ingredients: list = Field(default_factory=list)
+    total_cost: float = 0
+    cost_per_unit: float = 0
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class Supplier(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str
+    contact_name: str = ""
+    email: str = ""
+    phone: str = ""
+    address: str = ""
+    payment_terms: str = "30 days"
+    products: list = Field(default_factory=list)
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class PurchaseOrder(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    supplier_id: str = ""
+    supplier_name: str = ""
+    status: str = "draft"  # draft, sent, received, cancelled
+    items: list = Field(default_factory=list)  # [{product_id, product_name, quantity, unit, unit_cost, total}]
+    total_amount: float = 0
+    notes: str = ""
+    order_date: str = ""
+    expected_date: str = ""
+    received_date: str = ""
+    created_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class StockCount(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    name: str = ""
+    status: str = "in_progress"  # in_progress, completed
+    items: list = Field(default_factory=list)  # [{product_id, product_name, expected, counted, variance, variance_cost}]
+    total_variance_cost: float = 0
+    counted_by: str = ""
+    completed_at: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== ENHANCED ACCOUNTING MODELS (M3/Xero-level) ====================
+
+USALI_ACCOUNTS = {
+    "revenue": ["4100-room_revenue","4200-fb_revenue","4300-other_revenue","4400-rental_income","4500-spa_revenue"],
+    "cost_of_sales": ["5100-food_cost","5200-beverage_cost","5300-labour_cost","5400-other_cos"],
+    "operating_expenses": ["6100-admin","6200-marketing","6300-utilities","6400-maintenance","6500-insurance","6600-technology","6700-depreciation"],
+    "payroll": ["7100-salaries","7200-benefits","7300-payroll_taxes"],
+}
+
+class ChartOfAccount(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    code: str
+    name: str
+    account_type: str  # revenue, cost_of_sales, operating_expenses, payroll, asset, liability
+    parent_code: str = ""
+    is_active: bool = True
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class Invoice(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    property_id: str
+    invoice_type: str = "receivable"  # receivable (guest owes us), payable (we owe supplier)
+    invoice_number: str = ""
+    counterparty: str = ""  # guest name or supplier name
+    items: list = Field(default_factory=list)  # [{description, quantity, unit_price, vat_rate, total}]
+    subtotal: float = 0
+    vat_amount: float = 0
+    total: float = 0
+    currency: str = "GBP"
+    status: str = "draft"  # draft, sent, paid, overdue, cancelled
+    due_date: str = ""
+    paid_date: str = ""
+    notes: str = ""
+    created_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

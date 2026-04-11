@@ -59,8 +59,21 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - Guest Messaging: Unified Inbox, Automation, Channel Settings, AI Concierge
 - Connections: Integrations, API Connection, Webhooks
 
+## Code Architecture (Refactored)
+```
+backend/
+├── server.py          # Core routes (~5,200 lines, down from 6,400)
+├── routes/
+│   ├── messaging.py   # 17 endpoints (517 lines) — Conversations, Messages, Quick Replies, Channel Settings, Auto-Replies, Calendar, Send
+│   ├── automation.py  # 9 endpoints (222 lines) — Rules CRUD, Toggle, Run, Logs, Stats, Preview
+│   └── dashboard.py   # 5 endpoints (179 lines) — Dashboard Overview, Concierge Analytics, Space Bookings Admin
+├── auth.py            # JWT auth, require_roles
+├── database.py        # MongoDB connection
+└── models.py          # Pydantic models
+```
+
 ## Backlog
 - P1: Real bi-directional outbound sync for review platforms
-- P2: Extract server.py (~6,400 lines) into /routes/ modules
+- P2: Continue server.py modularization (bookings, reviews, auth routes)
 - P3: Real-time availability calendar integration
 - Note: Channel Manager already exists on myhotelbox.com — NOT building

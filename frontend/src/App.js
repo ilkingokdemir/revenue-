@@ -32,6 +32,7 @@ import { DashboardHome } from "./components/dashboard/DashboardHome";
 import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePanel";
 import { GuestProfilesPanel } from "./components/dashboard/GuestProfilesPanel";
 import { AdminPanel } from "./components/dashboard/AdminPanel";
+import { HousekeepingPanel } from "./components/dashboard/HousekeepingPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -116,6 +117,7 @@ import {
   MapPin,
   Wallet,
   Receipt,
+  Broom,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2497,6 +2499,7 @@ const Dashboard = ({ user, onLogout }) => {
     {
       label: "Operations",
       items: [
+        { id: "housekeeping", icon: Broom, name: "Housekeeping", testId: "housekeeping-btn" },
         { id: "stock-management", icon: Package, name: "Stock / F&B", testId: "stock-management-btn" },
         { id: "accounting", icon: Wallet, name: "Accounting", testId: "accounting-btn" },
         { id: "pos", icon: Receipt, name: "Point of Sale", testId: "pos-btn" },
@@ -2879,6 +2882,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Stock Management */}
         {activeView === "stock-management" && (
           <StockManagementPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Housekeeping */}
+        {activeView === "housekeeping" && (
+          <HousekeepingPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Accounting */}

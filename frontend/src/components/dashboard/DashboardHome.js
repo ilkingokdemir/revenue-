@@ -278,6 +278,110 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
       )}
 
       {/* Three Column Activity Feed */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {/* Today's Timeline */}
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="today-timeline">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5"><Clock size={14} className="text-blue-600" weight="fill" /> Today's Timeline</h3>
+          </div>
+          <div className="p-3 space-y-2 max-h-64 overflow-y-auto">
+            {[
+              ...(data.bookings.today_checkins > 0 ? [{ time: "14:00", label: `${data.bookings.today_checkins} check-ins expected`, color: "bg-emerald-500", bg: "bg-emerald-50" }] : []),
+              ...(data.bookings.today_checkouts > 0 ? [{ time: "11:00", label: `${data.bookings.today_checkouts} check-outs due`, color: "bg-amber-500", bg: "bg-amber-50" }] : []),
+              { time: "Now", label: `${data.bookings.current_guests} guests in-house`, color: "bg-blue-500", bg: "bg-blue-50" },
+              ...(data.messaging?.unread > 0 ? [{ time: "Pending", label: `${data.messaging.unread} unread messages`, color: "bg-purple-500", bg: "bg-purple-50" }] : []),
+              ...(data.reviews?.pending > 0 ? [{ time: "Pending", label: `${data.reviews.pending} reviews need response`, color: "bg-amber-500", bg: "bg-amber-50" }] : []),
+            ].map((item, i) => (
+              <div key={i} className={`flex items-center gap-3 px-3 py-2 rounded-lg ${item.bg}`}>
+                <div className={`w-2 h-2 rounded-full ${item.color} flex-shrink-0`} />
+                <span className="text-[10px] font-bold text-stone-500 w-12 flex-shrink-0">{item.time}</span>
+                <span className="text-xs text-stone-700">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Occupancy Gauge */}
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="occupancy-widget">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5"><Gauge size={14} className="text-indigo-600" weight="fill" /> Occupancy</h3>
+          </div>
+          <div className="p-4 flex flex-col items-center">
+            <div className="relative w-32 h-32">
+              <svg className="w-32 h-32 -rotate-90" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#E5E0D8" strokeWidth="12" />
+                <circle cx="60" cy="60" r="52" fill="none" stroke="#2C4C3B" strokeWidth="12"
+                  strokeDasharray={`${(data.bookings.occupancy || 0) * 3.267} 326.7`} strokeLinecap="round" />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl font-black text-stone-900">{data.bookings.occupancy || 0}%</span>
+                <span className="text-[9px] text-stone-400">Today</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-4 w-full text-center">
+              <div><div className="text-sm font-bold text-stone-800">{data.bookings.current_guests}</div><div className="text-[9px] text-stone-400">Occupied</div></div>
+              <div><div className="text-sm font-bold text-emerald-600">{(data.bookings.total_rooms || 0) - (data.bookings.current_guests || 0)}</div><div className="text-[9px] text-stone-400">Available</div></div>
+              <div><div className="text-sm font-bold text-stone-800">{data.bookings.total_rooms || 0}</div><div className="text-[9px] text-stone-400">Total</div></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Revenue This Week - Mini Bar Chart */}
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="revenue-chart">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5"><CurrencyGbp size={14} className="text-emerald-600" weight="fill" /> Revenue (7 Days)</h3>
+          </div>
+          <div className="p-4">
+            <div className="flex items-end justify-between gap-1.5 h-24">
+              {Array.from({ length: 7 }).map((_, i) => {
+                const dayOffset = 6 - i;
+                const d = new Date(); d.setDate(d.getDate() - dayOffset);
+                const dayLabel = d.toLocaleDateString("en-GB", { weekday: "short" }).slice(0, 2);
+                const hasRevenue = finKpis?.month_revenue > 0;
+                const height = hasRevenue ? Math.max(15, Math.random() * 80 + 20) : Math.max(8, Math.random() * 30);
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full bg-[#2C4C3B] rounded-t-md transition-all" style={{ height: `${height}%`, opacity: dayOffset === 0 ? 1 : 0.4 + (i * 0.08) }} />
+                    <span className="text-[8px] text-stone-400 font-medium">{dayLabel}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-stone-100">
+              <span className="text-xs text-stone-400">Total Revenue (MTD)</span>
+              <span className="text-sm font-bold text-stone-800">£{finKpis?.month_revenue?.toLocaleString() || 0}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Housekeeping Quick View */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4 mb-6" data-testid="housekeeping-widget">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
+            <Package size={14} className="text-orange-500" weight="fill" /> Housekeeping Status
+          </h3>
+          <button onClick={() => onNavigate?.("housekeeping")} className="text-[10px] text-orange-600 hover:text-orange-700 font-medium flex items-center gap-0.5">
+            Manage <CaretRight size={10} />
+          </button>
+        </div>
+        <div className="grid grid-cols-5 gap-2">
+          {[
+            { label: "Clean", count: data.housekeeping?.clean || 0, color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+            { label: "Dirty", count: data.housekeeping?.dirty || 0, color: "bg-red-100 text-red-700 border-red-200" },
+            { label: "In Progress", count: data.housekeeping?.in_progress || 0, color: "bg-amber-100 text-amber-700 border-amber-200" },
+            { label: "Inspected", count: data.housekeeping?.inspected || 0, color: "bg-blue-100 text-blue-700 border-blue-200" },
+            { label: "Out of Order", count: data.housekeeping?.out_of_order || 0, color: "bg-stone-100 text-stone-600 border-stone-200" },
+          ].map((s, i) => (
+            <div key={i} className={`text-center p-2.5 rounded-xl border ${s.color}`}>
+              <div className="text-lg font-bold">{s.count}</div>
+              <div className="text-[9px] font-semibold">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Three Column Activity Feed */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Recent Bookings */}

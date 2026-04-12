@@ -173,6 +173,13 @@ def create_dashboard_router(db, require_roles):
                 "bookings": recent_bookings,
                 "messages": recent_messages,
                 "reviews": recent_reviews_list,
+            },
+            "housekeeping": {
+                "clean": await db.room_statuses.count_documents({**prop_filter, "status": "clean"}),
+                "dirty": await db.room_statuses.count_documents({**prop_filter, "status": "dirty"}),
+                "in_progress": await db.room_statuses.count_documents({**prop_filter, "status": "in_progress"}),
+                "inspected": await db.room_statuses.count_documents({**prop_filter, "status": "inspected"}),
+                "out_of_order": await db.room_statuses.count_documents({**prop_filter, "status": "out_of_order"}),
             }
         }
 

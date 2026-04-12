@@ -42,8 +42,9 @@ def create_payments_router(db, require_roles):
         webhook_url = f"{host_url}/api/webhook/stripe"
         stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
 
-        success_url = f"{origin_url}/booking-confirmation?session_id={{CHECKOUT_SESSION_ID}}"
-        cancel_url = f"{origin_url}/booking/{booking.get('property_id', '')}"
+        property_id = booking.get('property_id', '')
+        success_url = f"{origin_url}/book?property={property_id}&payment=success&session_id={{CHECKOUT_SESSION_ID}}"
+        cancel_url = f"{origin_url}/book?property={property_id}&payment=cancelled"
 
         checkout_req = CheckoutSessionRequest(
             amount=amount,
@@ -151,7 +152,7 @@ def create_payments_router(db, require_roles):
         # Check if already processed
         tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
         if tx and tx.get("payment_status") == "paid":
-            return {"status": "complete", "payment_status": "paid", "amount": tx.get("amount"), "type": tx.get("type")}
+            return {"status": "complete", "payment_status": "paid", "amount": tx.get("amount"), "type": tx.get("type"), "booking_ref": tx.get("reference_number", "")}
 
         host_url = str(request.base_url).rstrip("/")
         webhook_url = f"{host_url}/api/webhook/stripe"
@@ -229,6 +230,7 @@ def create_payments_router(db, require_roles):
             "amount": status.amount_total / 100 if status.amount_total else 0,
             "currency": status.currency,
             "type": tx.get("type") if tx else "unknown",
+            "booking_ref": tx.get("reference_number", "") if tx else "",
         }
 
     # ==================== STRIPE WEBHOOK ====================

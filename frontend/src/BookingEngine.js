@@ -240,8 +240,8 @@ function BookingEngineInner() {
         adults, children, rooms: roomCount, special_requests: guestForm.special_requests,
       });
       if (paymentMethod === "card") {
-        const { data: pd } = await axios.post(`${API}/payments/create-checkout`, null, {
-          params: { booking_id: data.id, origin_url: window.location.origin }
+        const { data: pd } = await axios.post(`${API}/payments/booking-checkout`, {
+          booking_id: data.id, origin_url: window.location.origin
         });
         if (pd.url) window.location.href = pd.url;
       } else {

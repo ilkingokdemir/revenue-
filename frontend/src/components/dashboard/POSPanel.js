@@ -15,7 +15,7 @@ import {
   Plus, Minus, ArrowsClockwise, Trash, X, Receipt,
   CurrencyGbp, Lightning, Star, CheckCircle,
 } from "@phosphor-icons/react";
-import { UtensilsCrossed, Wine, Bed, Sparkles, Gift, ShoppingCart, BarChart3, Clock, CreditCard, Banknote, Building, Users, ChefHat, LayoutGrid } from "lucide-react";
+import { UtensilsCrossed, Wine, Bed, Sparkles, Gift, ShoppingCart, BarChart3, Clock, CreditCard, Banknote, Building, Users, ChefHat, LayoutGrid, QrCode, Percent, Award } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -59,6 +59,10 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
   const [payMethod, setPayMethod] = useState("card");
   const [tip, setTip] = useState(0);
 
+  const [happyHours, setHappyHours] = useState([]);
+  const [showHappyForm, setShowHappyForm] = useState(false);
+  const [newHH, setNewHH] = useState({ name: "", start_hour: 16, end_hour: 19, discount_pct: 20, categories: [] });
+
   const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
   const fetchOutlets = useCallback(async () => {
@@ -88,6 +92,11 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
     setReports(data);
   }, [propertyId]);
 
+  const fetchHappyHours = useCallback(async () => {
+    const { data } = await axios.get(`${API}/pos/happy-hours/${propertyId}`);
+    setHappyHours(data);
+  }, [propertyId]);
+
   const fetchTables = useCallback(async () => {
     if (activeOutlet?.id) {
       const { data } = await axios.get(`${API}/pos/tables/${activeOutlet.id}`);
@@ -103,6 +112,7 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
   useEffect(() => { if (tab === "orders") fetchOrders(); }, [tab, fetchOrders]);
   useEffect(() => { if (tab === "kitchen") fetchKitchen(); }, [tab, fetchKitchen]);
   useEffect(() => { if (tab === "reports") fetchReports(); }, [tab, fetchReports]);
+  useEffect(() => { if (tab === "happy-hour") fetchHappyHours(); }, [tab, fetchHappyHours]);
   useEffect(() => { if (tab === "tables") fetchTables(); }, [tab, fetchTables]);
 
   const addToCart = (item) => {
@@ -182,6 +192,8 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
     { id: "kitchen", label: "Kitchen", icon: ChefHat },
     { id: "orders", label: "Orders", icon: Receipt },
     { id: "reports", label: "Reports", icon: BarChart3 },
+    { id: "happy-hour", label: "Happy Hour", icon: Percent },
+    { id: "qr-code", label: "QR Order", icon: QrCode },
   ];
 
   if (loading) return <div className="flex items-center justify-center h-96"><ArrowsClockwise size={24} className="animate-spin text-stone-300" /></div>;
@@ -422,6 +434,15 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
                       <button onClick={() => { setPayingOrder(o); setShowPay(true); }}
                         className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded font-medium" data-testid={`pay-${o.id}`}>Pay</button>
                     )}
+                    {o.payment_status === "paid" && !o.receipt_sent && (
+                      <button onClick={async () => {
+                        const email = prompt("Guest email for receipt:");
+                        if (email) {
+                          try { await axios.post(`${API}/pos/orders/${o.id}/receipt`, { email }); toast.success("Receipt sent!"); fetchOrders(); } catch (e) { toast.error("Failed"); }
+                        }
+                      }} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-600 rounded font-medium" data-testid={`receipt-${o.id}`}>Receipt</button>
+                    )}
+                    {o.receipt_sent && <span className="text-[9px] text-stone-400">Sent</span>}
                   </div>
                 </div>
               ))}
@@ -505,6 +526,109 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
             )}
 
             {reports.total_orders === 0 && <div className="text-center py-10 text-stone-400 text-sm">No sales data for today</div>}
+          </div>
+        )}
+
+        {/* ========== HAPPY HOUR ========== */}
+        {tab === "happy-hour" && (
+          <div className="flex-1 p-6 overflow-y-auto space-y-4" data-testid="happy-hour-tab">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-stone-800 flex items-center gap-2"><Percent size={16} /> Happy Hour & Promotions</span>
+              <button onClick={() => setShowHappyForm(true)} className="text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg font-medium" data-testid="new-happy-hour-btn">
+                <Plus size={12} className="inline mr-1" /> New Promotion
+              </button>
+            </div>
+            {happyHours.map(hh => (
+              <div key={hh.id} className={`bg-white border rounded-xl p-4 ${hh.enabled ? "border-amber-200" : "border-stone-200 opacity-60"}`} data-testid={`hh-${hh.id}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <span className="text-sm font-semibold text-stone-800">{hh.name}</span>
+                    <span className="text-[10px] text-amber-600 ml-2 bg-amber-50 px-1.5 py-0.5 rounded-full">{hh.discount_pct}% off</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className={`text-[9px] ${hh.enabled ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>{hh.enabled ? "Active" : "Inactive"}</Badge>
+                    <button onClick={async () => { await axios.put(`${API}/pos/happy-hours/${hh.id}`, { enabled: !hh.enabled }); fetchHappyHours(); }}
+                      className="text-[10px] text-blue-600 hover:text-blue-700" data-testid={`toggle-hh-${hh.id}`}>
+                      {hh.enabled ? "Disable" : "Enable"}
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-stone-500 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Clock size={12} /> {hh.start_hour}:00 — {hh.end_hour}:00
+                    <span className="text-[10px] text-stone-400">({hh.days?.join(", ")})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {hh.categories?.map(c => (
+                      <span key={c} className="text-[9px] bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded-full">{c}</span>
+                    ))}
+                    {(!hh.categories || hh.categories.length === 0) && <span className="text-[9px] text-stone-400">All categories</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {happyHours.length === 0 && <div className="text-center py-10 text-stone-400 text-sm">No promotions configured</div>}
+
+            <Dialog open={showHappyForm} onOpenChange={setShowHappyForm}>
+              <DialogContent className="max-w-md"><DialogHeader><DialogTitle>New Happy Hour</DialogTitle></DialogHeader>
+                <div className="space-y-2">
+                  <Input placeholder="Promotion name" value={newHH.name} onChange={e => setNewHH(p => ({...p, name: e.target.value}))} data-testid="hh-name" />
+                  <div className="grid grid-cols-3 gap-2">
+                    <div><label className="text-[10px] text-stone-500">Start Hour</label><Input type="number" min={0} max={23} value={newHH.start_hour} onChange={e => setNewHH(p => ({...p, start_hour: parseInt(e.target.value) || 0}))} /></div>
+                    <div><label className="text-[10px] text-stone-500">End Hour</label><Input type="number" min={0} max={23} value={newHH.end_hour} onChange={e => setNewHH(p => ({...p, end_hour: parseInt(e.target.value) || 0}))} /></div>
+                    <div><label className="text-[10px] text-stone-500">Discount %</label><Input type="number" min={1} max={100} value={newHH.discount_pct} onChange={e => setNewHH(p => ({...p, discount_pct: parseInt(e.target.value) || 0}))} /></div>
+                  </div>
+                  <button onClick={async () => {
+                    if (!newHH.name) return toast.error("Name required");
+                    await axios.post(`${API}/pos/happy-hours`, { ...newHH, property_id: propertyId });
+                    setShowHappyForm(false); fetchHappyHours(); toast.success("Promotion created");
+                  }} className="w-full text-xs py-2 bg-orange-500 text-white rounded-lg font-medium" data-testid="save-hh-btn">Create Promotion</button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
+
+        {/* ========== QR CODE ========== */}
+        {tab === "qr-code" && (
+          <div className="flex-1 p-6 overflow-y-auto space-y-4" data-testid="qr-code-tab">
+            <div className="text-sm font-semibold text-stone-800 flex items-center gap-2 mb-4"><QrCode size={16} /> QR Code Self-Ordering</div>
+            <p className="text-xs text-stone-500 mb-4">Generate QR codes for each outlet. Guests scan with their phone to browse the menu and place orders directly — no app download needed.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {outlets.filter(o => o.active).map(outlet => {
+                const baseUrl = process.env.REACT_APP_BACKEND_URL || "";
+                const qrUrl = `${baseUrl}/qr-order/${propertyId}/${outlet.id}`;
+                const Icon = OUTLET_ICONS[outlet.icon] || UtensilsCrossed;
+                return (
+                  <div key={outlet.id} className="bg-white border border-stone-200 rounded-xl p-4" data-testid={`qr-outlet-${outlet.id}`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center"><Icon size={16} className="text-orange-600" /></div>
+                      <span className="text-sm font-semibold text-stone-800">{outlet.name}</span>
+                    </div>
+                    <div className="bg-stone-50 rounded-lg p-3 mb-3">
+                      <div className="text-[10px] text-stone-400 mb-1">Order URL</div>
+                      <div className="text-[11px] font-mono text-blue-600 break-all">{qrUrl}</div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { navigator.clipboard.writeText(qrUrl); toast.success("Link copied!"); }}
+                        className="flex-1 text-xs py-1.5 bg-blue-50 text-blue-700 rounded-lg font-medium">Copy Link</button>
+                      <button onClick={() => { navigator.clipboard.writeText(`${qrUrl}?table=1`); toast.success("Table 1 link copied!"); }}
+                        className="flex-1 text-xs py-1.5 bg-stone-100 text-stone-600 rounded-lg font-medium">+ Table #</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-4">
+              <h4 className="text-xs font-semibold text-amber-800 mb-1">How It Works</h4>
+              <ol className="text-[11px] text-amber-700 space-y-1 list-decimal list-inside">
+                <li>Print the QR code or share the link — add <code>?table=5</code> to pre-fill table number</li>
+                <li>Guests scan and see the full digital menu with live prices and availability</li>
+                <li>Happy Hour discounts are automatically applied if active</li>
+                <li>Orders appear instantly on your Kitchen Display and Orders tab</li>
+                <li>Process payment when serving — card, cash, or charge to room</li>
+              </ol>
+            </div>
           </div>
         )}
       </div>

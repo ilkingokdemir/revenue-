@@ -41,6 +41,7 @@ from routes.accounting_advanced import create_accounting_advanced_router
 from routes.bank_reconciliation import create_bank_reconciliation_router
 from routes.enhanced_features import create_enhanced_features_router
 from routes.pos import create_pos_router
+from routes.pos_advanced import create_pos_advanced_router
 from routes.auth_routes import create_auth_router
 from routes.connections import create_connections_router
 from routes.reviews import create_reviews_router
@@ -288,6 +289,9 @@ api_router.include_router(enhanced_router)
 
 pos_router = create_pos_router(db, require_roles)
 api_router.include_router(pos_router)
+
+pos_adv_router = create_pos_advanced_router(db, require_roles, resend)
+api_router.include_router(pos_adv_router)
 
 auth_routes_router = create_auth_router(db, require_roles, get_current_user, hash_password, verify_password,
                                          create_access_token, create_refresh_token, get_jwt_secret, JWT_ALGORITHM)

@@ -1,94 +1,117 @@
 {
   "theme": "Light",
-  "archetype": "4 (Swiss & High-Contrast) optimized for High-Conversion Travel Utility",
-  "vibe": "Secure, authoritative, urgent, high-conversion",
-  "colors": {
-    "background_primary": "#FFFFFF",
-    "background_secondary": "#F5F7FA",
-    "primary": "#0A4297",
-    "primary_hover": "#083375",
-    "action": "#006CE4",
-    "action_hover": "#0056B3",
-    "accent_warning": "#FFB703",
-    "accent_urgency": "#D32F2F",
-    "accent_success": "#008009",
-    "text_main": "#1A1A1A",
-    "text_muted": "#4A5568",
-    "border": "#E5E7EB"
+  "archetype": "Archetype 1 (Organic & Earthy)",
+  "color_palette": {
+    "background": "bg-[#F9F8F6]",
+    "surface": "bg-white",
+    "primary": "bg-[#2C4C3B]",
+    "primary_foreground": "text-white",
+    "secondary": "bg-[#F0EBE1]",
+    "secondary_foreground": "text-[#2C4C3B]",
+    "accent": "bg-[#D4A373]",
+    "accent_foreground": "text-white",
+    "destructive": "bg-[#9B4837]",
+    "destructive_foreground": "text-white",
+    "muted": "bg-[#EAE5DC]",
+    "muted_foreground": "text-[#78716C]",
+    "border": "border-[#E5E0D8]"
   },
   "typography": {
-    "font_heading": "Outfit",
-    "font_body": "Manrope",
-    "h1": "text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-slate-900",
-    "h2": "text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-slate-900",
-    "h3": "text-xl sm:text-2xl font-semibold text-slate-900",
-    "body": "text-base text-slate-600 leading-relaxed",
-    "small_label": "text-xs font-bold tracking-[0.2em] uppercase text-slate-500",
-    "price": "text-2xl font-bold text-slate-900",
-    "urgency_text": "text-sm font-semibold text-[#D32F2F]"
+    "heading_font": "Outfit",
+    "body_font": "Manrope",
+    "h1": "text-4xl sm:text-5xl font-black tracking-tighter text-[#1C1917]",
+    "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-[#1C1917]",
+    "h3": "text-xl sm:text-2xl font-bold tracking-tight text-[#1C1917]",
+    "h4": "text-lg sm:text-xl font-semibold tracking-tight text-[#1C1917]",
+    "body": "text-base font-medium text-[#44403C]",
+    "small": "text-sm font-medium text-[#78716C]",
+    "overline": "text-xs font-bold uppercase tracking-[0.2em] text-[#78716C]"
   },
-  "layout_spacing": {
-    "container_padding": "px-4 sm:px-6 lg:px-8",
-    "section_spacing": "py-16 sm:py-24 lg:py-32",
-    "element_gap": "gap-6 lg:gap-8",
-    "booking_widget": "p-6 sm:p-8 bg-white border border-gray-200 shadow-xl rounded-xl"
+  "spacing_and_layout": {
+    "philosophy": "Generous Spacing Philosophy with Control Room Grid for dense areas.",
+    "pos_terminal": "flex h-screen overflow-hidden. Left Nav (w-20), Main Content (flex-1 flex flex-col p-6), Right Cart (w-[400px] border-l border-[#E5E0D8] bg-white p-6 flex flex-col).",
+    "menu_grid": "grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6",
+    "kitchen_display": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start",
+    "reports_grid": "grid grid-cols-1 lg:grid-cols-3 gap-6",
+    "table_plan": "relative w-full h-full bg-[#F0EBE1] rounded-3xl p-8 border border-[#E5E0D8]",
+    "card_padding": "p-6",
+    "section_gap": "gap-8"
+  },
+  "surface_strategies": {
+    "header": "Solid background bg-white with a hard bottom border border-[#E5E0D8].",
+    "menu_card": "Flat background bg-white, 1px subtle border border-[#E5E0D8], rounded-2xl p-2. Image rounded-xl. Hover: -translate-y-1 shadow-lg border-[#D4A373] transition-all duration-200.",
+    "cart_sidebar": "bg-white border-l border-[#E5E0D8] shadow-[0_0_40px_rgba(0,0,0,0.02)]",
+    "kitchen_ticket": "bg-white border border-[#E5E0D8] rounded-2xl p-6 shadow-sm. Header of ticket uses accent color for new orders.",
+    "table_object": "Rounded geometries (circles for round tables, rounded-2xl for square). bg-white border-2 border-[#E5E0D8]. Active table: border-[#2C4C3B] bg-[#2C4C3B]/5."
   },
   "components": {
     "buttons": {
-      "primary": "bg-[#006CE4] text-white hover:bg-[#0056B3] font-semibold rounded-md px-6 py-3 transition-colors",
-      "secondary": "bg-white text-[#0A4297] border border-[#0A4297] hover:bg-[#F5F7FA] font-semibold rounded-md px-6 py-3 transition-colors"
+      "primary": "bg-[#2C4C3B] text-white hover:bg-[#1A3025] hover:text-white rounded-xl px-6 py-4 font-bold transition-all duration-200",
+      "secondary": "bg-[#F0EBE1] text-[#2C4C3B] hover:bg-[#E5E0D8] hover:text-[#1A3025] rounded-xl px-4 py-2 font-bold",
+      "accent": "bg-[#D4A373] text-white hover:bg-[#C28E5B] hover:text-white rounded-xl px-4 py-2 font-bold",
+      "destructive": "bg-[#9B4837] text-white hover:bg-[#7D382A] hover:text-white rounded-xl px-4 py-2 font-bold"
     },
-    "cards": "bg-white border border-gray-200 rounded-lg overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1",
-    "badges": {
-      "cancellation": "bg-green-50 text-[#008009] border border-green-200 text-xs font-semibold px-2 py-1 rounded",
-      "rating": "bg-[#0A4297] text-white font-bold px-2 py-1 text-sm rounded-tl-lg rounded-br-lg"
-    }
+    "inputs": "Shadcn UI Input, rounded-xl border-[#E5E0D8] bg-[#F9F8F6] focus:ring-2 focus:ring-[#2C4C3B]/20 focus:border-[#2C4C3B] transition-all",
+    "dialog": "Shadcn Dialog for Split Bill and Payment. Use rounded-3xl, p-8. No generic modal feel, make it feel like a tactile receipt.",
+    "tabs": "Shadcn Tabs for POS Categories. Use pill-style tabs: data-[state=active]:bg-[#2C4C3B] data-[state=active]:text-white rounded-full px-6 py-2 bg-transparent text-[#78716C] border border-[#E5E0D8]",
+    "charts": "Recharts. Bar Chart for Top Items (using #2C4C3B and #D4A373). Heatmap for sales (custom grid of colored blocks)."
   },
-  "trust_and_urgency": {
-    "trust_signals": [
-      "Lock icon + 'Secure Booking' near checkout button",
-      "CheckCircle + 'Free Cancellation' in green text on room cards",
-      "Star icon + Rating bubble (e.g. 8.9 Excellent) prominently displayed"
-    ],
-    "urgency_patterns": [
-      "'Only X rooms left on our site!' in red",
-      "'In high demand - booked X times in the last 24 hours'",
-      "Strike-through original pricing to show savings"
-    ]
-  },
-  "icons": {
-    "library": "@phosphor-icons/react",
-    "style": "weight='fill' for ratings/badges, weight='regular' for UI actions",
-    "installation": "yarn add @phosphor-icons/react"
+  "icons_and_assets": {
+    "icon_library": "@phosphor-icons/react",
+    "installation": "yarn add @phosphor-icons/react lucide-react recharts clsx tailwind-merge framer-motion",
+    "icon_style": "Duotone weight for primary navigation, Regular for dense UI actions."
   },
   "media": {
-    "hero_background": {
-      "url": "https://images.pexels.com/photos/9119725/pexels-photo-9119725.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "description": "Tranquil luxury hotel paradise with mountain backdrop and inviting poolside setting.",
-      "usage": "Hero section background with dark blue/black gradient overlay (bg-black/40) so the white booking widget pops."
-    },
-    "rooms": [
+    "image_urls": [
       {
-        "url": "https://images.unsplash.com/photo-1766928210443-0be92ed5884a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBsdXh1cnklMjBob3RlbCUyMHJvb20lMjBpbnRlcmlvciUyMGJlZHxlbnwwfHx8fDE3NzU4ODU3NTh8MA&ixlib=rb-4.1.0&q=85",
-        "name": "Deluxe Ocean View Room",
-        "description": "Modern bedroom with large window and artwork"
+        "category": "menu_item_gourmet",
+        "url": "https://images.unsplash.com/photo-1737140789642-9788a3388494?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHw0fHxnb3VybWV0JTIwZm9vZCUyMHJlc3RhdXJhbnQlMjBkaXNofGVufDB8fHx8MTc3NTk5Nzc3NHww&ixlib=rb-4.1.0&q=85",
+        "description": "Gourmet Dish 1 - Steak/Meat"
       },
       {
-        "url": "https://images.unsplash.com/photo-1759264244726-adde4e4318fc?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwyfHxtb2Rlcm4lMjBsdXh1cnklMjBob3RlbCUyMHJvb20lMjBpbnRlcmlvciUyMGJlZHxlbnwwfHx8fDE3NzU4ODU3NTh8MA&ixlib=rb-4.1.0&q=85",
-        "name": "Executive Suite",
-        "description": "A neatly made bed with white linens and pillows."
+        "category": "menu_item_scallops",
+        "url": "https://images.unsplash.com/photo-1758580815331-44e9214c3e6a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwyfHxnb3VybWV0JTIwZm9vZCUyMHJlc3RhdXJhbnQlMjBkaXNofGVufDB8fHx8MTc3NTk5Nzc3NHww&ixlib=rb-4.1.0&q=85",
+        "description": "Gourmet Dish 2 - Scallops"
+      },
+      {
+        "category": "menu_item_cheese",
+        "url": "https://images.unsplash.com/photo-1698369233650-f34e12878909?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwzfHxnb3VybWV0JTIwZm9vZCUyMHJlc3RhdXJhbnQlMjBkaXNofGVufDB8fHx8MTc3NTk5Nzc3NHww&ixlib=rb-4.1.0&q=85",
+        "description": "Appetizer - Cheese and Crackers"
+      },
+      {
+        "category": "menu_item_cocktail",
+        "url": "https://images.unsplash.com/photo-1698054239930-1a96f42f87da?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxjcmFmdCUyMGNvY2t0YWlsJTIwZHJpbmslMjBiYXJ8ZW58MHx8fHwxNzc1OTk3Nzc0fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Craft Cocktail with Lime"
+      },
+      {
+        "category": "menu_item_coffee",
+        "url": "https://images.unsplash.com/photo-1582076174004-d66a1311d411?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwzfHxjb2ZmZWUlMjBsYXR0ZSUyMGFydCUyMGNhZmV8ZW58MHx8fHwxNzc1OTk3Nzc0fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Coffee Latte Art"
       }
     ]
   },
+  "animations_and_motion": {
+    "hover_states": "All buttons and cards must have transform scaling (scale-95 for click, scale-105 for hover).",
+    "page_transitions": "Framer motion for switching between POS, Kitchen, Tables, and Reports. Use opacity and subtle y-axis sliding.",
+    "cart_items": "Animate layout shifts when items are added/removed from cart using framer-motion <motion.li layout />."
+  },
+  "accessibility": {
+    "focus_rings": "focus-visible:ring-2 focus-visible:ring-[#2C4C3B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F9F8F6]",
+    "contrast": "Text must meet 4.5:1 ratio. Primary button text (#FFFFFF) on #2C4C3B meets standard.",
+    "testing_attributes": "All interactive elements MUST have data-testid attributes (e.g., data-testid='pos-menu-item', data-testid='cart-pay-button')."
+  },
   "instructions_to_main_agent": [
-    "Build a White-Label Hotel Booking Engine module suitable for MyHotelBox PMS.",
-    "CRITICAL: Adhere strictly to the color palette. Use #0A4297 (Deep Blue) for trust elements/header and #006CE4 (Action Blue) for CTAs to mimic the Booking.com secure feel. Do NOT use default tailwind blues.",
-    "Implement a step-by-step booking flow (Search -> Room Selection -> Guest Details -> Confirm). Use a sticky 'Book Now' bar at the bottom for mobile.",
-    "For the Search Widget, use Shadcn Calendar for date selection and Shadcn Select/Popover for Guest/Room counts. Make the widget stark white with a crisp 1px border and strong shadow against the hero image.",
-    "Include 'Trust Signals' aggressively: ShieldCheck icons next to checkout, 'Free Cancellation' green badges on room cards, and secure payment logos.",
-    "Include 'Urgency Signals': Hardcode some realistic urgency text like 'Only 2 rooms left on our site!' in #D32F2F (Red).",
-    "For the Landing Page Template, structure it: Hero (with embedded widget) -> Rooms (Cards) -> Amenities -> Location/Map (placeholder) -> Reviews.",
-    "All interactive elements MUST have data-testid attributes (e.g., data-testid='room-search-button').",
-    "Use @phosphor-icons/react for all icons."
+    "Create a responsive multi-view dashboard: 1. POS Terminal (Menu & Cart) 2. Table Floor Plan 3. Kitchen Display 4. Reports.",
+    "Use a Left Sidebar (w-20 or w-24) for main navigation between these views. It should just have icons and active state indicators.",
+    "The POS Terminal view: Split into Left/Center (Menu Grid) and Right (Order Cart Sidebar). The cart MUST include Modifiers, Order Notes, Discount/Promo inputs, Void/Refund buttons, and a massive 'PAY' CTA.",
+    "The Table Floor Plan: Create a visual map of tables using absolute positioning or CSS Grid, where tables change color if occupied (#2C4C3B/10 background, #2C4C3B border).",
+    "Kitchen Display: A horizontal timeline or bento grid of active order tickets. Tickets must show items, modifiers, and time elapsed.",
+    "Reports View: Incorporate Recharts to show a Sales Heatmap and a Top Items Bar Chart.",
+    "Payment Dialog: Implement a Shadcn Dialog for the payment step that includes a Split Bill functionality and Receipt Preview.",
+    "Use Outfit for headings and Manrope for body text. Enforce the Organic & Earthy palette strictly. Do not use generic Inter or generic blue/gray.",
+    "Cards should use the 1px subtle border rule, no heavy shadows until hovered.",
+    "Use @phosphor-icons/react for premium duotone/regular icons.",
+    "All interactive elements MUST include data-testid attributes.",
+    "Install Google Fonts 'Outfit' and 'Manrope' in index.css using @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');"
   ]
 }

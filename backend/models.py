@@ -1263,6 +1263,7 @@ class MaintenanceRequest(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     property_id: str
     room_number: str = ""
+    title: str = ""
     category: str = "general"  # plumbing, electrical, hvac, furniture, general
     description: str
     priority: str = "normal"

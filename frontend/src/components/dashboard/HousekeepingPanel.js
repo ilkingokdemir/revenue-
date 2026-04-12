@@ -36,7 +36,7 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
   const [search, setSearch] = useState("");
   const [showNewTask, setShowNewTask] = useState(false);
   const [showNewMaint, setShowNewMaint] = useState(false);
-  const [newTask, setNewTask] = useState({ room_number: "", type: "clean", assigned_to: "", priority: "normal", notes: "" });
+  const [newTask, setNewTask] = useState({ room_number: "", task_type: "clean", assigned_to: "", priority: "normal", notes: "" });
   const [newMaint, setNewMaint] = useState({ room_number: "", title: "", description: "", priority: "normal", category: "plumbing" });
 
   const propertyId = activePropertyId && activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "aldgate-flats");
@@ -73,7 +73,7 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
     try {
       await axios.post(`${API}/housekeeping/tasks`, { ...newTask, property_id: propertyId });
       toast.success("Task created"); setShowNewTask(false);
-      setNewTask({ room_number: "", type: "clean", assigned_to: "", priority: "normal", notes: "" });
+      setNewTask({ room_number: "", task_type: "clean", assigned_to: "", priority: "normal", notes: "" });
       fetchData();
     } catch (e) { toast.error("Failed"); }
   };
@@ -185,7 +185,7 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
                     {task.status === "completed" ? <CheckCircle size={18} className="text-emerald-600" weight="fill" /> : <Broom size={18} className="text-blue-600" />}
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-stone-900">Room {task.room_number} — {task.type}</div>
+                    <div className="text-sm font-bold text-stone-900">Room {task.room_number} — {task.task_type || task.type}</div>
                     <div className="text-[11px] text-stone-500 flex items-center gap-2">
                       {task.assigned_to && <span className="flex items-center gap-0.5"><User size={10} /> {task.assigned_to}</span>}
                       {task.notes && <span>{task.notes}</span>}
@@ -222,7 +222,7 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
                     {m.status === "resolved" ? <CheckCircle size={18} className="text-emerald-600" weight="fill" /> : <AlertTriangle size={18} className="text-orange-600" />}
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-stone-900">{m.title}</div>
+                    <div className="text-sm font-bold text-stone-900">{m.title || m.description?.slice(0, 40)}</div>
                     <div className="text-[11px] text-stone-500">Room {m.room_number} · {m.category} · {m.description?.slice(0, 60)}</div>
                   </div>
                 </div>
@@ -251,7 +251,7 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
           <DialogHeader><DialogTitle>New Cleaning Task</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <Input value={newTask.room_number} onChange={e => setNewTask(p => ({...p, room_number: e.target.value}))} placeholder="Room Number" data-testid="task-room" />
-            <Select value={newTask.type} onValueChange={v => setNewTask(p => ({...p, type: v}))}>
+            <Select value={newTask.task_type} onValueChange={v => setNewTask(p => ({...p, task_type: v}))}>
               <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="clean">Full Clean</SelectItem>

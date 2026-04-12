@@ -10,6 +10,7 @@ import ReviewCollectionPage from "./ReviewCollectionPage";
 import SelfCheckInPage from "./SelfCheckInPage";
 import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
+import TurkishPayPage from "./TurkishPayPage";
 import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
 import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
 import { ReportsSettings } from "./components/dashboard/ReportsSettings";
@@ -2988,6 +2989,9 @@ function App() {
   if (window.location.pathname.startsWith("/pay/")) {
     const payToken = window.location.pathname.split("/pay/")[1];
     return <GuestPaymentPage token={payToken} />;
+  }
+  if (window.location.pathname === "/turkish-pay") {
+    return <TurkishPayPage />;
   }
   if (window.location.pathname.startsWith("/survey/")) {
     const token = window.location.pathname.split("/survey/")[1];

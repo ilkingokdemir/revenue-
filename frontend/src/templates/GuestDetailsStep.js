@@ -110,8 +110,10 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             <div className="space-y-3">
               {[
                 { value: "card", icon: CreditCard, label: tr("payment.payNow"), sub: tr("payment.payNowSub"), showSecure: true },
+                { value: "iyzico", icon: CreditCard, label: "iyzico ile Ode", sub: "Turkey — All Turkish banks, taksit (installments)", showSecure: true, flag: "🇹🇷" },
+                { value: "paytr", icon: CreditCard, label: "PayTR ile Ode", sub: "Turkey — Sanal POS, SMS payment, taksitli odeme", showSecure: true, flag: "🇹🇷" },
                 { value: "hotel", icon: Buildings, label: tr("payment.payHotel"), sub: tr("payment.payHotelSub") },
-              ].map(({ value, icon: Icon, label, sub, showSecure }) => (
+              ].map(({ value, icon: Icon, label, sub, showSecure, flag }) => (
                 <label key={value} className="flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-colors"
                   style={{ borderColor: paymentMethod === value ? t.colors.accent : "#e5e7eb", background: paymentMethod === value ? `${t.colors.accent}08` : "transparent", borderRadius: t.borderRadius }}
                   data-testid={`payment-${value}-option`}>
@@ -138,6 +140,8 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             style={{ background: t.colors.accent, borderRadius: t.borderRadius }} data-testid="complete-booking-btn">
             {bookingLoading ? <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
               : paymentMethod === "card" ? <><CreditCard size={20} weight="fill" /> {tr("payment.payAndComplete", { amount: totalPrice.toFixed(0) })}</>
+              : paymentMethod === "iyzico" ? <><CreditCard size={20} weight="fill" /> iyzico ile {totalPrice.toFixed(0)} {selectedRoom?.currency || "TRY"} Ode</>
+              : paymentMethod === "paytr" ? <><CreditCard size={20} weight="fill" /> PayTR ile {totalPrice.toFixed(0)} {selectedRoom?.currency || "TRY"} Ode</>
               : <><Lock size={20} weight="fill" /> {tr("payment.completePayAtHotel")}</>}
           </button>
           <p className="text-center text-xs text-slate-400 flex items-center justify-center gap-1 mt-2">

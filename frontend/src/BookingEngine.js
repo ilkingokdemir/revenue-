@@ -244,6 +244,16 @@ function BookingEngineInner() {
           booking_id: data.id, origin_url: window.location.origin
         });
         if (pd.url) window.location.href = pd.url;
+      } else if (paymentMethod === "iyzico") {
+        const { data: pd } = await axios.post(`${API}/payments/iyzico-checkout`, {
+          booking_id: data.id, origin_url: window.location.origin, currency: "TRY", installments: 12
+        });
+        if (pd.url) window.location.href = pd.url;
+      } else if (paymentMethod === "paytr") {
+        const { data: pd } = await axios.post(`${API}/payments/paytr-checkout`, {
+          booking_id: data.id, origin_url: window.location.origin, currency: "TRY", installments: 12
+        });
+        if (pd.url) window.location.href = pd.url;
       } else {
         setConfirmation(data);
         setStep(STEPS.CONFIRM);

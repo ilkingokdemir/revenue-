@@ -357,4 +357,247 @@ def create_payments_router(db, require_roles):
         doc = await db.payment_settings.find_one({"property_id": property_id}, {"_id": 0})
         return doc
 
+    # ==================== IYZICO VIRTUAL CHECKOUT ====================
+
+    @router.post("/payments/iyzico-checkout")
+    async def create_iyzico_checkout(data: Dict, request: Request):
+        """Create iyzico checkout session for a booking (Turkey)"""
+        booking_id = data.get("booking_id")
+        origin_url = data.get("origin_url", "")
+
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+
+        amount = float(booking.get("total_price", 0))
+        if amount <= 0:
+            raise HTTPException(400, "Invalid amount")
+
+        currency = data.get("currency", "TRY")
+        installments = data.get("installments", 1)
+
+        # Get iyzico credentials
+        settings = await db.terminal_settings.find_one({"property_id": booking.get("property_id")}, {"_id": 0})
+        iyzico_key = settings.get("iyzico_api_key", "") if settings else ""
+        iyzico_secret = settings.get("iyzico_secret_key", "") if settings else ""
+
+        session_token = str(uuid.uuid4())
+        host_url = str(request.base_url).rstrip("/")
+        base_url = data.get("origin_url") or os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+
+        # Create transaction record
+        tx = {
+            "id": str(uuid.uuid4()),
+            "session_id": f"iyzico_{session_token}",
+            "type": "booking",
+            "reference_id": booking_id,
+            "reference_number": booking.get("booking_ref", ""),
+            "property_id": booking.get("property_id", ""),
+            "amount": amount,
+            "currency": currency,
+            "guest_name": booking.get("guest_name", ""),
+            "guest_email": booking.get("guest_email", ""),
+            "payment_method": "iyzico",
+            "payment_status": "initiated",
+            "installments": installments,
+            "metadata": {
+                "type": "booking", "booking_id": booking_id,
+                "booking_ref": booking.get("booking_ref", ""),
+                "provider": "iyzico",
+            },
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.payment_transactions.insert_one(tx)
+
+        if iyzico_key and iyzico_secret and iyzico_key != "test_iyzico_key":
+            # Real iyzico Checkout Form API
+            try:
+                import httpx, hashlib, base64
+                iyzico_base = settings.get("iyzico_base_url", "https://sandbox-api.iyzipay.com")
+                random_str = str(uuid.uuid4())[:8]
+                hash_str = f"{iyzico_key}{random_str}{iyzico_secret}"
+                pki_hash = hashlib.sha1(hash_str.encode()).digest()
+                auth_header = f"IYZWS {iyzico_key}:{base64.b64encode(pki_hash).decode()}"
+
+                checkout_data = {
+                    "locale": "tr", "conversationId": session_token,
+                    "price": str(amount), "paidPrice": str(amount),
+                    "currency": currency, "installment": installments,
+                    "basketId": booking_id,
+                    "paymentGroup": "PRODUCT",
+                    "callbackUrl": f"{host_url}/api/payments/iyzico-callback?token={session_token}",
+                    "enabledInstallments": [1, 2, 3, 6, 9, 12],
+                    "buyer": {
+                        "id": booking.get("guest_email", "guest"),
+                        "name": booking.get("guest_name", "Guest").split(" ")[0],
+                        "surname": " ".join(booking.get("guest_name", "Guest").split(" ")[1:]) or "Guest",
+                        "email": booking.get("guest_email", "guest@hotel.com"),
+                        "identityNumber": "11111111111",
+                        "registrationAddress": "Hotel Address",
+                        "city": "Istanbul", "country": "Turkey",
+                        "ip": "85.34.78.112",
+                    },
+                    "billingAddress": {"contactName": booking.get("guest_name", "Guest"), "city": "Istanbul", "country": "Turkey", "address": "Hotel"},
+                    "basketItems": [{"id": booking_id, "name": f"Room Booking {booking.get('booking_ref','')}", "category1": "Accommodation", "itemType": "VIRTUAL", "price": str(amount)}],
+                }
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(f"{iyzico_base}/payment/iyzipos/checkoutform/initialize/auth/ecom",
+                        json=checkout_data,
+                        headers={"Authorization": auth_header, "Content-Type": "application/json", "x-iyzi-rnd": random_str},
+                        timeout=15)
+                    result = resp.json()
+                    if result.get("status") == "success" and result.get("paymentPageUrl"):
+                        return {"url": result["paymentPageUrl"], "session_id": f"iyzico_{session_token}", "provider": "iyzico"}
+            except Exception as e:
+                logger.error(f"iyzico checkout error: {e}")
+
+        # Demo/sandbox mode — redirect to our own demo checkout page
+        checkout_url = f"{base_url}/turkish-pay?provider=iyzico&token={session_token}&amount={amount}&currency={currency}&ref={booking.get('booking_ref','')}&name={booking.get('guest_name','')}&installments={installments}"
+        return {"url": checkout_url, "session_id": f"iyzico_{session_token}", "provider": "iyzico", "mode": "demo"}
+
+    # ==================== PAYTR VIRTUAL CHECKOUT ====================
+
+    @router.post("/payments/paytr-checkout")
+    async def create_paytr_checkout(data: Dict, request: Request):
+        """Create PayTR checkout session for a booking (Turkey)"""
+        booking_id = data.get("booking_id")
+        origin_url = data.get("origin_url", "")
+
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+
+        amount = float(booking.get("total_price", 0))
+        if amount <= 0:
+            raise HTTPException(400, "Invalid amount")
+
+        currency = data.get("currency", "TRY")
+        installments = data.get("installments", 1)
+
+        settings = await db.terminal_settings.find_one({"property_id": booking.get("property_id")}, {"_id": 0})
+        paytr_id = settings.get("paytr_merchant_id", "") if settings else ""
+        paytr_key = settings.get("paytr_merchant_key", "") if settings else ""
+        paytr_salt = settings.get("paytr_merchant_salt", "") if settings else ""
+
+        session_token = str(uuid.uuid4())
+        host_url = str(request.base_url).rstrip("/")
+        base_url = data.get("origin_url") or os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+
+        tx = {
+            "id": str(uuid.uuid4()),
+            "session_id": f"paytr_{session_token}",
+            "type": "booking",
+            "reference_id": booking_id,
+            "reference_number": booking.get("booking_ref", ""),
+            "property_id": booking.get("property_id", ""),
+            "amount": amount,
+            "currency": currency,
+            "guest_name": booking.get("guest_name", ""),
+            "guest_email": booking.get("guest_email", ""),
+            "payment_method": "paytr",
+            "payment_status": "initiated",
+            "installments": installments,
+            "metadata": {"type": "booking", "booking_id": booking_id, "booking_ref": booking.get("booking_ref", ""), "provider": "paytr"},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.payment_transactions.insert_one(tx)
+
+        if paytr_id and paytr_key and paytr_salt and paytr_id != "test_paytr_merchant":
+            # Real PayTR iFrame Token API
+            try:
+                import httpx, hashlib, base64
+                amount_cents = int(amount * 100)
+                basket_json = base64.b64encode(f'[["Room Booking","{amount}","1"]]'.encode()).decode()
+                hash_str = f"{paytr_id}{origin_url or host_url}{booking_id}{amount_cents}{basket_json}0{installments}{currency}test{booking.get('guest_email','guest@hotel.com')}{paytr_salt}"
+                paytr_token = base64.b64encode(hashlib.sha256(hash_str.encode()).digest()).decode()
+
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post("https://www.paytr.com/odeme/api/get-token", data={
+                        "merchant_id": paytr_id, "user_ip": "85.34.78.112",
+                        "merchant_oid": booking_id, "email": booking.get("guest_email", ""),
+                        "payment_amount": amount_cents, "paytr_token": paytr_token,
+                        "user_basket": basket_json, "debug_on": "1",
+                        "no_installment": "0" if installments > 1 else "1",
+                        "max_installment": str(installments), "currency": currency,
+                        "test_mode": "1",
+                        "merchant_ok_url": f"{base_url}/book?property={booking.get('property_id','')}&payment=success",
+                        "merchant_fail_url": f"{base_url}/book?property={booking.get('property_id','')}&payment=cancelled",
+                    }, timeout=15)
+                    result = resp.json()
+                    if result.get("status") == "success" and result.get("token"):
+                        iframe_url = f"https://www.paytr.com/odeme/guvenli/{result['token']}"
+                        return {"url": iframe_url, "session_id": f"paytr_{session_token}", "provider": "paytr", "iframe_token": result["token"]}
+            except Exception as e:
+                logger.error(f"PayTR checkout error: {e}")
+
+        # Demo/sandbox mode
+        checkout_url = f"{base_url}/turkish-pay?provider=paytr&token={session_token}&amount={amount}&currency={currency}&ref={booking.get('booking_ref','')}&name={booking.get('guest_name','')}&installments={installments}"
+        return {"url": checkout_url, "session_id": f"paytr_{session_token}", "provider": "paytr", "mode": "demo"}
+
+    # ==================== TURKISH PAYMENT CALLBACK ====================
+
+    @router.post("/payments/iyzico-callback")
+    async def iyzico_callback(request: Request):
+        """iyzico checkout callback"""
+        form = await request.form()
+        token = form.get("token") or request.query_params.get("token", "")
+        session_id = f"iyzico_{token}"
+        status = form.get("status", "")
+        if status == "success":
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
+            )
+        return {"status": "ok"}
+
+    @router.post("/payments/paytr-callback")
+    async def paytr_callback(request: Request):
+        """PayTR payment callback"""
+        form = await request.form()
+        merchant_oid = form.get("merchant_oid", "")
+        status = form.get("status", "")
+        if status == "success":
+            tx = await db.payment_transactions.find_one({"reference_id": merchant_oid}, {"_id": 0})
+            if tx:
+                await db.payment_transactions.update_one(
+                    {"id": tx["id"]},
+                    {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
+                )
+        return {"status": "OK"}
+
+    # ==================== TURKISH DEMO PAYMENT CONFIRM ====================
+
+    @router.post("/payments/turkish-demo-confirm")
+    async def turkish_demo_confirm(data: Dict):
+        """Confirm a demo Turkish payment (used in sandbox/demo mode)"""
+        session_token = data.get("token", "")
+        provider = data.get("provider", "iyzico")
+        session_id = f"{provider}_{session_token}"
+
+        tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+        if not tx:
+            raise HTTPException(404, "Transaction not found")
+
+        now = datetime.now(timezone.utc).isoformat()
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$set": {"payment_status": "paid", "paid_at": now, "demo_mode": True}}
+        )
+
+        # Update the booking
+        if tx.get("type") == "booking" and tx.get("reference_id"):
+            await db.bookings.update_one(
+                {"id": tx["reference_id"]},
+                {"$set": {"payment_status": "paid", "payment_method": provider, "paid_at": now}}
+            )
+
+        return {
+            "status": "paid",
+            "provider": provider,
+            "amount": tx.get("amount", 0),
+            "currency": tx.get("currency", "TRY"),
+            "booking_ref": tx.get("reference_number", ""),
+            "demo_mode": True,
+        }
+
     return router

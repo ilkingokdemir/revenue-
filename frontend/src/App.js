@@ -35,6 +35,8 @@ import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
 import { SetupWizardPanel } from "./components/dashboard/SetupWizardPanel";
 import { StockManagementPanel } from "./components/dashboard/StockManagementPanel";
 import { AccountingPanel } from "./components/dashboard/AccountingPanel";
+import { SurveyPanel } from "./components/dashboard/SurveyPanel";
+import GuestSurveyPage from "./GuestSurveyPage";
 import {
   Star,
   CheckCircle,
@@ -2481,6 +2483,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "guest-app", icon: MapPin, name: "Guest App", testId: "guest-app-btn" },
         { id: "smart-locks", icon: Key, name: "Digital Keys", testId: "smart-locks-btn" },
         { id: "campaigns", icon: Megaphone, name: "Campaigns", testId: "campaigns-btn" },
+        { id: "surveys", icon: Star, name: "Surveys / NPS", testId: "surveys-btn" },
       ]
     },
     {
@@ -2866,6 +2869,11 @@ const Dashboard = ({ user, onLogout }) => {
         {activeView === "accounting" && (
           <AccountingPanel properties={properties} activePropertyId={activePropertyId} />
         )}
+
+        {/* Guest Satisfaction Surveys */}
+        {activeView === "surveys" && (
+          <SurveyPanel properties={properties} user={user} activePropertyId={activePropertyId} />
+        )}
       </main>
 
       {/* Powered By Footer */}
@@ -2958,6 +2966,10 @@ function App() {
   }
   if (window.location.pathname === "/guest-portal") {
     return <GuestPortalPage />;
+  }
+  if (window.location.pathname.startsWith("/survey/")) {
+    const token = window.location.pathname.split("/survey/")[1];
+    return <GuestSurveyPage token={token} />;
   }
   return <MainApp />;
 }

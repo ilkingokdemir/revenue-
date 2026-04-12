@@ -1068,10 +1068,11 @@ class ChannelSettings(BaseModel):
     telegram_enabled: bool = False
     telegram_bot_token: str = ""
     telegram_bot_username: str = ""
-    # SMS (generic)
+    # SMS (Twilio)
     sms_enabled: bool = False
-    sms_provider: str = ""
-    sms_api_key: str = ""
+    sms_provider: str = "twilio"
+    sms_api_key: str = ""  # Twilio Account SID
+    sms_api_secret: str = ""  # Twilio Auth Token
     sms_sender_number: str = ""
     # Email
     email_enabled: bool = True

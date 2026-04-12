@@ -2,7 +2,7 @@
 Guest Messaging Hub Routes
 Extracted from server.py for maintainability
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from datetime import datetime, timezone
 from typing import Dict
 import os
@@ -195,7 +195,32 @@ def create_messaging_router(db, require_roles, LlmChat, UserMessage, resend):
                 else:
                     delivery_status = "sandbox"
             elif channel == "sms":
-                delivery_status = "sandbox"
+                phone = conv.get("guest_phone", "")
+                if settings and settings.get("sms_enabled"):
+                    account_sid = settings.get("sms_api_key", "")
+                    auth_token = settings.get("sms_api_secret", "")
+                    from_number = settings.get("sms_sender_number", "")
+                    if phone and account_sid and auth_token and from_number:
+                        try:
+                            import httpx
+                            async with httpx.AsyncClient() as client:
+                                resp = await client.post(
+                                    f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json",
+                                    data={"To": phone, "From": from_number, "Body": data["content"]},
+                                    auth=(account_sid, auth_token), timeout=10
+                                )
+                                if resp.status_code in (200, 201):
+                                    delivery_status = "delivered"
+                                else:
+                                    delivery_status = "failed"
+                                    delivery_error = resp.text[:200]
+                        except Exception as e:
+                            delivery_status = "failed"
+                            delivery_error = str(e)[:200]
+                    else:
+                        delivery_status = "sandbox"
+                else:
+                    delivery_status = "sandbox"
             else:
                 delivery_status = "internal"
 
@@ -548,6 +573,231 @@ Format: {{"sentiment": "positive|negative|neutral", "priority": "low|medium|high
             return {"status": "sent", "message": "Email sent successfully", "sent": True}
         except Exception as e:
             return {"status": "error", "message": str(e), "sent": False}
+
+    @router.post("/messaging/send/sms")
+    async def send_sms_message(data: Dict, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Send SMS via Twilio"""
+        property_id = data.get("property_id", "")
+        settings = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
+        if not settings or not settings.get("sms_enabled"):
+            return {"status": "sandbox", "message": "SMS is in sandbox mode. Configure Twilio credentials in Channel Settings.", "sent": False}
+        phone = data.get("phone", "")
+        text = data.get("message", "")
+        account_sid = settings.get("sms_api_key", "")
+        auth_token = settings.get("sms_api_secret", "")
+        from_number = settings.get("sms_sender_number", "")
+        if not account_sid or not auth_token or not from_number:
+            return {"status": "sandbox", "message": "Twilio credentials not configured. Go to Channel Settings.", "sent": False}
+        import httpx
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json",
+                    data={"To": phone, "From": from_number, "Body": text},
+                    auth=(account_sid, auth_token), timeout=10
+                )
+                if resp.status_code in (200, 201):
+                    return {"status": "sent", "message": "SMS sent successfully via Twilio", "sent": True}
+                else:
+                    return {"status": "error", "message": f"Twilio error: {resp.text[:200]}", "sent": False}
+        except Exception as e:
+            return {"status": "error", "message": str(e), "sent": False}
+
+    # ==================== CONNECTION VERIFICATION ====================
+
+    @router.post("/messaging/verify-connection/{channel}")
+    async def verify_channel_connection(channel: str, data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Verify that channel credentials are valid"""
+        import httpx
+        if channel == "whatsapp":
+            phone_id = data.get("whatsapp_phone_number_id", "")
+            access_token = data.get("whatsapp_access_token", "")
+            if not phone_id or not access_token:
+                return {"status": "error", "message": "Phone Number ID and Access Token required", "connected": False}
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"https://graph.facebook.com/v21.0/{phone_id}", headers={"Authorization": f"Bearer {access_token}"}, timeout=10)
+                    if resp.status_code == 200:
+                        info = resp.json()
+                        return {"status": "connected", "message": f"Connected to WhatsApp: {info.get('display_phone_number', phone_id)}", "connected": True, "phone": info.get("display_phone_number", "")}
+                    else:
+                        return {"status": "error", "message": f"Invalid credentials: {resp.json().get('error', {}).get('message', 'Unknown error')}", "connected": False}
+            except Exception as e:
+                return {"status": "error", "message": str(e)[:200], "connected": False}
+
+        elif channel == "telegram":
+            bot_token = data.get("telegram_bot_token", "")
+            if not bot_token:
+                return {"status": "error", "message": "Bot Token required", "connected": False}
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"https://api.telegram.org/bot{bot_token}/getMe", timeout=10)
+                    if resp.status_code == 200:
+                        bot = resp.json().get("result", {})
+                        return {"status": "connected", "message": f"Connected to bot: @{bot.get('username', 'unknown')}", "connected": True, "bot_username": f"@{bot.get('username', '')}"}
+                    else:
+                        return {"status": "error", "message": "Invalid bot token", "connected": False}
+            except Exception as e:
+                return {"status": "error", "message": str(e)[:200], "connected": False}
+
+        elif channel == "sms":
+            account_sid = data.get("sms_api_key", "")
+            auth_token = data.get("sms_api_secret", "")
+            if not account_sid or not auth_token:
+                return {"status": "error", "message": "Account SID and Auth Token required", "connected": False}
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}.json", auth=(account_sid, auth_token), timeout=10)
+                    if resp.status_code == 200:
+                        acct = resp.json()
+                        return {"status": "connected", "message": f"Connected to Twilio: {acct.get('friendly_name', account_sid)}", "connected": True}
+                    else:
+                        return {"status": "error", "message": "Invalid Twilio credentials", "connected": False}
+            except Exception as e:
+                return {"status": "error", "message": str(e)[:200], "connected": False}
+
+        return {"status": "error", "message": f"Unknown channel: {channel}", "connected": False}
+
+    # ==================== INBOUND WEBHOOKS ====================
+
+    @router.post("/messaging/webhook/whatsapp")
+    async def whatsapp_webhook(request: Request):
+        """Receive inbound WhatsApp messages from Meta"""
+        body = await request.json()
+        try:
+            for entry in body.get("entry", []):
+                for change in entry.get("changes", []):
+                    value = change.get("value", {})
+                    for msg in value.get("messages", []):
+                        sender_phone = msg.get("from", "")
+                        text = msg.get("text", {}).get("body", "") if msg.get("type") == "text" else f"[{msg.get('type', 'media')}]"
+                        contact_name = ""
+                        for c in value.get("contacts", []):
+                            if c.get("wa_id") == sender_phone:
+                                contact_name = c.get("profile", {}).get("name", "")
+
+                        # Find or create conversation
+                        phone_formatted = f"+{sender_phone}"
+                        conv = await db.conversations.find_one({"guest_phone": phone_formatted, "channel": "whatsapp"}, {"_id": 0})
+                        if not conv:
+                            from models import Conversation
+                            new_conv = Conversation(
+                                property_id=value.get("metadata", {}).get("phone_number_id", "default"),
+                                guest_name=contact_name or phone_formatted,
+                                guest_phone=phone_formatted,
+                                channel="whatsapp", status="new", priority="medium",
+                            )
+                            doc = new_conv.model_dump()
+                            await db.conversations.insert_one(doc)
+                            doc.pop("_id", None)
+                            conv = doc
+
+                        # Save message
+                        from models import Message
+                        new_msg = Message(
+                            conversation_id=conv["id"], channel="whatsapp",
+                            sender_type="guest", content=text,
+                        )
+                        md = new_msg.model_dump()
+                        await db.messages.insert_one(md)
+
+                        # Update conversation
+                        await db.conversations.update_one(
+                            {"id": conv["id"]},
+                            {"$set": {"last_message_preview": text[:100], "last_message_at": datetime.now(timezone.utc).isoformat(), "status": "new"},
+                             "$inc": {"unread_count": 1}}
+                        )
+                        logger.info(f"Inbound WhatsApp from {phone_formatted}: {text[:50]}")
+        except Exception as e:
+            logger.error(f"WhatsApp webhook error: {e}")
+        return {"status": "ok"}
+
+    @router.get("/messaging/webhook/whatsapp")
+    async def whatsapp_webhook_verify(request: Request):
+        """WhatsApp webhook verification (Meta sends GET to verify)"""
+        mode = request.query_params.get("hub.mode", "")
+        token = request.query_params.get("hub.verify_token", "")
+        challenge = request.query_params.get("hub.challenge", "")
+        verify_token = os.environ.get("WHATSAPP_VERIFY_TOKEN", "myhotelbox_verify_2026")
+        if mode == "subscribe" and token == verify_token:
+            return int(challenge) if challenge else 200
+        raise HTTPException(403, "Verification failed")
+
+    @router.post("/messaging/webhook/telegram")
+    async def telegram_webhook(request: Request):
+        """Receive inbound Telegram messages"""
+        body = await request.json()
+        try:
+            msg = body.get("message", {})
+            if not msg:
+                return {"status": "ok"}
+            chat_id = str(msg.get("chat", {}).get("id", ""))
+            text = msg.get("text", "")
+            sender_name = f"{msg.get('from', {}).get('first_name', '')} {msg.get('from', {}).get('last_name', '')}".strip()
+
+            conv = await db.conversations.find_one({"telegram_chat_id": chat_id, "channel": "telegram"}, {"_id": 0})
+            if not conv:
+                conv = await db.conversations.find_one({"guest_phone": chat_id, "channel": "telegram"}, {"_id": 0})
+            if not conv:
+                from models import Conversation
+                new_conv = Conversation(
+                    property_id="default", guest_name=sender_name or chat_id,
+                    guest_phone=chat_id, channel="telegram", status="new", priority="medium",
+                )
+                doc = new_conv.model_dump()
+                doc["telegram_chat_id"] = chat_id
+                await db.conversations.insert_one(doc)
+                doc.pop("_id", None)
+                conv = doc
+
+            from models import Message
+            new_msg = Message(conversation_id=conv["id"], channel="telegram", sender_type="guest", content=text)
+            md = new_msg.model_dump()
+            await db.messages.insert_one(md)
+
+            await db.conversations.update_one(
+                {"id": conv["id"]},
+                {"$set": {"last_message_preview": text[:100], "last_message_at": datetime.now(timezone.utc).isoformat(), "status": "new"},
+                 "$inc": {"unread_count": 1}}
+            )
+            logger.info(f"Inbound Telegram from {chat_id}: {text[:50]}")
+        except Exception as e:
+            logger.error(f"Telegram webhook error: {e}")
+        return {"status": "ok"}
+
+    @router.post("/messaging/webhook/twilio")
+    async def twilio_sms_webhook(request: Request):
+        """Receive inbound SMS from Twilio"""
+        form = await request.form()
+        from_number = form.get("From", "")
+        body_text = form.get("Body", "")
+        try:
+            conv = await db.conversations.find_one({"guest_phone": from_number, "channel": "sms"}, {"_id": 0})
+            if not conv:
+                from models import Conversation
+                new_conv = Conversation(
+                    property_id="default", guest_name=from_number,
+                    guest_phone=from_number, channel="sms", status="new", priority="medium",
+                )
+                doc = new_conv.model_dump()
+                await db.conversations.insert_one(doc)
+                doc.pop("_id", None)
+                conv = doc
+
+            from models import Message
+            new_msg = Message(conversation_id=conv["id"], channel="sms", sender_type="guest", content=body_text)
+            md = new_msg.model_dump()
+            await db.messages.insert_one(md)
+
+            await db.conversations.update_one(
+                {"id": conv["id"]},
+                {"$set": {"last_message_preview": body_text[:100], "last_message_at": datetime.now(timezone.utc).isoformat(), "status": "new"},
+                 "$inc": {"unread_count": 1}}
+            )
+            logger.info(f"Inbound SMS from {from_number}: {body_text[:50]}")
+        except Exception as e:
+            logger.error(f"Twilio SMS webhook error: {e}")
+        return "<Response></Response>"
 
     # Seed Demo Conversations
     @router.post("/messaging/seed/{property_id}")

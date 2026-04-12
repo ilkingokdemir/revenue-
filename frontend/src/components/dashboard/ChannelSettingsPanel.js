@@ -80,17 +80,25 @@ export function ChannelSettingsPanel({ properties, activePropertyId: propActiveP
     setTesting(channel);
     try {
       if (channel === "whatsapp") {
-        const { data } = await axios.post(`${API}/messaging/send/whatsapp`, {
-          property_id: propertyId, phone: "+0000000000", message: "Test message from MyHotelBox"
+        const { data } = await axios.post(`${API}/messaging/verify-connection/whatsapp`, {
+          whatsapp_phone_number_id: settings.whatsapp_phone_number_id,
+          whatsapp_access_token: settings.whatsapp_access_token,
         });
-        if (data.sent) toast.success("WhatsApp test sent!");
-        else toast(data.message, { description: data.status });
+        if (data.connected) toast.success(data.message);
+        else toast.error(data.message);
       } else if (channel === "telegram") {
-        const { data } = await axios.post(`${API}/messaging/send/telegram`, {
-          property_id: propertyId, chat_id: "test", message: "Test message from MyHotelBox"
+        const { data } = await axios.post(`${API}/messaging/verify-connection/telegram`, {
+          telegram_bot_token: settings.telegram_bot_token,
         });
-        if (data.sent) toast.success("Telegram test sent!");
-        else toast(data.message, { description: data.status });
+        if (data.connected) toast.success(data.message);
+        else toast.error(data.message);
+      } else if (channel === "sms") {
+        const { data } = await axios.post(`${API}/messaging/verify-connection/sms`, {
+          sms_api_key: settings.sms_api_key,
+          sms_api_secret: settings.sms_api_secret,
+        });
+        if (data.connected) toast.success(data.message);
+        else toast.error(data.message);
       } else if (channel === "email") {
         const { data } = await axios.post(`${API}/messaging/send/email`, {
           email: "test@example.com", subject: "MyHotelBox Test", message: "This is a test email from MyHotelBox."
@@ -138,7 +146,9 @@ export function ChannelSettingsPanel({ properties, activePropertyId: propActiveP
               <li>Go to <a href="https://business.facebook.com" target="_blank" rel="noreferrer" className="underline font-medium">Meta Business Suite</a></li>
               <li>Create a WhatsApp Business App in <a href="https://developers.facebook.com" target="_blank" rel="noreferrer" className="underline font-medium">Meta Developers</a></li>
               <li>Get your Phone Number ID and Access Token from the API Setup page</li>
-              <li>Paste them below and click Save</li>
+              <li>Set Webhook URL: <code className="bg-green-100 px-1 rounded text-[10px]">{window.location.origin}/api/messaging/webhook/whatsapp</code></li>
+              <li>Verify Token: <code className="bg-green-100 px-1 rounded text-[10px]">myhotelbox_verify_2026</code></li>
+              <li>Paste credentials below, Save, then Verify Connection</li>
             </ol>
           </div>
           <div>
@@ -159,7 +169,7 @@ export function ChannelSettingsPanel({ properties, activePropertyId: propActiveP
           <button onClick={() => testChannel("whatsapp")} disabled={testing === "whatsapp"}
             className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 flex items-center gap-1.5 font-medium transition-colors disabled:opacity-50"
             data-testid="test-whatsapp-btn">
-            <PaperPlaneTilt size={12} weight="fill" /> {testing === "whatsapp" ? "Testing..." : "Test Connection"}
+            <PaperPlaneTilt size={12} weight="fill" /> {testing === "whatsapp" ? "Verifying..." : "Verify Connection"}
           </button>
         </SettingsCard>
 
@@ -172,7 +182,8 @@ export function ChannelSettingsPanel({ properties, activePropertyId: propActiveP
               <li>Open Telegram and message <code className="bg-sky-100 px-1 rounded">@BotFather</code></li>
               <li>Send <code className="bg-sky-100 px-1 rounded">/newbot</code> and follow the prompts</li>
               <li>Copy the Bot Token provided</li>
-              <li>Paste it below and click Save</li>
+              <li>Set Webhook: <code className="bg-sky-100 px-1 rounded text-[10px]">{window.location.origin}/api/messaging/webhook/telegram</code></li>
+              <li>Paste token below, Save, then Verify Connection</li>
             </ol>
           </div>
           <div>
@@ -188,31 +199,42 @@ export function ChannelSettingsPanel({ properties, activePropertyId: propActiveP
           <button onClick={() => testChannel("telegram")} disabled={testing === "telegram"}
             className="text-xs bg-sky-600 text-white px-3 py-1.5 rounded-lg hover:bg-sky-700 flex items-center gap-1.5 font-medium transition-colors disabled:opacity-50"
             data-testid="test-telegram-btn">
-            <PaperPlaneTilt size={12} weight="fill" /> {testing === "telegram" ? "Testing..." : "Test Connection"}
+            <PaperPlaneTilt size={12} weight="fill" /> {testing === "telegram" ? "Verifying..." : "Verify Connection"}
           </button>
         </SettingsCard>
 
-        {/* SMS */}
-        <SettingsCard icon={DeviceMobile} iconColor="#8b5cf6" title="SMS" description="Send text messages to guests"
+        {/* SMS — Twilio */}
+        <SettingsCard icon={DeviceMobile} iconColor="#8b5cf6" title="SMS (Twilio)" description="Send text messages to guests via Twilio"
           enabled={settings.sms_enabled} onToggle={v => updateField("sms_enabled", v)} testId="sms-settings">
           <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-3 text-xs text-purple-800">
-            <p className="font-medium flex items-center gap-1"><Info size={12} /> SMS requires a provider (Twilio, Vonage, etc). Contact support to set up.</p>
+            <p className="font-medium mb-1 flex items-center gap-1"><Info size={12} /> Setup Guide</p>
+            <ol className="list-decimal ml-4 space-y-0.5">
+              <li>Sign up at <a href="https://www.twilio.com" target="_blank" rel="noreferrer" className="underline font-medium">twilio.com</a></li>
+              <li>Get your Account SID and Auth Token from the Console Dashboard</li>
+              <li>Buy or verify a phone number</li>
+              <li>Set the webhook URL for inbound SMS: <code className="bg-purple-100 px-1 rounded text-[10px]">{window.location.origin}/api/messaging/webhook/twilio</code></li>
+            </ol>
           </div>
           <div>
-            <label className="text-[11px] font-medium text-stone-600 mb-1 block">Provider</label>
-            <Input value={settings.sms_provider} onChange={e => updateField("sms_provider", e.target.value)}
-              placeholder="e.g. twilio, vonage" className="h-9 text-sm" data-testid="sms-provider" />
+            <label className="text-[11px] font-medium text-stone-600 mb-1 block">Twilio Account SID</label>
+            <Input value={settings.sms_api_key} onChange={e => updateField("sms_api_key", e.target.value)}
+              placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" className="h-9 text-sm font-mono" data-testid="twilio-sid" />
           </div>
           <div>
-            <label className="text-[11px] font-medium text-stone-600 mb-1 block">API Key</label>
-            <SecretInput value={settings.sms_api_key} onChange={e => updateField("sms_api_key", e.target.value)}
-              placeholder="Provider API key" testId="sms-api-key" />
+            <label className="text-[11px] font-medium text-stone-600 mb-1 block">Twilio Auth Token</label>
+            <SecretInput value={settings.sms_api_secret || ""} onChange={e => updateField("sms_api_secret", e.target.value)}
+              placeholder="Your Twilio Auth Token" testId="twilio-token" />
           </div>
           <div>
-            <label className="text-[11px] font-medium text-stone-600 mb-1 block">Sender Number</label>
+            <label className="text-[11px] font-medium text-stone-600 mb-1 block">Sender Phone Number</label>
             <Input value={settings.sms_sender_number} onChange={e => updateField("sms_sender_number", e.target.value)}
-              placeholder="+44..." className="h-9 text-sm" data-testid="sms-sender" />
+              placeholder="+15551234567" className="h-9 text-sm font-mono" data-testid="twilio-number" />
           </div>
+          <button onClick={() => testChannel("sms")} disabled={testing === "sms"}
+            className="text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 flex items-center gap-1.5 font-medium transition-colors disabled:opacity-50"
+            data-testid="test-sms-btn">
+            <PaperPlaneTilt size={12} weight="fill" /> {testing === "sms" ? "Verifying..." : "Verify Connection"}
+          </button>
         </SettingsCard>
 
         {/* Email */}

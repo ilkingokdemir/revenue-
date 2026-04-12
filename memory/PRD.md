@@ -6,64 +6,31 @@ Hotel management software "My Hotel Box" — a full-stack platform to rival top 
 ## Tech Stack
 - Frontend: React + Tailwind CSS + Shadcn UI
 - Backend: FastAPI + MongoDB
-- Integrations: OpenAI GPT-5.2 (Emergent LLM Key), Resend (Email), Stripe (Payments)
+- Integrations: OpenAI GPT-5.2 (Emergent LLM Key), Resend (Email), Stripe (Payments), iyzico (Turkey), PayTR (Turkey)
 
-## Architecture
-```
-/app/backend/routes/ — 19 route files (bookings, payments, terminal, guest_payment, pos, accounting, messaging, etc.)
-/app/frontend/src/ — Public pages (BookingEngine, GuestPaymentPage, KioskPage, QROrderPage, etc.)
-/app/frontend/src/components/dashboard/ — Admin panel components
-```
-
-## What's Been Implemented (Complete)
-
-### Core Platform
-- Multi-property management (10 properties) with branch selector
-- JWT auth (admin/manager/receptionist roles)
-- Setup Wizard, Connections panel, Smart Locks, Digital Keys
-
-### Booking Engine (Cloudbeds-level)
-- Public booking page at /book?property={id}
-- Room search, availability, multi-room booking
-- Guest details, promo codes, add-ons, upsells
-- AI Concierge chat, Cart abandonment recovery
-- Self check-in, Guest portal, Group bookings
-- Multi-currency, Multi-language (130+ via AI)
+## What's Been Implemented
 
 ### Payment Gateway (Cloudbeds-level)
-- Stripe Virtual Payments: Booking Engine → Pay Now with Card → Stripe Checkout
-- Guest Payment Portal: Staff sends link → Guest views itemized folio → Pays via Stripe
-- Automated Payment Reminders: Auto-email guests before checkout with unpaid balance
-- POS Checkout via Stripe
-- Physical Card Terminals: Stripe Terminal, iyzico (Turkey), PayTR (Turkey)
-- Payment Dashboard, Transaction management, Payment settings
+- **Stripe Virtual Payments**: Booking Engine → Stripe Checkout at checkout.stripe.com
+- **iyzico Virtual Checkout**: Turkish checkout with card form, installments (taksit), 3D Secure, all Turkish banks
+- **PayTR Virtual Checkout**: Turkish Sanal POS with card form, installments, SMS payment support
+- **Guest Payment Portal**: Staff sends link → Guest views itemized folio → Pays via Stripe/iyzico/PayTR
+- **Automated Payment Reminders**: Auto-email before checkout with configurable timing
+- **Physical Card Terminals**: Stripe Terminal, iyzico, PayTR hardware integration
+- **Payment Dashboard**: Processed/Pending totals, success rate, daily trends, transaction filtering
 
-### Guest Payment Portal
-- POST /api/guest-payment/send-link — Send payment link
-- GET /api/guest-payment/folio/{token} — View itemized folio
-- POST /api/guest-payment/pay/{token} — Pay via Stripe
-- POST /api/guest-payment/add-charge/{link_id} — Add extra charges
-- Frontend: /pay/{token} — Guest-facing folio page
+### Booking Engine
+- 4 payment options: Stripe, iyzico, PayTR, Pay at Hotel
+- Public booking at /book?property={id}
+- Room search, promo codes, add-ons, upsells, multi-currency, AI concierge
 
-### Automated Payment Reminders
-- GET/PUT /api/guest-payment/reminder-settings/{property_id} — Configure timing
-- POST /api/guest-payment/send-reminders/{property_id} — Send batch reminders
-- GET /api/guest-payment/reminder-history/{property_id} — View history
-- Settings: First/second reminder hours, max per booking, auto-send toggle
-- Admin UI: Send Reminders button with detailed results
-
-### Review Hub, Unified Messaging, Guest Surveys, Accounting, POS, Stock Management
-All previously built and tested (see earlier PRD versions).
+### Other Modules (All Complete)
+- Review Hub, Unified Messaging, Guest Surveys (NPS), Accounting (18 tabs), POS, Stock Management, etc.
 
 ## Testing Status
-- 62 test iterations completed (all passing)
-- Iteration 60: Stripe Virtual Payments (16/16, 100%)
-- Iteration 61: Guest Payment Portal (17/17, 100%)
-- Iteration 62: Payment Reminders (14/14, 100%)
+- 63 iterations, all passing
+- Iteration 63: Turkish Payments (14/14 backend, 100% frontend)
 
 ## Upcoming Tasks (P1)
 - Real bi-directional outbound sync for review platforms (needs user API keys)
-- Real outbound messaging for WhatsApp, Telegram, SMS (needs user credentials)
-
-## Future/Backlog (P2)
-- All requested features implemented
+- Real outbound messaging for WhatsApp/Telegram/SMS (needs user credentials)

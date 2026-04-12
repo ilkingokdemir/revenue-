@@ -1,36 +1,33 @@
 # My Hotel Box - Product Requirements Document
 
 ## Original Problem Statement
-Hotel management software "My Hotel Box" — a full-stack platform to rival top industry software (Chatlyn for messaging, M3 for accounting, Apicbase for stock, Prostay for POS, Cloudbeds for payments). Must NOT build: Channel Manager, Dynamic Pricing, or Space Bookings (handled externally).
+Hotel management software "My Hotel Box" — full-stack platform rivaling Chatlyn (messaging), M3 (accounting), Apicbase (stock), Prostay (POS), Cloudbeds (payments). Do NOT build: Channel Manager, Dynamic Pricing, Space Bookings.
 
 ## Tech Stack
-- Frontend: React + Tailwind CSS + Shadcn UI
-- Backend: FastAPI + MongoDB
-- Integrations: OpenAI GPT-5.2 (Emergent LLM Key), Resend (Email), Stripe (Payments), iyzico (Turkey), PayTR (Turkey)
+React + Tailwind + Shadcn UI | FastAPI + MongoDB | OpenAI GPT-5.2, Resend, Stripe, iyzico, PayTR
 
 ## What's Been Implemented
 
 ### Payment Gateway (Cloudbeds-level)
-- **Stripe Virtual Payments**: Booking Engine → Stripe Checkout at checkout.stripe.com
-- **iyzico Virtual Checkout**: Turkish checkout with card form, installments (taksit), 3D Secure, all Turkish banks
-- **PayTR Virtual Checkout**: Turkish Sanal POS with card form, installments, SMS payment support
-- **Guest Payment Portal**: Staff sends link → Guest views itemized folio → Pays via Stripe/iyzico/PayTR
-- **Automated Payment Reminders**: Auto-email before checkout with configurable timing
-- **Physical Card Terminals**: Stripe Terminal, iyzico, PayTR hardware integration
-- **Payment Dashboard**: Processed/Pending totals, success rate, daily trends, transaction filtering
+- Stripe Virtual Payments, iyzico/PayTR Virtual Checkout (Turkish), Guest Payment Portal, Payment Reminders
+- Physical Card Terminals, Payment Dashboard, Transaction management
 
-### Booking Engine
-- 4 payment options: Stripe, iyzico, PayTR, Pay at Hotel
-- Public booking at /book?property={id}
-- Room search, promo codes, add-ons, upsells, multi-currency, AI concierge
+### Real Outbound Messaging (NEW)
+- **WhatsApp**: Real Meta Cloud API integration with send/receive
+- **Telegram**: Real Bot API integration with send/receive
+- **SMS**: Real Twilio integration with send/receive
+- **Email**: Resend integration (active)
+- **Inbound Webhooks**: /api/messaging/webhook/whatsapp|telegram|twilio
+- **Connection Verification**: /api/messaging/verify-connection/{channel}
+- **Channel Settings UI**: Setup guides, webhook URLs, credential fields, Verify Connection buttons
 
 ### Other Modules (All Complete)
-- Review Hub, Unified Messaging, Guest Surveys (NPS), Accounting (18 tabs), POS, Stock Management, etc.
+Booking Engine, Review Hub, Unified Messaging, Guest Surveys, Accounting (18 tabs), POS, Stock Management
 
-## Testing Status
-- 63 iterations, all passing
-- Iteration 63: Turkish Payments (14/14 backend, 100% frontend)
+## Testing: 64 iterations, all passing
 
-## Upcoming Tasks (P1)
-- Real bi-directional outbound sync for review platforms (needs user API keys)
-- Real outbound messaging for WhatsApp/Telegram/SMS (needs user credentials)
+## How to Go Live
+1. **WhatsApp**: Enter Meta Phone Number ID + Access Token in Channel Settings, set webhook to /api/messaging/webhook/whatsapp
+2. **Telegram**: Enter Bot Token, set webhook to /api/messaging/webhook/telegram
+3. **SMS**: Enter Twilio Account SID + Auth Token + Phone Number, set webhook to /api/messaging/webhook/twilio
+4. **Turkish Payments**: Enter iyzico/PayTR API keys in Terminal Settings

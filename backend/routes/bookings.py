@@ -1109,7 +1109,8 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         doc.pop("_id", None)
 
         # Send confirmation email in background
-        prop_name_for_email = property.get("name", "Hotel") if property else "Hotel"
+        prop_doc = await db.properties.find_one({"id": booking_data.property_id}, {"_id": 0})
+        prop_name_for_email = prop_doc.get("name", "Hotel") if prop_doc else "Hotel"
         asyncio.create_task(_send_booking_confirmation(doc, room.get("name", "Room")))
         # Send check-in email in background
         asyncio.create_task(_send_checkin_email(doc, prop_name_for_email))

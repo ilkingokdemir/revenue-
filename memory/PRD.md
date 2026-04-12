@@ -1,13 +1,11 @@
 # My Hotel Box - PRD
 
-## Original Problem Statement
-Hotel management software rivaling Chatlyn, M3, Apicbase, Prostay, Cloudbeds.
-
 ## What's Been Implemented
-- Payment Gateway: Stripe, iyzico, PayTR (virtual + terminal), Guest Payment Portal, Reminders
-- Booking Engine: Multi-room, promo codes, upsells, AI concierge, multi-currency
-- POS System: Premium redesign, item modifiers/notes, discounts, split bill, receipt, void/refund, kitchen timeline, stock deduction
-- **Stock Deduction**: Auto-link menu to stock, real-time deduction on orders, stock restore on void, movement logging, low stock alerts
-- Review Hub, Messaging (WhatsApp/Telegram/SMS), Surveys, Accounting (18 tabs), Stock Management
+- **Admin Panel**: Roles & Permissions (14 modules × 6 actions), custom roles, team management, module settings for all modules
+- **Module Settings**: POS (tax/service charge/discounts/kitchen), Bookings (check-in/out/cancellation/deposit), Accounting (financial year/tax/auto-post), Messaging (auto-reply/business hours), Reviews, Stock, Surveys
+- **Auto Purchase Orders**: Generate POs for low stock items, grouped by supplier, approve → receive workflow with auto-restock
+- Payment Gateway: Stripe, iyzico, PayTR, Guest Payment Portal, Reminders
+- POS: Premium redesign, modifiers, discounts, split bill, stock deduction
+- Booking Engine, Review Hub, Messaging (WhatsApp/Telegram/SMS), Surveys, Accounting, Stock
 
-## Testing: 66 iterations, all passing
+## Testing: 67 iterations, all passing

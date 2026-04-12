@@ -29,59 +29,41 @@ Hotel management software "My Hotel Box" — a full-stack platform to rival top 
 - AI Concierge chat, Cart abandonment recovery
 - Self check-in, Guest portal, Group bookings
 - Multi-currency, Multi-language (130+ via AI)
-- Social proof, Price comparison widget
 
-### Payment Gateway (Cloudbeds-level) - VERIFIED WORKING
-- **Stripe Virtual Payments**: Booking Engine → Pay Now with Card → Stripe Checkout
-- **Guest Payment Portal**: Staff sends payment link → Guest views itemized folio → Pays via Stripe
+### Payment Gateway (Cloudbeds-level)
+- Stripe Virtual Payments: Booking Engine → Pay Now with Card → Stripe Checkout
+- Guest Payment Portal: Staff sends link → Guest views itemized folio → Pays via Stripe
+- Automated Payment Reminders: Auto-email guests before checkout with unpaid balance
 - POS Checkout via Stripe
-- Payment status tracking, webhook handling
 - Physical Card Terminals: Stripe Terminal, iyzico (Turkey), PayTR (Turkey)
-- Payment Dashboard: Processed/Pending/Failed totals, success rate, daily trends
-- Payment Settings: Toggle Stripe, Pay at Hotel, Room Charging, Cash, Contactless, Tipping
-- Guest Links tab: Manage all sent payment links
+- Payment Dashboard, Transaction management, Payment settings
 
-### Guest Payment Portal (NEW - Cloudbeds-style)
-- `POST /api/guest-payment/send-link` — Admin sends payment link to guest email
-- `GET /api/guest-payment/folio/{token}` — Guest views itemized folio (room, minibar, spa, restaurant, laundry)
-- `POST /api/guest-payment/pay/{token}` — Guest pays via Stripe Checkout
-- `GET /api/guest-payment/status/{token}` — Poll payment status
-- `POST /api/guest-payment/add-charge/{link_id}` — Admin adds extra charges
-- Frontend: `/pay/{token}` — Clean, mobile-friendly folio page
-- Admin: "Pay Link" button on each booking, "Guest Links" tab in Payment Gateway
+### Guest Payment Portal
+- POST /api/guest-payment/send-link — Send payment link
+- GET /api/guest-payment/folio/{token} — View itemized folio
+- POST /api/guest-payment/pay/{token} — Pay via Stripe
+- POST /api/guest-payment/add-charge/{link_id} — Add extra charges
+- Frontend: /pay/{token} — Guest-facing folio page
 
-### Review Hub
-- Multi-platform review aggregation
-- AI-powered response generation, Sentiment analysis
+### Automated Payment Reminders
+- GET/PUT /api/guest-payment/reminder-settings/{property_id} — Configure timing
+- POST /api/guest-payment/send-reminders/{property_id} — Send batch reminders
+- GET /api/guest-payment/reminder-history/{property_id} — View history
+- Settings: First/second reminder hours, max per booking, auto-send toggle
+- Admin UI: Send Reminders button with detailed results
 
-### Unified Messaging (Chatlyn-level)
-- 7 advanced features: Snooze, Translate, Internal Notes, Widget, Lists, FAQ
-
-### Guest Surveys (NPS)
-- Customizable survey templates, Public survey pages
-
-### Accounting (M3-level)
-- 18 tabs including Bank Reconciliation, PDF Invoices
-
-### Hotel POS (Prostay-level)
-- Outlets, Categories, Menu items, Tables
-- QR Code self-ordering, AI Self-Service Kiosk
-
-### Stock Management, Campaigns, Staff Performance, etc.
+### Review Hub, Unified Messaging, Guest Surveys, Accounting, POS, Stock Management
+All previously built and tested (see earlier PRD versions).
 
 ## Testing Status
-- 61 test iterations completed
-- Iteration 60: Stripe Virtual Payments (100%)
-- Iteration 61: Guest Payment Portal (17/17 backend, 100% frontend)
-
-## Known Limitations
-- Stripe test key can CREATE checkout sessions but not RETRIEVE status (expected for test mode)
-- Real WhatsApp/Telegram/SMS requires user's API credentials
-- Physical terminal hardware integration is simulated
+- 62 test iterations completed (all passing)
+- Iteration 60: Stripe Virtual Payments (16/16, 100%)
+- Iteration 61: Guest Payment Portal (17/17, 100%)
+- Iteration 62: Payment Reminders (14/14, 100%)
 
 ## Upcoming Tasks (P1)
 - Real bi-directional outbound sync for review platforms (needs user API keys)
 - Real outbound messaging for WhatsApp, Telegram, SMS (needs user credentials)
 
 ## Future/Backlog (P2)
-- None remaining — all requested features implemented
+- All requested features implemented

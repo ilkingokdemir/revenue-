@@ -29,6 +29,10 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
   const [filterType, setFilterType] = useState("all");
   const [savingSettings, setSavingSettings] = useState(false);
   const [paymentLinks, setPaymentLinks] = useState([]);
+  const [reminderSettings, setReminderSettings] = useState(null);
+  const [reminderHistory, setReminderHistory] = useState([]);
+  const [sendingReminders, setSendingReminders] = useState(false);
+  const [reminderResult, setReminderResult] = useState(null);
 
   const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
@@ -70,11 +74,25 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
     } catch (e) { /* ignore */ }
   }, [propertyId]);
 
+  const fetchReminderSettings = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/guest-payment/reminder-settings/${propertyId}`);
+      setReminderSettings(data);
+    } catch (e) { /* ignore */ }
+  }, [propertyId]);
+
+  const fetchReminderHistory = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/guest-payment/reminder-history/${propertyId}`);
+      setReminderHistory(data);
+    } catch (e) { /* ignore */ }
+  }, [propertyId]);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchDashboard(), fetchTransactions(), fetchSettings(), fetchTerminal(), fetchPaymentLinks()])
+    Promise.all([fetchDashboard(), fetchTransactions(), fetchSettings(), fetchTerminal(), fetchPaymentLinks(), fetchReminderSettings(), fetchReminderHistory()])
       .then(() => setLoading(false));
-  }, [fetchDashboard, fetchTransactions, fetchSettings, fetchTerminal, fetchPaymentLinks]);
+  }, [fetchDashboard, fetchTransactions, fetchSettings, fetchTerminal, fetchPaymentLinks, fetchReminderSettings, fetchReminderHistory]);
 
   const saveSettings = async () => {
     setSavingSettings(true);
@@ -204,9 +222,97 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
         {tab === "guest-links" && (
           <div className="p-6 max-w-5xl mx-auto space-y-4" data-testid="guest-links-tab">
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
-              <h3 className="text-sm font-semibold text-blue-800 mb-1">Guest Payment Portal</h3>
-              <p className="text-xs text-blue-600">Send payment links to guests so they can view their folio and pay outstanding balances via Stripe. Links are sent from the Bookings panel or can be managed here.</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-blue-800 mb-1">Guest Payment Portal</h3>
+                  <p className="text-xs text-blue-600">Send payment links to guests so they can view their folio and pay outstanding balances via Stripe.</p>
+                </div>
+                <button
+                  onClick={async () => {
+                    setSendingReminders(true);
+                    setReminderResult(null);
+                    try {
+                      const { data } = await axios.post(`${API}/guest-payment/send-reminders/${propertyId}`);
+                      setReminderResult(data);
+                      fetchReminderHistory();
+                      toast.success(data.message);
+                    } catch (e) { toast.error("Failed to send reminders"); }
+                    finally { setSendingReminders(false); }
+                  }}
+                  disabled={sendingReminders}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50 whitespace-nowrap"
+                  data-testid="send-reminders-btn"
+                >
+                  {sendingReminders ? <ArrowsClockwise size={14} className="animate-spin" /> : <Clock size={14} />}
+                  {sendingReminders ? "Sending..." : "Send Reminders"}
+                </button>
+              </div>
             </div>
+
+            {/* Reminder Result */}
+            {reminderResult && (
+              <div className="bg-white rounded-xl border border-stone-200 p-4" data-testid="reminder-result">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle size={16} className="text-emerald-500" weight="fill" />
+                  <span className="text-sm font-semibold text-stone-800">Reminder Results</span>
+                </div>
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-emerald-700">{reminderResult.sent}</div>
+                    <div className="text-[10px] text-emerald-600">Sent</div>
+                  </div>
+                  <div className="bg-stone-50 rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-stone-700">{reminderResult.skipped}</div>
+                    <div className="text-[10px] text-stone-500">Skipped</div>
+                  </div>
+                  <div className="bg-amber-50 rounded-lg p-3 text-center">
+                    <div className="text-lg font-bold text-amber-700">{reminderResult.total_unpaid}</div>
+                    <div className="text-[10px] text-amber-600">Unpaid Bookings</div>
+                  </div>
+                </div>
+                {reminderResult.results?.length > 0 && (
+                  <div className="space-y-1">
+                    {reminderResult.results.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs bg-stone-50 rounded-lg px-3 py-2">
+                        <div>
+                          <span className="font-medium text-stone-700">{r.booking_ref}</span>
+                          <span className="text-stone-400 ml-2">{r.guest_name || r.guest_email}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {r.amount > 0 && <span className="font-bold text-stone-700">£{r.amount?.toFixed(2)}</span>}
+                          {r.hours_left !== undefined && <span className="text-[10px] text-amber-600">{r.hours_left}h to checkout</span>}
+                          <Badge className={`text-[9px] ${r.status === "sent" ? "bg-emerald-100 text-emerald-700" : r.status === "max_reached" ? "bg-stone-100 text-stone-500" : "bg-red-100 text-red-600"}`}>
+                            {r.status === "sent" ? `Reminder #${r.reminder_number}` : r.status === "max_reached" ? "Max reached" : r.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Recent Reminder History */}
+            {reminderHistory.length > 0 && (
+              <div className="bg-white rounded-xl border border-stone-200 p-4">
+                <h3 className="text-sm font-semibold text-stone-800 mb-3">Recent Reminders ({reminderHistory.length})</h3>
+                <div className="space-y-1.5">
+                  {reminderHistory.slice(0, 15).map(r => (
+                    <div key={r.id} className="flex items-center justify-between text-xs bg-stone-50 rounded-lg px-3 py-2">
+                      <div>
+                        <span className="font-medium text-stone-700">{r.booking_ref} — {r.guest_name}</span>
+                        <span className="text-stone-400 ml-2">{r.sent_at?.slice(0, 16).replace("T", " ")}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-stone-700">£{r.amount?.toFixed(2)}</span>
+                        <Badge className="text-[9px] bg-amber-100 text-amber-700">Reminder #{r.reminder_number}</Badge>
+                        <span className="text-[10px] text-stone-400">{r.hours_until_checkout}h before</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {paymentLinks.length === 0 ? (
               <div className="bg-white rounded-xl border border-stone-200 p-10 text-center">
@@ -500,6 +606,69 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
                 {savingSettings ? "Saving..." : "Save Payment Settings"}
               </button>
             </div>
+
+            {/* Payment Reminder Settings */}
+            {reminderSettings && (
+              <div className="bg-white rounded-xl border border-stone-200 p-5 space-y-4 mt-4" data-testid="reminder-settings">
+                <div className="flex items-center gap-2 mb-2">
+                  <Clock size={16} className="text-amber-500" />
+                  <span className="text-sm font-semibold text-stone-800">Payment Reminders</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div><span className="text-xs text-stone-700 font-medium">Auto-Send Reminders</span><p className="text-[10px] text-stone-400">Automatically remind guests with unpaid balances before checkout</p></div>
+                  <Switch checked={reminderSettings.enabled} onCheckedChange={v => setReminderSettings(p => ({...p, enabled: v}))} data-testid="reminder-toggle" />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div><span className="text-xs text-stone-700 font-medium">Send to All Unpaid Bookings</span><p className="text-[10px] text-stone-400">Also send to bookings without a payment link</p></div>
+                  <Switch checked={reminderSettings.send_to_unpaid_bookings} onCheckedChange={v => setReminderSettings(p => ({...p, send_to_unpaid_bookings: v}))} />
+                </div>
+                <div>
+                  <label className="text-xs text-stone-700 font-medium">First Reminder (hours before checkout)</label>
+                  <Select value={String(reminderSettings.first_reminder_hours)} onValueChange={v => setReminderSettings(p => ({...p, first_reminder_hours: parseInt(v)}))}>
+                    <SelectTrigger className="h-8 text-xs mt-1 w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="48">48 hours (2 days)</SelectItem>
+                      <SelectItem value="24">24 hours (1 day)</SelectItem>
+                      <SelectItem value="12">12 hours</SelectItem>
+                      <SelectItem value="6">6 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-stone-700 font-medium">Second Reminder (hours before checkout)</label>
+                  <Select value={String(reminderSettings.second_reminder_hours)} onValueChange={v => setReminderSettings(p => ({...p, second_reminder_hours: parseInt(v)}))}>
+                    <SelectTrigger className="h-8 text-xs mt-1 w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="12">12 hours</SelectItem>
+                      <SelectItem value="6">6 hours</SelectItem>
+                      <SelectItem value="3">3 hours</SelectItem>
+                      <SelectItem value="1">1 hour</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-stone-700 font-medium">Max Reminders per Booking</label>
+                  <Select value={String(reminderSettings.max_reminders_per_booking)} onValueChange={v => setReminderSettings(p => ({...p, max_reminders_per_booking: parseInt(v)}))}>
+                    <SelectTrigger className="h-8 text-xs mt-1 w-28"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1</SelectItem>
+                      <SelectItem value="2">2</SelectItem>
+                      <SelectItem value="3">3</SelectItem>
+                      <SelectItem value="5">5</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <button onClick={async () => {
+                  try {
+                    await axios.put(`${API}/guest-payment/reminder-settings/${propertyId}`, reminderSettings);
+                    toast.success("Reminder settings saved");
+                  } catch (e) { toast.error("Failed to save"); }
+                }} className="w-full bg-amber-500 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-amber-600"
+                  data-testid="save-reminder-settings">
+                  Save Reminder Settings
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

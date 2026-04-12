@@ -36,6 +36,7 @@ import { SetupWizardPanel } from "./components/dashboard/SetupWizardPanel";
 import { StockManagementPanel } from "./components/dashboard/StockManagementPanel";
 import { AccountingPanel } from "./components/dashboard/AccountingPanel";
 import { POSPanel } from "./components/dashboard/POSPanel";
+import { PaymentsPanel } from "./components/dashboard/PaymentsPanel";
 import { SurveyPanel } from "./components/dashboard/SurveyPanel";
 import GuestSurveyPage from "./GuestSurveyPage";
 import QROrderPage from "./QROrderPage";
@@ -2496,6 +2497,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "stock-management", icon: Package, name: "Stock / F&B", testId: "stock-management-btn" },
         { id: "accounting", icon: Wallet, name: "Accounting", testId: "accounting-btn" },
         { id: "pos", icon: Receipt, name: "Point of Sale", testId: "pos-btn" },
+        { id: "payments", icon: Lightning, name: "Payment Gateway", testId: "payments-btn" },
       ]
     },
     {
@@ -2878,6 +2880,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Point of Sale */}
         {activeView === "pos" && (
           <POSPanel properties={properties} user={user} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Payment Gateway */}
+        {activeView === "payments" && (
+          <PaymentsPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Guest Satisfaction Surveys */}

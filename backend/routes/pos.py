@@ -150,8 +150,30 @@ def create_pos_router(db, require_roles):
             if item.get("stock_product_id"):
                 await db.stock_products.update_one(
                     {"id": item["stock_product_id"]},
-                    {"$inc": {"quantity": -item.get("quantity", 1)}}
+                    {"$inc": {"current_stock": -item.get("quantity", 1)}}
                 )
+                # Log stock movement
+                await db.stock_movements.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "product_id": item["stock_product_id"],
+                    "property_id": order.get("property_id", ""),
+                    "type": "pos_sale",
+                    "quantity": -item.get("quantity", 1),
+                    "reference": f"POS Order {order.get('order_number','')}",
+                    "order_id": order["id"],
+                    "item_name": item.get("name", ""),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+
+        # Check low stock alerts
+        low_stock = []
+        for item in items:
+            if item.get("stock_product_id"):
+                prod = await db.stock_products.find_one({"id": item["stock_product_id"]}, {"_id": 0})
+                if prod and prod.get("current_stock", 0) <= prod.get("reorder_level", 5):
+                    low_stock.append({"name": prod["name"], "quantity": prod.get("current_stock", 0), "min_stock": prod.get("reorder_level", 5)})
+        if low_stock:
+            order["low_stock_alerts"] = low_stock
 
         return order
 
@@ -186,6 +208,31 @@ def create_pos_router(db, require_roles):
         method = data.get("payment_method", "card")
         tip = data.get("tip", 0)
         total_with_tip = round(order["total"] + tip, 2)
+
+        # Handle void — restore stock
+        if method == "void":
+            await db.pos_orders.update_one({"id": order_id}, {"$set": {
+                "payment_method": "void", "payment_status": "void",
+                "voided_at": datetime.now(timezone.utc).isoformat(),
+                "voided_by": current_user.get("name", "Staff"),
+                "void_reason": data.get("reason", ""),
+            }})
+            # Restore stock for voided items
+            for item in order.get("items", []):
+                if item.get("stock_product_id"):
+                    await db.stock_products.update_one(
+                        {"id": item["stock_product_id"]},
+                        {"$inc": {"current_stock": item.get("quantity", 1)}}
+                    )
+                    await db.stock_movements.insert_one({
+                        "id": str(uuid.uuid4()), "product_id": item["stock_product_id"],
+                        "property_id": order.get("property_id", ""),
+                        "type": "void_restore", "quantity": item.get("quantity", 1),
+                        "reference": f"Void: {order.get('order_number','')}",
+                        "order_id": order_id, "item_name": item.get("name", ""),
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+            return {"status": "voided", "order_number": order.get("order_number", "")}
 
         await db.pos_orders.update_one({"id": order_id}, {"$set": {
             "payment_method": method,
@@ -453,6 +500,97 @@ def create_pos_router(db, require_roles):
             "top_items": [{"name": k, **v} for k, v in top_items],
             "hourly": dict(sorted(hourly.items())),
         }
+
+    # ==================== STOCK LINKING ====================
+
+    @router.post("/pos/link-stock/{property_id}")
+    async def auto_link_menu_stock(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Auto-create stock products for menu items and link them"""
+        menu_items = await db.pos_menu_items.find({"property_id": property_id}, {"_id": 0}).to_list(500)
+        linked = 0
+        created = 0
+        for mi in menu_items:
+            if mi.get("stock_product_id"):
+                # Verify the linked product exists
+                exists = await db.stock_products.find_one({"id": mi["stock_product_id"]}, {"_id": 0, "id": 1})
+                if exists:
+                    linked += 1
+                    continue
+                # Product doesn't exist — clear the broken link
+                await db.pos_menu_items.update_one({"id": mi["id"]}, {"$set": {"stock_product_id": "", "stock_linked": False}})
+            
+            # Check if stock product already exists with same name
+            existing = await db.stock_products.find_one({"property_id": property_id, "name": mi["name"]}, {"_id": 0})
+            if existing:
+                await db.pos_menu_items.update_one(
+                    {"id": mi["id"]},
+                    {"$set": {"stock_product_id": existing["id"], "stock_linked": True}}
+                )
+                linked += 1
+            else:
+                # Create stock product
+                from models import StockProduct
+                category_map = {
+                    "Beer": "beverages", "Wine": "beverages", "Cocktails": "beverages",
+                    "Soft Drinks": "beverages", "Hot Drinks": "beverages",
+                    "Starters": "food", "Mains": "food", "Desserts": "food",
+                    "Room Service": "food", "Spa": "supplies",
+                }
+                prod = StockProduct(
+                    property_id=property_id,
+                    name=mi["name"],
+                    category=category_map.get(mi.get("category", ""), "food"),
+                    unit="portion",
+                    current_stock=50,
+                    reorder_level=5,
+                    par_level=30,
+                    cost_price=mi.get("cost", 0),
+                    sell_price=mi.get("price", 0),
+                    supplier="Internal Kitchen",
+                )
+                doc = prod.model_dump()
+                await db.stock_products.insert_one(doc)
+                doc.pop("_id", None)
+                # Link to menu item
+                await db.pos_menu_items.update_one(
+                    {"id": mi["id"]},
+                    {"$set": {"stock_product_id": doc["id"], "stock_linked": True}}
+                )
+                created += 1
+                linked += 1
+
+        return {"linked": linked, "created": created, "total_menu_items": len(menu_items),
+                "message": f"Linked {linked} items ({created} new stock products created)"}
+
+    @router.get("/pos/stock-status/{property_id}")
+    async def get_menu_stock_status(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Get stock levels for all menu items"""
+        menu_items = await db.pos_menu_items.find({"property_id": property_id}, {"_id": 0}).to_list(500)
+        result = []
+        low_stock = []
+        out_of_stock = []
+        for mi in menu_items:
+            item = {"id": mi["id"], "name": mi["name"], "category": mi.get("category", ""), "price": mi.get("price", 0), "stock_linked": bool(mi.get("stock_product_id"))}
+            if mi.get("stock_product_id"):
+                prod = await db.stock_products.find_one({"id": mi["stock_product_id"]}, {"_id": 0})
+                if prod:
+                    item["stock_quantity"] = prod.get("current_stock", 0)
+                    item["min_stock"] = prod.get("reorder_level", 5)
+                    item["stock_product_name"] = prod.get("name", "")
+                    if prod.get("current_stock", 0) <= 0:
+                        out_of_stock.append(mi["name"])
+                    elif prod.get("current_stock", 0) <= prod.get("reorder_level", 5):
+                        low_stock.append({"name": mi["name"], "quantity": prod.get("current_stock", 0), "min_stock": prod.get("reorder_level", 5)})
+            result.append(item)
+        return {"items": result, "low_stock": low_stock, "out_of_stock": out_of_stock,
+                "total_linked": sum(1 for i in result if i.get("stock_linked")),
+                "total_items": len(result)}
+
+    @router.get("/pos/stock-movements/{property_id}")
+    async def get_stock_movements(property_id: str, limit: int = 50, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Get recent stock movements from POS orders"""
+        docs = await db.stock_movements.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+        return docs
 
     return router
 

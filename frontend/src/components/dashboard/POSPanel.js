@@ -72,6 +72,9 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
   const [showVoid, setShowVoid] = useState(false);
   const [voidOrder, setVoidOrder] = useState(null);
   const [voidReason, setVoidReason] = useState("");
+  const [stockStatus, setStockStatus] = useState(null);
+  const [stockMovements, setStockMovements] = useState([]);
+  const [linkingStock, setLinkingStock] = useState(false);
 
   const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
@@ -86,6 +89,16 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
   const fetchReports = useCallback(async () => { const { data } = await axios.get(`${API}/pos/reports/${propertyId}`); setReports(data); }, [propertyId]);
   const fetchHappyHours = useCallback(async () => { const { data } = await axios.get(`${API}/pos/happy-hours/${propertyId}`); setHappyHours(data); }, [propertyId]);
   const fetchTables = useCallback(async () => { if (activeOutlet?.id) { const { data } = await axios.get(`${API}/pos/tables/${activeOutlet.id}`); setTables(data); } }, [activeOutlet]);
+  const fetchStockStatus = useCallback(async () => {
+    try {
+      const [status, movements] = await Promise.all([
+        axios.get(`${API}/pos/stock-status/${propertyId}`),
+        axios.get(`${API}/pos/stock-movements/${propertyId}`),
+      ]);
+      setStockStatus(status.data);
+      setStockMovements(movements.data);
+    } catch (e) { /* ignore */ }
+  }, [propertyId]);
 
   useEffect(() => { setLoading(true); Promise.all([fetchOutlets(), fetchMenu()]).then(() => setLoading(false)); }, [fetchOutlets, fetchMenu]);
   useEffect(() => { if (tab === "orders") fetchOrders(); }, [tab, fetchOrders]);
@@ -93,6 +106,7 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
   useEffect(() => { if (tab === "reports") fetchReports(); }, [tab, fetchReports]);
   useEffect(() => { if (tab === "happy-hour") fetchHappyHours(); }, [tab, fetchHappyHours]);
   useEffect(() => { if (tab === "tables") fetchTables(); }, [tab, fetchTables]);
+  useEffect(() => { if (tab === "stock") fetchStockStatus(); }, [tab, fetchStockStatus]);
 
   const addToCart = (item) => {
     setCart(prev => {
@@ -182,6 +196,7 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
     { id: "orders", label: "Orders", icon: Receipt },
     { id: "reports", label: "Reports", icon: BarChart3 },
     { id: "happy-hour", label: "Happy Hour", icon: Percent },
+    { id: "stock", label: "Stock", icon: Award },
     { id: "qr-code", label: "QR Order", icon: QrCode },
   ];
 
@@ -678,6 +693,121 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
                 </div>
               </DialogContent>
             </Dialog>
+          </div>
+        )}
+
+        {/* ========== STOCK TAB ========== */}
+        {tab === "stock" && (
+          <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-[#F9F8F6]" data-testid="stock-tab">
+            <div className="flex items-center justify-between">
+              <span className="text-base font-bold text-[#1C1917] flex items-center gap-2" style={{ fontFamily: "Outfit, sans-serif" }}><Award size={18} className="text-[#2C4C3B]" /> Stock & Inventory</span>
+              <div className="flex gap-2">
+                <button onClick={fetchStockStatus} className="text-xs text-[#78716C] flex items-center gap-1"><RefreshCw size={12} /> Refresh</button>
+                <button onClick={async () => { setLinkingStock(true); try { const { data } = await axios.post(`${API}/pos/link-stock/${propertyId}`); toast.success(data.message); fetchStockStatus(); fetchMenu(); } catch (e) { toast.error("Failed"); } finally { setLinkingStock(false); } }}
+                  disabled={linkingStock}
+                  className="text-xs px-4 py-2 bg-[#2C4C3B] text-white rounded-xl font-bold hover:bg-[#1A3025] disabled:opacity-50 flex items-center gap-1"
+                  data-testid="link-stock-btn">
+                  {linkingStock ? <ArrowsClockwise size={12} className="animate-spin" /> : <Plus size={12} />}
+                  {linkingStock ? "Linking..." : "Auto-Link Stock"}
+                </button>
+              </div>
+            </div>
+
+            {stockStatus && (
+              <>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-white rounded-2xl p-4 border border-[#E5E0D8] text-center">
+                    <div className="text-2xl font-black text-[#1C1917]">{stockStatus.total_items}</div>
+                    <div className="text-[10px] text-[#A8A29E] font-semibold">Menu Items</div>
+                  </div>
+                  <div className="bg-[#D1FAE5] rounded-2xl p-4 border border-[#6EE7B7] text-center">
+                    <div className="text-2xl font-black text-[#065F46]">{stockStatus.total_linked}</div>
+                    <div className="text-[10px] text-[#059669] font-semibold">Stock Linked</div>
+                  </div>
+                  <div className="bg-[#FEF3C7] rounded-2xl p-4 border border-[#FCD34D] text-center">
+                    <div className="text-2xl font-black text-[#92400E]">{stockStatus.low_stock?.length || 0}</div>
+                    <div className="text-[10px] text-[#B45309] font-semibold">Low Stock</div>
+                  </div>
+                  <div className="bg-[#FEE2E2] rounded-2xl p-4 border border-[#FCA5A5] text-center">
+                    <div className="text-2xl font-black text-[#9B4837]">{stockStatus.out_of_stock?.length || 0}</div>
+                    <div className="text-[10px] text-[#DC2626] font-semibold">Out of Stock</div>
+                  </div>
+                </div>
+
+                {/* Alerts */}
+                {(stockStatus.low_stock?.length > 0 || stockStatus.out_of_stock?.length > 0) && (
+                  <div className="space-y-2">
+                    {stockStatus.out_of_stock?.map((name, i) => (
+                      <div key={i} className="bg-[#FEF2F2] border-2 border-[#FCA5A5] rounded-xl px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2"><Ban size={14} className="text-[#DC2626]" /><span className="text-xs font-bold text-[#9B4837]">{name}</span></div>
+                        <Badge className="text-[9px] bg-[#FEE2E2] text-[#DC2626] font-bold">OUT OF STOCK</Badge>
+                      </div>
+                    ))}
+                    {stockStatus.low_stock?.map((item, i) => (
+                      <div key={i} className="bg-[#FFFBEB] border-2 border-[#FCD34D] rounded-xl px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2"><Lightning size={14} className="text-[#D4A373]" weight="fill" /><span className="text-xs font-bold text-[#92400E]">{item.name}</span></div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-[#B45309] font-bold">{item.quantity} left</span>
+                          <span className="text-[9px] text-[#A8A29E]">min: {item.min_stock}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Stock Levels Table */}
+                <div className="bg-white rounded-2xl border border-[#E5E0D8] overflow-hidden">
+                  <div className="px-5 py-3 border-b border-[#EAE5DC] bg-[#F9F8F6]">
+                    <span className="text-xs font-bold text-[#57534E] uppercase tracking-wider">Menu Item Stock Levels</span>
+                  </div>
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {stockStatus.items?.map(item => (
+                      <div key={item.id} className="flex items-center justify-between px-5 py-2.5 border-b border-[#F0EBE1] last:border-0 hover:bg-[#F9F8F6]">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${item.stock_linked ? (item.stock_quantity <= 0 ? "bg-[#DC2626]" : item.stock_quantity <= (item.min_stock || 5) ? "bg-[#F59E0B]" : "bg-[#22C55E]") : "bg-[#D6D3D1]"}`} />
+                          <span className="text-xs font-semibold text-[#1C1917]">{item.name}</span>
+                          <span className="text-[9px] text-[#A8A29E]">{item.category}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {item.stock_linked ? (
+                            <span className={`text-xs font-bold ${item.stock_quantity <= 0 ? "text-[#DC2626]" : item.stock_quantity <= (item.min_stock || 5) ? "text-[#F59E0B]" : "text-[#22C55E]"}`}>{item.stock_quantity} in stock</span>
+                          ) : (
+                            <span className="text-[10px] text-[#D6D3D1]">Not linked</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Stock Movements */}
+                {stockMovements.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-[#E5E0D8] overflow-hidden">
+                    <div className="px-5 py-3 border-b border-[#EAE5DC] bg-[#F9F8F6]">
+                      <span className="text-xs font-bold text-[#57534E] uppercase tracking-wider">Recent Stock Movements</span>
+                    </div>
+                    <div className="max-h-[250px] overflow-y-auto">
+                      {stockMovements.map(m => (
+                        <div key={m.id} className="flex items-center justify-between px-5 py-2.5 border-b border-[#F0EBE1] last:border-0">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[9px] font-bold ${m.type === "pos_sale" ? "bg-[#FEE2E2] text-[#DC2626]" : "bg-[#D1FAE5] text-[#22C55E]"}`}>
+                              {m.quantity > 0 ? "+" : ""}{m.quantity}
+                            </div>
+                            <div>
+                              <span className="text-xs font-semibold text-[#1C1917]">{m.item_name}</span>
+                              <span className="text-[9px] text-[#A8A29E] block">{m.reference}</span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-[#A8A29E]">{m.created_at?.slice(11, 16)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {!stockStatus && <div className="text-center py-16 text-[#A8A29E] text-sm">Loading stock data...</div>}
           </div>
         )}
 

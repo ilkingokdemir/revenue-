@@ -35,6 +35,7 @@ import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
 import { SetupWizardPanel } from "./components/dashboard/SetupWizardPanel";
 import { StockManagementPanel } from "./components/dashboard/StockManagementPanel";
 import { AccountingPanel } from "./components/dashboard/AccountingPanel";
+import { POSPanel } from "./components/dashboard/POSPanel";
 import { SurveyPanel } from "./components/dashboard/SurveyPanel";
 import GuestSurveyPage from "./GuestSurveyPage";
 import {
@@ -108,6 +109,7 @@ import {
   Megaphone,
   MapPin,
   Wallet,
+  Receipt,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2491,6 +2493,7 @@ const Dashboard = ({ user, onLogout }) => {
       items: [
         { id: "stock-management", icon: Package, name: "Stock / F&B", testId: "stock-management-btn" },
         { id: "accounting", icon: Wallet, name: "Accounting", testId: "accounting-btn" },
+        { id: "pos", icon: Receipt, name: "Point of Sale", testId: "pos-btn" },
       ]
     },
     {
@@ -2868,6 +2871,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Accounting */}
         {activeView === "accounting" && (
           <AccountingPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Point of Sale */}
+        {activeView === "pos" && (
+          <POSPanel properties={properties} user={user} activePropertyId={activePropertyId} />
         )}
 
         {/* Guest Satisfaction Surveys */}

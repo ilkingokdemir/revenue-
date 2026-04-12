@@ -31,6 +31,7 @@ import { ChannelSettingsPanel } from "./components/dashboard/ChannelSettingsPane
 import { DashboardHome } from "./components/dashboard/DashboardHome";
 import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePanel";
 import { GuestProfilesPanel } from "./components/dashboard/GuestProfilesPanel";
+import { AdminPanel } from "./components/dashboard/AdminPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2529,6 +2530,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "mapping", icon: Buildings, name: "Property Mapping", testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: "Branding", testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: "Team", testId: "team-btn" }] : []),
+        ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: "Admin Panel", testId: "admin-panel-btn" }] : []),
       ]
     }
   ];
@@ -2777,6 +2779,11 @@ const Dashboard = ({ user, onLogout }) => {
           <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
             <UserManagementPanel currentUser={user} />
           </Dialog>
+        )}
+
+        {/* Admin Panel */}
+        {activeView === "admin-panel" && (
+          <AdminPanel properties={properties} user={user} activePropertyId={activePropertyId} />
         )}
 
         {/* Sync Log View */}

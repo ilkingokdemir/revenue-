@@ -1,127 +1,81 @@
 # MyHotelBox — Product Requirements Document
 
 ## Overview
-Hotel management software (www.myhotelbox.com) — Booking Engine + Review Hub + Guest Messaging + Automation modules. Competitive with Mews, Cloudbeds, eviivo, HiJiffy, Bookboost, Duve, **Chatlyn**.
+Hotel management software (www.myhotelbox.com) — Booking Engine + Review Hub + Guest Messaging + Automation + Full Accounting. Competitive with Mews, Cloudbeds, eviivo, HiJiffy, Bookboost, Duve, Chatlyn, **M3 Accounting**.
 
 ## Tech Stack
-React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stripe | Resend | Meta WhatsApp Cloud API | Telegram Bot API
+React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stripe | Resend
 
 ## Completed Features
 
-### Dashboard Home (Default Landing) — iter 38
-- **Today's Snapshot**: Check-ins, check-outs, in-house guests, occupancy rate
-- **Revenue Widgets**: Week/month totals with booking counts
-- **Messaging Stats**: Unread messages, open conversations (clickable → inbox)
-- **Review Stats**: Avg rating, total reviews (clickable → reviews)
-- **3-Column Activity Feed**: Recent bookings, unread messages (with channel icons), recent reviews (with star ratings)
-- **Automation Status**: Today's sends, failed, tomorrow's pre-arrival count
-- **Quick Actions**: Jump to Inbox, Automation, Reviews, Bookings
-- **Action Required Panel**: Tracks 7 types of system alerts
+### Dashboard Home — iter 38
+- Today's Snapshot, Revenue Widgets, Messaging/Review Stats, Activity Feed, Automation Status, Quick Actions, Action Required Panel
 
 ### Booking Engine — Core
-- 10 website templates + live customizer, Full booking flow, Stripe + Pay-at-hotel
-- Multi-property (9 branches, 45 room types), Resend email confirmations
-
-### Competitive Features (All Tested 100%)
-- Multi-Language (12 + RTL Arabic), Multi-Currency (18 currencies)
-- Promo Codes, Add-ons, Policies, Facilities, Amenities, Room Editor
-- Smart Upsells, Price Comparison, Social Proof, Google Structured Data
-- Guest Reviews, Self-Check-in, Guest Portal, Cart Recovery, Group Bookings
-- AI Concierge Chat (GPT-5.2), Hourly/Space Bookings (8 types)
+- 10 templates, Stripe + Pay-at-hotel, 9 branches, 45 room types, Resend emails
+- Multi-Language (12+RTL), Multi-Currency (18), Promo Codes, Add-ons, Smart Upsells, AI Concierge
 
 ### Guest Messaging Hub (Chatlyn Parity — iter 50)
-- **Unified Inbox**: Multi-channel (WhatsApp/Telegram/Email/SMS/OTA/Webchat), ticket workflow, priority, sentiment
-- **AI-Suggested Replies** (GPT-5.2), Quick Reply Templates (10), Auto-Reply FAQ Bot (10 rules)
-- **Guest Contact Directory**: From bookings, filters, one-click messaging
-- **Bookings Calendar**: Monthly check-in/out events
-- **New Conversation Modal**: Channel selector with pre-fill
-- **Internal Notes / Private Comments** — Staff-only notes with @mention support
-- **Conversation Snooze** — 5 duration options, auto-wake timer
-- **1-Click Translate** — AI GPT-5.2 translation across 20+ languages
-- **Guest Booking Data Sidebar** — VIP status, loyalty tier, total stays/spent, booking history
-- **Conversation Analytics Dashboard** — Heatmap, FRT, Resolution Time, by channel/agent/tag
-- **Webchat Widget Configurator** — Color, position, messages, AI toggle, preview, embed code
-- **Contact Lists** — Static & dynamic lists for targeted campaigns
+- Unified Inbox (WhatsApp/Telegram/Email/SMS/OTA/Webchat), AI Replies, Quick Templates, FAQ Bot
+- Internal Notes, Conversation Snooze, 1-Click Translate, Guest Booking Sidebar
+- Conversation Analytics (heatmap, FRT, resolution), Webchat Widget Configurator, Contact Lists
 
-### Guest Satisfaction Surveys (NPS) — iter 51
-- **NPS Score Collection** — 0-10 scale with emoji feedback, categorizes promoter/passive/detractor
-- **Category Ratings** — 6 configurable categories (Cleanliness, Service, Location, Value, Comfort, Facilities) rated 1-5
-- **Multi-Channel Delivery** — Email + WhatsApp (configurable), customizable email templates
-- **Auto-Send** — Automatically sends surveys to guests after checkout (configurable delay: 2h default)
-- **Manual Send** — Send survey to specific guest by name/email
-- **Public Survey Page** — Beautiful guest-facing survey form at /survey/{token} (no auth needed)
-- **Analytics Dashboard** — Net NPS, avg NPS, response rate, NPS distribution bar, category averages, daily trend, recent comments
-- **Low Score Alerts** — Configurable threshold triggers sync log alerts
-- **Guest Profile Integration** — Auto-tags guest profiles as nps:promoter/passive/detractor
-- **Configurable Settings** — Survey type (NPS only vs detailed), delay hours, channels, email template, reminder, alert threshold
+### Guest Satisfaction Surveys (NPS — iter 51)
+- NPS + 6 category ratings, Email/WhatsApp delivery, auto-send after checkout
+- Public survey page, analytics dashboard, low-score alerts, guest profile auto-tagging
 
-### Automation Engine
-- 6 Pre-built Journey Rules (Pre-Arrival, Arrival Day, Mid-Stay, Post-Checkout x2, Cart Recovery)
-- Rule editor with template variables, Run Now, logs & stats
+### Hotel Accounting (M3 Competitor Level — iter 52)
+**Original features:**
+- P&L Statement (by category, department), Income & Expense CRUD, USALI Chart of Accounts
+- Invoicing (AR/AP) with VAT, Budget vs Actual, 6-Month Trends, Booking Revenue Sync, CSV Export
 
-### Channel Settings
-- WhatsApp (Meta Cloud API), Telegram (Bot API), SMS, Email (Resend), Auto-Reply
+**10 New Features (iter 52):**
+- **AR Aging Report** — 30/60/90/120+ day overdue receivable tracking with colored distribution bars
+- **AP Aging Report** — Same for supplier payables
+- **Daily Revenue Report (Night Audit)** — Daily room revenue + F&B + expenses + payments + 7-day bar chart
+- **Cash Flow Statement** — Operating (revenue/expenses/AR/AP) + Investing (capex) + Financing
+- **Payment Tracking** — Record received/made payments with 7 methods (bank, card, cash, cheque, online), links to invoices, auto-updates invoice status & amount_paid
+- **Journal Entries (General Ledger)** — Double-entry bookkeeping with debit/credit balance validation, void support
+- **Balance Sheet** — Assets (cash + AR), Liabilities (AP + VAT), Equity with balanced check
+- **Revenue Forecasting** — 3-month projections based on confirmed bookings + historical average + trend, confidence levels
+- **Recurring Invoices** — Weekly/monthly/quarterly auto-generation with start/end dates, enable/disable
+- **Audit Trail** — Timestamped log of all accounting actions with user, entity, before/after values
 
-### Review Hub
-- 14-platform integration, AI responses, approval workflow, analytics, competitor benchmarking
-
-### Webhooks & Sync Logs (Production-Ready Audit Trail)
-- Guest Profiles, Campaigns, Messaging Hub, Automation Engine, Digital Keys, Guest App webhooks + sync logs
-- Cross-Module Connections: Booking→Guest Profile, Campaign→Guest Profile, Review→Guest Profile
-
-### Connections & Integrations
-- Platform Setup Wizard (Google Business, Booking.com, TripAdvisor, WhatsApp, Telegram)
-- Digital Keys / Smart Locks (6 providers)
-- 130+ Language AI Chat
-
-### Guest Experience
-- Guest Profiles / CRM with VIP, loyalty tiers, NPS tags
-- Campaign Manager (Email/WhatsApp/SMS bulk messaging)
-- Guest App / Digital Directory
-- Guest Satisfaction Surveys / NPS
-
-### Admin Panels
-- Staff Performance Dashboard
-- Guest Satisfaction Score (GSS)
+**Total: 18 tabs** — P&L, Night Audit, Income, Expenses, Invoices, Payments, Journal, AR Aging, AP Aging, Cash Flow, Balance Sheet, Forecast, VAT, Recurring, Trends, Budget, CoA, Audit Trail
 
 ### Operations
-- **Stock Management (Apicbase-level)** — 13 categories, recipes, sub-recipes, COGS, Menu Engineering, Par Level Auto-Ordering, Allergen tracking, Yield Management, 11 tabs
-- **Hotel Accounting (M3/Xero-level)** — USALI accounts, invoicing, VAT, P&L, budgets, CSV export
+- **Stock Management (Apicbase-level)** — 13 categories, recipes, COGS, Menu Engineering, Par Levels, Allergens, 11 tabs
+- **Hotel Accounting (M3-level)** — 18 tabs (see above)
+
+### Other Modules
+- Review Hub (14 platforms, AI responses, analytics, competitor benchmarking)
+- Automation Engine (6 journey rules)
+- Channel Settings (WhatsApp, Telegram, SMS, Email)
+- Guest Experience (Profiles/CRM, Guest App, Digital Keys, Campaigns, Surveys/NPS)
+- Connections (Setup Wizard, Webhooks, Sync Logs, Integration Guide)
+- Staff Performance Dashboard, Guest Satisfaction Score
 
 ### Infrastructure
-- JWT auth (admin/manager/receptionist), white-label branding, outbound webhooks
-
-## Sidebar Structure
-- **Dashboard** (home icon)
-- **Review Hub**: Reviews, Analytics, Response Templates, Approvals, Alerts, Reports
-- **Booking Engine**: Rooms & Bookings, Website Templates, Customize, Promos, Add-ons, Policies
-- **Guest Experience**: Guest Profiles, Guest App, Digital Keys, Campaigns, **Surveys / NPS**
-- **Operations**: Stock / F&B, Accounting
-- **Guest Messaging**: Unified Inbox, Automation, Channel Settings, AI Concierge, Staff Performance
-- **Connections**: Setup Wizard, Integrations, API Connection, Webhooks, Sync Log, Integration Guide
-- **Settings**: Property Mapping, Branding, Team
+- JWT auth (admin/manager/receptionist), white-label branding, webhooks
 
 ## Code Architecture
 ```
-backend/
-├── server.py
-├── routes/
-│   ├── helpers.py, auth_routes.py, connections.py, reviews.py, integrations.py
-│   ├── bookings.py, messaging.py, messaging_advanced.py, automation.py
-│   ├── dashboard.py, staff_performance.py, calendar_gss.py
-│   ├── guest_profiles.py, campaigns.py, guest_app.py, smart_locks.py
-│   ├── setup_wizard.py, stock.py, accounting.py
-│   └── surveys.py          # NEW: Guest Satisfaction Surveys
-├── auth.py, database.py, models.py
+backend/routes/
+├── accounting.py           # P&L, Income, Expenses, Invoices, VAT, Trends, Budget, CoA, Export
+├── accounting_advanced.py  # AR/AP Aging, Night Audit, Cash Flow, Payments, Journal, Balance Sheet, Forecast, Recurring, Audit Trail
+├── messaging.py + messaging_advanced.py
+├── surveys.py              # Guest Satisfaction Surveys
+├── (14 other route files)
 ```
 
+## Sidebar Structure
+- Dashboard | Review Hub | Booking Engine | Guest Experience (+ Surveys/NPS) | Operations (Stock, Accounting) | Guest Messaging | Connections | Settings
+
 ## Backlog
-- Dynamic Pricing, Drag-and-drop Calendar, Channel Manager — NOT building (exists on legacy site)
+- Dynamic Pricing, Channel Manager, Drag-and-drop Calendar — NOT building (legacy)
 - Space Bookings, Availability Calendar, Housekeeping — REMOVED per user request
 - Real bi-directional outbound sync for review platforms (P1)
-- Real outbound messaging for WhatsApp, Telegram, SMS — currently Sandbox mode (P1)
+- Real outbound messaging for WhatsApp/Telegram/SMS — Sandbox mode (P1)
 
 ## Testing
-- Iteration 49: 100% pass (51 tests) — Full regression
-- Iteration 50: 100% pass (39 tests) — Chatlyn competitor features
-- Iteration 51: 100% pass (30 tests) — Guest Satisfaction Surveys
+- iter 49: 100% (51 tests) | iter 50: 100% (39 tests) | iter 51: 100% (30 tests) | iter 52: 100% (46 tests)

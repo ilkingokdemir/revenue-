@@ -181,14 +181,40 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
   const payOrder = async () => {
     if (!payingOrder) return;
     try {
-      await axios.post(`${API}/pos/orders/${payingOrder.id}/pay`, {
-        payment_method: payMethod, tip,
-      });
-      toast.success(`Order paid via ${payMethod}`);
-      setShowPay(false);
-      setPayingOrder(null);
-      setTip(0);
-      fetchOrders();
+      if (payMethod === "terminal") {
+        // Send to card terminal
+        const { data } = await axios.post(`${API}/terminal/quick-pay/${payingOrder.id}`, { tip });
+        if (data.status === "sent_to_reader") {
+          toast.success("Amount sent to card reader! Waiting for guest to tap card...");
+          // Poll for completion
+          const pollInterval = setInterval(async () => {
+            try {
+              const { data: statusData } = await axios.get(`${API}/terminal/stripe/payment-status/${data.payment_intent_id}`);
+              if (statusData.payment_status === "paid") {
+                clearInterval(pollInterval);
+                toast.success("Payment confirmed!");
+                setShowPay(false);
+                setPayingOrder(null);
+                setTip(0);
+                fetchOrders();
+              }
+            } catch (e) { /* keep polling */ }
+          }, 3000);
+          // Stop polling after 2 minutes
+          setTimeout(() => clearInterval(pollInterval), 120000);
+        } else {
+          toast.error(data.message || "Failed to send to terminal");
+        }
+      } else {
+        await axios.post(`${API}/pos/orders/${payingOrder.id}/pay`, {
+          payment_method: payMethod, tip,
+        });
+        toast.success(`Order paid via ${payMethod}`);
+        setShowPay(false);
+        setPayingOrder(null);
+        setTip(0);
+        fetchOrders();
+      }
     } catch (e) { toast.error("Payment failed"); }
   };
 
@@ -713,7 +739,7 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
                   { value: "card", label: "Card", icon: CreditCard },
                   { value: "cash", label: "Cash", icon: Banknote },
                   { value: "room_charge", label: "Room Charge", icon: Building },
-                  { value: "contactless", label: "Contactless", icon: CreditCard },
+                  { value: "terminal", label: "Card Terminal", icon: CreditCard },
                 ].map(m => (
                   <button key={m.value} onClick={() => setPayMethod(m.value)}
                     className={`flex items-center gap-2 p-3 rounded-xl text-xs font-medium border-2 transition-all ${

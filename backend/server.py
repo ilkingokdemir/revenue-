@@ -44,6 +44,7 @@ from routes.pos import create_pos_router
 from routes.pos_advanced import create_pos_advanced_router
 from routes.pos_ai import create_pos_ai_router
 from routes.payments import create_payments_router
+from routes.terminal import create_terminal_router
 from routes.auth_routes import create_auth_router
 from routes.connections import create_connections_router
 from routes.reviews import create_reviews_router
@@ -300,6 +301,9 @@ api_router.include_router(pos_ai_router)
 
 payments_router = create_payments_router(db, require_roles)
 api_router.include_router(payments_router)
+
+terminal_router = create_terminal_router(db, require_roles)
+api_router.include_router(terminal_router)
 
 auth_routes_router = create_auth_router(db, require_roles, get_current_user, hash_password, verify_password,
                                          create_access_token, create_refresh_token, get_jwt_secret, JWT_ALGORITHM)

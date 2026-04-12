@@ -11,7 +11,7 @@ import {
 import {
   CurrencyGbp, ArrowsClockwise, CheckCircle, WarningCircle, Clock,
 } from "@phosphor-icons/react";
-import { CreditCard, BarChart3, Settings, TrendingUp, Shield } from "lucide-react";
+import { CreditCard, BarChart3, Settings, TrendingUp, Shield, Smartphone, Plus } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -20,6 +20,9 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
   const [dashboard, setDashboard] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [terminalSettings, setTerminalSettings] = useState(null);
+  const [devices, setDevices] = useState([]);
+  const [terminalPayments, setTerminalPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState("30d");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -48,11 +51,22 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
     setSettings(data);
   }, [propertyId]);
 
+  const fetchTerminal = useCallback(async () => {
+    const [ts, dv, tp] = await Promise.all([
+      axios.get(`${API}/terminal/settings/${propertyId}`),
+      axios.get(`${API}/terminal/devices/${propertyId}`),
+      axios.get(`${API}/terminal/payments/${propertyId}`),
+    ]);
+    setTerminalSettings(ts.data);
+    setDevices(dv.data);
+    setTerminalPayments(tp.data);
+  }, [propertyId]);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchDashboard(), fetchTransactions(), fetchSettings()])
+    Promise.all([fetchDashboard(), fetchTransactions(), fetchSettings(), fetchTerminal()])
       .then(() => setLoading(false));
-  }, [fetchDashboard, fetchTransactions, fetchSettings]);
+  }, [fetchDashboard, fetchTransactions, fetchSettings, fetchTerminal]);
 
   const saveSettings = async () => {
     setSavingSettings(true);
@@ -67,6 +81,7 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
 
   const tabs = [
     { id: "dashboard", label: "Overview", icon: BarChart3 },
+    { id: "terminal", label: "Card Terminals", icon: Smartphone },
     { id: "transactions", label: "Transactions", icon: CreditCard },
     { id: "settings", label: "Settings", icon: Settings },
   ];
@@ -224,6 +239,149 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* Terminal */}
+        {tab === "terminal" && (
+          <div className="p-6 max-w-5xl mx-auto space-y-5" data-testid="terminal-tab">
+            {/* How It Works */}
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-green-800 mb-2">How Card Terminal Payments Work</h3>
+              <div className="grid grid-cols-4 gap-3 text-center text-xs text-green-700">
+                <div className="bg-white rounded-lg p-3"><div className="text-lg mb-1">1</div><span>Staff selects "Pay by Terminal" on POS order</span></div>
+                <div className="bg-white rounded-lg p-3"><div className="text-lg mb-1">2</div><span>Amount auto-sent to card reader device</span></div>
+                <div className="bg-white rounded-lg p-3"><div className="text-lg mb-1">3</div><span>Guest inserts / taps card on terminal</span></div>
+                <div className="bg-white rounded-lg p-3"><div className="text-lg mb-1">4</div><span>Payment confirmed, order marked paid</span></div>
+              </div>
+            </div>
+
+            {/* Active Provider */}
+            {terminalSettings && (
+              <div className="bg-white rounded-xl border border-stone-200 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-stone-800">Terminal Provider</h3>
+                  <Badge className="text-[9px] bg-green-100 text-green-700 capitalize">{terminalSettings.active_provider}</Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { id: "stripe", name: "Stripe Terminal", desc: "Global — Visa, MC, Amex, Contactless", flag: "🌍" },
+                    { id: "iyzico", name: "iyzico", desc: "Turkey — All Turkish banks, Installments", flag: "🇹🇷" },
+                    { id: "paytr", name: "PayTR", desc: "Turkey — Virtual POS, SMS payment", flag: "🇹🇷" },
+                  ].map(p => (
+                    <button key={p.id} onClick={async () => {
+                      await axios.put(`${API}/terminal/settings/${propertyId}`, { active_provider: p.id });
+                      fetchTerminal();
+                      toast.success(`Switched to ${p.name}`);
+                    }} className={`text-left p-3 rounded-xl border-2 transition-all ${terminalSettings.active_provider === p.id ? "border-green-500 bg-green-50" : "border-stone-200 hover:border-stone-300"}`}
+                      data-testid={`provider-${p.id}`}>
+                      <div className="text-sm mb-0.5">{p.flag} <span className="font-semibold text-stone-800">{p.name}</span></div>
+                      <div className="text-[10px] text-stone-500">{p.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Registered Devices */}
+            <div className="bg-white rounded-xl border border-stone-200 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-stone-800">Card Readers ({devices.length})</h3>
+                <button onClick={async () => {
+                  const name = prompt("Device name (e.g., Reception Reader):");
+                  const readerId = prompt("Stripe Reader ID (e.g., tmr_xxx) or Device Serial:");
+                  if (name && readerId) {
+                    await axios.post(`${API}/terminal/devices`, {
+                      property_id: propertyId, name, provider_device_id: readerId, provider: terminalSettings?.active_provider || "stripe"
+                    });
+                    fetchTerminal();
+                    toast.success("Device registered");
+                  }
+                }} className="text-xs px-3 py-1.5 bg-green-600 text-white rounded-lg font-medium" data-testid="add-device-btn">
+                  <Plus size={12} className="inline mr-1" /> Add Reader
+                </button>
+              </div>
+              {devices.length === 0 ? (
+                <div className="text-center py-8 text-stone-400 text-sm">
+                  <Smartphone size={24} className="mx-auto mb-2 text-stone-300" />
+                  <p>No card readers registered</p>
+                  <p className="text-[10px] mt-1">Add your Stripe Terminal reader or iyzico device to start accepting card payments</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {devices.map(d => (
+                    <div key={d.id} className="flex items-center justify-between bg-stone-50 rounded-lg px-3 py-2.5" data-testid={`device-${d.id}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center"><Smartphone size={16} className="text-green-700" /></div>
+                        <div>
+                          <div className="text-xs font-semibold text-stone-800">{d.name}</div>
+                          <div className="text-[10px] text-stone-400">{d.provider} · {d.provider_device_id?.slice(0, 20)} {d.location && `· ${d.location}`}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={`text-[9px] ${d.status === "active" ? "bg-green-100 text-green-700" : "bg-stone-100 text-stone-500"}`}>{d.status}</Badge>
+                        {d.last_used && <span className="text-[9px] text-stone-400">Last: {d.last_used?.slice(0, 10)}</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Terminal Credentials */}
+            {terminalSettings && (
+              <div className="bg-white rounded-xl border border-stone-200 p-5">
+                <h3 className="text-sm font-semibold text-stone-800 mb-3">API Credentials</h3>
+                {terminalSettings.active_provider === "stripe" && (
+                  <div className="space-y-2">
+                    <div><label className="text-[11px] font-medium text-stone-600 block mb-1">Stripe Location ID</label>
+                      <Input value={terminalSettings.stripe_location_id || ""} onChange={e => setTerminalSettings(p => ({...p, stripe_location_id: e.target.value}))} placeholder="tml_xxx" className="h-8 text-sm" data-testid="stripe-location-id" /></div>
+                    <p className="text-[10px] text-stone-400">Stripe API Key is already configured in your environment.</p>
+                  </div>
+                )}
+                {terminalSettings.active_provider === "iyzico" && (
+                  <div className="space-y-2">
+                    <div><label className="text-[11px] font-medium text-stone-600 block mb-1">iyzico API Key</label>
+                      <Input value={terminalSettings.iyzico_api_key || ""} onChange={e => setTerminalSettings(p => ({...p, iyzico_api_key: e.target.value}))} placeholder="Enter API Key" className="h-8 text-sm" /></div>
+                    <div><label className="text-[11px] font-medium text-stone-600 block mb-1">iyzico Secret Key</label>
+                      <Input type="password" value={terminalSettings.iyzico_secret_key || ""} onChange={e => setTerminalSettings(p => ({...p, iyzico_secret_key: e.target.value}))} placeholder="Enter Secret Key" className="h-8 text-sm" /></div>
+                  </div>
+                )}
+                {terminalSettings.active_provider === "paytr" && (
+                  <div className="space-y-2">
+                    <div><label className="text-[11px] font-medium text-stone-600 block mb-1">PayTR Merchant ID</label>
+                      <Input value={terminalSettings.paytr_merchant_id || ""} onChange={e => setTerminalSettings(p => ({...p, paytr_merchant_id: e.target.value}))} className="h-8 text-sm" /></div>
+                    <div><label className="text-[11px] font-medium text-stone-600 block mb-1">PayTR Merchant Key</label>
+                      <Input type="password" value={terminalSettings.paytr_merchant_key || ""} onChange={e => setTerminalSettings(p => ({...p, paytr_merchant_key: e.target.value}))} className="h-8 text-sm" /></div>
+                  </div>
+                )}
+                <button onClick={async () => {
+                  await axios.put(`${API}/terminal/settings/${propertyId}`, terminalSettings);
+                  toast.success("Terminal settings saved");
+                }} className="w-full mt-3 bg-green-600 text-white py-2 rounded-lg text-xs font-medium hover:bg-green-700" data-testid="save-terminal-settings">Save Terminal Settings</button>
+              </div>
+            )}
+
+            {/* Recent Terminal Payments */}
+            {terminalPayments.length > 0 && (
+              <div className="bg-white rounded-xl border border-stone-200 p-5">
+                <h3 className="text-sm font-semibold text-stone-800 mb-3">Recent Terminal Payments</h3>
+                <div className="space-y-1.5">
+                  {terminalPayments.slice(0, 10).map(p => (
+                    <div key={p.id} className="flex items-center justify-between text-xs bg-stone-50 rounded-lg px-3 py-2">
+                      <div>
+                        <span className="font-medium text-stone-700">{p.type} · {p.reference_id?.slice(0, 8)}</span>
+                        <span className="text-stone-400 ml-2">{p.provider}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-stone-800">£{p.amount}</span>
+                        <Badge className={`text-[9px] ${p.payment_status === "paid" ? "bg-green-100 text-green-700" : p.status === "sent_to_reader" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>{p.payment_status || p.status}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         )}

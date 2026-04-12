@@ -44,20 +44,23 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
   const [data, setData] = useState(null);
   const [gss, setGss] = useState(null);
   const [notifications, setNotifications] = useState(null);
+  const [finKpis, setFinKpis] = useState(null);
   const [loading, setLoading] = useState(true);
   const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
   const fetch = useCallback(async () => {
     setLoading(true);
     try {
-      const [dashRes, gssRes, notifRes] = await Promise.all([
+      const [dashRes, gssRes, notifRes, kpiRes] = await Promise.all([
         axios.get(`${API}/dashboard/overview/${propertyId}`),
         axios.get(`${API}/gss/${propertyId}?days=30`).catch(() => ({ data: null })),
         axios.get(`${API}/dashboard/notifications/${propertyId}`).catch(() => ({ data: null })),
+        axios.get(`${API}/dashboard/financial-kpis/${propertyId}`).catch(() => ({ data: null })),
       ]);
       setData(dashRes.data);
       setGss(gssRes.data);
       setNotifications(notifRes.data);
+      setFinKpis(kpiRes.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, [propertyId]);
@@ -122,6 +125,36 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
           </button>
         ))}
       </div>
+
+      {/* Financial KPIs */}
+      {finKpis && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6" data-testid="financial-kpis">
+          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-indigo-700">{finKpis.revpar ? `£${finKpis.revpar}` : "—"}</div>
+            <div className="text-[9px] text-indigo-500 uppercase font-semibold">RevPAR</div>
+          </div>
+          <div className="bg-gradient-to-br from-blue-50 to-sky-50 border border-blue-200 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-blue-700">{finKpis.adr ? `£${finKpis.adr}` : "—"}</div>
+            <div className="text-[9px] text-blue-500 uppercase font-semibold">ADR</div>
+          </div>
+          <div className="bg-gradient-to-br from-emerald-50 to-green-50 border border-emerald-200 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-emerald-700">£{finKpis.month_revenue?.toLocaleString() || 0}</div>
+            <div className="text-[9px] text-emerald-500 uppercase font-semibold">Revenue (MTD)</div>
+          </div>
+          <div className={`bg-gradient-to-br border rounded-xl p-3 text-center ${finKpis.month_profit >= 0 ? "from-teal-50 to-emerald-50 border-teal-200" : "from-red-50 to-pink-50 border-red-200"}`}>
+            <div className={`text-lg font-bold ${finKpis.month_profit >= 0 ? "text-teal-700" : "text-red-600"}`}>£{finKpis.month_profit?.toLocaleString() || 0}</div>
+            <div className="text-[9px] text-stone-500 uppercase font-semibold">Net Profit (MTD)</div>
+          </div>
+          <div className={`bg-gradient-to-br border rounded-xl p-3 text-center ${finKpis.nps_score >= 0 ? "from-purple-50 to-violet-50 border-purple-200" : "from-red-50 to-pink-50 border-red-200"}`}>
+            <div className={`text-lg font-bold ${finKpis.nps_score >= 0 ? "text-purple-700" : "text-red-600"}`}>{finKpis.nps_score || 0}</div>
+            <div className="text-[9px] text-purple-500 uppercase font-semibold">NPS Score</div>
+          </div>
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-amber-700">£{finKpis.ar_outstanding?.toLocaleString() || 0}</div>
+            <div className="text-[9px] text-amber-500 uppercase font-semibold">AR Outstanding</div>
+          </div>
+        </div>
+      )}
 
       {/* Action Notifications — Don't Forget! */}
       {notifications && notifications.total > 0 && (

@@ -47,6 +47,7 @@ function InvoicesTab({ propertyId, month }) {
               </div>
               <Badge className={`text-[9px] ${inv.status === "paid" ? "bg-emerald-100 text-emerald-700" : inv.status === "overdue" ? "bg-red-100 text-red-700" : inv.status === "partially_paid" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>{inv.status}</Badge>
               {inv.status !== "paid" && <button onClick={() => markPaid(inv.id)} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-600 rounded" data-testid={`mark-paid-${inv.id}`}>Mark Paid</button>}
+              <a href={`${API}/accounting/invoices/${inv.id}/pdf`} target="_blank" rel="noreferrer" className="text-[10px] px-2 py-1 bg-indigo-50 text-indigo-600 rounded" data-testid={`pdf-${inv.id}`}>PDF</a>
             </div>
           </div>
         ))}

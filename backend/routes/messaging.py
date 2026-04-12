@@ -114,6 +114,10 @@ def create_messaging_router(db, require_roles, LlmChat, UserMessage, resend):
         doc = msg.model_dump()
         await db.messages.insert_one(doc)
         doc.pop("_id", None)
+
+        conv = await db.conversations.find_one({"id": data["conversation_id"]}, {"_id": 0})
+        channel = conv.get("channel", "") if conv else data.get("channel", "")
+
         await db.conversations.update_one(
             {"id": data["conversation_id"]},
             {"$set": {
@@ -122,8 +126,88 @@ def create_messaging_router(db, require_roles, LlmChat, UserMessage, resend):
                 "status": "waiting"
             }}
         )
-        asyncio.create_task(fire_webhooks(db, "message.sent", {"conversation_id": data["conversation_id"], "sender": current_user.get("name", "Staff"), "channel": doc.get("channel", "")}))
-        await log_sync(db, "messaging", "outbound", "success", f"Staff message in conv {data['conversation_id']}", data["conversation_id"])
+
+        # Auto-deliver via channel
+        delivery_status = "internal"
+        delivery_error = None
+        if conv:
+            property_id = conv.get("property_id", "")
+            settings = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
+
+            if channel == "whatsapp" and settings and settings.get("whatsapp_enabled"):
+                phone = conv.get("guest_phone", "")
+                access_token = settings.get("whatsapp_access_token", "")
+                phone_id = settings.get("whatsapp_phone_number_id", "")
+                if phone and access_token and phone_id:
+                    try:
+                        import httpx
+                        async with httpx.AsyncClient() as client:
+                            payload = {"messaging_product": "whatsapp", "to": phone.replace("+", ""), "type": "text", "text": {"body": data["content"]}}
+                            resp = await client.post(f"https://graph.facebook.com/v18.0/{phone_id}/messages",
+                                json=payload, headers={"Authorization": f"Bearer {access_token}"}, timeout=10)
+                            if resp.status_code == 200:
+                                delivery_status = "delivered"
+                            else:
+                                delivery_status = "failed"
+                                delivery_error = resp.text[:200]
+                    except Exception as e:
+                        delivery_status = "failed"
+                        delivery_error = str(e)[:200]
+                else:
+                    delivery_status = "sandbox"
+
+            elif channel == "telegram" and settings and settings.get("telegram_enabled"):
+                chat_id = conv.get("guest_phone", "") or conv.get("telegram_chat_id", "")
+                bot_token = settings.get("telegram_bot_token", "")
+                if chat_id and bot_token:
+                    try:
+                        import httpx
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.post(f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                                json={"chat_id": chat_id, "text": data["content"]}, timeout=10)
+                            if resp.status_code == 200:
+                                delivery_status = "delivered"
+                            else:
+                                delivery_status = "failed"
+                                delivery_error = resp.text[:200]
+                    except Exception as e:
+                        delivery_status = "failed"
+                        delivery_error = str(e)[:200]
+                else:
+                    delivery_status = "sandbox"
+
+            elif channel == "email":
+                guest_email = conv.get("guest_email", "")
+                if guest_email and resend:
+                    try:
+                        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+                        ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+                        hotel_name = ts.get("hotel_name", property_id)
+                        resend.emails.send({
+                            "from": sender, "to": [guest_email],
+                            "subject": f"Message from {hotel_name}",
+                            "html": f"<div style='font-family:Arial;padding:20px;'><p>{data['content']}</p><p style='color:#999;font-size:12px;'>— {hotel_name} Team</p></div>"
+                        })
+                        delivery_status = "delivered"
+                    except Exception as e:
+                        delivery_status = "failed"
+                        delivery_error = str(e)[:200]
+                else:
+                    delivery_status = "sandbox"
+            elif channel == "sms":
+                delivery_status = "sandbox"
+            else:
+                delivery_status = "internal"
+
+        # Update message with delivery status
+        await db.messages.update_one({"id": doc["id"]}, {"$set": {
+            "delivery_status": delivery_status,
+            "delivery_error": delivery_error,
+        }})
+        doc["delivery_status"] = delivery_status
+
+        asyncio.create_task(fire_webhooks(db, "message.sent", {"conversation_id": data["conversation_id"], "sender": current_user.get("name", "Staff"), "channel": channel, "delivery_status": delivery_status}))
+        await log_sync(db, "messaging", "outbound", delivery_status, f"Staff message via {channel} ({delivery_status}) in conv {data['conversation_id']}", data["conversation_id"])
         return doc
 
     @router.post("/messaging/messages/ai-suggest")

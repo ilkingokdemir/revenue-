@@ -504,20 +504,96 @@ Review: {review_text[:500]}"""
         try:
             integration = await db.platform_integrations.find_one({"platform": platform}, {"_id": 0})
             if not integration or not integration.get("credentials_configured"):
-                await log_sync(db, platform, "outbound", "skipped", f"No credentials configured for {platform}", review_id)
+                await log_sync(db, platform, "outbound", "skipped", f"No credentials configured for {platform}. Configure in Connections > Setup Wizard.", review_id)
                 return
 
             success = False
+            error_msg = ""
+
             if platform == "google":
-                location_id = integration.get("location_id")
-                if location_id:
-                    success = await PlatformService.post_google_reply(location_id, external_review_id, reply_text)
+                # Google Business Profile API - Reply to review
+                access_token = integration.get("access_token", "")
+                account_id = integration.get("account_id", "")
+                location_id = integration.get("location_id", "")
+                if access_token and account_id and location_id:
+                    try:
+                        import httpx
+                        url = f"https://mybusiness.googleapis.com/v4/accounts/{account_id}/locations/{location_id}/reviews/{external_review_id}/reply"
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.put(url,
+                                json={"comment": reply_text},
+                                headers={"Authorization": f"Bearer {access_token}"},
+                                timeout=15)
+                            if resp.status_code in (200, 201):
+                                success = True
+                            else:
+                                error_msg = f"Google API {resp.status_code}: {resp.text[:150]}"
+                    except Exception as e:
+                        error_msg = str(e)[:200]
+                else:
+                    error_msg = "Missing Google credentials (access_token, account_id, location_id)"
+
+            elif platform == "booking.com":
+                # Booking.com Connectivity API
+                api_key = integration.get("api_key", "")
+                hotel_id = integration.get("hotel_id", "")
+                if api_key and hotel_id:
+                    try:
+                        import httpx
+                        url = f"https://supply-xml.booking.com/hotels/xml/reviews"
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.post(url,
+                                json={"hotel_id": hotel_id, "review_id": external_review_id, "response": reply_text},
+                                headers={"Authorization": f"Basic {api_key}"},
+                                timeout=15)
+                            if resp.status_code in (200, 201):
+                                success = True
+                            else:
+                                error_msg = f"Booking.com API {resp.status_code}: {resp.text[:150]}"
+                    except Exception as e:
+                        error_msg = str(e)[:200]
+                else:
+                    error_msg = "Missing Booking.com credentials (api_key, hotel_id)"
+
+            elif platform == "tripadvisor":
+                # TripAdvisor Management Center API
+                api_key = integration.get("api_key", "")
+                location_id = integration.get("location_id", "")
+                if api_key and location_id:
+                    try:
+                        import httpx
+                        url = f"https://api.tripadvisor.com/api/partner/3.0/location/{location_id}/reviews/{external_review_id}/response"
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.post(url,
+                                json={"response_text": reply_text},
+                                headers={"x-tripadvisor-api-key": api_key},
+                                timeout=15)
+                            if resp.status_code in (200, 201):
+                                success = True
+                            else:
+                                error_msg = f"TripAdvisor API {resp.status_code}: {resp.text[:150]}"
+                    except Exception as e:
+                        error_msg = str(e)[:200]
+                else:
+                    error_msg = "Missing TripAdvisor credentials (api_key, location_id)"
+
+            else:
+                error_msg = f"Outbound reply not yet supported for {platform}"
 
             if success:
-                await db.reviews.update_one({"id": review_id}, {"$set": {"synced_to_platform": True, "sync_date": datetime.now(timezone.utc).isoformat()}})
-                await log_sync(db, platform, "outbound", "success", f"Reply posted to {platform}", review_id)
+                await db.reviews.update_one({"id": review_id}, {"$set": {
+                    "synced_to_platform": True,
+                    "sync_date": datetime.now(timezone.utc).isoformat(),
+                    "sync_status": "synced",
+                }})
+                await log_sync(db, platform, "outbound", "success", f"Reply posted to {platform} for review {external_review_id}", review_id)
             else:
-                await log_sync(db, platform, "outbound", "skipped", f"Outbound sync to {platform} not yet supported or failed", review_id)
+                await db.reviews.update_one({"id": review_id}, {"$set": {
+                    "synced_to_platform": False,
+                    "sync_status": "failed",
+                    "sync_error": error_msg,
+                }})
+                await log_sync(db, platform, "outbound", "warning", f"Reply sync to {platform} failed: {error_msg}", review_id)
         except Exception as e:
             logger.error(f"Outbound sync error for {platform}: {e}")
             await log_sync(db, platform, "outbound", "error", str(e)[:200], review_id)

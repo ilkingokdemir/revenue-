@@ -1479,6 +1479,12 @@ export function MessagingHub({ properties, user, activePropertyId: propActivePro
                               {!isGuest && msg.sender_name && <span>{msg.sender_name}</span>}
                               {isAI && <span className="flex items-center gap-0.5"><Robot size={10} /> AI</span>}
                               {msg.sender_type === "auto_reply" && <span className="flex items-center gap-0.5"><Robot size={10} /> Auto</span>}
+                              {msg.delivery_status && msg.delivery_status !== "internal" && (
+                                <span className={`flex items-center gap-0.5 ${msg.delivery_status === "delivered" ? "text-emerald-500" : msg.delivery_status === "sandbox" ? "text-amber-500" : msg.delivery_status === "failed" ? "text-red-500" : "text-stone-400"}`}>
+                                  {msg.delivery_status === "delivered" ? <CheckCircle size={10} weight="fill" /> : msg.delivery_status === "failed" ? <WarningCircle size={10} /> : null}
+                                  {msg.delivery_status}
+                                </span>
+                              )}
                               <span>{new Date(msg.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span>
                             </div>
                           </div>

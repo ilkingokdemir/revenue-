@@ -38,6 +38,7 @@ from routes.setup_wizard import create_setup_wizard_router
 from routes.stock import create_stock_router
 from routes.accounting import create_accounting_router
 from routes.accounting_advanced import create_accounting_advanced_router
+from routes.bank_reconciliation import create_bank_reconciliation_router
 from routes.auth_routes import create_auth_router
 from routes.connections import create_connections_router
 from routes.reviews import create_reviews_router
@@ -276,6 +277,9 @@ api_router.include_router(accounting_router)
 
 accounting_adv_router = create_accounting_advanced_router(db, require_roles)
 api_router.include_router(accounting_adv_router)
+
+bank_recon_router = create_bank_reconciliation_router(db, require_roles)
+api_router.include_router(bank_recon_router)
 
 auth_routes_router = create_auth_router(db, require_roles, get_current_user, hash_password, verify_password,
                                          create_access_token, create_refresh_token, get_jwt_secret, JWT_ALGORITHM)

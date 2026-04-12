@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
-import { BarChart3, CreditCard, BookOpen, Scale, TrendingUp, Repeat, History, Sun, FileText } from "lucide-react";
+import { BarChart3, CreditCard, BookOpen, Scale, TrendingUp, Repeat, History, Sun, FileText, Building2 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const INCOME_CATS = ["room_revenue","food_beverage","spa_wellness","events_meetings","parking","laundry","minibar","late_checkout","cancellation_fees","other"];
@@ -609,6 +609,206 @@ function RecurringTab({ propertyId }) {
   );
 }
 
+// ---- Bank Reconciliation Tab ----
+function BankReconciliationTab({ propertyId, month }) {
+  const [summary, setSummary] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showImport, setShowImport] = useState(false);
+  const [showAddTx, setShowAddTx] = useState(false);
+  const [matching, setMatching] = useState(false);
+  const [filterMatched, setFilterMatched] = useState("");
+  const [newTx, setNewTx] = useState({ date: new Date().toISOString().slice(0, 10), description: "", reference: "", amount: 0 });
+  const [importData, setImportData] = useState("");
+
+  const fetch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [s, t, a] = await Promise.all([
+        axios.get(`${API}/accounting/bank-reconciliation/summary/${propertyId}?month=${month}`),
+        axios.get(`${API}/accounting/bank-transactions/${propertyId}?month=${month}${filterMatched ? `&matched=${filterMatched}` : ""}`),
+        axios.get(`${API}/accounting/bank-accounts/${propertyId}`),
+      ]);
+      setSummary(s.data); setTransactions(t.data); setAccounts(a.data);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  }, [propertyId, month, filterMatched]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  const autoMatch = async () => {
+    setMatching(true);
+    try {
+      const { data } = await axios.post(`${API}/accounting/bank-reconciliation/auto-match/${propertyId}`);
+      toast.success(`Matched ${data.matched} transactions (${data.remaining_unmatched} remaining)`);
+      fetch();
+    } catch (e) { toast.error("Auto-match failed"); }
+    finally { setMatching(false); }
+  };
+
+  const addTransaction = async () => {
+    if (!newTx.amount) return toast.error("Amount required");
+    const accountId = accounts[0]?.id || "";
+    await axios.post(`${API}/accounting/bank-transactions/manual`, { ...newTx, property_id: propertyId, account_id: accountId });
+    setShowAddTx(false); setNewTx({ date: new Date().toISOString().slice(0, 10), description: "", reference: "", amount: 0 });
+    fetch(); toast.success("Transaction added");
+  };
+
+  const importTransactions = async () => {
+    try {
+      const lines = importData.trim().split("\n").filter(Boolean);
+      const txns = lines.map(line => {
+        const parts = line.split(",").map(p => p.trim());
+        return { date: parts[0] || "", description: parts[1] || "", amount: parseFloat(parts[2]) || 0, reference: parts[3] || "" };
+      });
+      const accountId = accounts[0]?.id || "";
+      const { data } = await axios.post(`${API}/accounting/bank-transactions/import`, { property_id: propertyId, account_id: accountId, transactions: txns });
+      toast.success(`Imported ${data.imported} transactions (${data.duplicates} duplicates skipped)`);
+      setShowImport(false); setImportData("");
+      fetch();
+    } catch (e) { toast.error("Import failed"); }
+  };
+
+  const unmatch = async (txId) => {
+    await axios.post(`${API}/accounting/bank-reconciliation/unmatch/${txId}`);
+    fetch();
+  };
+
+  const deleteTx = async (txId) => {
+    await axios.delete(`${API}/accounting/bank-transactions/${txId}`);
+    fetch();
+  };
+
+  if (loading) return <div className="flex justify-center py-16"><ArrowsClockwise size={24} className="animate-spin text-stone-300" /></div>;
+
+  return (
+    <div className="space-y-4" data-testid="bank-recon-tab">
+      {/* Summary */}
+      {summary && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className={`rounded-xl p-4 border text-center ${summary.reconciled ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+              <div className={`text-xl font-bold ${summary.reconciled ? "text-emerald-700" : "text-amber-700"}`}>{summary.match_rate}%</div>
+              <div className="text-[10px] text-stone-500">Match Rate</div>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+              <div className="text-xl font-bold text-stone-800">{summary.total_transactions}</div>
+              <div className="text-[10px] text-stone-500">{summary.matched} matched / {summary.unmatched} unmatched</div>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+              <div className="text-xl font-bold text-blue-700">£{summary.bank_net?.toLocaleString()}</div>
+              <div className="text-[10px] text-stone-500">Bank Net</div>
+            </div>
+            <div className={`rounded-xl p-4 border text-center ${Math.abs(summary.discrepancy) < 0.02 ? "bg-emerald-50 border-emerald-200" : "bg-red-50 border-red-200"}`}>
+              <div className={`text-xl font-bold ${Math.abs(summary.discrepancy) < 0.02 ? "text-emerald-700" : "text-red-600"}`}>£{summary.discrepancy?.toLocaleString()}</div>
+              <div className="text-[10px] text-stone-500">Discrepancy</div>
+            </div>
+          </div>
+
+          {/* Bank vs System comparison */}
+          <div className="bg-white rounded-xl border border-stone-200 p-4">
+            <div className="text-xs font-semibold text-stone-700 mb-2">Bank vs System Comparison</div>
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <div className="text-[10px] text-stone-400 uppercase mb-1">Bank Statement</div>
+                <div className="flex justify-between"><span>Credits (In)</span><span className="font-bold text-emerald-600">£{summary.bank_credits?.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Debits (Out)</span><span className="font-bold text-red-500">£{summary.bank_debits?.toLocaleString()}</span></div>
+                <div className="flex justify-between pt-1 border-t border-stone-100"><span className="font-semibold">Net</span><span className="font-bold">£{summary.bank_net?.toLocaleString()}</span></div>
+              </div>
+              <div>
+                <div className="text-[10px] text-stone-400 uppercase mb-1">System Records</div>
+                <div className="flex justify-between"><span>Income</span><span className="font-bold text-emerald-600">£{summary.system_income?.toLocaleString()}</span></div>
+                <div className="flex justify-between"><span>Expenses</span><span className="font-bold text-red-500">£{summary.system_expenses?.toLocaleString()}</span></div>
+                <div className="flex justify-between pt-1 border-t border-stone-100"><span className="font-semibold">Net</span><span className="font-bold">£{summary.system_net?.toLocaleString()}</span></div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <button onClick={autoMatch} disabled={matching}
+          className="text-xs px-3 py-1.5 bg-indigo-500 text-white rounded-lg font-medium disabled:opacity-50" data-testid="auto-match-btn">
+          <ArrowsClockwise size={12} className={`inline mr-1 ${matching ? "animate-spin" : ""}`} /> {matching ? "Matching..." : "Auto-Match"}
+        </button>
+        <button onClick={() => setShowAddTx(true)} className="text-xs px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg font-medium" data-testid="add-bank-tx-btn">
+          <Plus size={12} className="inline mr-1" /> Add Transaction
+        </button>
+        <button onClick={() => setShowImport(true)} className="text-xs px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg font-medium" data-testid="import-btn">
+          <ArrowDown size={12} className="inline mr-1" /> Import CSV
+        </button>
+        <div className="ml-auto flex gap-1">
+          {["", "true", "false"].map(v => (
+            <button key={v} onClick={() => setFilterMatched(v)}
+              className={`text-[10px] px-2 py-1 rounded-full ${filterMatched === v ? "bg-indigo-600 text-white" : "bg-stone-100 text-stone-500"}`}>
+              {v === "" ? "All" : v === "true" ? "Matched" : "Unmatched"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Transaction List */}
+      {transactions.length === 0 ? (
+        <div className="text-center py-10 text-stone-400 text-sm">No bank transactions for {month}. Import a statement or add manually.</div>
+      ) : (
+        <div className="space-y-1.5">
+          {transactions.map(tx => (
+            <div key={tx.id} className={`bg-white border rounded-lg px-3 py-2 flex items-center justify-between ${tx.matched ? "border-emerald-200" : "border-stone-200"}`} data-testid={`bank-tx-${tx.id}`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full ${tx.matched ? "bg-emerald-500" : "bg-amber-400"}`} />
+                <div>
+                  <div className="text-xs font-medium text-stone-800">{tx.description || "—"}</div>
+                  <div className="text-[10px] text-stone-400">{tx.date} {tx.reference && `· Ref: ${tx.reference}`}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                {tx.matched && (
+                  <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">
+                    {tx.match_confidence}% · {tx.matched_type}
+                  </span>
+                )}
+                <span className={`text-sm font-bold ${tx.amount >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                  {tx.amount >= 0 ? "+" : ""}£{Math.abs(tx.amount).toLocaleString()}
+                </span>
+                <div className="flex gap-1">
+                  {tx.matched && <button onClick={() => unmatch(tx.id)} className="text-[10px] text-amber-600 hover:text-amber-700">Unmatch</button>}
+                  <button onClick={() => deleteTx(tx.id)} className="text-stone-300 hover:text-red-400"><Trash size={12} /></button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add Transaction Dialog */}
+      <Dialog open={showAddTx} onOpenChange={setShowAddTx}>
+        <DialogContent className="max-w-md"><DialogHeader><DialogTitle>Add Bank Transaction</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <Input type="date" value={newTx.date} onChange={e => setNewTx(p => ({...p, date: e.target.value}))} />
+            <Input placeholder="Description" value={newTx.description} onChange={e => setNewTx(p => ({...p, description: e.target.value}))} data-testid="bank-tx-desc" />
+            <Input type="number" placeholder="Amount (+ for credit, - for debit)" value={newTx.amount || ""} onChange={e => setNewTx(p => ({...p, amount: parseFloat(e.target.value) || 0}))} data-testid="bank-tx-amount" />
+            <Input placeholder="Reference" value={newTx.reference} onChange={e => setNewTx(p => ({...p, reference: e.target.value}))} />
+            <button onClick={addTransaction} className="w-full text-xs py-2 bg-indigo-500 text-white rounded-lg font-medium" data-testid="save-bank-tx-btn">Add Transaction</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Dialog */}
+      <Dialog open={showImport} onOpenChange={setShowImport}>
+        <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Import Bank Statement (CSV)</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs text-stone-500">Paste CSV data: one transaction per line. Format: date, description, amount, reference</p>
+            <Textarea rows={8} placeholder={"2026-04-01, Room payment, 450, REF001\n2026-04-02, Supplier payment, -120, INV-445"} value={importData} onChange={e => setImportData(e.target.value)} className="text-xs font-mono" data-testid="import-csv-data" />
+            <button onClick={importTransactions} className="w-full text-xs py-2 bg-blue-600 text-white rounded-lg font-medium" data-testid="import-csv-btn">Import Transactions</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 // ---- Audit Trail ----
 function AuditTrailTab({ propertyId }) {
   const [trail, setTrail] = useState([]);
@@ -763,6 +963,7 @@ export function AccountingPanel({ properties, activePropertyId }) {
     { id: "budgets", label: "Budget", icon: ChartBar },
     { id: "accounts", label: "CoA", icon: Wallet },
     { id: "audit", label: "Audit Trail", icon: History },
+    { id: "bank-recon", label: "Bank Recon", icon: Building2 },
   ];
 
   return (
@@ -900,6 +1101,7 @@ export function AccountingPanel({ properties, activePropertyId }) {
         )}
         {tab === "accounts" && <ChartOfAccountsTab propertyId={propertyId} />}
         {tab === "audit" && <AuditTrailTab propertyId={propertyId} />}
+        {tab === "bank-recon" && <BankReconciliationTab propertyId={propertyId} month={month} />}
       </>)}
 
       {/* Add Income Dialog */}

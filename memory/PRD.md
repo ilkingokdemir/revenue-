@@ -16,6 +16,7 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - **3-Column Activity Feed**: Recent bookings, unread messages (with channel icons), recent reviews (with star ratings)
 - **Automation Status**: Today's sends, failed, tomorrow's pre-arrival count
 - **Quick Actions**: Jump to Inbox, Automation, Reviews, Bookings
+- **Action Required Panel**: Tracks 7 types of system alerts
 
 ### Booking Engine — Core
 - 10 website templates + live customizer, Full booking flow, Stripe + Pay-at-hotel
@@ -34,13 +35,25 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 - **Guest Contact Directory**: From bookings, filters, one-click messaging
 - **Bookings Calendar**: Monthly check-in/out events
 - **New Conversation Modal**: Channel selector with pre-fill
-- **Internal Notes / Private Comments** — Staff-only notes on conversations with @mention support (invisible to guests)
-- **Conversation Snooze** — Snooze conversations with 5 duration options (30m, 1h, 2h, 4h, tomorrow 9AM), auto-wake when timer expires
-- **1-Click Translate** — AI-powered translation for guest messages and staff replies across 20+ languages using GPT-5.2
-- **Guest Booking Data Sidebar** — View guest profile, VIP status, loyalty tier, total stays, total spent, and full booking history right next to the conversation
-- **Conversation Analytics Dashboard** — Activity heatmap (day × hour), First Response Time, Resolution Time, resolution rate, volume by channel/agent/tag, sentiment breakdown
-- **Webchat Widget Configurator** — Full settings panel for embeddable live chat widget (color, position, welcome/offline messages, AI toggle, require name/email), live preview, embed code generator
-- **Contact Lists** — Static and dynamic lists for targeted WhatsApp/Email campaigns. Dynamic lists auto-populate from guest profiles using filters (VIP, loyalty tier, min stays, tags, min spend)
+- **Internal Notes / Private Comments** — Staff-only notes with @mention support
+- **Conversation Snooze** — 5 duration options, auto-wake timer
+- **1-Click Translate** — AI GPT-5.2 translation across 20+ languages
+- **Guest Booking Data Sidebar** — VIP status, loyalty tier, total stays/spent, booking history
+- **Conversation Analytics Dashboard** — Heatmap, FRT, Resolution Time, by channel/agent/tag
+- **Webchat Widget Configurator** — Color, position, messages, AI toggle, preview, embed code
+- **Contact Lists** — Static & dynamic lists for targeted campaigns
+
+### Guest Satisfaction Surveys (NPS) — iter 51
+- **NPS Score Collection** — 0-10 scale with emoji feedback, categorizes promoter/passive/detractor
+- **Category Ratings** — 6 configurable categories (Cleanliness, Service, Location, Value, Comfort, Facilities) rated 1-5
+- **Multi-Channel Delivery** — Email + WhatsApp (configurable), customizable email templates
+- **Auto-Send** — Automatically sends surveys to guests after checkout (configurable delay: 2h default)
+- **Manual Send** — Send survey to specific guest by name/email
+- **Public Survey Page** — Beautiful guest-facing survey form at /survey/{token} (no auth needed)
+- **Analytics Dashboard** — Net NPS, avg NPS, response rate, NPS distribution bar, category averages, daily trend, recent comments
+- **Low Score Alerts** — Configurable threshold triggers sync log alerts
+- **Guest Profile Integration** — Auto-tags guest profiles as nps:promoter/passive/detractor
+- **Configurable Settings** — Survey type (NPS only vs detailed), delay hours, channels, email template, reminder, alert threshold
 
 ### Automation Engine
 - 6 Pre-built Journey Rules (Pre-Arrival, Arrival Day, Mid-Stay, Post-Checkout x2, Cart Recovery)
@@ -48,86 +61,67 @@ React + Tailwind + Shadcn UI | FastAPI + MongoDB | GPT-5.2 (Emergent Key) | Stri
 
 ### Channel Settings
 - WhatsApp (Meta Cloud API), Telegram (Bot API), SMS, Email (Resend), Auto-Reply
-- Setup guides, credential inputs, Test Connection buttons
 
 ### Review Hub
 - 14-platform integration, AI responses, approval workflow, analytics, competitor benchmarking
 
 ### Webhooks & Sync Logs (Production-Ready Audit Trail)
-- **Guest Profiles**: `guest.created`, `guest.updated`, `guest.vip_changed` webhooks + sync logs
-- **Campaigns**: `campaign.created`, `campaign.sent` webhooks + sync logs + auto-tags guest profiles
-- **Messaging Hub**: `conversation.created`, `conversation.resolved`, `message.sent` webhooks + sync logs
-- **Automation Engine**: `automation.triggered`, `automation.failed` webhooks + sync logs
-- **Digital Keys**: `key.generated`, `key.revoked`, `key.used` webhooks + sync logs
-- **Guest App**: `directory.updated` webhook + sync log
-- **Cross-Module Connections**: Booking→Guest Profile auto-update, Campaign→Guest Profile tagging, Review→Guest Profile linking
+- Guest Profiles, Campaigns, Messaging Hub, Automation Engine, Digital Keys, Guest App webhooks + sync logs
+- Cross-Module Connections: Booking→Guest Profile, Campaign→Guest Profile, Review→Guest Profile
 
 ### Connections & Integrations
-- **Platform Setup Wizard** — Self-service step-by-step guides for Google Business, Booking.com, TripAdvisor, WhatsApp, Telegram with credential management, test connection, auto-sync to channel settings
-- **Digital Keys / Smart Locks** — 6 lock providers (TTLock, Nuki, August/Yale, Salto KS, ASSA ABLOY, Generic), digital key generation per booking with 6-digit access codes, public guest key endpoint, revoke support
-- **130+ Language AI Chat** — AI Concierge auto-detects guest language and responds in same language, AI messaging replies also multilingual
+- Platform Setup Wizard (Google Business, Booking.com, TripAdvisor, WhatsApp, Telegram)
+- Digital Keys / Smart Locks (6 providers)
+- 130+ Language AI Chat
 
-### Guest Experience (Competitive with Mews, Cloudbeds, Duve, HiJiffy)
-- **Guest Profiles / CRM** — Unified guest history synced from bookings, VIP toggle, loyalty tiers, search/sort, detailed view with booking/review/conversation history
-- **Campaign Manager** — Bulk messaging (Email/WhatsApp/SMS), guest segmentation filters (VIP, loyalty tier, stays, spend, tags), preview recipients, send tracking
-- **Guest App / Digital Directory** — WiFi credentials, hotel services (6 default), local recommendations (4 default), public guest-facing URL, editable via admin panel
+### Guest Experience
+- Guest Profiles / CRM with VIP, loyalty tiers, NPS tags
+- Campaign Manager (Email/WhatsApp/SMS bulk messaging)
+- Guest App / Digital Directory
+- Guest Satisfaction Surveys / NPS
 
 ### Admin Panels
-- Staff Performance Dashboard — Agent leaderboard, response times, resolution rates, channel breakdown, daily trends, performance scoring
-- Guest Satisfaction Score (GSS) — Composite KPI (Reviews 50% + Sentiment 25% + Response Speed 25%), shown on Dashboard Home
+- Staff Performance Dashboard
+- Guest Satisfaction Score (GSS)
+
+### Operations
+- **Stock Management (Apicbase-level)** — 13 categories, recipes, sub-recipes, COGS, Menu Engineering, Par Level Auto-Ordering, Allergen tracking, Yield Management, 11 tabs
+- **Hotel Accounting (M3/Xero-level)** — USALI accounts, invoicing, VAT, P&L, budgets, CSV export
 
 ### Infrastructure
 - JWT auth (admin/manager/receptionist), white-label branding, outbound webhooks
 
 ## Sidebar Structure
-- **Dashboard** (home icon — default landing)
+- **Dashboard** (home icon)
 - **Review Hub**: Reviews, Analytics, Response Templates, Approvals, Alerts, Reports
 - **Booking Engine**: Rooms & Bookings, Website Templates, Customize, Promos, Add-ons, Policies
-- **Guest Experience**: Guest Profiles, Guest App, Digital Keys, Campaigns
+- **Guest Experience**: Guest Profiles, Guest App, Digital Keys, Campaigns, **Surveys / NPS**
 - **Operations**: Stock / F&B, Accounting
 - **Guest Messaging**: Unified Inbox, Automation, Channel Settings, AI Concierge, Staff Performance
 - **Connections**: Setup Wizard, Integrations, API Connection, Webhooks, Sync Log, Integration Guide
 - **Settings**: Property Mapping, Branding, Team
 
-### Operations
-- **Stock Management (Best-in-class, Apicbase-level)** — Product catalog (13 categories, 9 units, allergens, yield %, expiry tracking, par levels), portion-based recipes with sub-recipes, automatic COGS per sale, Menu Engineering (Stars/Puzzles/Plowhorses/Dogs profitability matrix), Food Cost % Dashboard (target 28-35%, per-outlet breakdown), Par Level Auto-Ordering (auto-generate POs), Allergen & Nutrition tracking, Supplier Price History, Yield Management (raw vs usable cost), Perishable Forecasting (FIFO expiry alerts), Multi-Outlet Transfers, Inventory Turnover Rate (target 4-8x), theoretical vs actual consumption (theft-proof), wastage with reason codes, supplier management, purchase orders, stock count sheets, variance detection — **11 tabs in UI**
-- **Hotel Accounting (M3/Xero-level)** — USALI Chart of Accounts (19 auto-seeded accounts), invoicing with automatic VAT calculation (20%), receivable & payable invoices, VAT reports (output vs input), 6-month financial trends, P&L statement with department cost centers, budget vs actual comparison, CSV export, auto-pull booking revenue from Booking Engine
-
-## Code Architecture (Fully Refactored)
+## Code Architecture
 ```
 backend/
-├── server.py              # App setup, Stripe webhook, seeds (446 lines)
+├── server.py
 ├── routes/
-│   ├── helpers.py         # Shared: serialize_review, log_sync, fire_webhooks
-│   ├── auth_routes.py     # Auth, Users, Properties
-│   ├── connections.py     # API Keys, Webhooks, Integration Guide
-│   ├── reviews.py         # Reviews, Templates, Sentiment, Competitors, Widget
-│   ├── integrations.py    # Reports, Branding, Platform Integrations, Sync
-│   ├── bookings.py        # Booking Engine, Room Types, Stripe
-│   ├── messaging.py       # Conversations, Messages, Quick Replies, Calendar
-│   ├── messaging_advanced.py  # Internal Notes, Snooze, Translate, Booking Data, Analytics, Webchat Config, Contact Lists
-│   ├── automation.py      # Automation Rules, Logs, Stats
-│   ├── dashboard.py       # Dashboard Overview, Concierge, Space Bookings Admin
-│   ├── staff_performance.py # Staff Performance Dashboard
-│   ├── calendar_gss.py    # Guest Satisfaction Score
-│   ├── guest_profiles.py  # Guest CRM, Profile Sync, VIP Management
-│   ├── campaigns.py       # Campaign Manager, Segmentation, Bulk Send
-│   ├── guest_app.py       # Guest App / Digital Directory (public + admin)
-│   ├── smart_locks.py     # Smart Lock Providers + Digital Keys
-│   ├── setup_wizard.py    # Platform Setup Wizard (5 platforms)
-│   ├── stock.py           # Stock Management (F&B inventory, recipes, variance)
-│   └── accounting.py      # Hotel Accounting (P&L, income, expenses, budgets)
-├── auth.py                # JWT auth, require_roles
-├── database.py            # MongoDB connection
-└── models.py              # Pydantic models
+│   ├── helpers.py, auth_routes.py, connections.py, reviews.py, integrations.py
+│   ├── bookings.py, messaging.py, messaging_advanced.py, automation.py
+│   ├── dashboard.py, staff_performance.py, calendar_gss.py
+│   ├── guest_profiles.py, campaigns.py, guest_app.py, smart_locks.py
+│   ├── setup_wizard.py, stock.py, accounting.py
+│   └── surveys.py          # NEW: Guest Satisfaction Surveys
+├── auth.py, database.py, models.py
 ```
 
 ## Backlog
-- Note: Dynamic Pricing, Drag-and-drop Calendar, Channel Manager — all exist on myhotelbox.com, NOT building
-- Note: Space Bookings, Availability Calendar, Housekeeping — removed from sidebar per user request (backend routes still exist)
+- Dynamic Pricing, Drag-and-drop Calendar, Channel Manager — NOT building (exists on legacy site)
+- Space Bookings, Availability Calendar, Housekeeping — REMOVED per user request
 - Real bi-directional outbound sync for review platforms (P1)
 - Real outbound messaging for WhatsApp, Telegram, SMS — currently Sandbox mode (P1)
 
 ## Testing
-- Iteration 49: 100% pass (51 backend tests) — Full regression before chatlyn features
-- Iteration 50: 100% pass (39 backend tests + frontend) — All 7 chatlyn competitor features verified
+- Iteration 49: 100% pass (51 tests) — Full regression
+- Iteration 50: 100% pass (39 tests) — Chatlyn competitor features
+- Iteration 51: 100% pass (30 tests) — Guest Satisfaction Surveys

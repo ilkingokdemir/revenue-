@@ -1622,3 +1622,26 @@ class Invoice(BaseModel):
     notes: str = ""
     created_by: str = ""
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+# ==================== GUEST PAYMENT LINK ====================
+
+class PaymentLink(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    booking_id: str
+    booking_ref: str = ""
+    property_id: str = ""
+    guest_name: str = ""
+    guest_email: str = ""
+    token: str = Field(default_factory=lambda: secrets.token_urlsafe(32))
+    amount: float = 0
+    currency: str = "GBP"
+    status: str = "pending"  # pending, paid, expired, cancelled
+    extra_charges: list = Field(default_factory=list)  # [{description, amount, category}]
+    notes: str = ""
+    sent_at: str = ""
+    paid_at: str = ""
+    expires_at: str = Field(default_factory=lambda: (datetime.now(timezone.utc) + timedelta(days=7)).isoformat())
+    created_by: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

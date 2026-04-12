@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Bed, ArrowsClockwise, Plus, Trash, PencilSimple, Users,
   CheckCircle, X, Copy, Eye, Lightning, Coffee, WifiHigh,
-  Buildings, CreditCard,
+  Buildings, CreditCard, PaperPlaneTilt,
 } from "@phosphor-icons/react";
 import { API } from "./config";
 import { RoomEditor } from "./RoomEditor";
@@ -51,6 +51,19 @@ const BookingEnginePanel = ({ properties }) => {
   const handleUpdateBookingStatus = async (bookingId, status) => {
     try { await axios.put(`${API}/bookings/${bookingId}/status?status=${status}`); toast.success(`Booking ${status}`); await fetchBookings(); }
     catch (e) { toast.error("Failed to update"); }
+  };
+
+  const handleSendPaymentLink = async (booking) => {
+    try {
+      const { data } = await axios.post(`${API}/guest-payment/send-link`, {
+        booking_id: booking.id, extra_charges: [], notes: "",
+      });
+      toast.success(`Payment link sent to ${booking.guest_email}`);
+      const link = data.url;
+      if (link) navigator.clipboard?.writeText(link);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to send payment link");
+    }
   };
 
   const startEdit = (room) => {
@@ -238,6 +251,12 @@ const BookingEnginePanel = ({ properties }) => {
                       </div>
                       {booking.status === "confirmed" && (
                         <div className="flex gap-1">
+                          {booking.payment_status !== "paid" && (
+                            <button onClick={() => handleSendPaymentLink(booking)}
+                              className="px-2 py-1 bg-green-50 text-green-700 text-[10px] rounded font-medium hover:bg-green-100 flex items-center gap-0.5" data-testid={`send-payment-${booking.booking_ref}`}>
+                              <PaperPlaneTilt size={10} weight="bold" /> Pay Link
+                            </button>
+                          )}
                           <button onClick={() => handleUpdateBookingStatus(booking.id, "checked_in")}
                             className="px-2 py-1 bg-blue-50 text-blue-700 text-[10px] rounded font-medium hover:bg-blue-100" data-testid={`checkin-${booking.booking_ref}`}>
                             Check In

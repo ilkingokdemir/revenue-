@@ -50,6 +50,7 @@ from routes.connections import create_connections_router
 from routes.reviews import create_reviews_router
 from routes.integrations import create_integrations_router
 from routes.bookings import create_bookings_router
+from routes.guest_payment import create_guest_payment_router
 
 # Import extracted modules
 from models import (
@@ -320,6 +321,9 @@ api_router.include_router(integrations_router)
 
 bookings_router = create_bookings_router(db, require_roles, LlmChat, UserMessage, resend)
 api_router.include_router(bookings_router)
+
+guest_payment_router = create_guest_payment_router(db, require_roles)
+api_router.include_router(guest_payment_router)
 
 app.include_router(api_router)
 

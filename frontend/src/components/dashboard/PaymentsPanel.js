@@ -11,7 +11,7 @@ import {
 import {
   CurrencyGbp, ArrowsClockwise, CheckCircle, WarningCircle, Clock,
 } from "@phosphor-icons/react";
-import { CreditCard, BarChart3, Settings, TrendingUp, Shield, Smartphone, Plus } from "lucide-react";
+import { CreditCard, BarChart3, Settings, TrendingUp, Shield, Smartphone, Plus, Send } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -28,6 +28,7 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
   const [savingSettings, setSavingSettings] = useState(false);
+  const [paymentLinks, setPaymentLinks] = useState([]);
 
   const propertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
@@ -62,11 +63,18 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
     setTerminalPayments(tp.data);
   }, [propertyId]);
 
+  const fetchPaymentLinks = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/guest-payment/links/${propertyId}`);
+      setPaymentLinks(data);
+    } catch (e) { /* ignore */ }
+  }, [propertyId]);
+
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchDashboard(), fetchTransactions(), fetchSettings(), fetchTerminal()])
+    Promise.all([fetchDashboard(), fetchTransactions(), fetchSettings(), fetchTerminal(), fetchPaymentLinks()])
       .then(() => setLoading(false));
-  }, [fetchDashboard, fetchTransactions, fetchSettings, fetchTerminal]);
+  }, [fetchDashboard, fetchTransactions, fetchSettings, fetchTerminal, fetchPaymentLinks]);
 
   const saveSettings = async () => {
     setSavingSettings(true);
@@ -81,6 +89,7 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
 
   const tabs = [
     { id: "dashboard", label: "Overview", icon: BarChart3 },
+    { id: "guest-links", label: "Guest Links", icon: Send },
     { id: "terminal", label: "Card Terminals", icon: Smartphone },
     { id: "transactions", label: "Transactions", icon: CreditCard },
     { id: "settings", label: "Settings", icon: Settings },
@@ -186,6 +195,57 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
                 <CreditCard size={32} className="mx-auto text-stone-300 mb-3" />
                 <p className="text-sm text-stone-500">No payment transactions yet</p>
                 <p className="text-xs text-stone-400 mt-1">Payments will appear here when guests pay via Stripe</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Guest Payment Links */}
+        {tab === "guest-links" && (
+          <div className="p-6 max-w-5xl mx-auto space-y-4" data-testid="guest-links-tab">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-blue-800 mb-1">Guest Payment Portal</h3>
+              <p className="text-xs text-blue-600">Send payment links to guests so they can view their folio and pay outstanding balances via Stripe. Links are sent from the Bookings panel or can be managed here.</p>
+            </div>
+
+            {paymentLinks.length === 0 ? (
+              <div className="bg-white rounded-xl border border-stone-200 p-10 text-center">
+                <Send size={28} className="mx-auto text-stone-300 mb-3" />
+                <p className="text-sm text-stone-500">No payment links sent yet</p>
+                <p className="text-xs text-stone-400 mt-1">Go to Rooms & Bookings and click "Pay Link" on a booking to send a payment link to the guest</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {paymentLinks.map(link => (
+                  <div key={link.id} className="bg-white border border-stone-200 rounded-xl p-4 flex items-center justify-between" data-testid={`link-${link.id}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${link.status === "paid" ? "bg-emerald-50" : link.status === "pending" ? "bg-blue-50" : "bg-stone-100"}`}>
+                        {link.status === "paid" ? <CheckCircle size={16} className="text-emerald-500" weight="fill" /> :
+                         link.status === "pending" ? <Clock size={16} className="text-blue-500" /> :
+                         <WarningCircle size={16} className="text-stone-400" />}
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold text-stone-800">{link.booking_ref} — {link.guest_name}</div>
+                        <div className="text-[10px] text-stone-400">
+                          {link.guest_email} · Sent {link.sent_at ? link.sent_at.slice(0, 16).replace("T", " ") : link.created_at?.slice(0, 16).replace("T", " ")}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-stone-800">£{link.amount?.toFixed(2)}</span>
+                      <Badge className={`text-[9px] ${link.status === "paid" ? "bg-emerald-100 text-emerald-700" : link.status === "pending" ? "bg-blue-100 text-blue-700" : "bg-stone-100 text-stone-500"}`}>{link.status}</Badge>
+                      {link.status === "pending" && (
+                        <button onClick={() => {
+                          const url = `${window.location.origin}/pay/${link.token}`;
+                          navigator.clipboard?.writeText(url);
+                          toast.success("Payment link copied to clipboard");
+                        }} className="text-[10px] px-2 py-1 bg-stone-100 text-stone-600 rounded hover:bg-stone-200">
+                          Copy Link
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

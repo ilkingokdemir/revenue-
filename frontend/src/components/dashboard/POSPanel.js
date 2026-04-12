@@ -59,6 +59,9 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
   const [payMethod, setPayMethod] = useState("card");
   const [tip, setTip] = useState(0);
 
+  const [showUpsell, setShowUpsell] = useState(false);
+  const [upsellSuggestions, setUpsellSuggestions] = useState([]);
+  const [upselling, setUpselling] = useState(false);
   const [happyHours, setHappyHours] = useState([]);
   const [showHappyForm, setShowHappyForm] = useState(false);
   const [newHH, setNewHH] = useState({ name: "", start_hour: 16, end_hour: 19, discount_pct: 20, categories: [] });
@@ -155,8 +158,24 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
       setTableNum("");
       setGuestName("");
       setRoomNumber("");
+      setUpsellSuggestions([]);
       fetchOrders();
     } catch (e) { toast.error("Failed to place order"); }
+  };
+
+  const getUpsellSuggestions = async () => {
+    if (!cart.length) return;
+    setUpselling(true);
+    try {
+      const { data } = await axios.post(`${API}/pos/ai-upsell`, {
+        property_id: propertyId,
+        cart_items: cart.map(c => ({ name: c.name, quantity: c.quantity, category: c.category, price: c.price })),
+        guest_name: guestName,
+      });
+      setUpsellSuggestions(data.suggestions || []);
+      setShowUpsell(true);
+    } catch (e) { toast.error("Upsell failed"); }
+    finally { setUpselling(false); }
   };
 
   const payOrder = async () => {
@@ -323,6 +342,31 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
 
               {cart.length > 0 && (
                 <div className="p-3 border-t border-stone-200 space-y-2">
+                  {/* AI Upsell */}
+                  {upsellSuggestions.length > 0 && showUpsell && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-2.5 mb-1" data-testid="upsell-panel">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-semibold text-purple-700 uppercase">AI Suggests</span>
+                        <button onClick={() => setShowUpsell(false)} className="text-purple-400 text-[10px]">Hide</button>
+                      </div>
+                      {upsellSuggestions.map((s, i) => (
+                        <button key={i} onClick={() => { const mi = menu.find(m => m.name === s.name); if (mi) addToCart(mi); }}
+                          className="w-full text-left flex items-center justify-between text-xs bg-white rounded-lg px-2 py-1.5 mb-1 hover:bg-purple-50 transition-colors" data-testid={`upsell-${i}`}>
+                          <div className="flex-1 min-w-0">
+                            <span className="font-medium text-stone-700">{s.name}</span>
+                            <span className="text-[9px] text-purple-500 block">{s.reason}</span>
+                          </div>
+                          <span className="text-xs font-bold text-purple-700 ml-2">+£{s.price?.toFixed(2)}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <button onClick={getUpsellSuggestions} disabled={upselling}
+                      className="flex-1 text-[10px] py-1.5 bg-purple-50 text-purple-700 rounded-lg font-medium hover:bg-purple-100 disabled:opacity-50" data-testid="ai-upsell-btn">
+                      {upselling ? "..." : "AI Suggest Add-ons"}
+                    </button>
+                  </div>
                   <div className="flex justify-between text-xs text-stone-500"><span>Subtotal</span><span>£{cartTotal.toFixed(2)}</span></div>
                   <div className="flex justify-between text-xs text-stone-500"><span>VAT</span><span>£{cartVat.toFixed(2)}</span></div>
                   <div className="flex justify-between text-sm font-bold text-stone-900"><span>Total</span><span>£{(cartTotal + cartVat).toFixed(2)}</span></div>
@@ -628,6 +672,27 @@ export function POSPanel({ properties, user, activePropertyId: propActivePropert
                 <li>Orders appear instantly on your Kitchen Display and Orders tab</li>
                 <li>Process payment when serving — card, cash, or charge to room</li>
               </ol>
+            </div>
+
+            {/* Kiosk Mode */}
+            <div className="bg-stone-900 rounded-xl p-4 mt-4" data-testid="kiosk-section">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-orange-500 flex items-center justify-center"><span className="text-lg">🖥</span></div>
+                <div><h4 className="text-sm font-semibold text-white">Self-Service Kiosk Mode</h4><p className="text-[10px] text-stone-400">Full-screen touch interface for lobby or restaurant</p></div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3">
+                {outlets.filter(o => o.active).map(outlet => {
+                  const kioskUrl = `${process.env.REACT_APP_BACKEND_URL || ""}/kiosk/${propertyId}/${outlet.id}`;
+                  return (
+                    <div key={outlet.id} className="flex items-center justify-between bg-stone-800 rounded-lg px-3 py-2">
+                      <span className="text-xs text-stone-300">{outlet.name}</span>
+                      <button onClick={() => { navigator.clipboard.writeText(kioskUrl); toast.success("Kiosk link copied!"); }}
+                        className="text-[10px] text-orange-400 hover:text-orange-300 font-medium">Copy Link</button>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-stone-500 mt-2">Open the kiosk link on a tablet in full-screen mode. Dark theme, large touch targets, auto-reset after order.</p>
             </div>
           </div>
         )}

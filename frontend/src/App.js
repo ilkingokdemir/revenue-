@@ -39,6 +39,7 @@ import { POSPanel } from "./components/dashboard/POSPanel";
 import { SurveyPanel } from "./components/dashboard/SurveyPanel";
 import GuestSurveyPage from "./GuestSurveyPage";
 import QROrderPage from "./QROrderPage";
+import KioskPage from "./KioskPage";
 import {
   Star,
   CheckCircle,
@@ -2983,6 +2984,10 @@ function App() {
   if (window.location.pathname.startsWith("/qr-order/")) {
     const parts = window.location.pathname.split("/qr-order/")[1].split("/");
     return <QROrderPage propertyId={parts[0]} outletId={parts[1]} />;
+  }
+  if (window.location.pathname.startsWith("/kiosk/")) {
+    const parts = window.location.pathname.split("/kiosk/")[1].split("/");
+    return <KioskPage propertyId={parts[0]} outletId={parts[1]} />;
   }
   return <MainApp />;
 }

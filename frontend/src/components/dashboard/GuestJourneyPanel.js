@@ -92,7 +92,8 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
       toast.success("ID uploaded successfully");
       fetchRegistrations();
     } catch (e) {
-      toast.error("Upload failed");
+      console.error("Reception upload error:", e);
+      toast.error(e.response?.data?.detail || "Upload failed. Please try again.");
     }
     setUploadingId(null);
   };

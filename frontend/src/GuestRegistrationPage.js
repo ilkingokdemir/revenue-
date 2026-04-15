@@ -81,7 +81,7 @@ export default function GuestRegistrationPage({ token }) {
   };
 
   const uploadId = async () => {
-    if (!idFile) return;
+    if (!idFile) return true;
     setUploading(true);
     try {
       const fd = new FormData();
@@ -90,10 +90,13 @@ export default function GuestRegistrationPage({ token }) {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setIdUploaded(true);
-    } catch {
-      alert("Upload failed. Please try again.");
+      setUploading(false);
+      return true;
+    } catch (e) {
+      console.error("Upload error:", e);
+      setUploading(false);
+      return false;
     }
-    setUploading(false);
   };
 
   const submitForm = async () => {
@@ -115,8 +118,9 @@ export default function GuestRegistrationPage({ token }) {
         signature,
       });
       setStep(3);
-    } catch {
-      alert("Submission failed. Please try again.");
+    } catch (e) {
+      console.error("Submit error:", e);
+      alert("Submission failed. Please check your connection and try again.");
     }
     setSubmitting(false);
   };
@@ -344,7 +348,13 @@ export default function GuestRegistrationPage({ token }) {
                 <button data-testid="btn-back-step-2" onClick={() => setStep(1)} className="px-5 py-2.5 text-stone-500 text-sm font-medium hover:bg-stone-100 rounded-lg transition">
                   Back
                 </button>
-                <button data-testid="btn-submit-registration" onClick={async () => { if (idFile && !idUploaded) await uploadId(); submitForm(); }} disabled={!canProceedStep2 || submitting} className="px-6 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                <button data-testid="btn-submit-registration" onClick={async () => {
+                  if (idFile && !idUploaded) {
+                    const ok = await uploadId();
+                    if (!ok) { alert("ID upload failed. Please try again."); return; }
+                  }
+                  await submitForm();
+                }} disabled={!canProceedStep2 || submitting || uploading} className="px-6 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
                   {submitting ? "Submitting..." : "Complete Registration"}
                 </button>
               </div>

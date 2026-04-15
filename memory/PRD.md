@@ -13,7 +13,7 @@
 - **Guest Profiles**: Rich detail, history, spending, preferences, tags, notes, loyalty tiers
 
 ### Guest Experience
-- **Guest Journey**: Pre-arrival registration (4-step form), ID upload, T&C acceptance, welcome pack emails, in-stay satisfaction checks, feedback collection, admin panel with stats/table/send-link dialog, QR code generation (popup modal + drawer + downloadable PNG)
+- **Guest Journey**: Pre-arrival registration (4-step form), ID upload, T&C acceptance, welcome pack emails, in-stay satisfaction checks, feedback collection. Admin panel with stats/table. Share modal with 6 options: Copy Link, Email, SMS, WhatsApp, Print (printable card with QR), Save QR (download PNG). Detail drawer with guest info, checklist, signature, timeline, QR code.
 - **Loyalty Program**: Points, 4 tiers (Standard to Platinum), 8 rewards, earn/redeem, auto-upgrade
 - **Campaigns**: 6 email templates, 8 audience segments, scheduling, template variables
 - **Surveys / NPS**: Customizable surveys, public guest page
@@ -40,7 +40,7 @@
 - 3rd party: OpenAI GPT-5.2, Resend, Twilio, Stripe, iyzico, PayTR, WhatsApp/Telegram webhooks
 - QR code: qrcode.react@4.2.0
 
-## Testing: 73 iterations, all passing
+## Testing: 74 iterations, all passing
 
 ## Upcoming Tasks
 - iPad/Kiosk-optimized UI for on-site registration (P1)

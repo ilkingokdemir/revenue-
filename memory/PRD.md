@@ -3,39 +3,36 @@
 ## All Modules (19 total + Multi-Language)
 
 ### Multi-Language Support (7 languages)
-English, Turkish (Türkçe), Spanish (Español), Russian (Русский), Arabic (العربية + RTL), French (Français), German (Deutsch). Language switcher in sidebar for staff, in header for guest pages. Preference saved in localStorage.
+English, Turkish, Spanish, Russian, Arabic (RTL), French, German
 
 ### Revenue & Analytics
-- **Dashboard**: KPIs (RevPAR, ADR), Timeline, Occupancy gauge, Revenue chart, Housekeeping widget
-- **Occupancy Forecast**: 30/60/90-day forecast, bar chart, daily breakdown table
-- **Accounting**: 18 tabs, Bank Reconciliation, PDF Invoices
+- Dashboard, Occupancy Forecast, Accounting (18 tabs)
 
 ### Front Office
-- **Bookings**: Room management, Calendar view, booking list, Pay Link
-- **Night Audit**: 5-check wizard, revenue/occupancy report, Complete & Close Day
-- **Guest Profiles**: Rich detail, history, spending, preferences, tags, notes, loyalty tiers
+- Bookings, Night Audit, Guest Profiles
 
 ### Guest Experience
-- **Guest Journey**: Pre-arrival registration, ID upload (camera+gallery), T&C, welcome emails, satisfaction checks (Email+SMS+WhatsApp), share modal (6 options), iPad/Kiosk check-in, configurable welcome info
-- **Loyalty Program**: Points, 4 tiers, 8 rewards, earn/redeem, auto-upgrade
-- **Campaigns**: 6 email templates, 8 audience segments, scheduling
-- **Surveys / NPS**: Customizable surveys, public guest page
+- Guest Journey (registration, ID upload, T&C, welcome emails, satisfaction, kiosk, share modal)
+- Loyalty Program, Campaigns, Surveys / NPS
 
 ### Operations
-- **Housekeeping**: Room Board, Task Management
-- **Maintenance**: Kanban+Table, Priority/SLA, Photos, Auto-assignment, Cost tracking, Comments, Recurring/Preventive, Analytics, Team management, Vendor management
-- **Duty Logbook**: Shift notes, incidents, VIP tracking, shift handovers
-- **Stock / F&B**: Inventory, POS deduction, auto purchase orders
+- Housekeeping
+- **Maintenance** (Advanced):
+  - Kanban+Table, Priority/SLA (2h/8h/24h/72h), Auto-department assignment
+  - **Job Timeline**: Full activity log (who reported, when, who acknowledged, who started, who resolved, who closed — all with timestamps and resolution time)
+  - **Before/After Photos**: Separate photo sections for issue reported state vs completed state, with camera/gallery upload, BEFORE/AFTER badges
+  - Cost tracking, Comments/activity log, Recurring/Preventive schedules
+  - Internal Team management (workload tracking), External Vendor management (rates/performance)
+  - Analytics dashboard
+- Duty Logbook, Stock / F&B
 
 ### F&B / Revenue
-- **Point of Sale**: Premium terminal, modifiers, split bill, kitchen, stock deduction
-- **Payment Gateway**: Stripe, iyzico, PayTR, Guest Portal, Reminders
+- Point of Sale, Payment Gateway (Stripe, iyzico, PayTR)
 
 ### Communications
-- **Messaging**: WhatsApp, Telegram, SMS (real API), AI translate, auto-reply
-- **Review Hub**: Multi-platform, AI responses, sentiment analysis
+- Messaging (WhatsApp, Telegram, SMS), Review Hub
 
 ### Administration
-- **Admin Panel**: Roles & Permissions (14x6), Module Settings, Auto Purchase Orders
+- Admin Panel (Roles & Permissions)
 
-## Testing: 78 iterations, all passing
+## Testing: 79 iterations, all passing

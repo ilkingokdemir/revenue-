@@ -1,19 +1,14 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 24+ Modules + Multi-Language (7 languages) + Mobile Responsive
+## 25+ Modules + Multi-Language (7 languages) + Mobile Responsive
 
 ### Multi-Language: English, Turkish, Spanish, Russian, Arabic (RTL), French, German
 
 ### Revenue & Analytics
-- Dashboard (KPIs, widgets, timeline)
-- Occupancy Forecast (30/60/90-day)
-- Accounting (18 tabs, bank reconciliation)
-- Rate Manager: Dynamic pricing, seasons, 30-day calendar
-- Reports Centre: Consolidated data, period filters, CSV export
+- Dashboard, Occupancy Forecast, Accounting, Rate Manager, Reports Centre
 
 ### Front Office
-- Bookings + Online Booking Widget: Public booking page, 4-step flow
-- Night Audit (5-step wizard), Guest Profiles
+- Bookings + Online Booking Widget, Night Audit, Guest Profiles
 
 ### Guest Experience
 - Guest Journey (registration, ID upload, T&C, kiosk, share 6 options)
@@ -24,21 +19,14 @@
 - Maintenance: Kanban+Table, SLA, Before/After Photos, Job Timeline
 - **Operations Hub** (7 modules): Reception, Routine Templates, Routine History, Pass Over Duties, Laundry, Compliance, Shifts
 
-### Finance Module (8 sub-modules) — ENHANCED
-1. **Finance Dashboard** (ENHANCED):
-   - Canonical profit overview with 8 KPIs
-   - **Operating Ledger** with individual expense items, Paid/Accrued badges, Pay buttons
-   - **Room Revenue** table by source with counts
-   - **Operating Profit/Loss** card with margin %
-   - **6-Month Financial Overview** bar chart (Revenue/Costs/Profit)
-   - **Quick Actions** cards (Manage Expenses, Payroll Runs, View Bookings)
-2. Earned Salaries: Day-by-day grid per staff
-3. Payroll Runs: Automation config + draft→approved→paid
-4. Adjustments: Employee bonuses/deductions
-5. Cash Advances: pending→deducted→cancelled
-6. Adjustment Categories: 8 defaults + custom
-7. Expenses: Monthly tracker with Pay/Delete
-8. Recurring Expenses: Play/Pause automation
+### Finance Module (8 sub-modules)
+1. Finance Dashboard (KPIs, Operating Ledger with Pay buttons, Revenue by Source, 6-Month Chart, Quick Actions)
+2. Earned Salaries, Payroll Runs, Adjustments, Cash Advances, Adjustment Categories, Expenses, Recurring Expenses
+
+### Staff Management (NEW - 3 tabs)
+1. **User Management** — Full table with Name/Email/Roles/Branches/Per-branch payment rates (Daily £50/day, Hourly £11/hr), role filters, search, Create/Edit user with Account + Branches & Payment Settings
+2. **My Shifts** — Staff self-service weekly calendar showing their own shifts with week navigation
+3. **Roles & Permissions** — Role list with user counts and permission counts
 
 ### Notification Centre
 - Bell icon, auto-generated alerts, filter tabs
@@ -49,11 +37,9 @@
 ### F&B / Revenue, Communications, Administration
 - POS, Payments, Messaging, Review Hub, Admin Panel
 
-## Testing: 85 iterations, all passing (100%)
+## Testing: 86 iterations, all passing (100%)
 
 ## Upcoming Tasks
-- Enhanced User Management with per-branch payment rates (from screenshots) (P1)
-- Staff self-service login to view personal shifts (P1)
-- My Tasks Dashboard (P2)
+- My Tasks Dashboard (P2) - personalized daily to-do
 - Lost & Found Module (P2)
 - Event/Meeting Room Management (P2)

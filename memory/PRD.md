@@ -13,9 +13,15 @@
 - **Guest Profiles**: Rich detail, history, spending, preferences, tags, notes, loyalty tiers
 
 ### Guest Experience
-- **Guest Journey**: Pre-arrival registration (4-step form), ID upload, T&C acceptance, welcome pack emails, in-stay satisfaction checks, feedback collection. Admin panel with stats/table. Share modal with 6 options: Copy Link, Email, SMS, WhatsApp, Print (printable card with QR), Save QR (download PNG). Detail drawer with guest info, checklist, signature, timeline, QR code.
-- **Loyalty Program**: Points, 4 tiers (Standard to Platinum), 8 rewards, earn/redeem, auto-upgrade
-- **Campaigns**: 6 email templates, 8 audience segments, scheduling, template variables
+- **Guest Journey**: Complete module with:
+  - Pre-arrival registration (4-step: details, ID upload w/ camera+gallery, T&C, complete)
+  - Share modal (6 options: Copy Link, Email, SMS, WhatsApp, Print, Save QR)
+  - iPad/Kiosk self check-in page (welcome screen, booking search, embedded registration, 60s auto-reset)
+  - Configurable welcome email info (hotel policies, city info, custom message per property)
+  - In-stay satisfaction checks via Email + SMS + WhatsApp
+  - Admin panel with 4 tabs: Registrations, Satisfaction, Welcome Info, Kiosk Setup
+- **Loyalty Program**: Points, 4 tiers, 8 rewards, earn/redeem, auto-upgrade
+- **Campaigns**: 6 email templates, 8 audience segments, scheduling
 - **Surveys / NPS**: Customizable surveys, public guest page
 
 ### Operations
@@ -40,9 +46,4 @@
 - 3rd party: OpenAI GPT-5.2, Resend, Twilio, Stripe, iyzico, PayTR, WhatsApp/Telegram webhooks
 - QR code: qrcode.react@4.2.0
 
-## Testing: 74 iterations, all passing
-
-## Upcoming Tasks
-- iPad/Kiosk-optimized UI for on-site registration (P1)
-- Richer configurable city/hotel info in welcome emails (P1)
-- WhatsApp/SMS delivery channel for satisfaction checks (P2)
+## Testing: 75 iterations, all passing

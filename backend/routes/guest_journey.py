@@ -292,6 +292,16 @@ def create_guest_journey_router(db, require_roles):
         docs = await db.guest_registrations.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
         return docs
 
+    # ==================== KIOSK: PROPERTY INFO (PUBLIC) ====================
+
+    @router.get("/guest-journey/kiosk-info/{property_id}")
+    async def kiosk_info(property_id: str):
+        """Public: Get property name and branding for kiosk display"""
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+        ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+        return {"hotel_name": hotel_name, "logo_url": ts.get("logo_url", "")}
+
     # ==================== KIOSK: LOOKUP BOOKING (PUBLIC) ====================
 
     @router.get("/guest-journey/kiosk-lookup/{property_id}")

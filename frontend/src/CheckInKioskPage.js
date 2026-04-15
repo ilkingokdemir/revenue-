@@ -17,10 +17,8 @@ export default function CheckInKioskPage({ propertyId }) {
 
   // Load hotel name
   useEffect(() => {
-    axios.get(`${API}/guest-journey/kiosk-lookup/${propertyId}?q=___placeholder___`).catch(() => {});
-    axios.get(`${API}/properties`).then(r => {
-      const prop = (r.data || []).find(p => p.id === propertyId);
-      if (prop) setHotelName(prop.name || "Hotel");
+    axios.get(`${API}/guest-journey/kiosk-info/${propertyId}`).then(r => {
+      if (r.data?.hotel_name) setHotelName(r.data.hotel_name);
     }).catch(() => {});
   }, [propertyId]);
 

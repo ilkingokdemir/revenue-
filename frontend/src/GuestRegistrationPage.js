@@ -31,6 +31,7 @@ export default function GuestRegistrationPage({ token }) {
   const [uploading, setUploading] = useState(false);
   const [idUploaded, setIdUploaded] = useState(false);
   const fileRef = useRef(null);
+  const cameraRef = useRef(null);
 
   // Terms
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -258,7 +259,11 @@ export default function GuestRegistrationPage({ token }) {
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-white rounded-2xl shadow-sm border border-stone-200/60 p-6" data-testid="step-id-upload">
               <h2 className="text-lg font-semibold text-stone-800 mb-1">Upload ID Document</h2>
-              <p className="text-sm text-stone-400 mb-5">Upload a clear photo of your passport or government-issued ID</p>
+              <p className="text-sm text-stone-400 mb-5">Take a photo or choose from your gallery — passport, national ID, or driving license</p>
+
+              {/* Hidden file inputs */}
+              <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFileSelect} className="hidden" data-testid="id-camera-input" />
+              <input ref={fileRef} type="file" accept="image/*,.pdf" onChange={handleFileSelect} className="hidden" data-testid="id-file-input" />
 
               {idUploaded && !idFile ? (
                 <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl p-8 text-center" data-testid="id-already-uploaded">
@@ -267,33 +272,52 @@ export default function GuestRegistrationPage({ token }) {
                   </div>
                   <p className="font-medium text-emerald-800">ID Document Uploaded</p>
                   <p className="text-emerald-600 text-sm mt-1">Your document has been received</p>
-                  <button onClick={() => { setIdUploaded(false); setIdFile(null); setIdPreview(null); }} className="text-xs text-stone-500 underline mt-3">Upload a different document</button>
+                  <button onClick={() => { setIdUploaded(false); setIdFile(null); setIdPreview(null); }} className="text-xs text-stone-500 underline mt-3" data-testid="btn-reupload">Upload a different document</button>
+                </div>
+              ) : idPreview ? (
+                /* Preview after selecting */
+                <div className="border-2 border-[#1e3a5f]/20 bg-slate-50 rounded-xl p-5 text-center" data-testid="id-preview-section">
+                  <img src={idPreview} alt="ID Preview" className="max-h-52 rounded-lg mx-auto mb-3 object-contain shadow-sm" data-testid="id-preview-image" />
+                  <p className="text-sm font-medium text-stone-700">{idFile?.name}</p>
+                  <p className="text-xs text-stone-400 mt-0.5">{(idFile?.size / 1024 / 1024).toFixed(1)} MB</p>
+                  <button onClick={() => { setIdFile(null); setIdPreview(null); }} className="text-xs text-stone-500 underline mt-2" data-testid="btn-remove-preview">Remove & choose again</button>
                 </div>
               ) : (
-                <div className="border-2 border-dashed border-stone-300 rounded-xl p-8 text-center hover:border-[#1e3a5f]/40 transition-colors cursor-pointer" onClick={() => fileRef.current?.click()} data-testid="id-upload-dropzone">
-                  <input ref={fileRef} type="file" accept="image/*,.pdf" onChange={handleFileSelect} className="hidden" data-testid="id-file-input" />
-                  {idPreview ? (
-                    <div>
-                      <img src={idPreview} alt="ID Preview" className="max-h-48 rounded-lg mx-auto mb-3 object-contain" data-testid="id-preview-image" />
-                      <p className="text-sm font-medium text-stone-700">{idFile?.name}</p>
-                      <p className="text-xs text-stone-400 mt-1">{(idFile?.size / 1024 / 1024).toFixed(1)} MB</p>
+                /* Upload options — two buttons */
+                <div className="space-y-3" data-testid="id-upload-options">
+                  {/* Take Photo */}
+                  <button data-testid="btn-take-photo" onClick={() => cameraRef.current?.click()} className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-stone-200 hover:border-[#1e3a5f]/40 hover:bg-slate-50 transition group">
+                    <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center flex-shrink-0 group-hover:bg-[#1e3a5f]/20 transition">
+                      <svg className="w-6 h-6 text-[#1e3a5f]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
-                  ) : (
-                    <div>
-                      <div className="w-14 h-14 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <svg className="w-7 h-7 text-stone-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                      </div>
-                      <p className="font-medium text-stone-600">Tap to upload your ID</p>
-                      <p className="text-xs text-stone-400 mt-1">Passport, National ID, or Driving License</p>
-                      <p className="text-xs text-stone-300 mt-0.5">JPEG, PNG, or PDF - max 10MB</p>
+                    <div className="text-left">
+                      <p className="font-semibold text-stone-800 text-sm">Take Photo</p>
+                      <p className="text-xs text-stone-400">Use your camera to capture your ID</p>
                     </div>
-                  )}
+                  </button>
+
+                  {/* Choose from Gallery */}
+                  <button data-testid="btn-choose-gallery" onClick={() => fileRef.current?.click()} className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-stone-200 hover:border-[#1e3a5f]/40 hover:bg-slate-50 transition group">
+                    <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center flex-shrink-0 group-hover:bg-emerald-100 transition">
+                      <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </div>
+                    <div className="text-left">
+                      <p className="font-semibold text-stone-800 text-sm">Choose from Gallery</p>
+                      <p className="text-xs text-stone-400">Select a photo or PDF from your device</p>
+                    </div>
+                  </button>
+
+                  <p className="text-center text-[10px] text-stone-300 pt-1">Accepted: JPEG, PNG, PDF — max 10MB</p>
                 </div>
               )}
 
               {idFile && !idUploaded && (
-                <button data-testid="btn-upload-id" onClick={uploadId} disabled={uploading} className="mt-4 w-full py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition">
-                  {uploading ? "Uploading..." : "Upload Document"}
+                <button data-testid="btn-upload-id" onClick={uploadId} disabled={uploading} className="mt-4 w-full py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition flex items-center justify-center gap-2">
+                  {uploading ? (
+                    <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Uploading...</>
+                  ) : (
+                    <><svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg> Upload Document</>
+                  )}
                 </button>
               )}
 

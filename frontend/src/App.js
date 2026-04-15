@@ -34,6 +34,9 @@ import { GuestProfilesPanel } from "./components/dashboard/GuestProfilesPanel";
 import { AdminPanel } from "./components/dashboard/AdminPanel";
 import { HousekeepingPanel } from "./components/dashboard/HousekeepingPanel";
 import { NightAuditPanel } from "./components/dashboard/NightAuditPanel";
+import { LoyaltyPanel } from "./components/dashboard/LoyaltyPanel";
+import { LogbookPanel } from "./components/dashboard/LogbookPanel";
+import { ForecastPanel } from "./components/dashboard/ForecastPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -120,6 +123,9 @@ import {
   Receipt,
   Broom,
   Moon,
+  Crown,
+  Notebook,
+  ChartLine,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2492,6 +2498,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Guest Experience",
       items: [
         { id: "guest-profiles", icon: AddressBook, name: "Guest Profiles", testId: "guest-profiles-btn" },
+        { id: "loyalty", icon: Crown, name: "Loyalty Program", testId: "loyalty-btn" },
         { id: "guest-app", icon: MapPin, name: "Guest App", testId: "guest-app-btn" },
         { id: "smart-locks", icon: Key, name: "Digital Keys", testId: "smart-locks-btn" },
         { id: "campaigns", icon: Megaphone, name: "Campaigns", testId: "campaigns-btn" },
@@ -2503,6 +2510,8 @@ const Dashboard = ({ user, onLogout }) => {
       items: [
         { id: "housekeeping", icon: Broom, name: "Housekeeping", testId: "housekeeping-btn" },
         { id: "night-audit", icon: Moon, name: "Night Audit", testId: "night-audit-btn" },
+        { id: "logbook", icon: Notebook, name: "Duty Logbook", testId: "logbook-btn" },
+        { id: "forecast", icon: ChartLine, name: "Forecast", testId: "forecast-btn" },
         { id: "stock-management", icon: Package, name: "Stock / F&B", testId: "stock-management-btn" },
         { id: "accounting", icon: Wallet, name: "Accounting", testId: "accounting-btn" },
         { id: "pos", icon: Receipt, name: "Point of Sale", testId: "pos-btn" },
@@ -2895,6 +2904,21 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Night Audit */}
         {activeView === "night-audit" && (
           <NightAuditPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Loyalty Program */}
+        {activeView === "loyalty" && (
+          <LoyaltyPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Duty Logbook */}
+        {activeView === "logbook" && (
+          <LogbookPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Occupancy Forecast */}
+        {activeView === "forecast" && (
+          <ForecastPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Accounting */}

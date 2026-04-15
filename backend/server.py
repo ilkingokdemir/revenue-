@@ -63,6 +63,9 @@ from routes.operations import create_operations_router
 from routes.shifts import create_shifts_router
 from routes.notifications import create_notifications_router
 from routes.finance import create_finance_router
+from routes.my_tasks import create_my_tasks_router
+from routes.lost_found import create_lost_found_router
+from routes.events import create_events_router
 
 # Import extracted modules
 from models import (
@@ -376,6 +379,15 @@ api_router.include_router(notifications_router)
 
 finance_router = create_finance_router(db, require_roles)
 api_router.include_router(finance_router)
+
+my_tasks_router = create_my_tasks_router(db, require_roles)
+api_router.include_router(my_tasks_router)
+
+lost_found_router = create_lost_found_router(db, require_roles)
+api_router.include_router(lost_found_router)
+
+events_router = create_events_router(db, require_roles)
+api_router.include_router(events_router)
 
 app.include_router(api_router)
 

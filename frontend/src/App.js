@@ -56,6 +56,9 @@ import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
 import { StaffManagementPanel } from "./components/dashboard/StaffManagementPanel";
+import { MyTasksPanel } from "./components/dashboard/MyTasksPanel";
+import { LostFoundPanel } from "./components/dashboard/LostFoundPanel";
+import { EventsPanel } from "./components/dashboard/EventsPanel";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
@@ -2488,6 +2491,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: "",
       items: [
         { id: "dashboard", icon: House, name: t("nav.dashboard"), testId: "dashboard-btn" },
+        { id: "my-tasks", icon: Target, name: "My Tasks", testId: "my-tasks-btn" },
       ]
     },
     {
@@ -2540,6 +2544,8 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
+        { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
+        { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
       ]
     },
     {
@@ -2702,6 +2708,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Dashboard Home */}
         {activeView === "dashboard" && (
           <DashboardHome properties={properties} activePropertyId={activePropertyId} onNavigate={setActiveView} />
+        )}
+
+        {/* My Tasks */}
+        {activeView === "my-tasks" && (
+          <MyTasksPanel user={user} />
         )}
 
         {/* Reviews View */}
@@ -3010,6 +3021,16 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Finance */}
         {activeView === "finance" && (
           <FinancePanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Lost & Found */}
+        {activeView === "lost-found" && (
+          <LostFoundPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Events & Meeting Rooms */}
+        {activeView === "events" && (
+          <EventsPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Guest Satisfaction Surveys */}

@@ -46,7 +46,10 @@ import { AccountingPanel } from "./components/dashboard/AccountingPanel";
 import { POSPanel } from "./components/dashboard/POSPanel";
 import { PaymentsPanel } from "./components/dashboard/PaymentsPanel";
 import { SurveyPanel } from "./components/dashboard/SurveyPanel";
+import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
 import GuestSurveyPage from "./GuestSurveyPage";
+import GuestRegistrationPage from "./GuestRegistrationPage";
+import GuestFeedbackPage from "./GuestFeedbackPage";
 import QROrderPage from "./QROrderPage";
 import KioskPage from "./KioskPage";
 import {
@@ -2498,6 +2501,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Guest Experience",
       items: [
         { id: "guest-profiles", icon: AddressBook, name: "Guest Profiles", testId: "guest-profiles-btn" },
+        { id: "guest-journey", icon: SignIn, name: "Guest Journey", testId: "guest-journey-btn" },
         { id: "loyalty", icon: Crown, name: "Loyalty Program", testId: "loyalty-btn" },
         { id: "guest-app", icon: MapPin, name: "Guest App", testId: "guest-app-btn" },
         { id: "smart-locks", icon: Key, name: "Digital Keys", testId: "smart-locks-btn" },
@@ -2871,6 +2875,11 @@ const Dashboard = ({ user, onLogout }) => {
           <GuestProfilesPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
+        {/* Guest Journey */}
+        {activeView === "guest-journey" && (
+          <GuestJourneyPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
         {/* Campaigns */}
         {activeView === "campaigns" && (
           <CampaignsPanel properties={properties} activePropertyId={activePropertyId} />
@@ -3043,6 +3052,14 @@ function App() {
   if (window.location.pathname.startsWith("/survey/")) {
     const token = window.location.pathname.split("/survey/")[1];
     return <GuestSurveyPage token={token} />;
+  }
+  if (window.location.pathname.startsWith("/register/")) {
+    const token = window.location.pathname.split("/register/")[1];
+    return <GuestRegistrationPage token={token} />;
+  }
+  if (window.location.pathname.startsWith("/feedback/")) {
+    const token = window.location.pathname.split("/feedback/")[1];
+    return <GuestFeedbackPage token={token} />;
   }
   if (window.location.pathname.startsWith("/qr-order/")) {
     const parts = window.location.pathname.split("/qr-order/")[1].split("/");

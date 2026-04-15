@@ -310,6 +310,13 @@ def create_guest_journey_router(db, require_roles):
 
         return {"status": "submitted", "response": response}
 
+    # ==================== LIST SATISFACTION CHECKS ====================
+
+    @router.get("/guest-journey/satisfaction-checks/{property_id}")
+    async def list_satisfaction_checks(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        docs = await db.satisfaction_checks.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        return docs
+
     # ==================== EMAIL HELPERS ====================
 
     async def _send_registration_email(reg, hotel_name, reg_url, booking):

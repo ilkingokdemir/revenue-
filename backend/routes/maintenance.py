@@ -360,4 +360,131 @@ def create_maintenance_router(db, require_roles):
 
         return {"generated": created, "schedules_checked": len(schedules)}
 
+    # ==================== TEAM MEMBERS ====================
+
+    @router.get("/maintenance/team/{property_id}")
+    async def list_team(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        query = {} if property_id == "all" else {"property_id": property_id}
+        docs = await db.maintenance_team.find(query, {"_id": 0}).sort("name", 1).to_list(100)
+        # Attach workload (open issues count)
+        for d in docs:
+            d["open_issues"] = await db.maintenance_issues.count_documents({
+                "assigned_to": d["name"], "status": {"$in": ["open", "acknowledged", "in_progress"]}
+            })
+            d["total_resolved"] = await db.maintenance_issues.count_documents({
+                "assigned_to": d["name"], "status": {"$in": ["resolved", "closed"]}
+            })
+        return docs
+
+    @router.post("/maintenance/team")
+    async def add_team_member(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        now = datetime.now(timezone.utc).isoformat()
+        member = {
+            "id": str(uuid.uuid4()),
+            "property_id": data.get("property_id", ""),
+            "name": data.get("name", ""),
+            "role": data.get("role", "technician"),
+            "phone": data.get("phone", ""),
+            "email": data.get("email", ""),
+            "specialities": data.get("specialities", []),
+            "is_active": True,
+            "type": "internal",
+            "created_at": now,
+        }
+        await db.maintenance_team.insert_one(member)
+        member.pop("_id", None)
+        return member
+
+    @router.put("/maintenance/team/{member_id}")
+    async def update_team_member(member_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        updates.pop("_id", None)
+        updates.pop("id", None)
+        await db.maintenance_team.update_one({"id": member_id}, {"$set": updates})
+        doc = await db.maintenance_team.find_one({"id": member_id}, {"_id": 0})
+        return doc
+
+    @router.delete("/maintenance/team/{member_id}")
+    async def delete_team_member(member_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        await db.maintenance_team.delete_one({"id": member_id})
+        return {"status": "deleted"}
+
+    # ==================== EXTERNAL VENDORS ====================
+
+    @router.get("/maintenance/vendors/{property_id}")
+    async def list_vendors(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        query = {} if property_id == "all" else {"property_id": property_id}
+        docs = await db.maintenance_vendors.find(query, {"_id": 0}).sort("company_name", 1).to_list(100)
+        # Attach stats
+        for d in docs:
+            d["open_issues"] = await db.maintenance_issues.count_documents({
+                "assigned_to": d["company_name"], "status": {"$in": ["open", "acknowledged", "in_progress"]}
+            })
+            d["total_resolved"] = await db.maintenance_issues.count_documents({
+                "assigned_to": d["company_name"], "status": {"$in": ["resolved", "closed"]}
+            })
+            # Total cost from issues assigned to this vendor
+            cost_pipeline = [
+                {"$match": {"assigned_to": d["company_name"]}},
+                {"$group": {"_id": None, "total": {"$sum": "$actual_cost"}}}
+            ]
+            total_cost = 0
+            async for doc in db.maintenance_issues.aggregate(cost_pipeline):
+                total_cost = doc.get("total", 0)
+            d["total_cost"] = total_cost
+        return docs
+
+    @router.post("/maintenance/vendors")
+    async def add_vendor(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        now = datetime.now(timezone.utc).isoformat()
+        vendor = {
+            "id": str(uuid.uuid4()),
+            "property_id": data.get("property_id", ""),
+            "company_name": data.get("company_name", ""),
+            "contact_person": data.get("contact_person", ""),
+            "phone": data.get("phone", ""),
+            "email": data.get("email", ""),
+            "specialities": data.get("specialities", []),
+            "hourly_rate": data.get("hourly_rate", 0),
+            "currency": data.get("currency", "GBP"),
+            "notes": data.get("notes", ""),
+            "rating": 0,
+            "is_active": True,
+            "type": "external",
+            "created_at": now,
+        }
+        await db.maintenance_vendors.insert_one(vendor)
+        vendor.pop("_id", None)
+        return vendor
+
+    @router.put("/maintenance/vendors/{vendor_id}")
+    async def update_vendor(vendor_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        updates.pop("_id", None)
+        updates.pop("id", None)
+        await db.maintenance_vendors.update_one({"id": vendor_id}, {"$set": updates})
+        doc = await db.maintenance_vendors.find_one({"id": vendor_id}, {"_id": 0})
+        return doc
+
+    @router.delete("/maintenance/vendors/{vendor_id}")
+    async def delete_vendor(vendor_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        await db.maintenance_vendors.delete_one({"id": vendor_id})
+        return {"status": "deleted"}
+
+    # ==================== ASSIGNEES LIST (combined team + vendors) ====================
+
+    @router.get("/maintenance/assignees/{property_id}")
+    async def list_assignees(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Returns combined list of internal team and external vendors for assignment dropdowns"""
+        query = {} if property_id == "all" else {"property_id": property_id}
+        team = await db.maintenance_team.find({**query, "is_active": True}, {"_id": 0}).to_list(100)
+        vendors = await db.maintenance_vendors.find({**query, "is_active": True}, {"_id": 0}).to_list(100)
+
+        assignees = []
+        for t in team:
+            open_count = await db.maintenance_issues.count_documents({"assigned_to": t["name"], "status": {"$in": ["open", "acknowledged", "in_progress"]}})
+            assignees.append({"name": t["name"], "type": "internal", "role": t.get("role", ""), "specialities": t.get("specialities", []), "open_issues": open_count})
+        for v in vendors:
+            open_count = await db.maintenance_issues.count_documents({"assigned_to": v["company_name"], "status": {"$in": ["open", "acknowledged", "in_progress"]}})
+            assignees.append({"name": v["company_name"], "type": "external", "role": "vendor", "specialities": v.get("specialities", []), "hourly_rate": v.get("hourly_rate", 0), "open_issues": open_count})
+        return assignees
+
     return router

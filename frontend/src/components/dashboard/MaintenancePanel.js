@@ -66,16 +66,19 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   const [filterCategory, setFilterCategory] = useState("all");
   const [search, setSearch] = useState("");
   const [recurring, setRecurring] = useState([]);
+  const [assignees, setAssignees] = useState([]);
 
   const fetchData = useCallback(async () => {
     if (!activePropertyId) return;
     try {
-      const [issuesRes, statsRes] = await Promise.all([
+      const [issuesRes, statsRes, assigneesRes] = await Promise.all([
         axios.get(`${API}/maintenance/issues/${activePropertyId}`),
         axios.get(`${API}/maintenance/stats/${activePropertyId}`),
+        axios.get(`${API}/maintenance/assignees/${activePropertyId}`),
       ]);
       setIssues(issuesRes.data);
       setStats(statsRes.data);
+      setAssignees(assigneesRes.data);
     } catch (e) { console.error(e); }
     setLoading(false);
   }, [activePropertyId]);
@@ -147,6 +150,8 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
         <div className="flex gap-1 bg-stone-100 p-1 rounded-lg" data-testid="maint-tabs">
           {[
             { id: "issues", label: "Issues", icon: <Wrench size={13} /> },
+            { id: "team", label: "Team", icon: <Lightning size={13} /> },
+            { id: "vendors", label: "Vendors", icon: <Lightning size={13} /> },
             { id: "recurring", label: "Preventive", icon: <Repeat size={13} /> },
             { id: "analytics", label: "Analytics", icon: <Lightning size={13} /> },
           ].map(t => (
@@ -245,6 +250,16 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
         </>
       )}
 
+      {/* Team Tab */}
+      {tab === "team" && (
+        <TeamTab propertyId={activePropertyId} onRefresh={fetchData} />
+      )}
+
+      {/* Vendors Tab */}
+      {tab === "vendors" && (
+        <VendorsTab propertyId={activePropertyId} onRefresh={fetchData} />
+      )}
+
       {/* Recurring / Preventive Tab */}
       {tab === "recurring" && (
         <RecurringTab recurring={recurring} propertyId={activePropertyId} onRefresh={() => { fetchRecurring(); fetchData(); }} />
@@ -256,10 +271,10 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
       )}
 
       {/* Create Issue Dialog */}
-      <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} onCreated={() => { setShowCreate(false); fetchData(); }} />
+      <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} assignees={assignees} onCreated={() => { setShowCreate(false); fetchData(); }} />
 
       {/* Issue Detail Drawer */}
-      <IssueDetailDrawer issue={selectedIssue} onClose={() => setSelectedIssue(null)} onUpdate={() => { fetchData(); }} />
+      <IssueDetailDrawer issue={selectedIssue} onClose={() => setSelectedIssue(null)} assignees={assignees} onUpdate={() => { fetchData(); }} />
     </div>
   );
 }
@@ -295,7 +310,7 @@ function IssueCard({ issue, onClick, onStatusChange }) {
 }
 
 /* ==================== CREATE ISSUE DIALOG ==================== */
-function CreateIssueDialog({ open, onClose, propertyId, onCreated }) {
+function CreateIssueDialog({ open, onClose, propertyId, assignees = [], onCreated }) {
   const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "", assigned_to: "" });
   const [creating, setCreating] = useState(false);
   const [photos, setPhotos] = useState([]);
@@ -350,7 +365,20 @@ function CreateIssueDialog({ open, onClose, propertyId, onCreated }) {
             <Input data-testid="issue-location" value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} placeholder="Location (e.g. Lobby)" />
             <Input data-testid="issue-room" value={form.room_number} onChange={e => setForm(p => ({ ...p, room_number: e.target.value }))} placeholder="Room number" />
           </div>
-          <Input data-testid="issue-assignee" value={form.assigned_to} onChange={e => setForm(p => ({ ...p, assigned_to: e.target.value }))} placeholder="Assign to (optional)" />
+          <Select value={form.assigned_to || "_unassigned"} onValueChange={v => setForm(p => ({ ...p, assigned_to: v === "_unassigned" ? "" : v }))}>
+            <SelectTrigger className="h-9 text-sm" data-testid="issue-assignee"><SelectValue placeholder="Assign to..." /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_unassigned">Unassigned</SelectItem>
+              {assignees.filter(a => a.type === "internal").length > 0 && <div className="px-2 py-1 text-[9px] font-bold text-stone-400 uppercase">Internal Team</div>}
+              {assignees.filter(a => a.type === "internal").map(a => (
+                <SelectItem key={a.name} value={a.name}>{a.name} ({a.open_issues} open)</SelectItem>
+              ))}
+              {assignees.filter(a => a.type === "external").length > 0 && <div className="px-2 py-1 text-[9px] font-bold text-stone-400 uppercase">External Vendors</div>}
+              {assignees.filter(a => a.type === "external").map(a => (
+                <SelectItem key={a.name} value={a.name}>{a.name} — £{a.hourly_rate}/h ({a.open_issues} open)</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Textarea data-testid="issue-description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Describe the issue in detail..." rows={3} />
 
           {/* Photo Upload */}
@@ -380,7 +408,7 @@ function CreateIssueDialog({ open, onClose, propertyId, onCreated }) {
 }
 
 /* ==================== ISSUE DETAIL DRAWER ==================== */
-function IssueDetailDrawer({ issue, onClose, onUpdate }) {
+function IssueDetailDrawer({ issue, onClose, assignees = [], onUpdate }) {
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const [costForm, setCostForm] = useState({ estimated_cost: 0, actual_cost: 0, cost_notes: "" });
@@ -462,7 +490,18 @@ function IssueDetailDrawer({ issue, onClose, onUpdate }) {
               <div className="bg-stone-50 rounded-xl p-3 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-stone-500">Category</span><span className="font-medium">{CATEGORY_CONFIG[issue.category]?.icon} {CATEGORY_CONFIG[issue.category]?.label}</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">Location</span><span className="font-medium">{issue.location || issue.room_number || "—"}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">Assigned</span><span className="font-medium">{issue.assigned_to || issue.assigned_department || "Unassigned"}</span></div>
+                <div className="flex justify-between items-center"><span className="text-stone-500">Assigned</span>
+                  <Select value={issue.assigned_to || "_unassigned"} onValueChange={async (v) => {
+                    try { await axios.put(`${API}/maintenance/issues/${issue.id}`, { assigned_to: v === "_unassigned" ? "" : v }); toast.success("Reassigned"); onUpdate(); } catch {}
+                  }}>
+                    <SelectTrigger className="h-7 w-40 text-xs border-stone-200" data-testid="reassign-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_unassigned">Unassigned</SelectItem>
+                      {assignees.filter(a => a.type === "internal").map(a => <SelectItem key={a.name} value={a.name}>{a.name}</SelectItem>)}
+                      {assignees.filter(a => a.type === "external").map(a => <SelectItem key={a.name} value={a.name}>{a.name} (vendor)</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="flex justify-between"><span className="text-stone-500">Reported by</span><span className="font-medium">{issue.reported_by || "—"}</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">SLA Target</span><span className="font-medium">{issue.sla_hours}h</span></div>
                 <div className="flex justify-between"><span className="text-stone-500">Created</span><span className="font-medium text-xs">{issue.created_at ? new Date(issue.created_at).toLocaleString() : "—"}</span></div>
@@ -702,3 +741,222 @@ function AnalyticsTab({ stats, issues }) {
     </div>
   );
 }
+
+/* ==================== TEAM TAB ==================== */
+function TeamTab({ propertyId, onRefresh }) {
+  const [team, setTeam] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ name: "", role: "technician", phone: "", email: "", specialities: [] });
+  const [specInput, setSpecInput] = useState("");
+
+  useEffect(() => {
+    const load = async () => {
+      try { const { data } = await axios.get(`${API}/maintenance/team/${propertyId}`); setTeam(data); } catch {}
+      setLoading(false);
+    };
+    if (propertyId) load();
+  }, [propertyId]);
+
+  const create = async () => {
+    if (!form.name) return;
+    try {
+      await axios.post(`${API}/maintenance/team`, { ...form, property_id: propertyId });
+      toast.success("Team member added");
+      setShowNew(false); setForm({ name: "", role: "technician", phone: "", email: "", specialities: [] });
+      const { data } = await axios.get(`${API}/maintenance/team/${propertyId}`); setTeam(data); onRefresh();
+    } catch { toast.error("Failed"); }
+  };
+
+  const toggle = async (m) => {
+    await axios.put(`${API}/maintenance/team/${m.id}`, { is_active: !m.is_active });
+    const { data } = await axios.get(`${API}/maintenance/team/${propertyId}`); setTeam(data); onRefresh();
+  };
+
+  return (
+    <div className="space-y-4" data-testid="team-tab">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-stone-500">Your internal maintenance team members and their current workload</p>
+        <button onClick={() => setShowNew(true)} className="px-3 py-2 bg-orange-500 text-white text-xs font-semibold rounded-lg hover:bg-orange-600 flex items-center gap-1.5" data-testid="btn-add-team">
+          <Plus size={13} weight="bold" /> Add Member
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {team.map(m => (
+          <div key={m.id} className={`bg-white rounded-xl border ${m.is_active ? "border-stone-200" : "border-stone-100 opacity-60"} p-4`} data-testid={`team-${m.id}`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-full bg-orange-100 flex items-center justify-center text-orange-700 font-bold text-sm">{m.name?.charAt(0)}</div>
+                <div>
+                  <p className="text-sm font-semibold text-stone-800">{m.name}</p>
+                  <p className="text-[10px] text-stone-400 capitalize">{m.role}</p>
+                </div>
+              </div>
+              <button onClick={() => toggle(m)} className={`text-[9px] px-2 py-0.5 rounded font-medium ${m.is_active ? "bg-emerald-50 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>
+                {m.is_active ? "Active" : "Inactive"}
+              </button>
+            </div>
+            {m.specialities?.length > 0 && (
+              <div className="flex gap-1 flex-wrap mb-2">
+                {m.specialities.map((s, i) => <span key={i} className="text-[9px] px-1.5 py-0.5 bg-stone-100 text-stone-600 rounded">{s}</span>)}
+              </div>
+            )}
+            <div className="flex gap-3 text-[10px] text-stone-500">
+              <span className="text-orange-600 font-bold">{m.open_issues || 0} open</span>
+              <span className="text-emerald-600">{m.total_resolved || 0} resolved</span>
+              {m.phone && <span>{m.phone}</span>}
+            </div>
+          </div>
+        ))}
+        {!loading && team.length === 0 && <div className="col-span-3 p-8 text-center text-stone-400 text-sm">No team members added yet</div>}
+      </div>
+
+      <Dialog open={showNew} onOpenChange={setShowNew}>
+        <DialogContent className="max-w-md" data-testid="new-team-dialog">
+          <DialogHeader><DialogTitle>Add Team Member</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="Full name *" data-testid="team-name" />
+            <Select value={form.role} onValueChange={v => setForm(p => ({ ...p, role: v }))}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="technician">Technician</SelectItem>
+                <SelectItem value="supervisor">Supervisor</SelectItem>
+                <SelectItem value="electrician">Electrician</SelectItem>
+                <SelectItem value="plumber">Plumber</SelectItem>
+                <SelectItem value="handyman">Handyman</SelectItem>
+                <SelectItem value="hvac_tech">HVAC Technician</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="Phone" />
+              <Input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="Email" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-stone-600 mb-1 block">Specialities</label>
+              <div className="flex gap-1 flex-wrap mb-1.5">
+                {form.specialities.map((s, i) => (
+                  <span key={i} className="text-[10px] px-2 py-0.5 bg-orange-50 text-orange-700 rounded-full flex items-center gap-1">
+                    {s} <button onClick={() => setForm(p => ({ ...p, specialities: p.specialities.filter((_, idx) => idx !== i) }))}><X size={8} /></button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-1">
+                <Input value={specInput} onChange={e => setSpecInput(e.target.value)} placeholder="e.g. Plumbing" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === "Enter" && specInput.trim()) { setForm(p => ({ ...p, specialities: [...p.specialities, specInput.trim()] })); setSpecInput(""); } }} />
+                <button onClick={() => { if (specInput.trim()) { setForm(p => ({ ...p, specialities: [...p.specialities, specInput.trim()] })); setSpecInput(""); } }} className="px-2 h-8 bg-stone-100 text-stone-600 rounded text-xs">Add</button>
+              </div>
+            </div>
+            <button onClick={create} className="w-full py-2.5 bg-orange-500 text-white text-sm font-bold rounded-xl" data-testid="btn-create-team">Add Member</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+/* ==================== VENDORS TAB ==================== */
+function VendorsTab({ propertyId, onRefresh }) {
+  const [vendors, setVendors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ company_name: "", contact_person: "", phone: "", email: "", specialities: [], hourly_rate: 0, notes: "" });
+  const [specInput, setSpecInput] = useState("");
+
+  useEffect(() => {
+    const load = async () => {
+      try { const { data } = await axios.get(`${API}/maintenance/vendors/${propertyId}`); setVendors(data); } catch {}
+      setLoading(false);
+    };
+    if (propertyId) load();
+  }, [propertyId]);
+
+  const create = async () => {
+    if (!form.company_name) return;
+    try {
+      await axios.post(`${API}/maintenance/vendors`, { ...form, property_id: propertyId });
+      toast.success("Vendor added");
+      setShowNew(false); setForm({ company_name: "", contact_person: "", phone: "", email: "", specialities: [], hourly_rate: 0, notes: "" });
+      const { data } = await axios.get(`${API}/maintenance/vendors/${propertyId}`); setVendors(data); onRefresh();
+    } catch { toast.error("Failed"); }
+  };
+
+  const toggle = async (v) => {
+    await axios.put(`${API}/maintenance/vendors/${v.id}`, { is_active: !v.is_active });
+    const { data } = await axios.get(`${API}/maintenance/vendors/${propertyId}`); setVendors(data); onRefresh();
+  };
+
+  return (
+    <div className="space-y-4" data-testid="vendors-tab">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-stone-500">External service providers and contractors you work with</p>
+        <button onClick={() => setShowNew(true)} className="px-3 py-2 bg-orange-500 text-white text-xs font-semibold rounded-lg hover:bg-orange-600 flex items-center gap-1.5" data-testid="btn-add-vendor">
+          <Plus size={13} weight="bold" /> Add Vendor
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl border border-stone-200/60 overflow-hidden">
+        <div className="grid grid-cols-[1fr_120px_120px_80px_80px_80px_80px] gap-2 px-4 py-2.5 bg-stone-50 text-[10px] font-semibold text-stone-500 uppercase tracking-wide border-b">
+          <span>Vendor</span><span>Contact</span><span>Specialities</span><span>Rate</span><span>Open</span><span>Resolved</span><span>Total Cost</span>
+        </div>
+        {vendors.length === 0 ? (
+          <div className="p-8 text-center text-stone-400 text-sm">No vendors added yet. Add external service providers to assign maintenance tasks.</div>
+        ) : vendors.map(v => (
+          <div key={v.id} className={`grid grid-cols-[1fr_120px_120px_80px_80px_80px_80px] gap-2 px-4 py-3 border-b border-stone-100 items-center ${!v.is_active ? "opacity-50" : ""}`} data-testid={`vendor-${v.id}`}>
+            <div>
+              <p className="text-sm font-semibold text-stone-800">{v.company_name}</p>
+              <p className="text-[10px] text-stone-400">{v.contact_person || "—"}</p>
+            </div>
+            <div className="text-[10px] text-stone-500">
+              {v.phone && <p>{v.phone}</p>}
+              {v.email && <p className="truncate">{v.email}</p>}
+            </div>
+            <div className="flex gap-1 flex-wrap">
+              {(v.specialities || []).map((s, i) => <span key={i} className="text-[8px] px-1 py-0.5 bg-blue-50 text-blue-700 rounded">{s}</span>)}
+            </div>
+            <span className="text-xs font-medium text-stone-700">£{v.hourly_rate}/h</span>
+            <span className="text-xs font-bold text-orange-600">{v.open_issues || 0}</span>
+            <span className="text-xs text-emerald-600">{v.total_resolved || 0}</span>
+            <span className="text-xs font-medium text-stone-700">£{(v.total_cost || 0).toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+
+      <Dialog open={showNew} onOpenChange={setShowNew}>
+        <DialogContent className="max-w-md" data-testid="new-vendor-dialog">
+          <DialogHeader><DialogTitle>Add External Vendor</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} placeholder="Company name *" data-testid="vendor-name" />
+            <Input value={form.contact_person} onChange={e => setForm(p => ({ ...p, contact_person: e.target.value }))} placeholder="Contact person" />
+            <div className="grid grid-cols-2 gap-3">
+              <Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="Phone" />
+              <Input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="Email" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-stone-600 mb-1 block">Hourly Rate (£)</label>
+                <Input type="number" value={form.hourly_rate} onChange={e => setForm(p => ({ ...p, hourly_rate: Number(e.target.value) }))} placeholder="0" data-testid="vendor-rate" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-stone-600 mb-1 block">Specialities</label>
+              <div className="flex gap-1 flex-wrap mb-1.5">
+                {form.specialities.map((s, i) => (
+                  <span key={i} className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full flex items-center gap-1">
+                    {s} <button onClick={() => setForm(p => ({ ...p, specialities: p.specialities.filter((_, idx) => idx !== i) }))}><X size={8} /></button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-1">
+                <Input value={specInput} onChange={e => setSpecInput(e.target.value)} placeholder="e.g. Plumbing, Electrical" className="h-8 text-xs" onKeyDown={(e) => { if (e.key === "Enter" && specInput.trim()) { setForm(p => ({ ...p, specialities: [...p.specialities, specInput.trim()] })); setSpecInput(""); } }} />
+                <button onClick={() => { if (specInput.trim()) { setForm(p => ({ ...p, specialities: [...p.specialities, specInput.trim()] })); setSpecInput(""); } }} className="px-2 h-8 bg-stone-100 text-stone-600 rounded text-xs">Add</button>
+              </div>
+            </div>
+            <Textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder="Notes (contract details, availability...)" rows={2} />
+            <button onClick={create} className="w-full py-2.5 bg-orange-500 text-white text-sm font-bold rounded-xl" data-testid="btn-create-vendor">Add Vendor</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+

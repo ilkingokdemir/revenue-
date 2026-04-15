@@ -1,46 +1,20 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 28+ Modules + Multi-Language (7 languages) + Mobile Responsive
+## 30+ Modules + Multi-Language + Mobile Responsive
 
-### Multi-Language: English, Turkish, Spanish, Russian, Arabic (RTL), French, German
+### All features match or exceed legacy hotelbox.com
 
-### Revenue & Analytics
-- Dashboard, Occupancy Forecast, Accounting, Rate Manager, Reports Centre
+### Finance (Enhanced)
+- Dashboard: KPIs, Operating Ledger with individual items (Paid/Accrued + Pay buttons), 6-Month Chart, Quick Actions
+- Earned Salaries: Day-by-day grid per staff
+- **Payroll Runs (Enhanced)**: Automation config with Configure/Play/Pause, MODE/FREQUENCY/LAST RUN/NEXT RUN, Automation Plan (window/rule/upcoming dates/timezone)
+- Adjustments, Cash Advances, Categories, Expenses, Recurring Expenses
 
-### Front Office
-- Bookings + Online Booking Widget, Night Audit, Guest Profiles
+### Settings Hub (NEW)
+- Currencies (GBP, EUR, USD, TRY), Room Categories, Booking Sources (with commission %), Expense Categories, Laundry Providers, Booking Document Types
+- All with CRUD + auto-seeded defaults
 
-### Guest Experience
-- Guest Journey (registration, ID upload, T&C, kiosk, share 6 options)
-- Loyalty Program, Campaigns, Surveys/NPS
+### Operations Hub (7 modules), Staff Management (3 tabs), My Tasks, Lost & Found, Events & Rooms
+### + Dashboard, Bookings, Housekeeping, Maintenance, Guest Journey, Rate Manager, Reports, Notification Centre, Mobile Responsive, 7 languages
 
-### Operations
-- Housekeeping + Maintenance Integration
-- Maintenance: Kanban+Table, SLA, Before/After Photos, Job Timeline
-- Operations Hub (7 modules): Reception, Routine Templates, Routine History, Pass Over Duties, Laundry, Compliance, Shifts
-
-### Finance (8 sub-modules)
-- Finance Dashboard (KPIs, Operating Ledger, 6-Month Chart, Quick Actions)
-- Earned Salaries, Payroll Runs, Adjustments, Cash Advances, Categories, Expenses, Recurring
-
-### Staff Management (3 tabs)
-- User Management (per-branch payment rates, multi-branch)
-- My Shifts (staff self-service calendar)
-- Roles & Permissions
-
-### My Tasks Dashboard (NEW)
-- Personalized daily overview: greeting, 6 stat cards, shifts, handovers, routines, maintenance
-
-### Lost & Found (NEW)
-- Item tracking: category, location, guest matching, claim/dispose workflow, stats
-
-### Events & Meeting Rooms (NEW)
-- Meeting Rooms: capacity, equipment, 3-tier pricing (hourly/half-day/full-day)
-- Event Bookings: setup types, catering packages, attendees, cost, status workflow
-- Catering Packages: auto-seeded defaults (Tea & Coffee, Morning Break, Working Lunch, Full Day)
-
-### Notification Centre, Mobile Responsive, F&B, Communications, Administration
-
-## Testing: 87 iterations, all passing (100%)
-
-## All tasks complete. System exceeds legacy hotelbox.com functionality.
+## Testing: 88 iterations, all passing (100%)

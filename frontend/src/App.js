@@ -53,6 +53,7 @@ import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
 import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
 import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
+import { NotificationBell } from "./components/dashboard/NotificationBell";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
@@ -2477,6 +2478,7 @@ const Dashboard = ({ user, onLogout }) => {
   };
 
   const [activeView, setActiveView] = useState("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Sidebar menu items
   const menuSections = [
@@ -2571,8 +2573,22 @@ const Dashboard = ({ user, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-stone-50 flex" data-testid="review-dashboard">
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} data-testid="sidebar-overlay" />
+      )}
+
+      {/* Mobile Top Bar */}
+      <div className="fixed top-0 left-0 right-0 h-14 bg-[#1C1917] flex items-center justify-between px-4 z-30 lg:hidden" data-testid="mobile-topbar">
+        <button onClick={() => setSidebarOpen(true)} className="p-2 text-stone-400 hover:text-white" data-testid="mobile-menu-btn">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <h1 className="text-sm font-semibold text-white truncate">{branding?.app_name || "Review Hub"}</h1>
+        <NotificationBell onNavigate={(v) => { setActiveView(v); setSidebarOpen(false); }} />
+      </div>
+
       {/* Left Sidebar */}
-      <aside className="w-56 bg-[#1C1917] flex flex-col fixed inset-y-0 left-0 z-50" data-testid="sidebar">
+      <aside className={`w-56 bg-[#1C1917] flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`} data-testid="sidebar">
         {/* Logo */}
         <div className="p-4 border-b border-stone-800">
           <div className="flex items-center gap-2.5">
@@ -2583,10 +2599,19 @@ const Dashboard = ({ user, onLogout }) => {
                 <Buildings size={16} className="text-white" weight="fill" />
               </div>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h1 className="text-sm font-semibold text-white truncate" data-testid="header-app-name">{branding?.app_name || "Review Hub"}</h1>
               <p className="text-[10px] text-stone-500 truncate" data-testid="header-subtitle">{branding?.subtitle || "Review Management"}</p>
             </div>
+            {/* Close button for mobile */}
+            <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1 text-stone-500 hover:text-white" data-testid="sidebar-close-btn">
+              <X size={18} />
+            </button>
+          </div>
+          {/* Notification Bell — desktop only */}
+          <div className="mt-3 hidden lg:flex items-center gap-2">
+            <NotificationBell onNavigate={setActiveView} />
+            <span className="text-[10px] text-stone-500">Notifications</span>
           </div>
           {/* Branch Selector — always visible */}
           <div className="mt-3" data-testid="branch-selector-container">
@@ -2635,7 +2660,7 @@ const Dashboard = ({ user, onLogout }) => {
               {section.items.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => setActiveView(item.id)}
+                  onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
                   className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
                     activeView === item.id
                       ? "bg-stone-800 text-white font-medium border-l-2 border-emerald-500"
@@ -2670,7 +2695,7 @@ const Dashboard = ({ user, onLogout }) => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 ml-56">
+      <main className="flex-1 lg:ml-56 pt-14 lg:pt-0">
         {/* Dashboard Home */}
         {activeView === "dashboard" && (
           <DashboardHome properties={properties} activePropertyId={activePropertyId} onNavigate={setActiveView} />
@@ -2989,7 +3014,7 @@ const Dashboard = ({ user, onLogout }) => {
 
       {/* Powered By Footer */}
       {branding?.powered_by_visible && branding?.powered_by_text && (
-        <div className="fixed bottom-0 left-56 right-0 text-center py-1.5 border-t border-stone-100 bg-white/90 z-30" data-testid="powered-by-footer">
+        <div className="fixed bottom-0 left-0 lg:left-56 right-0 text-center py-1.5 border-t border-stone-100 bg-white/90 z-30" data-testid="powered-by-footer">
           <span className="text-[10px] text-stone-400">Powered by {branding.powered_by_text}</span>
         </div>
       )}

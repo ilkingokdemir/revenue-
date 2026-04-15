@@ -54,6 +54,7 @@ import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
 import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
+import { FinancePanel } from "./components/dashboard/FinancePanel";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
@@ -2537,6 +2538,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
+        { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
       ]
     },
     {
@@ -3004,6 +3006,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Operations Hub */}
         {activeView === "operations-hub" && (
           <OperationsHubPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Finance */}
+        {activeView === "finance" && (
+          <FinancePanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Guest Satisfaction Surveys */}

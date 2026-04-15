@@ -19,17 +19,14 @@
 - **Surveys / NPS**: Customizable surveys, public guest page
 
 ### Operations
-- **Housekeeping**: Room Board, Task Management, basic maintenance requests
-- **Maintenance** (NEW): Advanced module with:
-  - Kanban board + Table view (Open/In Progress/Resolved)
-  - Priority levels: Critical (2h SLA), High (8h), Medium (24h), Low (72h)
-  - Photo attachments (camera + gallery upload)
-  - Auto-assignment by category to department
-  - SLA tracking with breach detection
-  - Cost tracking (estimated, actual, materials, notes)
-  - Comments/Activity log per issue
-  - Recurring/Preventive maintenance schedules (daily/weekly/monthly/quarterly/yearly)
-  - Analytics dashboard (category breakdown, priority, costs, avg resolution time)
+- **Housekeeping**: Room Board, Task Management
+- **Maintenance**: Advanced module with 5 tabs:
+  - Issues: Kanban board + Table view, priority (Critical/High/Medium/Low), SLA tracking (2h/8h/24h/72h), photo attachments, auto-department assignment, comments/activity log, cost tracking
+  - Team: Internal maintenance staff directory with roles (Technician/Supervisor/Electrician/Plumber/Handyman/HVAC), specialities, workload tracking
+  - Vendors: External contractor directory with company info, contact, hourly rate, specialities, performance metrics (resolved count, total cost)
+  - Preventive: Recurring maintenance schedules (daily/weekly/monthly/quarterly/yearly), auto-generates issues
+  - Analytics: Category breakdown, priority breakdown, cost summary, avg resolution time
+  - Issue assignment to internal team or external vendor with grouped dropdown
 - **Duty Logbook**: Shift notes, incidents, VIP tracking, shift handovers
 - **Stock / F&B**: Inventory, POS deduction, auto purchase orders
 
@@ -44,4 +41,4 @@
 ### Administration
 - **Admin Panel**: Roles & Permissions (14x6), Module Settings, Auto Purchase Orders
 
-## Testing: 76 iterations, all passing
+## Testing: 77 iterations, all passing

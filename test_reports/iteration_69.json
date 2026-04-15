@@ -1,0 +1,119 @@
+{
+  "summary": "Iteration 69 - Guest Profiles, Bookings Calendar, and Campaigns upgrades testing complete. Fixed critical bug in Guest Profiles (TypeError on preferences.includes). All features verified working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "bugs_fixed": [
+    {
+      "component": "GuestProfilesPanel.js",
+      "issue": "TypeError: ((intermediate value)(intermediate value)(intermediate value) || []).includes is not a function",
+      "root_cause": "Backend GuestProfile model had preferences as dict and notes as string, but frontend expected preferences as array and notes as array of objects",
+      "fix_applied": [
+        "Updated backend/models.py: Changed GuestProfile.preferences from dict to list, notes from str to list",
+        "Updated frontend GuestProfilesPanel.js: Added Array.isArray() checks for preferences and notes to handle both old and new data formats"
+      ],
+      "files_modified": [
+        "/app/backend/models.py",
+        "/app/frontend/src/components/dashboard/GuestProfilesPanel.js"
+      ]
+    }
+  ],
+  "features_tested": {
+    "guest_profiles": {
+      "status": "PASS",
+      "features": [
+        "Split layout with guest list (left) and detail panel (right) ✓",
+        "Search input for filtering guests ✓",
+        "Sort by dropdown (Last Stay, Top Spenders, Most Stays, Name A-Z) ✓",
+        "Filter by tier dropdown (All Tiers, Standard, Silver, Gold, Platinum) ✓",
+        "Sync from Bookings button ✓",
+        "Stats display (Total: 40, VIP: 3, Gold: 1, Platinum: 0) ✓",
+        "Guest list shows name, tier badge, stays count, total spend ✓",
+        "Detail panel shows guest name with VIP badge ✓",
+        "Detail panel shows tier badge with progress to next tier ✓",
+        "Detail panel shows email, phone, nationality ✓",
+        "Stats grid: Total Stays, Total Spent, Avg per Stay, Last Visit ✓",
+        "Preferences section with Edit button ✓",
+        "Preferences dialog with 12 options (High Floor, Quiet Room, Extra Pillows, Late Checkout, Early Check-in, Vegan Diet, Halal Food, Non-Smoking, Pet-Friendly, Accessible Room, Empty Minibar, Daily Newspaper) ✓",
+        "Tags section with Add button ✓",
+        "Staff Notes section ✓",
+        "Add Staff Note dialog with textarea and Save Note button ✓",
+        "VIP toggle button ✓",
+        "Stay History showing booking refs, dates, amounts, payment status ✓"
+      ]
+    },
+    "bookings_calendar": {
+      "status": "PASS",
+      "features": [
+        "Calendar tab in Rooms & Bookings panel ✓",
+        "Monthly grid view showing April 2026 ✓",
+        "Day headers (MON, TUE, WED, THU, FRI, SAT, SUN) ✓",
+        "Previous/Next month navigation buttons ✓",
+        "Check-in indicators (green) showing count per day ✓",
+        "Check-out indicators (amber) showing count per day ✓",
+        "Staying indicators (blue) showing guests staying through ✓",
+        "Today highlighted in blue ✓",
+        "Legend at bottom (Check-ins, Check-outs, Staying) ✓"
+      ]
+    },
+    "campaigns": {
+      "status": "PASS",
+      "features": [
+        "Campaigns panel with header and stats (Total, Sent, Drafts, Recipients) ✓",
+        "3 tabs: Campaigns, Templates, Audience ✓",
+        "New Campaign button ✓",
+        "Empty state message when no campaigns ✓",
+        "Template Library with 6 pre-built templates ✓",
+        "Templates: Welcome Back (retention), Pre-Arrival (operations), Post Stay Review (feedback), Special Offer (promotion), Birthday Wishes (loyalty), Loyalty Tier Upgrade (loyalty) ✓",
+        "Use Template button populates campaign creator form ✓",
+        "Audience Segments with 8 targeting options ✓",
+        "Segments: All Guests, VIP Guests, Returning Guests, Recent Checkouts, Upcoming Arrivals, High Spenders, Inactive Guests, Gold & Platinum ✓",
+        "Target button on each segment ✓",
+        "New Campaign dialog with all fields ✓",
+        "Campaign Name input ✓",
+        "Channel dropdown (Email, WhatsApp, SMS) ✓",
+        "Email Subject input ✓",
+        "Message Body textarea ✓",
+        "Browse Templates link ✓",
+        "Template variable buttons ({guest_name}, {hotel_name}, {check_in_date}, {loyalty_tier}, {discount}, {promo_code}) ✓",
+        "Target Audience dropdown with all segments ✓",
+        "Schedule (optional) datetime input ✓",
+        "Save as Draft button ✓",
+        "Save & Send button ✓"
+      ]
+    }
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Guest Profiles panel has excellent split layout design with comprehensive guest detail view",
+    "Bookings Calendar provides clear visual indicators for check-ins, check-outs, and staying guests",
+    "Campaigns module is well-structured with Templates and Audience tabs for easy campaign creation",
+    "All data-testid attributes are properly implemented for testing"
+  ],
+  "updated_files": [
+    "/app/backend/models.py",
+    "/app/frontend/src/components/dashboard/GuestProfilesPanel.js"
+  ],
+  "success_rate": {
+    "backend": "N/A (frontend-only testing)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "None - used existing data from previous iterations",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Guest Profiles, Bookings Calendar, and Campaigns modules are fully functional. Guest Profiles requires clicking 'Sync from Bookings' to populate guest list if empty. Bookings Calendar is the middle tab in Rooms & Bookings. Campaigns has Templates (6 pre-built) and Audience (8 segments) tabs. Fixed bug where preferences/notes data type mismatch caused TypeError - frontend now handles both old (dict/string) and new (array) formats.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All APIs are real backend endpoints"
+  }
+}

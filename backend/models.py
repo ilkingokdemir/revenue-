@@ -1286,8 +1286,8 @@ class GuestProfile(BaseModel):
     name: str
     vip: bool = False
     tags: list = Field(default_factory=list)
-    preferences: dict = Field(default_factory=dict)  # room_type, floor, pillows, dietary, etc.
-    notes: str = ""
+    preferences: list = Field(default_factory=list)  # list of preference IDs: high_floor, quiet_room, etc.
+    notes: list = Field(default_factory=list)  # list of {text, date, by} objects
     total_stays: int = 0
     total_spend: float = 0
     avg_rating_given: float = 0
@@ -1295,6 +1295,7 @@ class GuestProfile(BaseModel):
     last_stay: str = ""
     loyalty_tier: str = "standard"  # standard, silver, gold, platinum
     source: str = ""  # direct, booking.com, expedia, etc.
+    nationality: str = ""  # guest nationality
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

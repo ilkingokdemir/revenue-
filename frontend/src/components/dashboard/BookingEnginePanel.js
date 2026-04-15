@@ -17,6 +17,7 @@ const BookingEnginePanel = ({ properties }) => {
   const [editingRoom, setEditingRoom] = useState(null);
   const [showEditor, setShowEditor] = useState(false);
   const [filterProperty, setFilterProperty] = useState("");
+  const [calendarDate, setCalendarDate] = useState(new Date());
 
   const fetchRooms = useCallback(async () => {
     try { const { data } = await axios.get(`${API}/room-types`); setRooms(data); } catch (e) { toast.error("Failed to load room types"); }
@@ -124,6 +125,7 @@ const BookingEnginePanel = ({ properties }) => {
       <div className="flex gap-1 bg-stone-100 rounded-lg p-1 mb-5">
         {[
           { id: "rooms", label: `Rooms (${filteredRooms.length})`, icon: Bed },
+          { id: "calendar", label: "Calendar", icon: Eye },
           { id: "bookings", label: `Bookings (${filteredBookings.length})`, icon: CreditCard },
         ].map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -217,7 +219,70 @@ const BookingEnginePanel = ({ properties }) => {
             </div>
           )}
 
-          {/* BOOKINGS TAB */}
+          {/* CALENDAR TAB */}
+          {activeTab === "calendar" && (
+            <div data-testid="calendar-view">
+              {/* Calendar Navigation */}
+              <div className="flex items-center justify-between mb-4">
+                <button onClick={() => { const d = new Date(calendarDate); d.setMonth(d.getMonth() - 1); setCalendarDate(d); }}
+                  className="text-xs px-3 py-1.5 bg-white border border-stone-200 rounded-lg hover:bg-stone-50">Previous</button>
+                <h3 className="text-sm font-bold text-stone-800">
+                  {calendarDate.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+                </h3>
+                <button onClick={() => { const d = new Date(calendarDate); d.setMonth(d.getMonth() + 1); setCalendarDate(d); }}
+                  className="text-xs px-3 py-1.5 bg-white border border-stone-200 rounded-lg hover:bg-stone-50">Next</button>
+              </div>
+              {/* Calendar Grid */}
+              <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+                {/* Day Headers */}
+                <div className="grid grid-cols-7 border-b border-stone-100">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
+                    <div key={d} className="text-center py-2 text-[10px] font-bold text-stone-500 uppercase tracking-wider">{d}</div>
+                  ))}
+                </div>
+                {/* Days */}
+                <div className="grid grid-cols-7">
+                  {(() => {
+                    const year = calendarDate.getFullYear();
+                    const month = calendarDate.getMonth();
+                    const firstDay = new Date(year, month, 1);
+                    const lastDay = new Date(year, month + 1, 0);
+                    const startPad = (firstDay.getDay() + 6) % 7;
+                    const days = [];
+                    for (let i = 0; i < startPad; i++) days.push(null);
+                    for (let d = 1; d <= lastDay.getDate(); d++) days.push(d);
+                    const today = new Date();
+                    return days.map((day, i) => {
+                      if (!day) return <div key={i} className="h-20 border-b border-r border-stone-50" />;
+                      const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                      const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === day;
+                      const dayBookings = filteredBookings.filter(b => b.check_in <= dateStr && b.check_out > dateStr);
+                      const checkIns = filteredBookings.filter(b => b.check_in === dateStr);
+                      const checkOuts = filteredBookings.filter(b => b.check_out === dateStr);
+                      return (
+                        <div key={i} className={`h-20 border-b border-r border-stone-50 p-1 ${isToday ? "bg-blue-50" : ""}`}>
+                          <div className={`text-[10px] font-bold ${isToday ? "text-blue-600" : "text-stone-600"}`}>{day}</div>
+                          {checkIns.length > 0 && <div className="text-[8px] px-1 py-0.5 bg-emerald-100 text-emerald-700 rounded mt-0.5 truncate font-semibold">{checkIns.length} check-in{checkIns.length > 1 ? "s" : ""}</div>}
+                          {checkOuts.length > 0 && <div className="text-[8px] px-1 py-0.5 bg-amber-100 text-amber-700 rounded mt-0.5 truncate font-semibold">{checkOuts.length} check-out{checkOuts.length > 1 ? "s" : ""}</div>}
+                          {dayBookings.length > 0 && checkIns.length === 0 && checkOuts.length === 0 && (
+                            <div className="text-[8px] px-1 py-0.5 bg-blue-50 text-blue-600 rounded mt-0.5 truncate">{dayBookings.length} staying</div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+              {/* Legend */}
+              <div className="flex gap-4 mt-3 text-[10px] text-stone-500">
+                <span className="flex items-center gap-1"><div className="w-3 h-2 bg-emerald-100 rounded" /> Check-ins</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-2 bg-amber-100 rounded" /> Check-outs</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-2 bg-blue-50 rounded" /> Staying</span>
+              </div>
+            </div>
+          )}
+
+          {/* BOOKINGS LIST TAB */}
           {activeTab === "bookings" && (
             <div className="space-y-2">
               {filteredBookings.length === 0 ? (

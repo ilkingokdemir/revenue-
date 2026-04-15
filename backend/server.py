@@ -59,6 +59,8 @@ from routes.maintenance import create_maintenance_router
 from routes.rate_manager import create_rate_manager_router
 from routes.reports import create_reports_router
 from routes.booking_widget import create_booking_widget_router
+from routes.operations import create_operations_router
+from routes.shifts import create_shifts_router
 
 # Import extracted modules
 from models import (
@@ -356,6 +358,12 @@ api_router.include_router(reports_router)
 
 booking_widget_router = create_booking_widget_router(db, require_roles)
 api_router.include_router(booking_widget_router)
+
+operations_router = create_operations_router(db, require_roles)
+api_router.include_router(operations_router)
+
+shifts_router = create_shifts_router(db, require_roles)
+api_router.include_router(shifts_router)
 
 app.include_router(api_router)
 

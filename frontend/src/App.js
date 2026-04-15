@@ -52,6 +52,7 @@ import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
 import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
 import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
 import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
+import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
@@ -2533,6 +2534,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
         { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
+        { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
       ]
     },
     {
@@ -2972,6 +2974,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Reports Centre */}
         {activeView === "reports-centre" && (
           <ReportsCentrePanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Operations Hub */}
+        {activeView === "operations-hub" && (
+          <OperationsHubPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Guest Satisfaction Surveys */}

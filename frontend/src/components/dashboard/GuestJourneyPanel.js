@@ -11,13 +11,14 @@ import {
   PaperPlaneTilt, CheckCircle, Clock, Upload, Eye, X, UserCircle,
   ArrowsClockwise, Envelope, Smiley, WarningCircle, CaretRight,
 } from "@phosphor-icons/react";
-import { FileText, Send, Users, Shield, Camera, ChevronDown, ExternalLink } from "lucide-react";
+import { FileText, Send, Users, Shield, Camera, ChevronDown, ExternalLink, QrCode } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
 export function GuestJourneyPanel({ properties, activePropertyId: propActivePropertyId }) {
-  const activePropertyId = (propActivePropertyId && propActivePropertyId !== "all") ? propActivePropertyId : (properties?.[0]?.id || "aldgate-flats");
+  const activePropertyId = propActivePropertyId || "all";
   const [registrations, setRegistrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedReg, setSelectedReg] = useState(null);
@@ -32,6 +33,7 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
   const [bookings, setBookings] = useState([]);
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [tab, setTab] = useState("registrations"); // registrations | satisfaction
+  const [showQR, setShowQR] = useState(null); // registration token for QR modal
 
   const fetchRegistrations = useCallback(async () => {
     if (!activePropertyId) return;
@@ -47,7 +49,8 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
   const fetchBookings = useCallback(async () => {
     if (!activePropertyId) return;
     try {
-      const { data } = await axios.get(`${API}/bookings?property_id=${activePropertyId}&status=confirmed`);
+      const params = activePropertyId === "all" ? "" : `property_id=${activePropertyId}&`;
+      const { data } = await axios.get(`${API}/bookings?${params}status=confirmed`);
       setBookings(Array.isArray(data) ? data : (data.bookings || []));
     } catch { }
   }, [activePropertyId]);
@@ -212,6 +215,9 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
                       <button onClick={(e) => { e.stopPropagation(); setSelectedReg(reg); }} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition" data-testid={`btn-view-reg-${reg.id}`}>
                         <Eye size={14} />
                       </button>
+                      <button onClick={(e) => { e.stopPropagation(); setShowQR(reg); }} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400 hover:text-violet-600 transition" data-testid={`btn-qr-${reg.id}`} title="Show QR Code">
+                        <QrCode size={14} />
+                      </button>
                       {!reg.id_uploaded && (
                         <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.setAttribute("data-booking", reg.booking_id); fileInputRef.current?.click(); }} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition" data-testid={`btn-upload-for-${reg.id}`}>
                           <Camera size={14} />
@@ -354,7 +360,7 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
                     </div>
                   </div>
 
-                  {/* Registration URL */}
+                  {/* Registration URL & QR Code */}
                   {selectedReg.token && (
                     <div className="space-y-2">
                       <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Registration Link</h4>
@@ -364,10 +370,68 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
                           <ExternalLink size={14} />
                         </button>
                       </div>
+                      {/* QR Code */}
+                      <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col items-center" data-testid="drawer-qr-code">
+                        <QRCodeSVG value={`${BASE_URL}/register/${selectedReg.token}`} size={160} level="M" includeMargin />
+                        <p className="text-[10px] text-stone-400 mt-2">Scan to open registration form</p>
+                        <button onClick={() => {
+                          const svg = document.querySelector('[data-testid="drawer-qr-code"] svg');
+                          if (!svg) return;
+                          const svgData = new XMLSerializer().serializeToString(svg);
+                          const canvas = document.createElement("canvas");
+                          canvas.width = 320; canvas.height = 320;
+                          const ctx = canvas.getContext("2d");
+                          const img = new Image();
+                          img.onload = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0,0,320,320); ctx.drawImage(img, 0, 0, 320, 320); const a = document.createElement("a"); a.download = `qr-${selectedReg.guest_name?.replace(/\s+/g,"-") || "guest"}.png`; a.href = canvas.toDataURL("image/png"); a.click(); };
+                          img.src = "data:image/svg+xml;base64," + btoa(svgData);
+                        }} className="mt-2 text-xs text-[#1e3a5f] font-medium hover:underline" data-testid="btn-download-qr">
+                          Download QR Code
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
               </ScrollArea>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QR Code Pop-up Modal */}
+      <AnimatePresence>
+        {showQR && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowQR(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-white rounded-2xl shadow-xl p-6 max-w-xs w-full text-center" onClick={(e) => e.stopPropagation()} data-testid="qr-code-modal">
+              <div className="flex justify-between items-start mb-4">
+                <div className="text-left">
+                  <h3 className="font-semibold text-stone-800 text-sm">Registration QR Code</h3>
+                  <p className="text-xs text-stone-500">{showQR.guest_name}</p>
+                </div>
+                <button onClick={() => setShowQR(null)} className="p-1 hover:bg-stone-100 rounded-lg"><X size={16} className="text-stone-400" /></button>
+              </div>
+              <div className="bg-stone-50 rounded-xl p-4 inline-block" data-testid="qr-modal-code">
+                <QRCodeSVG value={`${BASE_URL}/register/${showQR.token}`} size={200} level="M" includeMargin />
+              </div>
+              <p className="text-xs text-stone-500 mt-3">Guest scans this to open their registration form</p>
+              <p className="text-[10px] text-stone-400 mt-1 font-mono">{showQR.booking_ref}</p>
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => { navigator.clipboard.writeText(`${BASE_URL}/register/${showQR.token}`); toast.success("Link copied!"); }} className="flex-1 py-2 text-xs font-medium text-[#1e3a5f] border border-[#1e3a5f]/20 rounded-lg hover:bg-[#1e3a5f]/5 transition" data-testid="btn-qr-copy-link">
+                  Copy Link
+                </button>
+                <button onClick={() => {
+                  const svg = document.querySelector('[data-testid="qr-modal-code"] svg');
+                  if (!svg) return;
+                  const svgData = new XMLSerializer().serializeToString(svg);
+                  const canvas = document.createElement("canvas");
+                  canvas.width = 400; canvas.height = 400;
+                  const ctx = canvas.getContext("2d");
+                  const img = new Image();
+                  img.onload = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0,0,400,400); ctx.drawImage(img, 0, 0, 400, 400); const a = document.createElement("a"); a.download = `qr-${showQR.guest_name?.replace(/\s+/g,"-") || "guest"}.png`; a.href = canvas.toDataURL("image/png"); a.click(); };
+                  img.src = "data:image/svg+xml;base64," + btoa(svgData);
+                }} className="flex-1 py-2 text-xs font-medium text-white bg-[#1e3a5f] rounded-lg hover:bg-[#15304f] transition" data-testid="btn-qr-download">
+                  Download PNG
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

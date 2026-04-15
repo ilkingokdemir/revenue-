@@ -214,7 +214,8 @@ def create_guest_journey_router(db, require_roles):
 
     @router.get("/guest-journey/registrations/{property_id}")
     async def list_registrations(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
-        docs = await db.guest_registrations.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        query = {} if property_id == "all" else {"property_id": property_id}
+        docs = await db.guest_registrations.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
         return docs
 
     # ==================== SATISFACTION CHECK ====================
@@ -314,7 +315,8 @@ def create_guest_journey_router(db, require_roles):
 
     @router.get("/guest-journey/satisfaction-checks/{property_id}")
     async def list_satisfaction_checks(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
-        docs = await db.satisfaction_checks.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        query = {} if property_id == "all" else {"property_id": property_id}
+        docs = await db.satisfaction_checks.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
         return docs
 
     # ==================== EMAIL HELPERS ====================

@@ -8,13 +8,12 @@
 - Dashboard (KPIs, widgets, timeline)
 - Occupancy Forecast (30/60/90-day)
 - Accounting (18 tabs, bank reconciliation)
-- **Rate Manager**: Dynamic pricing, seasons, 30-day calendar
-- **Reports Centre**: Consolidated data, period filters, CSV export
+- Rate Manager: Dynamic pricing, seasons, 30-day calendar
+- Reports Centre: Consolidated data, period filters, CSV export
 
 ### Front Office
-- Bookings + **Online Booking Widget**: Public booking page, 4-step flow
-- Night Audit (5-step wizard)
-- Guest Profiles
+- Bookings + Online Booking Widget: Public booking page, 4-step flow
+- Night Audit (5-step wizard), Guest Profiles
 
 ### Guest Experience
 - Guest Journey (registration, ID upload, T&C, kiosk, share 6 options)
@@ -25,35 +24,35 @@
 - Maintenance: Kanban+Table, SLA, Before/After Photos, Job Timeline
 - **Operations Hub** (7 modules): Reception, Routine Templates, Routine History, Pass Over Duties, Laundry, Compliance, Shifts
 
-### Finance Module (NEW - 8 sub-modules)
-1. **Finance Dashboard**: Canonical profit overview (Gross, Room, ADR, Commission, Expenses, Payroll, Total Costs, Net), Operating Costs breakdown, Revenue by source, Operating Profit/Loss with margin
-2. **Earned Salaries**: Day-by-day salary grid per staff, role badges, branch filter, stats cards
-3. **Payroll Runs**: Automation config (mode/frequency/next run), payroll periods table, draft→approved→paid workflow
-4. **Adjustments**: Employee bonuses/deductions, type/category/schedule, filter by type
-5. **Cash Advances**: Employee advances with pending/deducted/cancelled workflow, stats cards
-6. **Adjustment Categories**: 8 system defaults (bonus, transport, meal, etc.) + custom, enable/disable
-7. **Expenses**: Monthly tracker with category badges, status filters, month navigation, Pay/Delete actions
-8. **Recurring Expenses**: Automated expenses with play/pause mode, frequency, next run dates
+### Finance Module (8 sub-modules) — ENHANCED
+1. **Finance Dashboard** (ENHANCED):
+   - Canonical profit overview with 8 KPIs
+   - **Operating Ledger** with individual expense items, Paid/Accrued badges, Pay buttons
+   - **Room Revenue** table by source with counts
+   - **Operating Profit/Loss** card with margin %
+   - **6-Month Financial Overview** bar chart (Revenue/Costs/Profit)
+   - **Quick Actions** cards (Manage Expenses, Payroll Runs, View Bookings)
+2. Earned Salaries: Day-by-day grid per staff
+3. Payroll Runs: Automation config + draft→approved→paid
+4. Adjustments: Employee bonuses/deductions
+5. Cash Advances: pending→deducted→cancelled
+6. Adjustment Categories: 8 defaults + custom
+7. Expenses: Monthly tracker with Pay/Delete
+8. Recurring Expenses: Play/Pause automation
 
 ### Notification Centre
-- Bell icon with unread badge, auto-generated alerts (SLA, handover, compliance, routines)
-- Filter tabs, mark as read
+- Bell icon, auto-generated alerts, filter tabs
 
 ### Mobile Responsive
 - Hamburger menu, slide-in sidebar, mobile top bar
 
-### F&B / Revenue
-- Point of Sale, Payment Gateway (Stripe, iyzico, PayTR)
+### F&B / Revenue, Communications, Administration
+- POS, Payments, Messaging, Review Hub, Admin Panel
 
-### Communications
-- Messaging (WhatsApp, Telegram, SMS), Review Hub
-
-### Administration
-- Admin Panel (Roles & Permissions 14x6)
-
-## Testing: 84 iterations, all passing (100%)
+## Testing: 85 iterations, all passing (100%)
 
 ## Upcoming Tasks
+- Enhanced User Management with per-branch payment rates (from screenshots) (P1)
 - Staff self-service login to view personal shifts (P1)
 - My Tasks Dashboard (P2)
 - Lost & Found Module (P2)

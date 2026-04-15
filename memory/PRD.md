@@ -1,6 +1,6 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## All Modules (17 total)
+## All Modules (18 total)
 
 ### Revenue & Analytics
 - **Dashboard**: KPIs (RevPAR, ADR), Timeline, Occupancy gauge, Revenue chart, Housekeeping widget
@@ -13,6 +13,7 @@
 - **Guest Profiles**: Rich detail, history, spending, preferences, tags, notes, loyalty tiers
 
 ### Guest Experience
+- **Guest Journey**: Pre-arrival registration (4-step form), ID upload, T&C acceptance, welcome pack emails, in-stay satisfaction checks, feedback collection, admin panel with stats/table/send-link dialog
 - **Loyalty Program**: Points, 4 tiers (Standard→Platinum), 8 rewards, earn/redeem, auto-upgrade
 - **Campaigns**: 6 email templates, 8 audience segments, scheduling, template variables
 - **Surveys / NPS**: Customizable surveys, public guest page
@@ -33,4 +34,14 @@
 ### Administration
 - **Admin Panel**: Roles & Permissions (14×6), Module Settings, Auto Purchase Orders
 
-## Testing: 71 iterations, all passing
+## Architecture
+- React + Tailwind + Shadcn UI (frontend)
+- FastAPI + MongoDB (backend)
+- 3rd party: OpenAI GPT-5.2, Resend, Twilio, Stripe, iyzico, PayTR, WhatsApp/Telegram webhooks
+
+## Testing: 72 iterations, all passing
+
+## Upcoming Tasks
+- iPad/Kiosk-optimized UI for on-site registration (P1)
+- Richer configurable city/hotel info in welcome emails (P1)
+- WhatsApp/SMS delivery channel for satisfaction checks (P2)

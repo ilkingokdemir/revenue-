@@ -1,6 +1,9 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## All Modules (19 total)
+## All Modules (19 total + Multi-Language)
+
+### Multi-Language Support (7 languages)
+English, Turkish (Türkçe), Spanish (Español), Russian (Русский), Arabic (العربية + RTL), French (Français), German (Deutsch). Language switcher in sidebar for staff, in header for guest pages. Preference saved in localStorage.
 
 ### Revenue & Analytics
 - **Dashboard**: KPIs (RevPAR, ADR), Timeline, Occupancy gauge, Revenue chart, Housekeeping widget
@@ -20,13 +23,7 @@
 
 ### Operations
 - **Housekeeping**: Room Board, Task Management
-- **Maintenance**: Advanced module with 5 tabs:
-  - Issues: Kanban board + Table view, priority (Critical/High/Medium/Low), SLA tracking (2h/8h/24h/72h), photo attachments, auto-department assignment, comments/activity log, cost tracking
-  - Team: Internal maintenance staff directory with roles (Technician/Supervisor/Electrician/Plumber/Handyman/HVAC), specialities, workload tracking
-  - Vendors: External contractor directory with company info, contact, hourly rate, specialities, performance metrics (resolved count, total cost)
-  - Preventive: Recurring maintenance schedules (daily/weekly/monthly/quarterly/yearly), auto-generates issues
-  - Analytics: Category breakdown, priority breakdown, cost summary, avg resolution time
-  - Issue assignment to internal team or external vendor with grouped dropdown
+- **Maintenance**: Kanban+Table, Priority/SLA, Photos, Auto-assignment, Cost tracking, Comments, Recurring/Preventive, Analytics, Team management, Vendor management
 - **Duty Logbook**: Shift notes, incidents, VIP tracking, shift handovers
 - **Stock / F&B**: Inventory, POS deduction, auto purchase orders
 
@@ -41,4 +38,4 @@
 ### Administration
 - **Admin Panel**: Roles & Permissions (14x6), Module Settings, Auto Purchase Orders
 
-## Testing: 77 iterations, all passing
+## Testing: 78 iterations, all passing

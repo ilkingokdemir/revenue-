@@ -13,8 +13,8 @@
 - **Guest Profiles**: Rich detail, history, spending, preferences, tags, notes, loyalty tiers
 
 ### Guest Experience
-- **Guest Journey**: Pre-arrival registration (4-step form), ID upload, T&C acceptance, welcome pack emails, in-stay satisfaction checks, feedback collection, admin panel with stats/table/send-link dialog
-- **Loyalty Program**: Points, 4 tiers (Standard→Platinum), 8 rewards, earn/redeem, auto-upgrade
+- **Guest Journey**: Pre-arrival registration (4-step form), ID upload, T&C acceptance, welcome pack emails, in-stay satisfaction checks, feedback collection, admin panel with stats/table/send-link dialog, QR code generation (popup modal + drawer + downloadable PNG)
+- **Loyalty Program**: Points, 4 tiers (Standard to Platinum), 8 rewards, earn/redeem, auto-upgrade
 - **Campaigns**: 6 email templates, 8 audience segments, scheduling, template variables
 - **Surveys / NPS**: Customizable surveys, public guest page
 
@@ -32,14 +32,15 @@
 - **Review Hub**: Multi-platform, AI responses, sentiment analysis
 
 ### Administration
-- **Admin Panel**: Roles & Permissions (14×6), Module Settings, Auto Purchase Orders
+- **Admin Panel**: Roles & Permissions (14x6), Module Settings, Auto Purchase Orders
 
 ## Architecture
 - React + Tailwind + Shadcn UI (frontend)
 - FastAPI + MongoDB (backend)
 - 3rd party: OpenAI GPT-5.2, Resend, Twilio, Stripe, iyzico, PayTR, WhatsApp/Telegram webhooks
+- QR code: qrcode.react@4.2.0
 
-## Testing: 72 iterations, all passing
+## Testing: 73 iterations, all passing
 
 ## Upcoming Tasks
 - iPad/Kiosk-optimized UI for on-site registration (P1)

@@ -1,0 +1,401 @@
+"""
+Guest Journey — Pre-arrival registration, ID upload, welcome pack, satisfaction checks
+"""
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from datetime import datetime, timezone, timedelta
+from typing import Dict, Optional
+import uuid
+import secrets
+import os
+import base64
+import asyncio
+import logging
+import resend
+
+logger = logging.getLogger(__name__)
+SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+UPLOAD_DIR = "/app/backend/uploads/ids"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+def create_guest_journey_router(db, require_roles):
+    router = APIRouter()
+
+    # ==================== SEND REGISTRATION LINK ====================
+
+    @router.post("/guest-journey/send-registration/{booking_id}")
+    async def send_registration_link(booking_id: str, request: Request, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Send pre-arrival registration link to guest"""
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+
+        token = secrets.token_urlsafe(32)
+        reg = {
+            "id": str(uuid.uuid4()),
+            "booking_id": booking_id,
+            "booking_ref": booking.get("booking_ref", ""),
+            "property_id": booking.get("property_id", ""),
+            "guest_name": booking.get("guest_name", ""),
+            "guest_email": booking.get("guest_email", ""),
+            "guest_phone": booking.get("guest_phone", ""),
+            "token": token,
+            "status": "pending",  # pending, completed
+            "form_data": {},
+            "id_uploaded": False,
+            "id_file_path": "",
+            "terms_accepted": False,
+            "signature": "",
+            "welcome_sent": False,
+            "satisfaction_check_sent": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": "",
+        }
+        await db.guest_registrations.insert_one(reg)
+        reg.pop("_id", None)
+
+        host_url = str(request.base_url).rstrip("/")
+        base_url = os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+        reg_url = f"{base_url}/register/{token}"
+
+        # Get property info
+        prop = await db.properties.find_one({"id": booking.get("property_id")}, {"_id": 0})
+        ts = await db.template_settings.find_one({"property_id": booking.get("property_id")}, {"_id": 0}) or {}
+        hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+
+        # Send email
+        asyncio.create_task(_send_registration_email(reg, hotel_name, reg_url, booking))
+
+        return {"status": "sent", "token": token, "url": reg_url}
+
+    # ==================== GET REGISTRATION FORM (PUBLIC) ====================
+
+    @router.get("/guest-journey/registration/{token}")
+    async def get_registration(token: str):
+        """Public: Guest views their registration form"""
+        reg = await db.guest_registrations.find_one({"token": token}, {"_id": 0})
+        if not reg:
+            raise HTTPException(404, "Registration link not found")
+
+        booking = await db.bookings.find_one({"id": reg["booking_id"]}, {"_id": 0})
+        prop = await db.properties.find_one({"id": reg.get("property_id")}, {"_id": 0})
+        ts = await db.template_settings.find_one({"property_id": reg.get("property_id")}, {"_id": 0}) or {}
+        hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+
+        # Hotel policies
+        module_settings = await db.module_settings.find_one({"module": "bookings", "property_id": reg.get("property_id")}, {"_id": 0}) or {}
+
+        return {
+            "status": reg.get("status"),
+            "token": token,
+            "hotel_name": hotel_name,
+            "hotel_logo": ts.get("logo_url", ""),
+            "hotel_address": ts.get("address", (prop or {}).get("address", "")),
+            "booking": {
+                "booking_ref": booking.get("booking_ref", "") if booking else "",
+                "guest_name": booking.get("guest_name", "") if booking else "",
+                "guest_email": booking.get("guest_email", "") if booking else "",
+                "check_in": booking.get("check_in", "") if booking else "",
+                "check_out": booking.get("check_out", "") if booking else "",
+                "rooms": booking.get("rooms", 1) if booking else 1,
+            },
+            "form_data": reg.get("form_data", {}),
+            "id_uploaded": reg.get("id_uploaded", False),
+            "terms_accepted": reg.get("terms_accepted", False),
+            "policies": {
+                "check_in_time": module_settings.get("check_in_time", "15:00"),
+                "check_out_time": module_settings.get("check_out_time", "11:00"),
+                "cancellation_hours": module_settings.get("cancellation_hours", 24),
+            },
+        }
+
+    # ==================== SUBMIT REGISTRATION (PUBLIC) ====================
+
+    @router.post("/guest-journey/registration/{token}")
+    async def submit_registration(token: str, data: Dict):
+        """Public: Guest submits their registration form"""
+        reg = await db.guest_registrations.find_one({"token": token}, {"_id": 0})
+        if not reg:
+            raise HTTPException(404, "Registration not found")
+
+        form_data = data.get("form_data", {})
+        terms = data.get("terms_accepted", False)
+        signature = data.get("signature", "")
+
+        updates = {
+            "form_data": form_data,
+            "terms_accepted": terms,
+            "signature": signature,
+            "status": "completed" if terms else "pending",
+            "completed_at": datetime.now(timezone.utc).isoformat() if terms else "",
+        }
+        await db.guest_registrations.update_one({"token": token}, {"$set": updates})
+
+        # Update booking with guest details
+        if form_data:
+            booking_updates = {}
+            if form_data.get("nationality"): booking_updates["nationality"] = form_data["nationality"]
+            if form_data.get("date_of_birth"): booking_updates["date_of_birth"] = form_data["date_of_birth"]
+            if form_data.get("address"): booking_updates["guest_address"] = form_data["address"]
+            if booking_updates:
+                await db.bookings.update_one({"id": reg["booking_id"]}, {"$set": booking_updates})
+
+        # Send welcome pack if completed
+        if terms:
+            prop = await db.properties.find_one({"id": reg.get("property_id")}, {"_id": 0})
+            ts = await db.template_settings.find_one({"property_id": reg.get("property_id")}, {"_id": 0}) or {}
+            hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+            booking = await db.bookings.find_one({"id": reg["booking_id"]}, {"_id": 0}) or {}
+            asyncio.create_task(_send_welcome_pack(reg, hotel_name, booking))
+            await db.guest_registrations.update_one({"token": token}, {"$set": {"welcome_sent": True}})
+
+        return {"status": "submitted", "completed": terms}
+
+    # ==================== UPLOAD ID (PUBLIC) ====================
+
+    @router.post("/guest-journey/upload-id/{token}")
+    async def upload_guest_id(token: str, file: UploadFile = File(...)):
+        """Public: Guest uploads their ID document"""
+        reg = await db.guest_registrations.find_one({"token": token}, {"_id": 0})
+        if not reg:
+            raise HTTPException(404, "Registration not found")
+
+        ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+        filename = f"{reg['id']}_{uuid.uuid4().hex[:8]}.{ext}"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+
+        await db.guest_registrations.update_one(
+            {"token": token},
+            {"$set": {"id_uploaded": True, "id_file_path": filepath, "id_filename": file.filename}}
+        )
+        return {"status": "uploaded", "filename": file.filename}
+
+    # ==================== RECEPTION: UPLOAD ID FOR GUEST ====================
+
+    @router.post("/guest-journey/reception-upload-id/{booking_id}")
+    async def reception_upload_id(booking_id: str, file: UploadFile = File(...), current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Reception: Upload guest ID during check-in"""
+        reg = await db.guest_registrations.find_one({"booking_id": booking_id}, {"_id": 0})
+        if not reg:
+            # Create registration record
+            booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+            if not booking:
+                raise HTTPException(404, "Booking not found")
+            reg = {
+                "id": str(uuid.uuid4()), "booking_id": booking_id,
+                "booking_ref": booking.get("booking_ref", ""), "property_id": booking.get("property_id", ""),
+                "guest_name": booking.get("guest_name", ""), "guest_email": booking.get("guest_email", ""),
+                "token": secrets.token_urlsafe(32), "status": "completed",
+                "form_data": {}, "id_uploaded": False, "terms_accepted": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.guest_registrations.insert_one(reg)
+            reg.pop("_id", None)
+
+        ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+        filename = f"{reg['id']}_{uuid.uuid4().hex[:8]}.{ext}"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+
+        await db.guest_registrations.update_one(
+            {"id": reg["id"]},
+            {"$set": {"id_uploaded": True, "id_file_path": filepath, "id_filename": file.filename, "uploaded_by": current_user.get("email", "")}}
+        )
+        return {"status": "uploaded", "filename": file.filename}
+
+    # ==================== LIST REGISTRATIONS ====================
+
+    @router.get("/guest-journey/registrations/{property_id}")
+    async def list_registrations(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        docs = await db.guest_registrations.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        return docs
+
+    # ==================== SATISFACTION CHECK ====================
+
+    @router.post("/guest-journey/send-satisfaction-check/{property_id}")
+    async def send_satisfaction_checks(property_id: str, request: Request, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Send satisfaction check to guests after first night"""
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        # Find guests who checked in yesterday (first night completed)
+        bookings = await db.bookings.find({
+            "property_id": property_id,
+            "check_in": yesterday,
+            "status": {"$in": ["confirmed", "checked_in"]},
+        }, {"_id": 0}).to_list(100)
+
+        host_url = str(request.base_url).rstrip("/")
+        base_url = os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+        ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+
+        sent = 0
+        for booking in bookings:
+            # Check if already sent
+            reg = await db.guest_registrations.find_one({"booking_id": booking["id"]}, {"_id": 0})
+            if reg and reg.get("satisfaction_check_sent"):
+                continue
+
+            token = secrets.token_urlsafe(16)
+            feedback_url = f"{base_url}/feedback/{token}"
+
+            # Save feedback token
+            await db.satisfaction_checks.insert_one({
+                "id": str(uuid.uuid4()), "token": token,
+                "booking_id": booking["id"], "booking_ref": booking.get("booking_ref", ""),
+                "property_id": property_id, "guest_name": booking.get("guest_name", ""),
+                "guest_email": booking.get("guest_email", ""),
+                "status": "sent", "response": "",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
+            # Mark as sent
+            if reg:
+                await db.guest_registrations.update_one({"id": reg["id"]}, {"$set": {"satisfaction_check_sent": True}})
+
+            asyncio.create_task(_send_satisfaction_email(booking, hotel_name, feedback_url))
+            sent += 1
+
+        return {"sent": sent, "total_eligible": len(bookings)}
+
+    # ==================== GUEST FEEDBACK RESPONSE (PUBLIC) ====================
+
+    @router.get("/guest-journey/feedback/{token}")
+    async def get_feedback_form(token: str):
+        check = await db.satisfaction_checks.find_one({"token": token}, {"_id": 0})
+        if not check:
+            raise HTTPException(404, "Not found")
+        prop = await db.properties.find_one({"id": check.get("property_id")}, {"_id": 0})
+        ts = await db.template_settings.find_one({"property_id": check.get("property_id")}, {"_id": 0}) or {}
+        return {
+            "token": token, "status": check.get("status"),
+            "guest_name": check.get("guest_name"), "booking_ref": check.get("booking_ref"),
+            "hotel_name": ts.get("hotel_name") or (prop or {}).get("name", "Hotel"),
+        }
+
+    @router.post("/guest-journey/feedback/{token}")
+    async def submit_feedback(token: str, data: Dict):
+        check = await db.satisfaction_checks.find_one({"token": token}, {"_id": 0})
+        if not check:
+            raise HTTPException(404, "Not found")
+        response = data.get("response", "")  # "all_good" or "need_help"
+        message = data.get("message", "")
+
+        await db.satisfaction_checks.update_one({"token": token}, {"$set": {
+            "status": "responded", "response": response, "message": message,
+            "responded_at": datetime.now(timezone.utc).isoformat(),
+        }})
+
+        # If guest needs help, create a logbook entry
+        if response == "need_help":
+            await db.logbook_entries.insert_one({
+                "id": str(uuid.uuid4()), "property_id": check.get("property_id"),
+                "type": "request", "title": f"Guest needs help — {check.get('guest_name')}",
+                "content": message or "Guest indicated they need assistance via satisfaction check",
+                "priority": "high", "room_number": "", "guest_name": check.get("guest_name"),
+                "shift": "", "status": "open",
+                "created_by": "System (Satisfaction Check)",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "follow_up_required": True,
+            })
+
+        return {"status": "submitted", "response": response}
+
+    # ==================== EMAIL HELPERS ====================
+
+    async def _send_registration_email(reg, hotel_name, reg_url, booking):
+        if not resend.api_key or resend.api_key == 're_123456789':
+            logger.info("No Resend key, skip registration email")
+            return
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <div style="background:linear-gradient(135deg,#1e3a5f,#2d5f8a);color:#fff;padding:32px;text-align:center;">
+            <h1 style="margin:0;font-size:22px;">{hotel_name}</h1>
+            <p style="margin:8px 0 0;opacity:0.8;">Pre-Arrival Registration</p>
+          </div>
+          <div style="padding:28px;">
+            <p>Dear {reg.get('guest_name', 'Guest')},</p>
+            <p>We're looking forward to welcoming you on <strong>{booking.get('check_in', '')}</strong>!</p>
+            <p>To ensure a smooth check-in, please complete your registration before arrival:</p>
+            <a href="{reg_url}" style="display:block;background:#1e3a5f;color:#fff;text-decoration:none;padding:16px;border-radius:8px;text-align:center;font-size:16px;font-weight:600;margin:24px 0;">
+              Complete Registration
+            </a>
+            <p style="font-size:13px;color:#666;">This includes your personal details, ID upload, and hotel terms acceptance.</p>
+          </div>
+        </div>"""
+        try:
+            await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [reg.get("guest_email", "")], "subject": f"Complete Your Registration — {hotel_name}", "html": html})
+        except Exception as e:
+            logger.error(f"Registration email error: {e}")
+
+    async def _send_welcome_pack(reg, hotel_name, booking):
+        if not resend.api_key or resend.api_key == 're_123456789':
+            return
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <div style="background:linear-gradient(135deg,#2C4C3B,#4a7c5c);color:#fff;padding:32px;text-align:center;">
+            <h1 style="margin:0;font-size:22px;">Welcome to {hotel_name}!</h1>
+          </div>
+          <div style="padding:28px;">
+            <p>Dear {reg.get('guest_name', 'Guest')},</p>
+            <p>Thank you for completing your registration. Here's everything you need for your stay:</p>
+            <div style="background:#f8fafc;border-radius:12px;padding:20px;margin:16px 0;">
+              <h3 style="margin:0 0 12px;color:#1e3a5f;">Hotel Policies</h3>
+              <ul style="margin:0;padding:0 0 0 16px;color:#555;font-size:14px;">
+                <li>Check-in: from 3:00 PM</li>
+                <li>Check-out: by 11:00 AM</li>
+                <li>WiFi: Available in all areas (password at reception)</li>
+                <li>Breakfast: 7:00 AM - 10:30 AM</li>
+                <li>Parking: Available on request</li>
+              </ul>
+            </div>
+            <div style="background:#fffbeb;border-radius:12px;padding:20px;margin:16px 0;">
+              <h3 style="margin:0 0 12px;color:#92400e;">Explore the Area</h3>
+              <ul style="margin:0;padding:0 0 0 16px;color:#555;font-size:14px;">
+                <li>Nearest tube/metro: 5 min walk</li>
+                <li>Airport shuttle available on request</li>
+                <li>Ask reception for restaurant recommendations</li>
+                <li>City tour bookings at front desk</li>
+              </ul>
+            </div>
+            <p style="color:#666;font-size:13px;">We look forward to seeing you on {booking.get('check_in', '')}!</p>
+          </div>
+        </div>"""
+        try:
+            await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [reg.get("guest_email", "")], "subject": f"Welcome Pack — {hotel_name}", "html": html})
+        except Exception as e:
+            logger.error(f"Welcome pack email error: {e}")
+
+    async def _send_satisfaction_email(booking, hotel_name, feedback_url):
+        if not resend.api_key or resend.api_key == 're_123456789':
+            return
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+          <div style="background:#2C4C3B;color:#fff;padding:28px;text-align:center;">
+            <h1 style="margin:0;font-size:20px;">{hotel_name}</h1>
+            <p style="margin:6px 0 0;opacity:0.8;">How's your stay?</p>
+          </div>
+          <div style="padding:28px;text-align:center;">
+            <p style="font-size:16px;color:#333;">Hi {booking.get('guest_name', 'Guest')},</p>
+            <p style="color:#666;">We hope you're enjoying your stay. Is there anything we can help with?</p>
+            <div style="margin:24px 0;">
+              <a href="{feedback_url}?r=all_good" style="display:inline-block;background:#22c55e;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600;margin:4px;">Everything's Great!</a>
+              <a href="{feedback_url}?r=need_help" style="display:inline-block;background:#f59e0b;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600;margin:4px;">I Need Help</a>
+            </div>
+          </div>
+        </div>"""
+        try:
+            await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [booking.get("guest_email", "")], "subject": f"How's your stay? — {hotel_name}", "html": html})
+        except Exception as e:
+            logger.error(f"Satisfaction email error: {e}")
+
+    return router

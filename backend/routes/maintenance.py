@@ -79,7 +79,9 @@ def create_maintenance_router(db, require_roles):
             "assigned_to": data.get("assigned_to", ""),
             "assigned_department": dept,
             "reported_by": current_user.get("name", current_user.get("email", "Staff")),
-            "photos": data.get("photos", []),
+            "reported_by_email": current_user.get("email", ""),
+            "photos_before": data.get("photos_before", []),
+            "photos_after": [],
             "estimated_cost": 0,
             "actual_cost": 0,
             "cost_notes": "",
@@ -88,11 +90,18 @@ def create_maintenance_router(db, require_roles):
             "sla_deadline": sla_deadline,
             "sla_breached": False,
             "acknowledged_at": "",
+            "acknowledged_by": "",
             "started_at": "",
+            "started_by": "",
             "resolved_at": "",
+            "resolved_by": "",
             "closed_at": "",
+            "closed_by": "",
             "resolution_notes": "",
             "comments": [],
+            "timeline": [
+                {"action": "created", "by": current_user.get("name", current_user.get("email", "Staff")), "at": now, "detail": f"Issue reported: {data.get('title', '')}"}
+            ],
             "recurring_id": "",
             "created_at": now,
             "updated_at": now,
@@ -115,18 +124,43 @@ def create_maintenance_router(db, require_roles):
         updates.pop("id", None)
         now = datetime.now(timezone.utc).isoformat()
         updates["updated_at"] = now
+        user_name = current_user.get("name", current_user.get("email", "Staff"))
 
-        # Track status transitions
+        # Build timeline entry for status changes
         new_status = updates.get("status")
+        timeline_entry = None
         if new_status:
             if new_status == "acknowledged":
                 updates["acknowledged_at"] = now
+                updates["acknowledged_by"] = user_name
+                timeline_entry = {"action": "acknowledged", "by": user_name, "at": now, "detail": "Issue acknowledged"}
             elif new_status == "in_progress":
                 updates["started_at"] = now
+                updates["started_by"] = user_name
+                timeline_entry = {"action": "started", "by": user_name, "at": now, "detail": "Work started"}
             elif new_status == "resolved":
                 updates["resolved_at"] = now
+                updates["resolved_by"] = user_name
+                timeline_entry = {"action": "resolved", "by": user_name, "at": now, "detail": updates.get("resolution_notes", "Issue resolved")}
             elif new_status == "closed":
                 updates["closed_at"] = now
+                updates["closed_by"] = user_name
+                timeline_entry = {"action": "closed", "by": user_name, "at": now, "detail": "Issue closed"}
+
+        # Track assignment changes
+        new_assigned = updates.get("assigned_to")
+        if new_assigned is not None:
+            issue_before = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
+            old_assigned = (issue_before or {}).get("assigned_to", "")
+            if new_assigned != old_assigned:
+                timeline_entry = {"action": "assigned", "by": user_name, "at": now, "detail": f"Assigned to {new_assigned}" if new_assigned else "Unassigned"}
+
+        # Append timeline
+        if timeline_entry:
+            issue_doc = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
+            timeline = (issue_doc or {}).get("timeline", [])
+            timeline.append(timeline_entry)
+            updates["timeline"] = timeline
 
         await db.maintenance_issues.update_one({"id": issue_id}, {"$set": updates})
         doc = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
@@ -140,7 +174,7 @@ def create_maintenance_router(db, require_roles):
     # ==================== PHOTO UPLOAD ====================
 
     @router.post("/maintenance/upload-photo/{issue_id}")
-    async def upload_photo(issue_id: str, file: UploadFile = File(...),
+    async def upload_photo(issue_id: str, file: UploadFile = File(...), photo_type: str = Form("before"),
                            current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
         issue = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
         if not issue:
@@ -154,10 +188,19 @@ def create_maintenance_router(db, require_roles):
             f.write(content)
 
         photo_url = f"/api/uploads/maintenance/{filename}"
-        photos = issue.get("photos", [])
-        photos.append({"url": photo_url, "filename": file.filename, "uploaded_by": current_user.get("name", "Staff"), "uploaded_at": datetime.now(timezone.utc).isoformat()})
-        await db.maintenance_issues.update_one({"id": issue_id}, {"$set": {"photos": photos}})
-        return {"status": "uploaded", "url": photo_url}
+        photo_entry = {"url": photo_url, "filename": file.filename, "uploaded_by": current_user.get("name", "Staff"), "uploaded_at": datetime.now(timezone.utc).isoformat(), "type": photo_type}
+
+        # Add to before or after list
+        field = "photos_before" if photo_type == "before" else "photos_after"
+        photos = issue.get(field, [])
+        photos.append(photo_entry)
+
+        # Also add timeline entry
+        timeline = issue.get("timeline", [])
+        timeline.append({"action": "photo_uploaded", "by": current_user.get("name", "Staff"), "at": datetime.now(timezone.utc).isoformat(), "detail": f"{photo_type.capitalize()} photo uploaded: {file.filename}"})
+
+        await db.maintenance_issues.update_one({"id": issue_id}, {"$set": {field: photos, "timeline": timeline}})
+        return {"status": "uploaded", "url": photo_url, "type": photo_type}
 
     # ==================== COMMENTS ====================
 
@@ -176,7 +219,9 @@ def create_maintenance_router(db, require_roles):
         }
         comments = issue.get("comments", [])
         comments.append(comment)
-        await db.maintenance_issues.update_one({"id": issue_id}, {"$set": {"comments": comments, "updated_at": datetime.now(timezone.utc).isoformat()}})
+        timeline = issue.get("timeline", [])
+        timeline.append({"action": "comment", "by": comment["author"], "at": comment["created_at"], "detail": data.get("text", "")[:100]})
+        await db.maintenance_issues.update_one({"id": issue_id}, {"$set": {"comments": comments, "timeline": timeline, "updated_at": datetime.now(timezone.utc).isoformat()}})
         return comment
 
     # ==================== COST TRACKING ====================

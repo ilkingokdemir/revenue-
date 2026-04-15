@@ -297,6 +297,7 @@ function IssueCard({ issue, onClick, onStatusChange }) {
           <span>{CATEGORY_CONFIG[issue.category]?.icon || "🔨"}</span>
           <span>{issue.location || issue.room_number || "—"}</span>
           {issue.photos?.length > 0 && <span className="flex items-center gap-0.5"><Camera size={10} /> {issue.photos.length}</span>}
+          {((issue.photos_before?.length || 0) + (issue.photos_after?.length || 0)) > 0 && <span className="flex items-center gap-0.5"><Camera size={10} /> {(issue.photos_before?.length || 0) + (issue.photos_after?.length || 0)}</span>}
           {issue.comments?.length > 0 && <span className="flex items-center gap-0.5"><ChatText size={10} /> {issue.comments.length}</span>}
         </div>
         {nextStatus && (
@@ -330,10 +331,11 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], onCreate
     setCreating(true);
     try {
       const { data } = await axios.post(`${API}/maintenance/issues`, { ...form, property_id: propertyId });
-      // Upload photos
+      // Upload before photos
       for (const p of photos) {
         const fd = new FormData();
         fd.append("file", p.file);
+        fd.append("photo_type", "before");
         await axios.post(`${API}/maintenance/upload-photo/${data.id}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
       }
       toast.success("Issue reported!"); setForm({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "", assigned_to: "" }); setPhotos([]); onCreated();
@@ -381,9 +383,9 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], onCreate
           </Select>
           <Textarea data-testid="issue-description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Describe the issue in detail..." rows={3} />
 
-          {/* Photo Upload */}
+          {/* Before Photos */}
           <div>
-            <label className="text-xs font-medium text-stone-600 mb-1.5 block">Photos</label>
+            <label className="text-xs font-medium text-stone-600 mb-1.5 block">Before Photos (current condition)</label>
             <div className="flex gap-2 flex-wrap">
               {photos.map((p, i) => (
                 <div key={i} className="w-16 h-16 rounded-lg border border-stone-200 overflow-hidden relative group">
@@ -413,7 +415,9 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], onUpdate }) {
   const [sending, setSending] = useState(false);
   const [costForm, setCostForm] = useState({ estimated_cost: 0, actual_cost: 0, cost_notes: "" });
   const [showCost, setShowCost] = useState(false);
-  const fileRef = useRef(null);
+  const beforeRef = useRef(null);
+  const afterRef = useRef(null);
+  const [detailTab, setDetailTab] = useState("info"); // info, timeline, photos
 
   useEffect(() => {
     if (issue) setCostForm({ estimated_cost: issue.estimated_cost || 0, actual_cost: issue.actual_cost || 0, cost_notes: issue.cost_notes || "" });
@@ -431,14 +435,15 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], onUpdate }) {
     setSending(false);
   };
 
-  const uploadPhoto = async (e) => {
+  const uploadPhoto = async (e, type) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("photo_type", type);
     try {
       await axios.post(`${API}/maintenance/upload-photo/${issue.id}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
-      toast.success("Photo uploaded"); onUpdate();
+      toast.success(`${type === "before" ? "Before" : "After"} photo uploaded`); onUpdate();
     } catch { toast.error("Upload failed"); }
     e.target.value = "";
   };
@@ -450,15 +455,33 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], onUpdate }) {
     } catch { toast.error("Failed"); }
   };
 
-  const updateStatus = async (s) => {
+  const updateStatus = async (s, notes) => {
     try {
-      await axios.put(`${API}/maintenance/issues/${issue.id}`, { status: s });
+      const body = { status: s };
+      if (notes) body.resolution_notes = notes;
+      await axios.put(`${API}/maintenance/issues/${issue.id}`, body);
       toast.success(`Status: ${s}`); onUpdate();
     } catch { toast.error("Failed"); }
   };
 
   const pri = PRIORITY_CONFIG[issue.priority] || PRIORITY_CONFIG.medium;
   const sta = STATUS_CONFIG[issue.status] || {};
+
+  // Calculate timing
+  const created = issue.created_at ? new Date(issue.created_at) : null;
+  const resolved = issue.resolved_at ? new Date(issue.resolved_at) : null;
+  const totalTime = created && resolved ? Math.round((resolved - created) / 3600000) : null;
+
+  const TIMELINE_ICONS = {
+    created: { icon: <Plus size={10} weight="bold" />, color: "bg-blue-500" },
+    acknowledged: { icon: <Eye size={10} />, color: "bg-indigo-500" },
+    started: { icon: <Wrench size={10} />, color: "bg-amber-500" },
+    assigned: { icon: <ArrowsClockwise size={10} />, color: "bg-violet-500" },
+    resolved: { icon: <CheckCircle size={10} weight="fill" />, color: "bg-emerald-500" },
+    closed: { icon: <X size={10} />, color: "bg-stone-500" },
+    comment: { icon: <ChatText size={10} />, color: "bg-stone-400" },
+    photo_uploaded: { icon: <Camera size={10} />, color: "bg-orange-500" },
+  };
 
   return (
     <AnimatePresence>
@@ -475,6 +498,7 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], onUpdate }) {
                 <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${pri.color}`}>{pri.label}</span>
                 <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${sta.color}`}>{sta.label}</span>
                 {issue.sla_breached && <span className="text-xs font-bold text-red-600 bg-red-50 px-2.5 py-1 rounded-full">SLA BREACHED</span>}
+                {totalTime !== null && <span className="text-xs text-stone-500 bg-stone-50 px-2.5 py-1 rounded-full">Total: {totalTime}h</span>}
               </div>
 
               {/* Quick Status Actions */}
@@ -486,95 +510,197 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], onUpdate }) {
                 ))}
               </div>
 
-              {/* Info */}
-              <div className="bg-stone-50 rounded-xl p-3 space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-stone-500">Category</span><span className="font-medium">{CATEGORY_CONFIG[issue.category]?.icon} {CATEGORY_CONFIG[issue.category]?.label}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">Location</span><span className="font-medium">{issue.location || issue.room_number || "—"}</span></div>
-                <div className="flex justify-between items-center"><span className="text-stone-500">Assigned</span>
-                  <Select value={issue.assigned_to || "_unassigned"} onValueChange={async (v) => {
-                    try { await axios.put(`${API}/maintenance/issues/${issue.id}`, { assigned_to: v === "_unassigned" ? "" : v }); toast.success("Reassigned"); onUpdate(); } catch {}
-                  }}>
-                    <SelectTrigger className="h-7 w-40 text-xs border-stone-200" data-testid="reassign-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="_unassigned">Unassigned</SelectItem>
-                      {assignees.filter(a => a.type === "internal").map(a => <SelectItem key={a.name} value={a.name}>{a.name}</SelectItem>)}
-                      {assignees.filter(a => a.type === "external").map(a => <SelectItem key={a.name} value={a.name}>{a.name} (vendor)</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex justify-between"><span className="text-stone-500">Reported by</span><span className="font-medium">{issue.reported_by || "—"}</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">SLA Target</span><span className="font-medium">{issue.sla_hours}h</span></div>
-                <div className="flex justify-between"><span className="text-stone-500">Created</span><span className="font-medium text-xs">{issue.created_at ? new Date(issue.created_at).toLocaleString() : "—"}</span></div>
-                {issue.resolved_at && <div className="flex justify-between"><span className="text-stone-500">Resolved</span><span className="font-medium text-xs">{new Date(issue.resolved_at).toLocaleString()}</span></div>}
+              {/* Detail Tabs */}
+              <div className="flex gap-1 bg-stone-100 p-0.5 rounded-lg">
+                {[
+                  { id: "info", label: "Info" },
+                  { id: "timeline", label: `Timeline (${(issue.timeline || []).length})` },
+                  { id: "photos", label: `Photos (${(issue.photos_before || []).length + (issue.photos_after || []).length})` },
+                ].map(t => (
+                  <button key={t.id} onClick={() => setDetailTab(t.id)} className={`flex-1 px-2 py-1.5 text-[10px] font-medium rounded-md transition ${detailTab === t.id ? "bg-white shadow-sm text-stone-800" : "text-stone-500"}`} data-testid={`detail-tab-${t.id}`}>
+                    {t.label}
+                  </button>
+                ))}
               </div>
 
-              {/* Description */}
-              {issue.description && (
-                <div><h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Description</h4><p className="text-sm text-stone-700 bg-stone-50 rounded-xl p-3">{issue.description}</p></div>
+              {/* INFO TAB */}
+              {detailTab === "info" && (
+                <div className="space-y-4">
+                  {/* Who & When */}
+                  <div className="bg-orange-50 rounded-xl p-3 space-y-2 text-sm border border-orange-100">
+                    <div className="flex justify-between"><span className="text-orange-700/70">Reported by</span><span className="font-semibold text-orange-900">{issue.reported_by || "—"}</span></div>
+                    <div className="flex justify-between"><span className="text-orange-700/70">Reported at</span><span className="font-medium text-orange-800 text-xs">{issue.created_at ? new Date(issue.created_at).toLocaleString() : "—"}</span></div>
+                    {issue.acknowledged_by && <div className="flex justify-between"><span className="text-orange-700/70">Acknowledged by</span><span className="font-medium text-orange-800">{issue.acknowledged_by} <span className="text-[10px] text-orange-600">({issue.acknowledged_at ? new Date(issue.acknowledged_at).toLocaleString() : ""})</span></span></div>}
+                    {issue.started_by && <div className="flex justify-between"><span className="text-orange-700/70">Started by</span><span className="font-medium text-orange-800">{issue.started_by} <span className="text-[10px] text-orange-600">({issue.started_at ? new Date(issue.started_at).toLocaleString() : ""})</span></span></div>}
+                    {issue.resolved_by && <div className="flex justify-between"><span className="text-orange-700/70">Resolved by</span><span className="font-semibold text-emerald-700">{issue.resolved_by} <span className="text-[10px] text-emerald-600">({issue.resolved_at ? new Date(issue.resolved_at).toLocaleString() : ""})</span></span></div>}
+                    {issue.closed_by && <div className="flex justify-between"><span className="text-orange-700/70">Closed by</span><span className="font-medium text-stone-700">{issue.closed_by}</span></div>}
+                    {totalTime !== null && <div className="flex justify-between border-t border-orange-200 pt-1.5"><span className="text-orange-700/70">Resolution time</span><span className="font-bold text-orange-900">{totalTime < 1 ? "<1 hour" : `${totalTime} hours`}</span></div>}
+                  </div>
+
+                  {/* Details */}
+                  <div className="bg-stone-50 rounded-xl p-3 space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-stone-500">Category</span><span className="font-medium">{CATEGORY_CONFIG[issue.category]?.icon} {CATEGORY_CONFIG[issue.category]?.label}</span></div>
+                    <div className="flex justify-between"><span className="text-stone-500">Location</span><span className="font-medium">{issue.location || issue.room_number || "—"}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-stone-500">Assigned</span>
+                      <Select value={issue.assigned_to || "_unassigned"} onValueChange={async (v) => {
+                        try { await axios.put(`${API}/maintenance/issues/${issue.id}`, { assigned_to: v === "_unassigned" ? "" : v }); toast.success("Reassigned"); onUpdate(); } catch {}
+                      }}>
+                        <SelectTrigger className="h-7 w-40 text-xs border-stone-200" data-testid="reassign-select"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_unassigned">Unassigned</SelectItem>
+                          {assignees.filter(a => a.type === "internal").map(a => <SelectItem key={a.name} value={a.name}>{a.name}</SelectItem>)}
+                          {assignees.filter(a => a.type === "external").map(a => <SelectItem key={a.name} value={a.name}>{a.name} (vendor)</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex justify-between"><span className="text-stone-500">Department</span><span className="font-medium capitalize">{issue.assigned_department || "—"}</span></div>
+                    <div className="flex justify-between"><span className="text-stone-500">SLA Target</span><span className="font-medium">{issue.sla_hours}h</span></div>
+                  </div>
+
+                  {issue.description && (
+                    <div><h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-1">Description</h4><p className="text-sm text-stone-700 bg-stone-50 rounded-xl p-3">{issue.description}</p></div>
+                  )}
+
+                  {/* Cost */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Cost Tracking</h4>
+                      <button onClick={() => setShowCost(!showCost)} className="text-[10px] text-orange-600 font-medium hover:underline">{showCost ? "Cancel" : "Edit Costs"}</button>
+                    </div>
+                    {showCost ? (
+                      <div className="bg-stone-50 rounded-xl p-3 space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div><label className="text-[10px] text-stone-500">Estimated</label><Input type="number" value={costForm.estimated_cost} onChange={e => setCostForm(p => ({ ...p, estimated_cost: Number(e.target.value) }))} className="h-8 text-sm" /></div>
+                          <div><label className="text-[10px] text-stone-500">Actual</label><Input type="number" value={costForm.actual_cost} onChange={e => setCostForm(p => ({ ...p, actual_cost: Number(e.target.value) }))} className="h-8 text-sm" /></div>
+                        </div>
+                        <Input value={costForm.cost_notes} onChange={e => setCostForm(p => ({ ...p, cost_notes: e.target.value }))} placeholder="Cost notes..." className="h-8 text-sm" />
+                        <button onClick={saveCost} className="text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg font-medium">Save</button>
+                      </div>
+                    ) : (
+                      <div className="bg-stone-50 rounded-xl p-3 flex gap-4 text-sm">
+                        <div><span className="text-stone-500">Est:</span> <span className="font-medium">£{issue.estimated_cost || 0}</span></div>
+                        <div><span className="text-stone-500">Actual:</span> <span className="font-medium">£{issue.actual_cost || 0}</span></div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Comments */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Comments ({(issue.comments || []).length})</h4>
+                    <div className="space-y-2 mb-3 max-h-32 overflow-y-auto">
+                      {(issue.comments || []).map(c => (
+                        <div key={c.id} className="bg-stone-50 rounded-lg p-2.5">
+                          <div className="flex justify-between items-center mb-0.5">
+                            <span className="text-xs font-semibold text-stone-700">{c.author}</span>
+                            <span className="text-[10px] text-stone-400">{c.created_at ? new Date(c.created_at).toLocaleString() : ""}</span>
+                          </div>
+                          <p className="text-xs text-stone-600">{c.text}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input data-testid="comment-input" value={comment} onChange={(e) => setComment(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addComment()} placeholder="Add a comment..." className="h-8 text-xs flex-1" />
+                      <button onClick={addComment} disabled={sending} className="px-3 py-1.5 bg-[#1e3a5f] text-white text-xs font-medium rounded-lg hover:bg-[#15304f] disabled:opacity-50" data-testid="btn-add-comment">
+                        <Send size={12} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
 
-              {/* Photos */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Photos ({issue.photos?.length || 0})</h4>
-                  <button onClick={() => fileRef.current?.click()} className="text-[10px] text-orange-600 font-medium hover:underline" data-testid="btn-drawer-upload-photo">+ Add Photo</button>
-                  <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={uploadPhoto} className="hidden" />
-                </div>
-                {issue.photos?.length > 0 ? (
-                  <div className="flex gap-2 flex-wrap">
-                    {issue.photos.map((p, i) => (
-                      <img key={i} src={`${process.env.REACT_APP_BACKEND_URL}${p.url}`} alt="" className="w-20 h-20 rounded-lg object-cover border border-stone-200" />
-                    ))}
-                  </div>
-                ) : <p className="text-xs text-stone-400">No photos attached</p>}
-              </div>
-
-              {/* Cost Tracking */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Cost Tracking</h4>
-                  <button onClick={() => setShowCost(!showCost)} className="text-[10px] text-orange-600 font-medium hover:underline">{showCost ? "Cancel" : "Edit Costs"}</button>
-                </div>
-                {showCost ? (
-                  <div className="bg-stone-50 rounded-xl p-3 space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div><label className="text-[10px] text-stone-500">Estimated (£)</label><Input type="number" value={costForm.estimated_cost} onChange={e => setCostForm(p => ({ ...p, estimated_cost: Number(e.target.value) }))} className="h-8 text-sm" /></div>
-                      <div><label className="text-[10px] text-stone-500">Actual (£)</label><Input type="number" value={costForm.actual_cost} onChange={e => setCostForm(p => ({ ...p, actual_cost: Number(e.target.value) }))} className="h-8 text-sm" /></div>
+              {/* TIMELINE TAB */}
+              {detailTab === "timeline" && (
+                <div className="space-y-1" data-testid="issue-timeline">
+                  <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Full Activity Timeline</h4>
+                  {(issue.timeline || []).length === 0 ? (
+                    <p className="text-xs text-stone-400 text-center py-6">No activity yet</p>
+                  ) : (
+                    <div className="relative pl-5">
+                      <div className="absolute left-[7px] top-2 bottom-2 w-px bg-stone-200" />
+                      {(issue.timeline || []).map((entry, i) => {
+                        const icon = TIMELINE_ICONS[entry.action] || { icon: <Clock size={10} />, color: "bg-stone-400" };
+                        return (
+                          <div key={i} className="relative pb-4" data-testid={`timeline-entry-${i}`}>
+                            <div className={`absolute left-[-13px] top-0.5 w-4 h-4 rounded-full ${icon.color} flex items-center justify-center text-white`}>
+                              {icon.icon}
+                            </div>
+                            <div className="ml-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-stone-800">{entry.by}</span>
+                                <span className="text-[10px] text-stone-400">{entry.at ? new Date(entry.at).toLocaleString() : ""}</span>
+                              </div>
+                              <p className="text-xs text-stone-600 mt-0.5">{entry.detail}</p>
+                              <span className="text-[9px] text-stone-400 capitalize">{entry.action.replace("_", " ")}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <Input value={costForm.cost_notes} onChange={e => setCostForm(p => ({ ...p, cost_notes: e.target.value }))} placeholder="Cost notes (parts, labour...)" className="h-8 text-sm" />
-                    <button onClick={saveCost} className="text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg font-medium">Save Costs</button>
-                  </div>
-                ) : (
-                  <div className="bg-stone-50 rounded-xl p-3 flex gap-4 text-sm">
-                    <div><span className="text-stone-500">Est:</span> <span className="font-medium">£{issue.estimated_cost || 0}</span></div>
-                    <div><span className="text-stone-500">Actual:</span> <span className="font-medium">£{issue.actual_cost || 0}</span></div>
-                    {issue.cost_notes && <div className="text-xs text-stone-500">{issue.cost_notes}</div>}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
-              {/* Comments / Activity Log */}
-              <div>
-                <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-2">Activity ({issue.comments?.length || 0})</h4>
-                <div className="space-y-2 mb-3 max-h-40 overflow-y-auto">
-                  {(issue.comments || []).map(c => (
-                    <div key={c.id} className="bg-stone-50 rounded-lg p-2.5">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-xs font-semibold text-stone-700">{c.author}</span>
-                        <span className="text-[10px] text-stone-400">{c.created_at ? new Date(c.created_at).toLocaleString() : ""}</span>
+              {/* PHOTOS TAB - Before & After */}
+              {detailTab === "photos" && (
+                <div className="space-y-5" data-testid="issue-photos">
+                  {/* Before Photos */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xs font-semibold text-red-600 uppercase tracking-wide flex items-center gap-1">
+                        <Camera size={12} /> Before ({(issue.photos_before || []).length})
+                      </h4>
+                      <button onClick={() => beforeRef.current?.click()} className="text-[10px] text-orange-600 font-medium hover:underline" data-testid="btn-add-before-photo">+ Add Before Photo</button>
+                      <input ref={beforeRef} type="file" accept="image/*" capture="environment" onChange={(e) => uploadPhoto(e, "before")} className="hidden" />
+                    </div>
+                    {(issue.photos_before || []).length > 0 ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {(issue.photos_before || []).map((p, i) => (
+                          <div key={i} className="rounded-lg overflow-hidden border-2 border-red-200 relative group">
+                            <img src={`${process.env.REACT_APP_BACKEND_URL}${p.url}`} alt="" className="w-full h-24 object-cover" />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
+                              <p className="text-[8px] text-white truncate">{p.uploaded_by}</p>
+                              <p className="text-[7px] text-white/60">{p.uploaded_at ? new Date(p.uploaded_at).toLocaleDateString() : ""}</p>
+                            </div>
+                            <div className="absolute top-1 left-1 bg-red-600 text-white text-[7px] font-bold px-1 rounded">BEFORE</div>
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-xs text-stone-600">{c.text}</p>
+                    ) : <p className="text-xs text-stone-400 bg-stone-50 rounded-lg p-4 text-center">No before photos</p>}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px bg-stone-200" />
+                    <span className="text-[10px] font-bold text-stone-400">VS</span>
+                    <div className="flex-1 h-px bg-stone-200" />
+                  </div>
+
+                  {/* After Photos */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xs font-semibold text-emerald-600 uppercase tracking-wide flex items-center gap-1">
+                        <CheckCircle size={12} weight="fill" /> After ({(issue.photos_after || []).length})
+                      </h4>
+                      <button onClick={() => afterRef.current?.click()} className="text-[10px] text-emerald-600 font-medium hover:underline" data-testid="btn-add-after-photo">+ Add After Photo</button>
+                      <input ref={afterRef} type="file" accept="image/*" capture="environment" onChange={(e) => uploadPhoto(e, "after")} className="hidden" />
                     </div>
-                  ))}
-                  {(!issue.comments || issue.comments.length === 0) && <p className="text-xs text-stone-400">No comments yet</p>}
+                    {(issue.photos_after || []).length > 0 ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {(issue.photos_after || []).map((p, i) => (
+                          <div key={i} className="rounded-lg overflow-hidden border-2 border-emerald-200 relative group">
+                            <img src={`${process.env.REACT_APP_BACKEND_URL}${p.url}`} alt="" className="w-full h-24 object-cover" />
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
+                              <p className="text-[8px] text-white truncate">{p.uploaded_by}</p>
+                              <p className="text-[7px] text-white/60">{p.uploaded_at ? new Date(p.uploaded_at).toLocaleDateString() : ""}</p>
+                            </div>
+                            <div className="absolute top-1 left-1 bg-emerald-600 text-white text-[7px] font-bold px-1 rounded">AFTER</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="text-xs text-stone-400 bg-stone-50 rounded-lg p-4 text-center">No after photos yet — upload when job is complete</p>}
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Input data-testid="comment-input" value={comment} onChange={(e) => setComment(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addComment()} placeholder="Add a comment..." className="h-8 text-xs flex-1" />
-                  <button onClick={addComment} disabled={sending} className="px-3 py-1.5 bg-[#1e3a5f] text-white text-xs font-medium rounded-lg hover:bg-[#15304f] disabled:opacity-50" data-testid="btn-add-comment">
-                    <Send size={12} />
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
           </ScrollArea>
         </motion.div>

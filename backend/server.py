@@ -31,6 +31,7 @@ from routes.staff_performance import create_staff_performance_router
 from routes.calendar_gss import create_calendar_gss_router
 from routes.housekeeping import create_housekeeping_router
 from routes.admin import create_admin_router
+from routes.night_audit import create_night_audit_router
 from routes.guest_profiles import create_guest_profiles_router
 from routes.campaigns import create_campaigns_router
 from routes.guest_app import create_guest_app_router
@@ -328,6 +329,9 @@ api_router.include_router(guest_payment_router)
 
 admin_router = create_admin_router(db, require_roles)
 api_router.include_router(admin_router)
+
+night_audit_router = create_night_audit_router(db, require_roles)
+api_router.include_router(night_audit_router)
 
 app.include_router(api_router)
 

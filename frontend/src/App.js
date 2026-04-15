@@ -33,6 +33,7 @@ import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePa
 import { GuestProfilesPanel } from "./components/dashboard/GuestProfilesPanel";
 import { AdminPanel } from "./components/dashboard/AdminPanel";
 import { HousekeepingPanel } from "./components/dashboard/HousekeepingPanel";
+import { NightAuditPanel } from "./components/dashboard/NightAuditPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -118,6 +119,7 @@ import {
   Wallet,
   Receipt,
   Broom,
+  Moon,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2500,6 +2502,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Operations",
       items: [
         { id: "housekeeping", icon: Broom, name: "Housekeeping", testId: "housekeeping-btn" },
+        { id: "night-audit", icon: Moon, name: "Night Audit", testId: "night-audit-btn" },
         { id: "stock-management", icon: Package, name: "Stock / F&B", testId: "stock-management-btn" },
         { id: "accounting", icon: Wallet, name: "Accounting", testId: "accounting-btn" },
         { id: "pos", icon: Receipt, name: "Point of Sale", testId: "pos-btn" },
@@ -2887,6 +2890,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Housekeeping */}
         {activeView === "housekeeping" && (
           <HousekeepingPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Night Audit */}
+        {activeView === "night-audit" && (
+          <NightAuditPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Accounting */}

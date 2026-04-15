@@ -68,6 +68,80 @@ def create_guest_journey_router(db, require_roles):
 
         return {"status": "sent", "token": token, "url": reg_url}
 
+    # ==================== SHARE REGISTRATION LINK ====================
+
+    @router.post("/guest-journey/share-link/{registration_id}")
+    async def share_registration_link(registration_id: str, data: Dict, request: Request, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Share registration link via email, SMS, or WhatsApp"""
+        reg = await db.guest_registrations.find_one({"id": registration_id}, {"_id": 0})
+        if not reg:
+            raise HTTPException(404, "Registration not found")
+
+        channel = data.get("channel", "email")  # email, sms, whatsapp
+        phone = data.get("phone", reg.get("guest_phone", ""))
+        email_addr = data.get("email", reg.get("guest_email", ""))
+
+        host_url = str(request.base_url).rstrip("/")
+        base_url = os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+        reg_url = f"{base_url}/register/{reg['token']}"
+
+        prop = await db.properties.find_one({"id": reg.get("property_id")}, {"_id": 0})
+        ts = await db.template_settings.find_one({"property_id": reg.get("property_id")}, {"_id": 0}) or {}
+        hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+        booking = await db.bookings.find_one({"id": reg.get("booking_id")}, {"_id": 0}) or {}
+
+        if channel == "email":
+            asyncio.create_task(_send_registration_email(reg, hotel_name, reg_url, booking))
+            return {"status": "sent", "channel": "email"}
+
+        message = f"{hotel_name} — Complete your pre-arrival registration here: {reg_url}"
+
+        if channel == "sms":
+            settings = await db.channel_settings.find_one({"property_id": reg.get("property_id")}, {"_id": 0}) or {}
+            account_sid = settings.get("twilio_account_sid", "")
+            auth_token = settings.get("twilio_auth_token", "")
+            from_number = settings.get("twilio_phone_number", "")
+            if not all([account_sid, auth_token, from_number, phone]):
+                return {"status": "skipped", "channel": "sms", "reason": "SMS not configured or no phone number"}
+            try:
+                import httpx
+                async with httpx.AsyncClient() as client_http:
+                    resp = await client_http.post(
+                        f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json",
+                        auth=(account_sid, auth_token),
+                        data={"From": from_number, "To": phone, "Body": message},
+                    )
+                    if resp.status_code in (200, 201):
+                        return {"status": "sent", "channel": "sms"}
+                    return {"status": "failed", "channel": "sms", "reason": resp.text}
+            except Exception as e:
+                logger.error(f"SMS send error: {e}")
+                return {"status": "failed", "channel": "sms", "reason": str(e)}
+
+        if channel == "whatsapp":
+            settings = await db.channel_settings.find_one({"property_id": reg.get("property_id")}, {"_id": 0}) or {}
+            access_token = settings.get("whatsapp_access_token", "")
+            phone_id = settings.get("whatsapp_phone_number_id", "")
+            if not all([access_token, phone_id, phone]):
+                return {"status": "skipped", "channel": "whatsapp", "reason": "WhatsApp not configured or no phone number"}
+            try:
+                import httpx
+                wa_phone = phone.replace("+", "").replace(" ", "")
+                async with httpx.AsyncClient() as client_http:
+                    resp = await client_http.post(
+                        f"https://graph.facebook.com/v18.0/{phone_id}/messages",
+                        headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+                        json={"messaging_product": "whatsapp", "to": wa_phone, "type": "text", "text": {"body": message}},
+                    )
+                    if resp.status_code == 200:
+                        return {"status": "sent", "channel": "whatsapp"}
+                    return {"status": "failed", "channel": "whatsapp", "reason": resp.text}
+            except Exception as e:
+                logger.error(f"WhatsApp send error: {e}")
+                return {"status": "failed", "channel": "whatsapp", "reason": str(e)}
+
+        return {"status": "error", "reason": "Unknown channel"}
+
     # ==================== GET REGISTRATION FORM (PUBLIC) ====================
 
     @router.get("/guest-journey/registration/{token}")

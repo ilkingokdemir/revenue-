@@ -11,8 +11,9 @@ import {
   PaperPlaneTilt, CheckCircle, Clock, Upload, Eye, X, UserCircle,
   ArrowsClockwise, Envelope, Smiley, WarningCircle, CaretRight,
 } from "@phosphor-icons/react";
-import { FileText, Send, Users, Shield, Camera, ChevronDown, ExternalLink, QrCode } from "lucide-react";
+import { FileText, Send, Users, Shield, Camera, ChevronDown, ExternalLink, QrCode, Share2, Printer, MessageSquare, Mail, Link2, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
+import { WhatsappLogo } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const BASE_URL = process.env.REACT_APP_BACKEND_URL;
@@ -33,7 +34,8 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
   const [bookings, setBookings] = useState([]);
   const [showSendDialog, setShowSendDialog] = useState(false);
   const [tab, setTab] = useState("registrations"); // registrations | satisfaction
-  const [showQR, setShowQR] = useState(null); // registration token for QR modal
+  const [showShare, setShowShare] = useState(null); // registration for share modal
+  const [sharing, setSharing] = useState("");
 
   const fetchRegistrations = useCallback(async () => {
     if (!activePropertyId) return;
@@ -96,6 +98,57 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
       toast.error(e.response?.data?.detail || "Upload failed. Please try again.");
     }
     setUploadingId(null);
+  };
+
+  const shareLink = async (reg, channel) => {
+    setSharing(channel);
+    try {
+      const { data } = await axios.post(`${API}/guest-journey/share-link/${reg.id}`, { channel });
+      if (data.status === "sent") {
+        toast.success(`Registration link sent via ${channel}!`);
+      } else if (data.status === "skipped") {
+        toast.error(`${channel} not configured. Set up in Channel Settings.`);
+      } else {
+        toast.error(data.reason || `Failed to send via ${channel}`);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || `Failed to send via ${channel}`);
+    }
+    setSharing("");
+  };
+
+  const printRegistration = (reg) => {
+    const url = `${BASE_URL}/register/${reg.token}`;
+    const win = window.open("", "_blank", "width=400,height=600");
+    win.document.write(`
+      <html><head><title>Registration - ${reg.guest_name}</title>
+      <style>body{font-family:Arial,sans-serif;padding:32px;text-align:center}
+      h2{margin:0 0 4px;font-size:20px}p{color:#666;font-size:13px;margin:4px 0}
+      .box{border:2px solid #ddd;border-radius:12px;padding:20px;margin:20px 0}
+      .qr{margin:16px auto}table{width:100%;text-align:left;font-size:13px;margin:12px 0}
+      td{padding:4px 8px}td:first-child{color:#888;width:40%}
+      .url{font-size:10px;word-break:break-all;color:#888;margin-top:12px}
+      @media print{body{padding:16px}}</style></head><body>
+      <h2>${reg.hotel_name || "Hotel"}</h2>
+      <p>Guest Registration</p>
+      <div class="box">
+        <div class="qr" id="qr"></div>
+        <p style="font-size:11px;color:#999">Scan to complete registration</p>
+      </div>
+      <table>
+        <tr><td>Guest</td><td><strong>${reg.guest_name || "—"}</strong></td></tr>
+        <tr><td>Booking</td><td>${reg.booking_ref || "—"}</td></tr>
+        <tr><td>Email</td><td>${reg.guest_email || "—"}</td></tr>
+      </table>
+      <p class="url">${url}</p>
+      <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>
+      <script>
+        var qr=qrcode(0,'M');qr.addData('${url}');qr.make();
+        document.getElementById('qr').innerHTML=qr.createSvgTag(5,0);
+        setTimeout(function(){window.print()},500);
+      <\/script></body></html>
+    `);
+    win.document.close();
   };
 
   const filtered = registrations.filter(r => {
@@ -216,8 +269,8 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
                       <button onClick={(e) => { e.stopPropagation(); setSelectedReg(reg); }} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition" data-testid={`btn-view-reg-${reg.id}`}>
                         <Eye size={14} />
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); setShowQR(reg); }} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400 hover:text-violet-600 transition" data-testid={`btn-qr-${reg.id}`} title="Show QR Code">
-                        <QrCode size={14} />
+                      <button onClick={(e) => { e.stopPropagation(); setShowShare(reg); }} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400 hover:text-[#1e3a5f] transition" data-testid={`btn-share-${reg.id}`} title="Share Registration Link">
+                        <Share2 size={14} />
                       </button>
                       {!reg.id_uploaded && (
                         <button onClick={(e) => { e.stopPropagation(); fileInputRef.current?.setAttribute("data-booking", reg.booking_id); fileInputRef.current?.click(); }} className="p-1.5 rounded-md hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition" data-testid={`btn-upload-for-${reg.id}`}>
@@ -361,7 +414,7 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
                     </div>
                   </div>
 
-                  {/* Registration URL & QR Code */}
+                  {/* Registration URL & Share */}
                   {selectedReg.token && (
                     <div className="space-y-2">
                       <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Registration Link</h4>
@@ -373,20 +426,16 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
                       </div>
                       {/* QR Code */}
                       <div className="bg-white rounded-xl border border-stone-200 p-4 flex flex-col items-center" data-testid="drawer-qr-code">
-                        <QRCodeSVG value={`${BASE_URL}/register/${selectedReg.token}`} size={160} level="M" includeMargin />
-                        <p className="text-[10px] text-stone-400 mt-2">Scan to open registration form</p>
-                        <button onClick={() => {
-                          const svg = document.querySelector('[data-testid="drawer-qr-code"] svg');
-                          if (!svg) return;
-                          const svgData = new XMLSerializer().serializeToString(svg);
-                          const canvas = document.createElement("canvas");
-                          canvas.width = 320; canvas.height = 320;
-                          const ctx = canvas.getContext("2d");
-                          const img = new Image();
-                          img.onload = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0,0,320,320); ctx.drawImage(img, 0, 0, 320, 320); const a = document.createElement("a"); a.download = `qr-${selectedReg.guest_name?.replace(/\s+/g,"-") || "guest"}.png`; a.href = canvas.toDataURL("image/png"); a.click(); };
-                          img.src = "data:image/svg+xml;base64," + btoa(svgData);
-                        }} className="mt-2 text-xs text-[#1e3a5f] font-medium hover:underline" data-testid="btn-download-qr">
-                          Download QR Code
+                        <QRCodeSVG value={`${BASE_URL}/register/${selectedReg.token}`} size={120} level="M" includeMargin />
+                        <p className="text-[10px] text-stone-400 mt-1">Scan to register</p>
+                      </div>
+                      {/* Share Buttons */}
+                      <div className="flex gap-1.5 flex-wrap">
+                        <button onClick={() => { setSelectedReg(null); setShowShare(selectedReg); }} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#1e3a5f] text-white rounded-lg hover:bg-[#15304f] transition" data-testid="drawer-share-all">
+                          <Share2 size={12} /> Share Options
+                        </button>
+                        <button onClick={() => printRegistration(selectedReg)} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-stone-200 text-stone-600 rounded-lg hover:bg-stone-50 transition" data-testid="drawer-print">
+                          <Printer size={12} /> Print
                         </button>
                       </div>
                     </div>
@@ -398,40 +447,97 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
         )}
       </AnimatePresence>
 
-      {/* QR Code Pop-up Modal */}
+      {/* Share Registration Link Modal */}
       <AnimatePresence>
-        {showQR && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowQR(null)}>
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="bg-white rounded-2xl shadow-xl p-6 max-w-xs w-full text-center" onClick={(e) => e.stopPropagation()} data-testid="qr-code-modal">
-              <div className="flex justify-between items-start mb-4">
-                <div className="text-left">
-                  <h3 className="font-semibold text-stone-800 text-sm">Registration QR Code</h3>
-                  <p className="text-xs text-stone-500">{showQR.guest_name}</p>
+        {showShare && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowShare(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden" onClick={(e) => e.stopPropagation()} data-testid="share-modal">
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-stone-100 flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-stone-800">Share Registration Link</h3>
+                  <p className="text-xs text-stone-500 mt-0.5">{showShare.guest_name} &middot; {showShare.booking_ref}</p>
                 </div>
-                <button onClick={() => setShowQR(null)} className="p-1 hover:bg-stone-100 rounded-lg"><X size={16} className="text-stone-400" /></button>
-              </div>
-              <div className="bg-stone-50 rounded-xl p-4 inline-block" data-testid="qr-modal-code">
-                <QRCodeSVG value={`${BASE_URL}/register/${showQR.token}`} size={200} level="M" includeMargin />
-              </div>
-              <p className="text-xs text-stone-500 mt-3">Guest scans this to open their registration form</p>
-              <p className="text-[10px] text-stone-400 mt-1 font-mono">{showQR.booking_ref}</p>
-              <div className="flex gap-2 mt-4">
-                <button onClick={() => { navigator.clipboard.writeText(`${BASE_URL}/register/${showQR.token}`); toast.success("Link copied!"); }} className="flex-1 py-2 text-xs font-medium text-[#1e3a5f] border border-[#1e3a5f]/20 rounded-lg hover:bg-[#1e3a5f]/5 transition" data-testid="btn-qr-copy-link">
-                  Copy Link
+                <button onClick={() => setShowShare(null)} className="p-1.5 hover:bg-stone-100 rounded-lg transition" data-testid="close-share-modal">
+                  <X size={16} className="text-stone-400" />
                 </button>
-                <button onClick={() => {
-                  const svg = document.querySelector('[data-testid="qr-modal-code"] svg');
-                  if (!svg) return;
-                  const svgData = new XMLSerializer().serializeToString(svg);
-                  const canvas = document.createElement("canvas");
-                  canvas.width = 400; canvas.height = 400;
-                  const ctx = canvas.getContext("2d");
-                  const img = new Image();
-                  img.onload = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0,0,400,400); ctx.drawImage(img, 0, 0, 400, 400); const a = document.createElement("a"); a.download = `qr-${showQR.guest_name?.replace(/\s+/g,"-") || "guest"}.png`; a.href = canvas.toDataURL("image/png"); a.click(); };
-                  img.src = "data:image/svg+xml;base64," + btoa(svgData);
-                }} className="flex-1 py-2 text-xs font-medium text-white bg-[#1e3a5f] rounded-lg hover:bg-[#15304f] transition" data-testid="btn-qr-download">
-                  Download PNG
-                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* QR Code */}
+                <div className="bg-stone-50 rounded-xl p-4 flex flex-col items-center" data-testid="share-qr-section">
+                  <div data-testid="share-qr-code">
+                    <QRCodeSVG value={`${BASE_URL}/register/${showShare.token}`} size={160} level="M" includeMargin />
+                  </div>
+                  <p className="text-[10px] text-stone-400 mt-2">Scan at reception or print for guest</p>
+                </div>
+
+                {/* Share Options Grid */}
+                <div className="grid grid-cols-3 gap-2" data-testid="share-options">
+                  {/* Copy Link */}
+                  <button data-testid="share-copy-link" onClick={() => { navigator.clipboard.writeText(`${BASE_URL}/register/${showShare.token}`); toast.success("Link copied to clipboard!"); }} className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-stone-200 hover:bg-stone-50 hover:border-stone-300 transition group">
+                    <div className="w-9 h-9 rounded-full bg-stone-100 flex items-center justify-center group-hover:bg-stone-200 transition">
+                      <Link2 size={16} className="text-stone-600" />
+                    </div>
+                    <span className="text-[11px] font-medium text-stone-700">Copy Link</span>
+                  </button>
+
+                  {/* Email */}
+                  <button data-testid="share-email" onClick={() => shareLink(showShare, "email")} disabled={sharing === "email"} className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-stone-200 hover:bg-blue-50 hover:border-blue-200 transition group disabled:opacity-50">
+                    <div className="w-9 h-9 rounded-full bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition">
+                      <Mail size={16} className="text-blue-600" />
+                    </div>
+                    <span className="text-[11px] font-medium text-stone-700">{sharing === "email" ? "Sending..." : "Email"}</span>
+                  </button>
+
+                  {/* SMS */}
+                  <button data-testid="share-sms" onClick={() => shareLink(showShare, "sms")} disabled={sharing === "sms"} className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-stone-200 hover:bg-emerald-50 hover:border-emerald-200 transition group disabled:opacity-50">
+                    <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition">
+                      <Smartphone size={16} className="text-emerald-600" />
+                    </div>
+                    <span className="text-[11px] font-medium text-stone-700">{sharing === "sms" ? "Sending..." : "SMS"}</span>
+                  </button>
+
+                  {/* WhatsApp */}
+                  <button data-testid="share-whatsapp" onClick={() => shareLink(showShare, "whatsapp")} disabled={sharing === "whatsapp"} className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-stone-200 hover:bg-green-50 hover:border-green-200 transition group disabled:opacity-50">
+                    <div className="w-9 h-9 rounded-full bg-green-50 flex items-center justify-center group-hover:bg-green-100 transition">
+                      <WhatsappLogo size={16} className="text-green-600" weight="fill" />
+                    </div>
+                    <span className="text-[11px] font-medium text-stone-700">{sharing === "whatsapp" ? "Sending..." : "WhatsApp"}</span>
+                  </button>
+
+                  {/* Print */}
+                  <button data-testid="share-print" onClick={() => printRegistration(showShare)} className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-stone-200 hover:bg-amber-50 hover:border-amber-200 transition group">
+                    <div className="w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center group-hover:bg-amber-100 transition">
+                      <Printer size={16} className="text-amber-600" />
+                    </div>
+                    <span className="text-[11px] font-medium text-stone-700">Print</span>
+                  </button>
+
+                  {/* Download QR */}
+                  <button data-testid="share-download-qr" onClick={() => {
+                    const svg = document.querySelector('[data-testid="share-qr-code"] svg');
+                    if (!svg) return;
+                    const svgData = new XMLSerializer().serializeToString(svg);
+                    const canvas = document.createElement("canvas");
+                    canvas.width = 400; canvas.height = 400;
+                    const ctx = canvas.getContext("2d");
+                    const img = new Image();
+                    img.onload = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0,0,400,400); ctx.drawImage(img, 0, 0, 400, 400); const a = document.createElement("a"); a.download = `qr-${showShare.guest_name?.replace(/\s+/g,"-") || "guest"}.png`; a.href = canvas.toDataURL("image/png"); a.click(); };
+                    img.src = "data:image/svg+xml;base64," + btoa(svgData);
+                    toast.success("QR code downloaded!");
+                  }} className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-stone-200 hover:bg-violet-50 hover:border-violet-200 transition group">
+                    <div className="w-9 h-9 rounded-full bg-violet-50 flex items-center justify-center group-hover:bg-violet-100 transition">
+                      <QrCode size={16} className="text-violet-600" />
+                    </div>
+                    <span className="text-[11px] font-medium text-stone-700">Save QR</span>
+                  </button>
+                </div>
+
+                {/* Registration URL */}
+                <div className="bg-stone-50 rounded-lg p-2.5 flex items-center gap-2">
+                  <code className="text-[10px] text-stone-500 truncate flex-1" data-testid="share-reg-url">{BASE_URL}/register/{showShare.token}</code>
+                </div>
               </div>
             </motion.div>
           </motion.div>

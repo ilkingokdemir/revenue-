@@ -50,6 +50,8 @@ import { PaymentsPanel } from "./components/dashboard/PaymentsPanel";
 import { SurveyPanel } from "./components/dashboard/SurveyPanel";
 import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
 import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
+import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
+import GuestMaintenancePage from "./GuestMaintenancePage";
 import GuestSurveyPage from "./GuestSurveyPage";
 import GuestRegistrationPage from "./GuestRegistrationPage";
 import GuestFeedbackPage from "./GuestFeedbackPage";
@@ -2527,6 +2529,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "accounting", icon: Wallet, name: t("nav.accounting"), testId: "accounting-btn" },
         { id: "pos", icon: Receipt, name: t("nav.pos"), testId: "pos-btn" },
         { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
+        { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
       ]
     },
     {
@@ -2958,6 +2961,11 @@ const Dashboard = ({ user, onLogout }) => {
           <PaymentsPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
+        {/* Rate Manager */}
+        {activeView === "rate-manager" && (
+          <RateManagerPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
         {/* Guest Satisfaction Surveys */}
         {activeView === "surveys" && (
           <SurveyPanel properties={properties} user={user} activePropertyId={activePropertyId} />
@@ -3077,6 +3085,10 @@ function App() {
   if (window.location.pathname.startsWith("/checkin-kiosk/")) {
     const propertyId = window.location.pathname.split("/checkin-kiosk/")[1];
     return <CheckInKioskPage propertyId={propertyId} />;
+  }
+  if (window.location.pathname.startsWith("/room-help/")) {
+    const parts = window.location.pathname.split("/room-help/")[1].split("/");
+    return <GuestMaintenancePage propertyId={parts[0]} roomId={parts[1] || "unknown"} />;
   }
   if (window.location.pathname.startsWith("/qr-order/")) {
     const parts = window.location.pathname.split("/qr-order/")[1].split("/");

@@ -280,6 +280,139 @@ def create_maintenance_router(db, require_roles):
             "costs": cost_data,
         }
 
+    @router.get("/maintenance/dashboard/{property_id}")
+    async def get_dashboard(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Enhanced dashboard with trends, SLA compliance, team workload"""
+        query = {} if property_id == "all" else {"property_id": property_id}
+
+        # Monthly trends (last 6 months)
+        now = datetime.now(timezone.utc)
+        monthly = []
+        for i in range(5, -1, -1):
+            month_start = (now.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
+            month_end = (month_start + timedelta(days=32)).replace(day=1)
+            m_query = {**query, "created_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}}
+            created = await db.maintenance_issues.count_documents(m_query)
+            r_query = {**query, "resolved_at": {"$gte": month_start.isoformat(), "$lt": month_end.isoformat()}}
+            resolved = await db.maintenance_issues.count_documents(r_query)
+            monthly.append({"month": month_start.strftime("%b %Y"), "created": created, "resolved": resolved})
+
+        # SLA compliance
+        total_with_sla = await db.maintenance_issues.count_documents({**query, "sla_deadline": {"$exists": True, "$ne": ""}})
+        breached = await db.maintenance_issues.count_documents({**query, "sla_breached": True})
+        sla_rate = round(((total_with_sla - breached) / max(total_with_sla, 1)) * 100, 1)
+
+        # Avg resolution time (hours)
+        pipeline_res = [
+            {"$match": {**query, "resolved_at": {"$ne": ""}, "created_at": {"$ne": ""}}},
+            {"$limit": 100}
+        ]
+        resolved_issues = []
+        async for doc in db.maintenance_issues.aggregate(pipeline_res):
+            resolved_issues.append(doc)
+        avg_hours = 0
+        if resolved_issues:
+            total_ms = sum((datetime.fromisoformat(d["resolved_at"].replace("Z", "+00:00")) - datetime.fromisoformat(d["created_at"].replace("Z", "+00:00"))).total_seconds() for d in resolved_issues if d.get("resolved_at") and d.get("created_at"))
+            avg_hours = round(total_ms / len(resolved_issues) / 3600, 1)
+
+        # Team workload
+        team_pipeline = [
+            {"$match": {**query, "assigned_to": {"$ne": ""}, "status": {"$in": ["open", "acknowledged", "in_progress"]}}},
+            {"$group": {"_id": "$assigned_to", "count": {"$sum": 1}}}
+        ]
+        team_load = {}
+        async for doc in db.maintenance_issues.aggregate(team_pipeline):
+            team_load[doc["_id"]] = doc["count"]
+
+        # Top locations
+        loc_pipeline = [
+            {"$match": query},
+            {"$group": {"_id": {"$ifNull": ["$location", "$room_number"]}, "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}}, {"$limit": 10}
+        ]
+        top_locations = []
+        async for doc in db.maintenance_issues.aggregate(loc_pipeline):
+            if doc["_id"]:
+                top_locations.append({"location": doc["_id"], "count": doc["count"]})
+
+        return {
+            "monthly_trends": monthly,
+            "sla_compliance_rate": sla_rate,
+            "sla_total": total_with_sla,
+            "sla_breached": breached,
+            "avg_resolution_hours": avg_hours,
+            "team_workload": team_load,
+            "top_locations": top_locations,
+        }
+
+    # ==================== GUEST QR MAINTENANCE REPORT (PUBLIC) ====================
+
+    @router.get("/maintenance/guest-report-info/{property_id}/{room_id}")
+    async def guest_report_info(property_id: str, room_id: str):
+        """Public: Get property info for guest maintenance report form"""
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+        ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
+        return {"hotel_name": hotel_name, "room": room_id, "property_id": property_id}
+
+    @router.post("/maintenance/guest-report/{property_id}/{room_id}")
+    async def guest_report_issue(property_id: str, room_id: str, data: Dict):
+        """Public: Guest submits maintenance issue via QR code"""
+        now = datetime.now(timezone.utc).isoformat()
+        category = data.get("category", "general")
+        dept = CATEGORY_DEPARTMENT.get(category, "maintenance")
+        sla_hours = SLA_TARGETS.get("high", 8)
+
+        issue = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "title": data.get("title", f"Guest report - Room {room_id}"),
+            "description": data.get("description", ""),
+            "category": category,
+            "priority": "high",
+            "status": "open",
+            "location": f"Room {room_id}",
+            "room_number": room_id,
+            "assigned_to": "",
+            "assigned_department": dept,
+            "reported_by": data.get("guest_name", "Guest"),
+            "reported_by_email": data.get("guest_email", ""),
+            "photos_before": [],
+            "photos_after": [],
+            "estimated_cost": 0, "actual_cost": 0, "cost_notes": "", "materials": [],
+            "sla_hours": sla_hours,
+            "sla_deadline": (datetime.now(timezone.utc) + timedelta(hours=sla_hours)).isoformat(),
+            "sla_breached": False,
+            "acknowledged_at": "", "acknowledged_by": "",
+            "started_at": "", "started_by": "",
+            "resolved_at": "", "resolved_by": "",
+            "closed_at": "", "closed_by": "",
+            "resolution_notes": "", "comments": [],
+            "timeline": [{"action": "created", "by": data.get("guest_name", "Guest"), "at": now, "detail": f"Guest reported from Room {room_id}: {data.get('title', '')}"}],
+            "recurring_id": "", "source": "guest_qr",
+            "created_at": now, "updated_at": now,
+        }
+        await db.maintenance_issues.insert_one(issue)
+        return {"status": "submitted", "id": issue["id"]}
+
+    @router.post("/maintenance/guest-upload-photo/{issue_id}")
+    async def guest_upload_photo(issue_id: str, file: UploadFile = File(...)):
+        """Public: Guest uploads photo for their reported issue"""
+        issue = await db.maintenance_issues.find_one({"id": issue_id, "source": "guest_qr"}, {"_id": 0})
+        if not issue:
+            raise HTTPException(404, "Issue not found")
+        ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+        filename = f"{issue_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        filepath = os.path.join(MAINT_UPLOAD_DIR, filename)
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+        photo_url = f"/api/uploads/maintenance/{filename}"
+        photos = issue.get("photos_before", [])
+        photos.append({"url": photo_url, "filename": file.filename, "uploaded_by": "Guest", "uploaded_at": datetime.now(timezone.utc).isoformat(), "type": "before"})
+        await db.maintenance_issues.update_one({"id": issue_id}, {"$set": {"photos_before": photos}})
+        return {"status": "uploaded", "url": photo_url}
+
     # ==================== SLA CHECK ====================
 
     @router.post("/maintenance/check-sla/{property_id}")

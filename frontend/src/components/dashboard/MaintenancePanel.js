@@ -13,8 +13,10 @@ import {
   ChatText, Timer, CurrencyDollar, CalendarBlank, Repeat, Lightning, Funnel,
 } from "@phosphor-icons/react";
 import { AlertTriangle, LayoutGrid, List, Send, ChevronRight, Upload, Trash2, MessageSquare } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 
 const PRIORITY_CONFIG = {
   critical: { label: "Critical", color: "bg-red-600 text-white", ring: "ring-red-400", sla: "2h" },
@@ -267,7 +269,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
 
       {/* Analytics Tab */}
       {tab === "analytics" && (
-        <AnalyticsTab stats={stats} issues={issues} />
+        <AnalyticsTab stats={stats} issues={issues} propertyId={activePropertyId} />
       )}
 
       {/* Create Issue Dialog */}
@@ -797,7 +799,9 @@ function RecurringTab({ recurring, propertyId, onRefresh }) {
 }
 
 /* ==================== ANALYTICS TAB ==================== */
-function AnalyticsTab({ stats, issues }) {
+function AnalyticsTab({ stats, issues, propertyId }) {
+  const [qrRoom, setQrRoom] = useState("");
+  const [qrRoomShow, setQrRoomShow] = useState("");
   const categories = Object.entries(stats.by_category || {}).sort((a, b) => b[1] - a[1]);
   const priorities = Object.entries(stats.by_priority || {}).sort((a, b) => b[1] - a[1]);
   const maxCat = Math.max(...categories.map(c => c[1]), 1);
@@ -863,6 +867,41 @@ function AnalyticsTab({ stats, issues }) {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Room QR Codes for Guest Reporting */}
+      <div className="bg-white rounded-xl border border-stone-200/60 p-4 mt-4">
+        <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Guest Room QR Codes</h4>
+        <p className="text-xs text-stone-500 mb-3">Generate QR codes for rooms. Guests scan to report maintenance issues directly.</p>
+        <div className="flex items-center gap-3">
+          <Input value={qrRoom} onChange={(e) => setQrRoom(e.target.value)} placeholder="Room number (e.g. 301)" className="max-w-[180px] h-8 text-xs" data-testid="qr-room-input" />
+          <button onClick={() => { if (qrRoom.trim()) setQrRoomShow(qrRoom.trim()); }} className="px-3 py-1.5 bg-orange-500 text-white text-xs font-medium rounded-lg" data-testid="btn-gen-room-qr">Generate QR</button>
+        </div>
+        {qrRoomShow && (
+          <div className="mt-3 bg-stone-50 rounded-xl p-4 flex items-center gap-4">
+            <div data-testid="room-qr-code">
+              <QRCodeSVG value={`${BASE_URL}/room-help/${propertyId}/${qrRoomShow}`} size={100} level="M" includeMargin />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-stone-800">Room {qrRoomShow}</p>
+              <code className="text-[10px] text-stone-500 block mt-0.5">{BASE_URL}/room-help/{propertyId}/{qrRoomShow}</code>
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => { navigator.clipboard.writeText(`${BASE_URL}/room-help/${propertyId}/${qrRoomShow}`); toast.success("Link copied!"); }} className="text-[10px] text-orange-600 font-medium hover:underline">Copy Link</button>
+                <button onClick={() => {
+                  const svg = document.querySelector('[data-testid="room-qr-code"] svg');
+                  if (!svg) return;
+                  const svgData = new XMLSerializer().serializeToString(svg);
+                  const canvas = document.createElement("canvas");
+                  canvas.width = 200; canvas.height = 200;
+                  const ctx = canvas.getContext("2d");
+                  const img = new Image();
+                  img.onload = () => { ctx.fillStyle = "#fff"; ctx.fillRect(0,0,200,200); ctx.drawImage(img, 0, 0, 200, 200); const a = document.createElement("a"); a.download = `room-${qrRoomShow}-qr.png`; a.href = canvas.toDataURL("image/png"); a.click(); };
+                  img.src = "data:image/svg+xml;base64," + btoa(svgData);
+                }} className="text-[10px] text-orange-600 font-medium hover:underline">Download QR</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

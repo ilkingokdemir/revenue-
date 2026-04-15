@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
+import { useTranslation } from "@/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function GuestFeedbackPage({ token }) {
+  const { t } = useTranslation();
   const [feedback, setFeedback] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -77,8 +80,8 @@ export default function GuestFeedbackPage({ token }) {
           <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
           </div>
-          <h2 className="text-xl font-bold text-stone-800 mb-2">Thank You!</h2>
-          <p className="text-stone-500 text-sm">Your feedback has been received. {selectedResponse === "need_help" ? "Our team will be with you shortly." : "We're glad you're enjoying your stay!"}</p>
+          <h2 className="text-xl font-bold text-stone-800 mb-2">{t("feedback.thank_you")}</h2>
+          <p className="text-stone-500 text-sm">{selectedResponse === "need_help" ? t("feedback.help_soon") : t("feedback.glad")}</p>
         </motion.div>
       </div>
     );
@@ -88,9 +91,10 @@ export default function GuestFeedbackPage({ token }) {
     <div className="min-h-screen bg-gradient-to-br from-stone-50 via-emerald-50/20 to-stone-50 flex items-center justify-center p-4" data-testid="guest-feedback-page">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl shadow-lg max-w-md w-full overflow-hidden">
         {/* Header */}
-        <div className="bg-[#2C4C3B] text-white p-6 text-center" data-testid="feedback-header">
+        <div className="bg-[#2C4C3B] text-white p-6 text-center relative" data-testid="feedback-header">
           <h1 className="text-lg font-bold">{feedback?.hotel_name || "Hotel"}</h1>
-          <p className="text-white/70 text-sm mt-1">How's your stay?</p>
+          <p className="text-white/70 text-sm mt-1">{t("feedback.title")}</p>
+          <div className="absolute right-4 top-4"><LanguageSwitcher compact /></div>
         </div>
 
         <div className="p-6">
@@ -104,13 +108,13 @@ export default function GuestFeedbackPage({ token }) {
               <div className="text-3xl mb-2">
                 <svg className="w-10 h-10 mx-auto text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               </div>
-              <p className="font-semibold text-sm text-stone-800">Everything's Great!</p>
+              <p className="font-semibold text-sm text-stone-800">{t("feedback.all_good")}</p>
             </button>
             <button data-testid="btn-need-help" onClick={() => setSelectedResponse("need_help")} className={`p-5 rounded-xl border-2 text-center transition-all ${selectedResponse === "need_help" ? "border-amber-500 bg-amber-50" : "border-stone-200 hover:border-amber-300"}`}>
               <div className="text-3xl mb-2">
                 <svg className="w-10 h-10 mx-auto text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
               </div>
-              <p className="font-semibold text-sm text-stone-800">I Need Help</p>
+              <p className="font-semibold text-sm text-stone-800">{t("feedback.need_help")}</p>
             </button>
           </div>
 
@@ -123,7 +127,7 @@ export default function GuestFeedbackPage({ token }) {
           )}
 
           <button data-testid="btn-submit-feedback" onClick={submit} disabled={!selectedResponse || submitting} className="w-full py-3 bg-[#2C4C3B] text-white text-sm font-semibold rounded-lg hover:bg-[#234030] disabled:opacity-40 disabled:cursor-not-allowed transition">
-            {submitting ? "Submitting..." : "Submit Feedback"}
+            {submitting ? t("common.loading") : t("feedback.submit")}
           </button>
         </div>
 

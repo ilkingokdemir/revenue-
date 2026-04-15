@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTranslation } from "@/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const STEPS = ["details", "document", "terms", "complete"];
-const STEP_LABELS = ["Personal Details", "ID Upload", "Terms & Conditions", "Complete"];
 
 export default function GuestRegistrationPage({ token }) {
+  const { t } = useTranslation();
+  const STEP_LABELS = [t("guest_reg.step_details"), t("guest_reg.step_document"), t("guest_reg.step_terms"), t("guest_reg.step_complete")];
   const [reg, setReg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -156,12 +159,15 @@ export default function GuestRegistrationPage({ token }) {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-stone-50 to-amber-50/30" data-testid="guest-registration-page">
       {/* Header */}
       <header className="bg-[#1e3a5f] text-white" data-testid="registration-header">
-        <div className="max-w-2xl mx-auto px-4 py-6 text-center">
+        <div className="max-w-2xl mx-auto px-4 py-6 text-center relative">
+          <div className="absolute right-4 top-4">
+            <LanguageSwitcher compact />
+          </div>
           {reg?.hotel_logo && (
             <img src={reg.hotel_logo} alt="" className="w-12 h-12 rounded-xl mx-auto mb-3 object-cover bg-white/10" />
           )}
           <h1 className="text-xl font-bold tracking-tight" data-testid="hotel-name-header">{reg?.hotel_name || "Hotel"}</h1>
-          <p className="text-white/70 text-sm mt-1">Pre-Arrival Registration</p>
+          <p className="text-white/70 text-sm mt-1">{t("guest_reg.title")}</p>
         </div>
       </header>
 
@@ -205,12 +211,12 @@ export default function GuestRegistrationPage({ token }) {
           {/* STEP 0: Personal Details */}
           {step === 0 && (
             <motion.div key="step0" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-white rounded-2xl shadow-sm border border-stone-200/60 p-6" data-testid="step-personal-details">
-              <h2 className="text-lg font-semibold text-stone-800 mb-1">Personal Details</h2>
-              <p className="text-sm text-stone-400 mb-5">Please fill in your information for a smooth check-in</p>
+              <h2 className="text-lg font-semibold text-stone-800 mb-1">{t("guest_reg.step_details")}</h2>
+              <p className="text-sm text-stone-400 mb-5">{t("guest_reg.fill_info")}</p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-medium text-stone-600 mb-1.5">Full Name *</label>
+                  <label className="block text-xs font-medium text-stone-600 mb-1.5">{t("guest_reg.full_name")} *</label>
                   <input data-testid="input-full-name" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f] outline-none transition" placeholder="As shown on your ID" />
                 </div>
                 <div>
@@ -258,8 +264,8 @@ export default function GuestRegistrationPage({ token }) {
           {/* STEP 1: ID Upload */}
           {step === 1 && (
             <motion.div key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-white rounded-2xl shadow-sm border border-stone-200/60 p-6" data-testid="step-id-upload">
-              <h2 className="text-lg font-semibold text-stone-800 mb-1">Upload ID Document</h2>
-              <p className="text-sm text-stone-400 mb-5">Take a photo or choose from your gallery — passport, national ID, or driving license</p>
+              <h2 className="text-lg font-semibold text-stone-800 mb-1">{t("guest_reg.step_document")}</h2>
+              <p className="text-sm text-stone-400 mb-5">{t("guest_reg.take_photo_desc")}</p>
 
               {/* Hidden file inputs */}
               <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={handleFileSelect} className="hidden" data-testid="id-camera-input" />
@@ -270,8 +276,8 @@ export default function GuestRegistrationPage({ token }) {
                   <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
                     <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                   </div>
-                  <p className="font-medium text-emerald-800">ID Document Uploaded</p>
-                  <p className="text-emerald-600 text-sm mt-1">Your document has been received</p>
+                  <p className="font-medium text-emerald-800">{t("guest_reg.id_uploaded")}</p>
+                  <p className="text-emerald-600 text-sm mt-1">{t("guest_reg.id_received")}</p>
                   <button onClick={() => { setIdUploaded(false); setIdFile(null); setIdPreview(null); }} className="text-xs text-stone-500 underline mt-3" data-testid="btn-reupload">Upload a different document</button>
                 </div>
               ) : idPreview ? (
@@ -291,8 +297,8 @@ export default function GuestRegistrationPage({ token }) {
                       <svg className="w-6 h-6 text-[#1e3a5f]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     </div>
                     <div className="text-left">
-                      <p className="font-semibold text-stone-800 text-sm">Take Photo</p>
-                      <p className="text-xs text-stone-400">Use your camera to capture your ID</p>
+                      <p className="font-semibold text-stone-800 text-sm">{t("guest_reg.take_photo")}</p>
+                      <p className="text-xs text-stone-400">{t("guest_reg.take_photo_desc")}</p>
                     </div>
                   </button>
 
@@ -302,8 +308,8 @@ export default function GuestRegistrationPage({ token }) {
                       <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     </div>
                     <div className="text-left">
-                      <p className="font-semibold text-stone-800 text-sm">Choose from Gallery</p>
-                      <p className="text-xs text-stone-400">Select a photo or PDF from your device</p>
+                      <p className="font-semibold text-stone-800 text-sm">{t("guest_reg.choose_gallery")}</p>
+                      <p className="text-xs text-stone-400">{t("guest_reg.choose_gallery_desc")}</p>
                     </div>
                   </button>
 
@@ -335,8 +341,8 @@ export default function GuestRegistrationPage({ token }) {
           {/* STEP 2: Terms & Conditions */}
           {step === 2 && (
             <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="bg-white rounded-2xl shadow-sm border border-stone-200/60 p-6" data-testid="step-terms">
-              <h2 className="text-lg font-semibold text-stone-800 mb-1">Terms & Conditions</h2>
-              <p className="text-sm text-stone-400 mb-5">Please review and accept our hotel policies</p>
+              <h2 className="text-lg font-semibold text-stone-800 mb-1">{t("guest_reg.terms_title")}</h2>
+              <p className="text-sm text-stone-400 mb-5">{t("guest_reg.terms_review")}</p>
 
               {/* Policy Box */}
               <div className="bg-stone-50 rounded-xl border border-stone-200/60 p-5 max-h-56 overflow-y-auto text-xs text-stone-600 leading-relaxed mb-5" data-testid="terms-content">
@@ -354,18 +360,18 @@ export default function GuestRegistrationPage({ token }) {
               <div className="space-y-3 mb-5">
                 <label className="flex items-start gap-3 cursor-pointer" data-testid="terms-checkbox-label">
                   <input data-testid="terms-checkbox" type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-stone-300 text-[#1e3a5f] focus:ring-[#1e3a5f]/30" />
-                  <span className="text-sm text-stone-700">I have read and accept the <strong>Terms & Conditions</strong></span>
+                  <span className="text-sm text-stone-700">{t("guest_reg.accept_terms")}</span>
                 </label>
                 <label className="flex items-start gap-3 cursor-pointer" data-testid="privacy-checkbox-label">
                   <input data-testid="privacy-checkbox" type="checkbox" checked={privacyAccepted} onChange={(e) => setPrivacyAccepted(e.target.checked)} className="mt-0.5 w-4 h-4 rounded border-stone-300 text-[#1e3a5f] focus:ring-[#1e3a5f]/30" />
-                  <span className="text-sm text-stone-700">I agree to the <strong>Privacy Policy</strong> and data processing</span>
+                  <span className="text-sm text-stone-700">{t("guest_reg.accept_privacy")}</span>
                 </label>
               </div>
 
               {/* Signature */}
               <div className="mb-5">
-                <label className="block text-xs font-medium text-stone-600 mb-1.5">Digital Signature *</label>
-                <input data-testid="input-signature" type="text" value={signature} onChange={(e) => setSignature(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm italic focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f] outline-none transition" placeholder="Type your full name as signature" />
+                <label className="block text-xs font-medium text-stone-600 mb-1.5">{t("guest_reg.signature")} *</label>
+                <input data-testid="input-signature" type="text" value={signature} onChange={(e) => setSignature(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm italic focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f] outline-none transition" placeholder={t("guest_reg.signature_placeholder")} />
               </div>
 
               <div className="flex justify-between">
@@ -379,7 +385,7 @@ export default function GuestRegistrationPage({ token }) {
                   }
                   await submitForm();
                 }} disabled={!canProceedStep2 || submitting || uploading} className="px-6 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition">
-                  {submitting ? "Submitting..." : "Complete Registration"}
+                  {submitting ? t("guest_reg.submitting") : t("guest_reg.submit_registration")}
                 </button>
               </div>
             </motion.div>
@@ -391,9 +397,9 @@ export default function GuestRegistrationPage({ token }) {
               <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-10 h-10 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
               </div>
-              <h2 className="text-xl font-bold text-stone-800 mb-2">Registration Complete!</h2>
+              <h2 className="text-xl font-bold text-stone-800 mb-2">{t("guest_reg.complete_title")}</h2>
               <p className="text-stone-500 text-sm max-w-sm mx-auto mb-6">
-                Thank you for completing your pre-arrival registration. We've sent you a welcome email with hotel information and local area guides.
+                {t("guest_reg.complete_message")}
               </p>
 
               {reg?.booking && (
@@ -407,7 +413,7 @@ export default function GuestRegistrationPage({ token }) {
                 </div>
               )}
 
-              <p className="text-xs text-stone-400 mt-6">You can close this page. See you soon!</p>
+              <p className="text-xs text-stone-400 mt-6">{t("guest_reg.complete_close")}</p>
             </motion.div>
           )}
         </AnimatePresence>

@@ -4,6 +4,8 @@ import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { LanguageProvider, useTranslation } from "@/i18n";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import ReviewWidget from "./ReviewWidget";
 import BookingEngine from "./BookingEngine";
 import ReviewCollectionPage from "./ReviewCollectionPage";
@@ -2327,6 +2329,7 @@ async def handle_review_webhook(request: Request):
 
 // Main Dashboard Component
 const Dashboard = ({ user, onLogout }) => {
+  const { t } = useTranslation();
   const [reviews, setReviews] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedReview, setSelectedReview] = useState(null);
@@ -2475,85 +2478,85 @@ const Dashboard = ({ user, onLogout }) => {
     {
       label: "",
       items: [
-        { id: "dashboard", icon: House, name: "Dashboard", testId: "dashboard-btn" },
+        { id: "dashboard", icon: House, name: t("nav.dashboard"), testId: "dashboard-btn" },
       ]
     },
     {
-      label: "Review Hub",
+      label: t("section.review_hub"),
       items: [
-        { id: "reviews", icon: ChatText, name: "Reviews", testId: "nav-reviews" },
-        { id: "analytics", icon: ChartBar, name: "Analytics", testId: "analytics-btn" },
-        { id: "templates", icon: FileText, name: "Response Templates", testId: "templates-btn" },
-        ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: "Approvals", testId: "approval-queue-btn" }] : []),
-        { id: "alerts", icon: Bell, name: "Alerts", testId: "notification-settings-btn" },
-        { id: "reports", icon: CalendarBlank, name: "Reports", testId: "reports-btn" },
+        { id: "reviews", icon: ChatText, name: t("nav.reviews"), testId: "nav-reviews" },
+        { id: "analytics", icon: ChartBar, name: t("nav.analytics"), testId: "analytics-btn" },
+        { id: "templates", icon: FileText, name: t("nav.templates"), testId: "templates-btn" },
+        ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: t("nav.approvals"), testId: "approval-queue-btn" }] : []),
+        { id: "alerts", icon: Bell, name: t("nav.alerts"), testId: "notification-settings-btn" },
+        { id: "reports", icon: CalendarBlank, name: t("nav.reports"), testId: "reports-btn" },
       ]
     },
     {
-      label: "Booking Engine",
+      label: t("section.booking_engine"),
       items: [
-        { id: "booking", icon: Bed, name: "Rooms & Bookings", testId: "booking-engine-btn" },
-        { id: "website-templates", icon: Layout, name: "Website Templates", testId: "website-templates-btn" },
-        { id: "customize-template", icon: PaintBrush, name: "Customize Template", testId: "customize-template-btn" },
-        { id: "promo-codes", icon: Tag, name: "Promo Codes", testId: "promo-codes-btn" },
-        { id: "add-ons", icon: Package, name: "Add-on Services", testId: "add-ons-btn" },
-        { id: "policies", icon: Scroll, name: "Policies & Facilities", testId: "policies-btn" },
+        { id: "booking", icon: Bed, name: t("nav.booking"), testId: "booking-engine-btn" },
+        { id: "website-templates", icon: Layout, name: t("nav.website_templates"), testId: "website-templates-btn" },
+        { id: "customize-template", icon: PaintBrush, name: t("nav.customize_template"), testId: "customize-template-btn" },
+        { id: "promo-codes", icon: Tag, name: t("nav.promo_codes"), testId: "promo-codes-btn" },
+        { id: "add-ons", icon: Package, name: t("nav.add_ons"), testId: "add-ons-btn" },
+        { id: "policies", icon: Scroll, name: t("nav.policies"), testId: "policies-btn" },
       ]
     },
     {
-      label: "Guest Experience",
+      label: t("section.guest_experience"),
       items: [
-        { id: "guest-profiles", icon: AddressBook, name: "Guest Profiles", testId: "guest-profiles-btn" },
-        { id: "guest-journey", icon: SignIn, name: "Guest Journey", testId: "guest-journey-btn" },
-        { id: "loyalty", icon: Crown, name: "Loyalty Program", testId: "loyalty-btn" },
-        { id: "guest-app", icon: MapPin, name: "Guest App", testId: "guest-app-btn" },
-        { id: "smart-locks", icon: Key, name: "Digital Keys", testId: "smart-locks-btn" },
-        { id: "campaigns", icon: Megaphone, name: "Campaigns", testId: "campaigns-btn" },
-        { id: "surveys", icon: Star, name: "Surveys / NPS", testId: "surveys-btn" },
+        { id: "guest-profiles", icon: AddressBook, name: t("nav.guest_profiles"), testId: "guest-profiles-btn" },
+        { id: "guest-journey", icon: SignIn, name: t("nav.guest_journey"), testId: "guest-journey-btn" },
+        { id: "loyalty", icon: Crown, name: t("nav.loyalty"), testId: "loyalty-btn" },
+        { id: "guest-app", icon: MapPin, name: t("nav.guest_app"), testId: "guest-app-btn" },
+        { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
+        { id: "campaigns", icon: Megaphone, name: t("nav.campaigns"), testId: "campaigns-btn" },
+        { id: "surveys", icon: Star, name: t("nav.surveys"), testId: "surveys-btn" },
       ]
     },
     {
-      label: "Operations",
+      label: t("section.operations"),
       items: [
-        { id: "housekeeping", icon: Broom, name: "Housekeeping", testId: "housekeeping-btn" },
-        { id: "maintenance", icon: Wrench, name: "Maintenance", testId: "maintenance-btn" },
-        { id: "night-audit", icon: Moon, name: "Night Audit", testId: "night-audit-btn" },
-        { id: "logbook", icon: Notebook, name: "Duty Logbook", testId: "logbook-btn" },
-        { id: "forecast", icon: ChartLine, name: "Forecast", testId: "forecast-btn" },
-        { id: "stock-management", icon: Package, name: "Stock / F&B", testId: "stock-management-btn" },
-        { id: "accounting", icon: Wallet, name: "Accounting", testId: "accounting-btn" },
-        { id: "pos", icon: Receipt, name: "Point of Sale", testId: "pos-btn" },
-        { id: "payments", icon: Lightning, name: "Payment Gateway", testId: "payments-btn" },
+        { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
+        { id: "maintenance", icon: Wrench, name: t("nav.maintenance"), testId: "maintenance-btn" },
+        { id: "night-audit", icon: Moon, name: t("nav.night_audit"), testId: "night-audit-btn" },
+        { id: "logbook", icon: Notebook, name: t("nav.logbook"), testId: "logbook-btn" },
+        { id: "forecast", icon: ChartLine, name: t("nav.forecast"), testId: "forecast-btn" },
+        { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
+        { id: "accounting", icon: Wallet, name: t("nav.accounting"), testId: "accounting-btn" },
+        { id: "pos", icon: Receipt, name: t("nav.pos"), testId: "pos-btn" },
+        { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
       ]
     },
     {
-      label: "Guest Messaging",
+      label: t("section.guest_messaging"),
       items: [
-        { id: "messaging", icon: Envelope, name: "Unified Inbox", testId: "messaging-btn" },
-        { id: "automation", icon: Lightning, name: "Automation", testId: "automation-btn" },
-        { id: "channel-settings", icon: Gear, name: "Channel Settings", testId: "channel-settings-btn" },
-        { id: "concierge-analytics", icon: Robot, name: "AI Concierge", testId: "concierge-analytics-btn" },
-        { id: "staff-performance", icon: Trophy, name: "Staff Performance", testId: "staff-performance-btn" },
+        { id: "messaging", icon: Envelope, name: t("nav.messaging"), testId: "messaging-btn" },
+        { id: "automation", icon: Lightning, name: t("nav.automation"), testId: "automation-btn" },
+        { id: "channel-settings", icon: Gear, name: t("nav.channel_settings"), testId: "channel-settings-btn" },
+        { id: "concierge-analytics", icon: Robot, name: t("nav.concierge"), testId: "concierge-analytics-btn" },
+        { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
       ]
     },
     {
-      label: "Connections",
+      label: t("section.connections"),
       items: [
-        { id: "setup-wizard", icon: Gear, name: "Setup Wizard", testId: "setup-wizard-btn" },
-        { id: "integrations", icon: PlugsConnected, name: "Integrations", testId: "integrations-btn" },
-        { id: "api", icon: Key, name: "API Connection", testId: "api-connection-btn" },
-        { id: "webhooks", icon: Code, name: "Webhooks", testId: "webhooks-btn" },
-        { id: "synclog", icon: ArrowsClockwise, name: "Sync Log", testId: "sync-log-btn" },
-        { id: "guide", icon: ArrowSquareOut, name: "Integration Guide", testId: "integration-guide-btn" },
+        { id: "setup-wizard", icon: Gear, name: t("nav.setup_wizard"), testId: "setup-wizard-btn" },
+        { id: "integrations", icon: PlugsConnected, name: t("nav.integrations"), testId: "integrations-btn" },
+        { id: "api", icon: Key, name: t("nav.api"), testId: "api-connection-btn" },
+        { id: "webhooks", icon: Code, name: t("nav.webhooks"), testId: "webhooks-btn" },
+        { id: "synclog", icon: ArrowsClockwise, name: t("nav.synclog"), testId: "sync-log-btn" },
+        { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
       ]
     },
     {
-      label: "Settings",
+      label: t("section.settings"),
       items: [
-        { id: "mapping", icon: Buildings, name: "Property Mapping", testId: "property-mapping-btn" },
-        { id: "branding", icon: Palette, name: "Branding", testId: "branding-btn" },
-        ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: "Team", testId: "team-btn" }] : []),
-        ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: "Admin Panel", testId: "admin-panel-btn" }] : []),
+        { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
+        { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
+        ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn" }] : []),
+        ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
       ]
     }
   ];
@@ -2640,8 +2643,9 @@ const Dashboard = ({ user, onLogout }) => {
           ))}
         </nav>
 
-        {/* User & Logout */}
-        <div className="p-3 border-t border-stone-800">
+        {/* Language & User & Logout */}
+        <div className="p-3 border-t border-stone-800 space-y-2">
+          <LanguageSwitcher compact />
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center">
               <UserCircle size={18} className="text-stone-400" />
@@ -3085,4 +3089,12 @@ function App() {
   return <MainApp />;
 }
 
-export default App;
+function AppWithLanguage() {
+  return (
+    <LanguageProvider>
+      <App />
+    </LanguageProvider>
+  );
+}
+
+export default AppWithLanguage;

@@ -66,6 +66,7 @@ from routes.finance import create_finance_router
 from routes.my_tasks import create_my_tasks_router
 from routes.lost_found import create_lost_found_router
 from routes.events import create_events_router
+from routes.settings_hub import create_settings_hub_router
 
 # Import extracted modules
 from models import (
@@ -388,6 +389,9 @@ api_router.include_router(lost_found_router)
 
 events_router = create_events_router(db, require_roles)
 api_router.include_router(events_router)
+
+settings_hub_router = create_settings_hub_router(db, require_roles)
+api_router.include_router(settings_hub_router)
 
 app.include_router(api_router)
 

@@ -277,66 +277,134 @@ const EarnedSalariesTab = ({ propertyId }) => {
   );
 };
 
-/* ── PAYROLL RUNS ── */
+/* ── PAYROLL RUNS (Enhanced - matches legacy Payroll Automation) ── */
 const PayrollRunsTab = ({ propertyId }) => {
   const [data, setData] = useState({ runs: [], config: {} });
   const [showCreate, setShowCreate] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
   const [form, setForm] = useState({ period_start: "", period_end: "", staff_count: 0, gross_total: 0, deductions: 0, notes: "" });
+  const [cfgForm, setCfgForm] = useState({ mode: "pause", frequency: "monthly", next_run: "", rule: "Every month on day 1", window_start: "", timezone: "Europe/London" });
 
   const load = useCallback(async () => {
-    try { const { data: d } = await axios.get(`${API}/finance/payroll-runs/${propertyId}`); setData(d); } catch { toast.error("Failed"); }
+    try { const { data: d } = await axios.get(`${API}/finance/payroll-runs/${propertyId}`); setData(d);
+      const c = d.config || {};
+      setCfgForm({ mode: c.mode || "pause", frequency: c.frequency || "monthly", next_run: c.next_run || "", rule: c.rule || "Every month on day 1", window_start: c.window_start || "", timezone: c.timezone || "Europe/London" });
+    } catch { toast.error("Failed"); }
   }, [propertyId]);
   useEffect(() => { load(); }, [load]);
 
   const create = async () => {
-    try {
-      await axios.post(`${API}/finance/payroll-runs`, { ...form, property_id: propertyId, net_total: form.gross_total - form.deductions });
-      toast.success("Payroll run created"); setShowCreate(false); load();
-    } catch { toast.error("Failed"); }
+    try { await axios.post(`${API}/finance/payroll-runs`, { ...form, property_id: propertyId, net_total: form.gross_total - form.deductions }); toast.success("Payroll run created"); setShowCreate(false); load(); } catch { toast.error("Failed"); }
   };
 
-  const updateStatus = async (id, status) => {
-    try { await axios.put(`${API}/finance/payroll-runs/${id}`, { status }); toast.success("Updated"); load(); } catch { toast.error("Failed"); }
+  const saveConfig = async () => {
+    try { await axios.put(`${API}/finance/payroll-config/${propertyId}`, cfgForm); toast.success("Config saved"); setShowConfig(false); load(); } catch { toast.error("Failed"); }
   };
+
+  const toggleMode = async () => {
+    const newMode = cfgForm.mode === "play" ? "pause" : "play";
+    try { await axios.put(`${API}/finance/payroll-config/${propertyId}`, { ...cfgForm, mode: newMode }); toast.success(newMode === "play" ? "Automation started" : "Automation paused"); load(); } catch { toast.error("Failed"); }
+  };
+
+  const updateStatus = async (id, status) => { try { await axios.put(`${API}/finance/payroll-runs/${id}`, { status }); toast.success("Updated"); load(); } catch { toast.error("Failed"); } };
 
   const cfg = data.config || {};
   const statusColors = { draft: "bg-stone-100 text-stone-500", pending: "bg-amber-100 text-amber-700", approved: "bg-blue-100 text-blue-700", paid: "bg-emerald-100 text-emerald-700" };
+
+  // Generate upcoming dates
+  const getUpcoming = () => {
+    const dates = [];
+    const nr = cfg.next_run ? new Date(cfg.next_run) : null;
+    if (!nr) return dates;
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(nr); d.setMonth(d.getMonth() + i);
+      dates.push(d.toISOString().split("T")[0]);
+    }
+    return dates;
+  };
 
   return (
     <div data-testid="payroll-runs-tab">
       <div className="flex items-center justify-between mb-6">
         <div><h2 className="text-lg font-bold text-stone-800">Payroll Runs</h2><p className="text-sm text-stone-500">Manage payroll periods and automation</p></div>
-        <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium" data-testid="new-payroll-btn">+ New Run</button>
+        <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium" data-testid="new-payroll-btn">+ New Payroll Run</button>
       </div>
-      <div className="bg-gradient-to-r from-stone-800 to-stone-900 rounded-2xl p-5 mb-6 text-white">
-        <h3 className="text-sm font-bold mb-3">Payroll Automation</h3>
-        <div className="flex items-center gap-6 text-sm">
-          <div><span className="text-stone-400 text-xs">Mode</span><div className="font-semibold capitalize">{cfg.mode || "Pause"}</div></div>
-          <div><span className="text-stone-400 text-xs">Frequency</span><div className="font-semibold capitalize">{cfg.frequency || "Monthly"}</div></div>
-          <div><span className="text-stone-400 text-xs">Next Run</span><div className="font-semibold">{cfg.next_run || "Not scheduled"}</div></div>
+
+      {/* Payroll Automation — Enhanced */}
+      <div className="bg-gradient-to-r from-stone-800 to-stone-900 rounded-2xl p-6 mb-6 text-white">
+        <div className="flex items-center justify-between mb-4">
+          <div><h3 className="text-sm font-bold">Payroll Automation</h3><p className="text-xs text-stone-400">Branch-based payroll generation</p></div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowConfig(true)} className="px-3 py-1.5 bg-stone-700 text-stone-300 rounded-lg text-xs font-medium hover:bg-stone-600" data-testid="payroll-configure-btn">Configure</button>
+            <button onClick={toggleMode} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${cfg.mode === "play" ? "bg-amber-500 text-white" : "bg-emerald-500 text-white"}`} data-testid="payroll-play-btn">
+              {cfg.mode === "play" ? "Pause" : "Play"}
+            </button>
+          </div>
         </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div><span className="text-[10px] text-stone-500 uppercase font-bold">Mode</span>
+            <div className={`mt-1 px-3 py-1.5 rounded-lg text-xs font-bold inline-block ${cfg.mode === "play" ? "bg-emerald-500" : "bg-amber-500"}`}>{cfg.mode === "play" ? "Play" : "Pause"}</div></div>
+          <div><span className="text-[10px] text-stone-500 uppercase font-bold">Frequency</span><div className="text-sm font-semibold mt-1 capitalize">{cfg.frequency || "Monthly"}</div></div>
+          <div><span className="text-[10px] text-stone-500 uppercase font-bold">Last Run</span><div className="text-sm font-semibold mt-1">{cfg.last_run || "Not started"}</div></div>
+          <div><span className="text-[10px] text-stone-500 uppercase font-bold">Next Run</span><div className="text-sm font-semibold mt-1">{cfg.next_run || "Not scheduled"}</div></div>
+        </div>
+        {cfg.next_run && (
+          <div className="bg-stone-700/50 rounded-xl p-4 mt-2">
+            <h4 className="text-xs font-bold text-stone-300 mb-2">Automation Plan</h4>
+            <div className="text-xs text-stone-400 space-y-1">
+              <div><span className="text-stone-300 font-medium">Window:</span> {cfg.window_start || "—"} — No end date</div>
+              <div><span className="text-stone-300 font-medium">Rule:</span> {cfg.rule || "Every month on day 1"}</div>
+              <div><span className="text-stone-300 font-medium">Upcoming:</span> {getUpcoming().join(", ") || "—"}</div>
+              <div className="text-[10px] text-stone-500 mt-2">Scheduler target time: 07:00 ({cfg.timezone || "Europe/London"})</div>
+            </div>
+          </div>
+        )}
       </div>
+
       {data.runs.length === 0 ? <div className="text-center py-12 text-stone-400 text-sm">No payroll runs yet</div> : (
         <div className="border border-stone-200 rounded-xl overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="bg-stone-50 border-b"><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Period</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Staff</th><th className="px-4 py-2.5 text-right text-xs font-semibold text-stone-500">Gross</th><th className="px-4 py-2.5 text-right text-xs font-semibold text-stone-500">Net</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Status</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Source</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Actions</th></tr></thead>
+            <thead><tr className="bg-stone-50 border-b"><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Period</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Branch</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Staff</th><th className="px-4 py-2.5 text-right text-xs font-semibold text-stone-500">Gross</th><th className="px-4 py-2.5 text-right text-xs font-semibold text-stone-500">Net</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Status</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Source</th><th className="px-4 py-2.5 text-left text-xs font-semibold text-stone-500">Actions</th></tr></thead>
             <tbody>{data.runs.map(r => (
               <tr key={r.id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`payroll-row-${r.id}`}>
-                <td className="px-4 py-2.5 text-stone-700 font-medium">{r.period_start} — {r.period_end}</td>
-                <td className="px-4 py-2.5 text-stone-600">{r.staff_count}</td>
+                <td className="px-4 py-2.5"><div className="text-stone-700 font-medium">{r.period_start} — {r.period_end}</div></td>
+                <td className="px-4 py-2.5 text-stone-500 text-xs uppercase">{r.property_id || "All"}</td>
+                <td className="px-4 py-2.5 text-stone-600">{r.staff_count} employees</td>
                 <td className="px-4 py-2.5 text-right font-semibold text-stone-700">{currency(r.gross_total)}</td>
                 <td className="px-4 py-2.5 text-right font-semibold text-emerald-600">{currency(r.net_total)}</td>
                 <td className="px-4 py-2.5"><Badge className={`text-[10px] ${statusColors[r.status] || "bg-stone-100"}`}>{r.status}</Badge></td>
-                <td className="px-4 py-2.5 text-stone-500 text-xs capitalize">{r.source}</td>
+                <td className="px-4 py-2.5"><Badge className="text-[10px] bg-stone-100 text-stone-500">{r.source || "Manual"}</Badge></td>
                 <td className="px-4 py-2.5 flex gap-1">
                   {r.status === "draft" && <button onClick={() => updateStatus(r.id, "approved")} className="text-xs text-blue-600 hover:underline">Approve</button>}
                   {r.status === "approved" && <button onClick={() => updateStatus(r.id, "paid")} className="text-xs text-emerald-600 hover:underline">Pay</button>}
+                  <button className="text-xs text-stone-400 hover:underline">View</button>
                 </td>
               </tr>
             ))}</tbody>
           </table>
         </div>
       )}
+
+      {/* Config Dialog */}
+      <Dialog open={showConfig} onOpenChange={setShowConfig}>
+        <DialogContent className="max-w-md" data-testid="payroll-config-dialog"><DialogHeader><DialogTitle>Configure Payroll Automation</DialogTitle></DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="text-xs text-stone-500 mb-1 block">Mode</label>
+                <Select value={cfgForm.mode} onValueChange={v => setCfgForm({...cfgForm, mode: v})}><SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pause">Pause</SelectItem><SelectItem value="play">Play</SelectItem></SelectContent></Select></div>
+              <div><label className="text-xs text-stone-500 mb-1 block">Frequency</label>
+                <Select value={cfgForm.frequency} onValueChange={v => setCfgForm({...cfgForm, frequency: v})}><SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="weekly">Weekly</SelectItem><SelectItem value="biweekly">Bi-Weekly</SelectItem><SelectItem value="monthly">Monthly</SelectItem></SelectContent></Select></div>
+            </div>
+            <div><label className="text-xs text-stone-500 mb-1 block">Next Run Date</label>
+              <Input type="date" value={cfgForm.next_run} onChange={e => setCfgForm({...cfgForm, next_run: e.target.value})} data-testid="payroll-next-run" /></div>
+            <div><label className="text-xs text-stone-500 mb-1 block">Rule</label>
+              <Input value={cfgForm.rule} onChange={e => setCfgForm({...cfgForm, rule: e.target.value})} placeholder="Every month on day 1" data-testid="payroll-rule" /></div>
+            <div><label className="text-xs text-stone-500 mb-1 block">Timezone</label>
+              <Input value={cfgForm.timezone} onChange={e => setCfgForm({...cfgForm, timezone: e.target.value})} placeholder="Europe/London" data-testid="payroll-timezone" /></div>
+            <button onClick={saveConfig} className="w-full py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium" data-testid="payroll-save-config">Save Configuration</button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="max-w-md" data-testid="payroll-dialog"><DialogHeader><DialogTitle>New Payroll Run</DialogTitle></DialogHeader>
           <div className="space-y-3 mt-2">

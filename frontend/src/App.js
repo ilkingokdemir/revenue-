@@ -59,6 +59,7 @@ import { StaffManagementPanel } from "./components/dashboard/StaffManagementPane
 import { MyTasksPanel } from "./components/dashboard/MyTasksPanel";
 import { LostFoundPanel } from "./components/dashboard/LostFoundPanel";
 import { EventsPanel } from "./components/dashboard/EventsPanel";
+import { SettingsHubPanel } from "./components/dashboard/SettingsHubPanel";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
@@ -2576,6 +2577,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
+        ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings Hub", testId: "settings-hub-btn" }] : []),
       ]
     }
   ];
@@ -2856,6 +2858,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Admin Panel */}
         {activeView === "admin-panel" && (
           <AdminPanel properties={properties} user={user} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Settings Hub */}
+        {activeView === "settings-hub" && (
+          <SettingsHubPanel />
         )}
 
         {/* Sync Log View */}

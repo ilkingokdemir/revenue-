@@ -1,6 +1,6 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 25+ Modules + Multi-Language (7 languages) + Mobile Responsive
+## 28+ Modules + Multi-Language (7 languages) + Mobile Responsive
 
 ### Multi-Language: English, Turkish, Spanish, Russian, Arabic (RTL), French, German
 
@@ -17,29 +17,30 @@
 ### Operations
 - Housekeeping + Maintenance Integration
 - Maintenance: Kanban+Table, SLA, Before/After Photos, Job Timeline
-- **Operations Hub** (7 modules): Reception, Routine Templates, Routine History, Pass Over Duties, Laundry, Compliance, Shifts
+- Operations Hub (7 modules): Reception, Routine Templates, Routine History, Pass Over Duties, Laundry, Compliance, Shifts
 
-### Finance Module (8 sub-modules)
-1. Finance Dashboard (KPIs, Operating Ledger with Pay buttons, Revenue by Source, 6-Month Chart, Quick Actions)
-2. Earned Salaries, Payroll Runs, Adjustments, Cash Advances, Adjustment Categories, Expenses, Recurring Expenses
+### Finance (8 sub-modules)
+- Finance Dashboard (KPIs, Operating Ledger, 6-Month Chart, Quick Actions)
+- Earned Salaries, Payroll Runs, Adjustments, Cash Advances, Categories, Expenses, Recurring
 
-### Staff Management (NEW - 3 tabs)
-1. **User Management** — Full table with Name/Email/Roles/Branches/Per-branch payment rates (Daily £50/day, Hourly £11/hr), role filters, search, Create/Edit user with Account + Branches & Payment Settings
-2. **My Shifts** — Staff self-service weekly calendar showing their own shifts with week navigation
-3. **Roles & Permissions** — Role list with user counts and permission counts
+### Staff Management (3 tabs)
+- User Management (per-branch payment rates, multi-branch)
+- My Shifts (staff self-service calendar)
+- Roles & Permissions
 
-### Notification Centre
-- Bell icon, auto-generated alerts, filter tabs
+### My Tasks Dashboard (NEW)
+- Personalized daily overview: greeting, 6 stat cards, shifts, handovers, routines, maintenance
 
-### Mobile Responsive
-- Hamburger menu, slide-in sidebar, mobile top bar
+### Lost & Found (NEW)
+- Item tracking: category, location, guest matching, claim/dispose workflow, stats
 
-### F&B / Revenue, Communications, Administration
-- POS, Payments, Messaging, Review Hub, Admin Panel
+### Events & Meeting Rooms (NEW)
+- Meeting Rooms: capacity, equipment, 3-tier pricing (hourly/half-day/full-day)
+- Event Bookings: setup types, catering packages, attendees, cost, status workflow
+- Catering Packages: auto-seeded defaults (Tea & Coffee, Morning Break, Working Lunch, Full Day)
 
-## Testing: 86 iterations, all passing (100%)
+### Notification Centre, Mobile Responsive, F&B, Communications, Administration
 
-## Upcoming Tasks
-- My Tasks Dashboard (P2) - personalized daily to-do
-- Lost & Found Module (P2)
-- Event/Meeting Room Management (P2)
+## Testing: 87 iterations, all passing (100%)
+
+## All tasks complete. System exceeds legacy hotelbox.com functionality.

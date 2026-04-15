@@ -1,0 +1,136 @@
+{
+  "summary": "Iteration 75 - Kiosk Self Check-In, Welcome Info Settings, and SMS/WhatsApp Satisfaction Testing Complete. All 20 backend API tests passed (100%). All frontend UI components verified working including kiosk page with welcome/search/results/register screens, Guest Journey panel with 4 tabs (Registrations, Satisfaction, Welcome Info, Kiosk Setup), and ID Upload with Take Photo/Choose from Gallery options.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Kiosk Welcome Screen",
+        "issues": ["Hotel name shows 'Hotel' instead of actual property name - this is because the kiosk page fetches from /api/properties which requires auth. The property name lookup should use a public endpoint or be passed differently."]
+      }
+    ]
+  },
+  "features_tested": {
+    "kiosk_lookup_endpoint": {
+      "status": "PASS",
+      "description": "GET /api/guest-journey/kiosk-lookup/{property_id}?q=search - public booking lookup",
+      "tests": [
+        "Valid query returns matching bookings with booking_id, booking_ref, guest_name, check_in, check_out, registration_token, registration_status",
+        "Short query (<2 chars) returns empty list",
+        "Empty query returns empty list",
+        "Non-matching query returns empty list",
+        "Search by booking ref works",
+        "Endpoint is public (no auth required)"
+      ]
+    },
+    "kiosk_register_endpoint": {
+      "status": "PASS",
+      "description": "POST /api/guest-journey/kiosk-register/{property_id} - create walk-in registration",
+      "tests": [
+        "Creates new registration and returns token + status",
+        "Returns existing token if registration already exists",
+        "Missing booking_id returns 400",
+        "Invalid booking_id returns 404",
+        "Endpoint is public (no auth required)"
+      ]
+    },
+    "welcome_info_endpoints": {
+      "status": "PASS",
+      "description": "GET/PUT /api/guest-journey/welcome-info/{property_id} - configurable welcome info",
+      "tests": [
+        "GET returns default values if not set (hotel_policies, city_info, custom_message)",
+        "PUT saves hotel_policies, city_info, custom_message",
+        "Saved data persists and can be retrieved",
+        "Endpoints require authentication",
+        "Empty lists are accepted"
+      ]
+    },
+    "satisfaction_sms_whatsapp": {
+      "status": "PASS",
+      "description": "Satisfaction checks with SMS/WhatsApp delivery (graceful skip if not configured)",
+      "tests": [
+        "POST /api/guest-journey/send-satisfaction-check/{property_id} returns sent count and total_eligible",
+        "GET /api/guest-journey/satisfaction-checks/{property_id} lists all satisfaction checks",
+        "SMS and WhatsApp gracefully skip when Twilio/WhatsApp not configured"
+      ]
+    },
+    "kiosk_page_ui": {
+      "status": "PASS",
+      "description": "Kiosk page at /checkin-kiosk/{property_id}",
+      "tests": [
+        "Welcome screen with hotel name, 'Self Check-In' subtitle, 'Tap anywhere to begin' button",
+        "Search screen with 'Find Your Booking' title, search input, Search button, 'Back to welcome screen' link",
+        "Results screen with 'Select Your Booking' title, booking cards with guest name, ref, dates, rooms",
+        "Completed badges shown for completed registrations",
+        "Arrow navigation icons for pending registrations",
+        "Registration screen with embedded iframe of /register/{token}",
+        "Back to search button on registration screen",
+        "Auto-reset to welcome screen after 60s idle (code verified)"
+      ]
+    },
+    "guest_journey_panel_tabs": {
+      "status": "PASS",
+      "description": "Guest Journey panel has 4 tabs",
+      "tests": [
+        "Registrations tab - shows registration table with guest, booking ref, status, ID, T&C, date, actions",
+        "Satisfaction tab - shows satisfaction checks table",
+        "Welcome Info tab - editable hotel policies list, city info list, custom message textarea, save button, add item buttons",
+        "Kiosk Setup tab - kiosk URL, QR code, copy button, setup instructions (4 steps), preview button"
+      ]
+    },
+    "id_upload_options": {
+      "status": "PASS",
+      "description": "ID Upload step has two options",
+      "tests": [
+        "Take Photo button with camera icon - 'Use your camera to capture your ID'",
+        "Choose from Gallery button with gallery icon - 'Select a photo or PDF from your device'",
+        "Hidden camera input with capture='environment' attribute",
+        "Hidden file input for gallery selection",
+        "Accepted formats shown: JPEG, PNG, PDF - max 10MB"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration75_kiosk_welcome_info.py",
+    "/app/test_reports/pytest/pytest_iteration75_kiosk_welcome.xml"
+  ],
+  "action_items": [
+    "Minor: Kiosk welcome screen shows 'Hotel' instead of actual property name because /api/properties requires auth. Consider adding a public endpoint for property name lookup or passing property name via URL parameter."
+  ],
+  "critical_code_review_comments": [
+    "Kiosk page well-implemented with 4 screens (welcome, search, results, register) and proper state management",
+    "Kiosk uses iframe to embed existing registration page - good code reuse",
+    "60-second idle timeout correctly resets to welcome screen",
+    "Welcome Info tab allows full customization of hotel policies, city info, and custom message",
+    "Kiosk Setup tab provides clear setup instructions with QR code for easy device setup",
+    "ID Upload step provides both camera capture and gallery selection options",
+    "All kiosk endpoints (lookup, register) are correctly public (no auth required)",
+    "Welcome info endpoints correctly require admin/manager authentication",
+    "SMS/WhatsApp satisfaction delivery gracefully skips when not configured",
+    "All data-testid attributes properly implemented for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration75_kiosk_welcome_info.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (all UI components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "test_property": "aldgate-flats",
+    "kiosk_url": "https://review-hub-108.preview.emergentagent.com/checkin-kiosk/aldgate-flats"
+  },
+  "seed_data_creation": "None - used existing test data from previous iterations",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 75 tested new kiosk self check-in feature, welcome info settings, and SMS/WhatsApp satisfaction delivery. Kiosk page at /checkin-kiosk/{property_id} has 4 screens: welcome, search, results, register. Guest Journey panel now has 4 tabs: Registrations, Satisfaction, Welcome Info, Kiosk Setup. ID Upload step has Take Photo and Choose from Gallery options. All backend endpoints working. Minor issue: kiosk welcome screen shows 'Hotel' instead of property name because /api/properties requires auth.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "SMS (Twilio) and WhatsApp require API keys configured in channel_settings - they gracefully skip when not configured. Email uses Resend placeholder key (re_123456789)."
+  }
+}

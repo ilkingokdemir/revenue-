@@ -292,6 +292,95 @@ def create_guest_journey_router(db, require_roles):
         docs = await db.guest_registrations.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
         return docs
 
+    # ==================== KIOSK: LOOKUP BOOKING (PUBLIC) ====================
+
+    @router.get("/guest-journey/kiosk-lookup/{property_id}")
+    async def kiosk_lookup(property_id: str, q: str = ""):
+        """Public: Look up booking by ref or guest name for kiosk check-in"""
+        if not q or len(q) < 2:
+            return []
+        query = {
+            "property_id": property_id,
+            "status": {"$in": ["confirmed", "pending", "checked_in"]},
+            "$or": [
+                {"booking_ref": {"$regex": q, "$options": "i"}},
+                {"guest_name": {"$regex": q, "$options": "i"}},
+                {"guest_email": {"$regex": q, "$options": "i"}},
+            ]
+        }
+        bookings = await db.bookings.find(query, {"_id": 0}).sort("check_in", 1).to_list(20)
+        results = []
+        for b in bookings:
+            reg = await db.guest_registrations.find_one({"booking_id": b["id"]}, {"_id": 0})
+            results.append({
+                "booking_id": b["id"],
+                "booking_ref": b.get("booking_ref", ""),
+                "guest_name": b.get("guest_name", ""),
+                "guest_email": b.get("guest_email", ""),
+                "check_in": b.get("check_in", ""),
+                "check_out": b.get("check_out", ""),
+                "rooms": b.get("rooms", 1),
+                "registration_token": reg.get("token") if reg else None,
+                "registration_status": reg.get("status") if reg else None,
+            })
+        return results
+
+    # ==================== KIOSK: CREATE WALK-IN REGISTRATION (PUBLIC) ====================
+
+    @router.post("/guest-journey/kiosk-register/{property_id}")
+    async def kiosk_register(property_id: str, data: Dict):
+        """Public: Create registration for walk-in guest at kiosk"""
+        booking_id = data.get("booking_id")
+        if not booking_id:
+            raise HTTPException(400, "booking_id required")
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+
+        existing = await db.guest_registrations.find_one({"booking_id": booking_id}, {"_id": 0})
+        if existing and existing.get("token"):
+            return {"token": existing["token"], "status": existing.get("status", "pending")}
+
+        token = secrets.token_urlsafe(32)
+        reg = {
+            "id": str(uuid.uuid4()), "booking_id": booking_id,
+            "booking_ref": booking.get("booking_ref", ""), "property_id": property_id,
+            "guest_name": booking.get("guest_name", ""), "guest_email": booking.get("guest_email", ""),
+            "guest_phone": booking.get("guest_phone", ""), "token": token,
+            "status": "pending", "form_data": {}, "id_uploaded": False,
+            "terms_accepted": False, "signature": "", "welcome_sent": False,
+            "satisfaction_check_sent": False,
+            "created_at": datetime.now(timezone.utc).isoformat(), "completed_at": "",
+        }
+        await db.guest_registrations.insert_one(reg)
+        return {"token": token, "status": "pending"}
+
+    # ==================== WELCOME INFO SETTINGS ====================
+
+    @router.get("/guest-journey/welcome-info/{property_id}")
+    async def get_welcome_info(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        info = await db.welcome_info.find_one({"property_id": property_id}, {"_id": 0})
+        if not info:
+            return {
+                "property_id": property_id,
+                "hotel_policies": ["Check-in: from 3:00 PM", "Check-out: by 11:00 AM", "WiFi: Available in all areas (password at reception)", "Breakfast: 7:00 AM - 10:30 AM", "Parking: Available on request"],
+                "city_info": ["Nearest tube/metro: 5 min walk", "Airport shuttle available on request", "Ask reception for restaurant recommendations", "City tour bookings at front desk"],
+                "custom_message": "",
+            }
+        return info
+
+    @router.put("/guest-journey/welcome-info/{property_id}")
+    async def update_welcome_info(property_id: str, data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        update = {
+            "property_id": property_id,
+            "hotel_policies": data.get("hotel_policies", []),
+            "city_info": data.get("city_info", []),
+            "custom_message": data.get("custom_message", ""),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.welcome_info.update_one({"property_id": property_id}, {"$set": update}, upsert=True)
+        return {"status": "saved"}
+
     # ==================== SATISFACTION CHECK ====================
 
     @router.post("/guest-journey/send-satisfaction-check/{property_id}")
@@ -338,6 +427,14 @@ def create_guest_journey_router(db, require_roles):
                 await db.guest_registrations.update_one({"id": reg["id"]}, {"$set": {"satisfaction_check_sent": True}})
 
             asyncio.create_task(_send_satisfaction_email(booking, hotel_name, feedback_url))
+
+            # Also try SMS and WhatsApp
+            phone = booking.get("guest_phone", "")
+            if phone:
+                sms_msg = f"{hotel_name}: How's your stay? Everything OK? Tap here: {feedback_url}?r=all_good or need help? {feedback_url}?r=need_help"
+                asyncio.create_task(_send_satisfaction_sms(property_id, phone, sms_msg))
+                asyncio.create_task(_send_satisfaction_whatsapp(property_id, phone, sms_msg))
+
             sent += 1
 
         return {"sent": sent, "total_eligible": len(bookings)}
@@ -423,6 +520,16 @@ def create_guest_journey_router(db, require_roles):
     async def _send_welcome_pack(reg, hotel_name, booking):
         if not resend.api_key or resend.api_key == 're_123456789':
             return
+        # Load configurable welcome info
+        info = await db.welcome_info.find_one({"property_id": reg.get("property_id")}, {"_id": 0})
+        policies = (info or {}).get("hotel_policies", ["Check-in: from 3:00 PM", "Check-out: by 11:00 AM", "WiFi: Available in all areas (password at reception)", "Breakfast: 7:00 AM - 10:30 AM", "Parking: Available on request"])
+        city_info = (info or {}).get("city_info", ["Nearest tube/metro: 5 min walk", "Airport shuttle available on request", "Ask reception for restaurant recommendations", "City tour bookings at front desk"])
+        custom_msg = (info or {}).get("custom_message", "")
+
+        policy_html = "".join(f"<li>{p}</li>" for p in policies)
+        city_html = "".join(f"<li>{c}</li>" for c in city_info)
+        custom_block = f'<div style="background:#f0fdf4;border-radius:12px;padding:20px;margin:16px 0;"><p style="margin:0;color:#166534;font-size:14px;">{custom_msg}</p></div>' if custom_msg else ""
+
         html = f"""
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
           <div style="background:linear-gradient(135deg,#2C4C3B,#4a7c5c);color:#fff;padding:32px;text-align:center;">
@@ -431,24 +538,14 @@ def create_guest_journey_router(db, require_roles):
           <div style="padding:28px;">
             <p>Dear {reg.get('guest_name', 'Guest')},</p>
             <p>Thank you for completing your registration. Here's everything you need for your stay:</p>
+            {custom_block}
             <div style="background:#f8fafc;border-radius:12px;padding:20px;margin:16px 0;">
-              <h3 style="margin:0 0 12px;color:#1e3a5f;">Hotel Policies</h3>
-              <ul style="margin:0;padding:0 0 0 16px;color:#555;font-size:14px;">
-                <li>Check-in: from 3:00 PM</li>
-                <li>Check-out: by 11:00 AM</li>
-                <li>WiFi: Available in all areas (password at reception)</li>
-                <li>Breakfast: 7:00 AM - 10:30 AM</li>
-                <li>Parking: Available on request</li>
-              </ul>
+              <h3 style="margin:0 0 12px;color:#1e3a5f;">Hotel Information</h3>
+              <ul style="margin:0;padding:0 0 0 16px;color:#555;font-size:14px;">{policy_html}</ul>
             </div>
             <div style="background:#fffbeb;border-radius:12px;padding:20px;margin:16px 0;">
               <h3 style="margin:0 0 12px;color:#92400e;">Explore the Area</h3>
-              <ul style="margin:0;padding:0 0 0 16px;color:#555;font-size:14px;">
-                <li>Nearest tube/metro: 5 min walk</li>
-                <li>Airport shuttle available on request</li>
-                <li>Ask reception for restaurant recommendations</li>
-                <li>City tour bookings at front desk</li>
-              </ul>
+              <ul style="margin:0;padding:0 0 0 16px;color:#555;font-size:14px;">{city_html}</ul>
             </div>
             <p style="color:#666;font-size:13px;">We look forward to seeing you on {booking.get('check_in', '')}!</p>
           </div>
@@ -480,5 +577,41 @@ def create_guest_journey_router(db, require_roles):
             await asyncio.to_thread(resend.Emails.send, {"from": SENDER_EMAIL, "to": [booking.get("guest_email", "")], "subject": f"How's your stay? — {hotel_name}", "html": html})
         except Exception as e:
             logger.error(f"Satisfaction email error: {e}")
+
+    async def _send_satisfaction_sms(property_id, phone, message):
+        try:
+            settings = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+            account_sid = settings.get("twilio_account_sid", "")
+            auth_token = settings.get("twilio_auth_token", "")
+            from_number = settings.get("twilio_phone_number", "")
+            if not all([account_sid, auth_token, from_number]):
+                return
+            import httpx
+            async with httpx.AsyncClient() as client_http:
+                await client_http.post(
+                    f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json",
+                    auth=(account_sid, auth_token),
+                    data={"From": from_number, "To": phone, "Body": message},
+                )
+        except Exception as e:
+            logger.error(f"Satisfaction SMS error: {e}")
+
+    async def _send_satisfaction_whatsapp(property_id, phone, message):
+        try:
+            settings = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
+            access_token = settings.get("whatsapp_access_token", "")
+            phone_id = settings.get("whatsapp_phone_number_id", "")
+            if not all([access_token, phone_id]):
+                return
+            import httpx
+            wa_phone = phone.replace("+", "").replace(" ", "")
+            async with httpx.AsyncClient() as client_http:
+                await client_http.post(
+                    f"https://graph.facebook.com/v18.0/{phone_id}/messages",
+                    headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
+                    json={"messaging_product": "whatsapp", "to": wa_phone, "type": "text", "text": {"body": message}},
+                )
+        except Exception as e:
+            logger.error(f"Satisfaction WhatsApp error: {e}")
 
     return router

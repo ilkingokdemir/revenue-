@@ -208,6 +208,8 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
         {[
           { id: "registrations", label: "Registrations", icon: <FileText size={14} /> },
           { id: "satisfaction", label: "Satisfaction", icon: <Smiley size={14} /> },
+          { id: "welcome-info", label: "Welcome Info", icon: <Mail size={14} /> },
+          { id: "kiosk", label: "Kiosk Setup", icon: <Smartphone size={14} /> },
         ].map(t => (
           <button key={t.id} data-testid={`tab-${t.id}`} onClick={() => setTab(t.id)} className={`px-4 py-2 text-sm font-medium rounded-md flex items-center gap-2 transition ${tab === t.id ? "bg-white shadow-sm text-stone-800" : "text-stone-500 hover:text-stone-700"}`}>
             {t.icon} {t.label}
@@ -293,6 +295,14 @@ export function GuestJourneyPanel({ properties, activePropertyId: propActiveProp
 
       {tab === "satisfaction" && (
         <SatisfactionTab propertyId={activePropertyId} />
+      )}
+
+      {tab === "welcome-info" && (
+        <WelcomeInfoTab propertyId={activePropertyId} />
+      )}
+
+      {tab === "kiosk" && (
+        <KioskSetupTab propertyId={activePropertyId} />
       )}
 
       {/* Send Registration Link Dialog */}
@@ -609,6 +619,143 @@ function CheckItem({ label, done }) {
     <div className="flex items-center gap-2">
       {done ? <CheckCircle size={16} className="text-emerald-500" weight="fill" /> : <div className="w-4 h-4 rounded-full border-2 border-stone-300" />}
       <span className={`text-sm ${done ? "text-stone-800" : "text-stone-400"}`}>{label}</span>
+    </div>
+  );
+}
+
+
+function WelcomeInfoTab({ propertyId }) {
+  const [policies, setPolicies] = useState([]);
+  const [cityInfo, setCityInfo] = useState([]);
+  const [customMsg, setCustomMsg] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data } = await axios.get(`${API}/guest-journey/welcome-info/${propertyId}`);
+        setPolicies(data.hotel_policies || []);
+        setCityInfo(data.city_info || []);
+        setCustomMsg(data.custom_message || "");
+      } catch { }
+      setLoading(false);
+    };
+    if (propertyId) load();
+  }, [propertyId]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await axios.put(`${API}/guest-journey/welcome-info/${propertyId}`, { hotel_policies: policies, city_info: cityInfo, custom_message: customMsg });
+      toast.success("Welcome info saved!");
+    } catch { toast.error("Failed to save"); }
+    setSaving(false);
+  };
+
+  const addItem = (list, setList) => setList([...list, ""]);
+  const updateItem = (list, setList, idx, val) => { const n = [...list]; n[idx] = val; setList(n); };
+  const removeItem = (list, setList, idx) => setList(list.filter((_, i) => i !== idx));
+
+  if (loading) return <div className="p-8 text-center text-stone-400">Loading...</div>;
+
+  return (
+    <div className="space-y-6" data-testid="welcome-info-tab">
+      <div className="bg-white rounded-xl border border-stone-200/60 p-5">
+        <h3 className="text-sm font-semibold text-stone-800 mb-1">Hotel Information</h3>
+        <p className="text-xs text-stone-400 mb-4">These appear in the welcome email sent to guests after registration</p>
+        <div className="space-y-2">
+          {policies.map((p, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input data-testid={`policy-input-${i}`} value={p} onChange={(e) => updateItem(policies, setPolicies, i, e.target.value)} className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f] outline-none" placeholder="e.g. Check-in: from 3:00 PM" />
+              <button onClick={() => removeItem(policies, setPolicies, i)} className="p-1.5 text-stone-400 hover:text-red-500 transition"><X size={14} /></button>
+            </div>
+          ))}
+          <button onClick={() => addItem(policies, setPolicies)} className="text-xs text-[#1e3a5f] font-medium hover:underline" data-testid="btn-add-policy">+ Add item</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-stone-200/60 p-5">
+        <h3 className="text-sm font-semibold text-stone-800 mb-1">City & Area Info</h3>
+        <p className="text-xs text-stone-400 mb-4">Local tips and information for your guests</p>
+        <div className="space-y-2">
+          {cityInfo.map((c, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <input data-testid={`city-input-${i}`} value={c} onChange={(e) => updateItem(cityInfo, setCityInfo, i, e.target.value)} className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f] outline-none" placeholder="e.g. Nearest metro: 5 min walk" />
+              <button onClick={() => removeItem(cityInfo, setCityInfo, i)} className="p-1.5 text-stone-400 hover:text-red-500 transition"><X size={14} /></button>
+            </div>
+          ))}
+          <button onClick={() => addItem(cityInfo, setCityInfo)} className="text-xs text-[#1e3a5f] font-medium hover:underline" data-testid="btn-add-city">+ Add item</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-stone-200/60 p-5">
+        <h3 className="text-sm font-semibold text-stone-800 mb-1">Custom Welcome Message</h3>
+        <p className="text-xs text-stone-400 mb-3">Optional personal message shown at the top of the welcome email</p>
+        <textarea data-testid="custom-message-input" value={customMsg} onChange={(e) => setCustomMsg(e.target.value)} rows={3} className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f] outline-none resize-none" placeholder="e.g. We're thrilled to have you! Don't miss our rooftop bar opening at 6pm..." />
+      </div>
+
+      <button data-testid="btn-save-welcome-info" onClick={save} disabled={saving} className="px-6 py-2.5 bg-[#1e3a5f] text-white text-sm font-semibold rounded-lg hover:bg-[#15304f] disabled:opacity-50 transition">
+        {saving ? "Saving..." : "Save Welcome Info"}
+      </button>
+    </div>
+  );
+}
+
+function KioskSetupTab({ propertyId }) {
+  const kioskUrl = `${BASE_URL}/checkin-kiosk/${propertyId}`;
+
+  return (
+    <div className="space-y-6" data-testid="kiosk-setup-tab">
+      <div className="bg-white rounded-xl border border-stone-200/60 p-6">
+        <h3 className="text-base font-semibold text-stone-800 mb-1">iPad / Kiosk Check-In</h3>
+        <p className="text-sm text-stone-400 mb-5">Set up an iPad or tablet at your reception for guest self check-in. Open this URL in Safari/Chrome full-screen mode.</p>
+
+        <div className="bg-stone-50 rounded-xl p-4 space-y-4">
+          {/* URL */}
+          <div>
+            <label className="text-xs font-medium text-stone-500 block mb-1.5">Kiosk URL</label>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 px-3 py-2.5 bg-white rounded-lg border border-stone-200 text-sm text-stone-700 truncate" data-testid="kiosk-url">{kioskUrl}</code>
+              <button onClick={() => { navigator.clipboard.writeText(kioskUrl); toast.success("Kiosk URL copied!"); }} className="px-3 py-2.5 bg-[#1e3a5f] text-white text-xs font-medium rounded-lg hover:bg-[#15304f] transition" data-testid="btn-copy-kiosk-url">
+                Copy
+              </button>
+            </div>
+          </div>
+
+          {/* QR Code for kiosk */}
+          <div className="flex flex-col items-center pt-2">
+            <QRCodeSVG value={kioskUrl} size={140} level="M" includeMargin />
+            <p className="text-[10px] text-stone-400 mt-2">Scan to open kiosk on device</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-stone-200/60 p-6">
+        <h3 className="text-sm font-semibold text-stone-800 mb-3">Setup Instructions</h3>
+        <div className="space-y-3 text-sm text-stone-600">
+          <div className="flex gap-3">
+            <span className="w-6 h-6 rounded-full bg-[#1e3a5f] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">1</span>
+            <p>Open the kiosk URL on your iPad or tablet in Safari or Chrome</p>
+          </div>
+          <div className="flex gap-3">
+            <span className="w-6 h-6 rounded-full bg-[#1e3a5f] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">2</span>
+            <p>Enable full-screen mode: Safari &rarr; Share &rarr; Add to Home Screen</p>
+          </div>
+          <div className="flex gap-3">
+            <span className="w-6 h-6 rounded-full bg-[#1e3a5f] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">3</span>
+            <p>Place the iPad at reception. Guests tap the screen to search and check in</p>
+          </div>
+          <div className="flex gap-3">
+            <span className="w-6 h-6 rounded-full bg-[#1e3a5f] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">4</span>
+            <p>The kiosk auto-resets to the welcome screen after 60 seconds of inactivity</p>
+          </div>
+        </div>
+      </div>
+
+      <a href={kioskUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 transition" data-testid="btn-preview-kiosk">
+        <ExternalLink size={14} /> Preview Kiosk
+      </a>
     </div>
   );
 }

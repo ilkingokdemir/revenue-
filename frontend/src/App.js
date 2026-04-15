@@ -50,6 +50,7 @@ import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
 import GuestSurveyPage from "./GuestSurveyPage";
 import GuestRegistrationPage from "./GuestRegistrationPage";
 import GuestFeedbackPage from "./GuestFeedbackPage";
+import CheckInKioskPage from "./CheckInKioskPage";
 import QROrderPage from "./QROrderPage";
 import KioskPage from "./KioskPage";
 import {
@@ -3060,6 +3061,10 @@ function App() {
   if (window.location.pathname.startsWith("/feedback/")) {
     const token = window.location.pathname.split("/feedback/")[1];
     return <GuestFeedbackPage token={token} />;
+  }
+  if (window.location.pathname.startsWith("/checkin-kiosk/")) {
+    const propertyId = window.location.pathname.split("/checkin-kiosk/")[1];
+    return <CheckInKioskPage propertyId={propertyId} />;
   }
   if (window.location.pathname.startsWith("/qr-order/")) {
     const parts = window.location.pathname.split("/qr-order/")[1].split("/");

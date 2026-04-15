@@ -1,0 +1,135 @@
+{
+  "summary": "Iteration 85 - Finance Dashboard Enhancements Testing Complete. All 14 backend API tests passed (100%). All frontend features verified: 6-Month Chart, Quick Actions, Operating Ledger with Pay buttons, Room Revenue table, Operating Profit/Loss card with margin.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Finance Dashboard - Dialog",
+        "issues": ["Minor: Missing aria-describedby for DialogContent (accessibility warning in console)"]
+      }
+    ]
+  },
+  "features_tested": {
+    "dashboard_history_endpoint": {
+      "status": "PASS",
+      "endpoint": "GET /api/finance/dashboard-history/{property_id}",
+      "tests": [
+        "Returns 6 months of historical data by default",
+        "Each month has month, revenue, costs, profit fields",
+        "Respects months query parameter (e.g., ?months=3)",
+        "Profit calculation is correct (revenue - costs)",
+        "Requires authentication (401 without auth)",
+        "Works with specific property_id"
+      ]
+    },
+    "dashboard_expense_details": {
+      "status": "PASS",
+      "endpoint": "GET /api/finance/dashboard/{property_id}",
+      "tests": [
+        "Response includes expense_details array",
+        "Each expense has id, date, category, vendor, details, amount, status",
+        "Overview includes margin percentage",
+        "Revenue sources have source, count, revenue fields"
+      ]
+    },
+    "pay_expense_functionality": {
+      "status": "PASS",
+      "endpoint": "PUT /api/finance/expenses/{id}",
+      "tests": [
+        "Create expense with pending status",
+        "Update status to paid via PUT",
+        "Status change persists and reflects in dashboard expense_details"
+      ]
+    },
+    "frontend_6_month_chart": {
+      "status": "PASS",
+      "tests": [
+        "6-Month Financial Overview section visible",
+        "Chart displays bars for Revenue (green), Costs (red), Operating Profit (blue)",
+        "Month labels shown (Nov 2025 - Apr 2026)",
+        "Legend with Room Revenue, Costs, Operating Profit"
+      ]
+    },
+    "frontend_quick_actions": {
+      "status": "PASS",
+      "tests": [
+        "Quick Actions section visible with 3 buttons",
+        "Manage Expenses button switches to Expenses tab",
+        "Payroll Runs button switches to Payroll tab",
+        "View Bookings button present"
+      ],
+      "data_testids": ["qa-expenses", "qa-payroll", "qa-bookings"]
+    },
+    "frontend_operating_ledger": {
+      "status": "PASS",
+      "tests": [
+        "Operating Ledger section visible",
+        "Shows individual expense items with vendor/category, date, amount",
+        "Paid/Accrued status badges displayed correctly",
+        "Pay button visible for accrued expenses",
+        "Pay button marks expense as paid with toast notification"
+      ],
+      "data_testids": ["ledger-item-{id}", "ledger-pay-{id}"]
+    },
+    "frontend_room_revenue_table": {
+      "status": "PASS",
+      "tests": [
+        "Room Revenue section visible",
+        "Table has Source, Count, Revenue columns",
+        "Shows booking sources (Direct, website_widget)",
+        "Displays count and revenue per source"
+      ]
+    },
+    "frontend_profit_loss_card": {
+      "status": "PASS",
+      "tests": [
+        "Operating Profit / Loss card visible",
+        "Shows net profit/loss amount (£-9,905.00)",
+        "Displays margin percentage (-177.03%)",
+        "Color coding: red for loss, green for profit"
+      ]
+    },
+    "regression_finance_tabs": {
+      "status": "PASS",
+      "tests": [
+        "All 8 Finance tabs navigable: Dashboard, Earned Salaries, Payroll Runs, Adjustments, Cash Advances, Categories, Expenses, Recurring"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration85_finance_dashboard_enhancements.py",
+    "/app/test_reports/pytest/pytest_iteration85_finance_dashboard.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Dashboard-history endpoint correctly calculates 6-month data by iterating backwards from current date",
+    "Expense_details in dashboard response properly includes all required fields (id, date, category, vendor, details, amount, status)",
+    "Pay button correctly calls PUT /api/finance/expenses/{id} with {status: 'paid'}",
+    "6-Month chart uses CSS-based bars (no external charting library) - works well",
+    "Quick Actions use onTabSwitch prop to navigate between tabs",
+    "All new UI elements have proper data-testid attributes for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration85_finance_dashboard_enhancements.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (All features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Created TEST_PayButton expense during testing (cleaned up after test)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 85 tested Finance Dashboard enhancements. New endpoint GET /api/finance/dashboard-history/{property_id} returns 6-month historical data. Dashboard response now includes expense_details array with individual expense items. Operating Ledger shows expenses with Paid/Accrued badges and Pay buttons (data-testid='ledger-pay-{id}'). Room Revenue table shows Source/Count/Revenue. Operating Profit/Loss card shows net and margin%. 6-Month chart uses CSS bars. Quick Actions (data-testid='qa-expenses', 'qa-payroll', 'qa-bookings') switch tabs. Existing seed data: Landlord rent expense (£15,500 paid).",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All Finance Dashboard enhancement features are fully functional - no mocked APIs"
+  }
+}

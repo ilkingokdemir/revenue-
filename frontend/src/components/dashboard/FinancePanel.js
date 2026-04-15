@@ -12,18 +12,26 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const currency = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 /* ── FINANCE DASHBOARD ── */
-const DashboardTab = ({ propertyId }) => {
+const DashboardTab = ({ propertyId, onTabSwitch }) => {
   const [data, setData] = useState(null);
+  const [history, setHistory] = useState([]);
   const [fromDate, setFromDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; });
   const [toDate, setToDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()}`; });
 
   const load = useCallback(async () => {
     try {
-      const { data: d } = await axios.get(`${API}/finance/dashboard/${propertyId}?from_date=${fromDate}&to_date=${toDate}`);
-      setData(d);
+      const [{ data: d }, { data: h }] = await Promise.all([
+        axios.get(`${API}/finance/dashboard/${propertyId}?from_date=${fromDate}&to_date=${toDate}`),
+        axios.get(`${API}/finance/dashboard-history/${propertyId}?months=6`),
+      ]);
+      setData(d); setHistory(h);
     } catch { toast.error("Failed to load finance data"); }
   }, [propertyId, fromDate, toDate]);
   useEffect(() => { load(); }, [load]);
+
+  const payExpense = async (id) => {
+    try { await axios.put(`${API}/finance/expenses/${id}`, { status: "paid" }); toast.success("Marked as paid"); load(); } catch { toast.error("Failed"); }
+  };
 
   const o = data?.overview || {};
   const kpis = [
@@ -36,6 +44,8 @@ const DashboardTab = ({ propertyId }) => {
     { label: "TOTAL COSTS", value: currency(o.total_costs), color: "text-stone-700" },
     { label: "NET", value: `${o.net >= 0 ? "+" : ""}${currency(o.net)}`, color: o.net >= 0 ? "text-emerald-600" : "text-red-600" },
   ];
+
+  const maxChart = Math.max(...history.map(h => Math.max(h.revenue, h.costs, Math.abs(h.profit))), 1);
 
   return (
     <div data-testid="finance-dashboard-tab">
@@ -66,49 +76,124 @@ const DashboardTab = ({ propertyId }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-stone-200 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center"><svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg></div>
-            <div>
-              <h3 className="font-bold text-stone-800 text-sm">OPERATING COSTS</h3>
-              <p className="text-xs text-stone-400">{data?.operating_costs?.length || 0} items &middot; {currency(o.total_costs)}</p>
-            </div>
-          </div>
-          {(data?.operating_costs || []).length === 0 ? <p className="text-sm text-stone-400 text-center py-4">No expenses recorded</p> : (
-            <div className="space-y-2">{data.operating_costs.map((c, i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
-                <div className="flex items-center gap-2">
-                  <Badge className="text-[10px] bg-orange-50 text-orange-600 capitalize">{c.category}</Badge>
-                  <span className="text-xs text-stone-400">{c.count} items</span>
-                </div>
-                <span className="text-sm font-semibold text-stone-700">{currency(c.total)}</span>
-              </div>
-            ))}</div>
-          )}
+      {/* Operating Ledger with individual items */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-6 mb-6">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center"><svg className="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg></div>
+          <div><h3 className="font-bold text-stone-800">Operating Ledger</h3><p className="text-xs text-stone-400">Table view of costs and canonical room revenue for the selected period</p></div>
         </div>
-        <div className="bg-white border border-stone-200 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><svg className="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
-            <div>
-              <h3 className="font-bold text-stone-800 text-sm">ROOM REVENUE</h3>
-              <p className="text-xs text-stone-400">{data?.revenue_sources?.length || 0} sources &middot; {currency(o.room_revenue)}</p>
+        <p className="text-xs text-stone-400 mb-4">Expenses {currency(o.expenses)} &middot; Payroll {currency(o.payroll)} &middot; Commission {currency(o.commission)}</p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Operating Costs - individual items */}
+          <div className="border border-stone-200 rounded-xl overflow-hidden">
+            <div className="bg-stone-50 px-4 py-3 border-b flex justify-between">
+              <div><div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Operating Costs</div><div className="text-[10px] text-stone-400">Expenses, payroll and commission</div></div>
+              <div className="text-right"><div className="text-xs text-stone-400">{data?.expense_details?.length || 0} items</div><div className="text-sm font-bold text-red-600">{currency(o.total_costs)}</div></div>
+            </div>
+            <div className="max-h-[320px] overflow-y-auto">
+              {(data?.expense_details || []).map((e, i) => (
+                <div key={e.id || i} className="flex items-center justify-between px-4 py-2.5 border-b border-stone-100 last:border-0 hover:bg-stone-50/50" data-testid={`ledger-item-${e.id}`}>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-stone-800 capitalize truncate">{e.vendor || e.category}</div>
+                      <div className="text-[10px] text-stone-400 truncate">{e.date} {e.details ? `· ${e.details}` : ""}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                    <Badge className={`text-[9px] ${e.status === "paid" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{e.status === "paid" ? "Paid" : "Accrued"}</Badge>
+                    <span className="text-sm font-semibold text-stone-700 w-20 text-right">{currency(e.amount)}</span>
+                    {e.status !== "paid" && <button onClick={() => payExpense(e.id)} className="px-2 py-1 bg-emerald-500 text-white text-[10px] rounded font-medium" data-testid={`ledger-pay-${e.id}`}>Pay</button>}
+                  </div>
+                </div>
+              ))}
+              {(data?.expense_details || []).length === 0 && <p className="text-sm text-stone-400 text-center py-6">No expenses</p>}
             </div>
           </div>
-          {(data?.revenue_sources || []).length === 0 ? <p className="text-sm text-stone-400 text-center py-4">No revenue data</p> : (
-            <div className="space-y-2">{data.revenue_sources.map((s, i) => (
-              <div key={i} className="flex items-center justify-between py-2 border-b border-stone-100 last:border-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-stone-700 font-medium">{s.source}</span>
-                  <span className="text-xs text-stone-400">{s.count} bookings</span>
-                </div>
-                <span className="text-sm font-semibold text-emerald-600">{currency(s.revenue)}</span>
-              </div>
-            ))}</div>
-          )}
+
+          {/* Room Revenue by source */}
+          <div className="border border-stone-200 rounded-xl overflow-hidden">
+            <div className="bg-stone-50 px-4 py-3 border-b flex justify-between">
+              <div><div className="text-xs font-bold text-stone-500 uppercase tracking-wider">Room Revenue</div><div className="text-[10px] text-stone-400">Canonical stay revenue by source</div></div>
+              <div className="text-right"><div className="text-xs text-stone-400">{data?.revenue_sources?.length || 0} sources</div><div className="text-sm font-bold text-emerald-600">{currency(o.room_revenue)}</div></div>
+            </div>
+            <div className="max-h-[320px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead><tr className="border-b border-stone-100"><th className="px-4 py-2 text-left text-[10px] font-semibold text-stone-400 uppercase">Source</th><th className="px-4 py-2 text-center text-[10px] font-semibold text-stone-400 uppercase">Count</th><th className="px-4 py-2 text-right text-[10px] font-semibold text-stone-400 uppercase">Revenue</th></tr></thead>
+                <tbody>{(data?.revenue_sources || []).map((s, i) => (
+                  <tr key={i} className="border-b border-stone-100 last:border-0">
+                    <td className="px-4 py-2.5 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500" /><span className="font-medium text-stone-700">{s.source}</span></td>
+                    <td className="px-4 py-2.5 text-center text-stone-500">{s.count}</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-emerald-600">{currency(s.revenue)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              {(data?.revenue_sources || []).length === 0 && <p className="text-sm text-stone-400 text-center py-6">No revenue data</p>}
+            </div>
+          </div>
         </div>
       </div>
-      {data && <div className="mt-4 text-center"><span className="text-sm font-semibold text-stone-600">Operating Profit/Loss: <span className={o.net >= 0 ? "text-emerald-600" : "text-red-600"}>{currency(o.net)}</span> (Margin: {o.margin}%)</span></div>}
+
+      {/* Operating Profit/Loss */}
+      {data && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-6 mb-6 flex items-center justify-between">
+          <div><h3 className="font-bold text-stone-800 text-lg">Operating Profit / Loss</h3><p className="text-xs text-stone-400">Calculated as gross revenue minus expenses, payroll and commission. Margin: {o.margin}%</p></div>
+          <div className={`text-2xl font-bold ${o.net >= 0 ? "text-emerald-600" : "text-red-600"}`}>{currency(o.net)}</div>
+        </div>
+      )}
+
+      {/* 6-Month Chart + Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2 bg-white border border-stone-200 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><svg className="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div>
+            <div><h3 className="font-bold text-stone-800">6-Month Financial Overview</h3><p className="text-xs text-stone-400">Revenue, costs and net movement</p></div>
+          </div>
+          <div className="flex items-center gap-4 text-xs mb-4 ml-12">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-emerald-500" /> Room Revenue</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-red-400" /> Costs</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-blue-400" /> Operating Profit</span>
+          </div>
+          {history.length > 0 ? (
+            <div className="flex items-end gap-2 h-48 mt-4" data-testid="finance-chart">
+              {history.map((h, i) => {
+                const barH = (v) => Math.max(2, (Math.abs(v) / maxChart) * 160);
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="flex items-end gap-0.5 h-40">
+                      <div className="w-4 bg-emerald-500 rounded-t-sm transition-all" style={{ height: barH(h.revenue) }} title={`Revenue: ${currency(h.revenue)}`} />
+                      <div className="w-4 bg-red-400 rounded-t-sm transition-all" style={{ height: barH(h.costs) }} title={`Costs: ${currency(h.costs)}`} />
+                      <div className={`w-4 rounded-t-sm transition-all ${h.profit >= 0 ? "bg-blue-400" : "bg-amber-400"}`} style={{ height: barH(h.profit) }} title={`Profit: ${currency(h.profit)}`} />
+                    </div>
+                    <div className="text-[9px] text-stone-400 mt-1">{h.month}</div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : <p className="text-sm text-stone-400 text-center py-12">Loading chart data...</p>}
+        </div>
+
+        {/* Quick Actions */}
+        <div className="space-y-3" data-testid="finance-quick-actions">
+          <div className="bg-white border border-stone-200 rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              <h3 className="font-bold text-stone-800 text-sm">Quick Actions</h3>
+            </div>
+            <p className="text-xs text-stone-400 mb-3">Jump into the finance flows used most often</p>
+          </div>
+          <button onClick={() => onTabSwitch && onTabSwitch("expenses")} className="w-full bg-blue-50 border border-blue-100 rounded-xl p-4 text-left hover:shadow-md transition-all group" data-testid="qa-expenses">
+            <div className="flex items-center gap-3"><svg className="w-8 h-8 text-blue-500 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg><div><div className="font-semibold text-stone-800 text-sm">Manage Expenses</div><div className="text-xs text-stone-400">Add, review and settle expense items.</div></div></div>
+          </button>
+          <button onClick={() => onTabSwitch && onTabSwitch("payroll")} className="w-full bg-amber-50 border border-amber-100 rounded-xl p-4 text-left hover:shadow-md transition-all group" data-testid="qa-payroll">
+            <div className="flex items-center gap-3"><svg className="w-8 h-8 text-amber-500 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg><div><div className="font-semibold text-stone-800 text-sm">Payroll Runs</div><div className="text-xs text-stone-400">Open payroll history and payment status.</div></div></div>
+          </button>
+          <button onClick={() => onTabSwitch && onTabSwitch("dashboard")} className="w-full bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-left hover:shadow-md transition-all group" data-testid="qa-bookings">
+            <div className="flex items-center gap-3"><svg className="w-8 h-8 text-emerald-500 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg><div><div className="font-semibold text-stone-800 text-sm">View Bookings</div><div className="text-xs text-stone-400">Inspect reservations that feed room revenue.</div></div></div>
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -692,7 +777,7 @@ export const FinancePanel = ({ properties, activePropertyId }) => {
       </div>
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-          {tab === "dashboard" && <DashboardTab propertyId={pid} />}
+          {tab === "dashboard" && <DashboardTab propertyId={pid} onTabSwitch={setTab} />}
           {tab === "salaries" && <EarnedSalariesTab propertyId={pid} />}
           {tab === "payroll" && <PayrollRunsTab propertyId={pid} />}
           {tab === "adjustments" && <AdjustmentsTab propertyId={pid} />}

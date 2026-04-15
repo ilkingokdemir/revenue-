@@ -87,7 +87,37 @@ def create_finance_router(db, require_roles):
             "operating_costs": cost_items,
             "revenue_sources": revenue_sources,
             "bookings_count": len(bookings),
+            "expense_details": [{"id": e.get("id",""), "date": e.get("date",""), "category": e.get("category",""), "vendor": e.get("vendor",""), "details": e.get("details",""), "amount": float(e.get("amount",0)), "status": e.get("status","pending")} for e in expenses],
         }
+
+    @router.get("/finance/dashboard-history/{property_id}")
+    async def finance_history(property_id: str, months: int = 6,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """6-month financial overview for chart"""
+        import calendar as cal_mod
+        now = datetime.now(timezone.utc)
+        pq = {} if property_id == "all" else {"property_id": property_id}
+        history = []
+        for i in range(months - 1, -1, -1):
+            dt = now.replace(day=1) - timedelta(days=i * 30)
+            y, m = dt.year, dt.month
+            first = f"{y}-{m:02d}-01"
+            last_day = cal_mod.monthrange(y, m)[1]
+            last = f"{y}-{m:02d}-{last_day}"
+            month_label = dt.strftime("%b %Y")
+
+            bks = await db.bookings.find(
+                {**pq, "check_in": {"$lte": last}, "check_out": {"$gte": first}}, {"_id": 0, "total_price": 1}
+            ).to_list(500)
+            rev = sum(float(b.get("total_price", 0) or 0) for b in bks)
+
+            exps = await db.finance_expenses.find(
+                {**pq, "date": {"$gte": first, "$lte": last}}, {"_id": 0, "amount": 1}
+            ).to_list(500)
+            costs = sum(float(e.get("amount", 0) or 0) for e in exps)
+
+            history.append({"month": month_label, "revenue": round(rev, 2), "costs": round(costs, 2), "profit": round(rev - costs, 2)})
+        return history
 
     # ==================== 2. EARNED SALARIES ====================
 

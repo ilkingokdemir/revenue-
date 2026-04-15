@@ -80,8 +80,8 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
 
   const createMaintRequest = async () => {
     try {
-      await axios.post(`${API}/housekeeping/maintenance`, { ...newMaint, property_id: propertyId });
-      toast.success("Maintenance request created"); setShowNewMaint(false);
+      await axios.post(`${API}/housekeeping/report-maintenance`, { ...newMaint, property_id: propertyId });
+      toast.success("Maintenance issue created with full tracking!"); setShowNewMaint(false);
       setNewMaint({ room_number: "", title: "", description: "", priority: "normal", category: "plumbing" });
       fetchData();
     } catch (e) { toast.error("Failed"); }

@@ -2,12 +2,23 @@
 Housekeeping Management Routes
 Room status board, task assignment, maintenance requests
 """
-from fastapi import APIRouter, Depends, HTTPException
-from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from datetime import datetime, timezone, timedelta
 from typing import Dict
+import uuid
+import os
 import logging
 
 logger = logging.getLogger(__name__)
+MAINT_UPLOAD_DIR = "/app/backend/uploads/maintenance"
+
+CATEGORY_DEPARTMENT = {
+    "plumbing": "maintenance", "electrical": "maintenance", "hvac": "maintenance",
+    "furniture": "maintenance", "appliance": "maintenance", "structural": "maintenance",
+    "cleaning": "housekeeping", "pest_control": "maintenance", "safety": "management",
+    "it_network": "management", "general": "maintenance",
+}
+SLA_TARGETS = {"critical": 2, "high": 8, "medium": 24, "low": 72}
 
 
 def create_housekeeping_router(db, require_roles):
@@ -143,5 +154,69 @@ def create_housekeeping_router(db, require_roles):
         await db.maintenance_requests.update_one({"id": req_id}, {"$set": updates})
         doc = await db.maintenance_requests.find_one({"id": req_id}, {"_id": 0})
         return doc
+
+    # ==================== QUICK MAINTENANCE FROM HOUSEKEEPING ====================
+
+    @router.post("/housekeeping/report-maintenance")
+    async def hk_report_maintenance(data: Dict, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """One-tap create maintenance issue from housekeeping with room pre-filled"""
+        now = datetime.now(timezone.utc).isoformat()
+        category = data.get("category", "general")
+        priority = data.get("priority", "medium")
+        dept = CATEGORY_DEPARTMENT.get(category, "maintenance")
+        sla_hours = SLA_TARGETS.get(priority, 24)
+        user_name = current_user.get("name", current_user.get("email", "Staff"))
+
+        issue = {
+            "id": str(uuid.uuid4()),
+            "property_id": data.get("property_id", ""),
+            "title": data.get("title", f"Housekeeping found issue - Room {data.get('room_number', '')}"),
+            "description": data.get("description", ""),
+            "category": category,
+            "priority": priority,
+            "status": "open",
+            "location": data.get("location", f"Room {data.get('room_number', '')}"),
+            "room_number": data.get("room_number", ""),
+            "assigned_to": "",
+            "assigned_department": dept,
+            "reported_by": user_name,
+            "reported_by_email": current_user.get("email", ""),
+            "photos_before": [],
+            "photos_after": [],
+            "estimated_cost": 0, "actual_cost": 0, "cost_notes": "", "materials": [],
+            "sla_hours": sla_hours,
+            "sla_deadline": (datetime.now(timezone.utc) + timedelta(hours=sla_hours)).isoformat(),
+            "sla_breached": False,
+            "acknowledged_at": "", "acknowledged_by": "",
+            "started_at": "", "started_by": "",
+            "resolved_at": "", "resolved_by": "",
+            "closed_at": "", "closed_by": "",
+            "resolution_notes": "", "comments": [],
+            "timeline": [{"action": "created", "by": user_name, "at": now, "detail": f"Reported from housekeeping: {data.get('title', '')}"}],
+            "recurring_id": "", "source": "housekeeping",
+            "created_at": now, "updated_at": now,
+        }
+        await db.maintenance_issues.insert_one(issue)
+        issue.pop("_id", None)
+        return issue
+
+    @router.post("/housekeeping/upload-maintenance-photo/{issue_id}")
+    async def hk_upload_photo(issue_id: str, file: UploadFile = File(...),
+                              current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Upload before photo for housekeeping-reported maintenance issue"""
+        issue = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
+        if not issue:
+            raise HTTPException(404, "Issue not found")
+        ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "jpg"
+        filename = f"{issue_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        filepath = os.path.join(MAINT_UPLOAD_DIR, filename)
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+        photo_url = f"/api/uploads/maintenance/{filename}"
+        photos = issue.get("photos_before", [])
+        photos.append({"url": photo_url, "filename": file.filename, "uploaded_by": current_user.get("name", "Staff"), "uploaded_at": datetime.now(timezone.utc).isoformat(), "type": "before"})
+        await db.maintenance_issues.update_one({"id": issue_id}, {"$set": {"photos_before": photos}})
+        return {"status": "uploaded", "url": photo_url}
 
     return router

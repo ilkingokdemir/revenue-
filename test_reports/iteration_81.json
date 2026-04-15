@@ -1,0 +1,184 @@
+{
+  "summary": "Iteration 81 - Testing 3 New Features Complete. All backend APIs (32/32 tests passed) and frontend UI components verified working. Features: Reports Centre, Online Booking Widget, Housekeeping-Maintenance Integration.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "ReportsSettings component",
+        "issues": ["Missing icon imports (Eye, Send, CheckCircle) - FIXED by adding imports"]
+      }
+    ]
+  },
+  "features_tested": {
+    "reports_centre_summary": {
+      "status": "PASS",
+      "description": "GET /api/reports/summary/{property_id}?period=month - consolidated data",
+      "tests": [
+        "Returns bookings (total, confirmed, revenue)",
+        "Returns maintenance (total, open, resolved, overdue, cost)",
+        "Returns guest_journey (registrations, completed, completion_rate)",
+        "Returns satisfaction (total, happy, need_help, satisfaction_rate)",
+        "Returns pos (orders, revenue)",
+        "Returns loyalty (members)",
+        "Supports period filters: week, month, quarter, year",
+        "Works with property_id='all' for all properties",
+        "Requires authentication (401 without auth)"
+      ]
+    },
+    "reports_centre_csv_export": {
+      "status": "PASS",
+      "description": "GET /api/reports/export/{property_id}/{report_type} - CSV export",
+      "tests": [
+        "Export bookings CSV with headers: Booking Ref, Guest, Email, Check-In, Check-Out, Rooms, Room Type, Total, Status, Created",
+        "Export maintenance CSV with headers: Title, Category, Priority, Status, Location, etc.",
+        "Export registrations CSV with headers: Guest, Email, Booking Ref, Status, etc.",
+        "Export pos CSV with headers: Order ID, Items, Total, Payment, Status, etc.",
+        "Export satisfaction CSV with headers: Guest, Booking Ref, Response, Message, Created",
+        "Returns 400 for invalid report type",
+        "Returns Content-Type: text/csv with attachment disposition"
+      ]
+    },
+    "booking_widget_info": {
+      "status": "PASS",
+      "description": "GET /api/booking-widget/info/{property_id} - public property info",
+      "tests": [
+        "Returns hotel_name, property_id, logo_url, currency",
+        "Returns rooms array with id, name, base_rate, max_occupancy, description, amenities",
+        "No authentication required (public endpoint)",
+        "Returns default rooms if none configured"
+      ]
+    },
+    "booking_widget_availability": {
+      "status": "PASS",
+      "description": "POST /api/booking-widget/check-availability - check room availability",
+      "tests": [
+        "Returns available_rooms array with room_type_id, name, base_rate, total_rate, nights, available, max_occupancy",
+        "Calculates nights correctly from check_in/check_out dates",
+        "Returns 400 if missing required fields (property_id, check_in, check_out)",
+        "No authentication required (public endpoint)"
+      ]
+    },
+    "booking_widget_book": {
+      "status": "PASS",
+      "description": "POST /api/booking-widget/book - create booking from widget",
+      "tests": [
+        "Creates booking with status='confirmed' and source='website_widget'",
+        "Generates booking_ref starting with 'WEB-'",
+        "Calculates total from rate * nights",
+        "Returns 400 if missing required fields",
+        "No authentication required (public endpoint)"
+      ]
+    },
+    "booking_widget_config": {
+      "status": "PASS",
+      "description": "GET/PUT /api/booking-widget/config/{property_id} - widget configuration",
+      "tests": [
+        "GET returns config with property_id, enabled, accent_color, show_rates",
+        "PUT updates config and returns {status: 'saved'}",
+        "Requires authentication (401 without auth)"
+      ]
+    },
+    "housekeeping_maintenance_integration": {
+      "status": "PASS",
+      "description": "POST /api/housekeeping/report-maintenance - one-tap maintenance report",
+      "tests": [
+        "Creates maintenance issue with source='housekeeping'",
+        "Sets SLA based on priority (critical=2h, high=8h, medium=24h, low=72h)",
+        "Assigns department based on category (plumbing->maintenance, safety->management)",
+        "Creates timeline entry with 'Reported from housekeeping' detail",
+        "Requires authentication"
+      ]
+    },
+    "housekeeping_photo_upload": {
+      "status": "PASS",
+      "description": "POST /api/housekeeping/upload-maintenance-photo/{issue_id} - upload photo",
+      "tests": [
+        "Uploads photo to photos_before array",
+        "Returns {status: 'uploaded', url: '/api/uploads/maintenance/...'}"
+      ]
+    },
+    "frontend_reports_centre_panel": {
+      "status": "PASS",
+      "description": "Reports Centre panel in sidebar under Operations",
+      "tests": [
+        "Panel accessible from sidebar via 'Reports Centre' button",
+        "Title 'Reports Centre' with subtitle 'Consolidated overview across all modules'",
+        "Period selector with options: Last 7 Days, Last 30 Days, Last 90 Days, Last Year",
+        "4 Summary cards: Bookings, Maintenance, Guest Registration, Satisfaction",
+        "Revenue Overview section with Booking Revenue, POS Revenue, POS Orders, Maintenance Costs, Net",
+        "Operations Summary section with Open Issues, Resolved Issues, SLA Breaches, Maintenance Cost, Loyalty Members",
+        "Export Reports (CSV) section with 5 buttons: Bookings, Maintenance, Guest Registrations, POS Orders, Satisfaction"
+      ]
+    },
+    "frontend_booking_widget_page": {
+      "status": "PASS",
+      "description": "Booking Widget public page at /book/{property_id}",
+      "tests": [
+        "4-step flow: Search -> Results -> Details -> Confirmation",
+        "Search step: Hotel name, Check-in/Check-out date pickers, Guests selector, Search button",
+        "Results step: Available Rooms list with room name, description, price, availability",
+        "Details step: Booking summary, Name/Email/Phone inputs, Special Requests, Confirm button",
+        "Confirmation step: Success message with booking reference",
+        "Dark theme with gradient background",
+        "Language switcher in header"
+      ]
+    },
+    "frontend_housekeeping_maintenance_integration": {
+      "status": "PASS",
+      "description": "Housekeeping panel with maintenance integration",
+      "tests": [
+        "Housekeeping panel shows 'Maintenance' button in top right",
+        "Clicking Maintenance navigates to Maintenance panel",
+        "Maintenance panel shows 'Report Issue' button",
+        "Report Issue dialog has: Title, Category, Priority, Location, Room number, Assigned to, Description, Photo upload, Submit button",
+        "Issues created from housekeeping show in Maintenance kanban board"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration81_reports_booking_widget.py",
+    "/app/test_reports/pytest/pytest_iteration81_reports_booking_widget.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reports Centre API correctly aggregates data from multiple collections (bookings, maintenance_issues, guest_registrations, satisfaction_checks, pos_orders, loyalty)",
+    "CSV export uses StreamingResponse for efficient large file handling",
+    "Booking Widget public endpoints correctly skip authentication for guest-facing functionality",
+    "Housekeeping-Maintenance integration correctly sets SLA deadlines and assigns departments based on category",
+    "Frontend Reports Centre has well-organized layout with summary cards, detail sections, and export buttons",
+    "Booking Widget has smooth 4-step flow with proper state management"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration81_reports_booking_widget.py",
+    "/app/frontend/src/components/dashboard/ReportsSettings.js"
+  ],
+  "success_rate": {
+    "backend": "100% (32/32 tests passed)",
+    "frontend": "100% (11/11 features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "test_property": "aldgate-flats",
+    "booking_widget_url": "/book/aldgate-flats"
+  },
+  "seed_data_creation": "Created TEST_ prefixed maintenance issues during backend testing (cleaned up by cleanup tests)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 81 tested 3 new features: (1) Reports Centre - GET /api/reports/summary/{property_id}?period=month returns consolidated data (bookings, maintenance, registrations, satisfaction, POS, loyalty). CSV exports at GET /api/reports/export/{property_id}/{type} for bookings, maintenance, registrations, pos, satisfaction. Frontend panel under Operations with period selector, summary cards, revenue/operations sections, export buttons. (2) Online Booking Widget - Public endpoints: GET /api/booking-widget/info/{property_id}, POST /api/booking-widget/check-availability, POST /api/booking-widget/book. Frontend at /book/{property_id} with 4-step flow (search, results, details, confirmation). (3) Housekeeping-Maintenance Integration - POST /api/housekeeping/report-maintenance creates maintenance issue with source='housekeeping', SLA based on priority, department based on category. Photo upload at POST /api/housekeeping/upload-maintenance-photo/{issue_id}. Frontend has 'Maintenance' button in Housekeeping panel and 'Report Issue' dialog in Maintenance panel.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All features are fully functional - no mocked APIs"
+  },
+  "bug_fixes_applied": [
+    {
+      "file": "/app/frontend/src/components/dashboard/ReportsSettings.js",
+      "issue": "Missing icon imports (Eye, Send, CheckCircle) causing 'Eye is not defined' error",
+      "fix": "Added Eye, PaperPlaneTilt as Send, CheckCircle to @phosphor-icons/react imports"
+    }
+  ]
+}

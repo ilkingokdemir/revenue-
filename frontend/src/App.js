@@ -51,7 +51,9 @@ import { SurveyPanel } from "./components/dashboard/SurveyPanel";
 import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
 import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
 import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
+import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
 import GuestMaintenancePage from "./GuestMaintenancePage";
+import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
 import GuestRegistrationPage from "./GuestRegistrationPage";
 import GuestFeedbackPage from "./GuestFeedbackPage";
@@ -2530,6 +2532,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "pos", icon: Receipt, name: t("nav.pos"), testId: "pos-btn" },
         { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
         { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
+        { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
       ]
     },
     {
@@ -2966,6 +2969,11 @@ const Dashboard = ({ user, onLogout }) => {
           <RateManagerPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
+        {/* Reports Centre */}
+        {activeView === "reports-centre" && (
+          <ReportsCentrePanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
         {/* Guest Satisfaction Surveys */}
         {activeView === "surveys" && (
           <SurveyPanel properties={properties} user={user} activePropertyId={activePropertyId} />
@@ -3089,6 +3097,10 @@ function App() {
   if (window.location.pathname.startsWith("/room-help/")) {
     const parts = window.location.pathname.split("/room-help/")[1].split("/");
     return <GuestMaintenancePage propertyId={parts[0]} roomId={parts[1] || "unknown"} />;
+  }
+  if (window.location.pathname.startsWith("/book/")) {
+    const propertyId = window.location.pathname.split("/book/")[1];
+    return <BookingWidgetPage propertyId={propertyId} />;
   }
   if (window.location.pathname.startsWith("/qr-order/")) {
     const parts = window.location.pathname.split("/qr-order/")[1].split("/");

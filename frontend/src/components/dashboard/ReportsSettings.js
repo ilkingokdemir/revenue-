@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { FileText, CalendarBlank, EnvelopeSimple, X, Plus, Trash, ArrowsClockwise } from "@phosphor-icons/react";
+import { FileText, CalendarBlank, EnvelopeSimple, X, Plus, Trash, ArrowsClockwise, Eye, PaperPlaneTilt as Send, CheckCircle } from "@phosphor-icons/react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";

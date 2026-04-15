@@ -55,6 +55,7 @@ from routes.integrations import create_integrations_router
 from routes.bookings import create_bookings_router
 from routes.guest_payment import create_guest_payment_router
 from routes.guest_journey import create_guest_journey_router
+from routes.maintenance import create_maintenance_router
 
 # Import extracted modules
 from models import (
@@ -340,6 +341,9 @@ api_router.include_router(loyalty_router)
 
 guest_journey_router = create_guest_journey_router(db, require_roles)
 api_router.include_router(guest_journey_router)
+
+maintenance_router = create_maintenance_router(db, require_roles)
+api_router.include_router(maintenance_router)
 
 app.include_router(api_router)
 

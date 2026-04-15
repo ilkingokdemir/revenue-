@@ -47,6 +47,7 @@ import { POSPanel } from "./components/dashboard/POSPanel";
 import { PaymentsPanel } from "./components/dashboard/PaymentsPanel";
 import { SurveyPanel } from "./components/dashboard/SurveyPanel";
 import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
+import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
 import GuestSurveyPage from "./GuestSurveyPage";
 import GuestRegistrationPage from "./GuestRegistrationPage";
 import GuestFeedbackPage from "./GuestFeedbackPage";
@@ -130,6 +131,7 @@ import {
   Crown,
   Notebook,
   ChartLine,
+  Wrench,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2514,6 +2516,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: "Operations",
       items: [
         { id: "housekeeping", icon: Broom, name: "Housekeeping", testId: "housekeeping-btn" },
+        { id: "maintenance", icon: Wrench, name: "Maintenance", testId: "maintenance-btn" },
         { id: "night-audit", icon: Moon, name: "Night Audit", testId: "night-audit-btn" },
         { id: "logbook", icon: Notebook, name: "Duty Logbook", testId: "logbook-btn" },
         { id: "forecast", icon: ChartLine, name: "Forecast", testId: "forecast-btn" },
@@ -2909,6 +2912,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Housekeeping */}
         {activeView === "housekeeping" && (
           <HousekeepingPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Maintenance */}
+        {activeView === "maintenance" && (
+          <MaintenancePanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Night Audit */}

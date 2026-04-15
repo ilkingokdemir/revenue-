@@ -1,12 +1,12 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## All Modules (19 total + Multi-Language)
+## All Modules (20 total + Multi-Language)
 
-### Multi-Language Support (7 languages)
-English, Turkish, Spanish, Russian, Arabic (RTL), French, German
+### Multi-Language (7): English, Turkish, Spanish, Russian, Arabic (RTL), French, German
 
 ### Revenue & Analytics
 - Dashboard, Occupancy Forecast, Accounting (18 tabs)
+- **Rate Manager** (NEW): Dynamic pricing — base rates, day-of-week multipliers, occupancy-based rules (50/70/85/95%), seasonal adjustments, min/max bounds, 30-day rate calendar forecast
 
 ### Front Office
 - Bookings, Night Audit, Guest Profiles
@@ -17,13 +17,7 @@ English, Turkish, Spanish, Russian, Arabic (RTL), French, German
 
 ### Operations
 - Housekeeping
-- **Maintenance** (Advanced):
-  - Kanban+Table, Priority/SLA (2h/8h/24h/72h), Auto-department assignment
-  - **Job Timeline**: Full activity log (who reported, when, who acknowledged, who started, who resolved, who closed — all with timestamps and resolution time)
-  - **Before/After Photos**: Separate photo sections for issue reported state vs completed state, with camera/gallery upload, BEFORE/AFTER badges
-  - Cost tracking, Comments/activity log, Recurring/Preventive schedules
-  - Internal Team management (workload tracking), External Vendor management (rates/performance)
-  - Analytics dashboard
+- **Maintenance** (Advanced): Kanban+Table, Priority/SLA, Before/After Photos, Job Timeline (who/when tracking), Cost tracking, Comments, Recurring/Preventive, Team+Vendor management, Analytics Dashboard (trends, SLA compliance, workload, top locations), **Guest QR Room Reports** (guests scan QR in room to report issues)
 - Duty Logbook, Stock / F&B
 
 ### F&B / Revenue
@@ -35,4 +29,4 @@ English, Turkish, Spanish, Russian, Arabic (RTL), French, German
 ### Administration
 - Admin Panel (Roles & Permissions)
 
-## Testing: 79 iterations, all passing
+## Testing: 80 iterations, all passing

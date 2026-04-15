@@ -1,6 +1,6 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## All Modules (18 total)
+## All Modules (19 total)
 
 ### Revenue & Analytics
 - **Dashboard**: KPIs (RevPAR, ADR), Timeline, Occupancy gauge, Revenue chart, Housekeeping widget
@@ -13,19 +13,23 @@
 - **Guest Profiles**: Rich detail, history, spending, preferences, tags, notes, loyalty tiers
 
 ### Guest Experience
-- **Guest Journey**: Complete module with:
-  - Pre-arrival registration (4-step: details, ID upload w/ camera+gallery, T&C, complete)
-  - Share modal (6 options: Copy Link, Email, SMS, WhatsApp, Print, Save QR)
-  - iPad/Kiosk self check-in page (welcome screen, booking search, embedded registration, 60s auto-reset)
-  - Configurable welcome email info (hotel policies, city info, custom message per property)
-  - In-stay satisfaction checks via Email + SMS + WhatsApp
-  - Admin panel with 4 tabs: Registrations, Satisfaction, Welcome Info, Kiosk Setup
+- **Guest Journey**: Pre-arrival registration, ID upload (camera+gallery), T&C, welcome emails, satisfaction checks (Email+SMS+WhatsApp), share modal (6 options), iPad/Kiosk check-in, configurable welcome info
 - **Loyalty Program**: Points, 4 tiers, 8 rewards, earn/redeem, auto-upgrade
 - **Campaigns**: 6 email templates, 8 audience segments, scheduling
 - **Surveys / NPS**: Customizable surveys, public guest page
 
 ### Operations
-- **Housekeeping**: Room Board, Task Management, Maintenance Requests
+- **Housekeeping**: Room Board, Task Management, basic maintenance requests
+- **Maintenance** (NEW): Advanced module with:
+  - Kanban board + Table view (Open/In Progress/Resolved)
+  - Priority levels: Critical (2h SLA), High (8h), Medium (24h), Low (72h)
+  - Photo attachments (camera + gallery upload)
+  - Auto-assignment by category to department
+  - SLA tracking with breach detection
+  - Cost tracking (estimated, actual, materials, notes)
+  - Comments/Activity log per issue
+  - Recurring/Preventive maintenance schedules (daily/weekly/monthly/quarterly/yearly)
+  - Analytics dashboard (category breakdown, priority, costs, avg resolution time)
 - **Duty Logbook**: Shift notes, incidents, VIP tracking, shift handovers
 - **Stock / F&B**: Inventory, POS deduction, auto purchase orders
 
@@ -40,10 +44,4 @@
 ### Administration
 - **Admin Panel**: Roles & Permissions (14x6), Module Settings, Auto Purchase Orders
 
-## Architecture
-- React + Tailwind + Shadcn UI (frontend)
-- FastAPI + MongoDB (backend)
-- 3rd party: OpenAI GPT-5.2, Resend, Twilio, Stripe, iyzico, PayTR, WhatsApp/Telegram webhooks
-- QR code: qrcode.react@4.2.0
-
-## Testing: 75 iterations, all passing
+## Testing: 76 iterations, all passing

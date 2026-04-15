@@ -173,6 +173,7 @@ async def seed_admin():
     if existing is None:
         hashed = hash_password(admin_password)
         await db.users.insert_one({
+            "id": str(uuid.uuid4()),
             "email": admin_email,
             "password_hash": hashed,
             "name": "Hotel Admin",
@@ -185,6 +186,9 @@ async def seed_admin():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
         logger.info(f"Admin password updated: {admin_email}")
+    # Ensure admin has id field
+    if existing and not existing.get("id"):
+        await db.users.update_one({"email": admin_email}, {"$set": {"id": str(uuid.uuid4())}})
     
     await db.users.create_index("email", unique=True)
     await db.login_attempts.create_index("identifier")

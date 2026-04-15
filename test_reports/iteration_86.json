@@ -1,0 +1,185 @@
+{
+  "summary": "Iteration 86 - Staff Management Panel Testing Complete. All 18 backend API tests passed (100%). Frontend verified: Users tab with table, role filters, search, Add/Edit User dialogs with branch_payments. My Shifts tab with weekly calendar. Roles & Permissions tab with role list showing user counts and permission counts. Fixed 2 bugs: (1) my-shifts endpoint now allows housekeeper/maintenance roles, (2) Roles tab was crashing due to incorrect API response parsing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "staff_management_panel_access": {
+      "status": "PASS",
+      "tests": [
+        "Panel loads from sidebar 'Team' button (data-testid='team-btn')",
+        "3 tabs visible: Users, My Shifts, Roles & Permissions",
+        "Tab navigation works correctly"
+      ]
+    },
+    "users_tab": {
+      "status": "PASS",
+      "tests": [
+        "User table shows Name/Email/Roles/Branches/Payment columns",
+        "Role filter buttons work (All, admin, housekeeper, maintenance, receptionist)",
+        "Search by name/email works",
+        "+ Add User button opens create dialog",
+        "Edit button opens pre-filled edit dialog",
+        "Delete button present for each user"
+      ],
+      "data_testids": ["staff-users-tab", "add-user-btn", "user-role-filter-all", "user-search", "user-row-{id}", "edit-user-{id}", "delete-user-{id}"]
+    },
+    "create_user_dialog": {
+      "status": "PASS",
+      "tests": [
+        "Dialog opens with Account section (Name, Email, Color, Role, Department, Password)",
+        "Branches & Payment section shows all properties with checkboxes",
+        "Per-branch payment type (Daily/Hourly) and rate inputs available",
+        "Save button creates user"
+      ],
+      "data_testids": ["create-user-dialog", "user-form-name", "user-form-email", "user-form-password", "user-form-color", "user-form-save", "branch-check-{id}"]
+    },
+    "edit_user_dialog": {
+      "status": "PASS",
+      "tests": [
+        "Dialog opens with pre-filled user data",
+        "Can update branch_payments and property_access",
+        "Save Changes button updates user"
+      ],
+      "data_testids": ["edit-user-dialog", "branch-row-{id}"]
+    },
+    "my_shifts_tab": {
+      "status": "PASS",
+      "tests": [
+        "Weekly calendar cards displayed (7 days)",
+        "Week navigation (prev/next) works",
+        "Current day highlighted",
+        "Shows 'No shift' for days without shifts",
+        "Week summary section visible"
+      ],
+      "data_testids": ["my-shifts-tab", "my-shift-prev", "my-shift-next", "my-shift-week", "my-shift-day-{date}"]
+    },
+    "roles_permissions_tab": {
+      "status": "PASS",
+      "tests": [
+        "Role list displayed with Role Name, Users count, Permissions count, Type columns",
+        "Built-in roles shown: Admin, Manager, Receptionist",
+        "Custom roles shown with 'Custom' type badge",
+        "User counts accurate",
+        "Permission counts calculated correctly"
+      ],
+      "data_testids": ["roles-permissions-tab", "role-row-admin", "role-row-manager", "role-row-receptionist"]
+    },
+    "backend_api_admin_users": {
+      "status": "PASS",
+      "endpoint": "GET /api/admin/users",
+      "tests": [
+        "Returns users with effective_permissions",
+        "Includes branch_payments field",
+        "Requires authentication"
+      ]
+    },
+    "backend_api_user_detail": {
+      "status": "PASS",
+      "endpoint": "GET /api/admin/users/{user_id}",
+      "tests": [
+        "Returns single user with all fields",
+        "Returns 404 for non-existent user"
+      ]
+    },
+    "backend_api_update_permissions": {
+      "status": "PASS",
+      "endpoint": "PUT /api/admin/users/{user_id}/permissions",
+      "tests": [
+        "Updates branch_payments correctly",
+        "Updates color correctly",
+        "Updates name correctly",
+        "Does NOT return password_hash in response (security fix applied)"
+      ]
+    },
+    "backend_api_roles": {
+      "status": "PASS",
+      "endpoint": "GET /api/admin/roles",
+      "tests": [
+        "Returns built-in roles with permissions",
+        "Returns modules and actions lists"
+      ]
+    },
+    "backend_api_my_shifts": {
+      "status": "PASS",
+      "endpoint": "GET /api/admin/my-shifts",
+      "tests": [
+        "Returns shifts for current user",
+        "Accessible by maintenance role (bug fix applied)",
+        "Requires authentication"
+      ]
+    },
+    "valid_roles": {
+      "status": "PASS",
+      "tests": [
+        "housekeeper is a valid role",
+        "maintenance is a valid role"
+      ]
+    },
+    "staff_login": {
+      "status": "PASS",
+      "tests": [
+        "Ali (ali@hotel.com / Staff2026!) can log in",
+        "Returns correct role (maintenance)"
+      ]
+    }
+  },
+  "bugs_fixed": [
+    {
+      "issue": "GET /api/admin/my-shifts returned 403 for maintenance role",
+      "fix": "Added 'housekeeper' and 'maintenance' to require_roles() in admin.py line 165",
+      "file": "/app/backend/routes/admin.py"
+    },
+    {
+      "issue": "PUT /api/admin/users/{user_id}/permissions returned password_hash in response",
+      "fix": "Changed projection from {password: 0} to {password_hash: 0} in admin.py line 154",
+      "file": "/app/backend/routes/admin.py"
+    },
+    {
+      "issue": "Roles & Permissions tab crashed with 'roles.map is not a function'",
+      "fix": "Changed setRoles(r) to setRoles(r.roles || []) in StaffManagementPanel.js line 349",
+      "file": "/app/frontend/src/components/dashboard/StaffManagementPanel.js"
+    }
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration86_staff_management.py",
+    "/app/test_reports/pytest/pytest_iteration86_staff_management.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All Staff Management Panel features working correctly",
+    "Branch payments correctly saved to database with type (daily/hourly) and rate",
+    "Role filter buttons correctly filter users by role",
+    "Search functionality filters by name and email",
+    "My Shifts tab correctly shows weekly calendar with navigation",
+    "Roles & Permissions tab shows accurate user counts and permission counts"
+  ],
+  "updated_files": [
+    "/app/backend/routes/admin.py",
+    "/app/frontend/src/components/dashboard/StaffManagementPanel.js",
+    "/app/backend/tests/test_iteration86_staff_management.py",
+    "/app/memory/test_credentials.md"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100% (All features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "staff": "ali@hotel.com / Staff2026!"
+  },
+  "seed_data_creation": "Ali user already exists with branch_payments for aldgate-flats (£50/day) and vilenza-hotel (£100/day)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 86 tested Staff Management Panel. Access via sidebar 'Team' button (data-testid='team-btn'). Panel has 3 tabs: Users (data-testid='staff-tab-users'), My Shifts (data-testid='staff-tab-my-shifts'), Roles & Permissions (data-testid='staff-tab-roles'). Users tab shows table with Name/Email/Roles/Branches/Payment columns. Add User dialog has Account section + Branches & Payment section with per-branch payment rates. My Shifts tab shows weekly calendar. Roles tab shows role list with user counts and permission counts. Ali user (ali@hotel.com / Staff2026!) is a maintenance user with 2 branches. Fixed 3 bugs: my-shifts endpoint role access, password_hash leak, roles.map error.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All Staff Management Panel features are fully functional - no mocked APIs"
+  }
+}

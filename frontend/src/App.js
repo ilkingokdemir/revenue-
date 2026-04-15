@@ -55,6 +55,7 @@ import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
+import { StaffManagementPanel } from "./components/dashboard/StaffManagementPanel";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
@@ -2836,11 +2837,9 @@ const Dashboard = ({ user, onLogout }) => {
           </Dialog>
         )}
 
-        {/* Team View */}
+        {/* Team View - Enhanced Staff Management */}
         {activeView === "team" && (
-          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
-            <UserManagementPanel currentUser={user} />
-          </Dialog>
+          <StaffManagementPanel properties={properties} user={user} activePropertyId={activePropertyId} />
         )}
 
         {/* Admin Panel */}

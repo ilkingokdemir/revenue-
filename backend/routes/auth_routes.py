@@ -33,6 +33,7 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
 
         hashed = hash_password(user.password)
         new_user = {
+            "id": str(__import__('uuid').uuid4()),
             "email": email,
             "password_hash": hashed,
             "name": user.name,

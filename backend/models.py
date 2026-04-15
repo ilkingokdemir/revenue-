@@ -280,7 +280,7 @@ class PropertyUpdate(BaseModel):
     property_type: Optional[str] = None
     is_active: Optional[bool] = None
 
-VALID_ROLES = ["admin", "manager", "receptionist"]
+VALID_ROLES = ["admin", "manager", "receptionist", "housekeeper", "maintenance"]
 VALID_DEPARTMENTS = ["front_desk", "management", "housekeeping", "food_beverage", "maintenance", "spa_wellness", "concierge"]
 VALID_PROPERTY_TYPES = ["hotel", "resort", "hostel", "apartment", "villa", "boutique", "motel", "bed_breakfast"]
 

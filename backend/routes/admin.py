@@ -112,7 +112,7 @@ def create_admin_router(db, require_roles):
     @router.get("/admin/users")
     async def list_users_with_permissions(current_user: dict = Depends(require_roles("admin", "manager"))):
         """List all users with their roles and permissions"""
-        users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(100)
+        users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(100)
         # Enrich with permissions
         for u in users:
             role = u.get("role", "receptionist")
@@ -138,11 +138,39 @@ def create_admin_router(db, require_roles):
         if "permissions" in data:
             updates["custom_permissions"] = data["permissions"]
         if "property_access" in data:
-            updates["property_access"] = data["property_access"]  # list of property_ids or ["all"]
+            updates["property_access"] = data["property_access"]
+        if "branch_payments" in data:
+            updates["branch_payments"] = data["branch_payments"]
+        if "color" in data:
+            updates["color"] = data["color"]
+        if "phone" in data:
+            updates["phone"] = data["phone"]
+        if "name" in data:
+            updates["name"] = data["name"]
+        if "department" in data:
+            updates["department"] = data["department"]
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.users.update_one({"id": user_id}, {"$set": updates})
-        updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+        updated = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
         return updated
+
+    @router.get("/admin/users/{user_id}")
+    async def get_user_detail(user_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+        if not user:
+            raise HTTPException(404, "User not found")
+        return user
+
+    @router.get("/admin/my-shifts")
+    async def my_shifts(week_start: str = "", current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper", "maintenance"))):
+        """Get shifts for the current logged-in user"""
+        user_email = current_user.get("email", "")
+        user_name = current_user.get("name", "")
+        query = {"$or": [{"staff_name": user_name}]}
+        if week_start:
+            query["week_start"] = week_start
+        shifts = await db.shift_entries.find(query, {"_id": 0}).sort("date", 1).to_list(100)
+        return shifts
 
     # ==================== MODULE SETTINGS ====================
 

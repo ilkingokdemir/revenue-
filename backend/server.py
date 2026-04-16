@@ -72,6 +72,7 @@ from routes.revenue_advanced import create_revenue_advanced_router
 from routes.revenue_phase2 import create_revenue_phase2_router
 from routes.revenue_copilot import create_revenue_copilot_router
 from routes.revenue_exports import create_revenue_exports_router
+from routes.market_robot import create_market_robot_router
 
 # Import extracted modules
 from models import (
@@ -412,6 +413,9 @@ api_router.include_router(revenue_copilot_router)
 
 revenue_exports_router = create_revenue_exports_router(db, require_roles)
 api_router.include_router(revenue_exports_router)
+
+market_robot_router = create_market_robot_router(db, require_roles)
+api_router.include_router(market_robot_router)
 
 app.include_router(api_router)
 

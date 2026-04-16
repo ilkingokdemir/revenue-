@@ -15,10 +15,11 @@ import { RevenueParity, RevenueOverbooking, RevenueActionCenter, RevenueProfitOS
 import { RevenueAICopilot } from "./RevenueAICopilot";
 import { RateCalendarEditable } from "./RateCalendarEditable";
 import { ExportBar } from "./RevenueExports";
+import { MarketRobot } from "./MarketRobot";
 import {
   BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2,
   LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign,
-  Network, Eye, Bot, Download, ChevronRight
+  Network, Eye, Bot, Download, ChevronRight, Radar
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -44,6 +45,7 @@ const NAV_SECTIONS = [
   {
     label: "Intelligence",
     items: [
+      { id: "market-robot", label: "Market Robot", icon: Radar },
       { id: "forecasting", label: "Forecasting", icon: LineChart },
       { id: "analytics", label: "Analytics", icon: PieChart },
       { id: "competitors", label: "Competitors", icon: Eye },
@@ -175,6 +177,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "strategy" && <RevenuePricingStrategy propertyId={pid} />}
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
+              {tab === "market-robot" && <MarketRobot propertyId={pid} />}
               {tab === "analytics" && <RevenueAnalytics propertyId={pid} />}
               {tab === "reports" && <ExportBar propertyId={pid} />}
               {tab === "approvals" && <RevenueApprovals propertyId={pid} />}

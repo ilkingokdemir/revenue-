@@ -159,7 +159,7 @@ export const DynamicPricingEngine = ({ propertyId }) => {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="border-b">
-                    {["Date","Day","Ahead","Base","Current","AI Price","Change","Occ","Market","Comps","Factors"].map(h =>
+                    {["Date","Day","Ahead","Base","Current","AI Price","Change","Occ","Market","Comps","Event","Factors"].map(h =>
                       <th key={h} className="px-2 py-2 text-[10px] font-semibold text-stone-500 text-center whitespace-nowrap">{h}</th>
                     )}
                   </tr>
@@ -197,6 +197,9 @@ export const DynamicPricingEngine = ({ propertyId }) => {
                         </td>
                         <td className="px-2 py-1.5 text-center">
                           {p.competitor_avg ? <span className="text-[10px] text-stone-600">{cur(p.competitor_avg)}</span> : <span className="text-[10px] text-stone-300">—</span>}
+                        </td>
+                        <td className="px-2 py-1.5 text-center">
+                          {p.event ? <span className="text-[9px] font-bold text-red-500" title={p.event}>{p.event_impact?.toUpperCase()}</span> : <span className="text-[10px] text-stone-300">—</span>}
                         </td>
                         <td className="px-2 py-1.5">
                           <div className="flex flex-wrap gap-0.5">

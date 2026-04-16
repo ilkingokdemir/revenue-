@@ -16,6 +16,9 @@ logger = logging.getLogger(__name__)
 def create_dynamic_pricing_router(db, require_roles):
     router = APIRouter()
 
+    def _impact_rank(impact):
+        return {"mega": 4, "large": 3, "medium": 2, "small": 1}.get(impact, 0)
+
     async def _get_props(property_id):
         if property_id == "all":
             return await db.properties.find({}, {"_id": 0}).to_list(50)
@@ -29,10 +32,10 @@ def create_dynamic_pricing_router(db, require_roles):
         return max(t, 1)
 
     async def _calculate_ai_price(
-        base_rate, date_obj, days_ahead, strategy, supply_snap, our_occ, total_rooms, competitor_avg
+        base_rate, date_obj, days_ahead, strategy, supply_snap, our_occ, total_rooms, competitor_avg, event_data=None
     ):
         """
-        AI pricing algorithm combining all data sources.
+        AI pricing algorithm combining all data sources (9 factors).
         Returns (final_price, breakdown_dict)
         """
         breakdown = {"base": base_rate}
@@ -59,21 +62,29 @@ def create_dynamic_pricing_router(db, require_roles):
         lt_pct = 0
         lt_label = ""
         if days_ahead <= 1:
-            lt_pct = float(lt_adj.get("last_day", 0)); lt_label = "Last Day"
+            lt_pct = float(lt_adj.get("last_day", 0))
+            lt_label = "Last Day"
         elif days_ahead <= 3:
-            lt_pct = float(lt_adj.get("2_3_days", 0)); lt_label = "2-3 Days"
+            lt_pct = float(lt_adj.get("2_3_days", 0))
+            lt_label = "2-3 Days"
         elif days_ahead <= 7:
-            lt_pct = float(lt_adj.get("4_7_days", 0)); lt_label = "4-7 Days"
+            lt_pct = float(lt_adj.get("4_7_days", 0))
+            lt_label = "4-7 Days"
         elif days_ahead <= 14:
-            lt_pct = float(lt_adj.get("1_2_weeks", 0)); lt_label = "1-2 Weeks"
+            lt_pct = float(lt_adj.get("1_2_weeks", 0))
+            lt_label = "1-2 Weeks"
         elif days_ahead <= 28:
-            lt_pct = float(lt_adj.get("2_4_weeks", 0)); lt_label = "2-4 Weeks"
+            lt_pct = float(lt_adj.get("2_4_weeks", 0))
+            lt_label = "2-4 Weeks"
         elif days_ahead <= 42:
-            lt_pct = float(lt_adj.get("4_6_weeks", 0)); lt_label = "4-6 Weeks"
+            lt_pct = float(lt_adj.get("4_6_weeks", 0))
+            lt_label = "4-6 Weeks"
         elif days_ahead <= 90:
-            lt_pct = float(lt_adj.get("1_5_3_months", 0)); lt_label = "1.5-3 Months"
+            lt_pct = float(lt_adj.get("1_5_3_months", 0))
+            lt_label = "1.5-3 Months"
         else:
-            lt_pct = float(lt_adj.get("3_months_plus", 0)); lt_label = "3 Months+"
+            lt_pct = float(lt_adj.get("3_months_plus", 0))
+            lt_label = "3 Months+"
         if lt_pct != 0:
             price *= (1 + lt_pct / 100)
             breakdown["lead_time"] = f"{'+' if lt_pct > 0 else ''}{lt_pct}% ({lt_label})"
@@ -132,13 +143,32 @@ def create_dynamic_pricing_router(db, require_roles):
                 price *= (1 + comp_adj / 100)
                 breakdown["competitor"] = f"{round(comp_adj)}% (comps {round(abs(diff_pct))}% lower)"
 
-        # 7. AGGRESSIVENESS multiplier
+        # 7. EVENT INTELLIGENCE adjustment
+        if event_data:
+            impact = event_data.get("impact", "")
+            event_name = event_data.get("name", "Event")
+            attendance = event_data.get("estimated_attendance", 0)
+            if impact == "mega":
+                event_pct = 40
+            elif impact == "large":
+                event_pct = 25
+            elif impact == "medium":
+                event_pct = 12
+            elif impact == "small":
+                event_pct = 5
+            else:
+                event_pct = 0
+            if event_pct > 0:
+                price *= (1 + event_pct / 100)
+                breakdown["event"] = f"+{event_pct}% ({event_name}, {attendance:,})"
+
+        # 8. AGGRESSIVENESS multiplier
         agg = float(strategy.get("aggressiveness", 1.0))
         if agg != 1.0:
             price *= agg
             breakdown["aggressiveness"] = f"{agg}x"
 
-        # 8. GUARDRAILS - min/max
+        # 9. GUARDRAILS - min/max
         min_price = round(base_rate * 0.5, 2)
         max_price = round(base_rate * 3.0, 2)
         final = round(max(min_price, min(max_price, price)), 2)
@@ -185,6 +215,28 @@ def create_dynamic_pricing_router(db, require_roles):
                         comp_price_map[p["date"]] = []
                     comp_price_map[p["date"]].append(p["lowest_price"])
 
+        # Get events for event-based pricing
+        events_list = await db.market_events.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(200)
+        event_map = {}
+        for ev in events_list:
+            ev_date = ev.get("date", "")
+            ev_end = ev.get("end_date", ev_date)
+            try:
+                start_d = datetime.strptime(ev_date, "%Y-%m-%d")
+                end_d = datetime.strptime(ev_end, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            # Map event to its dates + 1 day buffer before/after
+            d = start_d - timedelta(days=1)
+            while d <= end_d + timedelta(days=1):
+                ds_key = d.strftime("%Y-%m-%d")
+                # Keep the highest impact event per date
+                if ds_key not in event_map or _impact_rank(ev.get("impact", "")) > _impact_rank(event_map[ds_key].get("impact", "")):
+                    event_map[ds_key] = ev
+                d += timedelta(days=1)
+
         # Calculate prices for every day
         results = []
         for rt in room_types[:5]:
@@ -211,8 +263,11 @@ def create_dynamic_pricing_router(db, require_roles):
                 comp_prices = comp_price_map.get(ds, [])
                 comp_avg = round(sum(comp_prices) / len(comp_prices), 2) if comp_prices else None
 
+                # Event for this date
+                event_for_day = event_map.get(ds)
+
                 final_price, breakdown = await _calculate_ai_price(
-                    base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg
+                    base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg, event_for_day
                 )
 
                 # Get current override if any
@@ -234,6 +289,8 @@ def create_dynamic_pricing_router(db, require_roles):
                     "our_occupancy": our_occ,
                     "market_unavail": supply_snap.get("unavailable_pct") if supply_snap else None,
                     "competitor_avg": comp_avg,
+                    "event": event_for_day.get("name") if event_for_day else None,
+                    "event_impact": event_for_day.get("impact") if event_for_day else None,
                     "breakdown": breakdown,
                     "is_today": i == 0,
                 })
@@ -303,6 +360,24 @@ def create_dynamic_pricing_router(db, require_roles):
                         comp_price_map[p["date"]] = []
                     comp_price_map[p["date"]].append(p["lowest_price"])
 
+        # Get events
+        events_list = await db.market_events.find({"property_id": property_id}, {"_id": 0}).to_list(200)
+        event_map_apply = {}
+        for ev in events_list:
+            ev_date = ev.get("date", "")
+            ev_end = ev.get("end_date", ev_date)
+            try:
+                start_d = datetime.strptime(ev_date, "%Y-%m-%d")
+                end_d = datetime.strptime(ev_end, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            d_iter = start_d - timedelta(days=1)
+            while d_iter <= end_d + timedelta(days=1):
+                ds_key = d_iter.strftime("%Y-%m-%d")
+                if ds_key not in event_map_apply or _impact_rank(ev.get("impact", "")) > _impact_rank(event_map_apply[ds_key].get("impact", "")):
+                    event_map_apply[ds_key] = ev
+                d_iter += timedelta(days=1)
+
         applied_count = 0
         for rt in room_types:
             base = float(rt.get("base_rate", 100) or 100)
@@ -323,8 +398,9 @@ def create_dynamic_pricing_router(db, require_roles):
                 comp_prices = comp_price_map.get(ds, [])
                 comp_avg = round(sum(comp_prices) / len(comp_prices), 2) if comp_prices else None
 
+                event_for_day = event_map_apply.get(ds)
                 final_price, breakdown = await _calculate_ai_price(
-                    base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg
+                    base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg, event_for_day
                 )
 
                 # Apply to rate overrides

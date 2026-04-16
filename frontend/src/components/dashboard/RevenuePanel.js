@@ -49,7 +49,6 @@ const NAV_SECTIONS = [
     label: "Intelligence",
     items: [
       { id: "market-robot", label: "Market Robot", icon: Radar },
-      { id: "event-intelligence", label: "Event Intelligence", icon: PartyPopper },
       { id: "forecasting", label: "Forecasting", icon: LineChart },
       { id: "analytics", label: "Analytics", icon: PieChart },
       { id: "competitors", label: "Competitors", icon: Eye },
@@ -183,7 +182,6 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
               {tab === "market-robot" && <MarketRobot propertyId={pid} />}
-              {tab === "event-intelligence" && <EventIntelligence propertyId={pid} />}
               {tab === "analytics" && <RevenueAnalytics propertyId={pid} />}
               {tab === "reports" && <ExportBar propertyId={pid} />}
               {tab === "approvals" && <RevenueApprovals propertyId={pid} />}

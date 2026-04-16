@@ -399,7 +399,7 @@ export const MarketRobot = ({ propertyId }) => {
                 <p className="text-xs text-stone-500 mb-3">Set the city or destination to monitor on Booking.com. This works for any location worldwide.</p>
                 <Input value={config.city || ""} onChange={e => setConfig(p => ({ ...p, city: e.target.value }))} onBlur={() => saveConfig({ city: config.city })} className="w-80 mb-3" placeholder="Type any city name..." data-testid="market-robot-city" />
                 <div className="flex flex-wrap gap-1.5">
-                  {["London","Paris","New York","Dubai","Barcelona","Rome","Tokyo","Sydney","Amsterdam","Istanbul","Bangkok","Singapore","Berlin","Miami","Los Angeles","Hong Kong","Lisbon","Prague","Vienna","Bali"].map(city => (
+                  {["London","Paris","New York","Dubai","Barcelona","Rome","Tokyo","Sydney","Amsterdam","Istanbul","Bangkok","Singapore","Berlin","Miami","Los Angeles","Hong Kong","Lisbon","Prague","Vienna","Bali","Zurich","Geneva","Munich","Milan","Edinburgh","Madrid","Athens","Marrakech","Cancun","Maldives"].map(city => (
                     <button key={city} onClick={() => { setConfig(p => ({ ...p, city })); saveConfig({ city }); }}
                       className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all ${config.city === city ? "bg-violet-600 text-white" : "bg-white border border-stone-200 text-stone-500 hover:border-violet-300 hover:text-violet-700"}`}
                       data-testid={`market-city-${city.toLowerCase().replace(/\s/g, "-")}`}>

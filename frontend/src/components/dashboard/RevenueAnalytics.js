@@ -205,7 +205,7 @@ const BudgetTab = ({ propertyId }) => {
         <div className="px-5 py-3 bg-stone-50 border-b font-bold text-stone-800 text-sm">Daily Breakdown</div>
         <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead><tr className="border-b bg-stone-50/50">
-            {["Date","Actual Occ","Budget Occ","Variance","Actual Rev","Budget Rev","Variance"].map(h =>
+            {["Date","Actual Occ","Budget Occ","Occ Variance","Actual Rev","Budget Rev","Rev Variance"].map(h =>
               <th key={h} className="px-3 py-2 text-xs font-semibold text-stone-500 text-center">{h}</th>
             )}
           </tr></thead>

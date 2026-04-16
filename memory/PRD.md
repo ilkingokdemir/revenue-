@@ -1,43 +1,42 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | 7 Languages | Mobile Responsive | 95 Test Iterations (100%)
+## 30+ Modules | 7 Languages | Mobile Responsive | 96 Test Iterations (100%)
 
-### Revenue Management System (NEW — Complete Enterprise-Grade System)
-Combines the best of RoomPriceGenie + Hotel Ops competitor features into an industry-leading module.
+### Revenue Management System — Industry-Leading (20 Modules)
+Combines the best of RoomPriceGenie + Hotel Ops + Duetto + IDeaS + Atomize + Flyr + PriceLabs + Lighthouse into the most comprehensive RMS on the market. **No competitor has all of this in one platform.**
 
-**8 Main Tabs:**
+**18 Navigable Tabs:**
 
-1. **Dashboard** (Enhanced): Revenue Readiness % score with 8-item checklist, KPI cards (Today's Occupancy, ADR, RevPAR with trends, 7-Day Occupancy mini-chart), Demand Index (0-100 with High/Moderate/Low), Booking Pace with trend comparison, AI Confidence %, Revenue Opportunities & Risk Alerts, What System is Doing / What to Review Today, Recent Pricing Decisions log, Quick Action cards (Smart Pricing, Approvals, Playbooks, Rate Lookup)
+1. **Dashboard** — Revenue Readiness %, KPIs (Occupancy/ADR/RevPAR/7-Day chart), Demand Index, Booking Pace, AI Confidence, Opportunities, Risk Alerts, Quick Actions
+2. **Rate Calendar** — Monthly grid, prices/occupancy/pickup views, room type selector
+3. **Pricing Strategy** (7 sub-tabs) — Rooms Setup, DOW, Monthly, Occupancy, Min Stay, Lead Time, Surge Protection
+4. **Smart Pricing** — Price Evolution chart, Recommendation Calendar, AI Insights, Recalculate
+5. **Forecasting** — AI 30-day forecast with SDLY, KPIs, forecast chart (Forecast/On Books/SDLY lines), Forecast vs SDLY table with confidence scores
+6. **Analytics** (3 sub-tabs):
+   - Performance: KPIs with SDLY, DOW bars, Segment Mix, Trend Analysis
+   - Pickup Report: On Books, Remaining, Revenue, Daily Pickup with Ahead/On Pace/Behind
+   - Budget Variance: Set Budget form, KPIs vs budget, Daily Breakdown
+7. **Approvals** — Accept/Reject pricing recommendations
+8. **Segments** — Customer profile CRUD (MOBILE, CORPORATE, MEMBER, GENIUS)
+9. **Playbooks** — Visual IF/THEN rule builder for automated pricing
+10. **Experiments** — A/B pricing tests with Control/Treatment
+11. **Parity** — Detect rate violations, KPIs, Fix button
+12. **Overbooking** — Run Simulation, policies (buffer rooms, walk cost, no-show rate)
+13. **Action Center** — System alerts with impact/risk scoring
+14. **Profit OS** — Net ADR, ContributionPAR, channel cost analysis
+15. **Distribution** — Channel Performance sorted by profitability
+16. **Competitors** — Rate comparison with 4 competitors, daily rate charts
+17. **Rate Resolver** — Precedence breakdown (Base → DOW → Monthly → Lead Time → Guardrails)
+18. **Setup Wizard** — 6-step guided setup with checklist
 
-2. **Rate Calendar**: RoomPriceGenie-style monthly calendar with recommended vs PMS rates per day, Prices/Occupancy/Pickup view toggles, Today highlight, Room Type selector, Month navigation, Monthly Performance metrics
-
-3. **Pricing Strategy** (7 Editable Sub-Tabs):
-   - Rooms Setup: Reference/Derived pricing, Base/Min/Max prices per room type
-   - Day-of-Week Adjustments: Editable % inputs for Mon-Sun with bar chart + Save
-   - Monthly Adjustments: Editable % inputs for Jan-Dec with bar chart + Save
-   - Occupancy Strategy: Target occupancy per month, Aggressiveness slider (0.5-2.0x), Dynamic pricing rules display
-   - Minimum Stay: Orphan Gap Correction settings, fixed restriction override toggle, room type selection
-   - Lead Time Adjustments: 9 time-window % inputs (6 Months+ through Last Day) + Save
-   - Surge Protection: Booking threshold, days-to-go, email toggle, event logs
-
-4. **Smart Pricing Dashboard**: System status, Recalculate Prices button, KPIs (Avg Daily Rate 30D, Occupancy Forecast, Projected Revenue, Strategy Mode), Price Evolution Forecast SVG chart (30 days with Recommended Rate line + Min/Max bands), Recommendation Calendar (per room type × 7 days, color-coded HIGH/NORMAL/LOW), AI Insights sidebar (demand alerts, competitor alerts)
-
-5. **Approvals & Publish**: Info cards explaining workflow, Tab navigation (Recommendations, Decisions, Parity, Overbooking, Intents, Publish Jobs), Status filters (all/draft/accepted/rejected), Table with Accept/Reject/Create Intent actions per recommendation
-
-6. **Revenue Segments**: Customer profile management (MOBILE, CORPORATE, MEMBER, GENIUS, GEO_US, LONG_STAY examples), CRUD with code/name/description/priority/status, Info box explaining segments
-
-7. **Rate Resolver (SSOT)**: Date/Room Category/Rate Plan inputs, Resolve Rate button, Resolved rate display with Precedence Breakdown showing layers (Base Rate → DOW → Monthly → Lead Time → Guardrails), Min/Max guardrails display
-
-8. **Setup Wizard**: 6-step progress (Business Context → Segments & Rates → Smart Pricing → Guardrails → Playbooks → Approval Flow), Progress bar with step completion, Revenue Setup Checklist with passed/warning/failed indicators, CTA banner, "What you'll configure" summary
+### Architecture
+- Backend: FastAPI + MongoDB (revenue.py + revenue_advanced.py + revenue_phase2.py)
+- Frontend: React + Tailwind + Shadcn (12 Revenue component files)
+- API: 30+ revenue endpoints, all auth-protected
 
 ### Premium Booking Engine + Admin
 ### Financial Pipeline (Shifts → Pay → Salaries → Deductions)
 ### Operations Hub (7 sub-modules)
 ### All 30+ Modules
 
-## Architecture
-- Backend: FastAPI + MongoDB (revenue.py + revenue_advanced.py)
-- Frontend: React + Tailwind + Shadcn UI (7 Revenue component files)
-- API: 15+ revenue endpoints, all auth-protected
-
-## Testing: 95 iterations, 100% pass rate
+## Testing: 96 iterations, 100% pass rate (35 backend tests in latest iteration)

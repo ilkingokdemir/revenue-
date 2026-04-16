@@ -309,6 +309,8 @@ def create_dynamic_pricing_router(db, require_roles):
         avg_change = round(sum(p["change_pct"] for p in all_prices) / max(len(all_prices), 1), 1)
         avg_price = round(sum(p["ai_price"] for p in all_prices) / max(len(all_prices), 1), 2)
 
+        event_days = sum(1 for p in all_prices if p.get("event"))
+
         return {
             "room_types": results,
             "summary": {
@@ -319,11 +321,13 @@ def create_dynamic_pricing_router(db, require_roles):
                 "unchanged": len(all_prices) - increases - decreases,
                 "avg_change_pct": avg_change,
                 "avg_ai_price": avg_price,
+                "event_days": event_days,
             },
             "data_sources": {
                 "market_supply_dates": len(supply_map),
                 "competitors_with_prices": len(comp_price_map),
                 "strategy_configured": bool(strategy.get("dow_adjustments") or strategy.get("monthly_adjustments")),
+                "events_loaded": len(event_map),
             },
         }
 

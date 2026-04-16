@@ -1,42 +1,41 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | 7 Languages | Mobile Responsive | 96 Test Iterations (100%)
+## 30+ Modules | 7 Languages | Mobile Responsive | 97 Test Iterations (100%)
 
-### Revenue Management System — Industry-Leading (20 Modules)
+### Revenue Management System — Industry-Leading (21 Modules, 19 Tabs)
 Combines the best of RoomPriceGenie + Hotel Ops + Duetto + IDeaS + Atomize + Flyr + PriceLabs + Lighthouse into the most comprehensive RMS on the market. **No competitor has all of this in one platform.**
 
-**18 Navigable Tabs:**
+**19 Navigable Tabs:**
 
-1. **Dashboard** — Revenue Readiness %, KPIs (Occupancy/ADR/RevPAR/7-Day chart), Demand Index, Booking Pace, AI Confidence, Opportunities, Risk Alerts, Quick Actions
-2. **Rate Calendar** — Monthly grid, prices/occupancy/pickup views, room type selector
-3. **Pricing Strategy** (7 sub-tabs) — Rooms Setup, DOW, Monthly, Occupancy, Min Stay, Lead Time, Surge Protection
-4. **Smart Pricing** — Price Evolution chart, Recommendation Calendar, AI Insights, Recalculate
-5. **Forecasting** — AI 30-day forecast with SDLY, KPIs, forecast chart (Forecast/On Books/SDLY lines), Forecast vs SDLY table with confidence scores
-6. **Analytics** (3 sub-tabs):
-   - Performance: KPIs with SDLY, DOW bars, Segment Mix, Trend Analysis
-   - Pickup Report: On Books, Remaining, Revenue, Daily Pickup with Ahead/On Pace/Behind
-   - Budget Variance: Set Budget form, KPIs vs budget, Daily Breakdown
-7. **Approvals** — Accept/Reject pricing recommendations
-8. **Segments** — Customer profile CRUD (MOBILE, CORPORATE, MEMBER, GENIUS)
-9. **Playbooks** — Visual IF/THEN rule builder for automated pricing
-10. **Experiments** — A/B pricing tests with Control/Treatment
-11. **Parity** — Detect rate violations, KPIs, Fix button
-12. **Overbooking** — Run Simulation, policies (buffer rooms, walk cost, no-show rate)
-13. **Action Center** — System alerts with impact/risk scoring
-14. **Profit OS** — Net ADR, ContributionPAR, channel cost analysis
-15. **Distribution** — Channel Performance sorted by profitability
-16. **Competitors** — Rate comparison with 4 competitors, daily rate charts
-17. **Rate Resolver** — Precedence breakdown (Base → DOW → Monthly → Lead Time → Guardrails)
-18. **Setup Wizard** — 6-step guided setup with checklist
+1. **Dashboard** — Revenue Readiness %, KPIs, Demand Index, Booking Pace, AI Confidence, Opportunities, Risk Alerts
+2. **AI Copilot** (GPT-5.2) — Natural language revenue assistant analyzing live hotel data, providing insights, rate recommendations, what-if scenarios, quick actions
+3. **Rate Calendar** — Monthly grid, prices/occupancy/pickup views, room type selector
+4. **Pricing Strategy** (7 sub-tabs) — Rooms Setup, DOW, Monthly, Occupancy, Min Stay, Lead Time, Surge Protection
+5. **Smart Pricing** — Price Evolution chart, Recommendation Calendar, AI Insights, Recalculate
+6. **Forecasting** — AI 30-day forecast with SDLY, chart (Forecast/On Books/SDLY lines), confidence scores
+7. **Analytics** (3 sub-tabs) — Performance (DOW bars, Segment Mix, Trends), Pickup Report (Pace indicators), Budget Variance
+8. **Approvals** — Accept/Reject pricing recommendations
+9. **Segments** — Customer profile CRUD
+10. **Playbooks** — Visual IF/THEN rule builder for automated pricing
+11. **Experiments** — A/B pricing tests with Control/Treatment
+12. **Parity** — Detect rate violations across channels
+13. **Overbooking** — Simulation + policies (buffer, walk cost, no-show rate)
+14. **Action Center** — System alerts with impact/risk scoring
+15. **Profit OS** — Net ADR, ContributionPAR, channel cost analysis
+16. **Distribution** — Channel performance by profitability
+17. **Competitors** — Rate comparison with daily rate charts
+18. **Rate Resolver** — Precedence breakdown
+19. **Setup Wizard** — 6-step guided setup
 
 ### Architecture
-- Backend: FastAPI + MongoDB (revenue.py + revenue_advanced.py + revenue_phase2.py)
-- Frontend: React + Tailwind + Shadcn (12 Revenue component files)
-- API: 30+ revenue endpoints, all auth-protected
+- Backend: FastAPI + MongoDB (4 revenue route files + copilot)
+- Frontend: React + Tailwind + Shadcn (13 Revenue component files)
+- AI: GPT-5.2 via Emergent LLM Key
+- API: 35+ revenue endpoints, all auth-protected
 
 ### Premium Booking Engine + Admin
 ### Financial Pipeline (Shifts → Pay → Salaries → Deductions)
 ### Operations Hub (7 sub-modules)
 ### All 30+ Modules
 
-## Testing: 96 iterations, 100% pass rate (35 backend tests in latest iteration)
+## Testing: 97 iterations, 100% pass rate

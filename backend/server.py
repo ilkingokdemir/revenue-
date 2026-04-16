@@ -70,6 +70,7 @@ from routes.settings_hub import create_settings_hub_router
 from routes.revenue import create_revenue_router
 from routes.revenue_advanced import create_revenue_advanced_router
 from routes.revenue_phase2 import create_revenue_phase2_router
+from routes.revenue_copilot import create_revenue_copilot_router
 
 # Import extracted modules
 from models import (
@@ -404,6 +405,9 @@ api_router.include_router(revenue_advanced_router)
 
 revenue_phase2_router = create_revenue_phase2_router(db, require_roles)
 api_router.include_router(revenue_phase2_router)
+
+revenue_copilot_router = create_revenue_copilot_router(db, require_roles)
+api_router.include_router(revenue_copilot_router)
 
 app.include_router(api_router)
 

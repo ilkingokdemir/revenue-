@@ -15,13 +15,15 @@ import { RevenueForecasting } from "./RevenueForecasting";
 import { RevenueAnalytics } from "./RevenueAnalytics";
 import { RevenuePlaybooks, RevenueExperiments } from "./RevenuePlaybooksExperiments";
 import { RevenueParity, RevenueOverbooking, RevenueActionCenter, RevenueProfitOS, RevenueDistribution, RevenueCompetitors } from "./RevenueModules";
-import { BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2, LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign, Network, Eye } from "lucide-react";
+import { RevenueAICopilot } from "./RevenueAICopilot";
+import { BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2, LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign, Network, Eye, Bot } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
+  { id: "ai-copilot", label: "AI Copilot", icon: Bot },
   { id: "calendar", label: "Rate Calendar", icon: CalendarDays },
   { id: "strategy", label: "Pricing Strategy", icon: Settings2 },
   { id: "smart-pricing", label: "Smart Pricing", icon: Zap },
@@ -123,6 +125,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
       <AnimatePresence mode="wait">
         <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
           {tab === "dashboard" && <RevenueDashboardEnhanced propertyId={pid} onNavigate={handleNavigate} />}
+          {tab === "ai-copilot" && <RevenueAICopilot propertyId={pid} />}
           {tab === "calendar" && <RateCalendarTab propertyId={pid} />}
           {tab === "strategy" && <RevenuePricingStrategy propertyId={pid} />}
           {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}

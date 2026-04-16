@@ -72,6 +72,23 @@ def create_shifts_router(db, require_roles):
     @router.post("/shifts/entries")
     async def create_shift(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
         now = datetime.now(timezone.utc).isoformat()
+        start_time = data.get("start_time", "09:00")
+        end_time = data.get("end_time", "17:00")
+        pay_type = data.get("pay_type", "daily")
+        pay_rate = float(data.get("pay_rate", 0) or 0)
+
+        # Auto-calculate hours and earned amount
+        try:
+            st = datetime.strptime(start_time, "%H:%M")
+            en = datetime.strptime(end_time, "%H:%M")
+            hours = round((en - st).seconds / 3600, 2)
+        except Exception:
+            hours = 8.0
+        if pay_type == "hourly":
+            earned = round(hours * pay_rate, 2)
+        else:
+            earned = round(pay_rate, 2)
+
         entry = {
             "id": str(uuid.uuid4()),
             "property_id": data.get("property_id", ""),
@@ -80,12 +97,14 @@ def create_shifts_router(db, require_roles):
             "role": data.get("role", ""),
             "date": data.get("date", ""),
             "week_start": data.get("week_start", ""),
-            "start_time": data.get("start_time", "09:00"),
-            "end_time": data.get("end_time", "17:00"),
+            "start_time": start_time,
+            "end_time": end_time,
+            "hours_worked": hours,
             "status": data.get("status", "planned"),
             "notes": data.get("notes", ""),
-            "pay_type": data.get("pay_type", "daily"),
-            "pay_rate": data.get("pay_rate", 0),
+            "pay_type": pay_type,
+            "pay_rate": pay_rate,
+            "earned_amount": earned,
             "created_by": current_user.get("name", "Staff"),
             "created_at": now,
         }
@@ -193,21 +212,88 @@ def create_shifts_router(db, require_roles):
             sid = s.get("staff_id", "")
             if sid not in staff_totals:
                 staff_totals[sid] = {"staff_id": sid, "staff_name": s.get("staff_name", ""), "role": s.get("role", ""),
-                                     "total_shifts": 0, "total_hours": 0, "total_pay": 0, "currency": s.get("currency", "GBP")}
+                                     "total_shifts": 0, "total_hours": 0, "total_pay": 0, "currency": "GBP"}
             staff_totals[sid]["total_shifts"] += 1
-            try:
-                start = datetime.strptime(s.get("start_time", "09:00"), "%H:%M")
-                end = datetime.strptime(s.get("end_time", "17:00"), "%H:%M")
-                hours = (end - start).seconds / 3600
-            except Exception:
-                hours = 8
+            hours = float(s.get("hours_worked", 0) or 0)
+            if hours == 0:
+                try:
+                    start = datetime.strptime(s.get("start_time", "09:00"), "%H:%M")
+                    end = datetime.strptime(s.get("end_time", "17:00"), "%H:%M")
+                    hours = (end - start).seconds / 3600
+                except Exception:
+                    hours = 8
             staff_totals[sid]["total_hours"] += hours
-            pay_type = s.get("pay_type", "daily")
-            pay_rate = s.get("pay_rate", 0)
-            if pay_type == "hourly":
-                staff_totals[sid]["total_pay"] += hours * pay_rate
-            else:
-                staff_totals[sid]["total_pay"] += pay_rate
+            earned = float(s.get("earned_amount", 0) or 0)
+            if earned == 0:
+                pay_type = s.get("pay_type", "daily")
+                pay_rate = float(s.get("pay_rate", 0) or 0)
+                earned = hours * pay_rate if pay_type == "hourly" else pay_rate
+            staff_totals[sid]["total_pay"] += earned
         return list(staff_totals.values())
+
+    # ==================== SYNC SHIFTS → EARNED SALARIES ====================
+
+    @router.post("/shifts/sync-to-salaries")
+    async def sync_shifts_to_salaries(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Generate earned salary entries from completed/approved shifts"""
+        week_start = data.get("week_start", "")
+        property_id = data.get("property_id", "")
+        query = {"status": {"$in": ["completed", "approved"]}}
+        if week_start:
+            query["week_start"] = week_start
+        if property_id and property_id != "all":
+            query["property_id"] = property_id
+
+        shifts = await db.shift_entries.find(query, {"_id": 0}).to_list(500)
+        now = datetime.now(timezone.utc).isoformat()
+        created = 0
+
+        for s in shifts:
+            # Check if already synced
+            existing = await db.finance_earned_salaries.find_one({
+                "shift_id": s.get("id", "")
+            })
+            if existing:
+                continue
+
+            hours = float(s.get("hours_worked", 0) or 0)
+            if hours == 0:
+                try:
+                    st = datetime.strptime(s.get("start_time", "09:00"), "%H:%M")
+                    en = datetime.strptime(s.get("end_time", "17:00"), "%H:%M")
+                    hours = round((en - st).seconds / 3600, 2)
+                except Exception:
+                    hours = 8.0
+
+            earned = float(s.get("earned_amount", 0) or 0)
+            if earned == 0:
+                pay_type = s.get("pay_type", "daily")
+                pay_rate = float(s.get("pay_rate", 0) or 0)
+                earned = round(hours * pay_rate, 2) if pay_type == "hourly" else round(pay_rate, 2)
+
+            if earned <= 0:
+                continue
+
+            salary_entry = {
+                "id": str(uuid.uuid4()),
+                "shift_id": s.get("id", ""),
+                "property_id": s.get("property_id", ""),
+                "staff_id": s.get("staff_id", ""),
+                "staff_name": s.get("staff_name", ""),
+                "role": s.get("role", ""),
+                "date": s.get("date", ""),
+                "amount": earned,
+                "hours": hours,
+                "pay_type": s.get("pay_type", "daily"),
+                "pay_rate": float(s.get("pay_rate", 0) or 0),
+                "source": "shift",
+                "notes": f"Shift {s.get('start_time','')}-{s.get('end_time','')} ({hours}h)",
+                "created_at": now,
+            }
+            await db.finance_earned_salaries.insert_one(salary_entry)
+            salary_entry.pop("_id", None)
+            created += 1
+
+        return {"synced": created, "total_shifts_processed": len(shifts)}
 
     return router

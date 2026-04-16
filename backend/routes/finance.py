@@ -45,11 +45,23 @@ def create_finance_router(db, require_roles):
         total_expenses = sum(float(e.get("amount", 0) or 0) for e in expenses if e.get("category") != "commission")
         total_commission = sum(float(e.get("amount", 0) or 0) for e in expenses if e.get("category") == "commission")
 
-        # Payroll from earned salaries
+        # Payroll from earned salaries (includes shift-synced entries)
         salaries = await db.finance_earned_salaries.find(
             {**pq, "date": {"$gte": from_date, "$lte": to_date}}, {"_id": 0}
         ).to_list(1000)
         total_payroll = sum(float(s.get("amount", 0) or 0) for s in salaries)
+
+        # Also check shifts directly for any not yet synced
+        shift_payroll = await db.shift_entries.find(
+            {**pq, "date": {"$gte": from_date, "$lte": to_date}, "status": {"$in": ["completed", "approved"]}}, {"_id": 0}
+        ).to_list(500)
+        synced_shift_ids = set(s.get("shift_id", "") for s in salaries if s.get("shift_id"))
+        unsynced_shift_pay = sum(
+            float(s.get("earned_amount", 0) or 0)
+            for s in shift_payroll
+            if s.get("id", "") not in synced_shift_ids and float(s.get("earned_amount", 0) or 0) > 0
+        )
+        total_payroll += unsynced_shift_pay
 
         gross = room_revenue + total_commission
         total_costs = total_expenses + total_payroll + total_commission

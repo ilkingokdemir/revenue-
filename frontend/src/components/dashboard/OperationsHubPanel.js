@@ -963,6 +963,11 @@ const ShiftSchedulerTab = ({ propertyId }) => {
         <button onClick={() => bulkAction("publish-all")} className="px-3 py-1.5 text-xs font-medium text-stone-600 border border-stone-200 rounded-lg hover:bg-stone-50 transition-colors" data-testid="shift-publish-all">Publish All</button>
         <button onClick={() => bulkAction("mark-completed")} className="px-3 py-1.5 text-xs font-medium text-white bg-emerald-500 rounded-lg hover:bg-emerald-600 transition-colors" data-testid="shift-mark-completed">Mark All Completed</button>
         <button onClick={() => bulkAction("approve-completed")} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors" data-testid="shift-approve-all">Approve All Completed</button>
+        <button onClick={async () => {
+          try { const { data } = await axios.post(`${API}/shifts/sync-to-salaries`, { week_start: weekStart, property_id: propertyId });
+            toast.success(`${data.synced} salary entries created from ${data.total_shifts_processed} shifts`);
+          } catch { toast.error("Failed to sync"); }
+        }} className="px-3 py-1.5 text-xs font-medium text-white bg-violet-500 rounded-lg hover:bg-violet-600 transition-colors" data-testid="shift-sync-salaries">Sync to Payroll</button>
         <button onClick={() => { if (window.confirm("Clear all shifts for this week?")) bulkAction("clear-week"); }}
           className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors" data-testid="shift-clear-week">Clear Week</button>
         <div className="flex items-center gap-2 ml-auto text-[10px] text-stone-400">
@@ -1002,11 +1007,14 @@ const ShiftSchedulerTab = ({ propertyId }) => {
                     return (
                       <td key={d.date} className="px-1 py-2 align-top min-w-[120px]" data-testid={`shift-cell-${s.id}-${d.date}`}>
                         {dayShifts.map(sh => (
-                          <div key={sh.id} className={`${shiftColors[sh.status] || "bg-stone-400"} text-white text-[10px] font-medium px-2 py-1 rounded-md mb-1 flex items-center justify-between group`}>
-                            <span>{sh.start_time}-{sh.end_time}</span>
-                            <button onClick={() => deleteShift(sh.id)} className="opacity-0 group-hover:opacity-100 ml-1" data-testid={`delete-shift-${sh.id}`}>
-                              <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/></svg>
-                            </button>
+                          <div key={sh.id} className={`${shiftColors[sh.status] || "bg-stone-400"} text-white text-[10px] font-medium px-2 py-1.5 rounded-md mb-1 group`}>
+                            <div className="flex items-center justify-between">
+                              <span>{sh.start_time}-{sh.end_time}</span>
+                              <button onClick={() => deleteShift(sh.id)} className="opacity-0 group-hover:opacity-100 ml-1" data-testid={`delete-shift-${sh.id}`}>
+                                <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/></svg>
+                              </button>
+                            </div>
+                            <div className="text-[9px] opacity-80 mt-0.5">{sh.hours_worked || "8"}h &middot; £{sh.earned_amount || sh.pay_rate || 0}</div>
                           </div>
                         ))}
                         <button onClick={() => setShowAddShift({ staffId: s.id, date: d.date })}

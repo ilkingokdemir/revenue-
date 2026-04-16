@@ -69,6 +69,7 @@ from routes.events import create_events_router
 from routes.settings_hub import create_settings_hub_router
 from routes.revenue import create_revenue_router
 from routes.revenue_advanced import create_revenue_advanced_router
+from routes.revenue_phase2 import create_revenue_phase2_router
 
 # Import extracted modules
 from models import (
@@ -400,6 +401,9 @@ api_router.include_router(revenue_router)
 
 revenue_advanced_router = create_revenue_advanced_router(db, require_roles)
 api_router.include_router(revenue_advanced_router)
+
+revenue_phase2_router = create_revenue_phase2_router(db, require_roles)
+api_router.include_router(revenue_phase2_router)
 
 app.include_router(api_router)
 

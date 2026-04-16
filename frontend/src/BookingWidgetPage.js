@@ -1,43 +1,38 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
-import { useTranslation } from "@/i18n";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const cur = (v, c) => `${c === "GBP" ? "£" : c === "EUR" ? "€" : c === "USD" ? "$" : c}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 export default function BookingWidgetPage({ propertyId }) {
-  const { t } = useTranslation();
-  const [hotelName, setHotelName] = useState("Hotel");
-  const [rooms, setRooms] = useState([]);
-  const [currency, setCurrency] = useState("GBP");
-  const [step, setStep] = useState("search"); // search, results, details, confirmed
+  const [hotel, setHotel] = useState({ hotel_name: "Hotel", rooms: [], currency: "GBP", logo_url: "" });
+  const [step, setStep] = useState("home");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [guests, setGuests] = useState(2);
+  const [children, setChildren] = useState(0);
+  const [roomCount, setRoomCount] = useState(1);
   const [available, setAvailable] = useState([]);
   const [selected, setSelected] = useState(null);
   const [searching, setSearching] = useState(false);
   const [booking, setBooking] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
   const [form, setForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" });
+  const [guestOpen, setGuestOpen] = useState(false);
+  const [mobileMenu, setMobileMenu] = useState(false);
 
   useEffect(() => {
-    axios.get(`${API}/booking-widget/info/${propertyId}`).then(r => {
-      setHotelName(r.data.hotel_name || "Hotel");
-      setRooms(r.data.rooms || []);
-      setCurrency(r.data.currency || "GBP");
-    }).catch(() => {});
+    axios.get(`${API}/booking-widget/info/${propertyId}`).then(r => setHotel(r.data)).catch(() => {});
+    const today = new Date();
+    const ci = new Date(today); ci.setDate(ci.getDate() + 1);
+    const co = new Date(today); co.setDate(co.getDate() + 3);
+    setCheckIn(ci.toISOString().split("T")[0]);
+    setCheckOut(co.toISOString().split("T")[0]);
   }, [propertyId]);
 
-  // Default dates
-  useEffect(() => {
-    const today = new Date();
-    const tmrw = new Date(today); tmrw.setDate(tmrw.getDate() + 1);
-    const day3 = new Date(today); day3.setDate(day3.getDate() + 3);
-    setCheckIn(tmrw.toISOString().split("T")[0]);
-    setCheckOut(day3.toISOString().split("T")[0]);
-  }, []);
+  const nights = (() => { try { return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)); } catch { return 1; } })();
+  const fmtDate = (d) => { try { return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); } catch { return d; } };
 
   const search = async () => {
     if (!checkIn || !checkOut) return;
@@ -46,7 +41,7 @@ export default function BookingWidgetPage({ propertyId }) {
       const { data } = await axios.post(`${API}/booking-widget/check-availability`, { property_id: propertyId, check_in: checkIn, check_out: checkOut });
       setAvailable(data.available_rooms || []);
       setStep("results");
-    } catch { }
+    } catch { /* silent */ }
     setSearching(false);
   };
 
@@ -56,171 +51,380 @@ export default function BookingWidgetPage({ propertyId }) {
     try {
       const { data } = await axios.post(`${API}/booking-widget/book`, {
         property_id: propertyId, room_type: selected.name, check_in: checkIn, check_out: checkOut,
-        rate: selected.base_rate, guests, currency, ...form,
+        guest_name: form.guest_name, guest_email: form.guest_email, guest_phone: form.guest_phone,
+        special_requests: form.special_requests, rate: selected.base_rate, guests, rooms: roomCount, currency: hotel.currency,
       });
       setConfirmation(data);
       setStep("confirmed");
-    } catch { alert("Booking failed. Please try again."); }
+    } catch { /* silent */ }
     setBooking(false);
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a]" data-testid="booking-widget-page">
-      {/* Header */}
-      <header className="border-b border-white/10">
-        <div className="max-w-3xl mx-auto px-4 py-5 flex items-center justify-between">
+  const cn = hotel.hotel_name;
+  const cc = hotel.currency;
+  const roomAmenities = ["Free WiFi", "Air Conditioning", "Flat-screen TV", "Private Bathroom", "Daily Housekeeping", "24hr Front Desk"];
+
+  // ─── HEADER ───
+  const Header = () => (
+    <header className="fixed top-0 left-0 right-0 z-50 transition-all bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-sm" data-testid="be-header">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-[#1a3c5e] flex items-center justify-center text-white font-bold text-sm">{cn[0]}</div>
           <div>
-            <h1 className="text-xl font-bold text-white" data-testid="widget-hotel-name">{hotelName}</h1>
-            <p className="text-white/40 text-xs mt-0.5">Official Direct Booking</p>
+            <div className="font-semibold text-[#1a3c5e] text-sm tracking-tight">{cn}</div>
+            <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /><span className="text-[10px] text-emerald-600 font-medium">OFFICIAL SITE</span></div>
           </div>
-          <LanguageSwitcher compact />
         </div>
-      </header>
+        <nav className="hidden md:flex items-center gap-6 text-sm">
+          <button onClick={() => setStep("home")} className="text-stone-600 hover:text-[#1a3c5e] font-medium transition-colors" data-testid="be-nav-home">Home</button>
+          <button onClick={() => { setStep("home"); setTimeout(() => document.getElementById("be-rooms")?.scrollIntoView({ behavior: "smooth" }), 100); }} className="text-stone-600 hover:text-[#1a3c5e] font-medium" data-testid="be-nav-rooms">Rooms</button>
+          <button onClick={() => search()} className="px-5 py-2 bg-[#1a3c5e] text-white rounded-lg font-medium text-sm hover:bg-[#0f2a45] transition-colors shadow-sm" data-testid="be-nav-book">Book Now</button>
+        </nav>
+        <button onClick={() => setMobileMenu(!mobileMenu)} className="md:hidden p-2 text-stone-500" data-testid="be-mobile-menu">
+          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
+      </div>
+      {mobileMenu && <div className="md:hidden border-t border-stone-100 bg-white p-4 space-y-3">
+        <button onClick={() => { setStep("home"); setMobileMenu(false); }} className="block w-full text-left text-stone-600 py-2">Home</button>
+        <button onClick={() => { search(); setMobileMenu(false); }} className="block w-full py-2.5 bg-[#1a3c5e] text-white rounded-lg text-center font-medium">Book Now</button>
+      </div>}
+    </header>
+  );
 
-      <div className="max-w-3xl mx-auto px-4 py-8">
-        <AnimatePresence mode="wait">
-          {/* SEARCH */}
-          {step === "search" && (
-            <motion.div key="search" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold text-white mb-2">Book Your Stay</h2>
-                <p className="text-white/50">Best price guaranteed when you book direct</p>
-              </div>
-              <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6" data-testid="search-form">
-                <div className="grid grid-cols-3 gap-4 mb-4">
-                  <div>
-                    <label className="text-xs font-medium text-white/60 mb-1.5 block">Check-in</label>
-                    <input data-testid="widget-checkin" type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} className="w-full px-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-white/60 mb-1.5 block">Check-out</label>
-                    <input data-testid="widget-checkout" type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} className="w-full px-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-white/60 mb-1.5 block">Guests</label>
-                    <select data-testid="widget-guests" value={guests} onChange={e => setGuests(Number(e.target.value))} className="w-full px-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none">
-                      {[1,2,3,4,5,6].map(n => <option key={n} value={n} className="bg-stone-800">{n} Guest{n > 1 ? "s" : ""}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <button data-testid="widget-search-btn" onClick={search} disabled={searching || !checkIn || !checkOut} className="w-full py-3.5 bg-white text-[#0f172a] text-sm font-bold rounded-xl hover:bg-white/90 disabled:opacity-40 transition">
-                  {searching ? t("common.loading") : "Search Availability"}
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* RESULTS */}
-          {step === "results" && (
-            <motion.div key="results" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-white">Available Rooms</h2>
-                  <p className="text-white/40 text-xs">{checkIn} to {checkOut}</p>
-                </div>
-                <button onClick={() => setStep("search")} className="text-white/50 text-xs hover:text-white">{t("common.back")}</button>
-              </div>
-
-              {available.length === 0 ? (
-                <div className="bg-white/5 rounded-2xl border border-white/10 p-10 text-center" data-testid="no-availability">
-                  <p className="text-white/60">No rooms available for these dates. Try different dates.</p>
-                </div>
-              ) : (
-                <div className="space-y-3" data-testid="room-results">
-                  {available.map(room => (
-                    <div key={room.room_type_id} className={`bg-white/5 rounded-2xl border ${selected?.room_type_id === room.room_type_id ? "border-white/40 bg-white/10" : "border-white/10"} p-5 cursor-pointer hover:border-white/30 transition`} onClick={() => setSelected(room)} data-testid={`room-${room.room_type_id}`}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-base font-semibold text-white">{room.name}</h3>
-                          <p className="text-white/40 text-xs mt-0.5">{room.description || `Up to ${room.max_occupancy} guests`}</p>
-                          <p className="text-white/30 text-[10px] mt-1">{room.available} room{room.available > 1 ? "s" : ""} left &middot; {room.nights} night{room.nights > 1 ? "s" : ""}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-white">{currency} {room.total_rate}</p>
-                          <p className="text-white/40 text-[10px]">{currency} {room.base_rate} / night</p>
-                        </div>
+  // ─── HERO ───
+  const Hero = () => (
+    <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden" data-testid="be-hero">
+      <div className="absolute inset-0 bg-gradient-to-b from-[#0a1628]/80 via-[#0a1628]/50 to-[#0a1628]/80 z-10" />
+      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80')] bg-cover bg-center" />
+      <div className="relative z-20 text-center px-4 max-w-4xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 mb-6">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span className="text-white/90 text-xs font-medium tracking-wide">OFFICIAL WEBSITE — BEST RATE GUARANTEED</span>
+          </div>
+          <h1 className="text-4xl sm:text-5xl lg:text-7xl font-light text-white tracking-tight mb-4" style={{ fontFamily: "'Georgia', serif" }}>{cn}</h1>
+          <div className="w-12 h-0.5 bg-amber-400 mx-auto mb-4" />
+          <p className="text-white/60 text-sm tracking-[0.2em] uppercase mb-2">Premium Accommodation</p>
+          <p className="text-white/80 text-base max-w-lg mx-auto">Experience exceptional hospitality with our best rate guarantee when you book direct</p>
+        </motion.div>
+      </div>
+      {/* Booking Bar */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 px-4 pb-6">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+          className="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl shadow-black/20 p-4 sm:p-5" data-testid="be-booking-bar">
+          <div className="flex flex-col sm:flex-row items-stretch gap-3">
+            <div className="flex-1 min-w-0">
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Check-in</label>
+              <input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} className="w-full text-sm font-medium text-stone-800 border border-stone-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" data-testid="be-checkin" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Check-out</label>
+              <input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} className="w-full text-sm font-medium text-stone-800 border border-stone-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" data-testid="be-checkout" />
+            </div>
+            <div className="flex-1 min-w-0 relative">
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Guests & Rooms</label>
+              <button onClick={() => setGuestOpen(!guestOpen)} className="w-full text-left text-sm font-medium text-stone-800 border border-stone-200 rounded-lg px-3 py-2.5" data-testid="be-guests-btn">
+                {guests} Adults · {children} Children · {roomCount} Room
+              </button>
+              {guestOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-xl p-4 z-50" data-testid="be-guests-dropdown">
+                  {[{ label: "Adults", val: guests, set: setGuests, min: 1 }, { label: "Children", val: children, set: setChildren, min: 0 }, { label: "Rooms", val: roomCount, set: setRoomCount, min: 1 }].map(g => (
+                    <div key={g.label} className="flex items-center justify-between py-2.5 border-b border-stone-100 last:border-0">
+                      <span className="text-sm text-stone-700">{g.label}</span>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => g.set(Math.max(g.min, g.val - 1))} className="w-8 h-8 rounded-full border border-stone-300 flex items-center justify-center text-stone-500 hover:bg-stone-50">-</button>
+                        <span className="text-sm font-semibold w-4 text-center">{g.val}</span>
+                        <button onClick={() => g.set(g.val + 1)} className="w-8 h-8 rounded-full border border-stone-300 flex items-center justify-center text-stone-500 hover:bg-stone-50">+</button>
                       </div>
                     </div>
                   ))}
+                  <button onClick={() => setGuestOpen(false)} className="w-full mt-3 py-2 bg-[#1a3c5e] text-white rounded-lg text-sm font-medium">Done</button>
                 </div>
               )}
-
-              {selected && (
-                <button data-testid="btn-continue-booking" onClick={() => setStep("details")} className="w-full mt-4 py-3.5 bg-white text-[#0f172a] text-sm font-bold rounded-xl hover:bg-white/90 transition">
-                  Continue — {currency} {selected.total_rate} total
-                </button>
-              )}
-            </motion.div>
-          )}
-
-          {/* DETAILS */}
-          {step === "details" && (
-            <motion.div key="details" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold text-white">Guest Details</h2>
-                <button onClick={() => setStep("results")} className="text-white/50 text-xs hover:text-white">{t("common.back")}</button>
-              </div>
-
-              {/* Booking Summary */}
-              <div className="bg-white/5 rounded-xl border border-white/10 p-4 mb-4 flex justify-between items-center" data-testid="booking-summary">
-                <div>
-                  <p className="text-sm font-semibold text-white">{selected?.name}</p>
-                  <p className="text-white/40 text-xs">{checkIn} &rarr; {checkOut} &middot; {selected?.nights} night{selected?.nights > 1 ? "s" : ""}</p>
-                </div>
-                <p className="text-xl font-bold text-white">{currency} {selected?.total_rate}</p>
-              </div>
-
-              <div className="bg-white/5 rounded-2xl border border-white/10 p-5 space-y-4" data-testid="guest-details-form">
-                <div>
-                  <label className="text-xs font-medium text-white/60 mb-1.5 block">{t("common.name")} *</label>
-                  <input data-testid="guest-name" type="text" value={form.guest_name} onChange={e => setForm(p => ({ ...p, guest_name: e.target.value }))} className="w-full px-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none" placeholder="Full name" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-white/60 mb-1.5 block">{t("common.email")} *</label>
-                    <input data-testid="guest-email" type="email" value={form.guest_email} onChange={e => setForm(p => ({ ...p, guest_email: e.target.value }))} className="w-full px-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none" />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-white/60 mb-1.5 block">{t("common.phone")}</label>
-                    <input data-testid="guest-phone" type="tel" value={form.guest_phone} onChange={e => setForm(p => ({ ...p, guest_phone: e.target.value }))} className="w-full px-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-white/60 mb-1.5 block">Special Requests</label>
-                  <textarea data-testid="special-requests" value={form.special_requests} onChange={e => setForm(p => ({ ...p, special_requests: e.target.value }))} rows={2} className="w-full px-3 py-3 bg-white/10 border border-white/20 rounded-xl text-white text-sm focus:border-white/40 outline-none resize-none" placeholder="Any preferences or requirements..." />
-                </div>
-                <button data-testid="btn-confirm-booking" onClick={book} disabled={booking || !form.guest_name || !form.guest_email} className="w-full py-3.5 bg-emerald-500 text-white text-sm font-bold rounded-xl hover:bg-emerald-600 disabled:opacity-40 transition">
-                  {booking ? t("common.loading") : `Confirm Booking — ${currency} ${selected?.total_rate}`}
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* CONFIRMED */}
-          {step === "confirmed" && confirmation && (
-            <motion.div key="confirmed" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center" data-testid="booking-confirmed">
-              <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
-                <svg className="w-10 h-10 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              </div>
-              <h2 className="text-2xl font-bold text-white mb-2">Booking Confirmed!</h2>
-              <p className="text-white/50 text-sm mb-6">A confirmation email has been sent to {form.guest_email}</p>
-
-              <div className="bg-white/5 rounded-2xl border border-white/10 p-5 max-w-sm mx-auto text-left space-y-2">
-                <div className="flex justify-between text-sm"><span className="text-white/50">Reference</span><span className="font-mono font-bold text-emerald-400" data-testid="conf-ref">{confirmation.booking_ref}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-white/50">Hotel</span><span className="text-white font-medium">{hotelName}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-white/50">Room</span><span className="text-white font-medium">{selected?.name}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-white/50">Check-in</span><span className="text-white font-medium">{checkIn}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-white/50">Check-out</span><span className="text-white font-medium">{checkOut}</span></div>
-                <div className="flex justify-between text-sm border-t border-white/10 pt-2"><span className="text-white/50">Total</span><span className="text-lg font-bold text-white">{currency} {selected?.total_rate}</span></div>
-              </div>
-
-              <p className="text-white/30 text-xs mt-6">You can close this page. We look forward to welcoming you!</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+            <div className="flex-shrink-0 flex items-end">
+              <button onClick={search} disabled={searching}
+                className="w-full sm:w-auto px-8 py-3 bg-[#1a3c5e] text-white rounded-xl font-semibold text-sm hover:bg-[#0f2a45] transition-all shadow-lg shadow-[#1a3c5e]/30 disabled:opacity-60" data-testid="be-search-btn">
+                {searching ? "Searching..." : "CHECK AVAILABILITY"}
+              </button>
+            </div>
+          </div>
+        </motion.div>
       </div>
+    </section>
+  );
 
-      <div className="text-center pb-4 text-[10px] text-white/20">Powered by My Hotel Box</div>
+  // ─── TRUST BAR ───
+  const TrustBar = () => (
+    <div className="bg-[#f8f6f3] border-y border-stone-200" data-testid="be-trust-bar">
+      <div className="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-xs text-stone-500">
+        {[
+          { icon: "M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z", text: "Secure SSL Booking" },
+          { icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z", text: "Best Price Guarantee" },
+          { icon: "M6 18L18 6M6 6l12 12", text: "Free Cancellation" },
+          { icon: "M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z", text: "No Prepayment Required" },
+          { icon: "M5 13l4 4L19 7", text: "Instant Confirmation" },
+        ].map(t => (
+          <div key={t.text} className="flex items-center gap-1.5">
+            <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={t.icon} /></svg>
+            <span className="font-medium">{t.text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ─── ROOMS PREVIEW ───
+  const RoomsPreview = () => (
+    <section id="be-rooms" className="max-w-6xl mx-auto px-4 py-16" data-testid="be-rooms-section">
+      <div className="text-center mb-10">
+        <p className="text-xs font-semibold text-[#1a3c5e] uppercase tracking-[0.2em] mb-2">ACCOMMODATION</p>
+        <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>Our Rooms & Suites</h2>
+        <div className="w-10 h-0.5 bg-amber-400 mx-auto mt-3" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {(hotel.rooms || []).map((r, i) => (
+          <motion.div key={r.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
+            className="group bg-white rounded-2xl overflow-hidden border border-stone-200 hover:shadow-xl transition-all duration-300" data-testid={`be-room-card-${r.id}`}>
+            <div className="h-48 bg-gradient-to-br from-stone-200 to-stone-300 relative overflow-hidden">
+              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=70')] bg-cover bg-center group-hover:scale-105 transition-transform duration-500" />
+              <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-sm">
+                <span className="text-xs font-bold text-[#1a3c5e]">From {cur(r.base_rate, cc)}<span className="text-stone-400 font-normal">/night</span></span>
+              </div>
+            </div>
+            <div className="p-5">
+              <h3 className="font-semibold text-stone-800 text-base mb-1">{r.name}</h3>
+              <p className="text-xs text-stone-500 mb-3 line-clamp-2">{r.description || "Comfortable accommodation with premium amenities"}</p>
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {roomAmenities.slice(0, 4).map(a => (
+                  <span key={a} className="text-[10px] bg-stone-100 text-stone-500 px-2 py-0.5 rounded-full">{a}</span>
+                ))}
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+                <div><span className="text-lg font-bold text-[#1a3c5e]">{cur(r.base_rate, cc)}</span><span className="text-xs text-stone-400"> / night</span></div>
+                <button onClick={() => search()} className="px-4 py-2 bg-[#1a3c5e] text-white rounded-lg text-xs font-semibold hover:bg-[#0f2a45] transition-colors" data-testid={`be-select-room-${r.id}`}>
+                  Select Dates
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </section>
+  );
+
+  // ─── WHY BOOK DIRECT ───
+  const WhyDirect = () => (
+    <section className="bg-[#1a3c5e] py-16" data-testid="be-why-direct">
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="text-center mb-10">
+          <p className="text-xs font-semibold text-amber-400 uppercase tracking-[0.2em] mb-2">WHY BOOK DIRECT</p>
+          <h2 className="text-2xl sm:text-3xl font-light text-white" style={{ fontFamily: "'Georgia', serif" }}>The Best Rate, Guaranteed</h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[
+            { title: "Best Price Promise", desc: "Our direct rates are always equal to or lower than any OTA. Find it cheaper and we'll match it.", icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+            { title: "Free Cancellation", desc: "Most rates offer free cancellation up to 48 hours before arrival — no questions asked.", icon: "M6 18L18 6M6 6l12 12" },
+            { title: "No Hidden Fees", desc: "The price you see is the price you pay. All taxes and charges included upfront.", icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" },
+          ].map(c => (
+            <div key={c.title} className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-amber-400/20 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={c.icon} /></svg>
+              </div>
+              <h3 className="font-semibold text-white mb-2">{c.title}</h3>
+              <p className="text-sm text-white/60 leading-relaxed">{c.desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-8 text-sm text-white/70">
+          {["Free cancellation up to 48 hours", "No prepayment required", "Instant confirmation", "Best rate guaranteed"].map(t => (
+            <div key={t} className="flex items-center gap-1.5"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span>{t}</span></div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+
+  // ─── FOOTER ───
+  const Footer = () => (
+    <footer className="bg-[#0f1f33] text-white/60 py-12" data-testid="be-footer">
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+          <div><h4 className="font-semibold text-white mb-2">{cn}</h4><p className="text-sm">Premium accommodation with the best rate guarantee when you book direct.</p></div>
+          <div><h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">Quick Links</h4>
+            <div className="space-y-2 text-sm"><button onClick={() => setStep("home")} className="block hover:text-white">Home</button><button onClick={() => search()} className="block hover:text-white">Check Availability</button></div>
+          </div>
+          <div><h4 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">Booking Guarantee</h4>
+            <div className="space-y-2 text-sm"><p>Best Price Promise</p><p>Free Cancellation</p><p>Secure SSL Payment</p><p>Instant Confirmation</p></div>
+          </div>
+        </div>
+        <div className="border-t border-white/10 pt-6 flex flex-wrap items-center justify-between gap-4 text-xs">
+          <span>&copy; {new Date().getFullYear()} {cn}. All rights reserved.</span>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1"><svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>SSL Secured</span>
+            <span>Powered by My Hotel Box</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+
+  // ─── RESULTS PAGE ───
+  const ResultsPage = () => (
+    <div className="pt-20 pb-12 min-h-screen bg-[#f8f6f3]" data-testid="be-results-page">
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 mb-6 shadow-sm">
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <div className="flex items-center gap-2"><svg className="w-5 h-5 text-[#1a3c5e]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              <span className="font-semibold text-stone-800">{fmtDate(checkIn)} — {fmtDate(checkOut)}</span><span className="text-stone-400">({nights} night{nights > 1 ? "s" : ""})</span></div>
+            <div className="text-stone-500">{guests} Adults · {children} Children · {roomCount} Room</div>
+            <button onClick={() => setStep("home")} className="ml-auto text-[#1a3c5e] font-medium hover:underline text-xs" data-testid="be-modify-search">Modify Search</button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mb-4"><span className="text-emerald-600 text-sm font-medium">{available.length} room{available.length !== 1 ? "s" : ""} available</span><span className="text-xs text-stone-400">for your dates</span></div>
+        {available.length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 text-center border border-stone-200">
+            <svg className="w-16 h-16 text-stone-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+            <h3 className="text-lg font-semibold text-stone-800 mb-2">No rooms available</h3>
+            <p className="text-sm text-stone-500">Try different dates or contact us directly.</p>
+          </div>
+        ) : available.map((r, i) => (
+          <motion.div key={r.room_type_id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
+            className="bg-white rounded-2xl border border-stone-200 mb-4 overflow-hidden hover:shadow-lg transition-all" data-testid={`be-result-room-${r.room_type_id}`}>
+            <div className="flex flex-col md:flex-row">
+              <div className="md:w-64 h-48 md:h-auto bg-[url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=400&q=70')] bg-cover bg-center flex-shrink-0" />
+              <div className="flex-1 p-5">
+                <div className="flex items-start justify-between mb-2">
+                  <div><h3 className="font-semibold text-stone-800 text-lg">{r.name}</h3><p className="text-xs text-stone-500">{r.description}</p></div>
+                  <div className="flex-shrink-0 ml-4 bg-[#1a3c5e] text-white px-2.5 py-1 rounded-lg"><span className="text-xs">Score</span><div className="text-sm font-bold">9.2</div></div>
+                </div>
+                <div className="flex flex-wrap gap-1.5 my-3">{roomAmenities.map(a => <span key={a} className="text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{a}</span>)}</div>
+                <div className="flex items-center gap-3 text-xs text-stone-500 mb-3">
+                  <span>Max {r.max_occupancy} guests</span><span>&middot;</span><span>{r.available} room{r.available > 1 ? "s" : ""} left</span>
+                  {r.available <= 3 && <span className="text-red-500 font-semibold animate-pulse">Only {r.available} left!</span>}
+                </div>
+                <div className="flex items-end justify-between pt-3 border-t border-stone-100">
+                  <div>
+                    <div className="text-xs text-stone-400 line-through">{cur(r.base_rate * 1.15, cc)}</div>
+                    <div className="text-2xl font-bold text-[#1a3c5e]">{cur(r.total_rate, cc)}</div>
+                    <div className="text-xs text-stone-400">{nights} night{nights > 1 ? "s" : ""} · {cur(r.base_rate, cc)}/night · Includes taxes</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-1 mb-1"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">Free cancellation</span></div>
+                    <div className="flex items-center gap-1 mb-2"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">No prepayment</span></div>
+                    <button onClick={() => { setSelected(r); setStep("details"); }} className="px-6 py-2.5 bg-[#1a3c5e] text-white rounded-lg font-semibold text-sm hover:bg-[#0f2a45] transition-colors shadow-md" data-testid={`be-book-room-${r.room_type_id}`}>
+                      Reserve
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+
+  // ─── DETAILS / CHECKOUT PAGE ───
+  const DetailsPage = () => (
+    <div className="pt-20 pb-12 min-h-screen bg-[#f8f6f3]" data-testid="be-details-page">
+      <div className="max-w-4xl mx-auto px-4">
+        <button onClick={() => setStep("results")} className="flex items-center gap-1 text-sm text-[#1a3c5e] font-medium mb-4 hover:underline" data-testid="be-back-results">
+          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" /></svg>
+          Back to rooms
+        </button>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+          <div className="md:col-span-3">
+            <div className="bg-white rounded-2xl border border-stone-200 p-6 shadow-sm">
+              <h2 className="text-lg font-semibold text-stone-800 mb-1">Your Details</h2>
+              <p className="text-xs text-stone-400 mb-5">Please fill in your details to complete the reservation</p>
+              <div className="space-y-4">
+                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Full Name *</label>
+                  <input value={form.guest_name} onChange={e => setForm({ ...form, guest_name: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="John Smith" data-testid="be-guest-name" /></div>
+                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Email Address *</label>
+                  <input type="email" value={form.guest_email} onChange={e => setForm({ ...form, guest_email: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="john@example.com" data-testid="be-guest-email" /></div>
+                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Phone Number</label>
+                  <input type="tel" value={form.guest_phone} onChange={e => setForm({ ...form, guest_phone: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="+44 7911 123456" data-testid="be-guest-phone" /></div>
+                <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Special Requests</label>
+                  <textarea value={form.special_requests} onChange={e => setForm({ ...form, special_requests: e.target.value })} rows={3} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none resize-none" placeholder="Late check-in, extra pillows..." data-testid="be-special-requests" /></div>
+              </div>
+              <button onClick={book} disabled={booking || !form.guest_name || !form.guest_email}
+                className="w-full mt-6 py-3.5 bg-[#1a3c5e] text-white rounded-xl font-semibold text-base hover:bg-[#0f2a45] transition-colors shadow-lg shadow-[#1a3c5e]/20 disabled:opacity-50" data-testid="be-confirm-booking">
+                {booking ? "Processing..." : "COMPLETE BOOKING"}
+              </button>
+              <div className="flex items-center justify-center gap-4 mt-4 text-[10px] text-stone-400">
+                <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>SSL Encrypted</span>
+                <span>No payment taken now</span><span>Free cancellation</span>
+              </div>
+            </div>
+          </div>
+          <div className="md:col-span-2">
+            <div className="bg-white rounded-2xl border border-stone-200 p-5 shadow-sm sticky top-20">
+              <h3 className="font-semibold text-stone-800 mb-3 text-sm">Booking Summary</h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between"><span className="text-stone-500">Hotel</span><span className="font-medium text-stone-800">{cn}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Room</span><span className="font-medium text-stone-800">{selected?.name}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Check-in</span><span className="text-stone-700">{fmtDate(checkIn)}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Check-out</span><span className="text-stone-700">{fmtDate(checkOut)}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Duration</span><span className="text-stone-700">{nights} night{nights > 1 ? "s" : ""}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Guests</span><span className="text-stone-700">{guests} adults{children > 0 ? `, ${children} children` : ""}</span></div>
+              </div>
+              <div className="border-t border-stone-100 mt-4 pt-4">
+                <div className="flex justify-between text-xs text-stone-400 mb-1"><span>{nights} night{nights > 1 ? "s" : ""} x {cur(selected?.base_rate, cc)}</span><span>{cur(selected?.total_rate, cc)}</span></div>
+                <div className="flex justify-between text-xs text-stone-400 mb-1"><span>Taxes & fees</span><span>Included</span></div>
+                <div className="flex justify-between items-baseline mt-3 pt-3 border-t border-stone-200"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold text-[#1a3c5e]">{cur(selected?.total_rate, cc)}</span></div>
+              </div>
+              <div className="mt-4 space-y-1.5">{["Free cancellation until 48h before", "No prepayment needed", "Instant email confirmation"].map(t => (
+                <div key={t} className="flex items-center gap-1.5 text-[10px] text-emerald-600"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>{t}</div>
+              ))}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ─── CONFIRMATION PAGE ───
+  const ConfirmationPage = () => (
+    <div className="pt-20 pb-12 min-h-screen bg-[#f8f6f3] flex items-center justify-center" data-testid="be-confirmation-page">
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-lg mx-auto px-4 w-full">
+        <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center shadow-lg">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+          </div>
+          <h2 className="text-xl font-semibold text-stone-800 mb-1">Booking Confirmed!</h2>
+          <p className="text-sm text-stone-500 mb-6">A confirmation email has been sent to {form.guest_email}</p>
+          <div className="bg-[#f8f6f3] rounded-xl p-4 mb-6 text-left space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-stone-500">Reference</span><span className="font-bold text-[#1a3c5e] text-base">{confirmation?.booking_ref}</span></div>
+            <div className="flex justify-between"><span className="text-stone-500">Hotel</span><span className="font-medium">{cn}</span></div>
+            <div className="flex justify-between"><span className="text-stone-500">Room</span><span>{confirmation?.booking?.room_type}</span></div>
+            <div className="flex justify-between"><span className="text-stone-500">Dates</span><span>{fmtDate(checkIn)} — {fmtDate(checkOut)}</span></div>
+            <div className="flex justify-between"><span className="text-stone-500">Total</span><span className="font-bold text-lg">{cur(confirmation?.booking?.total, cc)}</span></div>
+          </div>
+          <div className="space-y-1.5 text-xs text-stone-500 mb-6">
+            <p>Free cancellation up to 48 hours before arrival</p>
+            <p>No prepayment required — pay at property</p>
+          </div>
+          <button onClick={() => { setStep("home"); setConfirmation(null); setSelected(null); setForm({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" }); }}
+            className="px-8 py-2.5 bg-[#1a3c5e] text-white rounded-xl font-medium text-sm" data-testid="be-back-home">
+            Back to Home
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }} data-testid="booking-engine">
+      <Header />
+      <AnimatePresence mode="wait">
+        {step === "home" && <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          <Hero /><TrustBar /><RoomsPreview /><WhyDirect /><Footer />
+        </motion.div>}
+        {step === "results" && <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ResultsPage /><Footer /></motion.div>}
+        {step === "details" && <motion.div key="details" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><DetailsPage /><Footer /></motion.div>}
+        {step === "confirmed" && <motion.div key="confirmed" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ConfirmationPage /></motion.div>}
+      </AnimatePresence>
     </div>
   );
 }

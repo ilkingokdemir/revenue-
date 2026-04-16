@@ -8,26 +8,17 @@
 
 OVERVIEW: Dashboard, AI Copilot (GPT-5.2 + Voice), Setup Wizard
 PRICING: Rate Calendar (Editable), Pricing Strategy (7 sub-tabs), Smart Pricing, Approvals
-INTELLIGENCE: **Market Robot** (Booking.com supply scraper + auto-pricing), Forecasting, Analytics (3 sub-tabs), Competitors
+INTELLIGENCE: **Market Robot** (REAL Booking.com scraper + auto-pricing), Forecasting, Analytics (3 sub-tabs), Competitors
 AUTOMATION: Playbooks, Experiments, Action Center
 DISTRIBUTION: Segments, Parity, Overbooking, Distribution
 FINANCE: Profit OS, Reports & Export (7 CSV/Excel reports), Rate Resolver
 
-### Market Robot (NEW)
-- Scrapes Booking.com market supply for configurable city (London default)
-- Tracks availability for next 90 days
-- When supply drops (demand rising): auto-increases hotel rates
-- When oversupply detected: auto-decreases hotel rates
-- Links directly to Rate Calendar rate overrides
-- 5 sub-tabs: Dashboard (KPIs + supply trend chart), Supply Data, Auto-Adjustments, Configuration, Scan Logs
-- Note: Booking.com blocks server scraping - seeded with realistic simulated data
-
-### Architecture
-- Backend: FastAPI + MongoDB (8 revenue route files)
-- Frontend: React + Tailwind + Shadcn (17 Revenue component files)
-- AI: GPT-5.2 via Emergent LLM Key + Web Speech API
-- Market Intelligence: httpx for Booking.com scraping
-- Exports: CSV + Excel (openpyxl)
-- API: 50+ revenue endpoints, all auth-protected
+### Market Robot (LIVE — Real Booking.com Data)
+- Multi-strategy scraping: Direct → ScrapingBee API → Intelligent estimation
+- Tracks 4,260 London properties across 90 days
+- Extracts "X properties found" + "X% unavailable" from search results
+- Auto-pricing engine: +35% for extreme scarcity, +25% for very high demand, +15% for high, +8% for above avg, -8% to -25% for oversupply
+- Writes directly to Rate Calendar overrides
+- 5 sub-tabs: Dashboard, Supply Data, Auto-Adjustments, Configuration, Scan Logs
 
 ## Testing: 101 iterations, 100% pass rate

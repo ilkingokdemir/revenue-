@@ -581,4 +581,99 @@ def create_market_robot_router(db, require_roles):
             "our_rates": our_rates,
         }
 
+    # ==================== SMART SCANNER CONTROL ====================
+
+    async def _auto_apply_pricing(db_ref, property_id):
+        """Called by smart scanner after each scan batch — applies AI pricing."""
+        from routes.dynamic_pricing import create_dynamic_pricing_router
+        now = datetime.now(timezone.utc)
+        props = await db_ref.properties.find({}, {"_id": 0}).to_list(50) if property_id == "all" else [await db_ref.properties.find_one({"id": property_id}, {"_id": 0})]
+        props = [p for p in props if p]
+        total_rooms = 0
+        for p in props:
+            total_rooms += await db_ref.rooms.count_documents({"property_id": p.get("id", "")}) or 10
+        total_rooms = max(total_rooms, 1)
+        strategy = await db_ref.pricing_strategy.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        room_types = await db_ref.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(20)
+        if not room_types:
+            room_types = [{"id": "default", "name": "Standard", "base_rate": 100}]
+
+        supply_map = {}
+        supply_docs = await db_ref.market_supply.find({"property_id": property_id}, {"_id": 0}).sort("scanned_at", -1).to_list(500)
+        for s in supply_docs:
+            if s["date"] not in supply_map:
+                supply_map[s["date"]] = s
+
+        comp_price_map = {}
+        competitors = await db_ref.market_competitors.find({"property_id": property_id}, {"_id": 0}).to_list(20)
+        for comp in competitors:
+            for p in (comp.get("prices") or []):
+                if p.get("scraped") and p.get("lowest_price"):
+                    if p["date"] not in comp_price_map:
+                        comp_price_map[p["date"]] = []
+                    comp_price_map[p["date"]].append(p["lowest_price"])
+
+        count = 0
+        for rt in room_types:
+            base = float(rt.get("base_rate", 100) or 100)
+            for i in range(90):
+                d = now + timedelta(days=i)
+                ds = d.strftime("%Y-%m-%d")
+                booked = 0
+                for p in props:
+                    booked += await db_ref.bookings.count_documents({"property_id": p.get("id", ""), "check_in": {"$lte": ds}, "check_out": {"$gt": ds}, "status": {"$ne": "cancelled"}})
+                our_occ = min(100, round((booked / total_rooms) * 100))
+                supply_snap = supply_map.get(ds)
+
+                # Simplified AI pricing inline
+                price = base
+                dow_adj = strategy.get("dow_adjustments", {})
+                dow_pct = float(dow_adj.get(d.strftime("%a").lower()[:3], 0))
+                if dow_pct:
+                    price *= (1 + dow_pct / 100)
+                monthly_adj = strategy.get("monthly_adjustments", {})
+                month_pct = float(monthly_adj.get(d.strftime("%b").lower()[:3], 0))
+                if month_pct:
+                    price *= (1 + month_pct / 100)
+                occ_pct = 40 if our_occ >= 90 else 20 if our_occ >= 75 else 0 if our_occ >= 50 else -15 if our_occ >= 25 else -30
+                if occ_pct:
+                    price *= (1 + occ_pct / 100)
+                if supply_snap and supply_snap.get("scraped"):
+                    u = supply_snap.get("unavailable_pct", 50)
+                    m = 35 if u >= 90 else 25 if u >= 80 else 15 if u >= 70 else 8 if u >= 60 else 0 if u >= 40 else -8 if u >= 25 else -15 if u >= 10 else -25
+                    if m:
+                        price *= (1 + m / 100)
+                agg = float(strategy.get("aggressiveness", 1.0))
+                price *= agg
+                price = round(max(base * 0.5, min(base * 3.0, price)), 2)
+
+                await db_ref.rate_overrides.update_one(
+                    {"property_id": property_id, "date": ds, "room_type_id": rt.get("id", "")},
+                    {"$set": {"property_id": property_id, "room_type_id": rt.get("id", ""), "date": ds, "custom_rate": price, "set_by": "auto-scanner", "updated_at": now.isoformat()}},
+                    upsert=True
+                )
+                count += 1
+        logger.info(f"Auto-pricing applied: {count} rates updated")
+
+    # Initialize smart scanner
+    from routes.smart_scanner import init_scanner
+    scanner = init_scanner(db, _scrape_booking_date, _calculate_price_adjustment, _auto_apply_pricing)
+
+    @router.post("/revenue/market-robot/{property_id}/scanner/start")
+    async def start_scanner(property_id: str,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        result = await scanner.start(property_id)
+        return result
+
+    @router.post("/revenue/market-robot/{property_id}/scanner/stop")
+    async def stop_scanner(property_id: str,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        result = await scanner.stop()
+        return result
+
+    @router.get("/revenue/market-robot/{property_id}/scanner/status")
+    async def scanner_status(property_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        return scanner.get_status()
+
     return router

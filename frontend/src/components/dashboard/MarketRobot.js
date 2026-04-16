@@ -9,6 +9,14 @@ import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, Che
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
+const TIERS_DISPLAY = [
+  { label: "Today + Tomorrow", interval_mins: 30 },
+  { label: "Next 3-7 days", interval_mins: 60 },
+  { label: "1-2 weeks out", interval_mins: 180 },
+  { label: "2-4 weeks out", interval_mins: 360 },
+  { label: "1-3 months out", interval_mins: 720 },
+];
+
 export const MarketRobot = ({ propertyId }) => {
   const [config, setConfig] = useState(null);
   const [supply, setSupply] = useState(null);
@@ -20,9 +28,14 @@ export const MarketRobot = ({ propertyId }) => {
   const [competitors, setCompetitors] = useState([]);
   const [compForm, setCompForm] = useState({ name: "", booking_url: "" });
   const [compScanning, setCompScanning] = useState(false);
+  const [scannerStatus, setScannerStatus] = useState(null);
 
   useEffect(() => {
     loadAll();
+    const interval = setInterval(() => {
+      axios.get(`${API}/revenue/market-robot/${propertyId}/scanner/status`).then(r => setScannerStatus(r.data)).catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
   }, [propertyId]);
 
   const loadAll = () => {
@@ -31,6 +44,16 @@ export const MarketRobot = ({ propertyId }) => {
     axios.get(`${API}/revenue/market-robot/${propertyId}/logs`).then(r => setLogs(r.data.logs || [])).catch(() => {});
     axios.get(`${API}/revenue/market-robot/${propertyId}/adjustments`).then(r => setAdjustments(r.data.adjustments || [])).catch(() => {});
     axios.get(`${API}/revenue/market-robot/${propertyId}/competitors`).then(r => setCompetitors(r.data.competitors || [])).catch(() => {});
+    axios.get(`${API}/revenue/market-robot/${propertyId}/scanner/status`).then(r => setScannerStatus(r.data)).catch(() => {});
+  };
+
+  const toggleScanner = async () => {
+    const action = scannerStatus?.running ? "stop" : "start";
+    try {
+      await axios.post(`${API}/revenue/market-robot/${propertyId}/scanner/${action}`);
+      toast.success(action === "start" ? "Smart Scanner activated! Auto-scanning & re-pricing started." : "Scanner stopped");
+      setTimeout(() => axios.get(`${API}/revenue/market-robot/${propertyId}/scanner/status`).then(r => setScannerStatus(r.data)).catch(() => {}), 2000);
+    } catch { toast.error("Failed"); }
   };
 
   const saveConfig = async (updates) => {
@@ -153,6 +176,61 @@ export const MarketRobot = ({ propertyId }) => {
               </div>
             </div>
           )}
+
+          {/* Smart Scanner Control Panel */}
+          <div className={`border rounded-2xl p-5 ${scannerStatus?.running ? "bg-emerald-50 border-emerald-200" : "bg-white border-stone-200"}`} data-testid="smart-scanner-panel">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${scannerStatus?.running ? "bg-emerald-500" : "bg-stone-200"}`}>
+                  <Activity className={`w-5 h-5 ${scannerStatus?.running ? "text-white animate-pulse" : "text-stone-400"}`} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-800">Smart Tiered Scanner</h3>
+                  <p className="text-xs text-stone-400">
+                    {scannerStatus?.running
+                      ? "Actively scanning market & auto-repricing your calendar"
+                      : "Activate to auto-scan at optimal intervals & reprice dynamically"}
+                  </p>
+                </div>
+              </div>
+              <button onClick={toggleScanner}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                  scannerStatus?.running
+                    ? "bg-red-500 hover:bg-red-600 text-white"
+                    : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                }`} data-testid="smart-scanner-toggle">
+                {scannerStatus?.running ? <><AlertTriangle className="w-4 h-4" />Stop Scanner</> : <><Play className="w-4 h-4" />Activate Scanner</>}
+              </button>
+            </div>
+            {/* Tier Schedule */}
+            <div className="grid grid-cols-5 gap-2">
+              {(scannerStatus?.tiers || TIERS_DISPLAY).map((tier, i) => {
+                const ts = scannerStatus?.stats?.tier_status?.[tier.label] || {};
+                const nextScan = ts.next_scan ? new Date(ts.next_scan) : null;
+                const isOverdue = nextScan && nextScan < new Date();
+                return (
+                  <div key={i} className={`rounded-xl p-3 text-center text-xs border ${
+                    scannerStatus?.running && ts.last_scan ? "bg-emerald-50 border-emerald-200" : "bg-stone-50 border-stone-200"
+                  }`}>
+                    <p className="font-bold text-stone-700 text-[10px]">{tier.label}</p>
+                    <p className="text-stone-400 mt-0.5">Every {tier.interval_mins >= 60 ? `${tier.interval_mins / 60}h` : `${tier.interval_mins}m`}</p>
+                    {scannerStatus?.running && ts.last_scan && (
+                      <p className="text-[9px] text-emerald-600 mt-1 font-medium">
+                        {isOverdue ? "Scanning..." : `Next: ${nextScan?.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {scannerStatus?.running && scannerStatus?.stats && (
+              <div className="flex items-center gap-6 mt-3 text-xs text-stone-500 border-t border-stone-200 pt-3">
+                <span>Scans today: <strong className="text-stone-700">{scannerStatus.stats.total_scans_today}</strong></span>
+                <span>Requests today: <strong className="text-stone-700">{scannerStatus.stats.total_requests_today}</strong></span>
+                {scannerStatus.stats.last_reprice_time && <span>Last reprice: <strong className="text-emerald-600">{new Date(scannerStatus.stats.last_reprice_time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
+              </div>
+            )}
+          </div>
 
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="market-robot-kpis">

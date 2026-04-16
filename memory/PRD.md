@@ -1,6 +1,6 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | 7 Languages | Mobile Responsive | 101 Test Iterations (100%)
+## 30+ Modules | 7 Languages | Mobile Responsive | 102 Test Iterations (100%)
 
 ### Revenue Management System — Industry-Leading (21 Sidebar Modules)
 
@@ -8,17 +8,17 @@
 
 OVERVIEW: Dashboard, AI Copilot (GPT-5.2 + Voice), Setup Wizard
 PRICING: Rate Calendar (Editable), Pricing Strategy (7 sub-tabs), Smart Pricing, Approvals
-INTELLIGENCE: **Market Robot** (REAL Booking.com scraper + auto-pricing), Forecasting, Analytics (3 sub-tabs), Competitors
+INTELLIGENCE: **Market Robot** (Booking.com scraper + competitor hotels + auto-pricing), Forecasting, Analytics (3 sub-tabs), Competitors
 AUTOMATION: Playbooks, Experiments, Action Center
 DISTRIBUTION: Segments, Parity, Overbooking, Distribution
-FINANCE: Profit OS, Reports & Export (7 CSV/Excel reports), Rate Resolver
+FINANCE: Profit OS, Reports & Export (7 CSV/Excel), Rate Resolver
 
-### Market Robot (LIVE — Real Booking.com Data)
-- Multi-strategy scraping: Direct → ScrapingBee API → Intelligent estimation
-- Tracks 4,260 London properties across 90 days
-- Extracts "X properties found" + "X% unavailable" from search results
-- Auto-pricing engine: +35% for extreme scarcity, +25% for very high demand, +15% for high, +8% for above avg, -8% to -25% for oversupply
-- Writes directly to Rate Calendar overrides
-- 5 sub-tabs: Dashboard, Supply Data, Auto-Adjustments, Configuration, Scan Logs
+### Market Robot (6 Sub-tabs)
+1. Dashboard — Supply KPIs, demand level, trend chart
+2. Supply Data — Detailed supply snapshots table
+3. **Competitor Hotels** — Add Booking.com hotel URLs, scan their prices for 14 days, compare rates
+4. Auto-Adjustments — Rate overrides created by robot
+5. Configuration — City, days ahead, enable/disable, max increase/decrease %
+6. Scan Logs — History of all scans
 
-## Testing: 101 iterations, 100% pass rate
+## Testing: 102 iterations, 100% pass rate

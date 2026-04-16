@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Send, Trash2, Sparkles, TrendingUp, Target, Zap, ArrowRight, User } from "lucide-react";
+import { Bot, Send, Trash2, Sparkles, TrendingUp, Target, Zap, ArrowRight, User, Mic, MicOff, Square } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -29,6 +29,33 @@ export const RevenueAICopilot = ({ propertyId }) => {
   }, [propertyId]);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  // Voice input using Web Speech API
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef(null);
+
+  const startVoice = useCallback(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) { toast.error("Voice input not supported in this browser"); return; }
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-GB";
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results).map(r => r[0].transcript).join("");
+      setInput(transcript);
+    };
+    recognition.onend = () => setIsRecording(false);
+    recognition.onerror = () => { setIsRecording(false); toast.error("Voice recognition failed"); };
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsRecording(true);
+  }, []);
+
+  const stopVoice = useCallback(() => {
+    if (recognitionRef.current) { recognitionRef.current.stop(); }
+    setIsRecording(false);
+  }, []);
 
   const send = async (text) => {
     const msg = text || input.trim();
@@ -157,7 +184,15 @@ export const RevenueAICopilot = ({ propertyId }) => {
       </div>
 
       {/* Input Area */}
-      <div className="mt-4 flex items-center gap-3">
+      <div className="mt-4 flex items-center gap-2">
+        <button
+          onClick={isRecording ? stopVoice : startVoice}
+          className={`p-3 rounded-xl transition-all flex-shrink-0 ${isRecording ? "bg-red-500 hover:bg-red-600 text-white animate-pulse" : "bg-stone-100 hover:bg-stone-200 text-stone-500"}`}
+          data-testid="rev-copilot-voice"
+          title={isRecording ? "Stop recording" : "Voice input"}
+        >
+          {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+        </button>
         <div className="flex-1 relative">
           <input
             ref={inputRef}
@@ -165,8 +200,8 @@ export const RevenueAICopilot = ({ propertyId }) => {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
-            placeholder="Ask about your revenue, pricing, occupancy, competitors..."
-            className="w-full bg-white border border-stone-200 rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-100 transition-all"
+            placeholder={isRecording ? "Listening..." : "Ask about your revenue, pricing, occupancy, competitors..."}
+            className={`w-full bg-white border rounded-xl px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 transition-all ${isRecording ? "border-red-300 focus:border-red-400 focus:ring-red-100" : "border-stone-200 focus:border-violet-400 focus:ring-violet-100"}`}
             disabled={loading}
             data-testid="rev-copilot-input"
           />

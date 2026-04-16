@@ -172,17 +172,30 @@ def create_revenue_router(db, require_roles):
         expected_occ = min(100, round((total_nights / max(total_rooms * today_idx, 1)) * 100))
 
         days = []
+        # Get custom rate overrides for this month
+        overrides = {}
+        rt_id = rt.get("id", "")
+        ovr_query = {"property_id": property_id, "date": {"$gte": first, "$lte": last}}
+        if rt_id and rt_id != "default":
+            ovr_query["room_type_id"] = {"$in": [rt_id, ""]}
+        ovr_docs = await db.rate_overrides.find(ovr_query, {"_id": 0}).to_list(100)
+        for o in ovr_docs:
+            overrides[o["date"]] = o
+
         for d in range(1, last_day + 1):
             dt = f"{year}-{month:02d}-{d:02d}"
             booked = await db.bookings.count_documents({"property_id": property_id, "check_in": {"$lte": dt}, "check_out": {"$gt": dt}, "status": {"$ne": "cancelled"}})
             occ = min(100, round((booked / max(total_rooms, 1)) * 100))
             base = float(rt.get("base_rate", 100) or 100)
-            # Simple dynamic pricing based on occupancy
+            # Dynamic pricing based on occupancy
             if occ >= 90: recommended = round(base * 1.4, 2)
             elif occ >= 75: recommended = round(base * 1.2, 2)
             elif occ >= 50: recommended = round(base * 1.0, 2)
             elif occ >= 25: recommended = round(base * 0.85, 2)
             else: recommended = round(base * 0.7, 2)
+            # Check for custom override
+            ovr = overrides.get(dt)
+            custom_rate = float(ovr["custom_rate"]) if ovr else None
             is_full = occ >= 100
             is_today = dt == now.strftime("%Y-%m-%d")
             dow = datetime(year, month, d).strftime("%a")
@@ -190,6 +203,7 @@ def create_revenue_router(db, require_roles):
                 "date": dt, "day": d, "dow": dow, "occupancy": occ, "booked": booked,
                 "available": max(0, total_rooms - booked), "is_full": is_full, "is_today": is_today,
                 "base_rate": base, "recommended_rate": recommended, "pms_rate": base,
+                "custom_rate": custom_rate, "has_override": custom_rate is not None,
             })
 
         return {
@@ -199,6 +213,39 @@ def create_revenue_router(db, require_roles):
             "performance": {"occupancy": month_occ, "expected_by_today": expected_occ, "target": 60},
             "days": days,
         }
+
+    # ==================== RATE OVERRIDE (Editable Calendar) ====================
+
+    @router.put("/revenue/rate-override/{property_id}")
+    async def set_rate_override(property_id: str, data: Dict,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        date_str = data.get("date", "")
+        custom_rate = data.get("custom_rate")
+        room_type_id = data.get("room_type_id", "")
+
+        if not date_str:
+            return {"error": "Date is required"}
+
+        if custom_rate is None or custom_rate == "":
+            # Remove override
+            await db.rate_overrides.delete_one({
+                "property_id": property_id, "date": date_str, "room_type_id": room_type_id
+            })
+            return {"message": "Override removed", "date": date_str}
+
+        doc = {
+            "property_id": property_id,
+            "room_type_id": room_type_id,
+            "date": date_str,
+            "custom_rate": float(custom_rate),
+            "set_by": current_user.get("email", ""),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.rate_overrides.update_one(
+            {"property_id": property_id, "date": date_str, "room_type_id": room_type_id},
+            {"$set": doc}, upsert=True
+        )
+        return {"message": "Rate override saved", "date": date_str, "custom_rate": float(custom_rate)}
 
     # ==================== PRICING STRATEGY ====================
 

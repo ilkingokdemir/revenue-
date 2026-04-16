@@ -6,7 +6,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v, c) => `${c === "GBP" ? "£" : c === "EUR" ? "€" : c === "USD" ? "$" : c}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 export default function BookingWidgetPage({ propertyId }) {
-  const [hotel, setHotel] = useState({ hotel_name: "Hotel", rooms: [], currency: "GBP", logo_url: "" });
+  const [hotel, setHotel] = useState({ hotel_name: "Hotel", rooms: [], currency: "GBP", logo_url: "", reviews: [], avg_rating: 0, review_count: 0, theme: {} });
   const [step, setStep] = useState("home");
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
@@ -62,6 +62,11 @@ export default function BookingWidgetPage({ propertyId }) {
 
   const cn = hotel.hotel_name;
   const cc = hotel.currency;
+  const theme = hotel.theme || {};
+  const ac = theme.accent_color || "#1a3c5e";
+  const heroImg = theme.hero_image || "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80";
+  const tagline = theme.tagline || "Premium Accommodation";
+  const subtitle = theme.subtitle || "Experience exceptional hospitality with our best rate guarantee when you book direct";
   const roomAmenities = ["Free WiFi", "Air Conditioning", "Flat-screen TV", "Private Bathroom", "Daily Housekeeping", "24hr Front Desk"];
 
   // ─── HEADER ───
@@ -69,16 +74,16 @@ export default function BookingWidgetPage({ propertyId }) {
     <header className="fixed top-0 left-0 right-0 z-50 transition-all bg-white/95 backdrop-blur-md border-b border-stone-200 shadow-sm" data-testid="be-header">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-[#1a3c5e] flex items-center justify-center text-white font-bold text-sm">{cn[0]}</div>
+          <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: ac }}>{cn[0]}</div>
           <div>
-            <div className="font-semibold text-[#1a3c5e] text-sm tracking-tight">{cn}</div>
+            <div className="font-semibold text-sm tracking-tight" style={{ color: ac }}>{cn}</div>
             <div className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /><span className="text-[10px] text-emerald-600 font-medium">OFFICIAL SITE</span></div>
           </div>
         </div>
         <nav className="hidden md:flex items-center gap-6 text-sm">
           <button onClick={() => setStep("home")} className="text-stone-600 hover:text-[#1a3c5e] font-medium transition-colors" data-testid="be-nav-home">Home</button>
           <button onClick={() => { setStep("home"); setTimeout(() => document.getElementById("be-rooms")?.scrollIntoView({ behavior: "smooth" }), 100); }} className="text-stone-600 hover:text-[#1a3c5e] font-medium" data-testid="be-nav-rooms">Rooms</button>
-          <button onClick={() => search()} className="px-5 py-2 bg-[#1a3c5e] text-white rounded-lg font-medium text-sm hover:bg-[#0f2a45] transition-colors shadow-sm" data-testid="be-nav-book">Book Now</button>
+          <button onClick={() => search()} className="px-5 py-2 text-white rounded-lg font-medium text-sm hover:opacity-90 transition-colors shadow-sm" style={{ backgroundColor: ac }} data-testid="be-nav-book">Book Now</button>
         </nav>
         <button onClick={() => setMobileMenu(!mobileMenu)} className="md:hidden p-2 text-stone-500" data-testid="be-mobile-menu">
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
@@ -95,7 +100,7 @@ export default function BookingWidgetPage({ propertyId }) {
   const Hero = () => (
     <section className="relative min-h-[85vh] flex items-center justify-center overflow-hidden" data-testid="be-hero">
       <div className="absolute inset-0 bg-gradient-to-b from-[#0a1628]/80 via-[#0a1628]/50 to-[#0a1628]/80 z-10" />
-      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80')] bg-cover bg-center" />
+      <div className="absolute inset-0" style={{ backgroundImage: `url('${heroImg}')`, backgroundSize: "cover", backgroundPosition: "center" }} />
       <div className="relative z-20 text-center px-4 max-w-4xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8 }}>
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 mb-6">
@@ -104,8 +109,8 @@ export default function BookingWidgetPage({ propertyId }) {
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-7xl font-light text-white tracking-tight mb-4" style={{ fontFamily: "'Georgia', serif" }}>{cn}</h1>
           <div className="w-12 h-0.5 bg-amber-400 mx-auto mb-4" />
-          <p className="text-white/60 text-sm tracking-[0.2em] uppercase mb-2">Premium Accommodation</p>
-          <p className="text-white/80 text-base max-w-lg mx-auto">Experience exceptional hospitality with our best rate guarantee when you book direct</p>
+          <p className="text-white/60 text-sm tracking-[0.2em] uppercase mb-2">{tagline}</p>
+          <p className="text-white/80 text-base max-w-lg mx-auto">{subtitle}</p>
         </motion.div>
       </div>
       {/* Booking Bar */}
@@ -187,9 +192,9 @@ export default function BookingWidgetPage({ propertyId }) {
           <motion.div key={r.id} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.1 }}
             className="group bg-white rounded-2xl overflow-hidden border border-stone-200 hover:shadow-xl transition-all duration-300" data-testid={`be-room-card-${r.id}`}>
             <div className="h-48 bg-gradient-to-br from-stone-200 to-stone-300 relative overflow-hidden">
-              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=70')] bg-cover bg-center group-hover:scale-105 transition-transform duration-500" />
+              <div className="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform duration-500" style={{ backgroundImage: `url('${r.photo || "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=70"}')` }} />
               <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-lg shadow-sm">
-                <span className="text-xs font-bold text-[#1a3c5e]">From {cur(r.base_rate, cc)}<span className="text-stone-400 font-normal">/night</span></span>
+                <span className="text-xs font-bold" style={{ color: ac }}>From {cur(r.base_rate, cc)}<span className="text-stone-400 font-normal">/night</span></span>
               </div>
             </div>
             <div className="p-5">
@@ -201,8 +206,8 @@ export default function BookingWidgetPage({ propertyId }) {
                 ))}
               </div>
               <div className="flex items-center justify-between pt-3 border-t border-stone-100">
-                <div><span className="text-lg font-bold text-[#1a3c5e]">{cur(r.base_rate, cc)}</span><span className="text-xs text-stone-400"> / night</span></div>
-                <button onClick={() => search()} className="px-4 py-2 bg-[#1a3c5e] text-white rounded-lg text-xs font-semibold hover:bg-[#0f2a45] transition-colors" data-testid={`be-select-room-${r.id}`}>
+                <div><span className="text-lg font-bold" style={{ color: ac }}>{cur(r.base_rate, cc)}</span><span className="text-xs text-stone-400"> / night</span></div>
+                <button onClick={() => search()} className="px-4 py-2 text-white rounded-lg text-xs font-semibold hover:opacity-90 transition-colors" style={{ backgroundColor: ac }} data-testid={`be-select-room-${r.id}`}>
                   Select Dates
                 </button>
               </div>
@@ -213,9 +218,58 @@ export default function BookingWidgetPage({ propertyId }) {
     </section>
   );
 
+  // ─── GUEST REVIEWS ───
+  const ReviewsSection = () => {
+    const reviews = hotel.reviews || [];
+    if (reviews.length === 0) return null;
+    const ratingLabel = (r) => r >= 9.5 ? "Exceptional" : r >= 9 ? "Superb" : r >= 8.5 ? "Fabulous" : r >= 8 ? "Very Good" : "Good";
+    return (
+      <section className="bg-white py-16 border-t border-stone-100" data-testid="be-reviews-section">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] mb-2" style={{ color: ac }}>GUEST REVIEWS</p>
+              <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>What Our Guests Say</h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-white rounded-xl px-4 py-3 text-center" style={{ backgroundColor: ac }}>
+                <div className="text-2xl font-bold">{hotel.avg_rating}</div>
+                <div className="text-[10px] opacity-80">/10</div>
+              </div>
+              <div>
+                <div className="font-semibold text-stone-800">{ratingLabel(hotel.avg_rating)}</div>
+                <div className="text-xs text-stone-400">{hotel.review_count} verified reviews</div>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {reviews.slice(0, 6).map((r, i) => (
+              <motion.div key={i} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.06 }}
+                className="border border-stone-200 rounded-2xl p-5 bg-white hover:shadow-md transition-all" data-testid={`be-review-${i}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm" style={{ backgroundColor: ac }}>{r.guest_name?.[0] || "G"}</div>
+                    <div>
+                      <div className="text-sm font-semibold text-stone-800">{r.guest_name}</div>
+                      <div className="text-[10px] text-stone-400">{r.country}</div>
+                    </div>
+                  </div>
+                  <div className="text-white text-sm font-bold px-2 py-1 rounded-lg" style={{ backgroundColor: ac }}>{r.rating}</div>
+                </div>
+                <h4 className="font-semibold text-stone-700 text-sm mb-1">{r.title}</h4>
+                <p className="text-xs text-stone-500 leading-relaxed line-clamp-3">{r.comment}</p>
+                <div className="text-[10px] text-stone-400 mt-2">{r.date}</div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   // ─── WHY BOOK DIRECT ───
   const WhyDirect = () => (
-    <section className="bg-[#1a3c5e] py-16" data-testid="be-why-direct">
+    <section className="py-16" style={{ backgroundColor: ac }} data-testid="be-why-direct">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center mb-10">
           <p className="text-xs font-semibold text-amber-400 uppercase tracking-[0.2em] mb-2">WHY BOOK DIRECT</p>
@@ -292,11 +346,11 @@ export default function BookingWidgetPage({ propertyId }) {
           <motion.div key={r.room_type_id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
             className="bg-white rounded-2xl border border-stone-200 mb-4 overflow-hidden hover:shadow-lg transition-all" data-testid={`be-result-room-${r.room_type_id}`}>
             <div className="flex flex-col md:flex-row">
-              <div className="md:w-64 h-48 md:h-auto bg-[url('https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=400&q=70')] bg-cover bg-center flex-shrink-0" />
+              <div className="md:w-64 h-48 md:h-auto bg-cover bg-center flex-shrink-0" style={{ backgroundImage: `url('${r.photo || "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=400&q=70"}')` }} />
               <div className="flex-1 p-5">
                 <div className="flex items-start justify-between mb-2">
                   <div><h3 className="font-semibold text-stone-800 text-lg">{r.name}</h3><p className="text-xs text-stone-500">{r.description}</p></div>
-                  <div className="flex-shrink-0 ml-4 bg-[#1a3c5e] text-white px-2.5 py-1 rounded-lg"><span className="text-xs">Score</span><div className="text-sm font-bold">9.2</div></div>
+                  <div className="flex-shrink-0 ml-4 text-white px-2.5 py-1 rounded-lg" style={{ backgroundColor: ac }}><span className="text-xs">Score</span><div className="text-sm font-bold">{hotel.avg_rating || "9.2"}</div></div>
                 </div>
                 <div className="flex flex-wrap gap-1.5 my-3">{roomAmenities.map(a => <span key={a} className="text-[10px] bg-stone-100 text-stone-600 px-2 py-0.5 rounded-full">{a}</span>)}</div>
                 <div className="flex items-center gap-3 text-xs text-stone-500 mb-3">
@@ -306,13 +360,13 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div className="flex items-end justify-between pt-3 border-t border-stone-100">
                   <div>
                     <div className="text-xs text-stone-400 line-through">{cur(r.base_rate * 1.15, cc)}</div>
-                    <div className="text-2xl font-bold text-[#1a3c5e]">{cur(r.total_rate, cc)}</div>
+                    <div className="text-2xl font-bold" style={{ color: ac }}>{cur(r.total_rate, cc)}</div>
                     <div className="text-xs text-stone-400">{nights} night{nights > 1 ? "s" : ""} · {cur(r.base_rate, cc)}/night · Includes taxes</div>
                   </div>
                   <div className="text-right">
                     <div className="flex items-center gap-1 mb-1"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">Free cancellation</span></div>
                     <div className="flex items-center gap-1 mb-2"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg><span className="text-[10px] text-emerald-600">No prepayment</span></div>
-                    <button onClick={() => { setSelected(r); setStep("details"); }} className="px-6 py-2.5 bg-[#1a3c5e] text-white rounded-lg font-semibold text-sm hover:bg-[#0f2a45] transition-colors shadow-md" data-testid={`be-book-room-${r.room_type_id}`}>
+                    <button onClick={() => { setSelected(r); setStep("details"); }} className="px-6 py-2.5 text-white rounded-lg font-semibold text-sm hover:opacity-90 transition-colors shadow-md" style={{ backgroundColor: ac }} data-testid={`be-book-room-${r.room_type_id}`}>
                       Reserve
                     </button>
                   </div>
@@ -349,7 +403,7 @@ export default function BookingWidgetPage({ propertyId }) {
                   <textarea value={form.special_requests} onChange={e => setForm({ ...form, special_requests: e.target.value })} rows={3} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none resize-none" placeholder="Late check-in, extra pillows..." data-testid="be-special-requests" /></div>
               </div>
               <button onClick={book} disabled={booking || !form.guest_name || !form.guest_email}
-                className="w-full mt-6 py-3.5 bg-[#1a3c5e] text-white rounded-xl font-semibold text-base hover:bg-[#0f2a45] transition-colors shadow-lg shadow-[#1a3c5e]/20 disabled:opacity-50" data-testid="be-confirm-booking">
+                className="w-full mt-6 py-3.5 text-white rounded-xl font-semibold text-base hover:opacity-90 transition-colors shadow-lg disabled:opacity-50" style={{ backgroundColor: ac }} data-testid="be-confirm-booking">
                 {booking ? "Processing..." : "COMPLETE BOOKING"}
               </button>
               <div className="flex items-center justify-center gap-4 mt-4 text-[10px] text-stone-400">
@@ -372,7 +426,7 @@ export default function BookingWidgetPage({ propertyId }) {
               <div className="border-t border-stone-100 mt-4 pt-4">
                 <div className="flex justify-between text-xs text-stone-400 mb-1"><span>{nights} night{nights > 1 ? "s" : ""} x {cur(selected?.base_rate, cc)}</span><span>{cur(selected?.total_rate, cc)}</span></div>
                 <div className="flex justify-between text-xs text-stone-400 mb-1"><span>Taxes & fees</span><span>Included</span></div>
-                <div className="flex justify-between items-baseline mt-3 pt-3 border-t border-stone-200"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold text-[#1a3c5e]">{cur(selected?.total_rate, cc)}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold" style={{ color: ac }}>{cur(selected?.total_rate, cc)}</span></div>
               </div>
               <div className="mt-4 space-y-1.5">{["Free cancellation until 48h before", "No prepayment needed", "Instant email confirmation"].map(t => (
                 <div key={t} className="flex items-center gap-1.5 text-[10px] text-emerald-600"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>{t}</div>
@@ -419,7 +473,7 @@ export default function BookingWidgetPage({ propertyId }) {
       <Header />
       <AnimatePresence mode="wait">
         {step === "home" && <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <Hero /><TrustBar /><RoomsPreview /><WhyDirect /><Footer />
+          <Hero /><TrustBar /><RoomsPreview /><ReviewsSection /><WhyDirect /><Footer />
         </motion.div>}
         {step === "results" && <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ResultsPage /><Footer /></motion.div>}
         {step === "details" && <motion.div key="details" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><DetailsPage /><Footer /></motion.div>}

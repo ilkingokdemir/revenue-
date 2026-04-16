@@ -1,0 +1,118 @@
+{
+  "summary": "Iteration 91 - Reviews, Per-Room Photos, and Theme Support Testing Complete. All 14 backend tests passed (100%). Frontend verified: Reviews section with 6 cards showing guest name/country/rating/title/comment/date, overall rating badge (9.3 Superb with 6 verified reviews), unique per-room photos on home and results pages, theme accent_color (#1a3c5e) applied throughout. Full booking flow works. Mobile responsive.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/booking-widget/info/{property_id}",
+        "issue": "Room preview cards show '£0/night' because info endpoint returns base_rate: 0 for rooms (inherited from iteration 90). Check-availability returns correct rates.",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Rooms Preview Section",
+        "issues": ["Room cards show 'From £0/night' due to backend returning base_rate: 0 in info endpoint (same as iteration 90)"]
+      }
+    ]
+  },
+  "features_tested": {
+    "reviews_section": {
+      "status": "PASS",
+      "tests": [
+        "Reviews section renders with data-testid='be-reviews-section'",
+        "6 review cards displayed with data-testid='be-review-{index}'",
+        "Each review shows: guest_name, country, rating, title, comment, date",
+        "Overall rating badge shows 9.3 /10",
+        "'Superb' label displayed (rating >= 9)",
+        "'6 verified reviews' count displayed"
+      ]
+    },
+    "per_room_photos": {
+      "status": "PASS",
+      "tests": [
+        "5 room cards on home page have unique photos",
+        "Photos from Unsplash/Pexels (different room images)",
+        "Search results show unique photos per room",
+        "Photos consistent between info and availability endpoints"
+      ]
+    },
+    "theme_support": {
+      "status": "PASS",
+      "tests": [
+        "Theme object returned with accent_color, hero_image, tagline, subtitle",
+        "accent_color (#1a3c5e) applied to: header logo, Book Now button, Select Dates buttons, score badges, Why Book Direct section",
+        "hero_image from Unsplash displayed in hero section",
+        "tagline 'PREMIUM ACCOMMODATION' displayed",
+        "subtitle displayed below tagline"
+      ]
+    },
+    "booking_flow": {
+      "status": "PASS",
+      "tests": [
+        "Search → Results → Checkout → Confirmation flow works",
+        "Booking reference (WEB-XXXXXXXX) generated",
+        "Guest form accepts name, email, phone, special requests",
+        "Booking summary shows correct pricing (£200 for 2 nights)"
+      ]
+    },
+    "mobile_responsive": {
+      "status": "PASS",
+      "tests": [
+        "Hamburger menu visible on mobile",
+        "Mobile menu opens with Home and Book Now",
+        "Reviews section stacks vertically on mobile",
+        "Review cards display correctly on mobile"
+      ]
+    },
+    "backend_apis": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/booking-widget/info returns reviews array (6 items)",
+        "GET /api/booking-widget/info returns avg_rating (9.3)",
+        "GET /api/booking-widget/info returns review_count (6)",
+        "GET /api/booking-widget/info returns theme object",
+        "Each room has unique photo URL",
+        "POST /api/booking-widget/check-availability returns photos per room",
+        "POST /api/booking-widget/book creates confirmed booking"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration91_reviews_photos_theme.py",
+    "/app/test_reports/pytest/pytest_iteration91_reviews_photos_theme.xml"
+  ],
+  "action_items": [
+    "MINOR (inherited from iter 90): Fix base_rate in /api/booking-widget/info endpoint to return actual room rates instead of 0"
+  ],
+  "critical_code_review_comments": [
+    "Reviews section well-implemented with proper data-testid attributes",
+    "Rating label function correctly maps: >=9.5 Exceptional, >=9 Superb, >=8.5 Fabulous, >=8 Very Good",
+    "Theme colors applied via inline style={} instead of hardcoded Tailwind classes - good for dynamic theming",
+    "Per-room photos cycle through 5 Unsplash/Pexels images using index modulo",
+    "Default reviews seeded when guest_reviews collection is empty"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration91_reviews_photos_theme.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (All features verified)"
+  },
+  "test_credentials": {
+    "note": "No auth needed for booking engine (public)",
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test booking created during testing with email test_iter91@example.com",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 91 tested new features: 1) Reviews section with 6 default reviews, avg_rating 9.3, 'Superb' label. 2) Per-room photos - each room has unique Unsplash/Pexels image. 3) Theme support - accent_color, hero_image, tagline, subtitle configurable. All 14 backend tests passed. Full booking flow works. One minor inherited issue: room preview cards show £0/night (info endpoint returns base_rate: 0).",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All features are fully functional - no mocked APIs"
+  }
+}

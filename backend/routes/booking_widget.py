@@ -205,4 +205,100 @@ def create_booking_widget_router(db, require_roles):
         await db.booking_widget_config.update_one({"property_id": property_id}, {"$set": data}, upsert=True)
         return {"status": "saved"}
 
+    # ==================== ADMIN: ROOM PHOTO UPLOAD ====================
+
+    from fastapi import UploadFile, File, Form
+    import os
+
+    ROOM_UPLOAD_DIR = "/app/backend/uploads/rooms"
+    os.makedirs(ROOM_UPLOAD_DIR, exist_ok=True)
+
+    @router.post("/booking-widget/room-photo/{room_id}")
+    async def upload_room_photo(room_id: str, file: UploadFile = File(...),
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+        filename = f"{room_id}_{uuid.uuid4().hex[:8]}.{ext}"
+        filepath = os.path.join(ROOM_UPLOAD_DIR, filename)
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+        photo_url = f"/api/uploads/rooms/{filename}"
+        # Update room_types doc
+        result = await db.room_types.update_one({"id": room_id}, {"$set": {"photo": photo_url}})
+        if result.matched_count == 0:
+            # Try adding to gallery
+            await db.room_types.update_one({"id": room_id}, {"$push": {"gallery": photo_url}}, upsert=False)
+        return {"status": "uploaded", "url": photo_url}
+
+    @router.post("/booking-widget/room-gallery/{room_id}")
+    async def upload_room_gallery_photo(room_id: str, file: UploadFile = File(...),
+                                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+        filename = f"{room_id}_gallery_{uuid.uuid4().hex[:8]}.{ext}"
+        filepath = os.path.join(ROOM_UPLOAD_DIR, filename)
+        content = await file.read()
+        with open(filepath, "wb") as f:
+            f.write(content)
+        photo_url = f"/api/uploads/rooms/{filename}"
+        await db.room_types.update_one({"id": room_id}, {"$push": {"gallery": photo_url}})
+        return {"status": "uploaded", "url": photo_url}
+
+    # ==================== ADMIN: GUEST REVIEWS CRUD ====================
+
+    @router.get("/booking-widget/reviews/{property_id}")
+    async def list_reviews(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        docs = await db.guest_reviews.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        return docs
+
+    @router.post("/booking-widget/reviews")
+    async def create_review(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        now = datetime.now(timezone.utc).isoformat()
+        review = {
+            "id": str(uuid.uuid4()),
+            "property_id": data.get("property_id", ""),
+            "guest_name": data.get("guest_name", ""),
+            "country": data.get("country", ""),
+            "rating": float(data.get("rating", 0)),
+            "title": data.get("title", ""),
+            "comment": data.get("comment", ""),
+            "date": data.get("date", now[:7].replace("-", " ")),
+            "source": data.get("source", "direct"),
+            "verified": True,
+            "created_at": now,
+        }
+        await db.guest_reviews.insert_one(review)
+        review.pop("_id", None)
+        return review
+
+    @router.delete("/booking-widget/reviews/{review_id}")
+    async def delete_review(review_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        await db.guest_reviews.delete_one({"id": review_id})
+        return {"status": "deleted"}
+
+    # ==================== PUBLIC: HOTEL GALLERY ====================
+
+    @router.get("/booking-widget/gallery/{property_id}")
+    async def get_gallery(property_id: str):
+        rooms = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(50)
+        gallery = []
+        for r in rooms:
+            if r.get("photo"):
+                gallery.append({"url": r["photo"], "caption": r.get("name", ""), "type": "room"})
+            for g in r.get("gallery", []):
+                gallery.append({"url": g, "caption": r.get("name", ""), "type": "room"})
+        # Add property-level gallery images
+        prop_gallery = await db.property_gallery.find({"property_id": property_id}, {"_id": 0}).to_list(50)
+        for pg in prop_gallery:
+            gallery.append({"url": pg.get("url", ""), "caption": pg.get("caption", ""), "type": "property"})
+        if not gallery:
+            gallery = [
+                {"url": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=75", "caption": "Hotel Exterior", "type": "property"},
+                {"url": "https://images.unsplash.com/photo-1631048730670-ff5cd0d08f15?w=800&q=75", "caption": "Standard Room", "type": "room"},
+                {"url": "https://images.unsplash.com/photo-1629140727571-9b5c6f6267b4?w=800&q=75", "caption": "Deluxe Room", "type": "room"},
+                {"url": "https://images.unsplash.com/photo-1631049307305-1ceea96fb0e1?w=800&q=75", "caption": "Suite", "type": "room"},
+                {"url": "https://images.unsplash.com/photo-1631048835184-3f0ceda91b75?w=800&q=75", "caption": "Executive Suite", "type": "room"},
+                {"url": "https://images.pexels.com/photos/97083/pexels-photo-97083.jpeg?auto=compress&cs=tinysrgb&w=800", "caption": "Luxury Room", "type": "room"},
+            ]
+        return gallery
+
     return router

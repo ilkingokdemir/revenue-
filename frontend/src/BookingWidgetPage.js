@@ -21,9 +21,12 @@ export default function BookingWidgetPage({ propertyId }) {
   const [form, setForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" });
   const [guestOpen, setGuestOpen] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [gallery, setGallery] = useState([]);
+  const [lightbox, setLightbox] = useState({ open: false, index: 0 });
 
   useEffect(() => {
     axios.get(`${API}/booking-widget/info/${propertyId}`).then(r => setHotel(r.data)).catch(() => {});
+    axios.get(`${API}/booking-widget/gallery/${propertyId}`).then(r => setGallery(r.data)).catch(() => {});
     const today = new Date();
     const ci = new Date(today); ci.setDate(ci.getDate() + 1);
     const co = new Date(today); co.setDate(co.getDate() + 3);
@@ -217,6 +220,72 @@ export default function BookingWidgetPage({ propertyId }) {
       </div>
     </section>
   );
+
+  // ─── PHOTO GALLERY WITH LIGHTBOX ───
+  const GallerySection = () => {
+    if (gallery.length === 0) return null;
+    const openLB = (i) => setLightbox({ open: true, index: i });
+    return (
+      <section className="max-w-6xl mx-auto px-4 py-16" data-testid="be-gallery-section">
+        <div className="text-center mb-10">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] mb-2" style={{ color: ac }}>GALLERY</p>
+          <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>Explore Our Property</h2>
+          <div className="w-10 h-0.5 bg-amber-400 mx-auto mt-3" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
+          {gallery.slice(0, 6).map((img, i) => (
+            <motion.button key={i} onClick={() => openLB(i)} whileHover={{ scale: 1.02 }}
+              className={`relative overflow-hidden rounded-xl group ${i === 0 ? "md:col-span-2 md:row-span-2" : ""}`}
+              style={{ height: i === 0 ? "100%" : "200px", minHeight: i === 0 ? "300px" : "200px" }}
+              data-testid={`be-gallery-img-${i}`}>
+              <div className="absolute inset-0 bg-cover bg-center group-hover:scale-110 transition-transform duration-500"
+                style={{ backgroundImage: `url('${img.url}')` }} />
+              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-end">
+                <div className="p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-white text-xs font-medium bg-black/40 px-2 py-1 rounded">{img.caption}</span>
+                </div>
+              </div>
+            </motion.button>
+          ))}
+        </div>
+        {gallery.length > 6 && (
+          <div className="text-center mt-4">
+            <button onClick={() => openLB(0)} className="text-sm font-medium hover:underline" style={{ color: ac }} data-testid="be-gallery-see-all">
+              See all {gallery.length} photos
+            </button>
+          </div>
+        )}
+      </section>
+    );
+  };
+
+  // ─── LIGHTBOX OVERLAY ───
+  const Lightbox = () => {
+    if (!lightbox.open || gallery.length === 0) return null;
+    const img = gallery[lightbox.index];
+    const prev = () => setLightbox(p => ({ ...p, index: (p.index - 1 + gallery.length) % gallery.length }));
+    const next = () => setLightbox(p => ({ ...p, index: (p.index + 1) % gallery.length }));
+    return (
+      <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center" data-testid="be-lightbox">
+        <button onClick={() => setLightbox({ open: false, index: 0 })} className="absolute top-4 right-4 text-white/80 hover:text-white p-2 z-10" data-testid="be-lightbox-close">
+          <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        <button onClick={prev} className="absolute left-4 text-white/80 hover:text-white p-3 bg-white/10 rounded-full" data-testid="be-lightbox-prev">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+        </button>
+        <div className="max-w-5xl max-h-[80vh] mx-4">
+          <img src={img?.url} alt={img?.caption} className="max-w-full max-h-[75vh] object-contain rounded-lg mx-auto" data-testid="be-lightbox-image" />
+          <div className="text-center mt-3">
+            <p className="text-white text-sm">{img?.caption}</p>
+            <p className="text-white/50 text-xs mt-1">{lightbox.index + 1} / {gallery.length}</p>
+          </div>
+        </div>
+        <button onClick={next} className="absolute right-4 text-white/80 hover:text-white p-3 bg-white/10 rounded-full" data-testid="be-lightbox-next">
+          <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+        </button>
+      </div>
+    );
+  };
 
   // ─── GUEST REVIEWS ───
   const ReviewsSection = () => {
@@ -473,12 +542,13 @@ export default function BookingWidgetPage({ propertyId }) {
       <Header />
       <AnimatePresence mode="wait">
         {step === "home" && <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <Hero /><TrustBar /><RoomsPreview /><ReviewsSection /><WhyDirect /><Footer />
+          <Hero /><TrustBar /><RoomsPreview /><GallerySection /><ReviewsSection /><WhyDirect /><Footer />
         </motion.div>}
         {step === "results" && <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ResultsPage /><Footer /></motion.div>}
         {step === "details" && <motion.div key="details" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><DetailsPage /><Footer /></motion.div>}
         {step === "confirmed" && <motion.div key="confirmed" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ConfirmationPage /></motion.div>}
       </AnimatePresence>
+      <Lightbox />
     </div>
   );
 }

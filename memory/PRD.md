@@ -7,25 +7,18 @@
 **Left Sidebar Navigation (7 Categories):**
 
 OVERVIEW: Dashboard, AI Copilot (GPT-5.2 + Voice), Setup Wizard
-PRICING: **AI Dynamic Pricing** (90-day 8-factor pricing engine), Rate Calendar (Editable), Pricing Strategy (7 sub-tabs), Smart Pricing, Approvals
-INTELLIGENCE: Market Robot (Booking.com scraper + competitor hotels), Forecasting, Analytics (3 sub-tabs), Competitors
+PRICING: AI Dynamic Pricing (90-day 8-factor engine), Rate Calendar (Editable), Pricing Strategy (7 sub-tabs), Smart Pricing, Approvals
+INTELLIGENCE: Market Robot (worldwide Booking.com scraper + competitor hotels), Forecasting, Analytics (3 sub-tabs), Competitors
 AUTOMATION: Playbooks, Experiments, Action Center
 DISTRIBUTION: Segments, Parity, Overbooking, Distribution
 FINANCE: Profit OS, Reports & Export, Rate Resolver
 
-### AI Dynamic Pricing Engine (NEW — THE CORE)
-8-factor algorithm combining:
-1. Day-of-Week adjustments
-2. Monthly seasonality
-3. Lead time to check-in
-4. Hotel occupancy levels
-5. Market supply (Booking.com unavailability %)
-6. Competitor hotel prices
-7. Aggressiveness multiplier
-8. Min/Max guardrails
-
-- Preview: Shows AI price for every day across 90 days with full factor breakdown
-- Apply: One-click writes ALL prices to Rate Calendar
-- Each day shows: base → current → AI price, % change, occupancy, market data, competitor avg, and every factor that influenced the price
+### Market Robot — Worldwide Support
+- 20 preset cities: London, Paris, New York, Dubai, Barcelona, Rome, Tokyo, Sydney, Amsterdam, Istanbul, Bangkok, Singapore, Berlin, Miami, Los Angeles, Hong Kong, Lisbon, Prague, Vienna, Bali
+- Custom location: Type any city/destination name
+- Quick city switcher in header
+- 16 currencies: GBP, USD, EUR, AED, THB, JPY, AUD, SGD, CHF, CAD, INR, BRL, MXN, IDR, TRY, ZAR
+- 15 languages for Booking.com scraping
+- 90 days ahead scanning (full quarter coverage)
 
 ## Testing: 103 iterations, 100% pass rate

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight, Eye, Trash2 } from "lucide-react";
+import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight, Eye, Trash2, MapPin, Globe } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -107,6 +107,19 @@ export const MarketRobot = ({ propertyId }) => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* Location Badge */}
+          <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-3 py-2">
+            <MapPin className="w-4 h-4 text-violet-500" />
+            <input
+              value={config?.city || ""}
+              onChange={e => setConfig(p => ({ ...p, city: e.target.value }))}
+              onBlur={() => config?.city && saveConfig({ city: config.city })}
+              onKeyDown={e => e.key === "Enter" && config?.city && saveConfig({ city: config.city })}
+              className="text-sm font-semibold text-stone-800 w-32 bg-transparent outline-none"
+              placeholder="Enter city..."
+              data-testid="market-robot-city-quick"
+            />
+          </div>
           {config?.enabled && <Badge className="bg-emerald-100 text-emerald-700 text-xs"><span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 inline-block animate-pulse" />Active</Badge>}
           <button onClick={runScan} disabled={scanning}
             className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all" data-testid="market-robot-scan">
@@ -376,13 +389,31 @@ export const MarketRobot = ({ propertyId }) => {
                 <div><label className="font-semibold text-stone-700 text-sm">Auto-Pricing</label><p className="text-xs text-stone-400">Automatically adjust rates based on market supply</p></div>
                 <Switch checked={config.auto_pricing} onCheckedChange={v => saveConfig({ auto_pricing: v })} data-testid="market-robot-autopricing" />
               </div>
-              <div>
-                <label className="font-semibold text-stone-700 text-sm block mb-2">City to Monitor</label>
-                <Input value={config.city || ""} onChange={e => setConfig(p => ({ ...p, city: e.target.value }))} onBlur={() => saveConfig({ city: config.city })} className="w-64" data-testid="market-robot-city" />
+
+              {/* Location / City */}
+              <div className="border border-violet-200 rounded-xl p-5 bg-violet-50/30">
+                <div className="flex items-center gap-2 mb-3">
+                  <Globe className="w-5 h-5 text-violet-600" />
+                  <label className="font-bold text-stone-800 text-sm">Market Location</label>
+                </div>
+                <p className="text-xs text-stone-500 mb-3">Set the city or destination to monitor on Booking.com. This works for any location worldwide.</p>
+                <Input value={config.city || ""} onChange={e => setConfig(p => ({ ...p, city: e.target.value }))} onBlur={() => saveConfig({ city: config.city })} className="w-80 mb-3" placeholder="Type any city name..." data-testid="market-robot-city" />
+                <div className="flex flex-wrap gap-1.5">
+                  {["London","Paris","New York","Dubai","Barcelona","Rome","Tokyo","Sydney","Amsterdam","Istanbul","Bangkok","Singapore","Berlin","Miami","Los Angeles","Hong Kong","Lisbon","Prague","Vienna","Bali"].map(city => (
+                    <button key={city} onClick={() => { setConfig(p => ({ ...p, city })); saveConfig({ city }); }}
+                      className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-all ${config.city === city ? "bg-violet-600 text-white" : "bg-white border border-stone-200 text-stone-500 hover:border-violet-300 hover:text-violet-700"}`}
+                      data-testid={`market-city-${city.toLowerCase().replace(/\s/g, "-")}`}>
+                      {city}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-stone-400 mt-2">You can type any destination — these are popular presets. The robot will scrape Booking.com for the exact location you enter.</p>
               </div>
+
               <div>
                 <label className="font-semibold text-stone-700 text-sm block mb-2">Days Ahead to Scan</label>
-                <Input type="number" min={7} max={90} value={config.days_ahead || 14} onChange={e => setConfig(p => ({ ...p, days_ahead: Number(e.target.value) }))} onBlur={() => saveConfig({ days_ahead: config.days_ahead })} className="w-32" data-testid="market-robot-days" />
+                <p className="text-xs text-stone-400 mb-2">Number of days into the future to scan. Max 90 for full quarter coverage.</p>
+                <Input type="number" min={7} max={90} value={config.days_ahead || 90} onChange={e => setConfig(p => ({ ...p, days_ahead: Number(e.target.value) }))} onBlur={() => saveConfig({ days_ahead: config.days_ahead })} className="w-32" data-testid="market-robot-days" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -393,6 +424,32 @@ export const MarketRobot = ({ propertyId }) => {
                   <label className="font-semibold text-stone-700 text-sm block mb-2">Max Price Decrease %</label>
                   <Input type="number" value={config.max_decrease_pct || 25} onChange={e => setConfig(p => ({ ...p, max_decrease_pct: Number(e.target.value) }))} onBlur={() => saveConfig({ max_decrease_pct: config.max_decrease_pct })} className="w-24" />
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Currency Configuration */}
+          <div className="bg-white border border-stone-200 rounded-2xl p-6">
+            <h3 className="font-bold text-stone-800 mb-3 flex items-center gap-2"><Globe className="w-4 h-4 text-stone-400" /> Regional Settings</h3>
+            <p className="text-xs text-stone-400 mb-4">These settings adapt the robot for different markets worldwide.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="font-semibold text-stone-700 text-sm block mb-2">Currency</label>
+                <select value={config.currency || "GBP"} onChange={e => { setConfig(p => ({ ...p, currency: e.target.value })); saveConfig({ currency: e.target.value }); }}
+                  className="border border-stone-200 rounded-lg px-3 py-2 text-sm w-full" data-testid="market-robot-currency">
+                  {[["GBP","£ British Pound"],["USD","$ US Dollar"],["EUR","€ Euro"],["AED","د.إ UAE Dirham"],["THB","฿ Thai Baht"],["JPY","¥ Japanese Yen"],["AUD","A$ Australian Dollar"],["SGD","S$ Singapore Dollar"],["CHF","Fr Swiss Franc"],["CAD","C$ Canadian Dollar"],["INR","₹ Indian Rupee"],["BRL","R$ Brazilian Real"],["MXN","MX$ Mexican Peso"],["IDR","Rp Indonesian Rupiah"],["TRY","₺ Turkish Lira"],["ZAR","R South African Rand"]].map(([code, label]) => (
+                    <option key={code} value={code}>{label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="font-semibold text-stone-700 text-sm block mb-2">Booking.com Language</label>
+                <select value={config.language || "en-gb"} onChange={e => { setConfig(p => ({ ...p, language: e.target.value })); saveConfig({ language: e.target.value }); }}
+                  className="border border-stone-200 rounded-lg px-3 py-2 text-sm w-full" data-testid="market-robot-language">
+                  {[["en-gb","English (UK)"],["en-us","English (US)"],["fr","French"],["de","German"],["es","Spanish"],["it","Italian"],["pt-br","Portuguese (Brazil)"],["ja","Japanese"],["zh-cn","Chinese (Simplified)"],["ar","Arabic"],["ko","Korean"],["ru","Russian"],["tr","Turkish"],["nl","Dutch"],["th","Thai"]].map(([code, label]) => (
+                    <option key={code} value={code}>{label}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </div>

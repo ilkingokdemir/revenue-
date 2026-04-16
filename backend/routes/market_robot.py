@@ -20,9 +20,9 @@ SCRAPE_RUNNING = False
 def create_market_robot_router(db, require_roles):
     router = APIRouter()
 
-    async def _scrape_booking_date(city: str, checkin: str, checkout: str):
+    async def _scrape_booking_date(city: str, checkin: str, checkout: str, language: str = "en-gb"):
         """Scrape Booking.com search results using multiple strategies with fallback."""
-        url = f"https://www.booking.com/searchresults.en-gb.html?ss={city}&checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1&group_children=0"
+        url = f"https://www.booking.com/searchresults.{language}.html?ss={city}&checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1&group_children=0"
 
         # Strategy 1: Direct request with rotating headers
         user_agents = [
@@ -244,6 +244,8 @@ def create_market_robot_router(db, require_roles):
             "auto_pricing": True,
             "max_increase_pct": 35,
             "max_decrease_pct": 25,
+            "currency": "GBP",
+            "language": "en-gb",
             "last_scan": None,
             "total_scans": 0,
         }
@@ -272,8 +274,9 @@ def create_market_robot_router(db, require_roles):
 
         config = await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
         city = data.get("city") or config.get("city", "London")
-        days_ahead = min(int(data.get("days_ahead") or config.get("days_ahead", 14)), 90)
+        days_ahead = min(int(data.get("days_ahead") or config.get("days_ahead", 90)), 90)
         auto_pricing = config.get("auto_pricing", True)
+        language = config.get("language", "en-gb")
 
         SCRAPE_RUNNING = True
         now = datetime.now(timezone.utc)
@@ -292,7 +295,7 @@ def create_market_robot_router(db, require_roles):
                 checkin = d.strftime("%Y-%m-%d")
                 checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
 
-                supply = await _scrape_booking_date(city, checkin, checkout)
+                supply = await _scrape_booking_date(city, checkin, checkout, language)
 
                 # Get previous snapshot for this date
                 prev = await db.market_supply.find_one(

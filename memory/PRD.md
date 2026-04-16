@@ -1,17 +1,14 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | 7 Languages | Mobile Responsive | 93 Test Iterations (100%)
+## 30+ Modules | 7 Languages | Mobile Responsive | 94 Test Iterations (100%)
+
+### Revenue Management (NEW — combines Market Pulse + RoomPriceGenie)
+- **Dashboard**: 3 KPI cards (Last/Current/Next Month with revenue + YOY%), Occupancy Heatmap (10 properties × 14 days, color-coded), YOY Property Revenue Tables
+- **Rate Calendar**: RoomPriceGenie-style monthly calendar with recommended vs PMS rates per day, Prices/Occupancy/Pickup view toggles, Today highlight, Room Type selector, Month navigation
+- **Pricing Strategy**: Rooms Setup (Reference/Derived, Base/Min/Max prices), Day-of-Week adjustments, Monthly adjustments, Occupancy-based dynamic pricing rules (+40% at 90%+ to -30% at <25%)
 
 ### Premium Booking Engine + Admin
-- Public booking page at /book/{propertyId} with Booking.com-quality UX
-- **Admin Panel**: Room Photos (drag-and-drop upload per room), Guest Reviews CRUD, Theme & Branding config
-- Per-room photos, Gallery with lightbox, Guest reviews, Multi-property themes
-- 5 trust signals, 4-step booking flow, mobile responsive
-
-### Financial Pipeline
-- Shifts → Auto-Calculate Pay → Sync to Earned Salaries → Finance Dashboard deductions
-
+### Financial Pipeline (Shifts → Pay → Salaries → Deductions)
 ### All 30+ Modules
-Dashboard, Bookings, Housekeeping, Maintenance, Guest Journey, Rate Manager, Reports, Booking Engine + Admin, Operations Hub (7), Finance (8), Staff Management (3), My Tasks, Lost & Found, Events & Rooms, Notifications, Settings Hub (6), Admin Panel
 
-## Testing: 93 iterations, 100% pass rate
+## Testing: 94 iterations, 100% pass rate

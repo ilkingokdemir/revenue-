@@ -415,4 +415,172 @@ def create_market_robot_router(db, require_roles):
         ).sort("date", 1).to_list(200)
         return {"adjustments": overrides}
 
+    # ==================== COMPETITOR HOTELS ====================
+
+    @router.get("/revenue/market-robot/{property_id}/competitors")
+    async def get_competitors(property_id: str,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        comps = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(20)
+        return {"competitors": comps}
+
+    @router.post("/revenue/market-robot/{property_id}/competitors")
+    async def add_competitor(property_id: str, data: Dict,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        booking_url = data.get("booking_url", "").strip()
+        name = data.get("name", "").strip()
+        if not booking_url:
+            return {"error": "Booking.com URL is required"}
+
+        # Extract hotel slug from URL
+        slug_match = re.search(r'/hotel/[a-z]{2}/([^.?]+)', booking_url)
+        slug = slug_match.group(1) if slug_match else ""
+
+        comp = {
+            "id": str(uuid.uuid4())[:8],
+            "property_id": property_id,
+            "name": name or slug.replace("-", " ").title(),
+            "booking_url": booking_url,
+            "slug": slug,
+            "added_at": datetime.now(timezone.utc).isoformat(),
+            "last_scraped": None,
+            "prices": [],
+        }
+        await db.market_competitors.insert_one(comp)
+        comp.pop("_id", None)
+        return comp
+
+    @router.delete("/revenue/market-robot/competitors/{competitor_id}")
+    async def remove_competitor(competitor_id: str,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        await db.market_competitors.delete_one({"id": competitor_id})
+        return {"message": "Removed"}
+
+    @router.post("/revenue/market-robot/{property_id}/competitors/scan")
+    async def scan_competitors(property_id: str, data: Dict = {},
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Scrape prices from all configured competitor hotels."""
+        comps = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(20)
+
+        if not comps:
+            return {"error": "No competitors configured", "results": []}
+
+        now = datetime.now(timezone.utc)
+        days_ahead = int(data.get("days_ahead", 7))
+        results = []
+
+        for comp in comps:
+            comp_prices = []
+            base_url = comp.get("booking_url", "").split("?")[0]
+            if not base_url:
+                continue
+
+            for i in range(min(days_ahead, 14)):
+                d = now + timedelta(days=i)
+                checkin = d.strftime("%Y-%m-%d")
+                checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
+                url = f"{base_url}?checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1"
+
+                try:
+                    async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
+                        headers = {
+                            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                            "Accept-Language": "en-GB,en;q=0.9",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        }
+                        resp = await client.get(url, headers=headers)
+                        text = resp.text
+
+                        if resp.status_code == 202 or "challenge" in text[:500].lower():
+                            # Blocked — try extracting from meta
+                            pass
+
+                        # Extract prices — multiple patterns
+                        prices_found = []
+                        # Pattern: "$XXX for 1 night" or "£XXX per night"
+                        price_matches = re.findall(r'[$£€](\d+(?:,\d+)?)\s*(?:for 1 night|per night)', text)
+                        for p in price_matches:
+                            prices_found.append(float(p.replace(",", "")))
+
+                        # Pattern: data attribute or JSON
+                        json_prices = re.findall(r'"price":\s*"?(\d+(?:\.\d+)?)"?', text)
+                        for p in json_prices:
+                            val = float(p)
+                            if 20 < val < 5000:
+                                prices_found.append(val)
+
+                        # Extract review score
+                        score_match = re.search(r'Scored\s+([\d.]+)', text)
+                        score = float(score_match.group(1)) if score_match else None
+
+
+                        if prices_found:
+                            lowest = min(prices_found)
+                            comp_prices.append({
+                                "date": checkin,
+                                "lowest_price": lowest,
+                                "all_prices": sorted(set(prices_found))[:5],
+                                "score": score,
+                                "scraped": True,
+                            })
+                        else:
+                            comp_prices.append({
+                                "date": checkin,
+                                "lowest_price": None,
+                                "scraped": False,
+                            })
+
+                except Exception as e:
+                    logger.warning(f"Competitor scrape failed for {comp.get('name')}: {e}")
+                    comp_prices.append({"date": checkin, "lowest_price": None, "scraped": False})
+
+            # Update competitor with latest prices
+            await db.market_competitors.update_one(
+                {"id": comp["id"]},
+                {"$set": {
+                    "prices": comp_prices,
+                    "last_scraped": now.isoformat(),
+                }}
+            )
+            results.append({
+                "competitor_id": comp["id"],
+                "name": comp.get("name", ""),
+                "dates_scraped": len(comp_prices),
+                "prices_found": sum(1 for p in comp_prices if p.get("scraped")),
+                "prices": comp_prices,
+            })
+
+        return {"results": results, "total_competitors": len(results)}
+
+    @router.get("/revenue/market-robot/{property_id}/competitor-prices")
+    async def get_competitor_prices(property_id: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Get all competitor prices for comparison."""
+        comps = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(20)
+
+        # Get our own rates
+        now = datetime.now(timezone.utc)
+        our_rates = {}
+        for i in range(14):
+            d = now + timedelta(days=i)
+            ds = d.strftime("%Y-%m-%d")
+            override = await db.rate_overrides.find_one(
+                {"property_id": property_id, "date": ds}, {"_id": 0}
+            )
+            if override and override.get("custom_rate"):
+                our_rates[ds] = override["custom_rate"]
+            else:
+                rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
+                our_rates[ds] = float(rt.get("base_rate", 100) or 100) if rt else 100
+
+        return {
+            "competitors": comps,
+            "our_rates": our_rates,
+        }
+
     return router

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight, Eye, Trash2 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -17,6 +17,9 @@ export const MarketRobot = ({ propertyId }) => {
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState(null);
   const [subTab, setSubTab] = useState("dashboard");
+  const [competitors, setCompetitors] = useState([]);
+  const [compForm, setCompForm] = useState({ name: "", booking_url: "" });
+  const [compScanning, setCompScanning] = useState(false);
 
   useEffect(() => {
     loadAll();
@@ -27,6 +30,7 @@ export const MarketRobot = ({ propertyId }) => {
     axios.get(`${API}/revenue/market-robot/${propertyId}/supply`).then(r => setSupply(r.data)).catch(() => {});
     axios.get(`${API}/revenue/market-robot/${propertyId}/logs`).then(r => setLogs(r.data.logs || [])).catch(() => {});
     axios.get(`${API}/revenue/market-robot/${propertyId}/adjustments`).then(r => setAdjustments(r.data.adjustments || [])).catch(() => {});
+    axios.get(`${API}/revenue/market-robot/${propertyId}/competitors`).then(r => setCompetitors(r.data.competitors || [])).catch(() => {});
   };
 
   const saveConfig = async (updates) => {
@@ -53,6 +57,34 @@ export const MarketRobot = ({ propertyId }) => {
       toast.error("Scan failed");
     }
     setScanning(false);
+  };
+
+  const addCompetitor = async () => {
+    if (!compForm.booking_url) { toast.error("Booking.com URL required"); return; }
+    try {
+      await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors`, compForm);
+      toast.success("Competitor added");
+      setCompForm({ name: "", booking_url: "" });
+      loadAll();
+    } catch { toast.error("Failed"); }
+  };
+
+  const removeCompetitor = async (id) => {
+    try {
+      await axios.delete(`${API}/revenue/market-robot/competitors/${id}`);
+      toast.success("Removed");
+      loadAll();
+    } catch { toast.error("Failed"); }
+  };
+
+  const scanCompetitors = async () => {
+    setCompScanning(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors/scan`, { days_ahead: 7 });
+      toast.success(`Scanned ${data.total_competitors} competitors`);
+      loadAll();
+    } catch { toast.error("Failed"); }
+    setCompScanning(false);
   };
 
   const snapshots = supply?.snapshots || [];
@@ -86,7 +118,7 @@ export const MarketRobot = ({ propertyId }) => {
 
       {/* Sub-tabs */}
       <div className="flex items-center gap-1 border-b border-stone-200">
-        {[{id:"dashboard",label:"Dashboard"},{id:"supply",label:"Supply Data"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
+        {[{id:"dashboard",label:"Dashboard"},{id:"supply",label:"Supply Data"},{id:"competitors-tab",label:"Competitor Hotels"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
           <button key={t.id} onClick={() => setSubTab(t.id)} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-[1px] transition-all ${subTab === t.id ? "text-indigo-700 border-indigo-500" : "text-stone-400 border-transparent hover:text-stone-600"}`} data-testid={`market-robot-${t.id}`}>{t.label}</button>
         ))}
       </div>
@@ -250,6 +282,83 @@ export const MarketRobot = ({ propertyId }) => {
               </tr>
             ))}</tbody>
           </table></div>
+        </div>
+      )}
+
+
+      {/* Competitor Hotels Tab */}
+      {subTab === "competitors-tab" && (
+        <div className="space-y-6" data-testid="market-robot-competitors">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-stone-800">Competitor Hotels</h3>
+              <p className="text-sm text-stone-400">Add Booking.com hotel URLs to track their prices and availability.</p>
+            </div>
+            <button onClick={scanCompetitors} disabled={compScanning || competitors.length === 0}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50" data-testid="market-robot-scan-comps">
+              {compScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+              {compScanning ? "Scanning..." : "Scan All Prices"}
+            </button>
+          </div>
+
+          {/* Add Competitor Form */}
+          <div className="bg-white border border-stone-200 rounded-2xl p-5">
+            <h4 className="font-semibold text-stone-700 mb-3">Add Competitor Hotel</h4>
+            <div className="flex gap-3">
+              <input value={compForm.name} onChange={e => setCompForm(p => ({ ...p, name: e.target.value }))}
+                placeholder="Hotel name (optional)" className="border border-stone-200 rounded-lg px-3 py-2 text-sm w-48" data-testid="comp-name" />
+              <input value={compForm.booking_url} onChange={e => setCompForm(p => ({ ...p, booking_url: e.target.value }))}
+                placeholder="Booking.com hotel URL (paste full URL)" className="border border-stone-200 rounded-lg px-3 py-2 text-sm flex-1" data-testid="comp-url" />
+              <button onClick={addCompetitor}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap" data-testid="comp-add">+ Add</button>
+            </div>
+            <p className="text-[10px] text-stone-400 mt-2">Example: https://www.booking.com/hotel/gb/the-barkston.html</p>
+          </div>
+
+          {/* Competitor List */}
+          {competitors.length === 0 ? (
+            <div className="bg-white border border-stone-200 rounded-2xl p-12 text-center">
+              <Eye className="w-12 h-12 text-stone-200 mx-auto mb-3" />
+              <p className="font-semibold text-stone-600">No competitors added yet</p>
+              <p className="text-sm text-stone-400 mt-1">Paste a Booking.com hotel URL above to start tracking.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {competitors.map(comp => (
+                <div key={comp.id} className="bg-white border border-stone-200 rounded-2xl p-5" data-testid={`comp-${comp.id}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h4 className="font-bold text-stone-800">{comp.name}</h4>
+                      <p className="text-xs text-stone-400 truncate max-w-md">{comp.booking_url}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {comp.last_scraped && <Badge className="bg-emerald-100 text-emerald-700 text-[10px]">Last scan: {new Date(comp.last_scraped).toLocaleString("en-GB", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</Badge>}
+                      <button onClick={() => removeCompetitor(comp.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                  {comp.prices && comp.prices.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <div className="flex gap-2">
+                        {comp.prices.map(p => (
+                          <div key={p.date} className={`flex-shrink-0 text-center border rounded-xl p-3 min-w-[80px] ${p.scraped ? "border-stone-200" : "border-stone-100 bg-stone-50"}`}>
+                            <div className="text-[10px] text-stone-400 font-medium">{new Date(p.date + "T00:00:00").toLocaleDateString("en", { weekday: "short", day: "numeric" })}</div>
+                            {p.scraped && p.lowest_price ? (
+                              <div className="text-sm font-bold text-stone-800 mt-1">{cur(p.lowest_price)}</div>
+                            ) : (
+                              <div className="text-sm font-bold text-stone-300 mt-1">—</div>
+                            )}
+                            {p.score && <div className="text-[9px] text-amber-500 mt-0.5">{p.score}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-stone-400">No prices scraped yet. Click "Scan All Prices" to fetch.</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

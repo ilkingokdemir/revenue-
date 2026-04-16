@@ -281,16 +281,11 @@ def create_market_robot_router(db, require_roles):
         snapshots = []
 
         try:
-            # Scan key dates (today + every 3rd day to conserve resources)
+            # Scan ALL days for complete coverage
             scan_dates = []
-            for i in range(0, days_ahead, 3):
+            for i in range(days_ahead):
                 d = now + timedelta(days=i)
                 scan_dates.append(d)
-            # Always include tomorrow and day after
-            for extra in [1, 2]:
-                d = now + timedelta(days=extra)
-                if d not in scan_dates:
-                    scan_dates.append(d)
             scan_dates.sort()
 
             for d in scan_dates:

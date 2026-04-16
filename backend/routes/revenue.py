@@ -177,7 +177,10 @@ def create_revenue_router(db, require_roles):
         rt_id = rt.get("id", "")
         ovr_query = {"property_id": property_id, "date": {"$gte": first, "$lte": last}}
         if rt_id and rt_id != "default":
-            ovr_query["room_type_id"] = {"$in": [rt_id, ""]}
+            ovr_query["room_type_id"] = {"$in": [rt_id, "", "default"]}
+        else:
+            # Include both empty string and 'default' room_type_id for default room type
+            ovr_query["room_type_id"] = {"$in": ["", "default"]}
         ovr_docs = await db.rate_overrides.find(ovr_query, {"_id": 0}).to_list(100)
         for o in ovr_docs:
             overrides[o["date"]] = o

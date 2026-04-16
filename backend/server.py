@@ -73,6 +73,7 @@ from routes.revenue_phase2 import create_revenue_phase2_router
 from routes.revenue_copilot import create_revenue_copilot_router
 from routes.revenue_exports import create_revenue_exports_router
 from routes.market_robot import create_market_robot_router
+from routes.dynamic_pricing import create_dynamic_pricing_router
 
 # Import extracted modules
 from models import (
@@ -416,6 +417,9 @@ api_router.include_router(revenue_exports_router)
 
 market_robot_router = create_market_robot_router(db, require_roles)
 api_router.include_router(market_robot_router)
+
+dynamic_pricing_router = create_dynamic_pricing_router(db, require_roles)
+api_router.include_router(dynamic_pricing_router)
 
 app.include_router(api_router)
 

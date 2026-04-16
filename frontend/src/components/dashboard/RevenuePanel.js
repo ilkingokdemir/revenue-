@@ -16,10 +16,11 @@ import { RevenueAICopilot } from "./RevenueAICopilot";
 import { RateCalendarEditable } from "./RateCalendarEditable";
 import { ExportBar } from "./RevenueExports";
 import { MarketRobot } from "./MarketRobot";
+import { DynamicPricingEngine } from "./DynamicPricingEngine";
 import {
   BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2,
   LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign,
-  Network, Eye, Bot, Download, ChevronRight, Radar
+  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -36,6 +37,7 @@ const NAV_SECTIONS = [
   {
     label: "Pricing",
     items: [
+      { id: "dynamic-pricing", label: "AI Dynamic Pricing", icon: BrainCircuit },
       { id: "calendar", label: "Rate Calendar", icon: CalendarDays },
       { id: "strategy", label: "Pricing Strategy", icon: Settings2 },
       { id: "smart-pricing", label: "Smart Pricing", icon: Zap },
@@ -174,6 +176,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "dashboard" && <RevenueDashboardEnhanced propertyId={pid} onNavigate={handleNavigate} />}
               {tab === "ai-copilot" && <RevenueAICopilot propertyId={pid} />}
               {tab === "calendar" && <RateCalendarEditable propertyId={pid} />}
+              {tab === "dynamic-pricing" && <DynamicPricingEngine propertyId={pid} />}
               {tab === "strategy" && <RevenuePricingStrategy propertyId={pid} />}
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}

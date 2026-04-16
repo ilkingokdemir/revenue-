@@ -60,6 +60,7 @@ import { MyTasksPanel } from "./components/dashboard/MyTasksPanel";
 import { LostFoundPanel } from "./components/dashboard/LostFoundPanel";
 import { EventsPanel } from "./components/dashboard/EventsPanel";
 import { SettingsHubPanel } from "./components/dashboard/SettingsHubPanel";
+import { BookingEngineAdmin } from "./components/dashboard/BookingEngineAdmin";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
@@ -146,6 +147,7 @@ import {
   Notebook,
   ChartLine,
   Wrench,
+  Globe,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2547,6 +2549,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
+        { id: "booking-engine-admin", icon: Globe, name: "Booking Engine", testId: "booking-engine-admin-btn" },
       ]
     },
     {
@@ -3038,6 +3041,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Events & Meeting Rooms */}
         {activeView === "events" && (
           <EventsPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Booking Engine Admin */}
+        {activeView === "booking-engine-admin" && (
+          <BookingEngineAdmin properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Guest Satisfaction Surveys */}

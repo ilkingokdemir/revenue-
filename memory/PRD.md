@@ -1,35 +1,37 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | 7 Languages | Mobile Responsive | 98 Test Iterations (100%)
+## 30+ Modules | 7 Languages | Mobile Responsive | 99 Test Iterations (100%)
 
-### Revenue Management System — Industry-Leading (22 Modules, 19 Tabs)
+### Revenue Management System — Industry-Leading (23 Modules, 20 Tabs)
 Combines RoomPriceGenie + Hotel Ops + Duetto + IDeaS + Atomize + Flyr + PriceLabs + Lighthouse.
 
-**19 Navigable Tabs:**
+**20 Navigable Tabs:**
 1. Dashboard — Revenue Readiness, KPIs, Demand Index, Booking Pace, AI Confidence
-2. AI Copilot (GPT-5.2) — Natural language revenue assistant with voice input
-3. Rate Calendar — **EDITABLE** click-to-edit rates, bulk edit, custom overrides (amber), view toggles
+2. AI Copilot (GPT-5.2) — NLP revenue assistant with voice input
+3. Rate Calendar — EDITABLE click-to-edit, bulk edit, custom overrides
 4. Pricing Strategy (7 sub-tabs) — Rooms, DOW, Monthly, Occupancy, Min Stay, Lead Time, Surge
-5. Smart Pricing — Price Evolution chart, Recommendation Calendar, AI Insights
-6. Forecasting — AI 30-day forecast with SDLY, confidence scores
-7. Analytics (3 sub-tabs) — Performance, Pickup Report, Budget Variance
-8. Approvals — Accept/Reject pricing recommendations
-9. Segments — Customer profile CRUD
-10. Playbooks — Visual IF/THEN rule builder
-11. Experiments — A/B pricing tests
-12. Parity — Rate violation detection
-13. Overbooking — Simulation + policies
-14. Action Center — System alerts with impact/risk
-15. Profit OS — Net ADR, ContributionPAR, channel costs
-16. Distribution — Channel performance by profitability
-17. Competitors — Rate comparison with daily charts
-18. Rate Resolver — Precedence breakdown
-19. Setup Wizard — 6-step guided setup
+5. Smart Pricing — Price Evolution, Recommendation Calendar, AI Insights
+6. Forecasting — AI 30-day forecast with SDLY + inline Export
+7. Analytics (3 sub-tabs) — Performance, Pickup, Budget + inline Exports
+8. Reports & Export — 7 downloadable reports (CSV/Excel): Executive Summary, Performance, Pickup, Budget, Forecasting, Profit OS, Distribution
+9. Approvals — Accept/Reject pricing recommendations
+10. Segments — Customer profile CRUD
+11. Playbooks — Visual IF/THEN rule builder
+12. Experiments — A/B pricing tests
+13. Parity — Rate violation detection
+14. Overbooking — Simulation + policies
+15. Action Center — System alerts
+16. Profit OS — Net ADR, ContributionPAR + inline Export
+17. Distribution — Channel performance + inline Export
+18. Competitors — Rate comparison
+19. Rate Resolver — Precedence breakdown
+20. Setup Wizard — 6-step guided setup
 
 ### Architecture
-- Backend: FastAPI + MongoDB (5 revenue route files)
-- Frontend: React + Tailwind + Shadcn (14 Revenue component files)
+- Backend: FastAPI + MongoDB (6 revenue route files)
+- Frontend: React + Tailwind + Shadcn (15 Revenue component files)
 - AI: GPT-5.2 via Emergent LLM Key + Web Speech API voice
-- API: 40+ revenue endpoints, all auth-protected
+- Exports: CSV + Excel (openpyxl) with branded headers
+- API: 45+ revenue endpoints, all auth-protected
 
-## Testing: 98 iterations, 100% pass rate
+## Testing: 99 iterations, 100% pass rate

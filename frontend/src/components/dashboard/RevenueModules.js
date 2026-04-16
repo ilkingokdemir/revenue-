@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Shield, RefreshCw, AlertTriangle, CheckCircle, BarChart3, Play, DollarSign, TrendingUp } from "lucide-react";
+import { ExportButton } from "./RevenueExports";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -179,6 +180,7 @@ export const RevenueProfitOS = ({ propertyId }) => {
     <div className="space-y-6" data-testid="rev-profit-os">
       <div className="flex items-center justify-between">
         <div><h2 className="text-lg font-bold text-stone-800">Profit OS</h2><p className="text-sm text-stone-500">Net ADR + Contribution per room night analysis</p></div>
+        <ExportButton endpoint={`/revenue/export/profit-os/${propertyId}`} label="Profit OS" />
       </div>
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white border border-stone-200 rounded-2xl p-5 text-center"><p className="text-3xl font-bold text-emerald-600">{cur(data.kpis.avg_gross_adr)}</p><p className="text-xs text-stone-400 mt-1">Avg Gross ADR</p></div>
@@ -214,7 +216,10 @@ export const RevenueDistribution = ({ propertyId }) => {
 
   return (
     <div className="space-y-6" data-testid="rev-distribution">
-      <h2 className="text-lg font-bold text-stone-800">Distribution Cockpit</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-stone-800">Distribution Cockpit</h2>
+        <ExportButton endpoint={`/revenue/export/distribution/${propertyId}`} label="Distribution" />
+      </div>
       <p className="text-sm text-stone-500">Channel performance and contribution analysis | Period: {data.period?.start} to {data.period?.end}</p>
       <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden">
         <div className="px-5 py-3 bg-stone-50 border-b font-bold text-sm text-stone-800">Channel Performance (Sorted by ContributionPAR)</div>

@@ -3,6 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { RefreshCw, Zap, TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { ExportButton } from "./RevenueExports";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -38,6 +39,7 @@ export const RevenueForecasting = ({ propertyId }) => {
         </div>
         <div className="flex items-center gap-3">
           <Badge className="bg-violet-100 text-violet-700 text-xs">Accuracy: {accuracy}%</Badge>
+          <ExportButton endpoint={`/revenue/export/forecasting/${propertyId}`} label="Forecasting" />
           <button onClick={load} className="flex items-center gap-2 bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-sm font-medium" data-testid="rev-forecast-recalc">
             <RefreshCw className="w-4 h-4" />Recalculate
           </button>

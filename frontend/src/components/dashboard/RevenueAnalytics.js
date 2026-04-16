@@ -3,6 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { ExportButton } from "./RevenueExports";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -34,7 +35,8 @@ const PerformanceTab = ({ propertyId }) => {
     <div className="space-y-6" data-testid="rev-performance">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-stone-800">Performance Analytics</h2>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <ExportButton endpoint={`/revenue/export/performance/${propertyId}?period=${period}`} label="Performance" />
           {["mtd","last30","last90"].map(p => (
             <button key={p} onClick={() => setPeriod(p)} className={`px-3 py-1.5 text-xs font-medium rounded-lg ${period === p ? "bg-violet-100 text-violet-700" : "text-stone-400 hover:bg-stone-50"}`}>{p === "mtd" ? "MTD" : p === "last30" ? "Last 30" : "Last 90"}</button>
           ))}
@@ -109,7 +111,10 @@ const PickupTab = ({ propertyId }) => {
 
   return (
     <div className="space-y-6" data-testid="rev-pickup">
-      <h2 className="text-lg font-bold text-stone-800">Pickup Report</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-stone-800">Pickup Report</h2>
+        <ExportButton endpoint={`/revenue/export/pickup/${propertyId}`} label="Pickup" />
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Total On Books", value: kpis.total_on_books, sub: "Room nights confirmed", color: "text-blue-600" },
@@ -175,7 +180,10 @@ const BudgetTab = ({ propertyId }) => {
     <div className="space-y-6" data-testid="rev-budget">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-stone-800">Budget Variance</h2>
-        <button onClick={() => setShowForm(!showForm)} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-medium" data-testid="rev-set-budget">+ Set Budget</button>
+        <div className="flex items-center gap-2">
+          <ExportButton endpoint={`/revenue/export/budget/${propertyId}`} label="Budget" />
+          <button onClick={() => setShowForm(!showForm)} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-medium" data-testid="rev-set-budget">+ Set Budget</button>
+        </div>
       </div>
       {!has_budget && <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 font-medium">No budget defined for this period. Set budget targets to track variance and performance.</div>}
       {showForm && (

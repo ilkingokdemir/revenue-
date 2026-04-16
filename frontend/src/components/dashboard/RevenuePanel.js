@@ -14,10 +14,10 @@ import { RevenuePlaybooks, RevenueExperiments } from "./RevenuePlaybooksExperime
 import { RevenueParity, RevenueOverbooking, RevenueActionCenter, RevenueProfitOS, RevenueDistribution, RevenueCompetitors } from "./RevenueModules";
 import { RevenueAICopilot } from "./RevenueAICopilot";
 import { RateCalendarEditable } from "./RateCalendarEditable";
-import { BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2, LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign, Network, Eye, Bot } from "lucide-react";
+import { ExportBar } from "./RevenueExports";
+import { BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2, LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign, Network, Eye, Bot, Download } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
@@ -27,6 +27,7 @@ const TABS = [
   { id: "smart-pricing", label: "Smart Pricing", icon: Zap },
   { id: "forecasting", label: "Forecasting", icon: LineChart },
   { id: "analytics", label: "Analytics", icon: PieChart },
+  { id: "reports", label: "Reports", icon: Download },
   { id: "approvals", label: "Approvals", icon: CheckSquare },
   { id: "segments", label: "Segments", icon: Users },
   { id: "playbooks", label: "Playbooks", icon: BookOpen },
@@ -71,6 +72,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
           {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
           {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
           {tab === "analytics" && <RevenueAnalytics propertyId={pid} />}
+          {tab === "reports" && <ExportBar propertyId={pid} />}
           {tab === "approvals" && <RevenueApprovals propertyId={pid} />}
           {tab === "segments" && <RevenueSegments propertyId={pid} />}
           {tab === "playbooks" && <RevenuePlaybooks propertyId={pid} />}

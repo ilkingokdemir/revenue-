@@ -68,6 +68,7 @@ from routes.lost_found import create_lost_found_router
 from routes.events import create_events_router
 from routes.settings_hub import create_settings_hub_router
 from routes.revenue import create_revenue_router
+from routes.revenue_advanced import create_revenue_advanced_router
 
 # Import extracted modules
 from models import (
@@ -396,6 +397,9 @@ api_router.include_router(settings_hub_router)
 
 revenue_router = create_revenue_router(db, require_roles)
 api_router.include_router(revenue_router)
+
+revenue_advanced_router = create_revenue_advanced_router(db, require_roles)
+api_router.include_router(revenue_advanced_router)
 
 app.include_router(api_router)
 

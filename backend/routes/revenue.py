@@ -233,4 +233,46 @@ def create_revenue_router(db, require_roles):
         await db.pricing_strategy.update_one({"property_id": property_id}, {"$set": data}, upsert=True)
         return await db.pricing_strategy.find_one({"property_id": property_id}, {"_id": 0})
 
+    @router.get("/revenue/pricing-strategy-full/{property_id}")
+    async def get_full_pricing_strategy(property_id: str,
+                                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Get full pricing strategy including lead time, min stay, surge protection, target occupancy."""
+        room_types = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(20)
+        strategy = await db.pricing_strategy.find_one({"property_id": property_id}, {"_id": 0})
+        if not strategy:
+            strategy = {
+                "property_id": property_id,
+                "dow_adjustments": {},
+                "monthly_adjustments": {},
+                "occupancy_rules": [],
+                "lead_time_adjustments": {},
+                "target_occupancy": {},
+                "aggressiveness": 1.0,
+                "min_stay_settings": {"min_stay": 1, "orphan_gap_enabled": False, "fixed_override": False, "room_types": []},
+                "surge_protection": {"enabled": False, "booking_threshold": 100, "days_to_go": 30, "recipients": []},
+            }
+        rooms_setup = []
+        ref_room = room_types[0] if room_types else None
+        for i, rt in enumerate(room_types):
+            base = float(rt.get("base_rate", 100) or 100)
+            ref_base = float(ref_room.get("base_rate", 100) or 100) if ref_room else base
+            deriv = round(base - ref_base, 2) if i > 0 else 0
+            count = rt.get("count", 0) or await db.rooms.count_documents({"property_id": property_id, "room_type": rt.get("id", "")}) or 5
+            rooms_setup.append({
+                "id": rt.get("id", ""), "name": rt.get("name", ""),
+                "room_in_pms": rt.get("category", rt.get("name", "")),
+                "rate_in_pms": "Base Rate",
+                "number_of_rooms": count,
+                "reference_derived": "Reference" if i == 0 else "Derived",
+                "base_price": base,
+                "derivation": deriv if i > 0 else None,
+                "min_price": float(rt.get("min_price", 0) or 0) or round(base * 0.7, 2),
+                "max_price": float(rt.get("max_price", 0) or 0) or round(base * 2, 2),
+            })
+        return {
+            "rooms_setup": rooms_setup,
+            "strategy": strategy,
+            "room_types": [{"id": r.get("id", ""), "name": r.get("name", "")} for r in room_types],
+        }
+
     return router

@@ -1,14 +1,21 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | 7 Languages | Mobile Responsive | 89 Test Iterations (100%)
+## 30+ Modules | 7 Languages | Mobile Responsive | 90 Test Iterations (100%)
 
-### Full Financial Pipeline (NEW)
-- **Shifts → Auto-Calculate Pay**: Daily rate stays flat, Hourly = hours × rate
-- **Sync to Payroll**: One-click syncs completed shifts → Earned Salaries (with dedup)
-- **Finance Dashboard**: Revenue - Expenses - Payroll - Commission = Net Profit/Loss
-- **Payroll Automation**: Configure/Play/Pause, rules, upcoming dates, timezone
+### Premium Booking Engine (NEW)
+- Full-page public booking website at /book/{propertyId}
+- Booking.com-quality design: cinematic hero, trust signals, room cards with pricing
+- 5 trust indicators: SSL Booking, Best Price Guarantee, Free Cancellation, No Prepayment, Instant Confirmation
+- 4-step flow: Home → Search Results → Checkout → Confirmation
+- Guests/Rooms dropdown with +/- controls
+- Checkout with guest form + sticky booking summary sidebar
+- Mobile responsive with hamburger menu
+- Auto-generates WEB-XXXXXXXX booking references
 
-### All Modules
-Dashboard, Bookings, Housekeeping, Maintenance (Kanban/SLA/Photos), Guest Journey, Rate Manager, Reports Centre, Online Booking Widget, Operations Hub (7 modules), Finance (8 tabs), Staff Management (Users/My Shifts/Roles), My Tasks Dashboard, Lost & Found, Events & Meeting Rooms, Notification Centre, Settings Hub (6 sections), Accounting, POS, Payments, Messaging, Loyalty, Campaigns, Surveys
+### Financial Pipeline
+- Shifts → Auto-Calculate Pay (daily/hourly) → Sync to Earned Salaries → Deducted from Finance Dashboard
 
-## Testing: 89 iterations, 100% pass rate
+### All 30+ Modules
+Dashboard, Bookings, Housekeeping, Maintenance, Guest Journey, Rate Manager, Reports, Booking Widget, Operations Hub (7), Finance (8), Staff Management (3), My Tasks, Lost & Found, Events & Rooms, Notifications, Settings Hub (6), Admin Panel, POS, Payments, Messaging, Loyalty, Campaigns, Surveys
+
+## Testing: 90 iterations, 100% pass rate

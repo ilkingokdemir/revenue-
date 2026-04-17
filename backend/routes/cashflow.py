@@ -10,11 +10,13 @@ from fastapi import APIRouter, Depends
 from datetime import datetime, timezone, date, timedelta
 from typing import Dict
 import logging
+import os
+import uuid
 
 logger = logging.getLogger(__name__)
 
 
-def create_cashflow_router(db, require_roles):
+def create_cashflow_router(db, require_roles, LlmChat=None, UserMessage=None):
     router = APIRouter()
 
     @router.get("/finance/cash-flow-forecast/{property_id}")
@@ -189,5 +191,113 @@ def create_cashflow_router(db, require_roles):
             },
             "days": day_list,
         }
+
+    @router.post("/finance/cash-flow-forecast/{property_id}/ai-recommendations")
+    async def ai_recommendations(property_id: str, data: Dict,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Generate prescriptive actions from a forecast snapshot."""
+        if LlmChat is None or UserMessage is None:
+            return {"error": "AI not configured", "recommendations": []}
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            return {"error": "EMERGENT_LLM_KEY missing", "recommendations": []}
+
+        forecast = data.get("forecast") or {}
+        opening = forecast.get("opening_balance", 0)
+        ending = forecast.get("ending_balance", 0)
+        lowest = forecast.get("lowest_balance", 0)
+        lowest_date = forecast.get("lowest_date", "")
+        total_in = forecast.get("total_inflows", 0)
+        total_out = forecast.get("total_outflows", 0)
+        at_risk = forecast.get("at_risk", False)
+        counts = forecast.get("counts", {})
+        period = forecast.get("period_days", 30)
+
+        # Top 10 events by magnitude for context
+        days = forecast.get("days", [])
+        events = []
+        for d in days:
+            for it in d.get("items", {}).get("in", []):
+                events.append({"date": d["date"], "direction": "in", **it})
+            for it in d.get("items", {}).get("out", []):
+                events.append({"date": d["date"], "direction": "out", **it})
+        events.sort(key=lambda x: -float(x.get("amount", 0)))
+        top = events[:10]
+        top_lines = "\n".join(
+            f"  {e['date']} {e['direction'].upper()} £{float(e.get('amount',0)):.0f} · {e.get('kind','')} · {e.get('label','')[:60]}"
+            for e in top
+        ) or "  (no events)"
+
+        data_summary = f"""PERIOD: {period} days (starting {forecast.get('start','')})
+OPENING BALANCE: £{opening:.0f}
+TOTAL INFLOWS: £{total_in:.0f} ({counts.get('bookings',0)} bookings + {counts.get('recurring_invoices',0)} recurring invoices)
+TOTAL OUTFLOWS: £{total_out:.0f} ({counts.get('recurring_expenses',0)} recurring + {counts.get('future_expenses',0)} one-off)
+ENDING BALANCE: £{ending:.0f}
+LOWEST BALANCE: £{lowest:.0f} on {lowest_date}
+AT RISK (goes negative): {"YES" if at_risk else "NO"}
+PAYROLL ESTIMATE (monthly): £{forecast.get('payroll_estimate_monthly', 0):.0f}
+
+TOP 10 CASH EVENTS BY SIZE:
+{top_lines}
+"""
+
+        system_msg = """You are an expert hotelier CFO advisor. Given the cash flow forecast,
+produce 3-5 concrete, prescriptive recommendations. Each recommendation MUST be a JSON object with:
+  "title": short action (≤ 8 words)
+  "rationale": one sentence explaining why, citing SPECIFIC numbers and dates from the data
+  "impact": estimated £ impact (positive = saves/earns) — e.g. "+£1,200" or "-£380 risk avoided"
+  "priority": one of "high", "medium", "low"
+  "kind": one of "save_cost", "boost_revenue", "timing", "risk_alert", "efficiency"
+
+Return ONLY a JSON array of these objects, no prose, no markdown. Be specific with £ amounts and calendar dates.
+Use British English (£). If the forecast is healthy, still suggest optimisations."""
+
+        try:
+            session_id = f"cashflow-ai-{property_id}-{uuid.uuid4().hex[:8]}"
+            chat = LlmChat(api_key=api_key, session_id=session_id, system_message=system_msg).with_model("openai", "gpt-5.2")
+            text = await chat.send_message(UserMessage(text=f"Forecast data:\n{data_summary}"))
+        except Exception as e:
+            logger.error(f"Cash flow AI error: {e}")
+            return {"error": f"AI generation failed: {str(e)[:120]}", "recommendations": []}
+
+        # Parse JSON from response (strip markdown fences if present)
+        import json as _json
+        cleaned = text.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("```", 2)[1]
+            if cleaned.startswith("json"):
+                cleaned = cleaned[4:]
+            cleaned = cleaned.rsplit("```", 1)[0].strip()
+        try:
+            recs = _json.loads(cleaned)
+            if not isinstance(recs, list):
+                recs = []
+        except Exception:
+            # Fallback: wrap raw text into single recommendation
+            recs = [{"title": "AI Analysis", "rationale": cleaned[:400], "impact": "—", "priority": "medium", "kind": "efficiency"}]
+
+        # Persist for history
+        snapshot = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_by": current_user.get("name", ""),
+            "period_days": period,
+            "opening_balance": opening,
+            "ending_balance": ending,
+            "lowest_balance": lowest,
+            "recommendations": recs,
+        }
+        await db.cashflow_ai_snapshots.insert_one({**snapshot})
+        return {"recommendations": recs, "generated_at": snapshot["generated_at"]}
+
+    @router.get("/finance/cash-flow-forecast/{property_id}/ai-recommendations/latest")
+    async def latest_recommendations(property_id: str,
+                                     current_user: dict = Depends(require_roles("admin", "manager"))):
+        q = {} if property_id == "all" else {"property_id": property_id}
+        doc = await db.cashflow_ai_snapshots.find_one(q, {"_id": 0}, sort=[("generated_at", -1)])
+        if not doc:
+            return {"recommendations": [], "generated_at": None}
+        return {"recommendations": doc.get("recommendations", []), "generated_at": doc.get("generated_at")}
 
     return router

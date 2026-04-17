@@ -3,6 +3,7 @@ import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
@@ -10,6 +11,7 @@ import {
 import {
   RefreshCw, TrendingUp, TrendingDown, DollarSign, AlertTriangle,
   Calendar, ArrowDownCircle, ArrowUpCircle, Activity, Wallet,
+  Sparkles, Clock, CheckCircle2, TrendingUp as Boost, Shield, Zap,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -28,6 +30,9 @@ export const CashFlowForecast = ({ propertyId, user }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedDate, setExpandedDate] = useState(null);
+  const [aiRecs, setAiRecs] = useState([]);
+  const [aiAt, setAiAt] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const pid = propertyId || "all";
 
@@ -44,6 +49,34 @@ export const CashFlowForecast = ({ propertyId, user }) => {
     const t = setTimeout(load, 300);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Load cached AI recs on mount
+  useEffect(() => {
+    axios.get(`${API}/finance/cash-flow-forecast/${pid}/ai-recommendations/latest`)
+      .then(r => {
+        setAiRecs(r.data.recommendations || []);
+        setAiAt(r.data.generated_at);
+      })
+      .catch(() => {});
+  }, [pid]);
+
+  const generateAI = async () => {
+    if (!data) return;
+    setAiLoading(true);
+    try {
+      const { data: r } = await axios.post(`${API}/finance/cash-flow-forecast/${pid}/ai-recommendations`, { forecast: data });
+      if (r.error) {
+        toast.error(r.error);
+      } else {
+        setAiRecs(r.recommendations || []);
+        setAiAt(r.generated_at);
+        toast.success(`Generated ${r.recommendations?.length || 0} recommendations`);
+      }
+    } catch (e) {
+      toast.error("AI generation failed");
+    }
+    setAiLoading(false);
+  };
 
   if (loading && !data) return (
     <div className="flex items-center justify-center py-20 text-stone-400" data-testid="cashflow-forecast">
@@ -208,6 +241,73 @@ export const CashFlowForecast = ({ propertyId, user }) => {
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* AI Recommendations */}
+      <div className="bg-gradient-to-br from-violet-50 to-blue-50 border-2 border-violet-200 rounded-xl p-4" data-testid="ai-recommendations">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-violet-600" />
+            <h3 className="text-sm font-bold text-stone-800">AI CFO Recommendations</h3>
+            {aiAt && (
+              <Badge className="bg-white text-stone-600 text-[9px] border border-stone-200">
+                <Clock className="w-2.5 h-2.5 inline mr-1" />
+                Generated {new Date(aiAt).toLocaleString()}
+              </Badge>
+            )}
+          </div>
+          <Button
+            size="sm"
+            onClick={generateAI}
+            disabled={aiLoading || !data}
+            className="bg-violet-600 hover:bg-violet-700 text-white"
+            data-testid="generate-ai-btn"
+          >
+            {aiLoading ? (
+              <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />Analysing...</>
+            ) : (
+              <><Sparkles className="w-3.5 h-3.5 mr-1.5" />{aiRecs.length > 0 ? "Regenerate" : "Generate Insights"}</>
+            )}
+          </Button>
+        </div>
+        {aiRecs.length === 0 ? (
+          <div className="text-center py-8 text-stone-500">
+            <Sparkles className="w-8 h-8 mx-auto mb-2 text-violet-300" />
+            <p className="text-xs">Click "Generate Insights" to get GPT-5.2 prescriptive actions — specific ways to improve cash flow, avoid shortfalls, and time payments better.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5" data-testid="ai-recs-list">
+            {aiRecs.map((r, i) => {
+              const KIND_STYLE = {
+                save_cost:     { icon: Shield,  color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+                boost_revenue: { icon: Boost,   color: "text-blue-600",    bg: "bg-blue-50 border-blue-200" },
+                timing:        { icon: Clock,   color: "text-amber-600",   bg: "bg-amber-50 border-amber-200" },
+                risk_alert:    { icon: AlertTriangle, color: "text-red-600", bg: "bg-red-50 border-red-200" },
+                efficiency:    { icon: Zap,     color: "text-violet-600",  bg: "bg-violet-50 border-violet-200" },
+              };
+              const style = KIND_STYLE[r.kind] || KIND_STYLE.efficiency;
+              const Icon = style.icon;
+              const PRI = { high: "bg-red-500 text-white", medium: "bg-amber-500 text-white", low: "bg-stone-400 text-white" };
+              return (
+                <div key={i} className={`${style.bg} border rounded-lg p-3 relative`} data-testid={`ai-rec-${i}`}>
+                  <div className="flex items-start gap-2">
+                    <Icon className={`w-4 h-4 flex-shrink-0 mt-0.5 ${style.color}`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <h4 className="text-xs font-bold text-stone-800">{r.title}</h4>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Badge className={`${PRI[r.priority] || PRI.medium} text-[8px] uppercase`}>{r.priority || "med"}</Badge>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-stone-600 leading-snug">{r.rationale}</p>
+                      {r.impact && <p className="text-[11px] font-mono font-bold mt-1.5 text-stone-800">{r.impact}</p>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

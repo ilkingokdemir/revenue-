@@ -1,30 +1,26 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 72+ Modules | Mobile Responsive | 129 Test Iterations (100%)
+## 73+ Modules | Mobile Responsive | 130 Test Iterations (100%)
 
-### NEW (Iter 129): Payroll Management + Expense Management
+### NEW (Iter 130): Cash Flow Forecast — The CFO Dashboard
 
-**Payroll Management (4-tab UI)**
-- **Earned Salaries** — auto-computed from `shifts` collection × ROLE_RATES (receptionist £50, housekeeper £80, maintenance £100, manager £120, admin £150 per day)
-- **Payroll Runs** — monthly snapshot with lifecycle draft → approved → paid; auto-marks linked cash advances as repaid on "mark paid"
-- **Adjustments** — bonus/overtime/commission/benefit (+) or deduction/tax (−); aggregated into Net
-- **Cash Advances** — request → approve/reject → mark repaid; outstanding total deducted from next earnings
-- KPIs: Staff, Gross, Adjustments, Advances, Net Payable
-- Backend: `/api/payroll/earnings`, `/runs[/{id}/approve|mark-paid]`, `/adjustments`, `/advances[/{id}/approve|reject|mark-repaid]`
+**Cash Flow Forecast**
+- Period selector 30/60/90 days forward from today
+- Configurable opening balance (debounced input)
+- **Inflows**: confirmed future bookings (on check_in date) + recurring invoices
+- **Outflows**: recurring expenses (on next_due) + manually-dated future expenses + payroll estimate (avg of last 3 approved/paid runs, posted on last day of each calendar month)
+- **KPIs**: Opening, Total Inflows, Total Outflows, Ending Balance, Lowest Balance (with at-risk flag when negative)
+- **Charts** (Recharts): Area chart of projected running balance with zero reference line; stacked bar of daily in/out
+- **Events table**: Top 8 days by cash magnitude, expandable to see individual line items (booking name, recurring template, payroll estimate, expense)
+- Endpoint: `GET /api/finance/cash-flow-forecast/{pid}?days=30|60|90&opening_balance=N` — single aggregator call, zero N+1
 
-**Expense Management (3-tab UI)**
-- **Expenses** — 9 default categories (utilities, supplies, maintenance, marketing, salaries, rent, food, tech, other), vendor/method/receipt URL, category-color pills with monthly spend
-- **Recurring** — templates with weekly/biweekly/monthly/quarterly/annual frequency, auto-advance `next_due`, "Post Now" on due items, "Run All Due" batch, due count badge in header
-- **Categories & Budgets** — monthly budget per category, usage bar (green <80% / amber 80-100% / red >100%)
-- KPIs: Total Spent, Transactions, Avg/Expense, Recurring count
-- Backend: `/api/expenses[/{id}]`, `/expenses/categories/{pid}[/{cat}/budget]`, `/expenses/recurring[/{id}/post]`, `/run-due`
-
+### Iter 129: Payroll + Expense Management
 ### Iter 128: Compliance Register + Laundry Management
 ### Iter 127: Shift Scheduler + Reception Report + Pass Over Duties
-### Previously (≤Iter 126): Enhanced Dashboard, Reports Hub, Finance P&L, AI Weekly Digest, AI Upsell Engine, Competitor Rate Automation, Demand Radar, Compset, Price Alerts, Gantt Booking Calendar, AI Auto-Respond, OTA Sync, SEO Meta Tags, Digital Check-in/Folio, Displacement Analysis, LOS Optimizer, Mobile Companion + 65 more.
+### Previously (≤Iter 126): Enhanced Dashboard, Reports Hub, Finance P&L, AI Weekly Digest (GPT-5.2), AI Upsell Engine, Competitor Rate Automation, Demand Radar, Compset, Price Alerts, Gantt Booking Calendar, AI Auto-Respond, OTA Sync, SEO Meta Tags, Digital Check-in/Folio, Displacement Analysis, LOS Optimizer, Mobile Companion + 65 more.
 
-## Complete Feature Set (72+ modules)
-Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
+## Complete Feature Set (73+ modules)
+Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
 - User Contracts & granular Roles/Permissions
@@ -37,7 +33,7 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 - Rate Structure / OTA mapping configurations
 
 ## Refactor (low priority)
-- Split `/app/frontend/src/components/dashboard/` (94+ files) into `/operations`, `/revenue`, `/finance`, `/guest`
+- Split `/app/frontend/src/components/dashboard/` (95+ files) into `/operations`, `/revenue`, `/finance`, `/guest`
 
 ## Architecture: React + Tailwind + Shadcn, FastAPI + MongoDB, GPT-5.2, Stripe, Resend
-## Testing: 129 iterations, 100% pass rate
+## Testing: 130 iterations, 100% pass rate

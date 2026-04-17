@@ -75,6 +75,7 @@ from routes.revenue_exports import create_revenue_exports_router
 from routes.market_robot import create_market_robot_router
 from routes.dynamic_pricing import create_dynamic_pricing_router
 from routes.event_intelligence import create_event_intelligence_router
+from routes.parity_analysis import create_parity_analysis_router
 
 # Import extracted modules
 from models import (
@@ -424,6 +425,8 @@ api_router.include_router(dynamic_pricing_router)
 
 event_intelligence_router = create_event_intelligence_router(db, require_roles)
 api_router.include_router(event_intelligence_router)
+parity_analysis_router = create_parity_analysis_router(db, require_roles)
+api_router.include_router(parity_analysis_router)
 
 app.include_router(api_router)
 

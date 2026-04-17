@@ -1,23 +1,17 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | Mobile Responsive | 116 Test Iterations (100%)
+## 30+ Modules | Mobile Responsive | 117 Test Iterations (100%)
 
-### Smart Event Intelligence (365-Day Full Year Scanning)
-- **Hotel Demand Score (HDS 0-100)** — AI determines which events actually fill hotels
-- **Smart examples from London scan**:
-  - Arsenal vs Tottenham (local derby, 60k): HDS 15 → MINIMAL → no price boost (fans go home)
-  - UEFA Champions League Final: HDS 92 → CRITICAL → +45% (international fans need hotels)
-  - Wimbledon: HDS 65 → HIGH → +30% (global visitors)
-  - NFL London: HDS 68 → HIGH → +30% (US/European travelers)
-  - London Marathon: HDS 85 → CRITICAL → +45% (runners + supporters stay 1-3 nights)
-  - Notting Hill Carnival: HDS 22 → LOW → +5% (mostly local day-trippers)
-  - Boat Race: HDS 18 → MINIMAL → 0% (regional day-trippers)
-- **Rescan Full Year** button: Clears old events, does fresh 365-day smart scan
-- **Auto-scanner**: Events scanned every 2 hours, auto-reprice with HDS-based boosts
-- Factors: visitor_origin, is_evening, is_multi_day, event type, team quality
+### NEW: Revenue Intelligence Suite (4 Features)
+1. **Booking Pace & Pickup Velocity** — This year vs last year comparison, 24h pickup rate, velocity change alerts, pace chart (cyan=this year, grey=last year), day range selector (7/14/30/60/90)
+2. **Revenue Forecast Engine** — AI-projected Revenue, ADR, Occupancy, RevPAR with YoY comparison. Monthly revenue bars. Event-aware forecasting. Range: 30/60/90/180/365 days.
+3. **Rate Recommendation Actions** — Daily AI to-do list: "Increase Jun 15 by £22 (demand spike)". One-click Accept per item + Accept All bulk button. Priority: critical/high/medium/low. Reasons shown per recommendation.
+4. **What-If Simulator** — Test rate changes before committing. Input: % change + date range. Quick presets (-20% to +30%). Output: Current vs Projected comparison (Revenue, Occupancy, ADR, Rooms). Verdict: GO AHEAD / NOT RECOMMENDED / PROCEED WITH CAUTION.
 
-### Market Demand Dashboard
-- 8 Time Ranges, 3-Column ADR/Occ, Occupancy & Pickup, Recent Bookings
-- Competitive Landscape, Demand Heatmap, Rate Grid
+### Revenue Sidebar (30+ modules)
+INTELLIGENCE: Market Robot (11 sub-tabs), Booking Pace, Revenue Forecast, Rate Actions, What-If Simulator, Historical Analysis, Forecasting, Analytics, Competitors
+PRICING: AI Dynamic Pricing (365-day, 10-factor), Rate Calendar, Pricing Strategy, Smart Pricing, Approvals  
+DISTRIBUTION: Channel Manager (9 OTAs), Segments, Parity, Overbooking
+FINANCE: Profit OS, Reports & Export, Rate Resolver
 
-## Testing: 116 iterations, 100% pass rate
+## Testing: 117 iterations, 100% pass rate

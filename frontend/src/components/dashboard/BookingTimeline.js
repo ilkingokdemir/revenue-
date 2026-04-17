@@ -50,6 +50,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [folio, setFolio] = useState(null);
   const [showAddCharge, setShowAddCharge] = useState(false);
   const [detailTab, setDetailTab] = useState("info");
+  const [upsells, setUpsells] = useState(null);
   const scrollRef = useRef(null);
 
   const pid = activePropertyId || "all";
@@ -79,10 +80,31 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     setDetailTab("info");
     setFolio(null);
     setShowAddCharge(false);
+    setUpsells(null);
     try {
       const { data: d } = await axios.get(`${API}/bookings/timeline/${pid}/detail/${bookingId}`);
       setDetailData(d);
     } catch { /* silent */ }
+  };
+
+  const loadUpsells = async (bookingId) => {
+    try {
+      const { data: d } = await axios.get(`${API}/revenue/upsell/${bookingId}`);
+      setUpsells(d);
+    } catch { /* silent */ }
+  };
+
+  const acceptUpsell = async (suggestion) => {
+    if (!selectedBooking) return;
+    try {
+      await axios.post(`${API}/revenue/upsell/${selectedBooking}/accept`, {
+        type: suggestion.type, price: suggestion.price, description: suggestion.title,
+        target_room_type: suggestion.target_room_type || "",
+      });
+      toast.success(`Upsell accepted: ${suggestion.title}`);
+      loadFolio(selectedBooking);
+      loadUpsells(selectedBooking);
+    } catch { toast.error("Failed"); }
   };
 
   const loadFolio = async (bookingId) => {
@@ -463,9 +485,10 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                 {[
                   { id: "info", label: "Info" },
                   { id: "folio", label: "Folio" },
+                  { id: "upsell", label: "Upsell" },
                   { id: "actions", label: "Actions" },
                 ].map(t => (
-                  <button key={t.id} onClick={() => { setDetailTab(t.id); if (t.id === "folio" && !folio) loadFolio(detailData.id); }}
+                  <button key={t.id} onClick={() => { setDetailTab(t.id); if (t.id === "folio" && !folio) loadFolio(detailData.id); if (t.id === "upsell" && !upsells) loadUpsells(detailData.id); }}
                     data-testid={`detail-tab-${t.id}`}
                     className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-md ${detailTab === t.id ? "bg-white text-stone-800 shadow-sm" : "text-stone-500"}`}>
                     {t.label}
@@ -597,6 +620,33 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                   )}
                 </>) : (
                   <div className="text-center py-8 text-stone-400"><RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2" />Loading folio...</div>
+                )}
+              </div>
+              </>)}
+
+              {/* UPSELL TAB */}
+              {detailTab === "upsell" && (<>
+              <div className="space-y-3" data-testid="upsell-tab">
+                {upsells ? (<>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-stone-500">Upsell potential: <strong className="text-stone-800">{`£${upsells.total_potential}`}</strong></p>
+                    <Badge className="bg-violet-100 text-violet-700 text-[10px]">{upsells.suggestions?.length} options</Badge>
+                  </div>
+                  {upsells.suggestions?.map(s => (
+                    <div key={s.id} className={`border rounded-xl p-3 flex items-center justify-between ${s.type === "room_upgrade" ? "border-amber-200 bg-amber-50" : s.type === "addon" ? "border-stone-200 bg-white" : "border-blue-200 bg-blue-50"}`}>
+                      <div>
+                        <p className="text-xs font-bold text-stone-800">{s.title}</p>
+                        <p className="text-[10px] text-stone-500">{s.description}</p>
+                        <p className="text-xs font-bold text-emerald-600 mt-0.5">{s.price_label}</p>
+                      </div>
+                      <button onClick={() => acceptUpsell(s)} data-testid={`accept-upsell-${s.id}`}
+                        className="px-2.5 py-1.5 text-[10px] font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg flex-shrink-0">
+                        Accept
+                      </button>
+                    </div>
+                  ))}
+                </>) : (
+                  <div className="text-center py-8 text-stone-400"><RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2" />Loading upsells...</div>
                 )}
               </div>
               </>)}

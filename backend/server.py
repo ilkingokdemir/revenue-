@@ -87,6 +87,9 @@ from routes.guest_services import create_guest_services_router
 from routes.displacement import create_displacement_router
 from routes.los_optimizer import create_los_optimizer_router
 from routes.mobile_api import create_mobile_router
+from routes.weekly_digest import create_weekly_digest_router
+from routes.upsell_engine import create_upsell_router
+from routes.rate_scraper import create_rate_scraper_router
 
 # Import extracted modules
 from models import (
@@ -460,6 +463,12 @@ los_optimizer_router = create_los_optimizer_router(db, require_roles)
 api_router.include_router(los_optimizer_router)
 mobile_router = create_mobile_router(db, require_roles)
 api_router.include_router(mobile_router)
+weekly_digest_router = create_weekly_digest_router(db, require_roles, LlmChat, UserMessage)
+api_router.include_router(weekly_digest_router)
+upsell_router = create_upsell_router(db, require_roles, LlmChat, UserMessage)
+api_router.include_router(upsell_router)
+rate_scraper_router = create_rate_scraper_router(db, require_roles)
+api_router.include_router(rate_scraper_router)
 
 app.include_router(api_router)
 

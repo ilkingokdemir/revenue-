@@ -1,0 +1,117 @@
+{
+  "summary": "Iteration 115 - Hotel Demand Score (HDS) Event Intelligence System. All 10 backend API tests passed. Frontend UI fully verified: HDS-based KPI cards (Critical/High/Moderate/Low/Total), Smart Hotel Demand Scoring info box (dark theme), impact legend with HDS ranges and price boosts, manual add form with HDS field and Visitor Origin dropdown, event cards showing HDS scores.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "backend_login": {
+      "status": "PASS",
+      "endpoint": "POST /api/auth/login",
+      "credentials": "admin@hotelbox.com / HotelAdmin2026!"
+    },
+    "backend_add_local_event_minimal_impact": {
+      "status": "PASS",
+      "endpoint": "POST /api/revenue/events/all/add",
+      "test_data": {"hotel_demand_score": 15, "visitor_origin": "local"},
+      "result": "impact='minimal', prices_adjusted=0"
+    },
+    "backend_add_international_event_critical_impact": {
+      "status": "PASS",
+      "endpoint": "POST /api/revenue/events/all/add",
+      "test_data": {"hotel_demand_score": 95, "visitor_origin": "international"},
+      "result": "impact='critical', prices_adjusted>0"
+    },
+    "backend_get_events_hds_counts": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/events/all",
+      "counts_returned": ["critical", "high", "moderate", "low", "minimal", "mega", "large", "medium", "small", "total"]
+    },
+    "backend_events_store_hds_fields": {
+      "status": "PASS",
+      "fields_verified": ["hotel_demand_score", "visitor_origin", "is_evening", "is_multi_day", "reasoning", "estimated_hotel_nights"]
+    },
+    "backend_dynamic_pricing_hds_breakdown": {
+      "status": "PASS",
+      "endpoint": "POST /api/revenue/dynamic-pricing/all/calculate",
+      "breakdown_format": "+{pct}% ({event_name} | HDS:{score} | {visitor_origin})"
+    },
+    "backend_hds_impact_level_mapping": {
+      "status": "PASS",
+      "mappings": {
+        "HDS 80+": "critical",
+        "HDS 60-79": "high",
+        "HDS 40-59": "moderate",
+        "HDS 20-39": "low",
+        "HDS 0-19": "minimal"
+      }
+    },
+    "backend_legacy_backward_compat": {
+      "status": "PASS",
+      "legacy_map": {"mega": "critical", "large": "high", "medium": "moderate", "small": "low"}
+    },
+    "backend_auth_required": {
+      "status": "PASS",
+      "endpoints_protected": ["GET /api/revenue/events/{property_id}", "POST /api/revenue/events/{property_id}/add"]
+    },
+    "frontend_kpi_cards": {
+      "status": "PASS",
+      "cards": ["Critical Demand (HDS 80+)", "High Demand (HDS 60-79)", "Moderate (HDS 40-59)", "Low Impact (HDS 20-39)", "Total Events"]
+    },
+    "frontend_smart_hds_info_box": {
+      "status": "PASS",
+      "theme": "dark (bg-stone-800)",
+      "content": "Hotel Demand Score (HDS 0-100) explanation"
+    },
+    "frontend_impact_legend": {
+      "status": "PASS",
+      "levels": ["Critical (HDS 80+): +45%", "High (HDS 60-79): +30%", "Moderate (HDS 40-59): +15%", "Low (HDS 20-39): +5%"]
+    },
+    "frontend_manual_add_form": {
+      "status": "PASS",
+      "fields": ["Hotel Demand Score (0-100)", "Visitor Origin dropdown (international/national/regional/local)"]
+    },
+    "frontend_event_cards_hds_display": {
+      "status": "PASS",
+      "display": "HDS: {score} and visitor_origin shown on event cards"
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration115_hds_event_intelligence.py",
+    "/app/test_reports/pytest/pytest_iteration115_hds_events.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend correctly implements HDS-based impact level mapping (80+→critical, 60-79→high, 40-59→moderate, 20-39→low, 0-19→minimal)",
+    "Legacy events (mega/large/medium/small) are properly mapped to new levels via LEGACY_MAP for backward compatibility",
+    "Minimal impact events (HDS < 20) correctly result in 0 rate adjustments",
+    "Dynamic pricing breakdown now includes HDS and visitor_origin in event factor description",
+    "Frontend KPI cards correctly show HDS-based labels with sub-text explaining HDS ranges",
+    "Smart Hotel Demand Scoring info box uses dark theme (bg-stone-800) with cyan accent text",
+    "Manual add form includes Hotel Demand Score field and Visitor Origin dropdown",
+    "Event cards display HDS score and visitor_origin instead of just percentage boost"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration115_hds_event_intelligence.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Created test events: TEST_Arsenal vs Tottenham Local Derby (HDS:15, local, minimal), TEST_UEFA Champions League Final (HDS:95, international, critical), TEST_HDS_Fields_Check (HDS:75, national, high), TEST_Champions League Match (HDS:85, international, critical), and HDS level mapping tests (HDS 10-95)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 115 tested the REBUILT Event Intelligence with Hotel Demand Score (HDS) system. Key changes: Events are now scored by HDS (0-100) based on how many attendees actually need hotel rooms, not just raw attendance. Impact levels: critical (HDS 80+, +45%), high (60-79, +30%), moderate (40-59, +15%), low (20-39, +5%), minimal (0-19, 0%). Legacy events from before HDS still exist with old impact levels (mega/large/medium/small) which are mapped via LEGACY_MAP. Navigation: Revenue > Market Robot > Event Intelligence tab. The manual add form now has Hotel Demand Score field and Visitor Origin dropdown. Event cards show HDS score and visitor_origin.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": ["Event scanning via GPT-5.2 uses real Emergent LLM Key. Manual add uses HDS scoring directly."]
+  }
+}

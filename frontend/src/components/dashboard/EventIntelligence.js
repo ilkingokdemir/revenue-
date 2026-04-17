@@ -103,11 +103,11 @@ export const EventIntelligence = ({ propertyId }) => {
       {/* KPI Cards */}
       <div className="grid grid-cols-5 gap-3" data-testid="event-kpis">
         {[
-          { label: "Mega Events", value: counts.mega || 0, sub: "50,000+ attendance", cls: "text-red-500" },
-          { label: "Large Events", value: counts.large || 0, sub: "20,000-50,000", cls: "text-orange-500" },
-          { label: "Medium Events", value: counts.medium || 0, sub: "5,000-20,000", cls: "text-amber-500" },
-          { label: "Small Events", value: counts.small || 0, sub: "1,000-5,000", cls: "text-blue-500" },
-          { label: "Total Events", value: counts.total || 0, sub: "Next 90 days", cls: "text-violet-600" },
+          { label: "Critical Demand", value: counts.critical || counts.mega || 0, sub: "HDS 80+ (fills hotels)", cls: "text-red-500" },
+          { label: "High Demand", value: counts.high || counts.large || 0, sub: "HDS 60-79 (strong impact)", cls: "text-orange-500" },
+          { label: "Moderate", value: counts.moderate || counts.medium || 0, sub: "HDS 40-59", cls: "text-amber-500" },
+          { label: "Low Impact", value: counts.low || counts.small || 0, sub: "HDS 20-39", cls: "text-blue-500" },
+          { label: "Total Events", value: counts.total || 0, sub: "Hotel-demand events only", cls: "text-violet-600" },
         ].map(k => (
           <div key={k.label} className="bg-white border border-stone-200 rounded-2xl p-4 text-center">
             <p className={`text-2xl font-bold ${k.cls}`}>{k.value}</p>
@@ -115,6 +115,12 @@ export const EventIntelligence = ({ propertyId }) => {
             <p className="text-[9px] text-stone-300">{k.sub}</p>
           </div>
         ))}
+      </div>
+
+      {/* Smart Hotel Demand Info */}
+      <div className="bg-stone-800 rounded-xl p-4 text-white">
+        <p className="text-xs font-bold text-cyan-300 mb-1">Smart Hotel Demand Scoring</p>
+        <p className="text-[10px] text-white/50 leading-relaxed">Events scored by <strong>Hotel Demand Score (HDS 0-100)</strong> — not just attendance. A 60k local derby scores LOW (fans go home). A 20k UEFA match scores HIGH (away fans need hotels). Evening events, multi-day festivals, touring concerts score highest.</p>
       </div>
 
       {/* Manual Add Form */}
@@ -133,6 +139,13 @@ export const EventIntelligence = ({ propertyId }) => {
               </SelectContent>
             </Select>
             <Input type="number" value={form.estimated_attendance} onChange={e => setForm(p => ({ ...p, estimated_attendance: Number(e.target.value) }))} placeholder="Expected attendance" data-testid="event-form-attendance" />
+            <Input type="number" value={form.hotel_demand_score || ""} onChange={e => setForm(p => ({ ...p, hotel_demand_score: Number(e.target.value) }))} placeholder="Hotel Demand Score (0-100)" data-testid="event-form-hds" />
+            <Select value={form.visitor_origin || "regional"} onValueChange={v => setForm(p => ({ ...p, visitor_origin: v }))}>
+              <SelectTrigger><SelectValue placeholder="Visitor Origin" /></SelectTrigger>
+              <SelectContent>
+                {["international","national","regional","local"].map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="mt-3">
             <Input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Description (optional)" />
@@ -142,7 +155,7 @@ export const EventIntelligence = ({ propertyId }) => {
             <button onClick={addManual} className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-xl text-sm font-semibold" data-testid="event-form-save">Add & Auto-Price</button>
           </div>
           <div className="mt-3 bg-stone-50 rounded-lg p-3">
-            <p className="text-[10px] text-stone-400"><strong>Auto-pricing:</strong> Adding an event automatically adjusts rates for the event date + 1 day before/after. Mega events (+40%), Large (+25%), Medium (+12%), Small (+5%).</p>
+            <p className="text-[10px] text-stone-400"><strong>Smart pricing:</strong> Events are scored by Hotel Demand Score (HDS). Critical (HDS 80+): +45%, High (60-79): +30%, Moderate (40-59): +15%, Low (20-39): +5%. Local events where fans go home get minimal/no boost.</p>
           </div>
         </div>
       )}
@@ -202,10 +215,11 @@ export const EventIntelligence = ({ propertyId }) => {
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className={`text-sm font-bold ${event.impact === "mega" ? "text-red-500" : event.impact === "large" ? "text-orange-500" : "text-amber-500"}`}>
-                          +{event.impact === "mega" ? 40 : event.impact === "large" ? 25 : event.impact === "medium" ? 12 : 5}%
+                        <p className={`text-sm font-bold ${event.impact === "mega" || event.impact === "critical" ? "text-red-500" : event.impact === "large" || event.impact === "high" ? "text-orange-500" : "text-amber-500"}`}>
+                          HDS: {event.hotel_demand_score || "—"}
                         </p>
-                        <p className="text-[10px] text-stone-400">price boost</p>
+                        <p className="text-[10px] text-stone-400">{event.visitor_origin || "—"}{event.is_evening ? " | evening" : ""}</p>
+                        {event.reasoning && <p className="text-[9px] text-stone-300 max-w-[180px] text-right">{event.reasoning}</p>}
                       </div>
                       <button onClick={() => remove(event.id)} className="text-stone-300 hover:text-red-500 p-1 transition-colors">
                         <Trash2 className="w-4 h-4" />
@@ -223,8 +237,8 @@ export const EventIntelligence = ({ propertyId }) => {
 };
 
 const IMPACT_LEVELS_DISPLAY = {
-  mega: { label: "Mega (50k+)", boost: 40, dot: "bg-red-500" },
-  large: { label: "Large (20k+)", boost: 25, dot: "bg-orange-500" },
-  medium: { label: "Medium (5k+)", boost: 12, dot: "bg-amber-400" },
-  small: { label: "Small (1k+)", boost: 5, dot: "bg-blue-400" },
+  critical: { label: "Critical (HDS 80+)", boost: 45, dot: "bg-red-500" },
+  high: { label: "High (HDS 60-79)", boost: 30, dot: "bg-orange-500" },
+  moderate: { label: "Moderate (HDS 40-59)", boost: 15, dot: "bg-amber-400" },
+  low: { label: "Low (HDS 20-39)", boost: 5, dot: "bg-blue-400" },
 };

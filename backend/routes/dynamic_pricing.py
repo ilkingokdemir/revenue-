@@ -146,24 +146,32 @@ def create_dynamic_pricing_router(db, require_roles):
                 price *= (1 + comp_adj / 100)
                 breakdown["competitor"] = f"{round(comp_adj)}% (comps {round(abs(diff_pct))}% lower)"
 
-        # 7. EVENT INTELLIGENCE adjustment
+        # 7. EVENT INTELLIGENCE adjustment (Hotel Demand Score based)
         if event_data:
             impact = event_data.get("impact", "")
             event_name = event_data.get("name", "Event")
-            attendance = event_data.get("estimated_attendance", 0)
-            if impact == "mega":
-                event_pct = 40
-            elif impact == "large":
-                event_pct = 25
-            elif impact == "medium":
-                event_pct = 12
-            elif impact == "small":
+            hds = int(event_data.get("hotel_demand_score", 0) or 0)
+            visitor_origin = event_data.get("visitor_origin", "unknown")
+
+            # Map legacy impacts to new system
+            legacy_map = {"mega": "critical", "large": "high", "medium": "moderate", "small": "low"}
+            impact = legacy_map.get(impact, impact)
+
+            # HDS-based pricing: smarter than flat attendance
+            if hds >= 80 or impact == "critical":
+                event_pct = 45
+            elif hds >= 60 or impact == "high":
+                event_pct = 30
+            elif hds >= 40 or impact == "moderate":
+                event_pct = 15
+            elif hds >= 20 or impact == "low":
                 event_pct = 5
             else:
                 event_pct = 0
+
             if event_pct > 0:
                 price *= (1 + event_pct / 100)
-                breakdown["event"] = f"+{event_pct}% ({event_name}, {attendance:,})"
+                breakdown["event"] = f"+{event_pct}% ({event_name} | HDS:{hds} | {visitor_origin})"
 
         # 8. AGGRESSIVENESS multiplier
         agg = float(strategy.get("aggressiveness", 1.0))

@@ -161,6 +161,9 @@ def create_revenue_advanced_router(db, require_roles):
 
     # ==================== SMART PRICING ====================
 
+    def _sp_impact_rank(impact):
+        return {"mega": 4, "large": 3, "medium": 2, "small": 1}.get(impact, 0)
+
     @router.get("/revenue/smart-pricing/{property_id}")
     async def smart_pricing(property_id: str,
                             current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -193,6 +196,26 @@ def create_revenue_advanced_router(db, require_roles):
         aggressiveness = strategy.get("aggressiveness", 1.0)
         mode = "Aggressive" if aggressiveness > 1.3 else "Conservative" if aggressiveness < 0.7 else "Balanced"
 
+        # Load events for event-aware pricing
+        events_list = await db.market_events.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(200)
+        event_map = {}
+        for ev in events_list:
+            ev_date = ev.get("date", "")
+            ev_end = ev.get("end_date", ev_date)
+            try:
+                start_d = datetime.strptime(ev_date, "%Y-%m-%d")
+                end_d = datetime.strptime(ev_end, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            d_iter = start_d - timedelta(days=1)
+            while d_iter <= end_d + timedelta(days=1):
+                ds_key = d_iter.strftime("%Y-%m-%d")
+                if ds_key not in event_map or _sp_impact_rank(ev.get("impact", "")) > _sp_impact_rank(event_map[ds_key].get("impact", "")):
+                    event_map[ds_key] = ev
+                d_iter += timedelta(days=1)
+
         # Price Evolution Forecast (30 days)
         evolution = []
         for i in range(30):
@@ -211,11 +234,16 @@ def create_revenue_advanced_router(db, require_roles):
             month_pct = float(monthly_adj.get(month_key, 0))
             # Apply lead time
             lt_pct = 0
-            if i <= 1: lt_pct = float(lead_time_adj.get("last_day", 0))
-            elif i <= 3: lt_pct = float(lead_time_adj.get("2_3_days", 0))
-            elif i <= 7: lt_pct = float(lead_time_adj.get("4_7_days", 0))
-            elif i <= 14: lt_pct = float(lead_time_adj.get("1_2_weeks", 0))
-            elif i <= 28: lt_pct = float(lead_time_adj.get("2_4_weeks", 0))
+            if i <= 1:
+                lt_pct = float(lead_time_adj.get("last_day", 0))
+            elif i <= 3:
+                lt_pct = float(lead_time_adj.get("2_3_days", 0))
+            elif i <= 7:
+                lt_pct = float(lead_time_adj.get("4_7_days", 0))
+            elif i <= 14:
+                lt_pct = float(lead_time_adj.get("1_2_weeks", 0))
+            elif i <= 28:
+                lt_pct = float(lead_time_adj.get("2_4_weeks", 0))
 
             # Calculate occupancy for the day
             booked = 0
@@ -228,20 +256,44 @@ def create_revenue_advanced_router(db, require_roles):
 
             # Occupancy-based adjustment
             occ_pct = 0
-            if occ >= 90: occ_pct = 40
-            elif occ >= 75: occ_pct = 20
-            elif occ >= 50: occ_pct = 0
-            elif occ >= 25: occ_pct = -15
-            else: occ_pct = -30
+            if occ >= 90:
+                occ_pct = 40
+            elif occ >= 75:
+                occ_pct = 20
+            elif occ >= 50:
+                occ_pct = 0
+            elif occ >= 25:
+                occ_pct = -15
+            else:
+                occ_pct = -30
 
-            total_adj = (1 + dow_pct / 100) * (1 + month_pct / 100) * (1 + lt_pct / 100) * (1 + occ_pct / 100) * aggressiveness
+            # Event-based adjustment
+            event_pct = 0
+            event_for_day = event_map.get(ds)
+            if event_for_day:
+                impact = event_for_day.get("impact", "")
+                if impact == "mega":
+                    event_pct = 40
+                elif impact == "large":
+                    event_pct = 25
+                elif impact == "medium":
+                    event_pct = 12
+                elif impact == "small":
+                    event_pct = 5
+
+            total_adj = (1 + dow_pct / 100) * (1 + month_pct / 100) * (1 + lt_pct / 100) * (1 + occ_pct / 100) * (1 + event_pct / 100) * aggressiveness
             recommended = max(min_price, min(max_price, round(base * total_adj, 2)))
 
-            evolution.append({
+            evo_entry = {
                 "date": ds, "day": d.day, "dow": d.strftime("%a"),
                 "recommended": recommended, "min_limit": min_price, "max_limit": max_price,
                 "occupancy": occ
-            })
+            }
+            if event_for_day:
+                evo_entry["event"] = event_for_day.get("name", "")
+                evo_entry["event_impact"] = event_for_day.get("impact", "")
+                evo_entry["event_boost"] = event_pct
+            evolution.append(evo_entry)
 
         # Recommendation Calendar (per room type, 7 days)
         rec_calendar = []
@@ -253,12 +305,22 @@ def create_revenue_advanced_router(db, require_roles):
                 ds = d.strftime("%Y-%m-%d")
                 dow_key = d.strftime("%a").lower()[:3]
                 dow_pct = float(dow_adj.get(dow_key, 0))
-                rec = round(base * (1 + dow_pct / 100) * aggressiveness, 2)
-                level = "HIGH" if rec > base * 1.1 else "LOW" if rec < base * 0.9 else "NORMAL"
-                days_data.append({
+                event_for_day = event_map.get(ds)
+                ev_pct = 0
+                if event_for_day:
+                    imp = event_for_day.get("impact", "")
+                    ev_pct = {"mega": 40, "large": 25, "medium": 12, "small": 5}.get(imp, 0)
+                rec = round(base * (1 + dow_pct / 100) * (1 + ev_pct / 100) * aggressiveness, 2)
+                level = "EVENT" if ev_pct > 0 else "HIGH" if rec > base * 1.1 else "LOW" if rec < base * 0.9 else "NORMAL"
+                day_entry = {
                     "date": ds, "dow": d.strftime("%a"), "day": d.day,
                     "price": rec, "level": level, "is_today": i == 0
-                })
+                }
+                if event_for_day:
+                    day_entry["event"] = event_for_day.get("name", "")
+                    day_entry["event_impact"] = event_for_day.get("impact", "")
+                    day_entry["event_boost"] = ev_pct
+                days_data.append(day_entry)
             rec_calendar.append({
                 "room_type_id": rt.get("id", ""),
                 "room_type_name": rt.get("name", "Standard"),
@@ -282,8 +344,29 @@ def create_revenue_advanced_router(db, require_roles):
         occ_forecast = round(sum(e["occupancy"] for e in evolution[:7]) / 7)
         projected_rev = round(avg_adr * total_rooms * 30 * (occ_forecast / 100), 2)
 
-        # AI Insights
+        # Count event days
+        event_days_30 = sum(1 for e in evolution if e.get("event"))
+        upcoming_events = sorted(
+            [ev for ev in events_list if ev.get("date", "") >= today_str],
+            key=lambda x: x.get("date", "")
+        )[:5]
+
+        # AI Insights (now event-aware)
         insights = []
+        mega_events = [e for e in evolution[:14] if e.get("event_impact") == "mega"]
+        large_events = [e for e in evolution[:14] if e.get("event_impact") == "large"]
+        if mega_events:
+            names = list(set(e.get("event", "") for e in mega_events))[:3]
+            insights.append({
+                "type": "demand", "icon": "zap", "title": f"Mega Events Detected ({len(mega_events)} days)",
+                "desc": f"Upcoming: {', '.join(names)}. Prices boosted +40% for these dates. Expect max demand."
+            })
+        if large_events:
+            names = list(set(e.get("event", "") for e in large_events))[:3]
+            insights.append({
+                "type": "demand", "icon": "zap", "title": f"Large Events ({len(large_events)} days)",
+                "desc": f"Events: {', '.join(names)}. Prices boosted +25% for these dates."
+            })
         high_occ_days = [e for e in evolution[:7] if e["occupancy"] >= 70]
         if high_occ_days:
             insights.append({
@@ -313,11 +396,19 @@ def create_revenue_advanced_router(db, require_roles):
                 "projected_revenue": projected_rev,
                 "strategy_mode": mode,
                 "aggressiveness": aggressiveness,
+                "event_days": event_days_30,
             },
             "price_evolution": evolution,
             "recommendation_calendar": rec_calendar,
             "ai_insights": insights,
             "room_types": [{"id": r.get("id", ""), "name": r.get("name", "")} for r in room_types],
+            "upcoming_events": [{
+                "name": ev.get("name", ""),
+                "date": ev.get("date", ""),
+                "impact": ev.get("impact", ""),
+                "estimated_attendance": ev.get("estimated_attendance", 0),
+                "category": ev.get("category", ""),
+            } for ev in upcoming_events],
         }
 
     @router.post("/revenue/smart-pricing/{property_id}/recalculate")
@@ -328,6 +419,27 @@ def create_revenue_advanced_router(db, require_roles):
             await db.properties.find_one({"id": property_id}, {"_id": 0})]
         props = [p for p in props if p]
         now = datetime.now(timezone.utc)
+
+        # Load events for event-aware recalculation
+        events_list = await db.market_events.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(200)
+        event_map = {}
+        for ev in events_list:
+            ev_date = ev.get("date", "")
+            ev_end = ev.get("end_date", ev_date)
+            try:
+                start_d = datetime.strptime(ev_date, "%Y-%m-%d")
+                end_d = datetime.strptime(ev_end, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            d_iter = start_d - timedelta(days=1)
+            while d_iter <= end_d + timedelta(days=1):
+                ds_key = d_iter.strftime("%Y-%m-%d")
+                if ds_key not in event_map or _sp_impact_rank(ev.get("impact", "")) > _sp_impact_rank(event_map[ds_key].get("impact", "")):
+                    event_map[ds_key] = ev
+                d_iter += timedelta(days=1)
+
         count = 0
         for p in props:
             pid = p.get("id", "")
@@ -340,8 +452,16 @@ def create_revenue_advanced_router(db, require_roles):
                     ds = d.strftime("%Y-%m-%d")
                     dow_key = d.strftime("%a").lower()[:3]
                     dow_pct = float(strategy.get("dow_adjustments", {}).get(dow_key, 0))
-                    rec = round(base * (1 + dow_pct / 100), 2)
+                    event_for_day = event_map.get(ds)
+                    ev_pct = 0
+                    if event_for_day:
+                        imp = event_for_day.get("impact", "")
+                        ev_pct = {"mega": 40, "large": 25, "medium": 12, "small": 5}.get(imp, 0)
+                    rec = round(base * (1 + dow_pct / 100) * (1 + ev_pct / 100), 2)
                     if rec != base:
+                        reason = f"DOW: {dow_pct}%"
+                        if event_for_day:
+                            reason += f" | Event: {event_for_day.get('name', '')} (+{ev_pct}%)"
                         await db.revenue_approvals.insert_one({
                             "id": str(uuid.uuid4())[:8],
                             "property_id": pid,
@@ -350,12 +470,15 @@ def create_revenue_advanced_router(db, require_roles):
                             "date": ds,
                             "current_rate": base,
                             "recommended_rate": rec,
+                            "reason": reason,
+                            "event": event_for_day.get("name") if event_for_day else None,
+                            "event_impact": event_for_day.get("impact") if event_for_day else None,
                             "status": "draft",
                             "created_at": now.isoformat(),
                             "updated_at": now.isoformat(),
                         })
                         count += 1
-        return {"message": f"Recalculated. {count} new recommendations generated.", "count": count}
+        return {"message": f"Recalculated. {count} new recommendations generated (event-aware).", "count": count}
 
     # ==================== APPROVALS ====================
 

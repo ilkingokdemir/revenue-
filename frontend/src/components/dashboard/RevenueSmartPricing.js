@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Zap, RefreshCw, TrendingUp, Activity, AlertTriangle, Info } from "lucide-react";
+import { Zap, RefreshCw, TrendingUp, Activity, AlertTriangle, Info, PartyPopper, Users } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -31,7 +31,7 @@ export const RevenueSmartPricing = ({ propertyId }) => {
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><Activity className="w-5 h-5 animate-spin mr-2" />Loading Smart Pricing...</div>;
   if (!data) return null;
 
-  const { kpis, price_evolution, recommendation_calendar, ai_insights, room_types } = data;
+  const { kpis, price_evolution, recommendation_calendar, ai_insights, room_types, upcoming_events } = data;
 
   // SVG Chart for Price Evolution
   const chartW = 900, chartH = 200, padL = 50, padR = 20, padT = 20, padB = 30;
@@ -68,7 +68,7 @@ export const RevenueSmartPricing = ({ propertyId }) => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="rev-sp-kpis">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="rev-sp-kpis">
         <div className="bg-white border border-stone-200 rounded-2xl p-5">
           <p className="text-[10px] text-stone-400 font-medium uppercase tracking-wider">Avg. Daily Rate (30D)</p>
           <div className="flex items-center gap-2 mt-1">
@@ -99,7 +99,33 @@ export const RevenueSmartPricing = ({ propertyId }) => {
           <p className="text-2xl font-bold text-violet-700 mt-1">{kpis.strategy_mode}</p>
           <p className="text-[10px] text-stone-400 mt-1">Aggressiveness Factor: {kpis.aggressiveness}x</p>
         </div>
+        <div className="bg-white border border-red-100 rounded-2xl p-5">
+          <p className="text-[10px] text-red-500 font-medium uppercase tracking-wider">Event Impact Days</p>
+          <p className="text-2xl font-bold text-red-500 mt-1">{kpis.event_days || 0}</p>
+          <p className="text-[10px] text-stone-400 mt-1">Days with event-boosted prices</p>
+        </div>
       </div>
+
+      {/* Upcoming Events Banner */}
+      {upcoming_events && upcoming_events.length > 0 && (
+        <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-xl p-4" data-testid="sp-events-banner">
+          <div className="flex items-center gap-2 mb-2">
+            <PartyPopper className="w-4 h-4 text-red-500" />
+            <span className="font-bold text-red-800 text-sm">Event-Aware Smart Pricing Active</span>
+            <Badge className="bg-red-100 text-red-700 text-[10px]">{upcoming_events.length} events tracked</Badge>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {upcoming_events.slice(0, 5).map((ev, i) => (
+              <span key={i} className={`text-[10px] font-semibold px-2 py-1 rounded-lg ${
+                ev.impact === "mega" ? "bg-red-100 text-red-700" : ev.impact === "large" ? "bg-orange-100 text-orange-700" : "bg-amber-100 text-amber-700"
+              }`}>
+                {ev.name} ({new Date(ev.date + "T00:00:00").toLocaleDateString("en", { month: "short", day: "numeric" })})
+                {ev.impact === "mega" ? " +40%" : ev.impact === "large" ? " +25%" : ev.impact === "medium" ? " +12%" : " +5%"}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Price Evolution Chart */}
       <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="rev-price-evolution">
@@ -116,6 +142,7 @@ export const RevenueSmartPricing = ({ propertyId }) => {
           <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-violet-600 inline-block" /> Recommended Rate</span>
           <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-stone-300 inline-block border-dashed" /> Min Limit</span>
           <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-stone-300 inline-block" /> Max Limit</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500 inline-block" /> Event Day</span>
         </div>
         <div className="overflow-x-auto">
           <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ minWidth: "700px" }}>
@@ -138,9 +165,12 @@ export const RevenueSmartPricing = ({ propertyId }) => {
             {/* Data points */}
             {prices.map((p, i) => (
               <g key={i}>
-                <circle cx={scaleX(i)} cy={scaleY(p)} r="3" fill="#7c3aed" />
+                <circle cx={scaleX(i)} cy={scaleY(p)} r={price_evolution[i]?.event ? "5" : "3"} fill={price_evolution[i]?.event ? "#ef4444" : "#7c3aed"} />
                 {(i % 3 === 0 || i === prices.length - 1) && (
-                  <text x={scaleX(i)} y={scaleY(p) - 8} textAnchor="middle" className="text-[8px]" fill="#7c3aed" fontWeight="600">£{Math.round(p)}</text>
+                  <text x={scaleX(i)} y={scaleY(p) - 8} textAnchor="middle" className="text-[8px]" fill={price_evolution[i]?.event ? "#ef4444" : "#7c3aed"} fontWeight="600">£{Math.round(p)}</text>
+                )}
+                {price_evolution[i]?.event && (
+                  <text x={scaleX(i)} y={scaleY(p) + 14} textAnchor="middle" className="text-[6px]" fill="#ef4444" fontWeight="600">+{price_evolution[i].event_boost}%</text>
                 )}
               </g>
             ))}
@@ -160,7 +190,7 @@ export const RevenueSmartPricing = ({ propertyId }) => {
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-stone-800">Recommendation Calendar</h3>
             <div className="flex items-center gap-3 text-xs text-stone-400">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 border border-red-200" /> High</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 border border-red-200" /> High / Event</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-white border border-stone-200" /> Normal</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-50 border border-emerald-200" /> Low</span>
             </div>
@@ -189,12 +219,13 @@ export const RevenueSmartPricing = ({ propertyId }) => {
                     </td>
                     {rc.days.map(d => (
                       <td key={d.date} className={`px-2 py-2 text-center ${
-                        d.level === "HIGH" ? "bg-red-50" : d.level === "LOW" ? "bg-emerald-50" : ""
+                        d.level === "EVENT" ? "bg-red-50" : d.level === "HIGH" ? "bg-red-50" : d.level === "LOW" ? "bg-emerald-50" : ""
                       }`}>
                         <div className="font-bold text-stone-800 text-sm">{cur(d.price)}</div>
                         <div className={`text-[9px] font-semibold mt-0.5 ${
-                          d.level === "HIGH" ? "text-red-500" : d.level === "LOW" ? "text-emerald-600" : "text-stone-400"
-                        }`}>{d.level}</div>
+                          d.level === "EVENT" ? "text-red-500" : d.level === "HIGH" ? "text-red-500" : d.level === "LOW" ? "text-emerald-600" : "text-stone-400"
+                        }`}>{d.level}{d.event_boost ? ` +${d.event_boost}%` : ""}</div>
+                        {d.event && <div className="text-[8px] text-red-400 truncate max-w-[80px] mx-auto" title={d.event}>{d.event}</div>}
                       </td>
                     ))}
                   </tr>

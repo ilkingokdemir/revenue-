@@ -360,7 +360,7 @@ def create_market_robot_router(db, require_roles):
     @router.get("/revenue/market-robot/{property_id}/supply")
     async def get_supply_data(property_id: str, days: int = 30,
                               current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Get latest supply snapshots."""
+        """Get latest supply snapshots with event intelligence overlay."""
         now = datetime.now(timezone.utc)
         cutoff = (now - timedelta(days=1)).isoformat()
 
@@ -375,15 +375,54 @@ def create_market_robot_router(db, require_roles):
         ]
         snapshots = await db.market_supply.aggregate(pipeline).to_list(100)
 
+        # Load events and create date map
+        events_list = await db.market_events.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(200)
+        event_map = {}
+        for ev in events_list:
+            ev_date = ev.get("date", "")
+            ev_end = ev.get("end_date", ev_date)
+            try:
+                start_d = datetime.strptime(ev_date, "%Y-%m-%d")
+                end_d = datetime.strptime(ev_end, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            d_iter = start_d - timedelta(days=1)
+            while d_iter <= end_d + timedelta(days=1):
+                ds_key = d_iter.strftime("%Y-%m-%d")
+                impact_rank = {"mega": 4, "large": 3, "medium": 2, "small": 1}
+                if ds_key not in event_map or impact_rank.get(ev.get("impact", ""), 0) > impact_rank.get(event_map[ds_key].get("impact", ""), 0):
+                    event_map[ds_key] = ev
+                d_iter += timedelta(days=1)
+
+        # Merge events into supply snapshots
+        for s in snapshots:
+            ev = event_map.get(s.get("date", ""))
+            if ev:
+                s["event"] = ev.get("name", "")
+                s["event_impact"] = ev.get("impact", "")
+                s["event_attendance"] = ev.get("estimated_attendance", 0)
+                s["event_boost"] = {"mega": 40, "large": 25, "medium": 12, "small": 5}.get(ev.get("impact", ""), 0)
+
         # Summary stats
         if snapshots:
             avg_unavail = round(sum(s.get("unavailable_pct", 0) for s in snapshots) / len(snapshots))
             high_demand_days = sum(1 for s in snapshots if s.get("unavailable_pct", 0) >= 70)
             low_demand_days = sum(1 for s in snapshots if s.get("unavailable_pct", 0) < 30)
+            event_days = sum(1 for s in snapshots if s.get("event"))
         else:
             avg_unavail = 0
             high_demand_days = 0
             low_demand_days = 0
+            event_days = 0
+
+        # Upcoming events summary for dashboard
+        today_str = now.strftime("%Y-%m-%d")
+        upcoming_events = sorted(
+            [ev for ev in events_list if ev.get("date", "") >= today_str],
+            key=lambda x: x.get("date", "")
+        )[:10]
 
         return {
             "snapshots": snapshots,
@@ -392,7 +431,16 @@ def create_market_robot_router(db, require_roles):
                 "avg_unavailable_pct": avg_unavail,
                 "high_demand_days": high_demand_days,
                 "low_demand_days": low_demand_days,
+                "event_days": event_days,
             },
+            "upcoming_events": [{
+                "name": ev.get("name", ""),
+                "date": ev.get("date", ""),
+                "end_date": ev.get("end_date", ""),
+                "impact": ev.get("impact", ""),
+                "category": ev.get("category", ""),
+                "estimated_attendance": ev.get("estimated_attendance", 0),
+            } for ev in upcoming_events],
         }
 
     @router.get("/revenue/market-robot/{property_id}/logs")

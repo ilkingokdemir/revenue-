@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight, Eye, Trash2, MapPin, Globe, Radar } from "lucide-react";
+import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight, Eye, Trash2, MapPin, Globe, Radar, PartyPopper, Users } from "lucide-react";
 import { EventIntelligence } from "./EventIntelligence";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -113,6 +113,7 @@ export const MarketRobot = ({ propertyId }) => {
 
   const snapshots = supply?.snapshots || [];
   const summary = supply?.summary || {};
+  const upcomingEvents = supply?.upcoming_events || [];
 
   const demandLevel = summary.avg_unavailable_pct >= 70 ? "High" : summary.avg_unavailable_pct >= 40 ? "Moderate" : "Low";
   const demandColor = demandLevel === "High" ? "text-emerald-600" : demandLevel === "Moderate" ? "text-amber-500" : "text-red-500";
@@ -234,7 +235,7 @@ export const MarketRobot = ({ propertyId }) => {
           </div>
 
           {/* KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="market-robot-kpis">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="market-robot-kpis">
             <div className="bg-white border border-stone-200 rounded-2xl p-5">
               <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">Market Demand</p>
               <p className={`text-2xl font-bold mt-1 ${demandColor}`}>{demandLevel}</p>
@@ -250,12 +251,52 @@ export const MarketRobot = ({ propertyId }) => {
               <p className="text-2xl font-bold text-red-500 mt-1">{summary.low_demand_days || 0}</p>
               <p className="text-xs text-stone-400 mt-1">&lt;30% unavailable = oversupply</p>
             </div>
+            <div className="bg-white border border-red-100 rounded-2xl p-5">
+              <p className="text-[10px] text-red-500 uppercase tracking-wider font-medium">Event Days</p>
+              <p className="text-2xl font-bold text-red-500 mt-1">{summary.event_days || 0}</p>
+              <p className="text-xs text-stone-400 mt-1">Days with events detected</p>
+            </div>
             <div className="bg-white border border-stone-200 rounded-2xl p-5">
               <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">Active Adjustments</p>
               <p className="text-2xl font-bold text-indigo-600 mt-1">{adjustments.length}</p>
               <p className="text-xs text-stone-400 mt-1">Auto-priced by robot</p>
             </div>
           </div>
+
+          {/* Upcoming Events Awareness */}
+          {upcomingEvents.length > 0 && (
+            <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-2xl p-5" data-testid="market-robot-events-awareness">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <PartyPopper className="w-5 h-5 text-red-500" />
+                  <h3 className="font-bold text-red-800">Robot Event Awareness</h3>
+                  <Badge className="bg-red-100 text-red-700 text-[10px]">{upcomingEvents.length} upcoming</Badge>
+                </div>
+                <p className="text-[10px] text-red-400">Events auto-boost pricing via AI Dynamic Pricing & Smart Pricing</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                {upcomingEvents.slice(0, 6).map((ev, i) => (
+                  <div key={i} className={`flex items-center gap-2 rounded-xl px-3 py-2 border ${
+                    ev.impact === "mega" ? "bg-red-100/50 border-red-200" : ev.impact === "large" ? "bg-orange-100/50 border-orange-200" : "bg-amber-100/50 border-amber-200"
+                  }`}>
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      ev.impact === "mega" ? "bg-red-500" : ev.impact === "large" ? "bg-orange-500" : "bg-amber-400"
+                    }`} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-stone-800 truncate">{ev.name}</p>
+                      <div className="flex items-center gap-2 text-[10px] text-stone-500">
+                        <span>{new Date(ev.date + "T00:00:00").toLocaleDateString("en", { month: "short", day: "numeric" })}</span>
+                        {ev.estimated_attendance > 0 && <span className="flex items-center gap-0.5"><Users className="w-2.5 h-2.5" />{ev.estimated_attendance.toLocaleString()}</span>}
+                      </div>
+                    </div>
+                    <Badge className={`text-[8px] flex-shrink-0 ${
+                      ev.impact === "mega" ? "bg-red-500 text-white" : ev.impact === "large" ? "bg-orange-500 text-white" : "bg-amber-400 text-white"
+                    }`}>{ev.impact?.toUpperCase()}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Supply Trend Chart */}
           {snapshots.length > 0 && (
@@ -271,6 +312,7 @@ export const MarketRobot = ({ propertyId }) => {
                   const u = s.unavailable_pct;
                   const color = u >= 70 ? "bg-red-500" : u >= 40 ? "bg-amber-400" : "bg-emerald-400";
                   const adj = s.price_adjustment_pct || 0;
+                  const hasEvent = s.event;
                   return (
                     <div key={s.date} className="flex items-center gap-3 group">
                       <span className="w-20 text-xs text-stone-500 font-medium flex-shrink-0">{new Date(s.date + "T00:00:00").toLocaleDateString("en", { month: "short", day: "numeric", weekday: "short" })}</span>
@@ -278,11 +320,20 @@ export const MarketRobot = ({ propertyId }) => {
                         <div className={`h-5 rounded-full transition-all ${color}`} style={{ width: `${u}%` }} />
                         <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-difference">{u}%</span>
                       </div>
-                      <div className={`w-16 text-right text-xs font-bold ${adj > 0 ? "text-emerald-600" : adj < 0 ? "text-red-500" : "text-stone-400"}`}>
-                        {adj > 0 ? <span className="flex items-center justify-end gap-0.5"><ArrowUpRight className="w-3 h-3" />+{adj}%</span> :
-                         adj < 0 ? <span className="flex items-center justify-end gap-0.5"><ArrowDownRight className="w-3 h-3" />{adj}%</span> :
-                         "0%"}
-                      </div>
+                      {hasEvent ? (
+                        <div className="w-24 text-right flex items-center justify-end gap-1" title={s.event}>
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                            s.event_impact === "mega" ? "bg-red-500 text-white" : s.event_impact === "large" ? "bg-orange-500 text-white" : "bg-amber-400 text-white"
+                          }`}>{s.event_impact?.toUpperCase()}</span>
+                          <span className="text-[10px] font-bold text-red-500">+{s.event_boost}%</span>
+                        </div>
+                      ) : (
+                        <div className={`w-16 text-right text-xs font-bold ${adj > 0 ? "text-emerald-600" : adj < 0 ? "text-red-500" : "text-stone-400"}`}>
+                          {adj > 0 ? <span className="flex items-center justify-end gap-0.5"><ArrowUpRight className="w-3 h-3" />+{adj}%</span> :
+                           adj < 0 ? <span className="flex items-center justify-end gap-0.5"><ArrowDownRight className="w-3 h-3" />{adj}%</span> :
+                           "0%"}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -327,19 +378,26 @@ export const MarketRobot = ({ propertyId }) => {
           <div className="px-5 py-3 bg-stone-50 border-b font-bold text-sm text-stone-800">Supply Snapshots</div>
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="border-b bg-stone-50/50">
-              {["Date","Total Properties","Unavailable %","Available %","Available Est","Price Adj","Reason"].map(h =>
+              {["Date","Total Properties","Unavailable %","Available %","Available Est","Event","Price Adj","Reason"].map(h =>
                 <th key={h} className="px-3 py-2 text-xs font-semibold text-stone-500 text-center">{h}</th>
               )}
             </tr></thead>
             <tbody>{snapshots.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-12 text-stone-400">No data. Run a scan first.</td></tr>
+              <tr><td colSpan={8} className="text-center py-12 text-stone-400">No data. Run a scan first.</td></tr>
             ) : snapshots.map(s => (
-              <tr key={s.date} className="border-b border-stone-50">
+              <tr key={s.date} className={`border-b border-stone-50 ${s.event ? "bg-red-50/20" : ""}`}>
                 <td className="px-3 py-2 font-medium text-stone-700">{s.date}</td>
                 <td className="px-3 py-2 text-center">{s.total_properties?.toLocaleString() || 0}</td>
                 <td className="px-3 py-2 text-center"><span className={`font-semibold ${s.unavailable_pct >= 70 ? "text-red-500" : s.unavailable_pct >= 40 ? "text-amber-500" : "text-emerald-600"}`}>{s.unavailable_pct}%</span></td>
                 <td className="px-3 py-2 text-center">{s.available_pct}%</td>
                 <td className="px-3 py-2 text-center">{s.available_est?.toLocaleString() || 0}</td>
+                <td className="px-3 py-2 text-center">
+                  {s.event ? (
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                      s.event_impact === "mega" ? "bg-red-500 text-white" : s.event_impact === "large" ? "bg-orange-500 text-white" : "bg-amber-400 text-white"
+                    }`} title={s.event}>{s.event_impact?.toUpperCase()} +{s.event_boost}%</span>
+                  ) : <span className="text-[10px] text-stone-300">—</span>}
+                </td>
                 <td className="px-3 py-2 text-center"><span className={`font-bold ${(s.price_adjustment_pct || 0) > 0 ? "text-emerald-600" : (s.price_adjustment_pct || 0) < 0 ? "text-red-500" : "text-stone-400"}`}>{(s.price_adjustment_pct || 0) > 0 ? "+" : ""}{s.price_adjustment_pct || 0}%</span></td>
                 <td className="px-3 py-2 text-xs text-stone-500 max-w-[200px] truncate">{s.reason}</td>
               </tr>

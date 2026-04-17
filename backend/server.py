@@ -78,6 +78,7 @@ from routes.event_intelligence import create_event_intelligence_router
 from routes.parity_analysis import create_parity_analysis_router
 from routes.channel_manager import create_channel_manager_router
 from routes.historical_pricing import create_historical_pricing_router
+from routes.revenue_intelligence import create_revenue_intelligence_router
 
 # Import extracted modules
 from models import (
@@ -433,6 +434,8 @@ channel_manager_router = create_channel_manager_router(db, require_roles)
 api_router.include_router(channel_manager_router)
 historical_pricing_router = create_historical_pricing_router(db, require_roles)
 api_router.include_router(historical_pricing_router)
+revenue_intelligence_router = create_revenue_intelligence_router(db, require_roles)
+api_router.include_router(revenue_intelligence_router)
 
 app.include_router(api_router)
 

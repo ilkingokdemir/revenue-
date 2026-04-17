@@ -93,6 +93,7 @@ from routes.rate_scraper import create_rate_scraper_router
 from routes.enhanced_dashboard import create_enhanced_dashboard_router
 from routes.reports_hub import create_reports_hub_router
 from routes.finance_pl import create_finance_pl_router
+from routes.shift_scheduler import create_shift_scheduler_router
 
 # Import extracted modules
 from models import (
@@ -478,6 +479,8 @@ reports_hub_router = create_reports_hub_router(db, require_roles)
 api_router.include_router(reports_hub_router)
 finance_pl_router = create_finance_pl_router(db, require_roles)
 api_router.include_router(finance_pl_router)
+shift_scheduler_router = create_shift_scheduler_router(db, require_roles)
+api_router.include_router(shift_scheduler_router)
 
 app.include_router(api_router)
 

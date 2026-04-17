@@ -57,6 +57,8 @@ import { MobileCompanion } from "./components/dashboard/MobileCompanion";
 import { EnhancedDashboard } from "./components/dashboard/EnhancedDashboard";
 import { ReportsHub } from "./components/dashboard/ReportsHub";
 import { FinancePL } from "./components/dashboard/FinancePL";
+import { ShiftScheduler } from "./components/dashboard/ShiftScheduler";
+import { ReceptionReport } from "./components/dashboard/ReceptionReport";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
@@ -2584,6 +2586,8 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
+        { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
+        { id: "reception-report", icon: Notepad, name: "Reception Report", testId: "reception-report-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },

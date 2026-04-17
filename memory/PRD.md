@@ -1,58 +1,39 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 68+ Modules | Mobile Responsive | 127 Test Iterations (100%)
+## 70+ Modules | Mobile Responsive | 128 Test Iterations (100%)
 
-### NEW (Iter 127): P1 Operations — Shift Scheduler, Reception Report, Pass Over Duties
+### NEW (Iter 128): Compliance Register + Laundry Management
 
-**Shift Scheduler (weekly Gantt)**
-- Weekly grid with 7-day columns + staff rows (receptionist, housekeeper, maintenance)
-- Role badges + daily rates (£50/£80/£100), role filter tabs
-- Presets: morning 07-15, afternoon 12-20, evening 15-23, night 23-07, full 09-17
-- Inline preset picker on empty cells; week navigation; Publish All, Approve All, Clear Week
-- Backend: `GET/POST /api/operations/shifts/{pid}`, `/assign`, `/bulk-publish`, `/clear-week`
+**Compliance Register**
+- 7 default categories: Fire Safety, Food Hygiene, H&S, Licensing, Insurance, Data Protection, Staff Training
+- Status auto-computed: compliant / expiring_soon (≤30d) / overdue / action_needed / N/A
+- Category pills with badge counts for items needing attention
+- KPI row (Total, Compliant, Expiring ≤30d, Overdue, Action Needed)
+- Full CRUD, "Mark as Checked" one-click action, evidence URL links, frequency (weekly/monthly/quarterly/annual/once)
+- Backend: `/api/compliance/categories/{pid}`, `/api/compliance/items/{pid}[?category=&status=]`, `{id}/check`, PUT/DELETE
 
-**Reception Report**
-- 5 KPI cards (Bookings Created, Check-ins, Check-outs, Cancellations, Routine Runs)
-- 4 detail tables with 7-day default range + date inputs
-- Backend: `GET /api/operations/reception-report/{pid}?start=&end=`
+**Laundry Management**
+- 3 tabs: Dispatches / Stock / Contracts
+- 11-item default catalog (sheets, pillow cases, towels, napkins, etc.)
+- Dispatch flow auto-adjusts stock (clean→in_transit on send; in_transit→clean on receive)
+- Stock ledger with on_hand_clean / dirty / in_transit / damaged columns (inline edit)
+- Contracts with rate cards, pickup schedules, vendor contact info
+- KPIs: Items Sent YTD, Sent, Received, Active Contracts, Total Spend
+- Backend: `/api/laundry/dispatches/{pid}` (list/create/receive), `/api/laundry/stock/{pid}[/{item_id}]`, `/api/laundry/contracts/{pid}[/{id}]`, `/api/laundry/catalog`
 
-**Pass Over Duties (shift handovers)**
-- Priority (critical/high/normal/low) + category (general/maintenance/guest/housekeeping/reception/finance) + shift tags
-- Mentions: pick staff from team roster; acknowledgement trail with user+timestamp
-- Status filter tabs (open/acknowledged/archived/all), priority filter
-- Admin/manager archive + delete; all staff can create + acknowledge
-- Backend: `GET/POST /api/operations/pass-over/{pid}`, `/{id}/acknowledge`, `/{id}/archive`, `DELETE /{id}`
+### Iter 127: Shift Scheduler + Reception Report + Pass Over Duties
+- Weekly Gantt grid with role filters, presets, bulk publish/approve/clear-week
+- Reception KPI dashboard with 4 detail tables
+- Shift handovers with priority/category/mentions/acknowledgements
 
-### Previously Shipped (Iter ≤126)
-**Enhanced Dashboard (replaces old):**
-- 5 color-coded KPI cards (In-House, Occupancy, Arrivals, Departures, Daily Income)
-- Financial Overview table (Previous/This/Next Month + Same Month Last Year) — Gross, Room Rev, ADR, Commission, Net, Bookings
-- 7-Day Revenue bar chart with total + daily avg
-- Staff On Duty widget, Housekeeping completion % widget
-- Recent Bookings (last 24h) + Stayovers + Pending Payment counts
+### Previously Shipped (≤Iter 126)
+**Enhanced Dashboard, Reports Hub, Finance P&L**, AI Weekly Digest (GPT-5.2), AI Upsell Engine, Competitor Rate Automation, Demand Radar, Compset, Price Alerts, Gantt Booking Calendar, AI Auto-Respond, OTA Availability Sync, SEO Meta Tags, Digital Check-in/Folio, Displacement Analysis, LOS Optimizer, Mobile Companion, and 65+ additional modules.
 
-**Reports Hub (4 reports):**
-- Overview: 5 KPIs + Revenue by Source + Availability by Category
-- Revenue Report: Daily timeline chart + breakdown by category/source
-- Occupancy Report: Daily table (color-coded) + by-category bars + peak day
-- Commission Report: Per-source commission table (gross, rate%, commission, paid, pending, net)
-
-**Finance P&L Dashboard:**
-- Operating Ledger (costs vs revenue side-by-side) with paid/accrued badges
-- Operating Profit/Loss with margin %
-- 6-Month Financial Trend (grouped bar chart: revenue, costs, profit)
-
-### Premium Differentiators
-- AI Weekly Revenue Digest (GPT-5.2), AI Upsell Engine, Competitor Rate Automation
-
-### Complete Feature Set (68+ modules)
-Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | Finance | Operations (shifts, handovers, reception) | AI | Mobile
+### Complete Feature Set (70+ modules)
+Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | Finance | Operations (shifts, handovers, reception, compliance, laundry) | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Compliance Register & Categories
-- Laundry Management (Dispatch, Deliveries, Stock) + Contracts
-- Maintenance Issues Kanban
-- Payroll Runs, Adjustments, Cash Advances
+- Payroll Runs, Adjustments, Cash Advances, Earned Salaries
 - Expense Categories & Recurring Expenses
 - User Contracts & granular Roles/Permissions
 - System Feedback & internal Bug Tracker
@@ -64,7 +45,7 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | Finan
 - Rate Structure / OTA mapping configurations
 
 ## Refactor (low priority)
-- Split `/app/frontend/src/components/dashboard/` (90+ files) into `/operations`, `/revenue`, `/finance`, `/guest`
+- Split `/app/frontend/src/components/dashboard/` (92+ files) into `/operations`, `/revenue`, `/finance`, `/guest`
 
 ## Architecture: React + Tailwind + Shadcn, FastAPI + MongoDB, GPT-5.2, Stripe, Resend
-## Testing: 127 iterations, 100% pass rate
+## Testing: 128 iterations, 100% pass rate

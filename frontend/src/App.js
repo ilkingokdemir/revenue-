@@ -62,6 +62,8 @@ import { ReceptionReport } from "./components/dashboard/ReceptionReport";
 import { PassOverDuties } from "./components/dashboard/PassOverDuties";
 import { ComplianceRegister } from "./components/dashboard/ComplianceRegister";
 import { LaundryManagement } from "./components/dashboard/LaundryManagement";
+import { PayrollManagement } from "./components/dashboard/PayrollManagement";
+import { ExpenseManagement } from "./components/dashboard/ExpenseManagement";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
@@ -2595,6 +2597,8 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "pass-over", icon: Notebook, name: "Pass Over Duties", testId: "pass-over-btn" },
         { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
+        { id: "payroll", icon: Wallet, name: "Payroll", testId: "payroll-btn" },
+        { id: "expenses", icon: Receipt, name: "Expenses", testId: "expenses-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
@@ -3198,6 +3202,16 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Laundry Management */}
         {activeView === "laundry" && (
           <div className="p-6"><LaundryManagement propertyId={activePropertyId} user={user} /></div>
+        )}
+
+        {/* Payroll Management */}
+        {activeView === "payroll" && (
+          <div className="p-6"><PayrollManagement propertyId={activePropertyId} user={user} /></div>
+        )}
+
+        {/* Expense Management */}
+        {activeView === "expenses" && (
+          <div className="p-6"><ExpenseManagement propertyId={activePropertyId} user={user} /></div>
         )}
       </main>
 

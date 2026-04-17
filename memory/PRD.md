@@ -1,21 +1,23 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | Mobile Responsive | 115 Test Iterations (100%)
+## 30+ Modules | Mobile Responsive | 116 Test Iterations (100%)
 
-### Smart Event Intelligence (REBUILT)
-- **Hotel Demand Score (HDS 0-100)** replaces raw attendance-based scoring
-- Local football derbies (both teams same city) → HDS 15 → MINIMAL impact → 0 price boost
-- UEFA Champions League / FIFA international → HDS 95 → CRITICAL → +45% price boost
-- Multi-day festivals, touring concerts, international conferences → HIGH/CRITICAL
-- Scoring factors: visitor_origin (international/national/regional/local), is_evening, is_multi_day, duration
-- Impact levels: Critical (80+, +45%), High (60-79, +30%), Moderate (40-59, +15%), Low (20-39, +5%), Minimal (0-19, 0%)
+### Smart Event Intelligence (365-Day Full Year Scanning)
+- **Hotel Demand Score (HDS 0-100)** — AI determines which events actually fill hotels
+- **Smart examples from London scan**:
+  - Arsenal vs Tottenham (local derby, 60k): HDS 15 → MINIMAL → no price boost (fans go home)
+  - UEFA Champions League Final: HDS 92 → CRITICAL → +45% (international fans need hotels)
+  - Wimbledon: HDS 65 → HIGH → +30% (global visitors)
+  - NFL London: HDS 68 → HIGH → +30% (US/European travelers)
+  - London Marathon: HDS 85 → CRITICAL → +45% (runners + supporters stay 1-3 nights)
+  - Notting Hill Carnival: HDS 22 → LOW → +5% (mostly local day-trippers)
+  - Boat Race: HDS 18 → MINIMAL → 0% (regional day-trippers)
+- **Rescan Full Year** button: Clears old events, does fresh 365-day smart scan
+- **Auto-scanner**: Events scanned every 2 hours, auto-reprice with HDS-based boosts
+- Factors: visitor_origin, is_evening, is_multi_day, event type, team quality
 
 ### Market Demand Dashboard
-- 8 Time Ranges, 3-Column ADR/Occ Comparison, Occupancy & Pickup chart, Recent Bookings panel
-- Competitive Landscape chart, Demand Heatmap, Rate Grid with position arrows
+- 8 Time Ranges, 3-Column ADR/Occ, Occupancy & Pickup, Recent Bookings
+- Competitive Landscape, Demand Heatmap, Rate Grid
 
-### Market Robot — 11 Sub-Tabs
-### AI Dynamic Pricing — 10 Factors, 365 Days, HDS-based event factor
-### Smart Scanner — 7 Tiers, Events every 6h
-
-## Testing: 115 iterations, 100% pass rate
+## Testing: 116 iterations, 100% pass rate

@@ -59,6 +59,7 @@ import { ReportsHub } from "./components/dashboard/ReportsHub";
 import { FinancePL } from "./components/dashboard/FinancePL";
 import { ShiftScheduler } from "./components/dashboard/ShiftScheduler";
 import { ReceptionReport } from "./components/dashboard/ReceptionReport";
+import { PassOverDuties } from "./components/dashboard/PassOverDuties";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
@@ -2587,7 +2588,8 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
-        { id: "reception-report", icon: Notepad, name: "Reception Report", testId: "reception-report-btn" },
+        { id: "reception-report", icon: Notebook, name: "Reception Report", testId: "reception-report-btn" },
+        { id: "pass-over", icon: Notebook, name: "Pass Over Duties", testId: "pass-over-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
@@ -3166,6 +3168,21 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Guest Satisfaction Surveys */}
         {activeView === "surveys" && (
           <SurveyPanel properties={properties} user={user} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Shift Scheduler */}
+        {activeView === "shift-scheduler" && (
+          <div className="p-6"><ShiftScheduler propertyId={activePropertyId} /></div>
+        )}
+
+        {/* Reception Report */}
+        {activeView === "reception-report" && (
+          <div className="p-6"><ReceptionReport propertyId={activePropertyId} /></div>
+        )}
+
+        {/* Pass Over Duties */}
+        {activeView === "pass-over" && (
+          <div className="p-6"><PassOverDuties propertyId={activePropertyId} user={user} /></div>
         )}
       </main>
 

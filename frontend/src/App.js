@@ -52,6 +52,7 @@ import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
 import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
 import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
 import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
+import { ScheduledReports } from "./components/dashboard/ScheduledReports";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
@@ -2575,6 +2576,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
         { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
+        { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
@@ -3108,6 +3110,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Reports Centre */}
         {activeView === "reports-centre" && (
           <ReportsCentrePanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Scheduled Reports */}
+        {activeView === "scheduled-reports" && (
+          <div className="p-6"><ScheduledReports propertyId={activePropertyId} /></div>
         )}
 
         {/* Operations Hub */}

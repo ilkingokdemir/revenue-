@@ -5,7 +5,8 @@ import { toast } from "sonner";
 import {
   RefreshCw, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CalendarDays,
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
-  GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle
+  GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
+  FileText, Send, Receipt
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -46,6 +47,9 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [bulkMode, setBulkMode] = useState(false);
   const [todaysActions, setTodaysActions] = useState(null);
   const [showBulkPanel, setShowBulkPanel] = useState(false);
+  const [folio, setFolio] = useState(null);
+  const [showAddCharge, setShowAddCharge] = useState(false);
+  const [detailTab, setDetailTab] = useState("info");
   const scrollRef = useRef(null);
 
   const pid = activePropertyId || "all";
@@ -72,10 +76,48 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
   const openDetail = async (bookingId) => {
     setSelectedBooking(bookingId);
+    setDetailTab("info");
+    setFolio(null);
+    setShowAddCharge(false);
     try {
       const { data: d } = await axios.get(`${API}/bookings/timeline/${pid}/detail/${bookingId}`);
       setDetailData(d);
     } catch { /* silent */ }
+  };
+
+  const loadFolio = async (bookingId) => {
+    try {
+      const { data: d } = await axios.get(`${API}/folio/${bookingId}`);
+      setFolio(d);
+    } catch { /* silent */ }
+  };
+
+  const addCharge = async (desc, amount, category) => {
+    if (!selectedBooking) return;
+    try {
+      await axios.post(`${API}/folio/${selectedBooking}/add-charge`, { description: desc, unit_price: parseFloat(amount), quantity: 1, category });
+      toast.success("Charge added");
+      loadFolio(selectedBooking);
+      setShowAddCharge(false);
+    } catch { toast.error("Failed"); }
+  };
+
+  const addPayment = async (amount, method) => {
+    if (!selectedBooking) return;
+    try {
+      await axios.post(`${API}/folio/${selectedBooking}/add-payment`, { amount: parseFloat(amount), method });
+      toast.success("Payment recorded");
+      loadFolio(selectedBooking);
+      load();
+    } catch { toast.error("Failed"); }
+  };
+
+  const sendCheckinLink = async () => {
+    if (!selectedBooking) return;
+    try {
+      await axios.post(`${API}/guest-checkin/send-link/${selectedBooking}`);
+      toast.success("Check-in link sent to guest");
+    } catch { toast.error("Failed"); }
   };
 
   const changeStatus = async (bookingId, newStatus) => {
@@ -416,6 +458,23 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
             {/* Detail Body */}
             <div className="p-5 space-y-5">
+              {/* Tabs */}
+              <div className="flex gap-1 bg-stone-100 rounded-lg p-0.5" data-testid="detail-tabs">
+                {[
+                  { id: "info", label: "Info" },
+                  { id: "folio", label: "Folio" },
+                  { id: "actions", label: "Actions" },
+                ].map(t => (
+                  <button key={t.id} onClick={() => { setDetailTab(t.id); if (t.id === "folio" && !folio) loadFolio(detailData.id); }}
+                    data-testid={`detail-tab-${t.id}`}
+                    className={`flex-1 px-3 py-1.5 text-xs font-semibold rounded-md ${detailTab === t.id ? "bg-white text-stone-800 shadow-sm" : "text-stone-500"}`}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* INFO TAB */}
+              {detailTab === "info" && (<>
               {/* Dates */}
               <div className="grid grid-cols-3 gap-3">
                 <div><p className="text-[9px] text-stone-400 uppercase">Check-In</p><p className="text-sm font-bold">{detailData.check_in}</p></div>
@@ -442,15 +501,11 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                 {detailData.room_name && <div className="flex items-center gap-2 text-xs text-stone-500"><MapPin className="w-3.5 h-3.5 text-stone-400" />Room: {detailData.room_name}{detailData.room_floor ? ` (Floor ${detailData.room_floor})` : ""}</div>}
               </div>
 
-              {/* Financial */}
+              {/* Quick Financial Summary */}
               <div className="bg-stone-50 rounded-xl p-4 space-y-2">
-                <p className="text-[9px] text-stone-400 uppercase font-bold">Folio</p>
+                <p className="text-[9px] text-stone-400 uppercase font-bold">Summary</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-stone-500">Rate/night</span>
-                  <span className="text-sm font-bold">{cur(detailData.rate_per_night)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-stone-500">Total ({detailData.nights || 1} night{(detailData.nights || 1) > 1 ? "s" : ""})</span>
+                  <span className="text-xs text-stone-500">Total</span>
                   <span className="text-sm font-bold">{cur(detailData.total_price)}</span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -463,38 +518,131 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                 </div>
               </div>
 
-              {/* Quick Actions */}
-              <div>
-                <p className="text-[9px] text-stone-400 uppercase font-bold mb-2">Quick Actions</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {detailData.status === "confirmed" && (
-                    <button onClick={() => changeStatus(detailData.id, "checked_in")} data-testid="action-checkin"
-                      className="px-3 py-2 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg">Check In</button>
-                  )}
-                  {detailData.status === "checked_in" && (
-                    <button onClick={() => changeStatus(detailData.id, "checked_out")} data-testid="action-checkout"
-                      className="px-3 py-2 text-xs font-bold text-white bg-stone-600 hover:bg-stone-700 rounded-lg">Check Out</button>
-                  )}
-                  {detailData.status === "confirmed" && (
-                    <button onClick={() => changeStatus(detailData.id, "no_show")} data-testid="action-noshow"
-                      className="px-3 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg">No Show</button>
-                  )}
-                  {detailData.status === "pending" && (
-                    <button onClick={() => changeStatus(detailData.id, "confirmed")} data-testid="action-confirm"
-                      className="px-3 py-2 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 rounded-lg">Confirm</button>
-                  )}
-                  {!["cancelled", "checked_out"].includes(detailData.status) && (
-                    <button onClick={() => changeStatus(detailData.id, "cancelled")} data-testid="action-cancel"
-                      className="px-3 py-2 text-xs font-bold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg">Cancel</button>
-                  )}
-                </div>
-              </div>
-
               {/* Timestamps */}
               <div className="text-[10px] text-stone-400 space-y-1 border-t border-stone-100 pt-3">
                 {detailData.created_at && <p>Booked: {new Date(detailData.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>}
                 <p>ID: {detailData.id}</p>
+                {detailData.registration_completed && <p className="text-emerald-500 font-bold">Digital check-in completed</p>}
               </div>
+              </>)}
+
+              {/* FOLIO TAB */}
+              {detailTab === "folio" && (<>
+              <div className="space-y-3" data-testid="folio-tab">
+                {folio ? (<>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold text-stone-800 flex items-center gap-1.5"><Receipt className="w-4 h-4 text-stone-500" />{folio.invoice_number}</p>
+                      <p className="text-[10px] text-stone-400">{folio.room?.type} — {folio.room?.name}</p>
+                    </div>
+                    <button onClick={() => setShowAddCharge(true)} data-testid="add-charge-btn" className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200">
+                      <Plus className="w-3 h-3" />Add Charge
+                    </button>
+                  </div>
+
+                  {/* Add Charge Form */}
+                  {showAddCharge && (
+                    <div className="bg-stone-50 rounded-xl p-3 space-y-2" data-testid="add-charge-form">
+                      <input id="charge-desc" placeholder="Description (e.g. Minibar, Room Service)" className="w-full border border-stone-200 rounded-lg px-3 py-1.5 text-xs" />
+                      <div className="flex gap-2">
+                        <input id="charge-amt" type="number" step="0.01" placeholder="Amount" className="flex-1 border border-stone-200 rounded-lg px-3 py-1.5 text-xs" />
+                        <select id="charge-cat" className="border border-stone-200 rounded-lg px-2 py-1.5 text-xs">
+                          <option value="minibar">Minibar</option>
+                          <option value="room_service">Room Service</option>
+                          <option value="laundry">Laundry</option>
+                          <option value="spa">Spa</option>
+                          <option value="parking">Parking</option>
+                          <option value="damage">Damage</option>
+                          <option value="extra">Other</option>
+                        </select>
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => setShowAddCharge(false)} className="text-xs text-stone-400">Cancel</button>
+                        <button onClick={() => { const d = document.getElementById("charge-desc").value; const a = document.getElementById("charge-amt").value; const c = document.getElementById("charge-cat").value; if (d && a) addCharge(d, a, c); }} data-testid="submit-charge-btn"
+                          className="px-3 py-1.5 text-xs font-bold text-white bg-stone-800 rounded-lg">Add</button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Items List */}
+                  <div className="space-y-1">
+                    {folio.items.map(item => (
+                      <div key={item.id} className={`flex items-center justify-between py-2 px-3 rounded-lg text-xs ${item.type === "payment" ? "bg-emerald-50" : item.type === "adjustment" ? "bg-amber-50" : "bg-white border border-stone-100"}`}>
+                        <div>
+                          <p className="font-medium text-stone-700">{item.description}</p>
+                          <p className="text-[10px] text-stone-400">{item.category} {item.quantity > 1 ? `x${item.quantity}` : ""}</p>
+                        </div>
+                        <span className={`font-bold ${item.type === "payment" ? "text-emerald-600" : item.type === "adjustment" ? "text-amber-600" : "text-stone-800"}`}>
+                          {item.type === "payment" ? "-" : ""}{cur(item.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Totals */}
+                  <div className="bg-stone-800 rounded-xl p-4 space-y-2 text-white" data-testid="folio-totals">
+                    <div className="flex justify-between text-xs"><span className="text-stone-400">Charges</span><span>{cur(folio.totals.charges)}</span></div>
+                    {folio.totals.payments > 0 && <div className="flex justify-between text-xs"><span className="text-stone-400">Payments</span><span className="text-emerald-400">-{cur(folio.totals.payments)}</span></div>}
+                    {folio.totals.adjustments !== 0 && <div className="flex justify-between text-xs"><span className="text-stone-400">Adjustments</span><span className="text-amber-400">{cur(folio.totals.adjustments)}</span></div>}
+                    <div className="h-px bg-stone-700" />
+                    <div className="flex justify-between text-sm font-bold"><span>Balance Due</span><span className={folio.totals.balance_due <= 0 ? "text-emerald-400" : "text-red-400"}>{cur(folio.totals.balance_due)}</span></div>
+                  </div>
+
+                  {/* Quick Payment */}
+                  {folio.totals.balance_due > 0 && (
+                    <button onClick={() => addPayment(folio.totals.balance_due, "card")} data-testid="record-payment-btn"
+                      className="w-full py-2.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg flex items-center justify-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5" />Record Full Payment ({cur(folio.totals.balance_due)})
+                    </button>
+                  )}
+                </>) : (
+                  <div className="text-center py-8 text-stone-400"><RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2" />Loading folio...</div>
+                )}
+              </div>
+              </>)}
+
+              {/* ACTIONS TAB */}
+              {detailTab === "actions" && (<>
+              <div className="space-y-4" data-testid="actions-tab">
+                {/* Status Actions */}
+                <div>
+                  <p className="text-[9px] text-stone-400 uppercase font-bold mb-2">Change Status</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {detailData.status === "confirmed" && (
+                      <button onClick={() => changeStatus(detailData.id, "checked_in")} data-testid="action-checkin"
+                        className="px-3 py-2 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg">Check In</button>
+                    )}
+                    {detailData.status === "checked_in" && (
+                      <button onClick={() => changeStatus(detailData.id, "checked_out")} data-testid="action-checkout"
+                        className="px-3 py-2 text-xs font-bold text-white bg-stone-600 hover:bg-stone-700 rounded-lg">Check Out</button>
+                    )}
+                    {detailData.status === "confirmed" && (
+                      <button onClick={() => changeStatus(detailData.id, "no_show")} data-testid="action-noshow"
+                        className="px-3 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg">No Show</button>
+                    )}
+                    {detailData.status === "pending" && (
+                      <button onClick={() => changeStatus(detailData.id, "confirmed")} data-testid="action-confirm"
+                        className="px-3 py-2 text-xs font-bold text-white bg-blue-500 hover:bg-blue-600 rounded-lg">Confirm</button>
+                    )}
+                    {!["cancelled", "checked_out"].includes(detailData.status) && (
+                      <button onClick={() => changeStatus(detailData.id, "cancelled")} data-testid="action-cancel"
+                        className="px-3 py-2 text-xs font-bold text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg">Cancel</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Guest Services */}
+                <div>
+                  <p className="text-[9px] text-stone-400 uppercase font-bold mb-2">Guest Services</p>
+                  <div className="space-y-2">
+                    <button onClick={sendCheckinLink} data-testid="send-checkin-link"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200">
+                      <Send className="w-3.5 h-3.5" />Send Digital Check-in Link
+                    </button>
+                  </div>
+                </div>
+              </div>
+              </>)}
             </div>
           </div>
         </div>

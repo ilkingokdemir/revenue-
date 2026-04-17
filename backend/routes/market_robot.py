@@ -622,24 +622,56 @@ def create_market_robot_router(db, require_roles):
         aligned_market = sum(1 for d in daily_data if d["position"] == "aligned")
         avg_position_pct = round(sum(d["position_pct"] for d in days_with_comp) / max(len(days_with_comp), 1), 1) if days_with_comp else 0
 
+        # Market occupancy (from supply data = unavailability ≈ market occupancy)
+        days_with_market = [d for d in daily_data if d["market_unavail"] is not None]
+        market_avg_occ = round(sum(d["market_unavail"] for d in days_with_market) / max(len(days_with_market), 1)) if days_with_market else None
+
+        # Market ADR estimate (from supply data — avg price adjustment applied)
+        market_adr = None
+        if days_with_market:
+            market_adr = round(sum(
+                base_rate * (1 + (supply_map.get(d["date"], {}).get("price_adjustment_pct", 0) or 0) / 100)
+                for d in days_with_market
+            ) / len(days_with_market), 2)
+
+        # Competitor ADR and occupancy estimate
+        comp_adr = avg_comp
+        # Competitor occupancy estimated from their pricing vs base
+        comp_occ = None
+        if days_with_comp:
+            # Higher priced = likely higher occupancy
+            comp_occ = min(100, round(sum(
+                min(100, max(10, 50 + (d["comp_avg"] - base_rate) / base_rate * 80))
+                for d in days_with_comp
+            ) / len(days_with_comp)))
+
         return {
             "daily_data": daily_data,
             "kpis": {
                 "total_days": len(daily_data),
-                "avg_occupancy": avg_occ,
-                "avg_sell_rate": avg_rate,
                 "base_rate": base_rate,
+                # Our hotel
+                "our_adr": avg_rate,
+                "our_occupancy": avg_occ,
+                # Market
+                "market_adr": market_adr,
+                "market_occupancy": market_avg_occ,
+                # Competitors
+                "comp_adr": comp_adr,
+                "comp_occupancy": comp_occ,
+                # Positioning
+                "avg_position_pct": avg_position_pct,
+                "above_market_days": above_market,
+                "below_market_days": below_market,
+                "aligned_days": aligned_market,
+                # Other
                 "high_demand_days": high_demand_days,
                 "low_demand_days": low_demand_days,
                 "event_days": event_days,
                 "ai_managed_days": ai_managed_days,
                 "ai_managed_pct": round((ai_managed_days / max(len(daily_data), 1)) * 100),
-                "avg_competitor_rate": avg_comp,
-                "above_market_days": above_market,
-                "below_market_days": below_market,
-                "aligned_days": aligned_market,
-                "avg_position_pct": avg_position_pct,
                 "competitors_tracked": len(competitors),
+                "market_data_days": len(days_with_market),
             },
         }
 

@@ -1,11 +1,21 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { Activity, TrendingUp, TrendingDown, BarChart3, RefreshCw, Calendar, Zap, PartyPopper, Eye, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, BarChart3, RefreshCw, Zap, PartyPopper, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+
+const RANGES = [
+  { value: 1, label: "Today" },
+  { value: 7, label: "7 Days" },
+  { value: 15, label: "15 Days" },
+  { value: 30, label: "30 Days" },
+  { value: 60, label: "60 Days" },
+  { value: 90, label: "90 Days" },
+  { value: 180, label: "180 Days" },
+  { value: 365, label: "1 Year" },
+];
 
 const AI_STATUS = {
   ai: { label: "AI", bg: "bg-violet-500", text: "text-white" },
@@ -17,113 +27,152 @@ const AI_STATUS = {
 export const MarketDemandDashboard = ({ propertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [nightsRange, setNightsRange] = useState(365);
+  const [range, setRange] = useState(365);
 
-  const load = (nights) => {
+  const load = (days) => {
     setLoading(true);
-    axios.get(`${API}/revenue/market-robot/${propertyId}/demand-dashboard?days=${nights}`)
+    axios.get(`${API}/revenue/market-robot/${propertyId}/demand-dashboard?days=${days}`)
       .then(r => { setData(r.data); setLoading(false); })
-      .catch(() => { setLoading(false); });
+      .catch(() => setLoading(false));
   };
-  useEffect(() => { load(nightsRange); }, [propertyId, nightsRange]);
+  useEffect(() => { load(range); }, [propertyId, range]);
 
-  if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Loading {nightsRange}-day market data...</div>;
+  if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Loading {range}-day data...</div>;
   if (!data) return null;
 
   const { daily_data, kpis } = data;
 
-  // === COMPETITIVE POSITION CHART ===
-  const chartW = 1200, chartH = 320, padL = 60, padR = 20, padT = 35, padB = 55;
+  // === Chart ===
+  const chartW = 1200, chartH = 310, padL = 60, padR = 20, padT = 35, padB = 55;
   const innerW = chartW - padL - padR, innerH = chartH - padT - padB;
-  const hasComp = daily_data.some(d => d.comp_avg);
-
-  // Rate range for chart
   const allRates = daily_data.flatMap(d => [d.sell_rate, d.comp_avg, d.base_rate, d.floor_rate].filter(Boolean));
   const maxRate = Math.max(...allRates, 1) * 1.1;
   const minRate = Math.min(...allRates) * 0.9;
   const scaleX = (i) => padL + (i / Math.max(daily_data.length - 1, 1)) * innerW;
   const scaleY = (v) => padT + (1 - (v - minRate) / (maxRate - minRate)) * innerH;
 
-  // Monthly labels
   const monthLabels = [];
-  let lastMonth = "";
-  daily_data.forEach((d, i) => {
-    if (d.month !== lastMonth) { monthLabels.push({ i, label: `${d.month}` }); lastMonth = d.month; }
-  });
+  let lastM = "";
+  daily_data.forEach((d, i) => { if (d.month !== lastM) { monthLabels.push({ i, label: d.month }); lastM = d.month; } });
 
-  // Build SVG lines
   const sellLine = daily_data.map((d, i) => `${i === 0 ? "M" : "L"} ${scaleX(i)} ${scaleY(d.sell_rate)}`).join(" ");
   const baseLine = daily_data.map((d, i) => `${i === 0 ? "M" : "L"} ${scaleX(i)} ${scaleY(d.base_rate)}`).join(" ");
   const floorLine = daily_data.map((d, i) => `${i === 0 ? "M" : "L"} ${scaleX(i)} ${scaleY(d.floor_rate)}`).join(" ");
+  const compSegs = []; let seg = [];
+  daily_data.forEach((d, i) => { if (d.comp_avg) { seg.push({ i, y: d.comp_avg }); } else if (seg.length > 1) { compSegs.push([...seg]); seg = []; } else { seg = []; } });
+  if (seg.length > 1) compSegs.push(seg);
 
-  // Competitor line (skip gaps)
-  const compSegments = [];
-  let seg = [];
-  daily_data.forEach((d, i) => {
-    if (d.comp_avg) { seg.push({ i, y: d.comp_avg }); }
-    else if (seg.length > 1) { compSegments.push([...seg]); seg = []; }
-    else { seg = []; }
-  });
-  if (seg.length > 1) compSegments.push(seg);
-
-  // Fill area between sell and comp (above = green, below = red)
-  const aboveFill = [];
-  const belowFill = [];
+  const aboveFill = [], belowFill = [];
   daily_data.forEach((d, i) => {
     if (d.comp_avg) {
-      if (d.sell_rate >= d.comp_avg) {
-        aboveFill.push({ i, top: d.sell_rate, bot: d.comp_avg });
-      } else {
-        belowFill.push({ i, top: d.comp_avg, bot: d.sell_rate });
-      }
+      if (d.sell_rate >= d.comp_avg) aboveFill.push({ i, top: d.sell_rate, bot: d.comp_avg });
+      else belowFill.push({ i, top: d.comp_avg, bot: d.sell_rate });
     }
   });
 
   return (
     <div className="space-y-5" data-testid="market-demand-dashboard">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 rounded-2xl p-6 text-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
-              <Activity className="w-6 h-6 text-cyan-400" />
+      {/* Header + Range Selector */}
+      <div className="bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 rounded-2xl p-5 text-white">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+              <Activity className="w-5 h-5 text-cyan-400" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">Market Position & Demand</h2>
-              <p className="text-sm text-white/50">Your rates vs market | Demand landscape | {nightsRange} days</p>
+              <h2 className="text-lg font-bold">Market Position & Demand</h2>
+              <p className="text-xs text-white/40">Where do you stand? ADR &amp; Occupancy vs Market vs Competitors</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 bg-white/5 rounded-xl border border-white/10 p-0.5" data-testid="demand-nights-selector">
-              {[30, 60, 90, 180, 365].map(n => (
-                <button key={n} onClick={() => setNightsRange(n)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${nightsRange === n ? "bg-cyan-500 text-white" : "text-white/40 hover:text-white/70"}`}
-                  data-testid={`demand-nights-${n}`}>{n === 365 ? "1 Year" : `${n}N`}
-                </button>
-              ))}
+          {/* Range Selector */}
+          <div className="flex items-center gap-1 bg-white/5 rounded-xl border border-white/10 p-0.5" data-testid="demand-range-selector">
+            {RANGES.map(r => (
+              <button key={r.value} onClick={() => setRange(r.value)}
+                className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg transition-all whitespace-nowrap ${range === r.value ? "bg-cyan-500 text-white" : "text-white/35 hover:text-white/70"}`}
+                data-testid={`range-${r.value}`}>{r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 3-Column Comparison: Us / Market / Competitors */}
+        <div className="grid grid-cols-3 gap-3" data-testid="adr-occ-comparison">
+          {/* OUR HOTEL */}
+          <div className="bg-cyan-500/10 border border-cyan-500/20 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-3 h-3 rounded-full bg-cyan-400" />
+              <span className="text-sm font-bold text-cyan-300">Your Hotel</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[9px] text-white/30 uppercase">ADR</p>
+                <p className="text-xl font-bold text-cyan-300">{cur(kpis.our_adr)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-white/30 uppercase">Occupancy</p>
+                <p className="text-xl font-bold text-cyan-300">{kpis.our_occupancy}%</p>
+              </div>
+            </div>
+            <div className="mt-2 text-[10px] text-white/30">Based on your bookings &amp; AI pricing</div>
+          </div>
+
+          {/* MARKET */}
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-3 h-3 rounded-full bg-amber-400" />
+              <span className="text-sm font-bold text-amber-300">Market Average</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[9px] text-white/30 uppercase">Market ADR</p>
+                <p className="text-xl font-bold text-amber-300">{kpis.market_adr ? cur(kpis.market_adr) : "—"}</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-white/30 uppercase">Market Occ</p>
+                <p className="text-xl font-bold text-amber-300">{kpis.market_occupancy != null ? `${kpis.market_occupancy}%` : "—"}</p>
+              </div>
+            </div>
+            <div className="mt-2 text-[10px] text-white/30">{kpis.market_data_days || 0} days of supply data from robot</div>
+          </div>
+
+          {/* COMPETITORS */}
+          <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-3 h-3 rounded-full bg-violet-400" />
+              <span className="text-sm font-bold text-violet-300">Competitors</span>
+              <Badge className="bg-white/10 text-white/40 text-[8px]">{kpis.competitors_tracked} tracked</Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[9px] text-white/30 uppercase">Comp ADR</p>
+                <p className="text-xl font-bold text-violet-300">{kpis.comp_adr ? cur(kpis.comp_adr) : "—"}</p>
+              </div>
+              <div>
+                <p className="text-[9px] text-white/30 uppercase">Comp Occ</p>
+                <p className="text-xl font-bold text-violet-300">{kpis.comp_occupancy != null ? `${kpis.comp_occupancy}%` : "—"}</p>
+              </div>
+            </div>
+            <div className="mt-2 text-[10px] text-white/30">
+              {kpis.comp_adr ? `Position: ${kpis.avg_position_pct > 0 ? "+" : ""}${kpis.avg_position_pct}% vs competitors` : "Scan competitor hotels for data"}
             </div>
           </div>
         </div>
 
-        {/* Position KPIs */}
-        <div className="grid grid-cols-3 md:grid-cols-6 lg:grid-cols-12 gap-2 mt-4">
+        {/* Quick Stats Row */}
+        <div className="grid grid-cols-4 md:grid-cols-8 gap-2 mt-3">
           {[
-            { l: "Our Avg Rate", v: cur(kpis.avg_sell_rate), c: "text-cyan-300" },
-            { l: "Comp Avg Rate", v: kpis.avg_competitor_rate ? cur(kpis.avg_competitor_rate) : "—", c: "text-amber-300" },
-            { l: "Position", v: `${kpis.avg_position_pct > 0 ? "+" : ""}${kpis.avg_position_pct}%`, c: kpis.avg_position_pct > 0 ? "text-emerald-300" : kpis.avg_position_pct < 0 ? "text-red-300" : "text-white" },
             { l: "Above Market", v: kpis.above_market_days, c: "text-emerald-300" },
             { l: "Below Market", v: kpis.below_market_days, c: "text-red-300" },
-            { l: "Aligned", v: kpis.aligned_days, c: "text-white" },
-            { l: "Avg Occupancy", v: `${kpis.avg_occupancy}%`, c: kpis.avg_occupancy >= 60 ? "text-emerald-300" : "text-amber-300" },
+            { l: "Aligned", v: kpis.aligned_days, c: "text-white/60" },
             { l: "High Demand", v: kpis.high_demand_days, c: "text-red-300" },
             { l: "Low Demand", v: kpis.low_demand_days, c: "text-emerald-300" },
             { l: "Event Days", v: kpis.event_days, c: "text-red-300" },
             { l: "AI Managed", v: `${kpis.ai_managed_pct}%`, c: "text-cyan-300" },
-            { l: "Days", v: kpis.total_days, c: "text-white" },
+            { l: "Days", v: kpis.total_days, c: "text-white/60" },
           ].map(k => (
             <div key={k.l} className="bg-white/5 rounded-lg p-2 text-center">
               <p className={`text-sm font-bold ${k.c}`}>{k.v}</p>
-              <p className="text-[8px] text-white/30 uppercase leading-tight">{k.l}</p>
+              <p className="text-[7px] text-white/25 uppercase leading-tight">{k.l}</p>
             </div>
           ))}
         </div>
@@ -135,7 +184,7 @@ export const MarketDemandDashboard = ({ propertyId }) => {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
             <span className="text-sm font-bold text-white">COMPETITIVE LANDSCAPE</span>
-            <Badge className="bg-white/10 text-white/50 text-[9px]">{nightsRange} days</Badge>
+            <Badge className="bg-white/10 text-white/50 text-[9px]">{daily_data.length} days</Badge>
           </div>
           <div className="flex items-center gap-4 text-[10px] text-stone-400">
             <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-cyan-400 inline-block" /> Our Rate</span>
@@ -146,96 +195,47 @@ export const MarketDemandDashboard = ({ propertyId }) => {
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500/20 inline-block" /> Below</span>
           </div>
         </div>
-
         <div className="overflow-x-auto">
-          <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ minWidth: `${Math.max(800, daily_data.length * 3)}px` }}>
-            {/* Y-axis grid */}
+          <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ minWidth: `${Math.max(600, daily_data.length * 3)}px` }}>
             {[0, 0.25, 0.5, 0.75, 1].map(frac => {
-              const y = padT + (1 - frac) * innerH;
-              const val = Math.round(minRate + frac * (maxRate - minRate));
-              return (
-                <g key={frac}>
-                  <line x1={padL} x2={chartW - padR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" />
-                  <text x={padL - 8} y={y + 4} textAnchor="end" className="text-[8px]" fill="#6b7280">{cur(val)}</text>
-                </g>
-              );
+              const y = padT + (1 - frac) * innerH; const val = Math.round(minRate + frac * (maxRate - minRate));
+              return (<g key={frac}><line x1={padL} x2={chartW - padR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" /><text x={padL - 8} y={y + 4} textAnchor="end" className="text-[8px]" fill="#6b7280">{cur(val)}</text></g>);
             })}
-
-            {/* Month labels */}
-            {monthLabels.map(ml => (
-              <g key={ml.i}>
-                <line x1={scaleX(ml.i)} x2={scaleX(ml.i)} y1={padT} y2={chartH - padB} stroke="#4b5563" strokeWidth="0.5" strokeDasharray="4 4" />
-                <text x={scaleX(ml.i) + 4} y={chartH - 18} textAnchor="start" className="text-[10px]" fill="#9ca3af" fontWeight="600">{ml.label}</text>
-              </g>
-            ))}
-
-            {/* Above market fill (green) */}
-            {aboveFill.map((af, idx) => (
-              <rect key={`a${idx}`} x={scaleX(af.i) - 2} y={scaleY(af.top)} width={4} height={scaleY(af.bot) - scaleY(af.top)} fill="#22c55e" opacity="0.15" />
-            ))}
-
-            {/* Below market fill (red) */}
-            {belowFill.map((bf, idx) => (
-              <rect key={`b${idx}`} x={scaleX(bf.i) - 2} y={scaleY(bf.top)} width={4} height={scaleY(bf.bot) - scaleY(bf.top)} fill="#ef4444" opacity="0.15" />
-            ))}
-
-            {/* Floor rate line */}
+            {monthLabels.map(ml => (<g key={ml.i}><line x1={scaleX(ml.i)} x2={scaleX(ml.i)} y1={padT} y2={chartH - padB} stroke="#4b5563" strokeWidth="0.5" strokeDasharray="4 4" /><text x={scaleX(ml.i) + 4} y={chartH - 18} textAnchor="start" className="text-[10px]" fill="#9ca3af" fontWeight="600">{ml.label}</text></g>))}
+            {aboveFill.map((af, idx) => <rect key={`a${idx}`} x={scaleX(af.i) - 2} y={scaleY(af.top)} width={4} height={scaleY(af.bot) - scaleY(af.top)} fill="#22c55e" opacity="0.15" />)}
+            {belowFill.map((bf, idx) => <rect key={`b${idx}`} x={scaleX(bf.i) - 2} y={scaleY(bf.top)} width={4} height={scaleY(bf.bot) - scaleY(bf.top)} fill="#ef4444" opacity="0.15" />)}
             <path d={floorLine} fill="none" stroke="#f87171" strokeWidth="1" strokeDasharray="3 3" opacity="0.4" />
-
-            {/* Base rate line */}
             <path d={baseLine} fill="none" stroke="#6b7280" strokeWidth="1" strokeDasharray="5 5" opacity="0.5" />
-
-            {/* Competitor lines */}
-            {compSegments.map((seg, si) => (
-              <path key={`c${si}`} d={seg.map((pt, j) => `${j === 0 ? "M" : "L"} ${scaleX(pt.i)} ${scaleY(pt.y)}`).join(" ")}
-                fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.8" />
-            ))}
-
-            {/* Our sell rate line */}
+            {compSegs.map((s, si) => <path key={`c${si}`} d={s.map((pt, j) => `${j === 0 ? "M" : "L"} ${scaleX(pt.i)} ${scaleY(pt.y)}`).join(" ")} fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.8" />)}
             <path d={sellLine} fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinejoin="round" />
-
-            {/* Event markers */}
-            {daily_data.map((d, i) => {
-              if (!d.event) return null;
-              return <circle key={`ev${i}`} cx={scaleX(i)} cy={scaleY(d.sell_rate)} r="4" fill="#ef4444" stroke="#000" strokeWidth="1" />;
-            })}
-
-            {/* Rate labels on key points (every ~30 days) */}
-            {daily_data.filter((_, i) => i % Math.max(Math.floor(daily_data.length / 12), 1) === 0).map((d, idx) => {
+            {daily_data.map((d, i) => d.event ? <circle key={`ev${i}`} cx={scaleX(i)} cy={scaleY(d.sell_rate)} r="4" fill="#ef4444" stroke="#000" strokeWidth="1" /> : null)}
+            {daily_data.filter((_, i) => i % Math.max(Math.floor(daily_data.length / 12), 1) === 0).map((d) => {
               const i = daily_data.indexOf(d);
-              return (
-                <g key={`lbl${idx}`}>
-                  <text x={scaleX(i)} y={scaleY(d.sell_rate) - 8} textAnchor="middle" className="text-[7px]" fill="#06b6d4" fontWeight="600">{cur(d.sell_rate)}</text>
-                  {d.comp_avg && <text x={scaleX(i)} y={scaleY(d.comp_avg) + 14} textAnchor="middle" className="text-[7px]" fill="#f59e0b">{cur(d.comp_avg)}</text>}
-                </g>
-              );
+              return (<g key={`lbl${i}`}><text x={scaleX(i)} y={scaleY(d.sell_rate) - 8} textAnchor="middle" className="text-[7px]" fill="#06b6d4" fontWeight="600">{cur(d.sell_rate)}</text>{d.comp_avg && <text x={scaleX(i)} y={scaleY(d.comp_avg) + 14} textAnchor="middle" className="text-[7px]" fill="#f59e0b">{cur(d.comp_avg)}</text>}</g>);
             })}
           </svg>
         </div>
       </div>
 
-      {/* DEMAND HEATMAP — Market Unavailability across year */}
+      {/* DEMAND HEATMAP */}
       <div className="bg-stone-900 border border-stone-700 rounded-2xl p-5" data-testid="demand-heatmap">
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-bold text-white flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-stone-400" /> MARKET DEMAND HEATMAP
-          </span>
+          <span className="text-sm font-bold text-white flex items-center gap-2"><BarChart3 className="w-4 h-4 text-stone-400" /> MARKET DEMAND HEATMAP</span>
           <div className="flex items-center gap-3 text-[10px] text-stone-400">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500" />High (&gt;70%)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500" />High</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-500" />Moderate</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500" />Low (&lt;30%)</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-500" />Low</span>
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-stone-700" />No Data</span>
           </div>
         </div>
         <div className="flex flex-wrap gap-[2px]">
           {daily_data.map((d, i) => {
             const mu = d.market_unavail;
-            const color = mu === null || mu === undefined ? "#374151" : mu >= 70 ? "#ef4444" : mu >= 40 ? "#f59e0b" : "#22c55e";
-            const opacity = mu === null || mu === undefined ? 0.3 : 0.7 + (mu / 100) * 0.3;
+            const color = mu == null ? "#374151" : mu >= 70 ? "#ef4444" : mu >= 40 ? "#f59e0b" : "#22c55e";
+            const opacity = mu == null ? 0.3 : 0.7 + (mu / 100) * 0.3;
             return (
-              <div key={i} className="group relative"
-                style={{ width: `${Math.max(3, Math.min(10, 700 / daily_data.length))}px`, height: "20px", backgroundColor: color, opacity, borderRadius: "1px" }}
-                title={`${d.date} (${d.dow}) | Market: ${mu ?? "—"}% | Demand: ${d.demand_level}${d.event ? ` | Event: ${d.event}` : ""}`}>
+              <div key={i} className="relative" style={{ width: `${Math.max(3, Math.min(10, 700 / daily_data.length))}px`, height: "20px", backgroundColor: color, opacity, borderRadius: "1px" }}
+                title={`${d.date} (${d.dow}) | Market: ${mu ?? "—"}% | ${d.demand_level}${d.event ? ` | ${d.event}` : ""}`}>
                 {d.event && <div className="absolute -top-1 left-0 right-0 h-1 bg-red-300 rounded-full" />}
               </div>
             );
@@ -243,27 +243,26 @@ export const MarketDemandDashboard = ({ propertyId }) => {
         </div>
         <div className="flex items-center justify-between mt-2 text-[9px] text-stone-500">
           <span>{daily_data[0]?.date}</span>
-          <span>{daily_data[Math.floor(daily_data.length / 2)]?.date}</span>
+          {daily_data.length > 2 && <span>{daily_data[Math.floor(daily_data.length / 2)]?.date}</span>}
           <span>{daily_data[daily_data.length - 1]?.date}</span>
         </div>
       </div>
 
-      {/* Rate Table */}
+      {/* Rate Grid Table */}
       <div className="bg-stone-900 border border-stone-700 rounded-2xl overflow-hidden" data-testid="demand-rate-table">
         <div className="px-5 py-3 border-b border-stone-700 flex items-center justify-between">
-          <span className="font-bold text-white text-sm">Rate Grid — {nightsRange} Nights</span>
+          <span className="font-bold text-white text-sm">Rate Grid — {daily_data.length} Days</span>
           <div className="flex items-center gap-3 text-[9px] text-stone-400">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400" />Our Rate</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Competitor</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400" />Above</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" />Below</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400" />Our ADR</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Market</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-400" />Competitor</span>
           </div>
         </div>
         <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-stone-800 z-10">
               <tr className="border-b border-stone-700">
-                {["Date", "Day", "Status", "Our Rate", "Comp Avg", "Position", "Occ %", "Market", "Floor", "Event"].map(h => (
+                {["Date", "Day", "Status", "Our ADR", "Our Occ", "Comp ADR", "Position", "Market", "Floor", "Event"].map(h => (
                   <th key={h} className="px-2 py-2 text-[10px] font-semibold text-stone-400 text-center whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -281,7 +280,10 @@ export const MarketDemandDashboard = ({ propertyId }) => {
                       <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${ais.bg} ${ais.text}`}>{ais.label}</span>
                     </td>
                     <td className="px-2 py-1.5 text-center text-cyan-400 font-bold text-xs">{cur(d.sell_rate)}</td>
-                    <td className="px-2 py-1.5 text-center text-amber-400 text-xs">{d.comp_avg ? cur(d.comp_avg) : <span className="text-stone-600">—</span>}</td>
+                    <td className="px-2 py-1.5 text-center">
+                      <span className={`text-xs font-semibold ${d.occupancy >= 70 ? "text-emerald-400" : d.occupancy >= 40 ? "text-amber-400" : "text-red-400"}`}>{d.occupancy}%</span>
+                    </td>
+                    <td className="px-2 py-1.5 text-center text-violet-400 text-xs">{d.comp_avg ? cur(d.comp_avg) : <span className="text-stone-600">—</span>}</td>
                     <td className="px-2 py-1.5 text-center">
                       {d.position ? (
                         <span className={`flex items-center justify-center gap-0.5 text-[10px] font-bold ${d.position === "above" ? "text-emerald-400" : d.position === "below" ? "text-red-400" : "text-stone-400"}`}>
@@ -291,18 +293,14 @@ export const MarketDemandDashboard = ({ propertyId }) => {
                       ) : <span className="text-stone-700">—</span>}
                     </td>
                     <td className="px-2 py-1.5 text-center">
-                      <span className={`text-xs font-semibold ${d.occupancy >= 70 ? "text-emerald-400" : d.occupancy >= 40 ? "text-amber-400" : "text-red-400"}`}>{d.occupancy}%</span>
-                    </td>
-                    <td className="px-2 py-1.5 text-center">
-                      {d.market_unavail !== null && d.market_unavail !== undefined ? (
+                      {d.market_unavail != null ? (
                         <span className={`text-[10px] font-bold ${d.demand_level === "high" ? "text-red-400" : d.demand_level === "moderate" ? "text-amber-400" : "text-emerald-400"}`}>{d.market_unavail}%</span>
                       ) : <span className="text-stone-600">—</span>}
                     </td>
-                    <td className="px-2 py-1.5 text-center text-violet-400 text-xs">{cur(d.floor_rate)}</td>
+                    <td className="px-2 py-1.5 text-center text-stone-500 text-xs">{cur(d.floor_rate)}</td>
                     <td className="px-2 py-1.5 text-center">
                       {d.event ? (
-                        <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${d.event_impact === "mega" ? "bg-red-500 text-white" : d.event_impact === "large" ? "bg-orange-500 text-white" : "bg-amber-400 text-white"}`}
-                          title={d.event}>{d.event_impact?.toUpperCase()}</span>
+                        <span className={`text-[8px] font-bold px-1 py-0.5 rounded ${d.event_impact === "mega" ? "bg-red-500 text-white" : d.event_impact === "large" ? "bg-orange-500 text-white" : "bg-amber-400 text-white"}`} title={d.event}>{d.event_impact?.toUpperCase()}</span>
                       ) : <span className="text-stone-700">—</span>}
                     </td>
                   </tr>

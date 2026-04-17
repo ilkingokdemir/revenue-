@@ -1,40 +1,32 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 70+ Modules | Mobile Responsive | 128 Test Iterations (100%)
+## 72+ Modules | Mobile Responsive | 129 Test Iterations (100%)
 
-### NEW (Iter 128): Compliance Register + Laundry Management
+### NEW (Iter 129): Payroll Management + Expense Management
 
-**Compliance Register**
-- 7 default categories: Fire Safety, Food Hygiene, H&S, Licensing, Insurance, Data Protection, Staff Training
-- Status auto-computed: compliant / expiring_soon (≤30d) / overdue / action_needed / N/A
-- Category pills with badge counts for items needing attention
-- KPI row (Total, Compliant, Expiring ≤30d, Overdue, Action Needed)
-- Full CRUD, "Mark as Checked" one-click action, evidence URL links, frequency (weekly/monthly/quarterly/annual/once)
-- Backend: `/api/compliance/categories/{pid}`, `/api/compliance/items/{pid}[?category=&status=]`, `{id}/check`, PUT/DELETE
+**Payroll Management (4-tab UI)**
+- **Earned Salaries** — auto-computed from `shifts` collection × ROLE_RATES (receptionist £50, housekeeper £80, maintenance £100, manager £120, admin £150 per day)
+- **Payroll Runs** — monthly snapshot with lifecycle draft → approved → paid; auto-marks linked cash advances as repaid on "mark paid"
+- **Adjustments** — bonus/overtime/commission/benefit (+) or deduction/tax (−); aggregated into Net
+- **Cash Advances** — request → approve/reject → mark repaid; outstanding total deducted from next earnings
+- KPIs: Staff, Gross, Adjustments, Advances, Net Payable
+- Backend: `/api/payroll/earnings`, `/runs[/{id}/approve|mark-paid]`, `/adjustments`, `/advances[/{id}/approve|reject|mark-repaid]`
 
-**Laundry Management**
-- 3 tabs: Dispatches / Stock / Contracts
-- 11-item default catalog (sheets, pillow cases, towels, napkins, etc.)
-- Dispatch flow auto-adjusts stock (clean→in_transit on send; in_transit→clean on receive)
-- Stock ledger with on_hand_clean / dirty / in_transit / damaged columns (inline edit)
-- Contracts with rate cards, pickup schedules, vendor contact info
-- KPIs: Items Sent YTD, Sent, Received, Active Contracts, Total Spend
-- Backend: `/api/laundry/dispatches/{pid}` (list/create/receive), `/api/laundry/stock/{pid}[/{item_id}]`, `/api/laundry/contracts/{pid}[/{id}]`, `/api/laundry/catalog`
+**Expense Management (3-tab UI)**
+- **Expenses** — 9 default categories (utilities, supplies, maintenance, marketing, salaries, rent, food, tech, other), vendor/method/receipt URL, category-color pills with monthly spend
+- **Recurring** — templates with weekly/biweekly/monthly/quarterly/annual frequency, auto-advance `next_due`, "Post Now" on due items, "Run All Due" batch, due count badge in header
+- **Categories & Budgets** — monthly budget per category, usage bar (green <80% / amber 80-100% / red >100%)
+- KPIs: Total Spent, Transactions, Avg/Expense, Recurring count
+- Backend: `/api/expenses[/{id}]`, `/expenses/categories/{pid}[/{cat}/budget]`, `/expenses/recurring[/{id}/post]`, `/run-due`
 
+### Iter 128: Compliance Register + Laundry Management
 ### Iter 127: Shift Scheduler + Reception Report + Pass Over Duties
-- Weekly Gantt grid with role filters, presets, bulk publish/approve/clear-week
-- Reception KPI dashboard with 4 detail tables
-- Shift handovers with priority/category/mentions/acknowledgements
+### Previously (≤Iter 126): Enhanced Dashboard, Reports Hub, Finance P&L, AI Weekly Digest, AI Upsell Engine, Competitor Rate Automation, Demand Radar, Compset, Price Alerts, Gantt Booking Calendar, AI Auto-Respond, OTA Sync, SEO Meta Tags, Digital Check-in/Folio, Displacement Analysis, LOS Optimizer, Mobile Companion + 65 more.
 
-### Previously Shipped (≤Iter 126)
-**Enhanced Dashboard, Reports Hub, Finance P&L**, AI Weekly Digest (GPT-5.2), AI Upsell Engine, Competitor Rate Automation, Demand Radar, Compset, Price Alerts, Gantt Booking Calendar, AI Auto-Respond, OTA Availability Sync, SEO Meta Tags, Digital Check-in/Folio, Displacement Analysis, LOS Optimizer, Mobile Companion, and 65+ additional modules.
-
-### Complete Feature Set (70+ modules)
-Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | Finance | Operations (shifts, handovers, reception, compliance, laundry) | AI | Mobile
+## Complete Feature Set (72+ modules)
+Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Payroll Runs, Adjustments, Cash Advances, Earned Salaries
-- Expense Categories & Recurring Expenses
 - User Contracts & granular Roles/Permissions
 - System Feedback & internal Bug Tracker
 
@@ -45,7 +37,7 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | Finan
 - Rate Structure / OTA mapping configurations
 
 ## Refactor (low priority)
-- Split `/app/frontend/src/components/dashboard/` (92+ files) into `/operations`, `/revenue`, `/finance`, `/guest`
+- Split `/app/frontend/src/components/dashboard/` (94+ files) into `/operations`, `/revenue`, `/finance`, `/guest`
 
 ## Architecture: React + Tailwind + Shadcn, FastAPI + MongoDB, GPT-5.2, Stripe, Resend
-## Testing: 128 iterations, 100% pass rate
+## Testing: 129 iterations, 100% pass rate

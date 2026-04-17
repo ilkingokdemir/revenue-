@@ -1,20 +1,21 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | Mobile Responsive | 114 Test Iterations (100%)
+## 30+ Modules | Mobile Responsive | 115 Test Iterations (100%)
 
-### Market Demand Dashboard (Full Feature Set)
-- **8 Time Ranges**: Today, 7D, 15D, 30D, 60D, 90D, 180D, 1 Year
-- **3-Column Comparison**: Your Hotel ADR/Occ | Market ADR/Occ | Competitor ADR/Occ
-- **90 Day Occupancy & Pickup** chart: Grey bars (base occ) + Cyan bars (booking velocity), 24H/3DAYS/7DAYS toggle
-- **Recent Bookings** panel: Last 7 days — Date, Bookings, Room Nights, ADR, Revenue + summary
-- **Competitive Landscape** chart: Our Rate vs Competitor vs Base vs Floor with above/below fills
-- **Demand Heatmap**: 365 colored cells
-- **Rate Grid**: 10-column table with position arrows
+### Smart Event Intelligence (REBUILT)
+- **Hotel Demand Score (HDS 0-100)** replaces raw attendance-based scoring
+- Local football derbies (both teams same city) → HDS 15 → MINIMAL impact → 0 price boost
+- UEFA Champions League / FIFA international → HDS 95 → CRITICAL → +45% price boost
+- Multi-day festivals, touring concerts, international conferences → HIGH/CRITICAL
+- Scoring factors: visitor_origin (international/national/regional/local), is_evening, is_multi_day, duration
+- Impact levels: Critical (80+, +45%), High (60-79, +30%), Moderate (40-59, +15%), Low (20-39, +5%), Minimal (0-19, 0%)
+
+### Market Demand Dashboard
+- 8 Time Ranges, 3-Column ADR/Occ Comparison, Occupancy & Pickup chart, Recent Bookings panel
+- Competitive Landscape chart, Demand Heatmap, Rate Grid with position arrows
 
 ### Market Robot — 11 Sub-Tabs
-Dashboard, Market Demand, Performance, Supply Data, Rate Parity, Competitor Analysis, Event Intelligence, Competitor Hotels, Auto-Adjustments, Configuration, Scan Logs
+### AI Dynamic Pricing — 10 Factors, 365 Days, HDS-based event factor
+### Smart Scanner — 7 Tiers, Events every 6h
 
-### AI Dynamic Pricing — 10 Factors, 365 Days
-### Smart Scanner — 7 Tiers, Events every 6h, Auto-reprice
-
-## Testing: 114 iterations, 100% pass rate
+## Testing: 115 iterations, 100% pass rate

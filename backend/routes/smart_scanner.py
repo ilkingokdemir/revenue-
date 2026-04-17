@@ -1,6 +1,6 @@
 """
 Smart Tiered Scanner — Scans different date windows at different frequencies,
-then auto-triggers AI Dynamic Pricing after each scan batch.
+auto-scans events via GPT-5.2, then auto-triggers AI Dynamic Pricing after each batch.
 Runs as a background async task.
 """
 from datetime import datetime, timezone, timedelta
@@ -18,13 +18,17 @@ TIERS = [
     {"label": "1-3 months out",     "days_from": 28, "days_to": 90,  "interval_mins": 720},
 ]
 
+# Event scanning schedule
+EVENT_SCAN_INTERVAL_MINS = 360  # Every 6 hours
+
 
 class SmartScanner:
-    def __init__(self, db, scrape_fn, calculate_price_fn, apply_pricing_fn):
+    def __init__(self, db, scrape_fn, calculate_price_fn, apply_pricing_fn, event_scan_fn=None):
         self.db = db
         self.scrape_fn = scrape_fn
         self.calculate_price_fn = calculate_price_fn
         self.apply_pricing_fn = apply_pricing_fn
+        self.event_scan_fn = event_scan_fn
         self.running = False
         self.task = None
         self.stats = {
@@ -32,6 +36,9 @@ class SmartScanner:
             "total_requests_today": 0,
             "last_scan_time": None,
             "last_reprice_time": None,
+            "last_event_scan": None,
+            "events_found_today": 0,
+            "event_scan_enabled": True,
             "tier_status": {},
             "started_at": None,
         }
@@ -41,8 +48,9 @@ class SmartScanner:
             return {"status": "already_running"}
         self.running = True
         self.stats["started_at"] = datetime.now(timezone.utc).isoformat()
+        self.stats["events_found_today"] = 0
         self.task = asyncio.create_task(self._run_loop(property_id))
-        return {"status": "started"}
+        return {"status": "started", "event_scanning": bool(self.event_scan_fn)}
 
     async def stop(self):
         self.running = False
@@ -56,10 +64,40 @@ class SmartScanner:
             "running": self.running,
             "stats": self.stats,
             "tiers": TIERS,
+            "event_scan_interval_mins": EVENT_SCAN_INTERVAL_MINS,
         }
 
+    async def _run_event_scan(self, property_id: str, city: str):
+        """Run event intelligence scan in the background."""
+        if not self.event_scan_fn:
+            return 0
+
+        now = datetime.now(timezone.utc)
+        last = self.stats.get("last_event_scan")
+
+        # Check if event scan is due
+        if last:
+            last_dt = datetime.fromisoformat(last)
+            if now < last_dt + timedelta(minutes=EVENT_SCAN_INTERVAL_MINS):
+                return 0
+
+        try:
+            logger.info(f"Smart Scanner: Starting event intelligence scan for {city}")
+            result = await self.event_scan_fn(self.db, property_id, city)
+            events_found = result.get("events_found", 0)
+            events_stored = result.get("events_stored", 0)
+
+            self.stats["last_event_scan"] = now.isoformat()
+            self.stats["events_found_today"] += events_found
+
+            logger.info(f"Smart Scanner: Event scan complete — {events_found} found, {events_stored} stored")
+            return events_found
+        except Exception as e:
+            logger.error(f"Smart Scanner: Event scan failed: {e}")
+            return 0
+
     async def _run_loop(self, property_id: str):
-        """Main loop — checks each tier and scans if interval has passed."""
+        """Main loop — checks each tier and scans if interval has passed. Also runs event scans."""
         # Initialize tier last-scan times
         for tier in TIERS:
             self.stats["tier_status"][tier["label"]] = {
@@ -79,6 +117,7 @@ class SmartScanner:
                 language = config.get("language", "en-gb")
                 any_scanned = False
 
+                # ===== MARKET SUPPLY SCANNING =====
                 for tier in TIERS:
                     tier_key = tier["label"]
                     ts = self.stats["tier_status"][tier_key]
@@ -140,11 +179,16 @@ class SmartScanner:
 
                     logger.info(f"Smart Scanner: {tier_key} — {dates_scanned} dates scanned")
 
-                # Auto re-price if any tier scanned
+                # ===== EVENT INTELLIGENCE SCANNING =====
+                events_found = await self._run_event_scan(property_id, city)
+                if events_found > 0:
+                    any_scanned = True
+
+                # ===== AUTO RE-PRICE =====
                 if any_scanned and config.get("auto_pricing", True):
                     await self.apply_pricing_fn(self.db, property_id)
                     self.stats["last_reprice_time"] = datetime.now(timezone.utc).isoformat()
-                    logger.info("Smart Scanner: AI Dynamic Pricing auto-applied")
+                    logger.info("Smart Scanner: AI Dynamic Pricing auto-applied (market + events + historical)")
 
                 # Log
                 await self.db.market_robot_logs.insert_one({
@@ -153,6 +197,7 @@ class SmartScanner:
                     "city": city,
                     "type": "auto_scan",
                     "dates_scanned": self.stats["total_requests_today"],
+                    "events_found": events_found,
                     "auto_adjustments": 0,
                     "scanned_at": now.isoformat(),
                 })
@@ -161,6 +206,7 @@ class SmartScanner:
                 if now.hour == 0 and now.minute < 2:
                     self.stats["total_scans_today"] = 0
                     self.stats["total_requests_today"] = 0
+                    self.stats["events_found_today"] = 0
 
             except asyncio.CancelledError:
                 break
@@ -180,7 +226,7 @@ def get_scanner():
     return _scanner
 
 
-def init_scanner(db, scrape_fn, calc_fn, apply_fn):
+def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None):
     global _scanner
-    _scanner = SmartScanner(db, scrape_fn, calc_fn, apply_fn)
+    _scanner = SmartScanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn)
     return _scanner

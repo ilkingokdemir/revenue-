@@ -192,8 +192,8 @@ export const MarketRobot = ({ propertyId }) => {
                   <h3 className="font-bold text-stone-800">Smart Tiered Scanner</h3>
                   <p className="text-xs text-stone-400">
                     {scannerStatus?.running
-                      ? "Actively scanning market & auto-repricing your calendar"
-                      : "Activate to auto-scan at optimal intervals & reprice dynamically"}
+                      ? "Actively scanning market, events & auto-repricing your calendar"
+                      : "Activate to auto-scan market + events at optimal intervals & reprice dynamically"}
                   </p>
                 </div>
               </div>
@@ -228,9 +228,11 @@ export const MarketRobot = ({ propertyId }) => {
               })}
             </div>
             {scannerStatus?.running && scannerStatus?.stats && (
-              <div className="flex items-center gap-6 mt-3 text-xs text-stone-500 border-t border-stone-200 pt-3">
+              <div className="flex items-center gap-6 mt-3 text-xs text-stone-500 border-t border-stone-200 pt-3 flex-wrap">
                 <span>Scans today: <strong className="text-stone-700">{scannerStatus.stats.total_scans_today}</strong></span>
                 <span>Requests today: <strong className="text-stone-700">{scannerStatus.stats.total_requests_today}</strong></span>
+                <span>Events found today: <strong className="text-red-500">{scannerStatus.stats.events_found_today || 0}</strong></span>
+                {scannerStatus.stats.last_event_scan && <span>Last event scan: <strong className="text-red-500">{new Date(scannerStatus.stats.last_event_scan).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
                 {scannerStatus.stats.last_reprice_time && <span>Last reprice: <strong className="text-emerald-600">{new Date(scannerStatus.stats.last_reprice_time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
               </div>
             )}
@@ -357,11 +359,12 @@ export const MarketRobot = ({ propertyId }) => {
           {/* How it works */}
           <div className="bg-stone-800 rounded-2xl p-6 text-white">
             <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Zap className="w-5 h-5 text-amber-400" /> How Market Robot Works</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {[
                 { step: 1, title: "Scrape Market Supply", desc: "Scans Booking.com for your city to see how many properties are available for each date in the next 90 days." },
-                { step: 2, title: "Detect Demand Changes", desc: "If availability drops (more properties sold out), demand is rising. If supply increases, demand is falling." },
-                { step: 3, title: "Auto-Adjust Prices", desc: "Automatically increases your rates when demand is high, and reduces them when there's oversupply — feeding directly into your Rate Calendar." },
+                { step: 2, title: "Scan Events (GPT-5.2)", desc: "Every 6 hours, AI detects concerts, matches, exhibitions, festivals with 1,000+ attendees and auto-classifies impact." },
+                { step: 3, title: "Detect Demand Changes", desc: "If availability drops (more sold out), demand is rising. Events create demand spikes. If supply increases, demand is falling." },
+                { step: 4, title: "Auto-Adjust Prices", desc: "Automatically reprices using ALL 10 factors: supply, events, competitors, historical floors, seasonality & more." },
               ].map(s => (
                 <div key={s.step} className="bg-stone-700/50 rounded-xl p-4">
                   <div className="w-8 h-8 rounded-full bg-indigo-500 text-white flex items-center justify-center text-sm font-bold mb-3">{s.step}</div>

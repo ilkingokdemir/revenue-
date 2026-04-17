@@ -632,8 +632,7 @@ def create_market_robot_router(db, require_roles):
     # ==================== SMART SCANNER CONTROL ====================
 
     async def _auto_apply_pricing(db_ref, property_id):
-        """Called by smart scanner after each scan batch — applies AI pricing."""
-        from routes.dynamic_pricing import create_dynamic_pricing_router
+        """Called by smart scanner after each scan batch — applies AI pricing with ALL 10 factors."""
         now = datetime.now(timezone.utc)
         props = await db_ref.properties.find({}, {"_id": 0}).to_list(50) if property_id == "all" else [await db_ref.properties.find_one({"id": property_id}, {"_id": 0})]
         props = [p for p in props if p]
@@ -661,6 +660,50 @@ def create_market_robot_router(db, require_roles):
                         comp_price_map[p["date"]] = []
                     comp_price_map[p["date"]].append(p["lowest_price"])
 
+        # Load events
+        events_list = await db_ref.market_events.find({"property_id": property_id}, {"_id": 0}).to_list(200)
+        event_map = {}
+        for ev in events_list:
+            ev_date = ev.get("date", "")
+            ev_end = ev.get("end_date", ev_date)
+            try:
+                from datetime import datetime as dt_cls
+                start_d = dt_cls.strptime(ev_date, "%Y-%m-%d")
+                end_d = dt_cls.strptime(ev_end, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            d_iter = start_d - timedelta(days=1)
+            while d_iter <= end_d + timedelta(days=1):
+                ds_key = d_iter.strftime("%Y-%m-%d")
+                impact_rank = {"mega": 4, "large": 3, "medium": 2, "small": 1}
+                if ds_key not in event_map or impact_rank.get(ev.get("impact", ""), 0) > impact_rank.get(event_map[ds_key].get("impact", ""), 0):
+                    event_map[ds_key] = ev
+                d_iter += timedelta(days=1)
+
+        # Load historical price floors
+        price_floors = strategy.get("price_floors", {})
+        hist_floor_map = {}
+        for month_str, floor_data in price_floors.items():
+            try:
+                hist_floor_map[int(month_str)] = float(floor_data.get("min_price", 0))
+            except (ValueError, TypeError):
+                pass
+        if not hist_floor_map:
+            hist_data = await db_ref.historical_prices.find(
+                {"property_id": property_id}, {"_id": 0, "month": 1, "sold_rate": 1}
+            ).to_list(800)
+            if hist_data:
+                monthly_rates = {}
+                for h in hist_data:
+                    m = h.get("month")
+                    if m not in monthly_rates:
+                        monthly_rates[m] = []
+                    monthly_rates[m].append(h["sold_rate"])
+                for m, rates in monthly_rates.items():
+                    sorted_rates = sorted(rates)
+                    p25 = sorted_rates[len(sorted_rates) // 4]
+                    hist_floor_map[m] = round(p25 * 0.95, 2)
+
         count = 0
         for rt in room_types:
             base = float(rt.get("base_rate", 100) or 100)
@@ -673,39 +716,154 @@ def create_market_robot_router(db, require_roles):
                 our_occ = min(100, round((booked / total_rooms) * 100))
                 supply_snap = supply_map.get(ds)
 
-                # Simplified AI pricing inline
                 price = base
+                # 1. DOW
                 dow_adj = strategy.get("dow_adjustments", {})
                 dow_pct = float(dow_adj.get(d.strftime("%a").lower()[:3], 0))
                 if dow_pct:
                     price *= (1 + dow_pct / 100)
+                # 2. Monthly
                 monthly_adj = strategy.get("monthly_adjustments", {})
                 month_pct = float(monthly_adj.get(d.strftime("%b").lower()[:3], 0))
                 if month_pct:
                     price *= (1 + month_pct / 100)
+                # 3. Occupancy
                 occ_pct = 40 if our_occ >= 90 else 20 if our_occ >= 75 else 0 if our_occ >= 50 else -15 if our_occ >= 25 else -30
                 if occ_pct:
                     price *= (1 + occ_pct / 100)
+                # 4. Market supply
                 if supply_snap and supply_snap.get("scraped"):
                     u = supply_snap.get("unavailable_pct", 50)
-                    m = 35 if u >= 90 else 25 if u >= 80 else 15 if u >= 70 else 8 if u >= 60 else 0 if u >= 40 else -8 if u >= 25 else -15 if u >= 10 else -25
-                    if m:
-                        price *= (1 + m / 100)
+                    m_adj = 35 if u >= 90 else 25 if u >= 80 else 15 if u >= 70 else 8 if u >= 60 else 0 if u >= 40 else -8 if u >= 25 else -15 if u >= 10 else -25
+                    if m_adj:
+                        price *= (1 + m_adj / 100)
+                # 5. Competitor positioning
+                comp_prices = comp_price_map.get(ds, [])
+                if comp_prices:
+                    comp_avg = sum(comp_prices) / len(comp_prices)
+                    diff_pct = ((comp_avg - price) / price) * 100
+                    if diff_pct > 20:
+                        price *= (1 + min(15, diff_pct * 0.3) / 100)
+                    elif diff_pct < -20:
+                        price *= (1 + max(-10, diff_pct * 0.2) / 100)
+                # 6. Event intelligence
+                event_for_day = event_map.get(ds)
+                if event_for_day:
+                    impact = event_for_day.get("impact", "")
+                    ev_pct = {"mega": 40, "large": 25, "medium": 12, "small": 5}.get(impact, 0)
+                    if ev_pct:
+                        price *= (1 + ev_pct / 100)
+                # 7. Aggressiveness
                 agg = float(strategy.get("aggressiveness", 1.0))
                 price *= agg
+                # 8. Historical floor
+                hist_floor = hist_floor_map.get(d.month, 0)
+                if hist_floor and price < hist_floor:
+                    price = hist_floor
+                # 9. Guardrails
                 price = round(max(base * 0.5, min(base * 3.0, price)), 2)
+
+                reason = "auto-scanner (market+events+historical)"
+                if event_for_day:
+                    reason += f" | Event: {event_for_day.get('name', '')}"
 
                 await db_ref.rate_overrides.update_one(
                     {"property_id": property_id, "date": ds, "room_type_id": rt.get("id", "")},
-                    {"$set": {"property_id": property_id, "room_type_id": rt.get("id", ""), "date": ds, "custom_rate": price, "set_by": "auto-scanner", "updated_at": now.isoformat()}},
+                    {"$set": {"property_id": property_id, "room_type_id": rt.get("id", ""), "date": ds, "custom_rate": price, "set_by": "auto-scanner", "reason": reason, "updated_at": now.isoformat()}},
                     upsert=True
                 )
                 count += 1
-        logger.info(f"Auto-pricing applied: {count} rates updated")
+        logger.info(f"Auto-pricing applied: {count} rates (market + events + historical floors)")
 
-    # Initialize smart scanner
+    # ==================== EVENT SCAN FUNCTION FOR SCANNER ====================
+
+    async def _auto_event_scan(db_ref, property_id, city):
+        """Called by smart scanner to auto-scan events using GPT-5.2."""
+        import re as re_mod
+        import json as json_mod
+        now = datetime.now(timezone.utc)
+
+        # Web search for events
+        events_raw = []
+        queries = [
+            f"major events concerts festivals {city} {now.strftime('%B %Y')} next 3 months",
+            f"football matches stadium events {city} {now.strftime('%Y')} upcoming",
+            f"marathon exhibition conference {city} {now.strftime('%B %Y')} schedule",
+        ]
+        for query in queries:
+            try:
+                search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}&gl=uk"
+                async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                    headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"}
+                    resp = await client.get(search_url, headers=headers)
+                    events_raw.append(resp.text[:10000])
+            except Exception as e:
+                logger.warning(f"Auto event search failed: {e}")
+
+        raw_text = "\n".join(events_raw)
+
+        # AI analysis
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+            date_from = now.strftime("%Y-%m-%d")
+            date_to = (now + timedelta(days=90)).strftime("%Y-%m-%d")
+
+            system_prompt = f"""You are an event intelligence analyst for a hotel in {city}.
+Return ONLY a valid JSON array of upcoming events between {date_from} and {date_to}.
+Each event: name, date (YYYY-MM-DD), end_date, venue, category, estimated_attendance, impact (mega/large/medium/small), description, confidence.
+Focus on events with 1000+ attendance. Include known recurring events."""
+
+            chat = LlmChat(api_key=api_key, session_id=f"auto-event-{city}-{now.strftime('%Y%m%d%H')}",
+                           system_message=system_prompt).with_model("openai", "gpt-5.2")
+            response = await chat.send_message(UserMessage(text=f"Scraped data:\n{raw_text[:4000]}"))
+            json_match = re_mod.search(r'\[[\s\S]*\]', response)
+            events = json_mod.loads(json_match.group()) if json_match else []
+        except Exception as e:
+            logger.error(f"Auto event AI failed: {e}")
+            events = []
+
+        # Store events
+        stored = 0
+        for event in events:
+            event_date = event.get("date", "")
+            if not event_date:
+                continue
+            try:
+                ed = datetime.strptime(event_date, "%Y-%m-%d")
+                now_naive = now.replace(tzinfo=None)
+                if ed.date() < now_naive.date() or ed > now_naive + timedelta(days=90):
+                    continue
+            except (ValueError, TypeError):
+                continue
+
+            doc = {
+                "id": str(uuid.uuid4())[:8],
+                "property_id": property_id,
+                "city": city,
+                "name": event.get("name", "Unknown"),
+                "date": event_date,
+                "end_date": event.get("end_date", event_date),
+                "venue": event.get("venue", ""),
+                "category": event.get("category", "other"),
+                "estimated_attendance": int(event.get("estimated_attendance", 0) or 0),
+                "impact": event.get("impact", "small"),
+                "description": event.get("description", ""),
+                "confidence": event.get("confidence", "medium"),
+                "source": "auto-scanner",
+                "scanned_at": now.isoformat(),
+            }
+            await db_ref.market_events.update_one(
+                {"property_id": property_id, "name": doc["name"], "date": doc["date"]},
+                {"$set": doc}, upsert=True
+            )
+            stored += 1
+
+        return {"events_found": len(events), "events_stored": stored}
+
+    # Initialize smart scanner with event scanning
     from routes.smart_scanner import init_scanner
-    scanner = init_scanner(db, _scrape_booking_date, _calculate_price_adjustment, _auto_apply_pricing)
+    scanner = init_scanner(db, _scrape_booking_date, _calculate_price_adjustment, _auto_apply_pricing, _auto_event_scan)
 
     @router.post("/revenue/market-robot/{property_id}/scanner/start")
     async def start_scanner(property_id: str,

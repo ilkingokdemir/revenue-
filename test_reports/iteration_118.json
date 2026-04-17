@@ -1,0 +1,118 @@
+{
+  "summary": "Iteration 118 - Demand Radar & Compset Intelligence Analytics Modules. All 27 backend tests passed (100%). All frontend components verified working with proper data-testid attributes. Both modules fully functional with day selector buttons, charts, KPIs, and insights.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "backend_demand_radar": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/demand-radar/{property_id}?days=N",
+      "response_fields": ["status", "status_text", "demand_change_pp", "wap_change", "kpis", "insights", "daily", "pickup_change", "opportunity_map", "supply_dynamics"],
+      "kpis_verified": ["avg_demand", "avg_wap", "avg_supply", "high_demand_days", "low_demand_days", "peak_date", "peak_demand", "quietest_date", "total_days"],
+      "day_ranges_tested": [30, 60, 90, 180, 365]
+    },
+    "backend_booking_behavior": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/demand-radar/{property_id}/booking-behavior",
+      "response_fields": ["total_bookings", "lead_time", "length_of_stay", "demand_by_lead_time", "dow_patterns"],
+      "lead_time_buckets": ["0-7d", "8-14d", "15-30d", "31-60d", "60d+"],
+      "los_buckets": ["1 night", "2 nights", "3 nights", "4+ nights"],
+      "demand_windows": ["URGENT (0-14d)", "TACTICAL (15-30d)", "STRATEGIC (31-60d)", "HORIZON (61-90d)"],
+      "dow_patterns": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    },
+    "backend_compset_intel": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/compset-intel/{property_id}?days=N",
+      "response_fields": ["kpis", "sentinel_insight", "key_insights", "daily", "tier_distribution", "neighbourhoods", "market_context"],
+      "kpis_verified": ["my_occupancy", "comp_occupancy", "my_adr", "comp_adr", "my_revpar", "comp_revpar", "occ_rank", "adr_rank", "revpar_rank", "segment_size"],
+      "day_ranges_tested": [7, 14, 30, 60, 90]
+    },
+    "frontend_sidebar_navigation": {
+      "status": "PASS",
+      "items_found": ["Demand Radar", "Compset Intelligence"],
+      "location": "Revenue > Intelligence section",
+      "data_testids": ["rev-tab-demand-radar", "rev-tab-compset-intel"]
+    },
+    "frontend_demand_radar": {
+      "status": "PASS",
+      "component": "DemandRadar.js",
+      "data_testid": "demand-radar",
+      "sections_verified": [
+        "demand-chart (How Busy Is the Market?)",
+        "wap-chart (Weighted Average Price)",
+        "pickup-change (7-Day Pickup Change)",
+        "opportunity-map (Pricing Opportunity Map)",
+        "lead-time-dist (Lead Time Distribution)",
+        "los-dist (Length of Stay)",
+        "demand-by-lt (Demand by Lead Time)",
+        "dow-patterns (Day-of-Week Patterns)"
+      ],
+      "day_selector_buttons": ["30d", "60d", "90d", "180d", "1yr"],
+      "kpis_displayed": ["Avg Demand (64%)", "Avg WAP (£125.37)", "Avg Supply (1,553)", "High Demand Days (24)", "Peak Date (Apr 18)", "Quietest Date (Jul 14)"],
+      "insights_displayed": ["7 dates — demand up, rates flat", "40 supply compression events", "20 major events in the next 90 days"]
+    },
+    "frontend_compset_intelligence": {
+      "status": "PASS",
+      "component": "CompsetIntelligence.js",
+      "data_testid": "compset-intelligence",
+      "sections_verified": [
+        "ranking-cards (Occupancy, ADR, RevPAR with rank badges)",
+        "sentinel-insight (Your occupancy is 62pts below segment average)",
+        "key-insights (Occupancy, ADR, RevPAR differences)",
+        "adr-chart (ADR — Your Hotel vs Segment)",
+        "occ-chart (Occupancy — Your Hotel vs Segment)",
+        "revpar-chart (RevPAR — Your Hotel vs Segment)",
+        "daily-drilldown (Performance by Date table)",
+        "market-context (Segment hotels, rooms, market hotels, rooms)",
+        "tier-distribution (Midscale, Economy, Upper Midscale, Hostel)",
+        "neighbourhoods (Pimlico, Whitechapel, Paddington, etc.)"
+      ],
+      "day_selector_buttons": ["7d", "14d", "30d", "60d", "90d"],
+      "day_selector_testids": ["compset-days-7", "compset-days-14", "compset-days-30", "compset-days-60", "compset-days-90"]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration118_demand_compset.py",
+    "/app/test_reports/pytest/pytest_iteration118_demand_compset.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Both Demand Radar and Compset Intelligence modules implemented correctly with full backend + frontend",
+    "All 3 backend endpoints return proper response structures with all required fields",
+    "Frontend components have proper data-testid attributes for all major sections",
+    "Day range selectors work correctly for both modules (Demand Radar: 30/60/90/180/365, Compset: 7/14/30/60/90)",
+    "Demand Radar shows comprehensive market intelligence: demand chart, WAP chart, pickup change, opportunity map, lead time, LOS, DOW patterns",
+    "Compset Intelligence shows competitive positioning: ranking cards with badges, ADR/Occ/RevPAR charts, daily drilldown table, market context, tier distribution, neighbourhoods",
+    "Smart insights in Demand Radar correctly identify opportunities (demand up rates flat, compression events, major events)",
+    "Sentinel insight in Compset Intelligence provides clear competitive position summary"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration118_demand_compset.py"
+  ],
+  "success_rate": {
+    "backend": "100% (27/27 tests passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "No new seed data created",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 118 tested 2 NEW advanced analytics modules: 1) Demand Radar - comprehensive market intelligence with demand chart, WAP chart, 7-day pickup change, pricing opportunity map, lead time distribution, length of stay, demand by lead time windows, and DOW patterns. Day selectors: 30/60/90/180/365. 2) Compset Intelligence - competitive positioning with ranking cards (Occ/ADR/RevPAR with rank badges), sentinel insight, key insights, ADR/Occ/RevPAR comparison charts, daily drilldown table, market context, tier distribution, and neighbourhoods. Day selectors: 7/14/30/60/90. Navigation: Revenue > click sidebar items (Demand Radar, Compset Intelligence) in Intelligence section.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Market supply data uses smart simulation fallback if no scans exist",
+      "Competitor pricing data simulated if no scraped data available",
+      "7-day pickup change simulated (would compare current vs 7-day-old scans in production)",
+      "Segment occupancy/ADR simulated based on supply data when no competitor data exists"
+    ]
+  }
+}

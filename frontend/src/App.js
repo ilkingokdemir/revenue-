@@ -61,6 +61,7 @@ import { LostFoundPanel } from "./components/dashboard/LostFoundPanel";
 import { EventsPanel } from "./components/dashboard/EventsPanel";
 import { SettingsHubPanel } from "./components/dashboard/SettingsHubPanel";
 import { BookingEngineAdmin } from "./components/dashboard/BookingEngineAdmin";
+import { BookingTimeline } from "./components/dashboard/BookingTimeline";
 import { RevenuePanel } from "./components/dashboard/RevenuePanel";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
@@ -2496,6 +2497,7 @@ const Dashboard = ({ user, onLogout }) => {
       items: [
         { id: "dashboard", icon: House, name: t("nav.dashboard"), testId: "dashboard-btn" },
         { id: "my-tasks", icon: Target, name: "My Tasks", testId: "my-tasks-btn" },
+        { id: "calendar", icon: CalendarBlank, name: "Calendar", testId: "sidebar-calendar" },
         { id: "revenue", icon: ChartLine, name: "Revenue Mgmt", testId: "revenue-btn" },
       ]
     },
@@ -2720,6 +2722,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* My Tasks */}
         {activeView === "my-tasks" && (
           <MyTasksPanel user={user} />
+        )}
+
+        {/* Booking Calendar Timeline */}
+        {activeView === "calendar" && (
+          <BookingTimeline properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Revenue Management */}

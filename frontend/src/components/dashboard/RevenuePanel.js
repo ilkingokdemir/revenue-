@@ -18,10 +18,12 @@ import { ExportBar } from "./RevenueExports";
 import { MarketRobot } from "./MarketRobot";
 import { DynamicPricingEngine } from "./DynamicPricingEngine";
 import { EventIntelligence } from "./EventIntelligence";
+import { ChannelManager } from "./ChannelManager";
+import { HistoricalPricing } from "./HistoricalPricing";
 import {
   BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2,
   LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign,
-  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper
+  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper, History
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -49,6 +51,7 @@ const NAV_SECTIONS = [
     label: "Intelligence",
     items: [
       { id: "market-robot", label: "Market Robot", icon: Radar },
+      { id: "historical", label: "Historical Analysis", icon: History },
       { id: "forecasting", label: "Forecasting", icon: LineChart },
       { id: "analytics", label: "Analytics", icon: PieChart },
       { id: "competitors", label: "Competitors", icon: Eye },
@@ -65,6 +68,7 @@ const NAV_SECTIONS = [
   {
     label: "Distribution",
     items: [
+      { id: "channel-manager", label: "Channel Manager", icon: Network },
       { id: "segments", label: "Segments", icon: Users },
       { id: "parity", label: "Parity", icon: Shield },
       { id: "overbooking", label: "Overbooking", icon: Hotel },
@@ -182,6 +186,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
               {tab === "market-robot" && <MarketRobot propertyId={pid} />}
+              {tab === "historical" && <HistoricalPricing propertyId={pid} />}
               {tab === "analytics" && <RevenueAnalytics propertyId={pid} />}
               {tab === "reports" && <ExportBar propertyId={pid} />}
               {tab === "approvals" && <RevenueApprovals propertyId={pid} />}
@@ -193,6 +198,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "action-center" && <RevenueActionCenter propertyId={pid} />}
               {tab === "profit-os" && <RevenueProfitOS propertyId={pid} />}
               {tab === "distribution" && <RevenueDistribution propertyId={pid} />}
+              {tab === "channel-manager" && <ChannelManager propertyId={pid} />}
               {tab === "competitors" && <RevenueCompetitors propertyId={pid} />}
               {tab === "rate-resolver" && <RevenueRateResolver propertyId={pid} roomTypes={roomTypes} />}
               {tab === "wizard" && <RevenueSetupWizard propertyId={pid} />}

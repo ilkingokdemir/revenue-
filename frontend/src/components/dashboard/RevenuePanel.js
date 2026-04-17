@@ -27,10 +27,12 @@ import { WhatIfSimulator } from "./WhatIfSimulator";
 import { DemandRadar } from "./DemandRadar";
 import { CompsetIntelligence } from "./CompsetIntelligence";
 import { PriceAlerts } from "./PriceAlerts";
+import { DisplacementAnalysis } from "./DisplacementAnalysis";
+import { LOSOptimizer } from "./LOSOptimizer";
 import {
   BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2,
   LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign,
-  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper, History, Activity, Trophy, AlertTriangle
+  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper, History, Activity, Trophy, AlertTriangle, Scale, Timer
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -65,6 +67,8 @@ const NAV_SECTIONS = [
       { id: "revenue-forecast", label: "Revenue Forecast", icon: DollarSign },
       { id: "rate-actions", label: "Rate Actions", icon: Zap },
       { id: "what-if", label: "What-If Simulator", icon: FlaskConical },
+      { id: "displacement", label: "Displacement", icon: Scale },
+      { id: "los-optimizer", label: "LOS Optimizer", icon: Timer },
       { id: "historical", label: "Historical Analysis", icon: History },
       { id: "forecasting", label: "Forecasting", icon: LineChart },
       { id: "analytics", label: "Analytics", icon: PieChart },
@@ -207,6 +211,8 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "revenue-forecast" && <RevenueForecast propertyId={pid} />}
               {tab === "rate-actions" && <RateRecommendations propertyId={pid} />}
               {tab === "what-if" && <WhatIfSimulator propertyId={pid} />}
+              {tab === "displacement" && <DisplacementAnalysis propertyId={pid} />}
+              {tab === "los-optimizer" && <LOSOptimizer propertyId={pid} />}
               {tab === "historical" && <HistoricalPricing propertyId={pid} />}
               {tab === "analytics" && <RevenueAnalytics propertyId={pid} />}
               {tab === "reports" && <ExportBar propertyId={pid} />}

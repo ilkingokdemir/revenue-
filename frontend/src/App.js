@@ -53,6 +53,7 @@ import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
 import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
 import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
 import { ScheduledReports } from "./components/dashboard/ScheduledReports";
+import { MobileCompanion } from "./components/dashboard/MobileCompanion";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
@@ -152,6 +153,7 @@ import {
   Wrench,
   Globe,
   MagicWand,
+  DeviceMobile,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2577,6 +2579,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
+        { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
@@ -3115,6 +3118,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Scheduled Reports */}
         {activeView === "scheduled-reports" && (
           <div className="p-6"><ScheduledReports propertyId={activePropertyId} /></div>
+        )}
+
+        {/* Mobile Companion */}
+        {activeView === "mobile-companion" && (
+          <div className="p-6"><MobileCompanion propertyId={activePropertyId} /></div>
         )}
 
         {/* Operations Hub */}

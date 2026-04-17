@@ -84,6 +84,9 @@ from routes.compset_intel import create_compset_intel_router
 from routes.price_alerts import create_price_alerts_router
 from routes.booking_timeline import create_booking_timeline_router
 from routes.guest_services import create_guest_services_router
+from routes.displacement import create_displacement_router
+from routes.los_optimizer import create_los_optimizer_router
+from routes.mobile_api import create_mobile_router
 
 # Import extracted modules
 from models import (
@@ -451,6 +454,12 @@ booking_timeline_router = create_booking_timeline_router(db, require_roles)
 api_router.include_router(booking_timeline_router)
 guest_services_router = create_guest_services_router(db, require_roles)
 api_router.include_router(guest_services_router)
+displacement_router = create_displacement_router(db, require_roles)
+api_router.include_router(displacement_router)
+los_optimizer_router = create_los_optimizer_router(db, require_roles)
+api_router.include_router(los_optimizer_router)
+mobile_router = create_mobile_router(db, require_roles)
+api_router.include_router(mobile_router)
 
 app.include_router(api_router)
 

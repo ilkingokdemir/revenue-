@@ -90,6 +90,9 @@ from routes.mobile_api import create_mobile_router
 from routes.weekly_digest import create_weekly_digest_router
 from routes.upsell_engine import create_upsell_router
 from routes.rate_scraper import create_rate_scraper_router
+from routes.enhanced_dashboard import create_enhanced_dashboard_router
+from routes.reports_hub import create_reports_hub_router
+from routes.finance_pl import create_finance_pl_router
 
 # Import extracted modules
 from models import (
@@ -469,6 +472,12 @@ upsell_router = create_upsell_router(db, require_roles, LlmChat, UserMessage)
 api_router.include_router(upsell_router)
 rate_scraper_router = create_rate_scraper_router(db, require_roles)
 api_router.include_router(rate_scraper_router)
+enhanced_dashboard_router = create_enhanced_dashboard_router(db, require_roles)
+api_router.include_router(enhanced_dashboard_router)
+reports_hub_router = create_reports_hub_router(db, require_roles)
+api_router.include_router(reports_hub_router)
+finance_pl_router = create_finance_pl_router(db, require_roles)
+api_router.include_router(finance_pl_router)
 
 app.include_router(api_router)
 

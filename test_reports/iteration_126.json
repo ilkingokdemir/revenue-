@@ -1,0 +1,160 @@
+{
+  "summary": "Iteration 126 - Enhanced Dashboard, Reports Hub, Finance P&L fully tested. All 10 backend tests passed (100%). Frontend UI verified with all components loading correctly, data displaying properly, and navigation working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "enhanced_dashboard_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/dashboard/enhanced/{property_id}",
+      "tests_passed": 1,
+      "features": [
+        "KPIs: in_house_guests, occupancy_pct, arrivals_today, departures_today, daily_income, total_rooms, pending_payment",
+        "Financial Overview: this_month, previous_month, next_month, same_month_last_year with gross, room_revenue, adr, commission, net, bookings, room_nights",
+        "7-day revenue chart with date, dow, revenue, bookings per day",
+        "Staff on duty list",
+        "Housekeeping widget: clean, dirty, total, completion_pct",
+        "Recent bookings (last 24h)",
+        "Stayovers count"
+      ]
+    },
+    "reports_hub_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/reports/overview/{property_id} - KPIs, revenue by source/category, availability",
+        "GET /api/reports/revenue/{property_id} - Daily timeline, revenue breakdowns, top source",
+        "GET /api/reports/occupancy/{property_id} - Daily occupancy table, category breakdown, peak day",
+        "GET /api/reports/commission/{property_id} - Per-source commission summary with gross/rate/commission/paid/pending/net"
+      ],
+      "tests_passed": 4
+    },
+    "finance_pl_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/finance/pl/{property_id} - Operating ledger with costs vs revenue, profit/loss, margin%",
+        "GET /api/finance/pl/{property_id}/trend?months=6 - 6-month financial trend"
+      ],
+      "tests_passed": 2
+    },
+    "unauthorized_access": {
+      "status": "PASS",
+      "tests_passed": 3,
+      "features": [
+        "All endpoints return 401 without authentication"
+      ]
+    },
+    "frontend_enhanced_dashboard": {
+      "status": "PASS",
+      "data_testids": [
+        "enhanced-dashboard",
+        "dashboard-kpis",
+        "financial-overview",
+        "revenue-7d-chart",
+        "staff-on-duty",
+        "hk-widget",
+        "recent-bookings"
+      ],
+      "features_verified": [
+        "5 KPI cards: In-House Guests (3), Occupancy Rate (4%), Arrivals Today (3), Departures Today (3), Daily Income (£192.83)",
+        "Financial Overview table with 4-column YoY comparison (Previous Month, This Month, Next Month, Same Month LY)",
+        "Daily Gross Revenue chart: £1,915.24 total, Avg £273.61/day, 7-day bar chart",
+        "Staff On Duty widget: Ali (maintenance)",
+        "Housekeeping widget: 82% Completion, 18 Clean, 4 Dirty, 22 Total",
+        "Reservations: Last 24h: 0, Stayovers: 2, Pending: 38",
+        "Dashboard loads as default view after login"
+      ]
+    },
+    "frontend_reports_hub": {
+      "status": "PASS",
+      "data_testids": [
+        "reports-hub",
+        "report-tab-overview",
+        "report-tab-revenue",
+        "report-tab-occupancy",
+        "report-tab-commission",
+        "overview-kpis",
+        "revenue-kpis",
+        "revenue-timeline",
+        "occ-kpis",
+        "occ-daily-table",
+        "comm-kpis",
+        "comm-by-source"
+      ],
+      "features_verified": [
+        "4 tabs: Overview, Revenue Report, Occupancy Report, Commission Report",
+        "Overview: £5,417.00 Room Revenue, 81 Sold Room Nights, 2% Occupancy, £66.88 ADR, £812.55 Commission",
+        "Revenue Report: £5,417.00 Room Revenue, £186.79 Avg/Day, Top Source: Expedia (£979.00), Revenue Timeline chart",
+        "Occupancy Report: 2% Avg Occupancy, 82 Sold Nights, 3920 Available, 100% Peak, Daily Breakdown table with color coding",
+        "Commission Report: £5,417.00 Gross, £5,010.92 Net, £406.08 Commission, Commission Summary by Source table",
+        "Navigation: Reports Centre button in sidebar"
+      ]
+    },
+    "frontend_finance_pl": {
+      "status": "PASS",
+      "data_testids": [
+        "finance-pl",
+        "finance-title",
+        "cost-ledger",
+        "revenue-ledger",
+        "profit-box",
+        "financial-trend"
+      ],
+      "features_verified": [
+        "Canonical Profit Overview header: Gross, Room, ADR, Comm, Expenses, Payroll, Net",
+        "Operating Costs ledger: 7 items (Rent, Laundry, Utilities, OTA Commissions, Cleaning, Insurance, Maintenance)",
+        "Room Revenue ledger: 11 sources with booking counts",
+        "Operating Profit/Loss box: £-44,100.55 (red for loss), Margin: -814.1%",
+        "6-Month Financial Overview grouped bar chart (Revenue, Costs, Profit)",
+        "Navigation: Profit & Loss button in sidebar"
+      ]
+    },
+    "navigation": {
+      "status": "PASS",
+      "features_verified": [
+        "Dashboard loads as default view after login",
+        "Reports Centre button (data-testid='reports-centre-btn') navigates to Reports Hub",
+        "Profit & Loss button (data-testid='finance-pl-btn') navigates to Finance P&L"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration126_enhanced_dashboard_reports.py",
+    "/app/test_reports/pytest/pytest_iteration126_enhanced_dashboard_reports.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All data-testid attributes properly implemented for testing",
+    "All endpoints properly protected with role-based authentication (admin, manager, receptionist for dashboard)",
+    "Financial overview correctly calculates YoY comparison",
+    "Operating costs are estimated from room count and revenue when no expense records exist (MOCKED)",
+    "Commission rates properly applied per source (18% for OTAs, 0% for direct)",
+    "6-month trend chart correctly shows historical data"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration126_enhanced_dashboard_reports.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "None - used existing data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 126 tested Enhanced Dashboard, Reports Hub, and Finance P&L features. Enhanced Dashboard is the default view after login showing KPIs, Financial Overview table with YoY comparison, 7-day revenue chart, Staff On Duty, Housekeeping widget, and Recent Bookings. Reports Hub has 4 tabs (Overview, Revenue, Occupancy, Commission) accessible via 'Reports Centre' in sidebar. Finance P&L shows Operating Costs vs Room Revenue ledgers, Operating Profit/Loss box, and 6-Month Financial Overview chart, accessible via 'Profit & Loss' in sidebar. All 10 backend tests passed. All frontend components verified with data-testid selectors.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Finance costs are estimated from room count and revenue when no expense records exist"
+    ],
+    "notes": "Operating costs in Finance P&L are calculated estimates (Rent = rooms * 250, Laundry = room_nights * 5, etc.) when no actual expense records exist in the database."
+  }
+}

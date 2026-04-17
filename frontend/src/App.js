@@ -54,6 +54,9 @@ import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
 import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
 import { ScheduledReports } from "./components/dashboard/ScheduledReports";
 import { MobileCompanion } from "./components/dashboard/MobileCompanion";
+import { EnhancedDashboard } from "./components/dashboard/EnhancedDashboard";
+import { ReportsHub } from "./components/dashboard/ReportsHub";
+import { FinancePL } from "./components/dashboard/FinancePL";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
@@ -2582,6 +2585,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
+        { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "booking-engine-admin", icon: Globe, name: "Booking Engine", testId: "booking-engine-admin-btn" },
@@ -2747,7 +2751,7 @@ const Dashboard = ({ user, onLogout }) => {
       <main className="flex-1 lg:ml-56 pt-14 lg:pt-0">
         {/* Dashboard Home */}
         {activeView === "dashboard" && (
-          <DashboardHome properties={properties} activePropertyId={activePropertyId} onNavigate={setActiveView} />
+          <EnhancedDashboard propertyId={activePropertyId} />
         )}
 
         {/* My Tasks */}
@@ -3112,7 +3116,7 @@ const Dashboard = ({ user, onLogout }) => {
 
         {/* Reports Centre */}
         {activeView === "reports-centre" && (
-          <ReportsCentrePanel properties={properties} activePropertyId={activePropertyId} />
+          <div className="p-6"><ReportsHub propertyId={activePropertyId} /></div>
         )}
 
         {/* Scheduled Reports */}
@@ -3133,6 +3137,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Finance */}
         {activeView === "finance" && (
           <FinancePanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Finance P&L */}
+        {activeView === "finance-pl" && (
+          <div className="p-6"><FinancePL propertyId={activePropertyId} /></div>
         )}
 
         {/* Lost & Found */}

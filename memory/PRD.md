@@ -1,40 +1,37 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | Mobile Responsive | 110 Test Iterations (100%)
+## 30+ Modules | Mobile Responsive | 111 Test Iterations (100%)
 
 ### Revenue Management System — Industry-Leading (25+ Sidebar Modules)
 
 OVERVIEW: Dashboard, AI Copilot (GPT-5.2 + Voice), Setup Wizard
-PRICING: AI Dynamic Pricing (90-day **10-factor**), Rate Calendar, Pricing Strategy, Smart Pricing (EVENT-AWARE), Approvals
-INTELLIGENCE: Market Robot (10 sub-tabs, CONTINUOUS), Historical Analysis (2yr, UNIFIED), Forecasting, Analytics, Competitors
+PRICING: AI Dynamic Pricing (**365-day**, 10-factor, nights selector 30/60/90/180/365), Rate Calendar, Pricing Strategy, Smart Pricing, Approvals
+INTELLIGENCE: Market Robot (11 sub-tabs), Historical Analysis (2yr, UNIFIED), Forecasting, Analytics, Competitors
 AUTOMATION: Playbooks, Experiments, Action Center
 DISTRIBUTION: Channel Manager (9 OTAs), Segments, Parity, Overbooking, Distribution
 FINANCE: Profit OS, Reports & Export, Rate Resolver
 
-### Market Robot — 10 Sub-Tabs
-1. **Dashboard** — KPIs, event awareness, supply trend, smart scanner
-2. **Performance** (NEW) — ROI report, revenue uplift, by-source breakdown, monthly/daily impact
-3. **Supply Data** — Snapshots with event overlay
-4. **Rate Parity** — 6 OTA channels, parity score, violation grid
-5. **Competitor Analysis** — Deep insights from all data sources
-6. **Event Intelligence** — GPT-5.2 detection, manual add, auto-pricing
-7. **Competitor Hotels** — Add/scan by Booking.com URL
-8. **Auto-Adjustments** — Rate overrides by robot
-9. **Configuration** — City, currency, language, 30 presets
-10. **Scan Logs** — Full history
+### 365-Day Full Year Coverage
+- All scraping, pricing, events expanded from 90 → 365 days
+- Nights selector: 30 / 60 / 90 / 180 / 365 on both Dynamic Pricing and Market Demand
 
-### Scanner Performance Report (NEW)
-- Estimated revenue uplift (total + this month)
-- Days optimized (increases vs decreases)
-- Event revenue impact
-- Revenue breakdown by source (Auto Scanner, Market Robot, AI Dynamic Pricing, Event Intelligence)
-- Monthly revenue impact bars
-- Daily rate impact table (last 14 days)
+### Market Demand Dashboard (NEW — Dark Theme)
+- FLOWCAST chart: Occupancy bars + AI Rate dots + Min Rate dashed line
+- Rate Grid table: Date, DOW, AI Status, ADR, Occupancy, Min/Floor/Sell/Target Rates, Market %, Events
+- AI Status per day: AI / EVENT / MANUAL / BASE badges
+- 8 KPI cards in dark theme header
+- Nights selector: 30/60/90/180/365
 
-### Smart Tiered Scanner (Continuous)
-- Market Supply: 5-tier (30m/1h/3h/6h/12h)
-- Event Intelligence: Every 6 hours via GPT-5.2
-- Auto-repricing with ALL 10 factors
+### Market Robot — 11 Sub-Tabs
+1. Dashboard  2. Market Demand (NEW)  3. Performance  4. Supply Data
+5. Rate Parity  6. Competitor Analysis  7. Event Intelligence
+8. Competitor Hotels  9. Auto-Adjustments  10. Configuration  11. Scan Logs
+
+### Smart Tiered Scanner — 7 Tiers (365 Days)
+30m / 1h / 3h / 6h / 12h / 24h / 48h (Today → 12 months out)
+
+### AI Dynamic Pricing — 10 Factors, 365 Days
+Extended lead time tiers: 3-6 Months, 6-12 Months
 
 ## Upcoming Tasks
 - SEO meta tags for public booking engine (P2)
@@ -45,4 +42,4 @@ FINANCE: Profit OS, Reports & Export, Rate Resolver
 - Scheduled report email delivery
 - Mobile companion app
 
-## Testing: 110 iterations, 100% pass rate
+## Testing: 111 iterations, 100% pass rate

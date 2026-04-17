@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Radar, Search, Plus, Trash2, Users, Music, Trophy, Flag, Tent, Mic2, Building2, Calendar, Zap, TrendingUp, AlertTriangle } from "lucide-react";
+import { Radar, Search, Plus, Trash2, Users, Music, Trophy, Flag, Tent, Mic2, Building2, Calendar, Zap, TrendingUp, AlertTriangle, RefreshCw } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -29,11 +29,23 @@ export const EventIntelligence = ({ propertyId }) => {
     setScanning(true);
     setScanResult(null);
     try {
-      const { data } = await axios.post(`${API}/revenue/events/${propertyId}/scan`, { days_ahead: 90, auto_price: true });
+      const { data } = await axios.post(`${API}/revenue/events/${propertyId}/scan`, { days_ahead: 365, auto_price: true });
       setScanResult(data);
       toast.success(`Found ${data.events_found} events, ${data.prices_adjusted} prices adjusted`);
       load();
     } catch { toast.error("Scan failed"); }
+    setScanning(false);
+  };
+
+  const rescanFullYear = async () => {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const { data } = await axios.post(`${API}/revenue/events/${propertyId}/rescan-full`, {});
+      setScanResult(data);
+      toast.success(data.message);
+      load();
+    } catch { toast.error("Full rescan failed"); }
     setScanning(false);
   };
 
@@ -77,10 +89,15 @@ export const EventIntelligence = ({ propertyId }) => {
           <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 border border-stone-200 text-stone-600 px-3 py-2 rounded-xl text-sm font-medium hover:bg-stone-50" data-testid="event-add-manual">
             <Plus className="w-4 h-4" />Add Event
           </button>
+          <button onClick={rescanFullYear} disabled={scanning}
+            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50" data-testid="event-rescan-full">
+            {scanning ? <Search className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Rescan Full Year
+          </button>
           <button onClick={scan} disabled={scanning}
             className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50" data-testid="event-scan">
             {scanning ? <Search className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
-            {scanning ? "Scanning Events..." : "Scan Events (AI)"}
+            {scanning ? "Scanning..." : "Scan Events (AI)"}
           </button>
         </div>
       </div>
@@ -92,11 +109,13 @@ export const EventIntelligence = ({ propertyId }) => {
             <Zap className="w-5 h-5 text-red-500" />
             <span className="font-bold text-red-800">AI Scan Complete</span>
           </div>
-          <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-4 gap-4 text-sm">
             <div><span className="text-red-500">Events Found:</span> <strong>{scanResult.events_found}</strong></div>
             <div><span className="text-red-500">Stored:</span> <strong>{scanResult.events_stored}</strong></div>
             <div><span className="text-red-500">Prices Adjusted:</span> <strong>{scanResult.prices_adjusted}</strong></div>
+            {scanResult.old_events_cleared > 0 && <div><span className="text-red-500">Old Cleared:</span> <strong>{scanResult.old_events_cleared}</strong></div>}
           </div>
+          {scanResult.message && <p className="text-xs text-red-600 mt-2">{scanResult.message}</p>}
         </div>
       )}
 

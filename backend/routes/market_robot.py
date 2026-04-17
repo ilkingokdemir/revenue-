@@ -402,7 +402,11 @@ def create_market_robot_router(db, require_roles):
                 s["event"] = ev.get("name", "")
                 s["event_impact"] = ev.get("impact", "")
                 s["event_attendance"] = ev.get("estimated_attendance", 0)
-                s["event_boost"] = {"mega": 40, "large": 25, "medium": 12, "small": 5}.get(ev.get("impact", ""), 0)
+                s["hotel_demand_score"] = ev.get("hotel_demand_score", 0)
+                s["visitor_origin"] = ev.get("visitor_origin", "")
+                hds = int(ev.get("hotel_demand_score", 0) or 0)
+                imp = ev.get("impact", "")
+                s["event_boost"] = 45 if hds >= 80 or imp == "critical" else 30 if hds >= 60 or imp in ("high", "mega") else 15 if hds >= 40 or imp in ("moderate", "large") else 5 if hds >= 20 or imp in ("low", "medium", "small") else 0
 
         # Summary stats
         if snapshots:
@@ -439,6 +443,9 @@ def create_market_robot_router(db, require_roles):
                 "impact": ev.get("impact", ""),
                 "category": ev.get("category", ""),
                 "estimated_attendance": ev.get("estimated_attendance", 0),
+                "hotel_demand_score": ev.get("hotel_demand_score", 0),
+                "visitor_origin": ev.get("visitor_origin", ""),
+                "reasoning": ev.get("reasoning", ""),
             } for ev in upcoming_events],
         }
 
@@ -1251,11 +1258,22 @@ def create_market_robot_router(db, require_roles):
                         price *= (1 + min(15, diff_pct * 0.3) / 100)
                     elif diff_pct < -20:
                         price *= (1 + max(-10, diff_pct * 0.2) / 100)
-                # 6. Event intelligence
+                # 6. Event intelligence (HDS-based)
                 event_for_day = event_map.get(ds)
                 if event_for_day:
-                    impact = event_for_day.get("impact", "")
-                    ev_pct = {"mega": 40, "large": 25, "medium": 12, "small": 5}.get(impact, 0)
+                    hds = int(event_for_day.get("hotel_demand_score", 0) or 0)
+                    imp = event_for_day.get("impact", "")
+                    # Smart HDS-based boost
+                    if hds >= 80 or imp == "critical":
+                        ev_pct = 45
+                    elif hds >= 60 or imp in ("high", "mega"):
+                        ev_pct = 30
+                    elif hds >= 40 or imp in ("moderate", "large"):
+                        ev_pct = 15
+                    elif hds >= 20 or imp in ("low", "medium", "small"):
+                        ev_pct = 5
+                    else:
+                        ev_pct = 0
                     if ev_pct:
                         price *= (1 + ev_pct / 100)
                 # 7. Aggressiveness
@@ -1314,10 +1332,21 @@ def create_market_robot_router(db, require_roles):
             date_from = now.strftime("%Y-%m-%d")
             date_to = (now + timedelta(days=365)).strftime("%Y-%m-%d")
 
-            system_prompt = f"""You are an event intelligence analyst for a hotel in {city}.
-Return ONLY a valid JSON array of upcoming events between {date_from} and {date_to}.
-Each event: name, date (YYYY-MM-DD), end_date, venue, category, estimated_attendance, impact (mega/large/medium/small), description, confidence.
-Focus on events with 1000+ attendance. Include known recurring events."""
+            system_prompt = f"""You are a HOTEL REVENUE intelligence analyst for {city}.
+Identify events that make people STAY IN HOTELS — not just any event.
+
+RULES:
+- Local football derby (both teams same city) = SKIP or HDS <15 — fans go home
+- International match (FIFA/UEFA/away team from abroad) = HDS 70-95
+- Top team visiting from DIFFERENT city = HDS 40-60
+- Major touring concert (stadium) = HDS 75-95
+- Multi-day festival = HDS 80-95
+- International conference = HDS 60-80
+- Local small gig/event = SKIP
+
+Return ONLY a JSON array. Each event: name, date (YYYY-MM-DD), end_date, venue, category, estimated_attendance, hotel_demand_score (0-100), visitor_origin (international/national/regional/local), is_evening (bool), is_multi_day (bool), reasoning (1 sentence), impact (critical/high/moderate/low/minimal), estimated_hotel_nights, confidence.
+Skip events with hotel_demand_score below 15.
+Date range: {date_from} to {date_to}."""
 
             chat = LlmChat(api_key=api_key, session_id=f"auto-event-{city}-{now.strftime('%Y%m%d%H')}",
                            system_message=system_prompt).with_model("openai", "gpt-5.2")
@@ -1352,6 +1381,12 @@ Focus on events with 1000+ attendance. Include known recurring events."""
                 "venue": event.get("venue", ""),
                 "category": event.get("category", "other"),
                 "estimated_attendance": int(event.get("estimated_attendance", 0) or 0),
+                "hotel_demand_score": int(event.get("hotel_demand_score", 0) or 0),
+                "visitor_origin": event.get("visitor_origin", "unknown"),
+                "is_evening": event.get("is_evening", True),
+                "is_multi_day": event.get("is_multi_day", False),
+                "estimated_hotel_nights": int(event.get("estimated_hotel_nights", 0) or 0),
+                "reasoning": event.get("reasoning", ""),
                 "impact": event.get("impact", "small"),
                 "description": event.get("description", ""),
                 "confidence": event.get("confidence", "medium"),

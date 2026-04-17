@@ -20,8 +20,8 @@ TIERS = [
     {"label": "6-12 months out",    "days_from": 180, "days_to": 365, "interval_mins": 2880},
 ]
 
-# Event scanning schedule
-EVENT_SCAN_INTERVAL_MINS = 360  # Every 6 hours
+# Event scanning schedule — every 2 hours for fresh data
+EVENT_SCAN_INTERVAL_MINS = 120
 
 
 class SmartScanner:

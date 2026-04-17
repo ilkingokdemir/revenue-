@@ -121,17 +121,21 @@ Include known recurring events, sports seasons, touring concerts, etc."""
                 system_message=system_prompt,
             ).with_model("openai", "gpt-5.2")
 
+            scraped_text = raw_text[:4000] if len(raw_text) > 100 else "No scraped data available — use your knowledge of known events in this city."
             user_msg = UserMessage(
-                text=f"Scraped data about events in {city}:\n\n{raw_text[:4000]}"
+                text=f"Find ALL upcoming hotel-demand events in {city} for the next {days_ahead} days (from {date_from} to {date_to}).\n\nScraped data:\n{scraped_text}\n\nIMPORTANT: Even if scraped data is empty, use your knowledge of annual events, sports seasons, concert tours, festivals for {city}. Return at least 10-20 events as a JSON array."
             )
             response = await chat.send_message(user_msg)
+            logger.info(f"Event AI response length: {len(response)}")
 
             json_match = re.search(r'\[[\s\S]*\]', response)
             if json_match:
                 import json
                 events = json.loads(json_match.group())
-                # Filter out low-impact events
-                return [e for e in events if int(e.get("hotel_demand_score", 0) or 0) >= 15]
+                filtered = [e for e in events if int(e.get("hotel_demand_score", 0) or 0) >= 15]
+                logger.info(f"Event AI: {len(events)} total, {len(filtered)} with HDS >= 15")
+                return filtered
+            logger.warning(f"Event AI: No JSON array found in response")
             return []
         except Exception as e:
             logger.error(f"AI event analysis failed: {e}")
@@ -389,5 +393,91 @@ Include known recurring events, sports seasons, touring concerts, etc."""
                            current_user: dict = Depends(require_roles("admin", "manager"))):
         await db.market_events.delete_one({"id": event_id})
         return {"message": "Event removed"}
+
+    @router.post("/revenue/events/{property_id}/rescan-full")
+    async def rescan_full_year(property_id: str, data: Dict = {},
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Clear old events without HDS and do a fresh 365-day smart scan."""
+        config = await db.market_robot_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        ) or {}
+        city = data.get("city") or config.get("city", "London")
+        now = datetime.now(timezone.utc)
+
+        # Remove old events without HDS scores
+        old_deleted = await db.market_events.delete_many({
+            "property_id": property_id,
+            "hotel_demand_score": {"$exists": False}
+        })
+        deleted_count = old_deleted.deleted_count
+
+        # Also remove events with HDS of 0 (old format mapped)
+        old_zero = await db.market_events.delete_many({
+            "property_id": property_id,
+            "hotel_demand_score": 0
+        })
+        deleted_count += old_zero.deleted_count
+
+        # Now do fresh 365-day scan
+        raw_text = await _search_events_web(city, 365)
+        events = await _analyze_events_with_ai(city, raw_text, 365)
+
+        stored = 0
+        for event in events:
+            event_date = event.get("date", "")
+            if not event_date:
+                continue
+            try:
+                ed = datetime.strptime(event_date, "%Y-%m-%d")
+                now_naive = now.replace(tzinfo=None)
+                if ed.date() < now_naive.date() or ed > now_naive + timedelta(days=365):
+                    continue
+            except (ValueError, TypeError):
+                continue
+
+            hds = int(event.get("hotel_demand_score", 0) or 0)
+            impact = event.get("impact") or _get_impact_from_hds(hds)
+            impact = LEGACY_MAP.get(impact, impact)
+
+            doc = {
+                "id": str(uuid.uuid4())[:8],
+                "property_id": property_id,
+                "city": city,
+                "name": event.get("name", "Unknown Event"),
+                "date": event_date,
+                "end_date": event.get("end_date", event_date),
+                "venue": event.get("venue", ""),
+                "category": event.get("category", "other"),
+                "estimated_attendance": int(event.get("estimated_attendance", 0) or 0),
+                "hotel_demand_score": hds,
+                "visitor_origin": event.get("visitor_origin", "unknown"),
+                "is_evening": event.get("is_evening", True),
+                "is_multi_day": event.get("is_multi_day", False),
+                "estimated_hotel_nights": int(event.get("estimated_hotel_nights", 0) or 0),
+                "reasoning": event.get("reasoning", ""),
+                "impact": impact,
+                "description": event.get("description", ""),
+                "confidence": event.get("confidence", "medium"),
+                "scanned_at": now.isoformat(),
+            }
+            await db.market_events.update_one(
+                {"property_id": property_id, "name": doc["name"], "date": doc["date"]},
+                {"$set": doc}, upsert=True
+            )
+            stored += 1
+
+        # Auto-price with new events
+        prices_adjusted = 0
+        if stored > 0:
+            prices_adjusted = await _apply_event_pricing(db, property_id, events)
+
+        return {
+            "old_events_cleared": deleted_count,
+            "events_found": len(events),
+            "events_stored": stored,
+            "prices_adjusted": prices_adjusted,
+            "city": city,
+            "message": f"Full rescan: Cleared {deleted_count} old events. Found {len(events)} smart events, stored {stored} with HDS scoring. {prices_adjusted} rates adjusted.",
+        }
 
     return router

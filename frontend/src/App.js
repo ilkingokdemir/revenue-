@@ -64,6 +64,7 @@ import { ComplianceRegister } from "./components/dashboard/ComplianceRegister";
 import { LaundryManagement } from "./components/dashboard/LaundryManagement";
 import { PayrollManagement } from "./components/dashboard/PayrollManagement";
 import { ExpenseManagement } from "./components/dashboard/ExpenseManagement";
+import { CashFlowForecast } from "./components/dashboard/CashFlowForecast";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
@@ -2599,6 +2600,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
         { id: "payroll", icon: Wallet, name: "Payroll", testId: "payroll-btn" },
         { id: "expenses", icon: Receipt, name: "Expenses", testId: "expenses-btn" },
+        { id: "cash-flow", icon: ChartLine, name: "Cash Flow", testId: "cash-flow-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
@@ -3212,6 +3214,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Expense Management */}
         {activeView === "expenses" && (
           <div className="p-6"><ExpenseManagement propertyId={activePropertyId} user={user} /></div>
+        )}
+
+        {/* Cash Flow Forecast */}
+        {activeView === "cash-flow" && (
+          <div className="p-6"><CashFlowForecast propertyId={activePropertyId} user={user} /></div>
         )}
       </main>
 

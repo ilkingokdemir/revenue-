@@ -99,6 +99,7 @@ from routes.compliance import create_compliance_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
 from routes.expenses import create_expenses_router
+from routes.cashflow import create_cashflow_router
 
 # Import extracted modules
 from models import (
@@ -496,6 +497,8 @@ payroll_router = create_payroll_router(db, require_roles)
 api_router.include_router(payroll_router)
 expenses_router = create_expenses_router(db, require_roles)
 api_router.include_router(expenses_router)
+cashflow_router = create_cashflow_router(db, require_roles)
+api_router.include_router(cashflow_router)
 
 app.include_router(api_router)
 

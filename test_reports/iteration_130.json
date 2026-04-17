@@ -1,0 +1,100 @@
+{
+  "summary": "Iteration 130 - Cash Flow Forecast feature fully tested. All 24 backend API tests passed (100%). Frontend UI verified with all data-testid selectors working, charts rendering correctly, period selection functional, opening balance debounced updates working, and at-risk badge appearing when lowest_balance < 0.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "cashflow_forecast_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/finance/cash-flow-forecast/{property_id}?days=&opening_balance=",
+      "tests_passed": 24,
+      "features": [
+        "Returns period_days, start, end, opening_balance, total_inflows, total_outflows, net, ending_balance, lowest_balance, lowest_date, at_risk, payroll_estimate_monthly, counts, days",
+        "days array length equals period_days",
+        "Each day has date, inflows, outflows, net, running_balance, items:{in:[],out:[]}",
+        "ending_balance == opening_balance + total_inflows - total_outflows (within rounding)",
+        "running_balance monotonically accumulates day by day = prev_balance + inflows - outflows",
+        "Bookings with status confirmed/checked_in/pending and check_in in window count as inflows",
+        "?days=60 and ?days=90 produce correctly sized windows",
+        "Invalid days value (e.g., 15, 45) defaults to 30",
+        "opening_balance=0 still works",
+        "at_risk=true when lowest_balance<0",
+        "Endpoint requires admin/manager auth (401 without token)"
+      ]
+    },
+    "frontend_cashflow_forecast": {
+      "status": "PASS",
+      "data_testids": [
+        "cashflow-forecast",
+        "cashflow-title",
+        "cashflow-kpis",
+        "opening-balance-input",
+        "period-30",
+        "period-60",
+        "period-90",
+        "balance-chart",
+        "flows-chart",
+        "events-table",
+        "event-day-{date}",
+        "at-risk-badge"
+      ],
+      "features_verified": [
+        "5 KPI cards: Opening, Inflows (with count), Outflows, Ending (Day N), Lowest with date",
+        "Opening balance input with debounced updates",
+        "Period selector buttons (30d/60d/90d) change window and reload data",
+        "Projected Running Balance area chart renders correctly",
+        "Daily Inflows vs Outflows stacked bar chart renders correctly",
+        "Top Cash Events table shows event-day rows with dates, inflows, outflows, running balance",
+        "At-risk badge appears when opening_balance low enough to make lowest_balance negative",
+        "Event rows are expandable to show item details"
+      ]
+    },
+    "navigation": {
+      "status": "PASS",
+      "features_verified": [
+        "Sidebar nav item 'Cash Flow' with data-testid='cash-flow-btn' present",
+        "Clicking cash-flow-btn navigates to Cash Flow Forecast page"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration130_cashflow.py",
+    "/app/test_reports/pytest/pytest_iteration130_cashflow.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All data-testid attributes properly implemented for testing",
+    "Endpoint properly protected with role-based authentication (admin/manager)",
+    "Bookings correctly filtered by status (confirmed/checked_in/pending) and check_in date in window",
+    "Running balance calculation correctly accumulates day by day",
+    "at_risk flag correctly set when lowest_balance < 0",
+    "Invalid days values (not 30/60/90) correctly default to 30",
+    "Payroll estimate correctly calculates avg of last 3 approved/paid runs",
+    "Recurring expenses with next_due in window correctly counted as outflows",
+    "Future expenses with recurring_id are correctly deduplicated to avoid double-counting"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration130_cashflow.py"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24 passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "No test data created - used existing bookings in database (25-33 bookings depending on window)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 130 tested Cash Flow Forecast - a single-endpoint aggregator that combines bookings (inflows on check_in), recurring expenses (outflows on next_due), recurring invoices (inflows on next_due), and payroll estimate (avg of last 3 approved/paid runs, posted on last day of each month). All 24 backend tests passed. Frontend shows 5 KPI cards, area chart for running balance, bar chart for daily flows, and events table. Period selector (30/60/90 days) and opening balance input work correctly. At-risk badge appears when lowest_balance < 0. Currently 25-33 bookings contribute inflows, 0 recurring expenses/invoices seeded, 0 payroll estimate (no approved/paid runs).",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

@@ -497,7 +497,7 @@ payroll_router = create_payroll_router(db, require_roles)
 api_router.include_router(payroll_router)
 expenses_router = create_expenses_router(db, require_roles)
 api_router.include_router(expenses_router)
-cashflow_router = create_cashflow_router(db, require_roles, LlmChat, UserMessage)
+cashflow_router = create_cashflow_router(db, require_roles)
 api_router.include_router(cashflow_router)
 
 app.include_router(api_router)

@@ -2,7 +2,9 @@
 
 ## 73+ Modules | Mobile Responsive | 130 Test Iterations (100%)
 
-### NEW (Iter 130): Cash Flow Forecast — The CFO Dashboard
+### Iter 131: Cash Flow AI Recommendations — **REMOVED per user request** (kept base Cash Flow Forecast)
+
+### Iter 130: Cash Flow Forecast — The CFO Dashboard
 
 **Cash Flow Forecast**
 - Period selector 30/60/90 days forward from today

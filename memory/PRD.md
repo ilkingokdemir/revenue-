@@ -1,30 +1,22 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | Mobile Responsive | 122 Test Iterations (100%)
+## 50+ Modules | Mobile Responsive | 123 Test Iterations (100%)
 
-### NEW: AI Auto-Respond Reviews + OTA Availability Sync
-- **Batch AI Auto-Respond** — GPT-5.2 generates personalized responses for all unresponded reviews in one click. 3 tone options: Professional, Friendly, Apologetic. Shows response previews + processed count.
-- **OTA Availability Sync** — Push real-time room availability to all connected OTA channels. Per-room-type breakdown. Sync logs for audit trail.
+### NEW: Digital Check-in + Invoice/Folio + Scheduled Reports
+- **Digital Check-in** — Public guest registration form (passport, ID, address, emergency contact, arrival time, signature, T&C). "Send Check-in Link" from booking detail. No auth required for guests.
+- **Invoice/Folio Management** — Full itemised folio per booking: room charges (auto-generated), add charges (minibar/room service/laundry/spa/parking/damage), record payments, adjustments (discounts/refunds). Invoice number (INV-XXXXXXXX). Auto-updates payment status (pending/partial/paid).
+- **Scheduled Reports** — Create daily/weekly/monthly auto-reports with: occupancy, revenue, arrivals, departures, housekeeping. Set time, recipients, sections. Live preview with KPI cards.
 
 ### Gantt-Style Booking Calendar
-- Visual timeline grid (7/14/30d), drag-and-drop room reassignment, bulk check-in/out, today's actions dashboard, reservation detail slide-over
+- Visual timeline, drag-drop room reassignment, bulk check-in/out, tabbed detail (Info/Folio/Actions)
 
-### Price Intelligence Alerts
-- 8-check market scanner, configurable thresholds, alert feed with actions
-
-### Demand Radar & Compset Intelligence
-- Demand chart, WAP, pricing opportunity map, ranking cards, comparison charts
-
-### Revenue Intelligence Suite
-- Booking Pace, Revenue Forecast, Rate Recommendations, What-If Simulator
-
-### Revenue Sidebar (30+ modules)
-INTELLIGENCE | PRICING | DISTRIBUTION | FINANCE
+### AI Auto-Respond Reviews + OTA Availability Sync
+### Price Intelligence Alerts, Demand Radar, Compset Intelligence
+### Revenue Intelligence: Booking Pace, Revenue Forecast, Rate Recommendations, What-If Simulator
+### 30+ Revenue sub-modules | Channel Manager (9 OTAs) | AI Dynamic Pricing (365-day)
 
 ## Architecture
 React + Tailwind + Shadcn UI, FastAPI + MongoDB, GPT-5.2 via Emergent LLM Key, Stripe, Resend
 
-## Testing: 122 iterations, 100% pass rate
-
-## Upcoming: SEO meta tags for booking engine
-## Future: Weather Intelligence, Displacement Analysis, LOS Optimizer, Email reports, Mobile app
+## Testing: 123 iterations, 100% pass rate
+## Future: Displacement Analysis, LOS Optimizer, Mobile app

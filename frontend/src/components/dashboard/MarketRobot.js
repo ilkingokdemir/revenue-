@@ -8,6 +8,7 @@ import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, Che
 import { EventIntelligence } from "./EventIntelligence";
 import { RateParity } from "./RateParity";
 import { CompetitorAnalysis } from "./CompetitorAnalysis";
+import { PerformanceReport } from "./PerformanceReport";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -158,7 +159,7 @@ export const MarketRobot = ({ propertyId }) => {
 
       {/* Sub-tabs */}
       <div className="flex items-center gap-1 border-b border-stone-200">
-        {[{id:"dashboard",label:"Dashboard"},{id:"supply",label:"Supply Data"},{id:"parity",label:"Rate Parity"},{id:"analysis",label:"Competitor Analysis"},{id:"events",label:"Event Intelligence"},{id:"competitors-tab",label:"Competitor Hotels"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
+        {[{id:"dashboard",label:"Dashboard"},{id:"performance",label:"Performance"},{id:"supply",label:"Supply Data"},{id:"parity",label:"Rate Parity"},{id:"analysis",label:"Competitor Analysis"},{id:"events",label:"Event Intelligence"},{id:"competitors-tab",label:"Competitor Hotels"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
           <button key={t.id} onClick={() => setSubTab(t.id)} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-[1px] transition-all ${subTab === t.id ? "text-indigo-700 border-indigo-500" : "text-stone-400 border-transparent hover:text-stone-600"}`} data-testid={`market-robot-${t.id}`}>{t.label}</button>
         ))}
       </div>
@@ -440,6 +441,9 @@ export const MarketRobot = ({ propertyId }) => {
         </div>
       )}
 
+
+      {/* Performance Report Tab */}
+      {subTab === "performance" && <PerformanceReport propertyId={propertyId} />}
 
       {/* Rate Parity Tab */}
       {subTab === "parity" && <RateParity propertyId={propertyId} />}

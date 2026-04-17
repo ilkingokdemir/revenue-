@@ -461,7 +461,146 @@ def create_market_robot_router(db, require_roles):
         ).sort("date", 1).to_list(200)
         return {"adjustments": overrides}
 
-    # ==================== COMPETITOR HOTELS ====================
+    # ==================== PERFORMANCE REPORT ====================
+
+    @router.get("/revenue/market-robot/{property_id}/performance")
+    async def get_performance_report(property_id: str,
+                                     current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Scanner Performance Report — ROI, revenue impact, pricing adjustments breakdown."""
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+        month_start = now.replace(day=1).strftime("%Y-%m-%d")
+
+        # Get base rate
+        rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
+        base_rate = float(rt.get("base_rate", 100) or 100) if rt else 100.0
+
+        # Get ALL rate overrides set by robot/scanner/dynamic-pricing
+        all_overrides = await db.rate_overrides.find(
+            {"property_id": property_id, "set_by": {"$in": ["auto-scanner", "market-robot", "ai-dynamic-pricing", "event-intelligence"]}},
+            {"_id": 0}
+        ).sort("date", 1).to_list(500)
+
+        # Calculate revenue uplift
+        total_uplift = 0
+        total_days_adjusted = 0
+        increases = 0
+        decreases = 0
+        event_boosts = 0
+        event_uplift = 0
+        market_adjustments = 0
+        by_source = {"auto-scanner": 0, "market-robot": 0, "ai-dynamic-pricing": 0, "event-intelligence": 0}
+        daily_impact = []
+        monthly_impact = {}
+
+        for ov in all_overrides:
+            rate = float(ov.get("custom_rate", base_rate))
+            diff = rate - base_rate
+            diff_pct = round((diff / base_rate) * 100, 1) if base_rate > 0 else 0
+            ov_date = ov.get("date", "")
+            source = ov.get("set_by", "unknown")
+            reason = ov.get("reason", "")
+
+            if rate != base_rate:
+                total_days_adjusted += 1
+                total_uplift += diff
+                if diff > 0:
+                    increases += 1
+                else:
+                    decreases += 1
+
+                if source in by_source:
+                    by_source[source] += diff
+
+                if "Event" in reason or "event" in reason:
+                    event_boosts += 1
+                    event_uplift += diff
+
+                if "market" in reason.lower() or source == "market-robot":
+                    market_adjustments += 1
+
+            # Month grouping
+            month_key = ov_date[:7] if ov_date else "unknown"
+            if month_key not in monthly_impact:
+                monthly_impact[month_key] = {"uplift": 0, "days": 0, "increases": 0, "decreases": 0, "events": 0}
+            monthly_impact[month_key]["uplift"] += diff
+            monthly_impact[month_key]["days"] += 1
+            if diff > 0:
+                monthly_impact[month_key]["increases"] += 1
+            elif diff < 0:
+                monthly_impact[month_key]["decreases"] += 1
+            if "Event" in reason or "event" in reason:
+                monthly_impact[month_key]["events"] += 1
+
+            # Daily (last 14 days)
+            if ov_date >= (now - timedelta(days=14)).strftime("%Y-%m-%d") and ov_date <= today_str:
+                daily_impact.append({
+                    "date": ov_date,
+                    "base_rate": base_rate,
+                    "robot_rate": rate,
+                    "uplift": round(diff, 2),
+                    "uplift_pct": diff_pct,
+                    "source": source,
+                    "has_event": "Event" in reason or "event" in reason,
+                })
+
+        # Get scan counts
+        total_scans = await db.market_robot_logs.count_documents({"property_id": property_id})
+        scans_this_month = await db.market_robot_logs.count_documents(
+            {"property_id": property_id, "scanned_at": {"$gte": month_start}}
+        )
+
+        # Events detected
+        total_events = await db.market_events.count_documents({"property_id": property_id})
+        mega_events = await db.market_events.count_documents({"property_id": property_id, "impact": "mega"})
+        large_events = await db.market_events.count_documents({"property_id": property_id, "impact": "large"})
+
+        # Estimated revenue impact (assume avg 10 rooms per night)
+        avg_rooms = 10
+        estimated_rev_uplift = round(total_uplift * avg_rooms, 2)
+        monthly_rev_uplift = round(sum(m["uplift"] for k, m in monthly_impact.items() if k >= month_start[:7]) * avg_rooms, 2)
+
+        # Monthly sorted
+        monthly_sorted = []
+        for mk in sorted(monthly_impact.keys()):
+            mi = monthly_impact[mk]
+            monthly_sorted.append({
+                "month": mk,
+                "month_label": datetime.strptime(mk + "-01", "%Y-%m-%d").strftime("%b %Y") if mk != "unknown" else "Unknown",
+                "uplift_per_room": round(mi["uplift"], 2),
+                "est_revenue_uplift": round(mi["uplift"] * avg_rooms, 2),
+                "days_adjusted": mi["days"],
+                "increases": mi["increases"],
+                "decreases": mi["decreases"],
+                "event_days": mi["events"],
+            })
+
+        return {
+            "kpis": {
+                "total_days_adjusted": total_days_adjusted,
+                "total_rate_uplift": round(total_uplift, 2),
+                "avg_uplift_per_day": round(total_uplift / max(total_days_adjusted, 1), 2),
+                "estimated_revenue_uplift": estimated_rev_uplift,
+                "monthly_revenue_uplift": monthly_rev_uplift,
+                "increases": increases,
+                "decreases": decreases,
+                "event_boost_days": event_boosts,
+                "event_revenue_uplift": round(event_uplift * avg_rooms, 2),
+                "total_scans": total_scans,
+                "scans_this_month": scans_this_month,
+                "total_events_detected": total_events,
+                "mega_events": mega_events,
+                "large_events": large_events,
+            },
+            "by_source": {
+                "auto_scanner": round(by_source.get("auto-scanner", 0) * avg_rooms, 2),
+                "market_robot": round(by_source.get("market-robot", 0) * avg_rooms, 2),
+                "ai_dynamic_pricing": round(by_source.get("ai-dynamic-pricing", 0) * avg_rooms, 2),
+                "event_intelligence": round(by_source.get("event-intelligence", 0) * avg_rooms, 2),
+            },
+            "daily_impact": sorted(daily_impact, key=lambda x: x["date"], reverse=True),
+            "monthly_impact": monthly_sorted,
+        }
 
     @router.get("/revenue/market-robot/{property_id}/competitors")
     async def get_competitors(property_id: str,

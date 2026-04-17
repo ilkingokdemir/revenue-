@@ -1,0 +1,230 @@
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { Badge } from "@/components/ui/badge";
+import { TrendingUp, TrendingDown, DollarSign, Zap, BarChart3, Calendar, Radar, PartyPopper, Activity, RefreshCw } from "lucide-react";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+
+const SOURCE_LABELS = {
+  auto_scanner: { label: "Auto Scanner", color: "bg-emerald-500" },
+  market_robot: { label: "Market Robot", color: "bg-indigo-500" },
+  ai_dynamic_pricing: { label: "AI Dynamic Pricing", color: "bg-violet-500" },
+  event_intelligence: { label: "Event Intelligence", color: "bg-red-500" },
+};
+
+export const PerformanceReport = ({ propertyId }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = () => {
+    setLoading(true);
+    axios.get(`${API}/revenue/market-robot/${propertyId}/performance`)
+      .then(r => { setData(r.data); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, [propertyId]);
+
+  if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Calculating performance...</div>;
+  if (!data) return null;
+
+  const { kpis, by_source, daily_impact, monthly_impact } = data;
+
+  // Bar chart max
+  const maxMonthly = Math.max(...monthly_impact.map(m => Math.abs(m.est_revenue_uplift)), 1);
+
+  return (
+    <div className="space-y-6" data-testid="performance-report">
+      {/* Hero Banner */}
+      <div className="bg-gradient-to-r from-emerald-800 via-emerald-900 to-teal-900 rounded-2xl p-6 text-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-6 h-6 text-emerald-300" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Robot Performance Report</h2>
+              <p className="text-sm text-white/60">Revenue impact from automated pricing across all sources</p>
+            </div>
+          </div>
+          <button onClick={load} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium" data-testid="perf-refresh">
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </button>
+        </div>
+
+        {/* Hero KPIs */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <p className="text-[10px] text-white/40 uppercase">Estimated Revenue Uplift</p>
+            <p className={`text-2xl font-bold mt-1 ${kpis.estimated_revenue_uplift >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+              {kpis.estimated_revenue_uplift >= 0 ? "+" : ""}{cur(kpis.estimated_revenue_uplift)}
+            </p>
+            <p className="text-[10px] text-white/30 mt-1">Total lifetime impact</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <p className="text-[10px] text-white/40 uppercase">This Month</p>
+            <p className={`text-2xl font-bold mt-1 ${kpis.monthly_revenue_uplift >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+              {kpis.monthly_revenue_uplift >= 0 ? "+" : ""}{cur(kpis.monthly_revenue_uplift)}
+            </p>
+            <p className="text-[10px] text-white/30 mt-1">Current month impact</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <p className="text-[10px] text-white/40 uppercase">Days Optimized</p>
+            <p className="text-2xl font-bold mt-1">{kpis.total_days_adjusted}</p>
+            <p className="text-[10px] text-white/30 mt-1">{kpis.increases} up / {kpis.decreases} down</p>
+          </div>
+          <div className="bg-white/5 rounded-xl p-4 text-center">
+            <p className="text-[10px] text-white/40 uppercase">Event Revenue</p>
+            <p className="text-2xl font-bold mt-1 text-red-300">+{cur(kpis.event_revenue_uplift)}</p>
+            <p className="text-[10px] text-white/30 mt-1">{kpis.event_boost_days} event-boosted days</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="perf-stats">
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 text-center">
+          <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">Avg Uplift/Day</p>
+          <p className={`text-2xl font-bold mt-1 ${kpis.avg_uplift_per_day >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+            {kpis.avg_uplift_per_day >= 0 ? "+" : ""}{cur(kpis.avg_uplift_per_day)}
+          </p>
+          <p className="text-[10px] text-stone-400">per room/night</p>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 text-center">
+          <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">Total Scans</p>
+          <p className="text-2xl font-bold text-indigo-600 mt-1">{kpis.total_scans}</p>
+          <p className="text-[10px] text-stone-400">{kpis.scans_this_month} this month</p>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-2xl p-5 text-center">
+          <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">Events Detected</p>
+          <p className="text-2xl font-bold text-red-500 mt-1">{kpis.total_events_detected}</p>
+          <p className="text-[10px] text-stone-400">{kpis.mega_events} mega, {kpis.large_events} large</p>
+        </div>
+        <div className="bg-white border border-emerald-100 rounded-2xl p-5 text-center">
+          <p className="text-[10px] text-emerald-600 uppercase tracking-wider font-medium">Rate Increases</p>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{kpis.increases}</p>
+          <p className="text-[10px] text-stone-400">days with higher rates</p>
+        </div>
+        <div className="bg-white border border-red-100 rounded-2xl p-5 text-center">
+          <p className="text-[10px] text-red-500 uppercase tracking-wider font-medium">Rate Decreases</p>
+          <p className="text-2xl font-bold text-red-500 mt-1">{kpis.decreases}</p>
+          <p className="text-[10px] text-stone-400">days with lower rates</p>
+        </div>
+      </div>
+
+      {/* Revenue by Source */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="perf-by-source">
+          <h3 className="font-bold text-stone-800 mb-4 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-stone-400" /> Revenue Impact by Source
+          </h3>
+          <div className="space-y-3">
+            {Object.entries(by_source).map(([key, value]) => {
+              const src = SOURCE_LABELS[key] || { label: key, color: "bg-stone-400" };
+              const totalSource = Object.values(by_source).reduce((s, v) => s + Math.abs(v), 0) || 1;
+              const pct = Math.abs(value) / totalSource * 100;
+              return (
+                <div key={key}>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-3 h-3 rounded-full ${src.color}`} />
+                      <span className="text-sm font-medium text-stone-700">{src.label}</span>
+                    </div>
+                    <span className={`text-sm font-bold ${value >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                      {value >= 0 ? "+" : ""}{cur(value)}
+                    </span>
+                  </div>
+                  <div className="bg-stone-100 rounded-full h-2.5 overflow-hidden">
+                    <div className={`h-2.5 rounded-full transition-all ${src.color}`} style={{ width: `${Math.max(pct, 2)}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Monthly Revenue Chart */}
+        <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="perf-monthly">
+          <h3 className="font-bold text-stone-800 mb-4 flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-stone-400" /> Monthly Revenue Impact
+          </h3>
+          <div className="space-y-2">
+            {monthly_impact.map(m => {
+              const pct = (Math.abs(m.est_revenue_uplift) / maxMonthly) * 100;
+              const isPos = m.est_revenue_uplift >= 0;
+              return (
+                <div key={m.month} className="flex items-center gap-3">
+                  <span className="w-16 text-xs font-bold text-stone-600">{m.month_label}</span>
+                  <div className="flex-1 bg-stone-100 rounded-full h-5 overflow-hidden relative">
+                    <div className={`h-5 rounded-full transition-all ${isPos ? "bg-emerald-500" : "bg-red-400"}`} style={{ width: `${Math.max(pct, 3)}%` }} />
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-difference">
+                      {isPos ? "+" : ""}{cur(m.est_revenue_uplift)}
+                    </span>
+                  </div>
+                  <div className="w-20 text-right">
+                    <span className="text-[10px] text-stone-400">{m.days_adjusted}d</span>
+                    {m.event_days > 0 && <span className="text-[9px] text-red-500 ml-1">{m.event_days}ev</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Daily Impact Table */}
+      {daily_impact.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden" data-testid="perf-daily">
+          <div className="px-5 py-3 bg-stone-50 border-b flex items-center justify-between">
+            <span className="font-bold text-stone-800 text-sm">Daily Rate Impact (Last 14 Days)</span>
+            <Badge className="bg-stone-100 text-stone-500 text-[10px]">{daily_impact.length} days</Badge>
+          </div>
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-white z-10">
+                <tr className="border-b">
+                  {["Date", "Base Rate", "Robot Rate", "Uplift", "Change", "Source", "Event"].map(h => (
+                    <th key={h} className="px-3 py-2 text-xs font-semibold text-stone-500 text-center">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {daily_impact.map(d => (
+                  <tr key={d.date} className={`border-b border-stone-50 ${d.has_event ? "bg-red-50/20" : d.uplift > 0 ? "bg-emerald-50/20" : d.uplift < 0 ? "bg-red-50/10" : ""}`}>
+                    <td className="px-3 py-2 font-medium text-stone-700 text-xs whitespace-nowrap">
+                      {new Date(d.date + "T00:00:00").toLocaleDateString("en", { weekday: "short", month: "short", day: "numeric" })}
+                    </td>
+                    <td className="px-3 py-2 text-center text-stone-400">{cur(d.base_rate)}</td>
+                    <td className="px-3 py-2 text-center font-bold text-violet-700">{cur(d.robot_rate)}</td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`font-bold ${d.uplift > 0 ? "text-emerald-600" : d.uplift < 0 ? "text-red-500" : "text-stone-400"}`}>
+                        {d.uplift > 0 ? "+" : ""}{cur(d.uplift)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={`flex items-center justify-center gap-0.5 text-xs font-semibold ${d.uplift_pct > 0 ? "text-emerald-600" : d.uplift_pct < 0 ? "text-red-500" : "text-stone-400"}`}>
+                        {d.uplift_pct > 0 ? <TrendingUp className="w-3 h-3" /> : d.uplift_pct < 0 ? <TrendingDown className="w-3 h-3" /> : null}
+                        {d.uplift_pct > 0 ? "+" : ""}{d.uplift_pct}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <Badge className={`text-[8px] ${
+                        d.source === "ai-dynamic-pricing" ? "bg-violet-100 text-violet-700" :
+                        d.source === "auto-scanner" ? "bg-emerald-100 text-emerald-700" :
+                        d.source === "event-intelligence" ? "bg-red-100 text-red-700" :
+                        "bg-indigo-100 text-indigo-700"
+                      }`}>{d.source.replace(/-/g, " ")}</Badge>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {d.has_event ? <PartyPopper className="w-4 h-4 text-red-400 mx-auto" /> : <span className="text-stone-300">—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

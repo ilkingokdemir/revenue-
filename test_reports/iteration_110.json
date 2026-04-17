@@ -1,0 +1,142 @@
+{
+  "summary": "Iteration 110 - Scanner Performance Report Testing Complete. All 15 backend API tests passed. Frontend UI fully verified: Performance Report shows hero banner with 4 revenue KPIs (Estimated Revenue Uplift £79,702.8, This Month £79,702.8, Days Optimized 185, Event Revenue £16,707.9), stats grid with 5 cards, Revenue Impact by Source chart with 4 sources, Monthly Revenue Impact bars, and Daily Rate Impact table with all required columns. Market Robot now has 10 sub-tabs including Performance.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "performance_endpoint": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/revenue/market-robot/all/performance returns 200",
+        "Response contains kpis object with all required fields",
+        "Response contains by_source breakdown with 4 sources",
+        "Response contains daily_impact array with correct structure",
+        "Response contains monthly_impact array with correct structure",
+        "All KPI values are numeric",
+        "daily_impact sorted by date descending",
+        "monthly_impact sorted by month ascending"
+      ]
+    },
+    "kpis_verified": {
+      "status": "PASS",
+      "values": {
+        "estimated_revenue_uplift": 79702.8,
+        "monthly_revenue_uplift": 79702.8,
+        "total_days_adjusted": 185,
+        "avg_uplift_per_day": 43.08,
+        "increases": 159,
+        "decreases": 26,
+        "event_boost_days": 95,
+        "event_revenue_uplift": 16707.9,
+        "total_scans": 13,
+        "total_events_detected": 19
+      }
+    },
+    "by_source_breakdown": {
+      "status": "PASS",
+      "values": {
+        "auto_scanner": 8068.4,
+        "market_robot": 0,
+        "ai_dynamic_pricing": 6412.1,
+        "event_intelligence": 65222.3
+      }
+    },
+    "frontend_hero_banner": {
+      "status": "PASS",
+      "tests": [
+        "Hero banner displays 'Robot Performance Report' title",
+        "4 KPIs visible: Estimated Revenue Uplift, This Month, Days Optimized, Event Revenue",
+        "KPI values match backend data",
+        "Refresh button present"
+      ]
+    },
+    "frontend_stats_grid": {
+      "status": "PASS",
+      "tests": [
+        "Stats grid with data-testid='perf-stats' found",
+        "5 stat cards: Avg Uplift/Day, Total Scans, Events Detected, Rate Increases, Rate Decreases",
+        "Values displayed correctly with proper formatting"
+      ]
+    },
+    "frontend_revenue_by_source": {
+      "status": "PASS",
+      "tests": [
+        "Revenue Impact by Source section with data-testid='perf-by-source' found",
+        "4 sources displayed: Auto Scanner, Market Robot, AI Dynamic Pricing, Event Intelligence",
+        "Bar chart visualization with color-coded bars"
+      ]
+    },
+    "frontend_monthly_impact": {
+      "status": "PASS",
+      "tests": [
+        "Monthly Revenue Impact section with data-testid='perf-monthly' found",
+        "Monthly bars showing per-month uplift (Apr 2026, May 2026, Jun 2026, Jul 2026, Aug 2026)",
+        "Event day counts shown per month"
+      ]
+    },
+    "frontend_daily_impact_table": {
+      "status": "PASS",
+      "tests": [
+        "Daily Rate Impact table with data-testid='perf-daily' found",
+        "Table headers: Date, Base Rate, Robot Rate, Uplift, Change, Source, Event",
+        "Source badges displayed (event-intelligence, ai-dynamic-pricing)",
+        "Event icon shown for event-boosted days"
+      ]
+    },
+    "market_robot_10_subtabs": {
+      "status": "PASS",
+      "tests": [
+        "Dashboard tab present",
+        "Performance tab present (NEW)",
+        "Supply Data tab present",
+        "Rate Parity tab present",
+        "Competitor Analysis tab present",
+        "Event Intelligence tab present",
+        "Competitor Hotels tab present",
+        "Auto-Adjustments tab present",
+        "Configuration tab present",
+        "Scan Logs tab present"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration110_performance_report.py",
+    "/app/test_reports/pytest/pytest_iteration110_performance.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Performance endpoint correctly calculates ROI from rate_overrides collection",
+    "Revenue estimation uses avg 10 rooms per night assumption",
+    "Event-related uplift detected by checking 'Event' or 'event' in override reason field",
+    "by_source breakdown correctly aggregates from set_by field values",
+    "daily_impact shows last 14 days sorted descending",
+    "monthly_impact grouped by YYYY-MM and sorted ascending",
+    "Frontend PerformanceReport.js uses proper data-testid attributes for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration110_performance_report.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "No new seed data created. Using existing rate_overrides from previous iterations.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 110 tested the NEW Performance Report sub-tab in Market Robot. The report shows ROI metrics from automated pricing across 4 sources (auto-scanner, market-robot, ai-dynamic-pricing, event-intelligence). Key endpoint: GET /api/revenue/market-robot/{property_id}/performance. Navigation: Revenue > Market Robot > Performance tab (2nd tab). Market Robot now has 10 sub-tabs total.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": [
+      "Performance data is calculated from actual rate_overrides stored in MongoDB, not mocked"
+    ]
+  }
+}

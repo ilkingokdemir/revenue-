@@ -60,6 +60,8 @@ import { FinancePL } from "./components/dashboard/FinancePL";
 import { ShiftScheduler } from "./components/dashboard/ShiftScheduler";
 import { ReceptionReport } from "./components/dashboard/ReceptionReport";
 import { PassOverDuties } from "./components/dashboard/PassOverDuties";
+import { ComplianceRegister } from "./components/dashboard/ComplianceRegister";
+import { LaundryManagement } from "./components/dashboard/LaundryManagement";
 import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { FinancePanel } from "./components/dashboard/FinancePanel";
@@ -160,6 +162,7 @@ import {
   Globe,
   MagicWand,
   DeviceMobile,
+  TShirt,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2590,6 +2593,8 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "reception-report", icon: Notebook, name: "Reception Report", testId: "reception-report-btn" },
         { id: "pass-over", icon: Notebook, name: "Pass Over Duties", testId: "pass-over-btn" },
+        { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
+        { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
@@ -3183,6 +3188,16 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Pass Over Duties */}
         {activeView === "pass-over" && (
           <div className="p-6"><PassOverDuties propertyId={activePropertyId} user={user} /></div>
+        )}
+
+        {/* Compliance Register */}
+        {activeView === "compliance" && (
+          <div className="p-6"><ComplianceRegister propertyId={activePropertyId} user={user} /></div>
+        )}
+
+        {/* Laundry Management */}
+        {activeView === "laundry" && (
+          <div className="p-6"><LaundryManagement propertyId={activePropertyId} user={user} /></div>
         )}
       </main>
 

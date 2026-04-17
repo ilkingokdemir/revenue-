@@ -95,6 +95,8 @@ from routes.reports_hub import create_reports_hub_router
 from routes.finance_pl import create_finance_pl_router
 from routes.shift_scheduler import create_shift_scheduler_router
 from routes.pass_over import create_pass_over_router
+from routes.compliance import create_compliance_router
+from routes.laundry import create_laundry_router
 
 # Import extracted modules
 from models import (
@@ -484,6 +486,10 @@ shift_scheduler_router = create_shift_scheduler_router(db, require_roles)
 api_router.include_router(shift_scheduler_router)
 pass_over_router = create_pass_over_router(db, require_roles)
 api_router.include_router(pass_over_router)
+compliance_router = create_compliance_router(db, require_roles)
+api_router.include_router(compliance_router)
+laundry_router = create_laundry_router(db, require_roles)
+api_router.include_router(laundry_router)
 
 app.include_router(api_router)
 

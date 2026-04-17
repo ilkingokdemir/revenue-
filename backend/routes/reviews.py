@@ -783,6 +783,90 @@ Review: {review_text[:500]}"""
             logger.error(f"Translation error: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
 
+    @router.post("/reviews/batch-auto-respond")
+    async def batch_auto_respond(data: Dict = {},
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Batch auto-respond to all unresponded reviews using AI."""
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="AI service not configured")
+
+        tone = data.get("tone", "professional")
+        limit = min(int(data.get("limit", 10)), 20)
+        property_id = data.get("property_id")
+
+        query = {"response_status": "pending"}
+        if property_id:
+            query["property_id"] = property_id
+
+        unresponded = await db.reviews.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
+        if not unresponded:
+            return {"processed": 0, "message": "No unresponded reviews found"}
+
+        tone_map = {
+            "professional": "professional, courteous, and business-like",
+            "friendly": "warm, friendly, and personable",
+            "apologetic": "sincere, apologetic, and solution-focused",
+        }
+        tone_desc = tone_map.get(tone, tone_map["professional"])
+
+        results = []
+        processed = 0
+        errors = []
+
+        for review in unresponded:
+            try:
+                unique_session = f"batch-{review['id']}-{uuid.uuid4().hex[:8]}"
+                system_msg = f"""You are a professional hotel manager responding to guest reviews.
+Your responses should be {tone_desc}. Keep responses concise (2-3 paragraphs max).
+Always thank the guest. If negative, acknowledge concerns and offer to make things right.
+If positive, express gratitude and invite them back.
+Detect the language of the review and respond in the SAME language.
+Every response MUST be UNIQUE and PERSONALIZED — reference specific details from the review.
+Never use generic openings. Sign off as 'The Management Team'."""
+
+                prompt = f"""Write a response to this hotel review:
+Platform: {review.get('platform', 'Unknown')}
+Rating: {review.get('rating', 3)}/5 stars
+Guest: {review.get('guest_name', 'Guest')}
+Review: {review.get('review_text', '')}
+{f"Room: {review.get('room_type', '')}" if review.get('room_type') else ""}
+{f"Stay: {review.get('stay_date', '')}" if review.get('stay_date') else ""}"""
+
+                chat = LlmChat(api_key=api_key, session_id=unique_session, system_message=system_msg).with_model("openai", "gpt-5.2")
+                response_text = await chat.send_message(UserMessage(text=prompt))
+
+                now_iso = datetime.now(timezone.utc).isoformat()
+                await db.reviews.update_one({"id": review["id"]}, {"$set": {
+                    "response_text": response_text,
+                    "response_status": "responded",
+                    "response_date": now_iso,
+                    "response_by": current_user.get("name", "AI Auto-Respond"),
+                    "response_method": "ai_batch",
+                    "response_tone": tone,
+                }})
+
+                results.append({
+                    "review_id": review["id"],
+                    "guest_name": review.get("guest_name", ""),
+                    "platform": review.get("platform", ""),
+                    "rating": review.get("rating", 0),
+                    "response_preview": response_text[:120] + "...",
+                    "status": "responded",
+                })
+                processed += 1
+            except Exception as e:
+                logger.error(f"Batch respond error for {review.get('id')}: {e}")
+                errors.append({"review_id": review.get("id"), "error": str(e)[:80]})
+
+        return {
+            "processed": processed,
+            "errors": len(errors),
+            "error_details": errors,
+            "results": results,
+            "tone": tone,
+        }
+
     @router.get("/languages")
     async def get_languages():
         """Get supported languages"""

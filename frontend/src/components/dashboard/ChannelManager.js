@@ -36,6 +36,8 @@ export const ChannelManager = ({ propertyId }) => {
     } catch { toast.error("Failed"); }
   };
 
+  const [syncingAvail, setSyncingAvail] = useState(false);
+
   const pushRates = async () => {
     setPushing(true);
     try {
@@ -51,6 +53,16 @@ export const ChannelManager = ({ propertyId }) => {
       const { data: r } = await axios.get(`${API}/revenue/channel-manager/${propertyId}/rate-preview?days=7`);
       setPreview(r);
     } catch { toast.error("Failed"); }
+  };
+
+  const syncAvailability = async () => {
+    setSyncingAvail(true);
+    try {
+      const { data: r } = await axios.post(`${API}/revenue/channel-manager/${propertyId}/sync-availability`, { days: 30 });
+      toast.success(r.message);
+      load();
+    } catch { toast.error("Availability sync failed"); }
+    setSyncingAvail(false);
   };
 
   useEffect(() => { if (subTab === "preview") loadPreview(); }, [subTab]);
@@ -74,11 +86,18 @@ export const ChannelManager = ({ propertyId }) => {
               <p className="text-sm text-white/60">Distribute rates across OTAs, metasearch & direct channels</p>
             </div>
           </div>
-          <button onClick={pushRates} disabled={pushing || connected.length === 0}
-            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50" data-testid="cm-push-rates">
-            {pushing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {pushing ? "Pushing Rates..." : "Push Rates to All"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={syncAvailability} disabled={syncingAvail || connected.length === 0}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50" data-testid="cm-sync-availability">
+              {syncingAvail ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              {syncingAvail ? "Syncing..." : "Sync Availability"}
+            </button>
+            <button onClick={pushRates} disabled={pushing || connected.length === 0}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50" data-testid="cm-push-rates">
+              {pushing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              {pushing ? "Pushing Rates..." : "Push Rates to All"}
+            </button>
+          </div>
         </div>
         {data && (
           <div className="grid grid-cols-4 gap-4 mt-4">

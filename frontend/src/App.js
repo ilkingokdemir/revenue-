@@ -150,6 +150,7 @@ import {
   ChartLine,
   Wrench,
   Globe,
+  MagicWand,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2489,6 +2490,31 @@ const Dashboard = ({ user, onLogout }) => {
 
   const [activeView, setActiveView] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isBatchResponding, setIsBatchResponding] = useState(false);
+  const [batchResult, setBatchResult] = useState(null);
+
+  const batchAutoRespond = async (tone = "professional") => {
+    setIsBatchResponding(true);
+    setBatchResult(null);
+    try {
+      const { data } = await axios.post(`${API}/reviews/batch-auto-respond`, {
+        tone,
+        limit: 10,
+        property_id: activePropertyId !== "all" ? activePropertyId : undefined,
+      });
+      setBatchResult(data);
+      if (data.processed > 0) {
+        toast.success(`AI responded to ${data.processed} review${data.processed !== 1 ? "s" : ""}`);
+        fetchReviews();
+        fetchStats();
+      } else {
+        toast.info("No unresponded reviews to process");
+      }
+    } catch (e) {
+      toast.error("Batch auto-respond failed");
+    }
+    setIsBatchResponding(false);
+  };
 
   // Sidebar menu items
   const menuSections = [
@@ -2744,6 +2770,53 @@ const Dashboard = ({ user, onLogout }) => {
               <StatsCard icon={CheckCircle} label="Response Rate" value={`${stats?.response_rate || 0}%`} subtext={`${stats?.responded || 0} of ${stats?.total_reviews || 0} responded`} />
               <StatsCard icon={WarningCircle} label="Pending" value={(stats?.pending || 0) + (stats?.pending_approval || 0)} subtext="Reviews awaiting response" />
             </div>
+
+            {/* Auto-Respond Bar */}
+            {((stats?.pending || 0) + (stats?.pending_approval || 0)) > 0 && (
+              <div className="bg-gradient-to-r from-violet-50 to-blue-50 border border-violet-200 rounded-xl p-4 mb-5 flex items-center justify-between" data-testid="auto-respond-bar">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-violet-100 rounded-lg flex items-center justify-center">
+                    <MagicWand size={18} className="text-violet-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-stone-800">AI Auto-Respond</p>
+                    <p className="text-xs text-stone-500">{(stats?.pending || 0)} reviews awaiting response — let AI handle them</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => batchAutoRespond("professional")} disabled={isBatchResponding} data-testid="batch-respond-professional"
+                    className={`px-3 py-2 text-xs font-bold rounded-lg transition-all ${isBatchResponding ? "bg-stone-200 text-stone-400" : "bg-violet-500 hover:bg-violet-600 text-white"}`}>
+                    {isBatchResponding ? "Generating..." : "Professional Tone"}
+                  </button>
+                  <button onClick={() => batchAutoRespond("friendly")} disabled={isBatchResponding} data-testid="batch-respond-friendly"
+                    className={`px-3 py-2 text-xs font-bold rounded-lg transition-all ${isBatchResponding ? "bg-stone-200 text-stone-400" : "bg-blue-500 hover:bg-blue-600 text-white"}`}>
+                    Friendly Tone
+                  </button>
+                  <button onClick={() => batchAutoRespond("apologetic")} disabled={isBatchResponding} data-testid="batch-respond-apologetic"
+                    className={`px-3 py-2 text-xs font-bold rounded-lg transition-all ${isBatchResponding ? "bg-stone-200 text-stone-400" : "bg-amber-500 hover:bg-amber-600 text-white"}`}>
+                    Apologetic Tone
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Batch Result */}
+            {batchResult && batchResult.processed > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-5" data-testid="batch-result">
+                <p className="text-sm font-bold text-emerald-800">AI responded to {batchResult.processed} review{batchResult.processed !== 1 ? "s" : ""}</p>
+                <div className="mt-2 space-y-1">
+                  {batchResult.results?.slice(0, 5).map(r => (
+                    <div key={r.review_id} className="flex items-center gap-2 text-xs text-stone-600">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                      <span className="font-medium">{r.guest_name}</span>
+                      <span className="text-stone-400">({r.platform}, {r.rating}/5)</span>
+                      <span className="text-stone-400 truncate max-w-[300px]">{r.response_preview}</span>
+                    </div>
+                  ))}
+                </div>
+                {batchResult.errors > 0 && <p className="text-xs text-red-500 mt-1">{batchResult.errors} failed</p>}
+              </div>
+            )}
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-5">

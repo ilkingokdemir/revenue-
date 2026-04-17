@@ -20,6 +20,7 @@ import { SmartUpsellEngine } from "./templates/SmartUpsellEngine";
 import { PriceComparisonWidget } from "./templates/PriceComparisonWidget";
 import { SocialProofNotifications } from "./templates/SocialProofNotifications";
 import { GoogleHotelStructuredData } from "./templates/GoogleHotelStructuredData";
+import { SEOMetaTags } from "./templates/SEOMetaTags";
 import { useCurrency, CurrencySelector } from "./i18n/CurrencySelector";
 import { GroupBookingModal } from "./templates/GroupBookingModal";
 import { AIConciergeChat } from "./templates/AIConciergeChat";
@@ -296,6 +297,7 @@ function BookingEngineInner() {
 
       {/* Google Hotel Structured Data (SEO) */}
       <GoogleHotelStructuredData property={property} rooms={rooms.length > 0 ? rooms : property?.room_types} reviews={reviews} templateSettings={customSettings} />
+      <SEOMetaTags property={property} templateSettings={customSettings} rooms={rooms.length > 0 ? rooms : property?.room_types} />
 
       {/* Social Proof Floating Notifications */}
       <SocialProofNotifications

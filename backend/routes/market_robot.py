@@ -362,11 +362,10 @@ def create_market_robot_router(db, require_roles):
                               current_user: dict = Depends(require_roles("admin", "manager"))):
         """Get latest supply snapshots with event intelligence overlay."""
         now = datetime.now(timezone.utc)
-        cutoff = (now - timedelta(days=1)).isoformat()
 
-        # Get latest snapshot per date
+        # Get latest snapshot per date (no time cutoff — show ALL available data)
         pipeline = [
-            {"$match": {"property_id": property_id, "scanned_at": {"$gte": cutoff}}},
+            {"$match": {"property_id": property_id}},
             {"$sort": {"scanned_at": -1}},
             {"$group": {"_id": "$date", "doc": {"$first": "$$ROOT"}}},
             {"$replaceRoot": {"newRoot": "$doc"}},
@@ -469,10 +468,10 @@ def create_market_robot_router(db, require_roles):
             total_rooms += await db.rooms.count_documents({"property_id": p.get("id", "")}) or 10
         total_rooms = max(total_rooms, 1)
 
-        # Get all supply data
+        # Get all supply data (no time cutoff — show all)
         supply_docs = await db.market_supply.find(
             {"property_id": property_id}, {"_id": 0}
-        ).sort("scanned_at", -1).to_list(1000)
+        ).sort("scanned_at", -1).to_list(2000)
         supply_map = {}
         for s in supply_docs:
             if s["date"] not in supply_map:
@@ -481,7 +480,7 @@ def create_market_robot_router(db, require_roles):
         # Get all rate overrides
         overrides = await db.rate_overrides.find(
             {"property_id": property_id}, {"_id": 0}
-        ).to_list(500)
+        ).to_list(1000)
         override_map = {}
         for ov in overrides:
             if ov["date"] not in override_map:
@@ -490,7 +489,7 @@ def create_market_robot_router(db, require_roles):
         # Get events
         events = await db.market_events.find(
             {"property_id": property_id}, {"_id": 0}
-        ).to_list(300)
+        ).to_list(500)
         event_map = {}
         for ev in events:
             ev_date = ev.get("date", "")
@@ -519,6 +518,18 @@ def create_market_robot_router(db, require_roles):
                 hist_floor_map[int(month_str)] = float(floor_data.get("min_price", 0))
             except (ValueError, TypeError):
                 pass
+
+        # Get competitor price data
+        competitors = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(20)
+        comp_price_map = {}
+        for comp in competitors:
+            for p in (comp.get("prices") or []):
+                if p.get("scraped") and p.get("lowest_price"):
+                    if p["date"] not in comp_price_map:
+                        comp_price_map[p["date"]] = []
+                    comp_price_map[p["date"]].append(p["lowest_price"])
 
         # Build day-by-day data
         daily_data = []
@@ -560,6 +571,17 @@ def create_market_robot_router(db, require_roles):
             # Target sell rate (what AI recommends)
             target_rate = ai_rate if ai_rate else base_rate
 
+            # Competitor avg for this date
+            comp_prices = comp_price_map.get(ds, [])
+            comp_avg = round(sum(comp_prices) / len(comp_prices), 2) if comp_prices else None
+
+            # Position: above or below market
+            position = None
+            position_pct = 0
+            if comp_avg and sell_rate:
+                position_pct = round(((sell_rate - comp_avg) / comp_avg) * 100, 1)
+                position = "above" if position_pct > 2 else "below" if position_pct < -2 else "aligned"
+
             entry = {
                 "date": ds,
                 "day": d.day,
@@ -575,6 +597,9 @@ def create_market_robot_router(db, require_roles):
                 "min_rate": min_rate,
                 "floor_rate": floor_rate,
                 "target_rate": target_rate,
+                "comp_avg": comp_avg,
+                "position": position,
+                "position_pct": position_pct,
                 "ai_status": ai_status,
                 "set_by": set_by,
                 "event": event.get("name") if event else None,
@@ -590,6 +615,12 @@ def create_market_robot_router(db, require_roles):
         low_demand_days = sum(1 for d in daily_data if d["demand_level"] == "low")
         event_days = sum(1 for d in daily_data if d["event"])
         ai_managed_days = sum(1 for d in daily_data if d["ai_status"] in ("ai", "event"))
+        days_with_comp = [d for d in daily_data if d["comp_avg"]]
+        avg_comp = round(sum(d["comp_avg"] for d in days_with_comp) / max(len(days_with_comp), 1), 2) if days_with_comp else None
+        above_market = sum(1 for d in daily_data if d["position"] == "above")
+        below_market = sum(1 for d in daily_data if d["position"] == "below")
+        aligned_market = sum(1 for d in daily_data if d["position"] == "aligned")
+        avg_position_pct = round(sum(d["position_pct"] for d in days_with_comp) / max(len(days_with_comp), 1), 1) if days_with_comp else 0
 
         return {
             "daily_data": daily_data,
@@ -603,6 +634,12 @@ def create_market_robot_router(db, require_roles):
                 "event_days": event_days,
                 "ai_managed_days": ai_managed_days,
                 "ai_managed_pct": round((ai_managed_days / max(len(daily_data), 1)) * 100),
+                "avg_competitor_rate": avg_comp,
+                "above_market_days": above_market,
+                "below_market_days": below_market,
+                "aligned_days": aligned_market,
+                "avg_position_pct": avg_position_pct,
+                "competitors_tracked": len(competitors),
             },
         }
 

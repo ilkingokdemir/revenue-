@@ -27,11 +27,10 @@ import { WhatIfSimulator } from "./WhatIfSimulator";
 import { DemandRadar } from "./DemandRadar";
 import { CompsetIntelligence } from "./CompsetIntelligence";
 import { PriceAlerts } from "./PriceAlerts";
-import { WeatherIntelligence } from "./WeatherIntelligence";
 import {
   BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2,
   LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign,
-  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper, History, Activity, Trophy, AlertTriangle, CloudSun
+  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper, History, Activity, Trophy, AlertTriangle
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -62,7 +61,6 @@ const NAV_SECTIONS = [
       { id: "demand-radar", label: "Demand Radar", icon: Activity },
       { id: "compset-intel", label: "Compset Intelligence", icon: Trophy },
       { id: "price-alerts", label: "Price Alerts", icon: AlertTriangle },
-      { id: "weather", label: "Weather Intel", icon: CloudSun },
       { id: "booking-pace", label: "Booking Pace", icon: Activity },
       { id: "revenue-forecast", label: "Revenue Forecast", icon: DollarSign },
       { id: "rate-actions", label: "Rate Actions", icon: Zap },
@@ -205,7 +203,6 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "demand-radar" && <DemandRadar propertyId={pid} />}
               {tab === "compset-intel" && <CompsetIntelligence propertyId={pid} />}
               {tab === "price-alerts" && <PriceAlerts propertyId={pid} onNavigate={handleNavigate} />}
-              {tab === "weather" && <WeatherIntelligence propertyId={pid} />}
               {tab === "booking-pace" && <BookingPace propertyId={pid} />}
               {tab === "revenue-forecast" && <RevenueForecast propertyId={pid} />}
               {tab === "rate-actions" && <RateRecommendations propertyId={pid} />}

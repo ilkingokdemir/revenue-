@@ -83,7 +83,6 @@ from routes.demand_radar import create_demand_radar_router
 from routes.compset_intel import create_compset_intel_router
 from routes.price_alerts import create_price_alerts_router
 from routes.booking_timeline import create_booking_timeline_router
-from routes.weather_intel import create_weather_router
 
 # Import extracted modules
 from models import (
@@ -449,8 +448,6 @@ price_alerts_router = create_price_alerts_router(db, require_roles)
 api_router.include_router(price_alerts_router)
 booking_timeline_router = create_booking_timeline_router(db, require_roles)
 api_router.include_router(booking_timeline_router)
-weather_router = create_weather_router(db, require_roles)
-api_router.include_router(weather_router)
 
 app.include_router(api_router)
 

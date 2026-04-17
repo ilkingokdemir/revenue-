@@ -389,4 +389,140 @@ def create_booking_timeline_router(db, require_roles):
         }})
         return {"status": new_status, "booking_id": booking_id}
 
+    @router.put("/bookings/timeline/{property_id}/reassign/{booking_id}")
+    async def reassign_room(property_id: str, booking_id: str, data: Dict,
+                            current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Drag-and-drop room reassignment."""
+        new_room_id = data.get("room_id", "")
+        if not new_room_id:
+            return {"error": "room_id required"}
+
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            return {"error": "Booking not found"}
+
+        new_room = await db.rooms.find_one({"id": new_room_id}, {"_id": 0})
+        if not new_room:
+            return {"error": "Room not found"}
+
+        old_room_id = booking.get("room_id", "")
+        new_room_type_id = new_room.get("room_type_id", "")
+
+        # Check for conflicts — is the new room already booked for these dates?
+        ci = booking.get("check_in", "")
+        co = booking.get("check_out", "")
+        conflict = await db.bookings.find_one({
+            "room_id": new_room_id,
+            "id": {"$ne": booking_id},
+            "status": {"$nin": ["cancelled"]},
+            "check_in": {"$lt": co},
+            "check_out": {"$gt": ci},
+        })
+        if conflict:
+            return {"error": "Room conflict", "conflict_guest": conflict.get("guest_name", ""), "conflict_dates": f"{conflict.get('check_in')} - {conflict.get('check_out')}"}
+
+        await db.bookings.update_one({"id": booking_id}, {"$set": {
+            "room_id": new_room_id,
+            "room_type_id": new_room_type_id,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": current_user.get("name", ""),
+        }})
+
+        return {
+            "booking_id": booking_id,
+            "old_room_id": old_room_id,
+            "new_room_id": new_room_id,
+            "new_room_name": new_room.get("name", ""),
+            "status": "reassigned",
+        }
+
+    @router.post("/bookings/timeline/{property_id}/bulk-action")
+    async def bulk_action(property_id: str, data: Dict,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Bulk check-in, check-out, or other status changes."""
+        booking_ids = data.get("booking_ids", [])
+        action = data.get("action", "")
+        if not booking_ids or not action:
+            return {"error": "booking_ids and action required"}
+        if action not in ["checked_in", "checked_out", "confirmed", "cancelled", "no_show"]:
+            return {"error": "Invalid action"}
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        updated = 0
+        errors = []
+
+        for bid in booking_ids:
+            booking = await db.bookings.find_one({"id": bid}, {"_id": 0})
+            if not booking:
+                errors.append({"id": bid, "error": "not found"})
+                continue
+
+            current_status = booking.get("status", "")
+            # Validate transitions
+            valid = False
+            if action == "checked_in" and current_status in ["confirmed", "pending"]:
+                valid = True
+            elif action == "checked_out" and current_status == "checked_in":
+                valid = True
+            elif action == "confirmed" and current_status == "pending":
+                valid = True
+            elif action == "cancelled" and current_status not in ["cancelled", "checked_out"]:
+                valid = True
+            elif action == "no_show" and current_status in ["confirmed", "pending"]:
+                valid = True
+
+            if valid:
+                await db.bookings.update_one({"id": bid}, {"$set": {
+                    "status": action,
+                    "updated_at": now_iso,
+                    "updated_by": current_user.get("name", ""),
+                }})
+                updated += 1
+            else:
+                errors.append({"id": bid, "error": f"Cannot {action} from {current_status}"})
+
+        return {
+            "action": action,
+            "updated": updated,
+            "errors": errors,
+            "total_requested": len(booking_ids),
+        }
+
+    @router.get("/bookings/timeline/{property_id}/todays-actions")
+    async def todays_actions(property_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Get today's arrivals, departures, and in-house guests for bulk actions."""
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        query_base = {"status": {"$nin": ["cancelled"]}}
+        if property_id != "all":
+            query_base["property_id"] = property_id
+
+        arrivals = await db.bookings.find(
+            {**query_base, "check_in": today, "status": {"$in": ["confirmed", "pending"]}},
+            {"_id": 0}
+        ).to_list(200)
+
+        departures = await db.bookings.find(
+            {**query_base, "check_out": today, "status": "checked_in"},
+            {"_id": 0}
+        ).to_list(200)
+
+        in_house = await db.bookings.find(
+            {**query_base, "check_in": {"$lte": today}, "check_out": {"$gt": today}, "status": "checked_in"},
+            {"_id": 0}
+        ).to_list(200)
+
+        return {
+            "date": today,
+            "arrivals": [{"id": b["id"], "guest_name": b.get("guest_name", ""), "room_id": b.get("room_id", ""), "check_in": b.get("check_in", ""), "check_out": b.get("check_out", ""), "status": b.get("status", "")} for b in arrivals],
+            "departures": [{"id": b["id"], "guest_name": b.get("guest_name", ""), "room_id": b.get("room_id", ""), "check_in": b.get("check_in", ""), "check_out": b.get("check_out", ""), "status": b.get("status", "")} for b in departures],
+            "in_house": [{"id": b["id"], "guest_name": b.get("guest_name", ""), "room_id": b.get("room_id", ""), "check_in": b.get("check_in", ""), "check_out": b.get("check_out", ""), "status": b.get("status", "")} for b in in_house],
+            "counts": {
+                "arrivals": len(arrivals),
+                "departures": len(departures),
+                "in_house": len(in_house),
+            }
+        }
+
     return router

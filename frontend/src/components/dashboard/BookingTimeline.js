@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import {
   RefreshCw, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CalendarDays,
-  Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin
+  Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
+  GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -38,6 +40,12 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [dragBooking, setDragBooking] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const [todaysActions, setTodaysActions] = useState(null);
+  const [showBulkPanel, setShowBulkPanel] = useState(false);
   const scrollRef = useRef(null);
 
   const pid = activePropertyId || "all";
@@ -53,6 +61,15 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
   useEffect(() => { load(); }, [load]);
 
+  const loadTodaysActions = async () => {
+    try {
+      const { data: d } = await axios.get(`${API}/bookings/timeline/${pid}/todays-actions`);
+      setTodaysActions(d);
+    } catch { /* silent */ }
+  };
+
+  useEffect(() => { loadTodaysActions(); }, [pid]);
+
   const openDetail = async (bookingId) => {
     setSelectedBooking(bookingId);
     try {
@@ -65,10 +82,85 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     try {
       await axios.put(`${API}/bookings/timeline/${pid}/status/${bookingId}`, { status: newStatus });
       load();
+      loadTodaysActions();
       if (detailData && detailData.id === bookingId) {
         setDetailData({ ...detailData, status: newStatus });
       }
+      toast.success(`Status updated to ${newStatus.replace("_", " ")}`);
     } catch { /* silent */ }
+  };
+
+  // Drag and drop
+  const handleDragStart = (e, booking) => {
+    setDragBooking(booking);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", booking.id);
+  };
+
+  const handleDragOver = (e, roomId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTarget(roomId);
+  };
+
+  const handleDragLeave = () => setDropTarget(null);
+
+  const handleDrop = async (e, targetRoomId) => {
+    e.preventDefault();
+    setDropTarget(null);
+    if (!dragBooking || dragBooking.room_id === targetRoomId) {
+      setDragBooking(null);
+      return;
+    }
+    try {
+      const { data: res } = await axios.put(`${API}/bookings/timeline/${pid}/reassign/${dragBooking.id}`, { room_id: targetRoomId });
+      if (res.error) {
+        toast.error(res.error === "Room conflict" ? `Conflict with ${res.conflict_guest} (${res.conflict_dates})` : res.error);
+      } else {
+        toast.success(`${dragBooking.guest_name} moved to ${res.new_room_name}`);
+        load();
+      }
+    } catch { toast.error("Failed to reassign room"); }
+    setDragBooking(null);
+  };
+
+  // Bulk actions
+  const toggleSelect = (bookingId) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(bookingId) ? next.delete(bookingId) : next.add(bookingId);
+      return next;
+    });
+  };
+
+  const selectAllArrivals = () => {
+    if (todaysActions) {
+      setSelectedIds(new Set(todaysActions.arrivals.map(a => a.id)));
+    }
+  };
+
+  const selectAllDepartures = () => {
+    if (todaysActions) {
+      setSelectedIds(new Set(todaysActions.departures.map(d => d.id)));
+    }
+  };
+
+  const runBulkAction = async (action) => {
+    if (selectedIds.size === 0) return;
+    try {
+      const { data: res } = await axios.post(`${API}/bookings/timeline/${pid}/bulk-action`, {
+        booking_ids: Array.from(selectedIds), action,
+      });
+      toast.success(`${res.updated} booking(s) updated to ${action.replace("_", " ")}`);
+      if (res.errors?.length) {
+        toast.error(`${res.errors.length} failed: ${res.errors[0]?.error}`);
+      }
+      setSelectedIds(new Set());
+      setBulkMode(false);
+      setShowBulkPanel(false);
+      load();
+      loadTodaysActions();
+    } catch { toast.error("Bulk action failed"); }
   };
 
   const navigate = (dir) => {
@@ -108,8 +200,19 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           <h2 className="text-base font-bold text-stone-800" data-testid="timeline-title">Booking Calendar</h2>
           <Badge className="bg-stone-100 text-stone-600 text-[10px]">{total_rooms} rooms</Badge>
           <Badge className="bg-blue-50 text-blue-700 text-[10px]">{total_bookings} bookings</Badge>
+          {todaysActions && (
+            <div className="flex items-center gap-2 ml-2">
+              {todaysActions.counts.arrivals > 0 && <Badge className="bg-emerald-50 text-emerald-700 text-[10px]" data-testid="arrivals-badge"><LogIn className="w-3 h-3 mr-1" />{todaysActions.counts.arrivals} arrivals</Badge>}
+              {todaysActions.counts.departures > 0 && <Badge className="bg-amber-50 text-amber-700 text-[10px]" data-testid="departures-badge"><LogOut className="w-3 h-3 mr-1" />{todaysActions.counts.departures} departures</Badge>}
+              {todaysActions.counts.in_house > 0 && <Badge className="bg-blue-50 text-blue-700 text-[10px]" data-testid="inhouse-badge"><Users className="w-3 h-3 mr-1" />{todaysActions.counts.in_house} in-house</Badge>}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); setShowBulkPanel(!showBulkPanel); }} data-testid="bulk-mode-btn"
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${bulkMode ? "bg-violet-500 text-white border-violet-600" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"}`}>
+            <CheckSquare className="w-3.5 h-3.5" />{bulkMode ? "Exit Bulk" : "Bulk Actions"}
+          </button>
           <div className="relative">
             <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2" />
             <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search guest, ID..."
@@ -117,6 +220,46 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           </div>
         </div>
       </div>
+
+      {/* Bulk Actions Panel */}
+      {bulkMode && showBulkPanel && (
+        <div className="bg-violet-50 border-b border-violet-200 px-5 py-3 flex items-center justify-between flex-shrink-0" data-testid="bulk-panel">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-violet-700">{selectedIds.size} selected</span>
+            {todaysActions && todaysActions.counts.arrivals > 0 && (
+              <button onClick={selectAllArrivals} data-testid="select-arrivals-btn"
+                className="px-2.5 py-1 text-[11px] font-medium text-emerald-700 bg-emerald-100 rounded-md hover:bg-emerald-200">
+                Select all arrivals ({todaysActions.counts.arrivals})
+              </button>
+            )}
+            {todaysActions && todaysActions.counts.departures > 0 && (
+              <button onClick={selectAllDepartures} data-testid="select-departures-btn"
+                className="px-2.5 py-1 text-[11px] font-medium text-amber-700 bg-amber-100 rounded-md hover:bg-amber-200">
+                Select all departures ({todaysActions.counts.departures})
+              </button>
+            )}
+            <button onClick={() => setSelectedIds(new Set())} className="px-2 py-1 text-[11px] text-stone-500 hover:text-stone-700">Clear</button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => runBulkAction("checked_in")} disabled={selectedIds.size === 0} data-testid="bulk-checkin-btn"
+              className="px-3 py-1.5 text-[11px] font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg disabled:opacity-40">
+              <LogIn className="w-3 h-3 inline mr-1" />Bulk Check In
+            </button>
+            <button onClick={() => runBulkAction("checked_out")} disabled={selectedIds.size === 0} data-testid="bulk-checkout-btn"
+              className="px-3 py-1.5 text-[11px] font-bold text-white bg-stone-600 hover:bg-stone-700 rounded-lg disabled:opacity-40">
+              <LogOut className="w-3 h-3 inline mr-1" />Bulk Check Out
+            </button>
+            <button onClick={() => runBulkAction("confirmed")} disabled={selectedIds.size === 0} data-testid="bulk-confirm-btn"
+              className="px-3 py-1.5 text-[11px] font-bold text-white bg-blue-500 hover:bg-blue-600 rounded-lg disabled:opacity-40">
+              Bulk Confirm
+            </button>
+            <button onClick={() => runBulkAction("no_show")} disabled={selectedIds.size === 0} data-testid="bulk-noshow-btn"
+              className="px-3 py-1.5 text-[11px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg disabled:opacity-40">
+              Bulk No Show
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Navigation Bar */}
       <div className="bg-stone-50 border-b border-stone-200 px-5 py-2 flex items-center justify-between flex-shrink-0">
@@ -190,11 +333,16 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
                 {/* Room Rows */}
                 {!isCollapsed && group.rooms.map(room => (
-                  <div key={room.id} className="flex border-b border-stone-100 relative" style={{ height: ROW_H }} data-testid={`timeline-room-${room.id}`}>
+                  <div key={room.id} className={`flex border-b border-stone-100 relative transition-all ${dropTarget === room.id ? "bg-violet-100 ring-2 ring-violet-400 ring-inset" : ""}`}
+                    style={{ height: ROW_H }} data-testid={`timeline-room-${room.id}`}
+                    onDragOver={(e) => handleDragOver(e, room.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, room.id)}>
                     {/* Room Label */}
                     <div className="flex-shrink-0 flex items-center px-3 gap-2 sticky left-0 bg-white z-10 border-r border-stone-200" style={{ width: ROOM_LABEL_W }}>
                       <span className={`w-2 h-2 rounded-full ${HK_COLORS[room.housekeeping] || "bg-stone-300"}`} title={room.housekeeping} />
                       <span className="text-[11px] text-stone-600 truncate">{room.name}</span>
+                      {dropTarget === room.id && dragBooking && <span className="text-[9px] text-violet-500 font-bold ml-auto">Drop here</span>}
                     </div>
 
                     {/* Date cells */}
@@ -212,17 +360,30 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         const left = si * COL_W;
                         const width = Math.max((ei - si) * COL_W - 4, COL_W * 0.5);
                         const sc = STATUS_COLORS[bk.status] || STATUS_COLORS.confirmed;
+                        const isSelected = selectedIds.has(bk.id);
 
                         return (
-                          <button key={bk.id} onClick={() => openDetail(bk.id)} data-testid={`booking-bar-${bk.id}`}
-                            className={`absolute top-1 rounded-md ${sc.bar} ${sc.text} ${sc.border} border cursor-pointer hover:brightness-110 transition-all overflow-hidden flex items-center px-1.5 gap-1 shadow-sm`}
-                            style={{ left: left + 2, width, height: ROW_H - 8 }}
-                            title={`${bk.guest_name} | ${bk.check_in} → ${bk.check_out} | ${bk.status} | ${cur(bk.total_price)}`}>
-                            <span className="text-[10px] font-bold truncate">{bk.guest_name}</span>
-                            {width > 140 && <span className="text-[9px] opacity-70">{bk.source_code}</span>}
-                            {width > 180 && <span className="text-[9px] opacity-70">{cur(bk.total_price)}</span>}
-                            {width > 220 && <span className="text-[9px] opacity-70">{bk.nights}n</span>}
-                          </button>
+                          <div key={bk.id} className="absolute top-1" style={{ left: left + 2, width, height: ROW_H - 8 }}>
+                            {bulkMode && (
+                              <button onClick={(e) => { e.stopPropagation(); toggleSelect(bk.id); }} data-testid={`select-${bk.id}`}
+                                className="absolute -left-0.5 top-0.5 z-10 w-4 h-4 flex items-center justify-center">
+                                {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-violet-600" /> : <Square className="w-3.5 h-3.5 text-stone-400" />}
+                              </button>
+                            )}
+                            <button
+                              draggable={!bulkMode}
+                              onDragStart={(e) => handleDragStart(e, { ...bk, room_id: room.id })}
+                              onClick={() => bulkMode ? toggleSelect(bk.id) : openDetail(bk.id)}
+                              data-testid={`booking-bar-${bk.id}`}
+                              className={`w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border cursor-pointer hover:brightness-110 transition-all overflow-hidden flex items-center px-1.5 gap-1 shadow-sm ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
+                              title={`${bk.guest_name} | ${bk.check_in} → ${bk.check_out} | ${bk.status} | ${cur(bk.total_price)} | Drag to move`}>
+                              {!bulkMode && <GripVertical className="w-3 h-3 opacity-30 flex-shrink-0 cursor-grab" />}
+                              <span className="text-[10px] font-bold truncate">{bk.guest_name}</span>
+                              {width > 140 && <span className="text-[9px] opacity-70">{bk.source_code}</span>}
+                              {width > 180 && <span className="text-[9px] opacity-70">{cur(bk.total_price)}</span>}
+                              {width > 220 && <span className="text-[9px] opacity-70">{bk.nights}n</span>}
+                            </button>
+                          </div>
                         );
                       })}
                     </div>

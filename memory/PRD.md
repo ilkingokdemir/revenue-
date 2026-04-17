@@ -1,21 +1,20 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 30+ Modules | Mobile Responsive | 113 Test Iterations (100%)
+## 30+ Modules | Mobile Responsive | 114 Test Iterations (100%)
 
-### Market Demand Dashboard
-- **8 Time Ranges**: Today, 7 Days, 15 Days, 30 Days, 60 Days, 90 Days, 180 Days, 1 Year
-- **3-Column ADR/Occupancy Comparison**:
-  - Your Hotel (cyan): ADR + Occupancy from your bookings & AI pricing
-  - Market Average (amber): ADR + Occupancy from Robot supply data
-  - Competitors (violet): ADR + Occupancy from competitor price scans
-- **Competitive Landscape Chart**: Our Rate vs Competitor vs Base vs Floor with above/below fills
-- **Demand Heatmap**: 365 colored cells showing demand intensity
-- **Rate Grid**: Date, Day, Status, Our ADR, Our Occ, Comp ADR, Position, Market, Floor, Event
+### Market Demand Dashboard (Full Feature Set)
+- **8 Time Ranges**: Today, 7D, 15D, 30D, 60D, 90D, 180D, 1 Year
+- **3-Column Comparison**: Your Hotel ADR/Occ | Market ADR/Occ | Competitor ADR/Occ
+- **90 Day Occupancy & Pickup** chart: Grey bars (base occ) + Cyan bars (booking velocity), 24H/3DAYS/7DAYS toggle
+- **Recent Bookings** panel: Last 7 days — Date, Bookings, Room Nights, ADR, Revenue + summary
+- **Competitive Landscape** chart: Our Rate vs Competitor vs Base vs Floor with above/below fills
+- **Demand Heatmap**: 365 colored cells
+- **Rate Grid**: 10-column table with position arrows
 
-### Revenue Management — 25+ Modules
-PRICING: AI Dynamic Pricing (365-day, 10-factor, nights selector)
-INTELLIGENCE: Market Robot (11 sub-tabs), Historical Analysis (2yr)
-DISTRIBUTION: Channel Manager (9 OTAs)
-FINANCE: Profit OS, Reports & Export
+### Market Robot — 11 Sub-Tabs
+Dashboard, Market Demand, Performance, Supply Data, Rate Parity, Competitor Analysis, Event Intelligence, Competitor Hotels, Auto-Adjustments, Configuration, Scan Logs
 
-## Testing: 113 iterations, 100% pass rate
+### AI Dynamic Pricing — 10 Factors, 365 Days
+### Smart Scanner — 7 Tiers, Events every 6h, Auto-reprice
+
+## Testing: 114 iterations, 100% pass rate

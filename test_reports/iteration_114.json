@@ -1,0 +1,90 @@
+{
+  "summary": "Iteration 114 - Occupancy & Pickup Chart + Recent Bookings Panel. All 9 backend API tests passed. Frontend UI fully verified: 90 Day Occupancy & Pickup chart with grey bars (Base Occupancy) + cyan bars (Pickup), 24H/3DAYS/7DAYS toggle buttons functional, RECENT BOOKINGS panel showing last 7 days with columns DATE/BOOKINGS/ROOM NIGHTS/ADR/REVENUE, first row highlighted (today's data), summary showing Total Revenue and Avg ADR.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "backend_occupancy_pickup_24h": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/market-robot/all/occupancy-pickup?days=90&pickup_window=24h",
+      "response_fields": ["daily (90 items)", "pickup_window: 24h", "kpis: total_days, total_rooms, avg_occupancy, avg_pickup, peak_occupancy, peak_date"],
+      "daily_fields": ["date", "dow", "month", "day", "occupancy_pct", "pickup_pct", "booked_rooms", "pickup_rooms", "total_rooms"]
+    },
+    "backend_occupancy_pickup_3d": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/market-robot/all/occupancy-pickup?days=90&pickup_window=3d",
+      "response_fields": ["pickup_window: 3d", "avg_pickup varies from 24h"]
+    },
+    "backend_occupancy_pickup_7d": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/market-robot/all/occupancy-pickup?days=90&pickup_window=7d",
+      "response_fields": ["pickup_window: 7d", "avg_pickup varies from 24h/3d"]
+    },
+    "backend_recent_bookings": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/market-robot/all/recent-bookings?days=7",
+      "response_fields": ["daily (7 items)", "summary: total_bookings, total_room_nights, total_revenue, avg_adr, days"],
+      "daily_fields": ["date", "dow", "day", "month", "bookings", "room_nights", "adr", "revenue"]
+    },
+    "backend_auth_required": {
+      "status": "PASS",
+      "tests": ["occupancy-pickup returns 401/403 without auth", "recent-bookings returns 401/403 without auth"]
+    },
+    "frontend_occupancy_pickup_chart": {
+      "status": "PASS",
+      "elements": ["Chart title '90 Day Occupancy & Pickup'", "Grey bars for Base Occupancy", "Cyan bars for Pickup", "Legend showing Base Occupancy % and Pickup %"]
+    },
+    "frontend_pickup_window_toggle": {
+      "status": "PASS",
+      "buttons": ["24H", "3 DAYS", "7 DAYS"],
+      "functionality": "Clicking each button reloads chart data with corresponding pickup window, legend updates to show selected window"
+    },
+    "frontend_recent_bookings_panel": {
+      "status": "PASS",
+      "elements": ["Panel title 'RECENT BOOKINGS'", "Subtitle 'Last 7 days activity'", "Table with 7 rows"],
+      "columns": ["DATE (DOW + day + month)", "BOOKINGS", "ROOM NIGHTS", "ADR", "REVENUE"],
+      "first_row_highlight": "Cyan tint on first row (today's data)"
+    },
+    "frontend_recent_bookings_summary": {
+      "status": "PASS",
+      "elements": ["Total Revenue: £3,120", "Avg ADR: £124.8"]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration114_occupancy_pickup_bookings.py",
+    "/app/test_reports/pytest/pytest_iteration114_occupancy_pickup.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend correctly calculates occupancy from bookings overlapping each date",
+    "Pickup calculation correctly filters bookings by created_at within the pickup window (24h/72h/168h)",
+    "Recent bookings endpoint returns proper daily breakdown with ADR and revenue calculations",
+    "Frontend correctly implements pickup window toggle with data-testid attributes for testing",
+    "Chart legend dynamically updates to show selected pickup window (24h/3 Day/7 Day Pickup %)",
+    "First row in Recent Bookings table correctly highlighted with cyan tint for today's data"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration114_occupancy_pickup_bookings.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "No new seed data created. Using existing ~75 bookings in the system with check_in, check_out, total_price, nights, status fields.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 114 tested the NEW Occupancy & Pickup chart and Recent Bookings panel. Key endpoints: GET /api/revenue/market-robot/{property_id}/occupancy-pickup?days=90&pickup_window=24h|3d|7d and GET /api/revenue/market-robot/{property_id}/recent-bookings?days=7. Navigation: Revenue > Market Robot > Market Demand tab. The occupancy-pickup chart shows 90 days of data with grey bars for base occupancy and cyan bars for pickup velocity. The pickup window toggle (24H/3DAYS/7DAYS) reloads chart data. Recent Bookings panel shows last 7 days with DATE, BOOKINGS, ROOM NIGHTS, ADR, REVENUE columns. First row highlighted for today's data. Summary shows Total Revenue and Avg ADR.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": ["No mocking - uses real booking data from MongoDB"]
+  }
+}

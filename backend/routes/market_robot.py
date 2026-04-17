@@ -450,13 +450,155 @@ def create_market_robot_router(db, require_roles):
         ).sort("scanned_at", -1).to_list(50)
         return {"logs": logs}
 
+    # ==================== OCCUPANCY & PICKUP + RECENT BOOKINGS ====================
+
+    @router.get("/revenue/market-robot/{property_id}/occupancy-pickup")
+    async def get_occupancy_pickup(property_id: str, days: int = 90, pickup_window: str = "24h",
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Occupancy & Pickup chart data — base occupancy bars + booking velocity overlay."""
+        now = datetime.now(timezone.utc)
+        props = await db.properties.find({}, {"_id": 0}).to_list(50) if property_id == "all" else [await db.properties.find_one({"id": property_id}, {"_id": 0})]
+        props = [p for p in props if p]
+        total_rooms = 0
+        for p in props:
+            total_rooms += await db.rooms.count_documents({"property_id": p.get("id", "")}) or 10
+        total_rooms = max(total_rooms, 1)
+
+        # Pickup window in hours
+        pw_hours = {"24h": 24, "3d": 72, "7d": 168}.get(pickup_window, 24)
+        pickup_cutoff = (now - timedelta(hours=pw_hours)).isoformat()
+
+        daily = []
+        for i in range(days):
+            d = now + timedelta(days=i)
+            ds = d.strftime("%Y-%m-%d")
+
+            # Base occupancy: all confirmed bookings overlapping this date
+            booked = 0
+            for p in props:
+                booked += await db.bookings.count_documents({
+                    "property_id": p.get("id", ""), "check_in": {"$lte": ds},
+                    "check_out": {"$gt": ds}, "status": {"$ne": "cancelled"}
+                })
+            occ_pct = min(100, round((booked / total_rooms) * 100))
+
+            # Pickup: bookings made within the pickup window for this date
+            pickup_rooms = 0
+            for p in props:
+                pickup_rooms += await db.bookings.count_documents({
+                    "property_id": p.get("id", ""), "check_in": {"$lte": ds},
+                    "check_out": {"$gt": ds}, "status": {"$ne": "cancelled"},
+                    "created_at": {"$gte": pickup_cutoff}
+                })
+            pickup_pct = min(100, round((pickup_rooms / total_rooms) * 100))
+
+            daily.append({
+                "date": ds,
+                "dow": d.strftime("%a"),
+                "month": d.strftime("%b"),
+                "day": d.day,
+                "occupancy_pct": occ_pct,
+                "pickup_pct": pickup_pct,
+                "booked_rooms": booked,
+                "pickup_rooms": pickup_rooms,
+                "total_rooms": total_rooms,
+            })
+
+        avg_occ = round(sum(d["occupancy_pct"] for d in daily) / max(len(daily), 1))
+        avg_pickup = round(sum(d["pickup_pct"] for d in daily) / max(len(daily), 1))
+        peak_occ = max(d["occupancy_pct"] for d in daily) if daily else 0
+        peak_date = next((d["date"] for d in daily if d["occupancy_pct"] == peak_occ), None)
+
+        return {
+            "daily": daily,
+            "pickup_window": pickup_window,
+            "kpis": {
+                "total_days": len(daily),
+                "total_rooms": total_rooms,
+                "avg_occupancy": avg_occ,
+                "avg_pickup": avg_pickup,
+                "peak_occupancy": peak_occ,
+                "peak_date": peak_date,
+            },
+        }
+
+    @router.get("/revenue/market-robot/{property_id}/recent-bookings")
+    async def get_recent_bookings(property_id: str, days: int = 7,
+                                  current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Recent bookings summary — last N days of booking activity with ADR & Revenue."""
+        now = datetime.now(timezone.utc)
+        props = await db.properties.find({}, {"_id": 0}).to_list(50) if property_id == "all" else [await db.properties.find_one({"id": property_id}, {"_id": 0})]
+        props = [p for p in props if p]
+        prop_ids = [p.get("id", "") for p in props]
+
+        rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
+        base_rate = float(rt.get("base_rate", 100) or 100) if rt else 100.0
+
+        daily = []
+        total_bookings = 0
+        total_nights = 0
+        total_revenue = 0
+
+        for i in range(days):
+            d = now - timedelta(days=i)
+            ds = d.strftime("%Y-%m-%d")
+
+            # Get bookings that were created on this date OR have check-in on this date
+            day_bookings = []
+            for pid in prop_ids:
+                bks = await db.bookings.find({
+                    "property_id": pid,
+                    "check_in": {"$lte": ds},
+                    "check_out": {"$gt": ds},
+                    "status": {"$ne": "cancelled"}
+                }, {"_id": 0}).to_list(50)
+                day_bookings.extend(bks)
+
+            booking_count = len(day_bookings)
+            room_nights = sum(max(1, int(b.get("nights", 1) or 1)) for b in day_bookings)
+            day_revenue = sum(float(b.get("total_price", 0) or 0) for b in day_bookings)
+
+            # If no revenue data, estimate from rate overrides or base rate
+            if day_revenue == 0 and booking_count > 0:
+                override = await db.rate_overrides.find_one(
+                    {"property_id": property_id, "date": ds}, {"_id": 0}
+                )
+                rate = float(override.get("custom_rate", base_rate)) if override else base_rate
+                day_revenue = round(rate * booking_count, 2)
+
+            adr = round(day_revenue / max(booking_count, 1), 2)
+
+            daily.append({
+                "date": ds,
+                "dow": d.strftime("%a"),
+                "day": d.day,
+                "month": d.strftime("%b"),
+                "bookings": booking_count,
+                "room_nights": room_nights,
+                "adr": adr,
+                "revenue": round(day_revenue, 2),
+            })
+
+            total_bookings += booking_count
+            total_nights += room_nights
+            total_revenue += day_revenue
+
+        return {
+            "daily": daily,
+            "summary": {
+                "total_bookings": total_bookings,
+                "total_room_nights": total_nights,
+                "total_revenue": round(total_revenue, 2),
+                "avg_adr": round(total_revenue / max(total_bookings, 1), 2),
+                "days": days,
+            },
+        }
+
     @router.get("/revenue/market-robot/{property_id}/demand-dashboard")
     async def get_demand_dashboard(property_id: str, days: int = 365,
                                    current_user: dict = Depends(require_roles("admin", "manager"))):
         """Full-year market demand dashboard with occupancy, rates, events, and AI status."""
         now = datetime.now(timezone.utc)
-
-        # Get base rate and room types
         rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
         base_rate = float(rt.get("base_rate", 100) or 100) if rt else 100.0
 

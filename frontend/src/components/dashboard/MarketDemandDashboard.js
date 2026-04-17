@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
-import { Activity, TrendingUp, TrendingDown, BarChart3, RefreshCw, Zap, PartyPopper, ArrowUpRight, ArrowDownRight, Minus } from "lucide-react";
+import { Activity, TrendingUp, TrendingDown, BarChart3, RefreshCw, Zap, PartyPopper, ArrowUpRight, ArrowDownRight, Minus, Calendar } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -28,14 +28,28 @@ export const MarketDemandDashboard = ({ propertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState(365);
+  const [occData, setOccData] = useState(null);
+  const [recentBookings, setRecentBookings] = useState(null);
+  const [pickupWindow, setPickupWindow] = useState("24h");
 
   const load = (days) => {
     setLoading(true);
     axios.get(`${API}/revenue/market-robot/${propertyId}/demand-dashboard?days=${days}`)
       .then(r => { setData(r.data); setLoading(false); })
       .catch(() => setLoading(false));
+    // Load occupancy & pickup
+    axios.get(`${API}/revenue/market-robot/${propertyId}/occupancy-pickup?days=90&pickup_window=${pickupWindow}`)
+      .then(r => setOccData(r.data)).catch(() => {});
+    // Load recent bookings
+    axios.get(`${API}/revenue/market-robot/${propertyId}/recent-bookings?days=7`)
+      .then(r => setRecentBookings(r.data)).catch(() => {});
   };
   useEffect(() => { load(range); }, [propertyId, range]);
+  // Reload pickup when window changes
+  useEffect(() => {
+    axios.get(`${API}/revenue/market-robot/${propertyId}/occupancy-pickup?days=90&pickup_window=${pickupWindow}`)
+      .then(r => setOccData(r.data)).catch(() => {});
+  }, [pickupWindow]);
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Loading {range}-day data...</div>;
   if (!data) return null;
@@ -175,6 +189,112 @@ export const MarketDemandDashboard = ({ propertyId }) => {
               <p className="text-[7px] text-white/25 uppercase leading-tight">{k.l}</p>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* OCCUPANCY & PICKUP + RECENT BOOKINGS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Occupancy & Pickup Chart — 2/3 width */}
+        <div className="lg:col-span-2 bg-stone-900 border border-stone-700 rounded-2xl p-5" data-testid="occupancy-pickup-chart">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-sm font-bold text-white">90 Day Occupancy & Pickup</h3>
+              <p className="text-[10px] text-stone-500">Occupancy trend with booking velocity overlay</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 text-[10px] text-stone-400">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-stone-600" /> Base Occupancy %</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-cyan-400" /> {pickupWindow === "24h" ? "24h" : pickupWindow === "3d" ? "3 Day" : "7 Day"} Pickup %</span>
+              </div>
+              <div className="flex items-center gap-1 bg-white/5 rounded-lg border border-white/10 p-0.5" data-testid="pickup-window-selector">
+                {[{v:"24h",l:"24H"},{v:"3d",l:"3 DAYS"},{v:"7d",l:"7 DAYS"}].map(pw => (
+                  <button key={pw.v} onClick={() => setPickupWindow(pw.v)}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${pickupWindow === pw.v ? "bg-cyan-500 text-white" : "text-stone-500 hover:text-white/70"}`}
+                    data-testid={`pickup-${pw.v}`}>{pw.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          {occData && (() => {
+            const occ = occData.daily || [];
+            const cW = 800, cH = 200, pL = 35, pR = 10, pT = 10, pB = 30;
+            const iW = cW - pL - pR, iH = cH - pT - pB;
+            const barW = Math.max(2, Math.min(8, (iW / occ.length) - 1));
+            const sx = (i) => pL + (i / Math.max(occ.length - 1, 1)) * iW;
+            const sy = (v) => pT + (1 - v / 100) * iH;
+            const mLabels = []; let lm = "";
+            occ.forEach((d, i) => { if (d.month !== lm) { mLabels.push({ i, l: `${d.month} ${d.day}` }); lm = d.month; } });
+            return (
+              <div className="overflow-x-auto">
+                <svg viewBox={`0 0 ${cW} ${cH}`} className="w-full" style={{ minWidth: "600px" }}>
+                  {[0, 25, 50, 75, 100].map(v => (
+                    <g key={v}><line x1={pL} x2={cW - pR} y1={sy(v)} y2={sy(v)} stroke="#374151" strokeWidth="0.5" /><text x={pL - 5} y={sy(v) + 4} textAnchor="end" className="text-[7px]" fill="#6b7280">{v}%</text></g>
+                  ))}
+                  {mLabels.map(ml => (
+                    <text key={ml.i} x={sx(ml.i)} y={cH - 8} textAnchor="start" className="text-[8px]" fill="#6b7280">{ml.l}</text>
+                  ))}
+                  {occ.map((d, i) => {
+                    const x = sx(i) - barW / 2;
+                    const occH = (d.occupancy_pct / 100) * iH;
+                    const pickH = (d.pickup_pct / 100) * iH;
+                    return (
+                      <g key={i}>
+                        <rect x={x} y={pT + iH - occH} width={barW} height={occH} fill="#4b5563" rx="1" />
+                        {d.pickup_pct > 0 && <rect x={x} y={pT + iH - pickH} width={barW} height={pickH} fill="#06b6d4" rx="1" opacity="0.9" />}
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Recent Bookings Panel — 1/3 width */}
+        <div className="bg-stone-900 border border-stone-700 rounded-2xl p-5" data-testid="recent-bookings">
+          <div className="flex items-center gap-2 mb-4">
+            <Calendar className="w-5 h-5 text-cyan-400" />
+            <div>
+              <h3 className="text-sm font-bold text-white">RECENT BOOKINGS</h3>
+              <p className="text-[10px] text-stone-500">Last 7 days activity</p>
+            </div>
+          </div>
+          {recentBookings && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-stone-700">
+                    {["DATE", "BOOKINGS", "ROOM NIGHTS", "ADR", "REVENUE"].map(h => (
+                      <th key={h} className="px-2 py-1.5 text-[9px] font-semibold text-stone-500 text-center whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentBookings.daily.map((d, i) => (
+                    <tr key={d.date} className={`border-b border-stone-800/50 ${i === 0 ? "bg-cyan-500/5" : ""}`}>
+                      <td className="px-2 py-2.5 text-stone-300 text-xs font-medium whitespace-nowrap">
+                        <div className="leading-tight">
+                          <div className="font-bold">{d.dow} {d.day}</div>
+                          <div className="text-[10px] text-stone-500">{d.month}</div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2.5 text-center text-white font-bold">{d.bookings}</td>
+                      <td className="px-2 py-2.5 text-center text-white font-bold">{d.room_nights}</td>
+                      <td className="px-2 py-2.5 text-center text-stone-300">{cur(d.adr)}</td>
+                      <td className="px-2 py-2.5 text-center text-cyan-400 font-bold">{cur(d.revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {recentBookings.summary && (
+                <div className="mt-3 pt-3 border-t border-stone-700 grid grid-cols-2 gap-2 text-center">
+                  <div><p className="text-[9px] text-stone-500">Total Revenue</p><p className="text-sm font-bold text-cyan-400">{cur(recentBookings.summary.total_revenue)}</p></div>
+                  <div><p className="text-[9px] text-stone-500">Avg ADR</p><p className="text-sm font-bold text-white">{cur(recentBookings.summary.avg_adr)}</p></div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

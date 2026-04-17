@@ -2,7 +2,7 @@
 Laundry Management — Dispatches, Deliveries, Stock tracking, Contracts.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict
 import uuid
 import logging
@@ -196,6 +196,203 @@ def create_laundry_router(db, require_roles):
     @router.get("/laundry/catalog")
     async def catalog(current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
         return {"items": DEFAULT_ITEMS}
+
+    # ========================= DAILY USAGE =========================
+    @router.get("/laundry/usage/{property_id}")
+    async def list_usage(property_id: str, date: str = "", start: str = "", end: str = "",
+                         current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """Per-room daily linen collection records."""
+        query = {}
+        if property_id != "all":
+            query["property_id"] = property_id
+        if date:
+            query["date"] = date
+        elif start and end:
+            query["date"] = {"$gte": start, "$lte": end}
+        rows = await db.laundry_daily_usage.find(query, {"_id": 0}).sort("date", -1).to_list(500)
+        # Group by room + date for convenient display
+        return {"records": rows, "count": len(rows)}
+
+    @router.post("/laundry/usage/{property_id}")
+    async def create_usage(property_id: str, data: Dict,
+                           current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """Record a room's daily linen collection. Can pass items array for multiple lines at once."""
+        date = data.get("date", datetime.now(timezone.utc).date().isoformat())
+        room_id = data.get("room_id", "")
+        room_number = data.get("room_number", "")
+        items = data.get("items", [])
+        if not items or not isinstance(items, list):
+            raise HTTPException(400, "items array required")
+        now = datetime.now(timezone.utc).isoformat()
+        created = []
+        for it in items:
+            qty = int(it.get("qty", 0))
+            if qty <= 0:
+                continue
+            doc = {
+                "id": str(uuid.uuid4()),
+                "property_id": property_id,
+                "date": date,
+                "room_id": room_id,
+                "room_number": room_number,
+                "item_id": it.get("item_id", ""),
+                "item_name": it.get("item_name", ""),
+                "qty": qty,
+                "recorded_by": current_user.get("name", ""),
+                "created_at": now,
+            }
+            await db.laundry_daily_usage.insert_one({**doc})
+            # Also move stock from clean→dirty
+            await _adjust_stock(db, property_id, it.get("item_id", ""), it.get("item_name", ""),
+                                clean=-qty, dirty=qty)
+            created.append(doc)
+        return {"created": created, "count": len(created)}
+
+    @router.delete("/laundry/usage/{property_id}/{usage_id}")
+    async def delete_usage(property_id: str, usage_id: str,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.laundry_daily_usage.find_one({"id": usage_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Not found")
+        # Reverse the stock adjustment
+        qty = int(doc.get("qty", 0))
+        await _adjust_stock(db, property_id, doc.get("item_id", ""), doc.get("item_name", ""),
+                            clean=qty, dirty=-qty)
+        await db.laundry_daily_usage.delete_one({"id": usage_id})
+        return {"deleted": True}
+
+    # ========================= REPORTS =========================
+    @router.get("/laundry/reports/{property_id}/{report_type}")
+    async def reports(property_id: str, report_type: str, start: str = "", end: str = "",
+                      current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """report_type: daily-usage | count | order | dispatch | monthly-audit | group-update"""
+        from datetime import date as _date
+        today = _date.today().isoformat()
+        if not end:
+            end = today
+        if not start:
+            start = (datetime.fromisoformat(end) - timedelta(days=30)).date().isoformat()
+        prop_filter = {} if property_id == "all" else {"property_id": property_id}
+
+        if report_type == "daily-usage":
+            rows = await db.laundry_daily_usage.find(
+                {"date": {"$gte": start, "$lte": end}, **prop_filter}, {"_id": 0}
+            ).sort("date", -1).to_list(2000)
+            by_room = {}
+            by_date = {}
+            for r in rows:
+                rn = r.get("room_number") or r.get("room_id", "Unknown")
+                by_room[rn] = by_room.get(rn, 0) + int(r.get("qty", 0))
+                by_date[r.get("date", "")] = by_date.get(r.get("date", ""), 0) + int(r.get("qty", 0))
+            return {"rows": rows, "by_room": by_room, "by_date": by_date, "total_items": sum(int(r.get("qty", 0)) for r in rows), "start": start, "end": end}
+
+        if report_type == "count":
+            usage = await db.laundry_daily_usage.find(
+                {"date": {"$gte": start, "$lte": end}, **prop_filter}, {"_id": 0}
+            ).to_list(5000)
+            by_item = {}
+            for u in usage:
+                k = u.get("item_name") or u.get("item_id", "Unknown")
+                by_item.setdefault(k, {"name": k, "total": 0, "days": set(), "rooms": set()})
+                by_item[k]["total"] += int(u.get("qty", 0))
+                by_item[k]["days"].add(u.get("date", ""))
+                by_item[k]["rooms"].add(u.get("room_number") or u.get("room_id", ""))
+            out = []
+            for v in by_item.values():
+                days = len(v["days"]) or 1
+                daily_avg = v["total"] / days
+                out.append({
+                    "item": v["name"],
+                    "total": v["total"],
+                    "days_active": len(v["days"]),
+                    "rooms_active": len(v["rooms"]),
+                    "daily_avg": round(daily_avg, 1),
+                    "anomaly": v["total"] > (daily_avg * days * 1.5) or (days < 3 and v["total"] > 20),
+                })
+            out.sort(key=lambda x: -x["total"])
+            return {"items": out, "start": start, "end": end}
+
+        if report_type == "order":
+            disp = await db.laundry_dispatches.find(
+                {"sent_date": {"$gte": start, "$lte": end}, **prop_filter}, {"_id": 0}
+            ).to_list(500)
+            by_item = {}
+            for d in disp:
+                for it in d.get("items", []):
+                    k = it.get("name") or it.get("item_id", "Unknown")
+                    by_item.setdefault(k, {"name": k, "sent": 0, "received": 0, "variance": 0})
+                    by_item[k]["sent"] += int(it.get("qty_sent", 0))
+                    by_item[k]["received"] += int(it.get("qty_received", 0))
+            for v in by_item.values():
+                v["variance"] = v["sent"] - v["received"]
+            out = sorted(by_item.values(), key=lambda x: -x["sent"])
+            return {"items": out, "dispatches": len(disp), "start": start, "end": end}
+
+        if report_type == "dispatch":
+            disp = await db.laundry_dispatches.find(
+                {"sent_date": {"$gte": start, "$lte": end}, **prop_filter}, {"_id": 0}
+            ).sort("sent_date", -1).to_list(500)
+            return {
+                "dispatches": disp,
+                "total_cost": round(sum(float(d.get("total_cost", 0) or 0) for d in disp), 2),
+                "total_items": sum(int(i.get("qty_sent", 0)) for d in disp for i in d.get("items", [])),
+                "start": start, "end": end,
+            }
+
+        if report_type == "monthly-audit":
+            # End-of-month reconciliation: stock snapshot + discrepancies
+            stock = await db.laundry_stock.find(prop_filter, {"_id": 0}).to_list(200)
+            usage_total = await db.laundry_daily_usage.find(
+                {"date": {"$gte": start, "$lte": end}, **prop_filter}, {"_id": 0}
+            ).to_list(5000)
+            usage_by_item = {}
+            for u in usage_total:
+                k = u.get("item_id", "")
+                usage_by_item[k] = usage_by_item.get(k, 0) + int(u.get("qty", 0))
+            dispatches = await db.laundry_dispatches.find(
+                {"sent_date": {"$gte": start, "$lte": end}, **prop_filter}, {"_id": 0}
+            ).to_list(500)
+            dispatched_by_item = {}
+            for d in dispatches:
+                for it in d.get("items", []):
+                    k = it.get("item_id", "")
+                    dispatched_by_item[k] = dispatched_by_item.get(k, 0) + int(it.get("qty_sent", 0))
+            audit = []
+            for s in stock:
+                iid = s.get("item_id", "")
+                audit.append({
+                    "item": s.get("name", iid),
+                    "clean": int(s.get("on_hand_clean", 0)),
+                    "dirty": int(s.get("dirty", 0)),
+                    "in_transit": int(s.get("in_transit", 0)),
+                    "damaged": int(s.get("damaged", 0)),
+                    "used_in_period": usage_by_item.get(iid, 0),
+                    "dispatched_in_period": dispatched_by_item.get(iid, 0),
+                    "total_inventory": int(s.get("on_hand_clean", 0)) + int(s.get("dirty", 0)) + int(s.get("in_transit", 0)),
+                })
+            return {"audit": audit, "start": start, "end": end}
+
+        if report_type == "group-update":
+            # Rolling cycle ledger: each event that affected stock
+            usage = await db.laundry_daily_usage.find(
+                {"date": {"$gte": start, "$lte": end}, **prop_filter}, {"_id": 0}
+            ).to_list(2000)
+            disp = await db.laundry_dispatches.find(
+                {"sent_date": {"$gte": start, "$lte": end}, **prop_filter}, {"_id": 0}
+            ).to_list(500)
+            events = []
+            for u in usage:
+                events.append({"date": u.get("date", ""), "type": "usage", "item": u.get("item_name", ""), "qty": int(u.get("qty", 0)), "delta_clean": -int(u.get("qty", 0)), "delta_dirty": int(u.get("qty", 0)), "ref": u.get("room_number", "")})
+            for d in disp:
+                total_sent = sum(int(i.get("qty_sent", 0)) for i in d.get("items", []))
+                total_recv = sum(int(i.get("qty_received", 0)) for i in d.get("items", []))
+                events.append({"date": d.get("sent_date", ""), "type": "dispatch_sent", "item": d.get("vendor", ""), "qty": total_sent, "delta_clean": 0, "delta_dirty": -total_sent, "ref": d.get("vendor", "")})
+                if d.get("status") == "received":
+                    events.append({"date": d.get("received_date", d.get("sent_date", "")), "type": "dispatch_received", "item": d.get("vendor", ""), "qty": total_recv, "delta_clean": total_recv, "delta_dirty": 0, "ref": d.get("vendor", "")})
+            events.sort(key=lambda x: x["date"], reverse=True)
+            return {"events": events, "count": len(events), "start": start, "end": end}
+
+        raise HTTPException(400, f"Unknown report_type: {report_type}")
 
     return router
 

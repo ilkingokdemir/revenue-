@@ -184,30 +184,142 @@ def create_historical_pricing_router(db, require_roles):
                 "avg_occupancy": round(sum(sa["occupancies"]) / len(sa["occupancies"])),
             }
 
-        # AI Minimum Price Suggestions (per month)
-        # Use P25 (25th percentile) as minimum floor + consider season
+        # ==================== UNIFIED AI PRICE SUGGESTIONS ====================
+        # Combines: Historical data + Robot supply + Events + Competitor prices
+
+        # Load market supply data
+        supply_docs = await db.market_supply.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("scanned_at", -1).to_list(500)
+        supply_by_month = {}
+        for sd in supply_docs:
+            try:
+                sd_month = int(sd["date"][5:7])
+            except (ValueError, KeyError):
+                continue
+            if sd_month not in supply_by_month:
+                supply_by_month[sd_month] = []
+            supply_by_month[sd_month].append(sd.get("unavailable_pct", 50))
+
+        # Load events
+        events = await db.market_events.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(200)
+        events_by_month = {}
+        for ev in events:
+            try:
+                ev_month = int(ev["date"][5:7])
+            except (ValueError, KeyError):
+                continue
+            if ev_month not in events_by_month:
+                events_by_month[ev_month] = []
+            events_by_month[ev_month].append(ev)
+
+        # Load competitor prices
+        competitors = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(20)
+        comp_prices_by_month = {}
+        for comp in competitors:
+            for p in (comp.get("prices") or []):
+                if p.get("scraped") and p.get("lowest_price"):
+                    try:
+                        cp_month = int(p["date"][5:7])
+                    except (ValueError, KeyError):
+                        continue
+                    if cp_month not in comp_prices_by_month:
+                        comp_prices_by_month[cp_month] = []
+                    comp_prices_by_month[cp_month].append(p["lowest_price"])
+
+        # Build unified suggestions
         min_price_suggestions = []
         current_month = now.month
         for i in range(12):
             m = ((current_month - 1 + i) % 12) + 1
-            ms = next((ms for ms in monthly_stats if ms["month"] == m), None)
+            ms = next((ms_item for ms_item in monthly_stats if ms_item["month"] == m), None)
             if not ms:
                 continue
-            # Floor = max(P25 historical, 50% of base rate)
-            floor_rate = max(ms["p25_rate"], round(base_rate * 0.5, 2))
-            # Suggested min = P25 with a small buffer
-            suggested_min = round(floor_rate * 0.95, 2)
-            # Historical performance context
+
+            # Historical floor (P25 with buffer)
+            hist_floor = max(ms["p25_rate"], round(base_rate * 0.5, 2))
+            hist_suggested = round(hist_floor * 0.95, 2)
+
+            # Market supply signal
+            supply_data = supply_by_month.get(m, [])
+            avg_unavail = round(sum(supply_data) / len(supply_data)) if supply_data else None
+            market_signal = "high_demand" if avg_unavail and avg_unavail >= 70 else "moderate" if avg_unavail and avg_unavail >= 40 else "low_demand" if avg_unavail else None
+            market_boost = 0
+            if market_signal == "high_demand":
+                market_boost = 15
+            elif market_signal == "low_demand":
+                market_boost = -5
+
+            # Event signal
+            month_events = events_by_month.get(m, [])
+            mega_events = [e for e in month_events if e.get("impact") in ("mega", "large")]
+            event_boost = 0
+            event_names = []
+            if mega_events:
+                event_boost = 20
+                event_names = [e.get("name", "") for e in mega_events[:3]]
+
+            # Competitor signal
+            comp_prices = comp_prices_by_month.get(m, [])
+            comp_avg = round(sum(comp_prices) / len(comp_prices), 2) if comp_prices else None
+            comp_signal = None
+            comp_boost = 0
+            if comp_avg:
+                if comp_avg > ms["avg_rate"] * 1.1:
+                    comp_signal = "competitors_higher"
+                    comp_boost = 10
+                elif comp_avg < ms["avg_rate"] * 0.9:
+                    comp_signal = "competitors_lower"
+                    comp_boost = -5
+                else:
+                    comp_signal = "aligned"
+
+            # UNIFIED SUGGESTED PRICE = historical floor + adjustments from live data
+            unified_min = hist_suggested
+            unified_suggested = round(ms["avg_rate"] * (1 + market_boost / 100) * (1 + event_boost / 100) * (1 + comp_boost / 100), 2)
+            # Final suggestion: max of floor and smart suggestion
+            final_suggested = max(unified_min, round(unified_suggested * 0.85, 2))
+
+            # Build reasoning from all sources
+            reasons = [f"Historical 2yr: avg £{ms['avg_rate']}, P25 floor £{ms['p25_rate']}"]
+            if market_signal:
+                reasons.append(f"Market Robot: {market_signal.replace('_', ' ')} ({avg_unavail}% unavail, {'+' if market_boost > 0 else ''}{market_boost}%)")
+            if mega_events:
+                reasons.append(f"Events: {len(mega_events)} major events (+{event_boost}%)")
+            if comp_avg:
+                reasons.append(f"Competitors: avg £{comp_avg} ({comp_signal.replace('_', ' ')}, {'+' if comp_boost > 0 else ''}{comp_boost}%)")
+
             min_price_suggestions.append({
                 "month": m,
                 "month_name": ms["month_name"],
-                "suggested_min": suggested_min,
+                "suggested_min": unified_min,
+                "ai_suggested_rate": final_suggested,
                 "historical_avg": ms["avg_rate"],
                 "historical_min": ms["min_rate"],
                 "historical_p25": ms["p25_rate"],
                 "historical_max": ms["max_rate"],
                 "avg_occupancy": ms["avg_occupancy"],
-                "reasoning": f"Based on 2yr data: avg £{ms['avg_rate']}, min £{ms['min_rate']}. Floor set at P25 (£{ms['p25_rate']}) with 5% buffer.",
+                "market_unavail": avg_unavail,
+                "market_signal": market_signal,
+                "market_boost": market_boost,
+                "events_count": len(month_events),
+                "mega_events": len(mega_events),
+                "event_names": event_names,
+                "event_boost": event_boost,
+                "competitor_avg": comp_avg,
+                "competitor_signal": comp_signal,
+                "competitor_boost": comp_boost,
+                "reasoning": " | ".join(reasons),
+                "data_sources": {
+                    "historical": True,
+                    "market_robot": bool(supply_data),
+                    "events": bool(month_events),
+                    "competitors": bool(comp_prices),
+                },
             })
 
         # Year-over-year comparison

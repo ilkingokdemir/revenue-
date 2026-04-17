@@ -32,10 +32,10 @@ def create_dynamic_pricing_router(db, require_roles):
         return max(t, 1)
 
     async def _calculate_ai_price(
-        base_rate, date_obj, days_ahead, strategy, supply_snap, our_occ, total_rooms, competitor_avg, event_data=None
+        base_rate, date_obj, days_ahead, strategy, supply_snap, our_occ, total_rooms, competitor_avg, event_data=None, historical_floor=None
     ):
         """
-        AI pricing algorithm combining all data sources (9 factors).
+        AI pricing algorithm combining all data sources (10 factors).
         Returns (final_price, breakdown_dict)
         """
         breakdown = {"base": base_rate}
@@ -168,7 +168,13 @@ def create_dynamic_pricing_router(db, require_roles):
             price *= agg
             breakdown["aggressiveness"] = f"{agg}x"
 
-        # 9. GUARDRAILS - min/max
+        # 9. HISTORICAL FLOOR — never price below proven historical minimum
+        if historical_floor and historical_floor > 0 and price < historical_floor:
+            old_price = price
+            price = historical_floor
+            breakdown["historical_floor"] = f"Floor £{historical_floor} (was £{round(old_price, 2)})"
+
+        # 10. GUARDRAILS - min/max
         min_price = round(base_rate * 0.5, 2)
         max_price = round(base_rate * 3.0, 2)
         final = round(max(min_price, min(max_price, price)), 2)
@@ -237,6 +243,34 @@ def create_dynamic_pricing_router(db, require_roles):
                     event_map[ds_key] = ev
                 d += timedelta(days=1)
 
+        # Get historical price floors from strategy
+        price_floors = strategy.get("price_floors", {})
+
+        # Build historical monthly floor map
+        historical_floor_map = {}
+        for month_str, floor_data in price_floors.items():
+            try:
+                historical_floor_map[int(month_str)] = float(floor_data.get("min_price", 0))
+            except (ValueError, TypeError):
+                pass
+
+        # If no floors in strategy, compute from historical data
+        if not historical_floor_map:
+            hist_data = await db.historical_prices.find(
+                {"property_id": property_id}, {"_id": 0, "month": 1, "sold_rate": 1}
+            ).to_list(800)
+            if hist_data:
+                monthly_rates = {}
+                for h in hist_data:
+                    m = h.get("month")
+                    if m not in monthly_rates:
+                        monthly_rates[m] = []
+                    monthly_rates[m].append(h["sold_rate"])
+                for m, rates in monthly_rates.items():
+                    sorted_rates = sorted(rates)
+                    p25 = sorted_rates[len(sorted_rates) // 4]
+                    historical_floor_map[m] = round(p25 * 0.95, 2)
+
         # Calculate prices for every day
         results = []
         for rt in room_types[:5]:
@@ -266,8 +300,11 @@ def create_dynamic_pricing_router(db, require_roles):
                 # Event for this date
                 event_for_day = event_map.get(ds)
 
+                # Historical floor for this month
+                hist_floor = historical_floor_map.get(d.month, 0)
+
                 final_price, breakdown = await _calculate_ai_price(
-                    base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg, event_for_day
+                    base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg, event_for_day, hist_floor
                 )
 
                 # Get current override if any
@@ -328,6 +365,7 @@ def create_dynamic_pricing_router(db, require_roles):
                 "competitors_with_prices": len(comp_price_map),
                 "strategy_configured": bool(strategy.get("dow_adjustments") or strategy.get("monthly_adjustments")),
                 "events_loaded": len(event_map),
+                "historical_floors": len(historical_floor_map),
             },
         }
 
@@ -382,6 +420,30 @@ def create_dynamic_pricing_router(db, require_roles):
                     event_map_apply[ds_key] = ev
                 d_iter += timedelta(days=1)
 
+        # Get historical floors
+        price_floors_apply = strategy.get("price_floors", {})
+        hist_floor_map_apply = {}
+        for month_str, floor_data in price_floors_apply.items():
+            try:
+                hist_floor_map_apply[int(month_str)] = float(floor_data.get("min_price", 0))
+            except (ValueError, TypeError):
+                pass
+        if not hist_floor_map_apply:
+            hist_data = await db.historical_prices.find(
+                {"property_id": property_id}, {"_id": 0, "month": 1, "sold_rate": 1}
+            ).to_list(800)
+            if hist_data:
+                monthly_rates = {}
+                for h in hist_data:
+                    m = h.get("month")
+                    if m not in monthly_rates:
+                        monthly_rates[m] = []
+                    monthly_rates[m].append(h["sold_rate"])
+                for m, rates in monthly_rates.items():
+                    sorted_rates = sorted(rates)
+                    p25 = sorted_rates[len(sorted_rates) // 4]
+                    hist_floor_map_apply[m] = round(p25 * 0.95, 2)
+
         applied_count = 0
         for rt in room_types:
             base = float(rt.get("base_rate", 100) or 100)
@@ -403,8 +465,9 @@ def create_dynamic_pricing_router(db, require_roles):
                 comp_avg = round(sum(comp_prices) / len(comp_prices), 2) if comp_prices else None
 
                 event_for_day = event_map_apply.get(ds)
+                hist_floor = hist_floor_map_apply.get(d.month, 0)
                 final_price, breakdown = await _calculate_ai_price(
-                    base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg, event_for_day
+                    base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg, event_for_day, hist_floor
                 )
 
                 # Apply to rate overrides

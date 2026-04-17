@@ -1,0 +1,115 @@
+{
+  "summary": "Iteration 108 - Unified Price Suggestions Testing Complete. All 11 backend API tests passed. Frontend UI fully functional with Historical Analysis showing 'Unified AI Price Suggestions' table combining 4 data sources (Historical, Market Robot, Events, Competitors) with all required columns and data source legend. AI Dynamic Pricing Engine shows 10 factors including 'Historical Price Floors (2yr)' and data sources bar displays 'Historical Floors: 6 months' after preview.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "historical_pricing_unified_suggestions": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/revenue/historical-pricing/all returns min_price_suggestions with unified data",
+        "Each suggestion has: ai_suggested_rate, suggested_min (floor), historical_avg/min/p25/max",
+        "Market data: market_unavail, market_signal (high_demand/moderate/low_demand), market_boost",
+        "Event data: events_count, mega_events, event_names, event_boost",
+        "Competitor data: competitor_avg, competitor_signal (competitors_higher/lower/aligned), competitor_boost",
+        "data_sources object: historical (always true), market_robot, events, competitors (booleans)"
+      ]
+    },
+    "historical_pricing_market_signals": {
+      "status": "PASS",
+      "tests": [
+        "market_signal values: high_demand (+15%), moderate (0%), low_demand (-5%), or null",
+        "competitor_signal values: competitors_higher (+10%), competitors_lower (-5%), aligned (0%), or null"
+      ]
+    },
+    "dynamic_pricing_historical_floors": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/revenue/dynamic-pricing/all/calculate returns data_sources.historical_floors count",
+        "10 factors: DOW, Monthly, Lead Time, Occupancy, Market Supply, Competitor, Event, Aggressiveness, Historical Floor, Guardrails",
+        "Breakdown dict shows all applied factors per price",
+        "Summary includes: total_days, increases, decreases, avg_change_pct, avg_ai_price, event_days"
+      ]
+    },
+    "dynamic_pricing_apply": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/revenue/dynamic-pricing/all/apply uses historical floors (10th factor)",
+        "Returns applied count, days, room_types"
+      ]
+    },
+    "apply_price_floors": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/revenue/historical-pricing/all/apply-floors saves floors to pricing_strategy",
+        "Floors reflected in dynamic pricing data_sources.historical_floors count"
+      ]
+    },
+    "historical_analysis_ui": {
+      "status": "PASS",
+      "tests": [
+        "Historical Analysis accessible via Revenue > Historical Analysis (under Intelligence)",
+        "'Unified AI Price Suggestions' header with badge 'Historical + Robot + Events + Competitors'",
+        "Table columns: Month, AI Suggested, Floor, Hist Avg, Market, Events, Competitors, Occ %, Sources",
+        "Market column shows unavailability % with color badge",
+        "Events column shows mega event count with +20% boost",
+        "Competitors column shows avg price (No data when unavailable)",
+        "Sources column shows colored dots: violet=Historical, indigo=Market Robot, red=Events, amber=Competitors",
+        "Data source legend below table",
+        "'Apply All Floors to Strategy' button"
+      ]
+    },
+    "dynamic_pricing_engine_ui": {
+      "status": "PASS",
+      "tests": [
+        "AI Dynamic Pricing accessible via Revenue > AI Dynamic Pricing (under Pricing)",
+        "Description mentions 'historical floors' in subtitle",
+        "10 factors list includes 'Historical Price Floors (2yr)'",
+        "'Preview Prices' button triggers calculation",
+        "Data sources bar shows: Market Supply (91 dates), Competitor Prices (0 dates), Pricing Strategy (Configured), Event Intelligence (88 event days), Historical Floors (6 months)",
+        "Summary KPIs: Days Priced (90), Price Increases (69), Price Decreases (20), Avg Change (+19%), Avg AI Price (£151.02)",
+        "90-Day Price Grid shows breakdown factors per row"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration108_unified_pricing.py",
+    "/app/test_reports/pytest/pytest_iteration108_unified_pricing.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Unified suggestions correctly combine 4 data sources: Historical (always present from 730-day seed), Market Robot (from market_supply), Events (from market_events), Competitors (from market_competitors)",
+    "Historical floor is the 9th factor (before guardrails) - only triggers when calculated price would drop below floor",
+    "Current prices are high (~£150-200) so historical_floor factor may not appear in breakdown unless price would drop below floor",
+    "Market Robot and Competitor data may show 'No data' for some months if not scraped yet"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration108_unified_pricing.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Historical pricing seeds 730 days on first GET. Price floors applied via test (months 1-6). Market supply has 91 dates. Events have 88 event days.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 108 tested the UNIFIED price suggestion system. Historical Analysis now shows 'Unified AI Price Suggestions' table with 4 data sources combined. AI Dynamic Pricing Engine has 10 factors including Historical Price Floors. The historical_floor factor only appears in breakdown when price would drop below the floor (current prices are high so it may not trigger). Navigation: Revenue > Historical Analysis (Intelligence) or AI Dynamic Pricing (Pricing).",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Historical pricing data is SEEDED simulation (730 days of realistic data)",
+      "Market Robot Booking.com scraper uses simulated fallback",
+      "Events are real from GPT-5.2 integration",
+      "Channel Manager rate push to OTAs is SIMULATED"
+    ]
+  }
+}

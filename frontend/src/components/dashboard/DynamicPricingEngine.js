@@ -51,7 +51,7 @@ export const DynamicPricingEngine = ({ propertyId }) => {
             </div>
             <div>
               <h2 className="text-xl font-bold">AI Dynamic Pricing Engine</h2>
-              <p className="text-sm text-white/60">Combines market supply, competitors, occupancy, seasonality, lead time & event intelligence for optimal pricing across 90 days</p>
+              <p className="text-sm text-white/60">Combines market supply, competitors, occupancy, seasonality, lead time, event intelligence & historical floors for optimal pricing across 90 days</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -91,6 +91,10 @@ export const DynamicPricingEngine = ({ propertyId }) => {
               {ds.events_loaded > 0 ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
               Event Intelligence: {ds.events_loaded || 0} event days
             </span>
+            <span className={`flex items-center gap-1 ${ds.historical_floors > 0 ? "text-emerald-300" : "text-amber-300"}`}>
+              {ds.historical_floors > 0 ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+              Historical Floors: {ds.historical_floors || 0} months
+            </span>
           </div>
         )}
       </div>
@@ -103,7 +107,7 @@ export const DynamicPricingEngine = ({ propertyId }) => {
           <div className="bg-stone-50 rounded-xl p-4 max-w-lg mx-auto text-left space-y-2 text-xs text-stone-500">
             <p className="font-semibold text-stone-700">The AI combines these data sources:</p>
             <div className="grid grid-cols-2 gap-2">
-              {["Market Supply (Booking.com)", "Competitor Hotel Prices", "Your Occupancy Levels", "Day-of-Week Patterns", "Monthly Seasonality", "Lead Time to Check-in", "Event Intelligence (GPT-5.2)", "Aggressiveness Setting", "Min/Max Guardrails"].map(s => (
+              {["Market Supply (Booking.com)", "Competitor Hotel Prices", "Your Occupancy Levels", "Day-of-Week Patterns", "Monthly Seasonality", "Lead Time to Check-in", "Event Intelligence (GPT-5.2)", "Historical Price Floors (2yr)", "Aggressiveness Setting", "Min/Max Guardrails"].map(s => (
                 <span key={s} className="flex items-center gap-1"><CheckCircle className="w-3 h-3 text-emerald-500 flex-shrink-0" />{s}</span>
               ))}
             </div>

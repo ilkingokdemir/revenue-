@@ -154,8 +154,8 @@ export const HistoricalPricing = ({ propertyId }) => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Target className="w-5 h-5 text-amber-600" />
-            <h3 className="font-bold text-amber-900">AI Minimum Price Suggestions</h3>
-            <Badge className="bg-amber-100 text-amber-700 text-[10px]">Based on 2yr historical data</Badge>
+            <h3 className="font-bold text-amber-900">Unified AI Price Suggestions</h3>
+            <Badge className="bg-amber-100 text-amber-700 text-[10px]">Historical + Robot + Events + Competitors</Badge>
           </div>
           <button onClick={applyFloors} disabled={applying}
             className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-xl text-sm font-semibold disabled:opacity-50" data-testid="hp-apply-floors">
@@ -167,7 +167,7 @@ export const HistoricalPricing = ({ propertyId }) => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-amber-200">
-                {["Month", "Suggested Min", "Historical Avg", "Historical Min", "P25 Rate", "Historical Max", "Avg Occ %", "Reasoning"].map(h => (
+                {["Month", "AI Suggested", "Floor", "Hist Avg", "Market", "Events", "Competitors", "Occ %", "Sources"].map(h => (
                   <th key={h} className="px-3 py-2 text-xs font-semibold text-amber-800 text-center">{h}</th>
                 ))}
               </tr>
@@ -177,20 +177,59 @@ export const HistoricalPricing = ({ propertyId }) => {
                 <tr key={s.month} className="border-b border-amber-100">
                   <td className="px-3 py-2 font-bold text-amber-900">{s.month_name}</td>
                   <td className="px-3 py-2 text-center">
-                    <span className="bg-amber-600 text-white px-2 py-1 rounded-lg font-bold text-sm">{cur(s.suggested_min)}</span>
+                    <span className="bg-amber-600 text-white px-2 py-1 rounded-lg font-bold text-sm">{cur(s.ai_suggested_rate || s.suggested_min)}</span>
                   </td>
+                  <td className="px-3 py-2 text-center text-stone-600 text-xs">{cur(s.suggested_min)}</td>
                   <td className="px-3 py-2 text-center text-stone-700 font-semibold">{cur(s.historical_avg)}</td>
-                  <td className="px-3 py-2 text-center text-red-500 font-semibold">{cur(s.historical_min)}</td>
-                  <td className="px-3 py-2 text-center text-stone-600">{cur(s.historical_p25)}</td>
-                  <td className="px-3 py-2 text-center text-emerald-600 font-semibold">{cur(s.historical_max)}</td>
+                  <td className="px-3 py-2 text-center">
+                    {s.market_signal ? (
+                      <div>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                          s.market_signal === "high_demand" ? "bg-red-100 text-red-700" : s.market_signal === "low_demand" ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"
+                        }`}>{s.market_unavail}% unavail</span>
+                        {s.market_boost !== 0 && <div className={`text-[10px] font-semibold mt-0.5 ${s.market_boost > 0 ? "text-emerald-600" : "text-red-500"}`}>{s.market_boost > 0 ? "+" : ""}{s.market_boost}%</div>}
+                      </div>
+                    ) : <span className="text-[10px] text-stone-300">No data</span>}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {s.mega_events > 0 ? (
+                      <div>
+                        <span className="text-[9px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{s.mega_events} major</span>
+                        <div className="text-[10px] font-semibold text-red-500 mt-0.5">+{s.event_boost}%</div>
+                      </div>
+                    ) : s.events_count > 0 ? (
+                      <span className="text-[9px] text-amber-600">{s.events_count} events</span>
+                    ) : <span className="text-[10px] text-stone-300">None</span>}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {s.competitor_avg ? (
+                      <div>
+                        <span className="text-xs font-semibold text-stone-700">{cur(s.competitor_avg)}</span>
+                        {s.competitor_boost !== 0 && <div className={`text-[10px] font-semibold ${s.competitor_boost > 0 ? "text-emerald-600" : "text-red-500"}`}>{s.competitor_boost > 0 ? "+" : ""}{s.competitor_boost}%</div>}
+                      </div>
+                    ) : <span className="text-[10px] text-stone-300">No data</span>}
+                  </td>
                   <td className="px-3 py-2 text-center">
                     <span className={`font-semibold ${s.avg_occupancy >= 70 ? "text-emerald-600" : s.avg_occupancy >= 40 ? "text-amber-500" : "text-red-400"}`}>{s.avg_occupancy}%</span>
                   </td>
-                  <td className="px-3 py-2 text-[10px] text-stone-500 max-w-[200px]">{s.reasoning}</td>
+                  <td className="px-3 py-2 text-center">
+                    <div className="flex items-center justify-center gap-0.5">
+                      {s.data_sources?.historical && <span className="w-2 h-2 rounded-full bg-violet-500" title="Historical" />}
+                      {s.data_sources?.market_robot && <span className="w-2 h-2 rounded-full bg-indigo-500" title="Market Robot" />}
+                      {s.data_sources?.events && <span className="w-2 h-2 rounded-full bg-red-500" title="Events" />}
+                      {s.data_sources?.competitors && <span className="w-2 h-2 rounded-full bg-amber-500" title="Competitors" />}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="flex items-center gap-4 mt-3 text-[10px] text-stone-400">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500" />Historical (2yr)</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500" />Market Robot</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />Event Intelligence</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />Competitor Prices</span>
         </div>
       </div>
 

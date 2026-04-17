@@ -81,6 +81,7 @@ from routes.historical_pricing import create_historical_pricing_router
 from routes.revenue_intelligence import create_revenue_intelligence_router
 from routes.demand_radar import create_demand_radar_router
 from routes.compset_intel import create_compset_intel_router
+from routes.price_alerts import create_price_alerts_router
 
 # Import extracted modules
 from models import (
@@ -442,6 +443,8 @@ demand_radar_router = create_demand_radar_router(db, require_roles)
 api_router.include_router(demand_radar_router)
 compset_intel_router = create_compset_intel_router(db, require_roles)
 api_router.include_router(compset_intel_router)
+price_alerts_router = create_price_alerts_router(db, require_roles)
+api_router.include_router(price_alerts_router)
 
 app.include_router(api_router)
 

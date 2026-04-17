@@ -17,6 +17,7 @@ const categoryLabels = {
   compliance_due: "Compliance",
   routine_alert: "Routines",
   shift_update: "Shifts",
+  price_intelligence: "Price Intel",
   general: "General",
 };
 
@@ -122,6 +123,7 @@ export const NotificationBell = ({ onNavigate }) => {
                 {[
                   { id: "all", label: "All" },
                   { id: "unread", label: `Unread (${unreadCount})` },
+                  { id: "price_intelligence", label: "Price Intel" },
                   { id: "sla_breach", label: "SLA" },
                   { id: "handover_alert", label: "Handover" },
                   { id: "compliance_due", label: "Compliance" },

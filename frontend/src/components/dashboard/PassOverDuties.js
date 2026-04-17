@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
-  DialogFooter,
+  DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import {
@@ -132,7 +132,10 @@ export const PassOverDuties = ({ propertyId, user }) => {
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Create Shift Handover</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Create Shift Handover</DialogTitle>
+              <DialogDescription>Leave notes for the next shift. Set priority, mention staff, and track acknowledgements.</DialogDescription>
+            </DialogHeader>
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-semibold text-stone-600">Title</label>

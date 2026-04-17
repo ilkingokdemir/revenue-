@@ -1,24 +1,26 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 55+ Modules | Mobile Responsive | 124 Test Iterations (100%)
+## 60+ Modules | Mobile Responsive | 125 Test Iterations (100%)
 
-### ALL FEATURES COMPLETE
+### PREMIUM DIFFERENTIATORS (No Competitor Has These)
+- **AI Weekly Revenue Digest** — GPT-5.2 executive summary: Performance Summary, Wins, Concerns, Top 3 Priority Actions, Revenue Outlook. Auto-generates with real hotel data.
+- **AI Upsell Engine** — Per-booking suggestions: room upgrades (real availability check), early check-in, late checkout, add-ons (breakfast, airport, hamper, parking, spa). One-click accept adds to folio.
+- **Competitor Rate Automation** — 4 strategies (match median, undercut 5%, premium 10%, match lowest), configurable guard rails (±15%, min/max rate), select & apply suggested rates.
 
-**Core PMS:** Dashboard, Gantt Booking Calendar (drag-drop, bulk check-in/out), Guest Profiles, Guest Journey, Digital Check-in, Housekeeping, Maintenance, Night Audit, Logbook, Lost & Found, Operations Hub, Smart Locks, Staff Performance
+### COMPLETE FEATURE SET
+**Core PMS:** Dashboard, Gantt Calendar (drag-drop, bulk), Guest Profiles, Journey, Digital Check-in, Housekeeping, Maintenance, Night Audit, Logbook, Lost & Found, Ops Hub, Smart Locks, Staff Performance
 
-**Revenue (35+ sub-modules):** AI Dynamic Pricing (365-day), Market Robot, Demand Radar, Compset Intelligence, Price Alerts, Displacement Analysis, LOS Optimizer, Booking Pace, Revenue Forecast, What-If Simulator, Rate Calendar, Channel Manager (9 OTAs + availability sync), Parity, Overbooking, Profit OS, AI Copilot, Playbooks, Experiments
+**Revenue (38+ sub-modules):** AI Dynamic Pricing, Market Robot, Demand Radar, Compset Intel, Price Alerts, Displacement Analysis, LOS Optimizer, AI Weekly Digest, Rate Automation, Booking Pace, Revenue Forecast, What-If Simulator, Rate Calendar, Channel Manager (9 OTAs + sync), Parity, Overbooking, Profit OS, AI Copilot, Playbooks, Experiments
 
-**Booking Engine:** Direct booking, Templates, Promo Codes, Add-ons, SEO Meta Tags, Google Structured Data, AI Concierge, Social Proof, Price Comparison, Group Bookings, Multi-currency/language
+**Booking Engine:** Direct booking, Templates, SEO, Promo Codes, Add-ons, AI Concierge, Social Proof, Group Bookings, Multi-currency/language
 
-**Guest Experience:** Loyalty Program, Campaigns, Surveys, Guest App, Messaging (WhatsApp/Email/SMS)
+**Guest Experience:** Loyalty, Campaigns, Surveys, Guest App, Messaging
 
-**Finance:** Accounting, Invoice/Folio Management (itemised charges, payments, adjustments), Payments (Stripe), POS, Stock Management, Finance Hub, Reports Centre, Scheduled Reports (daily/weekly/monthly auto-email)
+**Finance:** Accounting, Invoice/Folio, Stripe, POS, Stock, Scheduled Reports
 
-**AI Features:** GPT-5.2 Review Auto-Respond (batch, 3 tones), Sentiment Analysis, Event Intelligence (HDS scoring)
+**AI:** GPT-5.2 Auto-Respond Reviews, Sentiment, Event Intelligence, Weekly Digest, Upsell Engine
 
-**Mobile:** Mobile Companion App (Today KPIs, quick check-in, housekeeping toggle)
+**Mobile:** Companion App (KPIs, check-in, housekeeping)
 
-## Architecture
-React + Tailwind + Shadcn UI, FastAPI + MongoDB, GPT-5.2 via Emergent LLM Key, Stripe, Resend
-
-## Testing: 124 iterations, 100% pass rate
+## Architecture: React + Tailwind + Shadcn, FastAPI + MongoDB, GPT-5.2 (Emergent LLM Key), Stripe, Resend
+## Testing: 125 iterations, 100% pass rate

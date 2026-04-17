@@ -16,6 +16,8 @@ TIERS = [
     {"label": "1-2 weeks out",      "days_from": 7,  "days_to": 14,  "interval_mins": 180},
     {"label": "2-4 weeks out",      "days_from": 14, "days_to": 28,  "interval_mins": 360},
     {"label": "1-3 months out",     "days_from": 28, "days_to": 90,  "interval_mins": 720},
+    {"label": "3-6 months out",     "days_from": 90, "days_to": 180, "interval_mins": 1440},
+    {"label": "6-12 months out",    "days_from": 180, "days_to": 365, "interval_mins": 2880},
 ]
 
 # Event scanning schedule

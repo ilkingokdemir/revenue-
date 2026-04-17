@@ -25,7 +25,7 @@ IMPACT_LEVELS = {
 def create_event_intelligence_router(db, require_roles):
     router = APIRouter()
 
-    async def _search_events_web(city: str, days_ahead: int = 90):
+    async def _search_events_web(city: str, days_ahead: int = 365):
         """Search for upcoming events in the city using web scraping."""
         now = datetime.now(timezone.utc)
         events_raw = []
@@ -187,7 +187,7 @@ Focus on events with 1000+ expected attendance. Return at least 10-20 events for
             {"property_id": property_id}, {"_id": 0}
         ) or {}
         city = data.get("city") or config.get("city", "London")
-        days_ahead = int(data.get("days_ahead", 90))
+        days_ahead = int(data.get("days_ahead", 365))
         auto_price = data.get("auto_price", True)
         now = datetime.now(timezone.utc)
 

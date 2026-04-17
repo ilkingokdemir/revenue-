@@ -240,7 +240,7 @@ def create_market_robot_router(db, require_roles):
             "enabled": False,
             "city": "London",
             "scan_interval_minutes": 10,
-            "days_ahead": 90,
+            "days_ahead": 365,
             "auto_pricing": True,
             "max_increase_pct": 35,
             "max_decrease_pct": 25,
@@ -274,7 +274,7 @@ def create_market_robot_router(db, require_roles):
 
         config = await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
         city = data.get("city") or config.get("city", "London")
-        days_ahead = min(int(data.get("days_ahead") or config.get("days_ahead", 90)), 90)
+        days_ahead = min(int(data.get("days_ahead") or config.get("days_ahead", 365)), 365)
         auto_pricing = config.get("auto_pricing", True)
         language = config.get("language", "en-gb")
 
@@ -450,6 +450,161 @@ def create_market_robot_router(db, require_roles):
             {"property_id": property_id}, {"_id": 0}
         ).sort("scanned_at", -1).to_list(50)
         return {"logs": logs}
+
+    @router.get("/revenue/market-robot/{property_id}/demand-dashboard")
+    async def get_demand_dashboard(property_id: str, days: int = 365,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Full-year market demand dashboard with occupancy, rates, events, and AI status."""
+        now = datetime.now(timezone.utc)
+
+        # Get base rate and room types
+        rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
+        base_rate = float(rt.get("base_rate", 100) or 100) if rt else 100.0
+
+        # Get properties and total rooms
+        props = await db.properties.find({}, {"_id": 0}).to_list(50) if property_id == "all" else [await db.properties.find_one({"id": property_id}, {"_id": 0})]
+        props = [p for p in props if p]
+        total_rooms = 0
+        for p in props:
+            total_rooms += await db.rooms.count_documents({"property_id": p.get("id", "")}) or 10
+        total_rooms = max(total_rooms, 1)
+
+        # Get all supply data
+        supply_docs = await db.market_supply.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("scanned_at", -1).to_list(1000)
+        supply_map = {}
+        for s in supply_docs:
+            if s["date"] not in supply_map:
+                supply_map[s["date"]] = s
+
+        # Get all rate overrides
+        overrides = await db.rate_overrides.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(500)
+        override_map = {}
+        for ov in overrides:
+            if ov["date"] not in override_map:
+                override_map[ov["date"]] = ov
+
+        # Get events
+        events = await db.market_events.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(300)
+        event_map = {}
+        for ev in events:
+            ev_date = ev.get("date", "")
+            ev_end = ev.get("end_date", ev_date)
+            try:
+                start_d = datetime.strptime(ev_date, "%Y-%m-%d")
+                end_d = datetime.strptime(ev_end, "%Y-%m-%d")
+            except (ValueError, TypeError):
+                continue
+            d_iter = start_d - timedelta(days=1)
+            while d_iter <= end_d + timedelta(days=1):
+                ds_key = d_iter.strftime("%Y-%m-%d")
+                impact_rank = {"mega": 4, "large": 3, "medium": 2, "small": 1}
+                if ds_key not in event_map or impact_rank.get(ev.get("impact", ""), 0) > impact_rank.get(event_map[ds_key].get("impact", ""), 0):
+                    event_map[ds_key] = ev
+                d_iter += timedelta(days=1)
+
+        # Get strategy for floor rate
+        strategy = await db.pricing_strategy.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        price_floors = strategy.get("price_floors", {})
+
+        # Get historical data for floor rates
+        hist_floor_map = {}
+        for month_str, floor_data in price_floors.items():
+            try:
+                hist_floor_map[int(month_str)] = float(floor_data.get("min_price", 0))
+            except (ValueError, TypeError):
+                pass
+
+        # Build day-by-day data
+        daily_data = []
+        for i in range(days):
+            d = now + timedelta(days=i)
+            ds = d.strftime("%Y-%m-%d")
+
+            # Occupancy
+            booked = 0
+            for p in props:
+                booked += await db.bookings.count_documents({
+                    "property_id": p.get("id", ""), "check_in": {"$lte": ds},
+                    "check_out": {"$gt": ds}, "status": {"$ne": "cancelled"}
+                })
+            occ = min(100, round((booked / total_rooms) * 100))
+
+            # Supply / demand
+            supply = supply_map.get(ds, {})
+            market_unavail = supply.get("unavailable_pct") if supply else None
+
+            # Our rates
+            ov = override_map.get(ds)
+            ai_rate = float(ov.get("custom_rate", base_rate)) if ov else None
+            sell_rate = ai_rate if ai_rate else base_rate
+            set_by = ov.get("set_by", "") if ov else ""
+
+            # AI status
+            ai_status = "ai" if set_by in ("ai-dynamic-pricing", "auto-scanner") else "event" if set_by == "event-intelligence" else "manual" if set_by == "market-robot" else "base"
+
+            # Floor rate
+            floor_rate = hist_floor_map.get(d.month, round(base_rate * 0.5, 2))
+
+            # Min rate (guardrail)
+            min_rate = round(base_rate * 0.5, 2)
+
+            # Event
+            event = event_map.get(ds)
+
+            # Target sell rate (what AI recommends)
+            target_rate = ai_rate if ai_rate else base_rate
+
+            entry = {
+                "date": ds,
+                "day": d.day,
+                "dow": d.strftime("%a"),
+                "month": d.strftime("%b"),
+                "days_ahead": i,
+                "occupancy": occ,
+                "market_unavail": market_unavail,
+                "demand_level": "high" if (market_unavail or 0) >= 70 else "moderate" if (market_unavail or 0) >= 40 else "low",
+                "base_rate": base_rate,
+                "ai_rate": ai_rate,
+                "sell_rate": sell_rate,
+                "min_rate": min_rate,
+                "floor_rate": floor_rate,
+                "target_rate": target_rate,
+                "ai_status": ai_status,
+                "set_by": set_by,
+                "event": event.get("name") if event else None,
+                "event_impact": event.get("impact") if event else None,
+                "event_attendance": event.get("estimated_attendance", 0) if event else None,
+            }
+            daily_data.append(entry)
+
+        # Summary KPIs
+        avg_occ = round(sum(d["occupancy"] for d in daily_data) / max(len(daily_data), 1))
+        avg_rate = round(sum(d["sell_rate"] for d in daily_data) / max(len(daily_data), 1), 2)
+        high_demand_days = sum(1 for d in daily_data if d["demand_level"] == "high")
+        low_demand_days = sum(1 for d in daily_data if d["demand_level"] == "low")
+        event_days = sum(1 for d in daily_data if d["event"])
+        ai_managed_days = sum(1 for d in daily_data if d["ai_status"] in ("ai", "event"))
+
+        return {
+            "daily_data": daily_data,
+            "kpis": {
+                "total_days": len(daily_data),
+                "avg_occupancy": avg_occ,
+                "avg_sell_rate": avg_rate,
+                "base_rate": base_rate,
+                "high_demand_days": high_demand_days,
+                "low_demand_days": low_demand_days,
+                "event_days": event_days,
+                "ai_managed_days": ai_managed_days,
+                "ai_managed_pct": round((ai_managed_days / max(len(daily_data), 1)) * 100),
+            },
+        }
 
     @router.get("/revenue/market-robot/{property_id}/adjustments")
     async def get_adjustments(property_id: str,
@@ -846,7 +1001,7 @@ def create_market_robot_router(db, require_roles):
         count = 0
         for rt in room_types:
             base = float(rt.get("base_rate", 100) or 100)
-            for i in range(90):
+            for i in range(365):
                 d = now + timedelta(days=i)
                 ds = d.strftime("%Y-%m-%d")
                 booked = 0
@@ -946,7 +1101,7 @@ def create_market_robot_router(db, require_roles):
             from emergentintegrations.llm.chat import LlmChat, UserMessage
             api_key = os.environ.get("EMERGENT_LLM_KEY", "")
             date_from = now.strftime("%Y-%m-%d")
-            date_to = (now + timedelta(days=90)).strftime("%Y-%m-%d")
+            date_to = (now + timedelta(days=365)).strftime("%Y-%m-%d")
 
             system_prompt = f"""You are an event intelligence analyst for a hotel in {city}.
 Return ONLY a valid JSON array of upcoming events between {date_from} and {date_to}.
@@ -971,7 +1126,7 @@ Focus on events with 1000+ attendance. Include known recurring events."""
             try:
                 ed = datetime.strptime(event_date, "%Y-%m-%d")
                 now_naive = now.replace(tzinfo=None)
-                if ed.date() < now_naive.date() or ed > now_naive + timedelta(days=90):
+                if ed.date() < now_naive.date() or ed > now_naive + timedelta(days=365):
                     continue
             except (ValueError, TypeError):
                 continue

@@ -9,6 +9,7 @@ import { EventIntelligence } from "./EventIntelligence";
 import { RateParity } from "./RateParity";
 import { CompetitorAnalysis } from "./CompetitorAnalysis";
 import { PerformanceReport } from "./PerformanceReport";
+import { MarketDemandDashboard } from "./MarketDemandDashboard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -19,6 +20,8 @@ const TIERS_DISPLAY = [
   { label: "1-2 weeks out", interval_mins: 180 },
   { label: "2-4 weeks out", interval_mins: 360 },
   { label: "1-3 months out", interval_mins: 720 },
+  { label: "3-6 months out", interval_mins: 1440 },
+  { label: "6-12 months out", interval_mins: 2880 },
 ];
 
 export const MarketRobot = ({ propertyId }) => {
@@ -159,7 +162,7 @@ export const MarketRobot = ({ propertyId }) => {
 
       {/* Sub-tabs */}
       <div className="flex items-center gap-1 border-b border-stone-200">
-        {[{id:"dashboard",label:"Dashboard"},{id:"performance",label:"Performance"},{id:"supply",label:"Supply Data"},{id:"parity",label:"Rate Parity"},{id:"analysis",label:"Competitor Analysis"},{id:"events",label:"Event Intelligence"},{id:"competitors-tab",label:"Competitor Hotels"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
+        {[{id:"dashboard",label:"Dashboard"},{id:"demand",label:"Market Demand"},{id:"performance",label:"Performance"},{id:"supply",label:"Supply Data"},{id:"parity",label:"Rate Parity"},{id:"analysis",label:"Competitor Analysis"},{id:"events",label:"Event Intelligence"},{id:"competitors-tab",label:"Competitor Hotels"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
           <button key={t.id} onClick={() => setSubTab(t.id)} className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-[1px] transition-all ${subTab === t.id ? "text-indigo-700 border-indigo-500" : "text-stone-400 border-transparent hover:text-stone-600"}`} data-testid={`market-robot-${t.id}`}>{t.label}</button>
         ))}
       </div>
@@ -208,7 +211,7 @@ export const MarketRobot = ({ propertyId }) => {
               </button>
             </div>
             {/* Tier Schedule */}
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-7 gap-2">
               {(scannerStatus?.tiers || TIERS_DISPLAY).map((tier, i) => {
                 const ts = scannerStatus?.stats?.tier_status?.[tier.label] || {};
                 const nextScan = ts.next_scan ? new Date(ts.next_scan) : null;
@@ -441,6 +444,9 @@ export const MarketRobot = ({ propertyId }) => {
         </div>
       )}
 
+
+      {/* Market Demand Tab */}
+      {subTab === "demand" && <MarketDemandDashboard propertyId={propertyId} />}
 
       {/* Performance Report Tab */}
       {subTab === "performance" && <PerformanceReport propertyId={propertyId} />}

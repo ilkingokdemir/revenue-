@@ -13,12 +13,13 @@ export const DynamicPricingEngine = ({ propertyId }) => {
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
   const [selectedRT, setSelectedRT] = useState(0);
+  const [nightsRange, setNightsRange] = useState(365);
 
   const calculate = async () => {
     setCalculating(true);
     setApplied(false);
     try {
-      const { data } = await axios.post(`${API}/revenue/dynamic-pricing/${propertyId}/calculate`, { days: 90 });
+      const { data } = await axios.post(`${API}/revenue/dynamic-pricing/${propertyId}/calculate`, { days: nightsRange });
       setPreview(data);
       toast.success(`Calculated ${data.summary.total_days} days x ${data.summary.total_room_types} room types`);
     } catch { toast.error("Calculation failed"); }
@@ -28,7 +29,7 @@ export const DynamicPricingEngine = ({ propertyId }) => {
   const apply = async () => {
     setApplying(true);
     try {
-      const { data } = await axios.post(`${API}/revenue/dynamic-pricing/${propertyId}/apply`, { days: 90 });
+      const { data } = await axios.post(`${API}/revenue/dynamic-pricing/${propertyId}/apply`, { days: nightsRange });
       toast.success(data.message);
       setApplied(true);
     } catch { toast.error("Failed to apply"); }
@@ -51,14 +52,23 @@ export const DynamicPricingEngine = ({ propertyId }) => {
             </div>
             <div>
               <h2 className="text-xl font-bold">AI Dynamic Pricing Engine</h2>
-              <p className="text-sm text-white/60">Combines market supply, competitors, occupancy, seasonality, lead time, event intelligence & historical floors for optimal pricing across 90 days</p>
+              <p className="text-sm text-white/60">Combines market supply, competitors, occupancy, seasonality, lead time, event intelligence & historical floors for optimal pricing up to 365 days</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
+            {/* Nights Selector */}
+            <div className="flex items-center gap-1 bg-white/5 rounded-xl border border-white/10 p-0.5">
+              {[30, 60, 90, 180, 365].map(n => (
+                <button key={n} onClick={() => { setNightsRange(n); setPreview(null); }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${nightsRange === n ? "bg-white/20 text-white" : "text-white/40 hover:text-white/70"}`}
+                  data-testid={`dp-nights-${n}`}>{n === 365 ? "1 Year" : `${n}d`}
+                </button>
+              ))}
+            </div>
             <button onClick={calculate} disabled={calculating}
               className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-2.5 rounded-xl text-sm font-semibold backdrop-blur-sm disabled:opacity-50 transition-all" data-testid="dp-calculate">
               {calculating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BarChart3 className="w-4 h-4" />}
-              {calculating ? "Calculating 90 days..." : "Preview Prices"}
+              {calculating ? `Calculating ${nightsRange} days...` : "Preview Prices"}
             </button>
             {preview && (
               <button onClick={apply} disabled={applying || applied}
@@ -156,7 +166,7 @@ export const DynamicPricingEngine = ({ propertyId }) => {
           {/* 90-Day Price Grid */}
           <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden" data-testid="dp-price-grid">
             <div className="px-5 py-3 bg-stone-50 border-b flex items-center justify-between">
-              <span className="font-bold text-stone-800 text-sm">90-Day AI Price Recommendations — {rtData?.room_type_name}</span>
+              <span className="font-bold text-stone-800 text-sm">{nightsRange}-Day AI Price Recommendations — {rtData?.room_type_name}</span>
               <div className="flex items-center gap-3 text-[10px] text-stone-400">
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-emerald-50 border border-emerald-200" />Increase</span>
                 <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-50 border border-red-200" />Decrease</span>

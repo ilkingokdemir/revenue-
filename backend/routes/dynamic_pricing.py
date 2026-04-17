@@ -1,7 +1,7 @@
 """
 AI Dynamic Pricing Engine — Combines market supply, competitor data, occupancy,
 DOW/monthly adjustments, lead time, and demand patterns to calculate optimal
-prices for every day across 90 days. Auto-applies to Rate Calendar.
+prices for every day across 365 days. Auto-applies to Rate Calendar.
 """
 from fastapi import APIRouter, Depends
 from datetime import datetime, timezone, timedelta
@@ -82,9 +82,12 @@ def create_dynamic_pricing_router(db, require_roles):
         elif days_ahead <= 90:
             lt_pct = float(lt_adj.get("1_5_3_months", 0))
             lt_label = "1.5-3 Months"
+        elif days_ahead <= 180:
+            lt_pct = float(lt_adj.get("3_months_plus", 0))
+            lt_label = "3-6 Months"
         else:
             lt_pct = float(lt_adj.get("3_months_plus", 0))
-            lt_label = "3 Months+"
+            lt_label = "6-12 Months"
         if lt_pct != 0:
             price *= (1 + lt_pct / 100)
             breakdown["lead_time"] = f"{'+' if lt_pct > 0 else ''}{lt_pct}% ({lt_label})"
@@ -186,11 +189,11 @@ def create_dynamic_pricing_router(db, require_roles):
     @router.post("/revenue/dynamic-pricing/{property_id}/calculate")
     async def calculate_dynamic_prices(property_id: str, data: Dict = {},
                                        current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Calculate AI dynamic prices for all 90 days without applying."""
+        """Calculate AI dynamic prices for all days without applying."""
         now = datetime.now(timezone.utc)
         props = await _get_props(property_id)
         total_rooms = await _total_rooms(props)
-        days_count = int(data.get("days", 90))
+        days_count = int(data.get("days", 365))
 
         # Get strategy
         strategy = await db.pricing_strategy.find_one({"property_id": property_id}, {"_id": 0}) or {}

@@ -18,6 +18,7 @@ import { IntegrationsMarketplace } from "./components/dashboard/IntegrationsMark
 import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
 import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
+import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { ContractSigningPage } from "./components/public/ContractSigningPage";
 import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
 import { ReportsSettings } from "./components/dashboard/ReportsSettings";
@@ -3322,6 +3323,7 @@ function MainApp() {
   return (
     <div className="App">
       <Dashboard user={user} onLogout={handleLogout} />
+      <PendingLegalDocsGate user={user} />
     </div>
   );
 }

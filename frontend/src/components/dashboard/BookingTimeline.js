@@ -13,22 +13,38 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const STATUS_COLORS = {
-  // Base booking statuses
-  pending:     { bar: "bg-gradient-to-r from-amber-300 to-amber-400",  text: "text-amber-900", border: "border-amber-500",  label: "Pending" },
-  confirmed:   { bar: "bg-gradient-to-r from-sky-400 to-blue-500",     text: "text-white",     border: "border-blue-600",   label: "Confirmed" },
-  checked_in:  { bar: "bg-gradient-to-r from-emerald-500 to-teal-600", text: "text-white",     border: "border-emerald-700",label: "Checked In" },
-  checked_out: { bar: "bg-gradient-to-r from-stone-300 to-stone-400",  text: "text-stone-800", border: "border-stone-500",  label: "Checked Out" },
-  no_show:     { bar: "bg-gradient-to-r from-rose-400 to-red-500",     text: "text-white",     border: "border-red-700",    label: "No show" },
-  cancelled:   { bar: "bg-gradient-to-r from-stone-500 to-stone-600",  text: "text-white opacity-70", border: "border-stone-700", label: "Cancelled" },
-  // Operational / housekeeping states (overlaid on bars)
-  unassigned:  { bar: "bg-white border-2 border-dashed border-stone-400", text: "text-stone-700", border: "border-stone-400", label: "Unassigned" },
-  awaiting_cleaning: { bar: "bg-white border-2 border-amber-400",         text: "text-amber-800", border: "border-amber-400", label: "Awaiting Cleaning" },
-  being_cleaned:     { bar: "bg-sky-50 border-2 border-sky-400",          text: "text-sky-800",   border: "border-sky-400",   label: "Being Cleaned" },
-  blocked:     { bar: "bg-[repeating-linear-gradient(45deg,#78716c,#78716c_6px,#57534e_6px,#57534e_12px)]", text: "text-white", border: "border-stone-700", label: "Blocked" },
-  // Contextual (computed) — these decorate the base colour
-  arriving_today:  { accent: "ring-2 ring-offset-0 ring-amber-400",  dotCls: "bg-amber-400",  label: "Arrives today" },
-  departing_today: { accent: "ring-2 ring-offset-0 ring-fuchsia-400",dotCls: "bg-fuchsia-400",label: "Departs today" },
+  // Base booking statuses — richer, more saturated gradients with inner highlight
+  pending:     { bar: "bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500",    text: "text-amber-950",   border: "border-orange-500",   label: "Pending",     shadow: "shadow-amber-500/30" },
+  confirmed:   { bar: "bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600",       text: "text-white",       border: "border-indigo-700",   label: "Confirmed",   shadow: "shadow-blue-500/40" },
+  checked_in:  { bar: "bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600",     text: "text-white",       border: "border-teal-700",     label: "Checked In",  shadow: "shadow-emerald-500/40" },
+  checked_out: { bar: "bg-gradient-to-br from-stone-200 via-stone-300 to-stone-400",     text: "text-stone-800",   border: "border-stone-500",    label: "Checked Out", shadow: "shadow-stone-400/30" },
+  no_show:     { bar: "bg-gradient-to-br from-rose-400 via-red-500 to-rose-700",         text: "text-white",       border: "border-red-800",      label: "No show",     shadow: "shadow-red-500/40" },
+  cancelled:   { bar: "bg-gradient-to-br from-stone-400 via-stone-500 to-slate-700",     text: "text-white opacity-60", border: "border-slate-800", label: "Cancelled", shadow: "shadow-slate-500/30" },
+  // Operational / housekeeping overlays
+  unassigned:        { bar: "bg-gradient-to-br from-white to-stone-100 border-2 border-dashed", text: "text-stone-700", border: "border-stone-400", label: "Unassigned",       shadow: "shadow-stone-200/30" },
+  awaiting_cleaning: { bar: "bg-gradient-to-br from-amber-50 to-amber-100 border-2",             text: "text-amber-900", border: "border-amber-400", label: "Awaiting Cleaning",shadow: "shadow-amber-300/30" },
+  being_cleaned:     { bar: "bg-gradient-to-br from-sky-50 to-sky-100 border-2",                 text: "text-sky-900",   border: "border-sky-400",   label: "Being Cleaned",    shadow: "shadow-sky-300/30" },
+  blocked:           { bar: "bg-[repeating-linear-gradient(45deg,#78716c,#78716c_6px,#57534e_6px,#57534e_12px)]", text: "text-white", border: "border-stone-700", label: "Blocked",     shadow: "shadow-stone-500/40" },
+  // Contextual (computed) — decorate the base colour
+  arriving_today:  { accent: "ring-2 ring-offset-1 ring-amber-400",  dotCls: "bg-amber-400",  label: "Arrives today" },
+  departing_today: { accent: "ring-2 ring-offset-1 ring-fuchsia-400",dotCls: "bg-fuchsia-400",label: "Departs today" },
 };
+
+// Per-source channel colour strip (left edge accent) — adds multi-colour variety based on booking source
+const SOURCE_STRIP = {
+  "Booking.com": "bg-[#003580]",
+  "Airbnb":      "bg-[#FF5A5F]",
+  "Expedia":     "bg-[#FFC72C]",
+  "Google":      "bg-[#4285F4]",
+  "Direct":      "bg-emerald-600",
+  "Web":         "bg-violet-600",
+  "Agoda":       "bg-[#FF3B00]",
+  "Hotelbeds":   "bg-[#00A3E4]",
+  "Stripe":      "bg-[#635BFF]",
+  "Turkish_Payment": "bg-rose-600",
+  "PayAtHotel":  "bg-slate-600",
+};
+const getSourceStrip = (src) => SOURCE_STRIP[src] || "bg-stone-500";
 
 // Compute effective status based on today's date + booking flags
 const computeContext = (bk, todayISO) => {
@@ -38,12 +54,13 @@ const computeContext = (bk, todayISO) => {
   return null;
 };
 
-// Resolve final display status — housekeeping/operational overrides booking status for visual
+// Resolve final display status — only promote to unassigned/blocked/cleaning when EXPLICITLY flagged.
+// A booking rendered inside a room row is assigned by definition.
 const resolveDisplayStatus = (bk) => {
-  if (!bk.room_id || bk.room_id === "unassigned") return "unassigned";
-  if (bk.blocked) return "blocked";
+  if (bk.blocked === true) return "blocked";
   if (bk.housekeeping_status === "being_cleaned") return "being_cleaned";
   if (bk.housekeeping_status === "awaiting_cleaning") return "awaiting_cleaning";
+  if (bk.unassigned === true || bk.status === "unassigned") return "unassigned";
   return bk.status || "confirmed";
 };
 
@@ -629,8 +646,14 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                   data-testid={`booking-bar-${bk.id}`}
                                   data-status={bk.status}
                                   data-context={ctx || ""}
-                                  className={`relative w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border cursor-pointer hover:brightness-110 transition-all overflow-hidden flex flex-col justify-center px-1.5 shadow-sm ${ctxMeta ? ctxMeta.accent : ""} ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
+                                  className={`relative w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border shadow-md ${sc.shadow || ""} cursor-pointer hover:brightness-110 hover:shadow-lg transition-all overflow-hidden flex flex-col justify-center pl-2 pr-1.5 ${ctxMeta ? ctxMeta.accent : ""} ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
                                   title={`${bk.guest_name} | ${src} | ${cur(bk.total_price)} | ${bk.check_in} → ${bk.check_out} | ${sc.label}${ctxMeta ? " · " + ctxMeta.label : ""}`}>
+                                  {/* Left-edge channel colour strip — adds multi-colour variety per source */}
+                                  <span className={`absolute left-0 top-0 bottom-0 w-1 ${getSourceStrip(src)}`} aria-hidden></span>
+                                  {/* Inner highlight for depth (except on striped/dashed variants) */}
+                                  {!["blocked","unassigned","awaiting_cleaning","being_cleaned"].includes(resolveDisplayStatus(bk)) && (
+                                    <span className="absolute inset-x-0 top-0 h-[2px] bg-white/40 rounded-t-md" aria-hidden></span>
+                                  )}
                                   {/* Contextual pulsing dot (arrives/departs today) */}
                                   {ctxMeta && (
                                     <span className="absolute top-0.5 right-0.5 flex h-2 w-2" data-testid={`ctx-dot-${bk.id}`}>
@@ -639,12 +662,12 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                     </span>
                                   )}
                                   {/* Line 1: platform logo + guest name */}
-                                  <div className="flex items-center gap-1 min-w-0">
+                                  <div className="flex items-center gap-1 min-w-0 relative z-10">
                                     <span data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={16} /></span>
                                     <span className="text-[11px] font-bold truncate flex-1" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
                                   </div>
                                   {/* Line 2: price + nights */}
-                                  <div className="flex items-center justify-between gap-1 mt-0.5 min-w-0 opacity-90">
+                                  <div className="flex items-center justify-between gap-1 mt-0.5 min-w-0 opacity-95 relative z-10">
                                     <span className="text-[10px] font-bold font-mono truncate" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>
                                     {width > 110 && <span className="text-[9px] opacity-80 flex-shrink-0">{bk.nights}n</span>}
                                   </div>

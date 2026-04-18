@@ -2,6 +2,25 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 155: Calendar "full multi-coloured" upgrade (user request)
+
+Fixed two issues from the previous iteration:
+1. `resolveDisplayStatus` incorrectly triggered "unassigned" (dashed outline) when `bk.room_id` wasn't in the payload — but every booking rendered inside a room row IS assigned. Now it only promotes to `unassigned` when `bk.unassigned === true` or `bk.status === "unassigned"` explicitly.
+2. Colours were too muted. Now every status uses a rich **tri-stop gradient** (bg-gradient-to-br with `from-X via-Y to-Z`) with a **status-tinted drop shadow**:
+   - Confirmed: sky → blue → indigo (+ blue glow)
+   - Checked In: emerald → teal → cyan (+ emerald glow)
+   - Pending: amber → orange (+ amber glow)
+   - No-show: rose → red (+ red glow)
+   - Checked Out / Cancelled: stone/slate tones
+
+**New**: **Per-source colour strip** along the left edge of every booking bar, mapped to the booking channel's brand colour:
+- Booking.com #003580 · Airbnb #FF5A5F · Expedia #FFC72C · Google #4285F4 · Agoda #FF3B00 · Hotelbeds #00A3E4 · Stripe #635BFF · Direct emerald · Web violet · PayAtHotel slate · Turkish_Payment rose
+- Gives the calendar genuine channel-mix variety at a glance
+
+**Plus**: inner top highlight (`bg-white/40` 2px top strip) for glossy depth, hover brightness + shadow lift, contextual pulsing dots for arrivals/departures.
+
+Live verified: 22 bookings now render with vivid confirmed/checked-in/checked-out colours, source-color strips on every bar, full channel variety visible.
+
 ### Iter 154: Calendar legend — full competitor parity + 4 new operational states
 
 User shared myhotelbox legend screenshot with 4 states we hadn't covered:

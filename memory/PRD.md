@@ -2,6 +2,33 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 149: RBAC Enforcement + Sidebar Gating (P1 — permission system is now REAL)
+Previously: the 313 permissions were declarative but routes still used `require_roles("admin", "manager")` — perms were decorative. This iteration makes them enforced.
+
+**Backend (`/app/backend/auth.py`):**
+- `get_user_permissions(user)` → resolves user's effective perm set from `role_key` → `db.roles` (honouring `is_global_admin`), with fallback to legacy role presets (admin=all, manager=all, receptionist/housekeeper/accountant/laundry_staff/maintenance = their template perms)
+- `require_perm(*keys, mode="any"|"all")` dependency — FastAPI-native, admin role bypass for safety, crisp 403 errors ("Missing permission: create_roles")
+- Backward-compatible: legacy `require_roles(...)` still works; new routes can adopt `require_perm(...)` progressively
+- New endpoint: `GET /api/rbac/me/permissions` → `{permissions[], menu_permissions[], is_legacy_admin}` — consumed by frontend
+
+**RBAC route migration:**
+- `POST /api/rbac/roles` now `require_perm("create_roles")`
+- `PUT /api/rbac/roles/{id}` → `edit_roles`
+- `DELETE /api/rbac/roles/{id}` → `delete_roles`
+- `POST /api/rbac/roles/{id}/clone` → `create_roles`
+
+**Frontend sidebar gating:**
+- `MainApp` fetches `/rbac/me/permissions` on login; stores `{permissions:Set, menu_permissions:Set, is_legacy_admin}` in state; passes to `Dashboard`
+- `SIDEBAR_PERM_MAP`: ~25 testIds mapped to MENU permission keys (payroll-btn → finance_payroll_runs_view, roles-permissions-btn → settings_roles_view, etc.)
+- `gatedNavigation` filters `menuSections` at render: admin bypass; items without a perm mapping stay visible (safe default); sections become empty → hidden
+
+**Live results:**
+- Admin sees all 78 sidebar buttons (full bypass)
+- Sarah (receptionist, 19 perms, 7 MENU perms) sees 54 — 24 items correctly filtered out (payroll, finance, roles, bug-tracker, housekeeping, maintenance, rate-manager, expenses, webhooks, etc.)
+- Sarah tries to `POST /rbac/roles` → 403 "Missing permission: create_roles"
+- Admin tries same → 200 OK
+- Tested iteration 146 (18/18 backend + 100% sidebar gating pass, zero issues)
+
 ### Iter 148: "Compare two roles" — Side-by-side role diff with AI narrative
 - **Compare** toggle in the Roles list hero switches rows to checkbox mode; click two roles, then **Compare now**
 - `POST /api/rbac/roles/compare` (admin|manager) returns:
@@ -224,9 +251,9 @@ User requirement: "When they fill when they on board staff they don't to be reac
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Enforcement middleware: check `role.permissions[]` on protected endpoints (currently role names are checked, not permission keys)
-- Wire sidebar visibility to MENU permissions
-- Import Module (competitor tagged as "Missing" — build it to fully surpass)
+- Build **Import Module** (competitor tagged "Missing" — trivial win vs them)
+- Gradual migration of existing `require_roles(...)` endpoints to `require_perm(...)` as we touch them
+- Expand `SIDEBAR_PERM_MAP` coverage to remaining ~50 sidebar items
 
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks

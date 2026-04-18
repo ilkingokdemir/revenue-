@@ -1,0 +1,152 @@
+{
+  "summary": "Iteration 133 - ArrivalsCockpit (Contactless Guest Journey / Self-Service Kiosk command centre) fully tested. All 22 backend API tests passed (100%). Frontend UI verified with all data-testid selectors working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "arrivals_list_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/arrivals/{pid}?window=today|7d|30d|all&q=...",
+      "tests_passed": 8,
+      "features": [
+        "Returns {window, start, end, counters{total,registered,id_verified,paid,key_issued}, arrivals[]}",
+        "window=today filters to today's arrivals (start=end)",
+        "window=7d filters to next 7 days (20 arrivals found)",
+        "window=30d filters to next 30 days",
+        "window=all returns all upcoming arrivals (365 days)",
+        "q=<string> regex-searches guest_name/booking_ref/guest_email",
+        "Each arrival has progress{link_sent,registered,id_verified,paid,key_issued}, stage (0-5), stage_label",
+        "Property filter works (e.g., /api/arrivals/aldgate-flats)",
+        "Requires admin|manager|receptionist auth (401 without token)"
+      ]
+    },
+    "mark_paid_api": {
+      "status": "PASS",
+      "endpoint": "POST /api/arrivals/{booking_id}/mark-paid",
+      "tests_passed": 2,
+      "features": [
+        "Sets payment_status=paid and amount_paid=total_price on booking",
+        "Returns {ok: true}",
+        "Returns 404 for invalid booking_id",
+        "Requires admin|manager auth (401 without token)"
+      ]
+    },
+    "issue_key_api": {
+      "status": "PASS",
+      "endpoint": "POST /api/arrivals/{booking_id}/issue-key",
+      "tests_passed": 3,
+      "features": [
+        "Returns 400 if booking not paid (requires paid status first)",
+        "Returns {ok: true, code: '8-char-alphanumeric', expires_at: 'ISO date'}",
+        "Upserts digital_keys collection with booking details",
+        "After calling, GET arrivals shows progress.key_issued=true and digital_key_code populated",
+        "Returns 404 for invalid booking_id",
+        "Requires admin|manager|receptionist auth (401 without token)"
+      ]
+    },
+    "revoke_key_api": {
+      "status": "PASS",
+      "endpoint": "POST /api/arrivals/{booking_id}/revoke-key",
+      "tests_passed": 2,
+      "features": [
+        "Marks key status=revoked in digital_keys collection",
+        "After calling, progress.key_issued becomes false",
+        "Returns {ok: true}",
+        "Returns 404 if no key exists for booking",
+        "Requires admin|manager|receptionist auth (401 without token)"
+      ]
+    },
+    "regression_endpoints": {
+      "status": "PASS",
+      "tests_passed": 2,
+      "features": [
+        "POST /api/guest-journey/send-registration/{booking_id} still works (returns {status:'sent', token, url})",
+        "GET /api/marketplace/catalog/{pid} still works (returns 124 integrations)"
+      ]
+    },
+    "complete_workflow": {
+      "status": "PASS",
+      "tests_passed": 1,
+      "features": [
+        "Full contactless journey: send-registration -> mark-paid -> issue-key -> revoke-key"
+      ]
+    },
+    "frontend_arrivals_cockpit": {
+      "status": "PASS",
+      "data_testids_verified": [
+        "arrivals-btn - Sidebar nav button for Arrivals Cockpit",
+        "arrivals-cockpit - Main component container",
+        "kpi-arrivals - KPI card showing total arrivals count",
+        "kpi-registered - KPI card showing registered count",
+        "kpi-id-verified - KPI card showing ID verified count",
+        "kpi-paid - KPI card showing paid count",
+        "kpi-keys - KPI card showing keys issued count",
+        "win-today - Window tab for today's arrivals",
+        "win-7d - Window tab for next 7 days",
+        "win-30d - Window tab for next 30 days",
+        "win-all - Window tab for all upcoming",
+        "arrivals-search - Search input for filtering arrivals",
+        "arrivals-table - Table showing arrivals list",
+        "send-{id} - Send registration link button per arrival",
+        "pay-{id} - Mark paid button per arrival",
+        "issue-{id} - Issue key button per arrival (shown when paid)",
+        "qr-{id} - QR code button per arrival (shown when link sent)",
+        "key-{id} - Key code chip per arrival (shown when key issued)",
+        "qr-modal - QR code modal with QRCodeSVG and copy link",
+        "key-modal - Digital key modal with code and revoke button",
+        "revoke-key - Revoke key button in key modal"
+      ],
+      "features_verified": [
+        "Hero section shows 'Contactless check-in, one pane.' with arrivals count and keys ready percentage",
+        "5 KPI cards with progress bars showing completion rates",
+        "Window tabs switch between today/7d/30d/all views",
+        "Search input filters arrivals by guest name/ref/email",
+        "Table shows guest info, check-in date, room, progress dots, action buttons",
+        "Progress dots show 5 stages: Link Sent -> Registered -> ID Verified -> Paid -> Key Issued",
+        "Action buttons appear based on stage (Send Link, Mark Paid, Issue Key, QR, Key code)",
+        "QR modal shows QRCodeSVG with registration URL and copy button",
+        "Key modal shows 8-char unlock code with expiry and Revoke button"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration133_arrivals_cockpit.py",
+    "/app/test_reports/pytest/pytest_iteration133_arrivals_cockpit.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 4 arrivals endpoints properly protected with role-based authentication",
+    "issue-key correctly requires paid status before issuing (400 if unpaid)",
+    "Digital keys stored in MongoDB with 8-char alphanumeric codes",
+    "Progress calculation correctly aggregates from bookings, guest_registrations, and digital_keys collections",
+    "All data-testid attributes properly implemented for testing",
+    "QRCodeSVG component renders registration QR codes correctly",
+    "MOCKED: Digital keys are stored in MongoDB but do NOT call any physical lock hardware"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration133_arrivals_cockpit.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Used existing seeded bookings (20 arrivals in 7d window). Backend tests modified some booking payment statuses and issued/revoked keys during testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 133 added ArrivalsCockpit - a dedicated ops view for contactless guest journey. Four new endpoints: GET /api/arrivals/{pid} returns arrivals with progress tracking, POST mark-paid/issue-key/revoke-key for one-click actions. Frontend shows hero, 5 KPI cards, window tabs (today/7d/30d/all), search, table with progress dots and action buttons. QR modal shows registration QR code, key modal shows digital unlock code. Digital keys are MOCKED (stored in MongoDB, no physical lock API calls).",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "digital_keys issuance (no physical lock API call) - keys stored in MongoDB but do NOT call any physical lock hardware"
+    ]
+  }
+}

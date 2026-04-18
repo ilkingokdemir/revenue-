@@ -15,6 +15,7 @@ import GuestPaymentPage from "./GuestPaymentPage";
 import TurkishPayPage from "./TurkishPayPage";
 import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
 import { IntegrationsMarketplace } from "./components/dashboard/IntegrationsMarketplace";
+import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
 import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
 import { ReportsSettings } from "./components/dashboard/ReportsSettings";
 import { LoginPage } from "./components/dashboard/LoginPage";
@@ -2594,6 +2595,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
+        { id: "arrivals", icon: Bed, name: "Arrivals Cockpit", testId: "arrivals-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "reception-report", icon: Notebook, name: "Reception Report", testId: "reception-report-btn" },
         { id: "pass-over", icon: Notebook, name: "Pass Over Duties", testId: "pass-over-btn" },
@@ -3226,6 +3228,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Integrations Marketplace */}
         {activeView === "marketplace" && (
           <div className="p-6"><IntegrationsMarketplace propertyId={activePropertyId} user={user} /></div>
+        )}
+
+        {/* Arrivals Cockpit */}
+        {activeView === "arrivals" && (
+          <div className="p-6"><ArrivalsCockpit propertyId={activePropertyId} user={user} /></div>
         )}
       </main>
 

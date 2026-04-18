@@ -1,6 +1,19 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 77+ Modules | Mobile Responsive | 134 Test Iterations (100%)
+## 78+ Modules | Mobile Responsive | 135 Test Iterations (100%)
+
+### Iter 136: Legal Documents & Consents — Policy Builder with E-Signature Audit
+- Inspired by myhotelbox.com benchmark screenshots — built a superset
+- **7 document types**: Privacy Policy, T&C, GDPR Consent, Code of Conduct, Health & Safety, NDA, Other
+- **7 dynamic field types** (vs competitor's text-only): Heading, Text input, Long text, Checkbox, Dropdown, Date, Signature
+- Full lifecycle: draft → active → scheduled → expired — with **version bump** (1.0 → 1.1 → 2.0) that auto-drafts the new version
+- **Required-acceptance** tracking: `GET /api/legal-documents/pending/me` returns docs the user hasn't accepted or where version changed
+- Audit trail per acceptance: user_id, user_role, version, IP, timestamp, field responses
+- Edit lock: once a document has acceptances, only `active` and `expiry_date` can be edited — must create a new version to change anything substantive
+- Delete lock: blocked if acceptances exist (forces deactivation)
+- Admin UI: indigo hero, 4 KPIs (Active / Required & Live / Expiring ≤30d / Total Acceptances), type & status filters + search, table with acceptance progress bar, per-row view-acceptances dialog, edit, new-version, delete
+- Dynamic field builder with inline editor, required toggle per field, move up/down, delete
+- Tested end-to-end iteration 135 (29/29 backend + full frontend)
 
 ### Iter 135: Staff Contracts — Digital Employment with E-Signature
 - Full lifecycle: **draft → sent → signed → active → expired/terminated** with admin-only gating

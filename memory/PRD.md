@@ -2,6 +2,27 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 153: Calendar color-coding (user request — "you didn't give colour for check in check out checked in upcoming booking")
+
+User referenced 3 competitor screenshots (myhotelbox, cloudbeds, eviivo). We added a full semantic color system with contextual decorations:
+
+**Base status colors** (gradient bars with matching borders):
+- **Upcoming / confirmed** → sky-blue → blue gradient
+- **In-house / checked-in** → emerald → teal gradient
+- **Departed / checked-out** → stone-grey gradient
+- **Pending** → amber gradient
+- **No-show** → rose → red gradient
+- **Cancelled** → muted stone, reduced opacity
+
+**Contextual decorations (the big UX win)**:
+- **Arrives today** → amber ring + animated pulsing amber dot (top-right corner)
+- **Departs today** → fuchsia ring + animated pulsing fuchsia dot
+- Computed reactively from `check_in/check_out === todayISO`
+
+**Color legend row** below the header shows all 8 states with matching swatches — users can decode the calendar instantly.
+
+Live verified: 22 booking bars across 4 statuses, 8 pulsing "arriving today" indicators, legend rendering accurately at the top of the timeline.
+
 ### Iter 152: AI Column Mapping — Import Module gets its magic moment
 Regex auto-map returns `{}` on foreign-language headers like `Apellido Completo`, `Fecha Nacimiento`, `Correo Electronico`. GPT-5.2 maps them all.
 

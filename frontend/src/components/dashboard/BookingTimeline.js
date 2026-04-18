@@ -13,11 +13,24 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const STATUS_COLORS = {
-  pending: { bar: "bg-amber-400", text: "text-amber-900", border: "border-amber-500", label: "Pending" },
-  confirmed: { bar: "bg-blue-400", text: "text-blue-900", border: "border-blue-500", label: "Confirmed" },
-  checked_in: { bar: "bg-emerald-500", text: "text-white", border: "border-emerald-600", label: "Checked In" },
-  checked_out: { bar: "bg-stone-400", text: "text-stone-900", border: "border-stone-500", label: "Checked Out" },
-  no_show: { bar: "bg-red-400", text: "text-red-900", border: "border-red-500", label: "No Show" },
+  // Base statuses
+  pending:     { bar: "bg-gradient-to-r from-amber-300 to-amber-400",  text: "text-amber-900", border: "border-amber-500",  label: "Pending" },
+  confirmed:   { bar: "bg-gradient-to-r from-sky-400 to-blue-500",     text: "text-white",     border: "border-blue-600",   label: "Upcoming" },
+  checked_in:  { bar: "bg-gradient-to-r from-emerald-500 to-teal-600", text: "text-white",     border: "border-emerald-700",label: "In-house" },
+  checked_out: { bar: "bg-gradient-to-r from-stone-300 to-stone-400",  text: "text-stone-800", border: "border-stone-500",  label: "Departed" },
+  no_show:     { bar: "bg-gradient-to-r from-rose-400 to-red-500",     text: "text-white",     border: "border-red-700",    label: "No show" },
+  cancelled:   { bar: "bg-gradient-to-r from-stone-500 to-stone-600",  text: "text-white opacity-70", border: "border-stone-700", label: "Cancelled" },
+  // Contextual (computed) — these decorate the base colour
+  arriving_today:  { accent: "ring-2 ring-offset-0 ring-amber-400",  dotCls: "bg-amber-400",  label: "Arrives today" },
+  departing_today: { accent: "ring-2 ring-offset-0 ring-fuchsia-400",dotCls: "bg-fuchsia-400",label: "Departs today" },
+};
+
+// Compute effective status based on today's date
+const computeContext = (bk, todayISO) => {
+  if (bk.status === "cancelled" || bk.status === "no_show") return null;
+  if (bk.check_in === todayISO && bk.status !== "checked_in") return "arriving_today";
+  if (bk.check_out === todayISO && bk.status === "checked_in") return "departing_today";
+  return null;
 };
 
 const HK_COLORS = { clean: "bg-emerald-400", dirty: "bg-red-400", inspected: "bg-blue-400" };
@@ -410,6 +423,49 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         </div>
       )}
 
+      {/* Color legend — decode the calendar at a glance */}
+      <div className="bg-gradient-to-r from-stone-50 to-white border-b border-stone-200 px-5 py-2 flex-shrink-0 overflow-x-auto" data-testid="color-legend">
+        <div className="flex items-center gap-4 text-[11px] whitespace-nowrap">
+          <span className="font-semibold text-stone-500 uppercase tracking-wider text-[9px]">Legend:</span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-sky-400 to-blue-500 border border-blue-600"></span>
+            <span className="text-stone-700">Upcoming</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-sky-400 to-blue-500 border border-blue-600 ring-2 ring-amber-400 relative">
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            </span>
+            <span className="text-stone-700">Arrives today</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-emerald-500 to-teal-600 border border-emerald-700"></span>
+            <span className="text-stone-700">In-house</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-emerald-500 to-teal-600 border border-emerald-700 ring-2 ring-fuchsia-400 relative">
+              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-fuchsia-400"></span>
+            </span>
+            <span className="text-stone-700">Departs today</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-stone-300 to-stone-400 border border-stone-500"></span>
+            <span className="text-stone-700">Departed</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-amber-300 to-amber-400 border border-amber-500"></span>
+            <span className="text-stone-700">Pending</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-rose-400 to-red-500 border border-red-700"></span>
+            <span className="text-stone-700">No-show</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-stone-500 to-stone-600 border border-stone-700"></span>
+            <span className="text-stone-700">Cancelled</span>
+          </span>
+        </div>
+      </div>
+
       {/* Navigation Bar */}
       <div className="bg-stone-50 border-b border-stone-200 px-5 py-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-1.5">
@@ -519,6 +575,9 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         const left = si * COL_W;
                         const width = Math.max((ei - si) * COL_W - 4, COL_W * 0.5);
                         const sc = STATUS_COLORS[bk.status] || STATUS_COLORS.confirmed;
+                        const todayISO = new Date().toISOString().slice(0, 10);
+                        const ctx = computeContext(bk, todayISO);
+                        const ctxMeta = ctx ? STATUS_COLORS[ctx] : null;
                         const isSelected = selectedIds.has(bk.id);
 
                         return (
@@ -537,8 +596,17 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                   onDragStart={(e) => handleDragStart(e, { ...bk, room_id: room.id })}
                                   onClick={() => bulkMode ? toggleSelect(bk.id) : openDetail(bk.id)}
                                   data-testid={`booking-bar-${bk.id}`}
-                                  className={`w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border cursor-pointer hover:brightness-110 transition-all overflow-hidden flex flex-col justify-center px-1.5 shadow-sm ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
-                                  title={`${bk.guest_name} | ${src} | ${cur(bk.total_price)} | ${bk.check_in} → ${bk.check_out} | ${bk.status}`}>
+                                  data-status={bk.status}
+                                  data-context={ctx || ""}
+                                  className={`relative w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border cursor-pointer hover:brightness-110 transition-all overflow-hidden flex flex-col justify-center px-1.5 shadow-sm ${ctxMeta ? ctxMeta.accent : ""} ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
+                                  title={`${bk.guest_name} | ${src} | ${cur(bk.total_price)} | ${bk.check_in} → ${bk.check_out} | ${sc.label}${ctxMeta ? " · " + ctxMeta.label : ""}`}>
+                                  {/* Contextual pulsing dot (arrives/departs today) */}
+                                  {ctxMeta && (
+                                    <span className="absolute top-0.5 right-0.5 flex h-2 w-2" data-testid={`ctx-dot-${bk.id}`}>
+                                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${ctxMeta.dotCls}`}></span>
+                                      <span className={`relative inline-flex rounded-full h-2 w-2 ${ctxMeta.dotCls}`}></span>
+                                    </span>
+                                  )}
                                   {/* Line 1: platform logo + guest name */}
                                   <div className="flex items-center gap-1 min-w-0">
                                     <span data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={16} /></span>

@@ -22,28 +22,128 @@ const STATUS_COLORS = {
 
 const HK_COLORS = { clean: "bg-emerald-400", dirty: "bg-red-400", inspected: "bg-blue-400" };
 
-// Platform/OTA logo badges — small inline circles with brand colors + letter
-const PLATFORM_BADGES = {
-  "booking.com":  { letter: "B", bg: "#003580", fg: "white",   label: "Booking.com" },
-  "booking":      { letter: "B", bg: "#003580", fg: "white",   label: "Booking.com" },
-  "airbnb":       { letter: "A", bg: "#FF385C", fg: "white",   label: "Airbnb" },
-  "expedia":      { letter: "E", bg: "#FFC72C", fg: "#003B5C", label: "Expedia" },
-  "hotels.com":   { letter: "H", bg: "#D32F2F", fg: "white",   label: "Hotels.com" },
-  "agoda":        { letter: "A", bg: "#5392F9", fg: "white",   label: "Agoda" },
-  "google":       { letter: "G", bg: "#4285F4", fg: "white",   label: "Google" },
-  "tripadvisor":  { letter: "T", bg: "#00AF87", fg: "white",   label: "TripAdvisor" },
-  "vrbo":         { letter: "V", bg: "#3D67FF", fg: "white",   label: "VRBO" },
-  "direct":       { letter: "D", bg: "#1F2937", fg: "white",   label: "Direct" },
-  "website":      { letter: "W", bg: "#0EA5E9", fg: "white",   label: "Website" },
-  "walk_in":      { letter: "W", bg: "#78716C", fg: "white",   label: "Walk-in" },
-  "walk-in":      { letter: "W", bg: "#78716C", fg: "white",   label: "Walk-in" },
-  "phone":        { letter: "P", bg: "#10B981", fg: "white",   label: "Phone" },
+// Authentic platform mini-logos — inline SVGs mimicking real brand marks
+const PlatformLogo = ({ source, size = 14 }) => {
+  const key = (source || "").toString().toLowerCase().trim();
+  const s = size;
+  // BOOKING.COM — blue square with italic "B."
+  if (key === "booking" || key === "booking.com") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-sm flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#003580" }} title="Booking.com">
+        <span className="text-white font-black italic leading-none" style={{ fontSize: s * 0.65 }}>B.</span>
+      </span>
+    );
+  }
+  // AIRBNB — coral pink rounded "Bélo" symbol
+  if (key === "airbnb") {
+    return (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="#FF385C" style={{ flexShrink: 0 }} title="Airbnb">
+        <path d="M12 1C8.8 1 7.3 3.9 6.5 5.7c-.4.9-5.5 11.8-5.5 13.7 0 2.4 1.9 4.4 4.3 4.4 1.8 0 3.5-1.2 6.7-5 3.2 3.8 4.9 5 6.7 5 2.4 0 4.3-2 4.3-4.4 0-1.9-5.1-12.8-5.5-13.7C16.7 3.9 15.2 1 12 1zm0 13.9c-1.9-2.4-2.8-4-2.8-5.2 0-1.7 1.3-3 2.8-3s2.8 1.3 2.8 3c0 1.2-.9 2.8-2.8 5.2z"/>
+      </svg>
+    );
+  }
+  // EXPEDIA — yellow circle with black "ex"
+  if (key === "expedia") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-full flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#FFC72C" }} title="Expedia">
+        <span className="font-black leading-none" style={{ fontSize: s * 0.55, color: "#1F3E66" }}>ex</span>
+      </span>
+    );
+  }
+  // HOTELS.COM — red square with "h"
+  if (key === "hotels.com" || key === "hotels") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-sm flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#D32F2F" }} title="Hotels.com">
+        <span className="text-white font-black leading-none" style={{ fontSize: s * 0.7 }}>h</span>
+      </span>
+    );
+  }
+  // AGODA — blue circle with "a"
+  if (key === "agoda") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-full flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#5392F9" }} title="Agoda">
+        <span className="text-white font-black italic leading-none" style={{ fontSize: s * 0.7 }}>a</span>
+      </span>
+    );
+  }
+  // GOOGLE — white bg with multi-color G
+  if (key === "google") {
+    return (
+      <svg width={s} height={s} viewBox="0 0 24 24" style={{ flexShrink: 0 }} title="Google">
+        <circle cx="12" cy="12" r="11" fill="white" stroke="#e5e7eb" strokeWidth="1" />
+        <path fill="#4285F4" d="M21.4 12.2c0-.6-.1-1.3-.2-1.9h-9v3.6h5.2c-.2 1.2-.9 2.3-1.9 3v2.5h3.1c1.8-1.7 2.8-4.1 2.8-7.2z" />
+        <path fill="#34A853" d="M12.2 21.5c2.6 0 4.7-.9 6.3-2.3l-3.1-2.5c-.9.6-1.9.9-3.2.9-2.5 0-4.6-1.7-5.3-3.9H3.7v2.5c1.6 3.2 4.9 5.3 8.5 5.3z" />
+        <path fill="#FBBC05" d="M6.9 13.7c-.4-1.2-.4-2.4 0-3.6V7.6H3.7c-1.3 2.6-1.3 5.6 0 8.2l3.2-2.1z" />
+        <path fill="#EA4335" d="M12.2 6.1c1.4 0 2.7.5 3.7 1.4l2.7-2.7C16.8 3.4 14.6 2.5 12.2 2.5 8.6 2.5 5.3 4.6 3.7 7.8l3.2 2.1c.7-2.2 2.8-3.8 5.3-3.8z" />
+      </svg>
+    );
+  }
+  // TRIPADVISOR — green circle with owl-eye
+  if (key === "tripadvisor") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-full flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#00AF87" }} title="TripAdvisor">
+        <span className="text-white font-black leading-none" style={{ fontSize: s * 0.55 }}>TA</span>
+      </span>
+    );
+  }
+  // VRBO — blue rounded rect
+  if (key === "vrbo") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-md flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#3D67FF" }} title="VRBO">
+        <span className="text-white font-black leading-none" style={{ fontSize: s * 0.5 }}>vrbo</span>
+      </span>
+    );
+  }
+  // DIRECT — dark with house icon
+  if (key === "direct") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-full flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#1F2937" }} title="Direct">
+        <svg width={s * 0.65} height={s * 0.65} viewBox="0 0 24 24" fill="white"><path d="M12 3L2 12h3v8h6v-6h2v6h6v-8h3L12 3z"/></svg>
+      </span>
+    );
+  }
+  // WEBSITE — sky blue globe
+  if (key === "website") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-full flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#0EA5E9" }} title="Website">
+        <svg width={s * 0.7} height={s * 0.7} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a13 13 0 010 18M12 3a13 13 0 000 18"/></svg>
+      </span>
+    );
+  }
+  // WALK-IN — grey person
+  if (key === "walk_in" || key === "walk-in") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-full flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#78716C" }} title="Walk-in">
+        <svg width={s * 0.65} height={s * 0.65} viewBox="0 0 24 24" fill="white"><circle cx="12" cy="6" r="3"/><path d="M6 21v-2a6 6 0 0112 0v2"/></svg>
+      </span>
+    );
+  }
+  // PHONE — green phone
+  if (key === "phone") {
+    return (
+      <span className="inline-flex items-center justify-center rounded-full flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#10B981" }} title="Phone">
+        <svg width={s * 0.65} height={s * 0.65} viewBox="0 0 24 24" fill="white"><path d="M20 15.5l-2.6-1.2a1 1 0 00-1.1.3l-1.6 1.9a13 13 0 01-6.2-6.2l1.9-1.6a1 1 0 00.3-1.1L9.5 4a1 1 0 00-1.1-.6L5 4A1 1 0 004 5a17 17 0 0015 15 1 1 0 001-1l.6-3.4a1 1 0 00-.6-1.1z"/></svg>
+      </span>
+    );
+  }
+  // FALLBACK — indigo circle with first letter
+  const letter = (source?.[0] || "?").toUpperCase();
+  return (
+    <span className="inline-flex items-center justify-center rounded-full flex-shrink-0" style={{ width: s, height: s, backgroundColor: "#6366F1" }} title={source || "Unknown"}>
+      <span className="text-white font-black leading-none" style={{ fontSize: s * 0.65 }}>{letter}</span>
+    </span>
+  );
 };
-const getPlatformBadge = (source) => {
-  if (!source) return { letter: "?", bg: "#78716C", fg: "white", label: "Unknown" };
-  const key = source.toString().toLowerCase().trim();
-  return PLATFORM_BADGES[key] || PLATFORM_BADGES[key.split(".")[0]] || PLATFORM_BADGES[key.replace(/[_-]/g, "")] ||
-    { letter: (source[0] || "?").toUpperCase(), bg: "#6366F1", fg: "white", label: source };
+
+// Quick color lookup for compact badges / legends
+const PLATFORM_COLOR = {
+  "booking": "#003580", "booking.com": "#003580",
+  "airbnb": "#FF385C", "expedia": "#FFC72C",
+  "hotels.com": "#D32F2F", "agoda": "#5392F9",
+  "google": "#4285F4", "tripadvisor": "#00AF87",
+  "vrbo": "#3D67FF", "direct": "#1F2937",
+  "website": "#0EA5E9", "walk_in": "#78716C",
+  "walk-in": "#78716C", "phone": "#10B981",
 };
 
 function getOccColor(pct) {
@@ -369,15 +469,12 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           ))}
           <span className="text-stone-300">|</span>
           <span className="text-stone-500 font-semibold">Sources:</span>
-          {[["booking","Booking"],["airbnb","Airbnb"],["expedia","Expedia"],["direct","Direct"],["google","Google"]].map(([k,label]) => {
-            const p = getPlatformBadge(k);
-            return (
-              <span key={k} className="flex items-center gap-1" data-testid={`legend-${k}`}>
-                <span className="rounded-full flex items-center justify-center font-black text-[8px]" style={{ width: 12, height: 12, backgroundColor: p.bg, color: p.fg }}>{p.letter}</span>
-                {label}
-              </span>
-            );
-          })}
+          {[["booking","Booking"],["airbnb","Airbnb"],["expedia","Expedia"],["google","Google"],["direct","Direct"],["website","Web"]].map(([k,label]) => (
+            <span key={k} className="flex items-center gap-1" data-testid={`legend-${k}`}>
+              <PlatformLogo source={k} size={12} />
+              {label}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -470,7 +567,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                               </button>
                             )}
                             {(() => {
-                              const plat = getPlatformBadge(bk.source_code || bk.source);
+                              const src = bk.source_code || bk.source || "";
                               return (
                                 <button
                                   draggable={!bulkMode}
@@ -478,14 +575,10 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                   onClick={() => bulkMode ? toggleSelect(bk.id) : openDetail(bk.id)}
                                   data-testid={`booking-bar-${bk.id}`}
                                   className={`w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border cursor-pointer hover:brightness-110 transition-all overflow-hidden flex flex-col justify-center px-1.5 shadow-sm ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
-                                  title={`${bk.guest_name} | ${plat.label} | ${cur(bk.total_price)} | ${bk.check_in} → ${bk.check_out} | ${bk.status}`}>
+                                  title={`${bk.guest_name} | ${src} | ${cur(bk.total_price)} | ${bk.check_in} → ${bk.check_out} | ${bk.status}`}>
                                   {/* Line 1: platform logo + guest name */}
                                   <div className="flex items-center gap-1 min-w-0">
-                                    <span
-                                      className="flex-shrink-0 rounded-full flex items-center justify-center font-black text-[9px]"
-                                      style={{ width: 14, height: 14, backgroundColor: plat.bg, color: plat.fg }}
-                                      data-testid={`platform-badge-${bk.id}`}
-                                    >{plat.letter}</span>
+                                    <span data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={14} /></span>
                                     <span className="text-[11px] font-bold truncate flex-1" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
                                   </div>
                                   {/* Line 2: price + nights */}
@@ -586,7 +679,10 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-stone-500">Source</span>
-                  <span className="text-xs font-medium">{detailData.source} ({detailData.source_code})</span>
+                  <span className="text-xs font-medium flex items-center gap-1.5">
+                    <PlatformLogo source={detailData.source_code || detailData.source} size={16} />
+                    {detailData.source} {detailData.source_code && detailData.source !== detailData.source_code ? `(${detailData.source_code})` : ""}
+                  </span>
                 </div>
               </div>
 

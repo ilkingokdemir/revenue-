@@ -1,6 +1,21 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 82+ Modules | Mobile Responsive | 140 Test Iterations (100%)
+## 82+ Modules | Mobile Responsive | 141 Test Iterations (100%)
+
+### Iter 142: Staff Onboarding Security Lockdown
+User requirement: "When they fill when they on board staff they don't to be reach any document they upload and they fill they signed."
+- **Server-side lockdown**:
+  - `/staff-onboarding/me` **strips** filenames, URLs, paths, `hmrc_data` and `email_log` from staff-facing response
+  - `upload/passport`, `upload/address`, `hmrc` POSTs return **400 "already submitted and locked"** on re-submission
+  - New authenticated route `GET /api/uploads/onboarding/{filename}` requires `admin`|`manager` — registered **before** the public static mount so it takes precedence (401 unauth, 403 staff, 200 admin)
+  - Path-traversal protection on the filename
+- **Frontend lockdown**:
+  - Upload buttons and "View uploaded document" links **removed** once a document is submitted
+  - New simplified `UploadedChip` shows "{label} received · locked" — no filename, no link
+  - Security disclaimer appears under each locked step
+  - HMRC tab split: `tab-hmrc` (form, only when `!hmrc_submitted`) and `tab-hmrc-sealed` (big emerald success card, SUBMITTED & LOCKED badge) — the form is NEVER rendered again after first submit
+- Admin detail drawer retains full access (all data, previews, downloads, email)
+- Tested iteration 141 (23/23 backend + frontend pass)
 
 ### Iter 141: Download & Email Onboarding Documents
 - Admin can now download **individual documents** or a **full ZIP bundle** of any staff member's onboarding pack

@@ -513,7 +513,7 @@ contracts_router = create_contracts_router(db, require_roles)
 api_router.include_router(contracts_router)
 legal_docs_router = create_legal_documents_router(db, require_roles, get_current_user)
 api_router.include_router(legal_docs_router)
-onboarding_router = create_staff_onboarding_router(db, require_roles, get_current_user)
+onboarding_router = create_staff_onboarding_router(db, require_roles, get_current_user, resend)
 api_router.include_router(onboarding_router)
 
 app.include_router(api_router)

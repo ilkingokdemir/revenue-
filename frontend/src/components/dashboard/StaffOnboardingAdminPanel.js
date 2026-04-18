@@ -4,11 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import {
   UserCheck, Search, RefreshCw, Eye, CheckCircle2, XCircle, Home,
   FileText, Receipt, FileSignature, ShieldCheck, Circle, Ban,
-  ExternalLink, Users, Clock,
+  ExternalLink, Users, Clock, Download, Mail, Package, Send,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -37,6 +39,11 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [emailDlg, setEmailDlg] = useState(null);
+  const [emailForm, setEmailForm] = useState({
+    to: "", subject: "", message: "",
+    include: { passport: true, address: true, hmrc: true },
+  });
 
   const isAdmin = user?.role === "admin";
 
@@ -87,6 +94,60 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
       setSelected(null);
       load();
     } catch (e) { toast.error("Failed"); }
+    setBusy(null);
+  };
+
+  // Trigger an authenticated file download via blob + temp link
+  const download = async (r, kind, label) => {
+    const url = kind === "bundle"
+      ? `${API}/staff-onboarding/${r.user_id}/download-bundle`
+      : `${API}/staff-onboarding/${r.user_id}/download/${kind}`;
+    try {
+      const res = await axios.get(url, { responseType: "blob" });
+      const cd = res.headers["content-disposition"] || "";
+      const match = /filename="?([^"]+)"?/i.exec(cd);
+      const filename = match ? match[1] : `${label}-${r.user_name}`;
+      const blob = new Blob([res.data], { type: res.headers["content-type"] || "application/octet-stream" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(a.href);
+      toast.success(`${label} downloaded`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Download failed");
+    }
+  };
+
+  const openEmail = (r) => {
+    setEmailForm({
+      to: "",
+      subject: `Onboarding documents — ${r.user_name}`,
+      message: "",
+      include: {
+        passport: !!r.passport_uploaded,
+        address: !!r.address_proof_uploaded,
+        hmrc: !!r.hmrc_submitted,
+      },
+    });
+    setEmailDlg(r);
+  };
+
+  const sendEmail = async () => {
+    const to = (emailForm.to || "").split(",").map(s => s.trim()).filter(Boolean);
+    if (!to.length) { toast.error("Enter at least one recipient"); return; }
+    const includes = Object.entries(emailForm.include).filter(([, v]) => v).map(([k]) => k);
+    if (!includes.length) { toast.error("Tick at least one attachment"); return; }
+    setBusy("email");
+    try {
+      await axios.post(`${API}/staff-onboarding/${emailDlg.user_id}/email`, {
+        to, subject: emailForm.subject, message: emailForm.message, include: includes,
+      });
+      toast.success(`Sent to ${to.length} recipient${to.length > 1 ? "s" : ""}`);
+      setEmailDlg(null);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Email failed");
+    }
     setBusy(null);
   };
 
@@ -243,6 +304,19 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
             </DialogHeader>
 
             <div className="grid grid-cols-2 gap-4 mt-3">
+              {/* Download + Email actions */}
+              <div className="col-span-2 flex items-center gap-2 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-3">
+                <Package className="w-4 h-4 text-indigo-700 flex-shrink-0" />
+                <p className="text-xs font-semibold text-indigo-900 flex-1">Share or archive this staff member's onboarding pack</p>
+                <Button size="sm" variant="outline" onClick={() => download(selected, "bundle", "Onboarding bundle")}
+                        className="bg-white" data-testid="oa-dl-bundle">
+                  <Download className="w-3.5 h-3.5 mr-1" />ZIP bundle
+                </Button>
+                <Button size="sm" onClick={() => openEmail(selected)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="oa-email">
+                  <Mail className="w-3.5 h-3.5 mr-1" />Email documents
+                </Button>
+              </div>
               {/* Passport */}
               <div className="bg-stone-50 rounded-xl border border-stone-200 p-4" data-testid="oa-passport-card">
                 <div className="flex items-center justify-between mb-2">
@@ -250,9 +324,17 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
                     <UserCheck className="w-4 h-4 text-blue-600" />
                     <h3 className="text-xs font-bold text-stone-800">ID / Passport</h3>
                   </div>
-                  {selected.passport_uploaded
-                    ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    : <XCircle className="w-4 h-4 text-stone-300" />}
+                  <div className="flex items-center gap-1">
+                    {selected.passport_uploaded && (
+                      <button onClick={() => download(selected, "passport", "Passport")}
+                              className="p-1 hover:bg-white rounded" title="Download" data-testid="oa-dl-passport">
+                        <Download className="w-3.5 h-3.5 text-stone-500" />
+                      </button>
+                    )}
+                    {selected.passport_uploaded
+                      ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      : <XCircle className="w-4 h-4 text-stone-300" />}
+                  </div>
                 </div>
                 {selected.passport_uploaded ? (
                   <>
@@ -275,9 +357,17 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
                     <Home className="w-4 h-4 text-purple-600" />
                     <h3 className="text-xs font-bold text-stone-800">Address Proof</h3>
                   </div>
-                  {selected.address_proof_uploaded
-                    ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    : <XCircle className="w-4 h-4 text-stone-300" />}
+                  <div className="flex items-center gap-1">
+                    {selected.address_proof_uploaded && (
+                      <button onClick={() => download(selected, "address", "Address proof")}
+                              className="p-1 hover:bg-white rounded" title="Download" data-testid="oa-dl-address">
+                        <Download className="w-3.5 h-3.5 text-stone-500" />
+                      </button>
+                    )}
+                    {selected.address_proof_uploaded
+                      ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      : <XCircle className="w-4 h-4 text-stone-300" />}
+                  </div>
                 </div>
                 {selected.address_proof_uploaded ? (
                   <>
@@ -301,9 +391,17 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
                     <Receipt className="w-4 h-4 text-amber-600" />
                     <h3 className="text-xs font-bold text-stone-800">HMRC Starter Checklist</h3>
                   </div>
-                  {selected.hmrc_submitted
-                    ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                    : <XCircle className="w-4 h-4 text-stone-300" />}
+                  <div className="flex items-center gap-1">
+                    {selected.hmrc_submitted && (
+                      <button onClick={() => download(selected, "hmrc", "HMRC PDF")}
+                              className="p-1 hover:bg-white rounded" title="Download PDF" data-testid="oa-dl-hmrc">
+                        <Download className="w-3.5 h-3.5 text-stone-500" />
+                      </button>
+                    )}
+                    {selected.hmrc_submitted
+                      ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      : <XCircle className="w-4 h-4 text-stone-300" />}
+                  </div>
                 </div>
                 {selected.hmrc_submitted && selected.hmrc_data ? (
                   <div className="grid grid-cols-3 gap-2 text-[11px]">
@@ -369,6 +467,63 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
                   <Ban className="w-3.5 h-3.5 mr-1" />Deactivate
                 </Button>
               )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {/* Email documents dialog */}
+      {emailDlg && (
+        <Dialog open={true} onOpenChange={() => setEmailDlg(null)}>
+          <DialogContent className="max-w-lg" data-testid="oa-email-dialog">
+            <DialogHeader>
+              <DialogTitle>Email onboarding documents</DialogTitle>
+            </DialogHeader>
+            <p className="text-[11px] text-stone-500 -mt-1 mb-1">
+              Sending documents for <span className="font-semibold text-stone-800">{emailDlg.user_name}</span> via Resend. Attachments are base-64 encoded in the email.
+            </p>
+            <div className="space-y-3 mt-2">
+              <div>
+                <Label className="text-xs">Recipients *</Label>
+                <Input value={emailForm.to} onChange={e => setEmailForm({ ...emailForm, to: e.target.value })}
+                       placeholder="hr@company.com, accountant@firm.com" data-testid="email-to" />
+                <p className="text-[10px] text-stone-400 mt-0.5">Separate multiple with commas.</p>
+              </div>
+              <div>
+                <Label className="text-xs">Subject</Label>
+                <Input value={emailForm.subject} onChange={e => setEmailForm({ ...emailForm, subject: e.target.value })} data-testid="email-subject" />
+              </div>
+              <div>
+                <Label className="text-xs">Message</Label>
+                <Textarea rows={3} value={emailForm.message} onChange={e => setEmailForm({ ...emailForm, message: e.target.value })}
+                          placeholder="Optional note to the recipient..." data-testid="email-message" />
+              </div>
+              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
+                <p className="text-[11px] font-bold text-stone-700 mb-2">Include</p>
+                <div className="space-y-1.5">
+                  {[
+                    { k: "passport", label: "ID / Passport",            avail: emailDlg.passport_uploaded },
+                    { k: "address",  label: "Address proof",            avail: emailDlg.address_proof_uploaded },
+                    { k: "hmrc",     label: "HMRC Starter Checklist (PDF)", avail: emailDlg.hmrc_submitted },
+                  ].map(opt => (
+                    <label key={opt.k} className={`flex items-center gap-2 text-xs ${opt.avail ? "cursor-pointer" : "opacity-40 cursor-not-allowed"}`}>
+                      <input type="checkbox" disabled={!opt.avail}
+                             checked={!!emailForm.include[opt.k]}
+                             onChange={e => setEmailForm({ ...emailForm, include: { ...emailForm.include, [opt.k]: e.target.checked } })}
+                             data-testid={`email-include-${opt.k}`} />
+                      <span className={opt.avail ? "text-stone-700" : "text-stone-400"}>
+                        {opt.label}{!opt.avail && <span className="ml-1 text-[10px] italic">(not uploaded)</span>}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t mt-3">
+              <Button variant="outline" onClick={() => setEmailDlg(null)}>Cancel</Button>
+              <Button onClick={sendEmail} disabled={busy === "email"}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="email-send">
+                {busy === "email" ? "Sending..." : <><Send className="w-3.5 h-3.5 mr-1" />Send email</>}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

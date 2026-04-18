@@ -4,10 +4,14 @@ New users must complete: passport upload + address proof + HMRC starter checklis
 + contract signing before their account is activated and they can use the dashboard.
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import FileResponse, StreamingResponse
 from datetime import datetime, timezone
 from typing import Dict, Optional
 import os
+import io
 import uuid
+import zipfile
+import base64
 import logging
 
 logger = logging.getLogger(__name__)
@@ -42,7 +46,7 @@ def _onboarding_status(doc: Dict) -> Dict:
     }
 
 
-def create_staff_onboarding_router(db, require_roles, get_current_user):
+def create_staff_onboarding_router(db, require_roles, get_current_user, resend_lib=None):
     router = APIRouter()
 
     # -------- GET MY STATUS --------
@@ -285,5 +289,264 @@ def create_staff_onboarding_router(db, require_roles, get_current_user):
                       "deactivated_at": datetime.now(timezone.utc).isoformat()}}
         )
         return {"ok": True}
+
+    # -------- HMRC PDF GENERATOR (shared) --------
+    def _build_hmrc_pdf(doc: Dict) -> bytes:
+        """Generate an authentic-looking HMRC Starter Checklist PDF from onboarding data."""
+        try:
+            from reportlab.lib.pagesizes import A4
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import mm
+            from reportlab.lib import colors
+            from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                            Table, TableStyle, PageBreak)
+        except Exception as e:
+            logger.error(f"reportlab not available: {e}")
+            raise HTTPException(500, "PDF library unavailable")
+
+        h = doc.get("hmrc_data") or {}
+        buf = io.BytesIO()
+        pdf = SimpleDocTemplate(buf, pagesize=A4,
+                                leftMargin=18 * mm, rightMargin=18 * mm,
+                                topMargin=15 * mm, bottomMargin=15 * mm,
+                                title="HMRC Starter Checklist")
+        styles = getSampleStyleSheet()
+        h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=16, spaceAfter=2 * mm, textColor=colors.HexColor("#0B5394"))
+        h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=11, spaceBefore=4 * mm, spaceAfter=1 * mm,
+                            textColor=colors.HexColor("#0B5394"))
+        body = ParagraphStyle("body", parent=styles["Normal"], fontSize=9, leading=12)
+        small = ParagraphStyle("small", parent=styles["Normal"], fontSize=7, leading=9, textColor=colors.grey)
+
+        story = []
+        story.append(Paragraph("HM Revenue & Customs", h1))
+        story.append(Paragraph("Starter checklist · HMRC 09/22", small))
+        story.append(Spacer(1, 2 * mm))
+        story.append(Paragraph(
+            "Tell your employer of your circumstances so that you do not pay too much or too little tax.", body))
+        story.append(Spacer(1, 3 * mm))
+
+        def row(label, value):
+            return [Paragraph(f"<b>{label}</b>", body), Paragraph(str(value or "—"), body)]
+
+        # Personal details
+        story.append(Paragraph("Employee's personal details", h2))
+        plans = ", ".join(h.get("student_loan_plans") or []) or "—"
+        pers = [
+            row("1. Last name", h.get("last_name", doc.get("user_name", ""))),
+            row("2. First names", h.get("first_names", "")),
+            row("3. Sex", (h.get("sex") or h.get("gender", "")).title()),
+            row("4. Date of birth", h.get("dob", "")),
+            row("5. Home address", h.get("home_address") or h.get("address", "")),
+            row("   Postcode", h.get("postcode", "")),
+            row("   Country", h.get("country", "United Kingdom")),
+            row("6. National Insurance", h.get("ni_number", "not provided")),
+            row("7. Employment start date", h.get("start_date", "")),
+        ]
+        t = Table(pers, colWidths=[55 * mm, 115 * mm])
+        t.setStyle(TableStyle([
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.whitesmoke, colors.white]),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(t)
+
+        # Statement
+        story.append(Paragraph("Employee statement", h2))
+        def yn(b): return "Yes" if b else "No"
+        stmt_tbl = [
+            row("8. Do you have another job?",       yn(h.get("q8_another_job"))),
+            row("9. Receive State/workplace/private pension?", yn(h.get("q9_receives_pension"))),
+            row("10. Since 6 April: another job, JSA, ESA or Incapacity Benefit?", yn(h.get("q10_recent_payments"))),
+            row("Statement applied",                 f"Statement {h.get('statement','—')}"),
+        ]
+        t2 = Table(stmt_tbl, colWidths=[90 * mm, 80 * mm])
+        t2.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+            ("BACKGROUND", (0, 3), (-1, 3), colors.HexColor("#E0ECFF")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(t2)
+
+        # Student loans
+        story.append(Paragraph("Student loans", h2))
+        loan_tbl = [
+            row("11. Have a student or postgraduate loan?", yn(h.get("has_loan"))),
+            row("12. Any qualifying study statements?",     yn(h.get("still_studying"))),
+            row("13. Loan plans",                            plans),
+        ]
+        t3 = Table(loan_tbl, colWidths=[90 * mm, 80 * mm])
+        t3.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(t3)
+
+        # Declaration
+        story.append(Paragraph("Declaration", h2))
+        decl_tbl = [
+            row("Full name", h.get("declaration_full_name", "")),
+            row("Date",      h.get("declaration_date", "")),
+            row("Signature", h.get("declaration_signature", "")),
+            row("Submitted", h.get("submitted_at", "")),
+        ]
+        t4 = Table(decl_tbl, colWidths=[55 * mm, 115 * mm])
+        t4.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(t4)
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph(
+            "I confirm that the information I've given on this form is correct. This document was digitally "
+            "signed and submitted via the hotel onboarding platform.", small))
+
+        pdf.build(story)
+        return buf.getvalue()
+
+    # -------- ADMIN: DOWNLOAD INDIVIDUAL DOC --------
+    @router.get("/staff-onboarding/{user_id}/download/{kind}")
+    async def admin_download(user_id: str, kind: str,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.staff_onboarding.find_one({"user_id": user_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Onboarding not found")
+        if kind == "passport":
+            path = doc.get("passport_path")
+            if not path or not os.path.exists(path):
+                raise HTTPException(404, "Passport file missing")
+            return FileResponse(path, filename=doc.get("passport_filename", "passport"))
+        if kind == "address":
+            path = doc.get("address_proof_path")
+            if not path or not os.path.exists(path):
+                raise HTTPException(404, "Address proof file missing")
+            return FileResponse(path, filename=doc.get("address_proof_filename", "address"))
+        if kind == "hmrc":
+            if not doc.get("hmrc_submitted"):
+                raise HTTPException(404, "HMRC checklist not submitted")
+            pdf = _build_hmrc_pdf(doc)
+            name = (doc.get("user_name") or "staff").replace(" ", "_")
+            return StreamingResponse(
+                io.BytesIO(pdf),
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="HMRC_Starter_{name}.pdf"'},
+            )
+        raise HTTPException(400, "Unknown document kind")
+
+    # -------- ADMIN: DOWNLOAD BUNDLE ZIP --------
+    @router.get("/staff-onboarding/{user_id}/download-bundle")
+    async def admin_download_bundle(user_id: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.staff_onboarding.find_one({"user_id": user_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Onboarding not found")
+        name = (doc.get("user_name") or "staff").replace(" ", "_")
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            # Passport
+            if doc.get("passport_path") and os.path.exists(doc["passport_path"]):
+                ext = doc["passport_filename"].rsplit(".", 1)[-1] if "." in (doc.get("passport_filename") or "") else "jpg"
+                zf.write(doc["passport_path"], arcname=f"{name}/1_ID_Passport.{ext}")
+            # Address
+            if doc.get("address_proof_path") and os.path.exists(doc["address_proof_path"]):
+                ext = doc["address_proof_filename"].rsplit(".", 1)[-1] if "." in (doc.get("address_proof_filename") or "") else "jpg"
+                zf.write(doc["address_proof_path"], arcname=f"{name}/2_Address_Proof.{ext}")
+            # HMRC PDF
+            if doc.get("hmrc_submitted"):
+                zf.writestr(f"{name}/3_HMRC_Starter_Checklist.pdf", _build_hmrc_pdf(doc))
+            # Contract ref as a small txt if signed
+            if doc.get("contract_id"):
+                zf.writestr(f"{name}/4_Contract_Reference.txt",
+                            f"Signed contract ID: {doc['contract_id']}\nStaff: {doc.get('user_name','')}\nEmail: {doc.get('user_email','')}\n")
+        buf.seek(0)
+        return StreamingResponse(
+            buf, media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="Onboarding_{name}.zip"'},
+        )
+
+    # -------- ADMIN: EMAIL DOCUMENTS --------
+    @router.post("/staff-onboarding/{user_id}/email")
+    async def admin_email(user_id: str, data: Dict,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        if not resend_lib or not os.environ.get("RESEND_API_KEY"):
+            raise HTTPException(503, "Email service not configured")
+
+        to_list = data.get("to") or []
+        if isinstance(to_list, str):
+            to_list = [x.strip() for x in to_list.split(",") if x.strip()]
+        if not to_list:
+            raise HTTPException(400, "At least one recipient required")
+
+        includes = set(data.get("include") or ["passport", "address", "hmrc"])
+        subject = (data.get("subject") or "Staff onboarding documents").strip()
+        message = (data.get("message") or "").strip()
+
+        doc = await db.staff_onboarding.find_one({"user_id": user_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Onboarding not found")
+        name = (doc.get("user_name") or "staff").replace(" ", "_")
+
+        # Build Resend attachments list (base64)
+        attachments = []
+        if "passport" in includes and doc.get("passport_path") and os.path.exists(doc["passport_path"]):
+            with open(doc["passport_path"], "rb") as f:
+                content = base64.b64encode(f.read()).decode()
+            fn = doc.get("passport_filename") or "passport"
+            attachments.append({"filename": f"{name}_ID_{fn}", "content": content})
+        if "address" in includes and doc.get("address_proof_path") and os.path.exists(doc["address_proof_path"]):
+            with open(doc["address_proof_path"], "rb") as f:
+                content = base64.b64encode(f.read()).decode()
+            fn = doc.get("address_proof_filename") or "address"
+            attachments.append({"filename": f"{name}_Address_{fn}", "content": content})
+        if "hmrc" in includes and doc.get("hmrc_submitted"):
+            attachments.append({
+                "filename": f"{name}_HMRC_Starter_Checklist.pdf",
+                "content": base64.b64encode(_build_hmrc_pdf(doc)).decode(),
+            })
+
+        if not attachments:
+            raise HTTPException(400, "No documents available to send")
+
+        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+        body_html = f"""<div style='font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:auto;padding:24px;color:#1f2937;'>
+<h2 style='color:#065f46;margin:0 0 8px 0;'>Onboarding documents for {doc.get('user_name','staff')}</h2>
+<p style='color:#6b7280;font-size:13px;'>Sent by {current_user.get('name','HR')} · {len(attachments)} attachment(s)</p>
+<p>{message or 'Attached are the onboarding documents for this employee. This email is confidential and intended for the recipient only.'}</p>
+<ul style='font-size:13px;color:#374151;'>
+{"".join([f"<li>{a['filename']}</li>" for a in attachments])}
+</ul>
+<p style='color:#9ca3af;font-size:11px;margin-top:24px;'>Sent via hotel onboarding platform · please do not forward.</p>
+</div>"""
+
+        try:
+            resend_lib.Emails.send({
+                "from": sender,
+                "to": to_list,
+                "subject": subject,
+                "html": body_html,
+                "attachments": attachments,
+            })
+        except Exception as e:
+            logger.error(f"Resend email failed: {e}")
+            raise HTTPException(502, f"Email send failed: {str(e)[:160]}")
+
+        # Audit log
+        await db.staff_onboarding.update_one(
+            {"user_id": user_id},
+            {"$push": {"email_log": {
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "sent_by": current_user.get("name", ""),
+                "to": to_list,
+                "attachments": [a["filename"] for a in attachments],
+                "subject": subject,
+            }}}
+        )
+        return {"ok": True, "sent_to": to_list, "attachments": len(attachments)}
 
     return router

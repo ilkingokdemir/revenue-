@@ -20,6 +20,7 @@ import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel"
 import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardingAdminPanel";
 import { PayrollRateMatrix } from "./components/dashboard/PayrollRateMatrix";
 import { BugTrackerPanel } from "./components/dashboard/BugTrackerPanel";
+import { RolesPermissionsPanel } from "./components/dashboard/RolesPermissionsPanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
@@ -2653,6 +2654,7 @@ const Dashboard = ({ user, onLogout }) => {
         ...(user?.role !== "receptionist" ? [{ id: "onboarding-admin", icon: Users, name: "Onboarding Review", testId: "onboarding-admin-btn" }] : []),
         ...(user?.role !== "receptionist" ? [{ id: "legal-docs", icon: ShieldCheck, name: "Legal Documents", testId: "legal-docs-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
+        ...(user?.role === "admin" ? [{ id: "roles-permissions", icon: ShieldCheck, name: "Roles & Permissions", testId: "roles-permissions-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings Hub", testId: "settings-hub-btn" }] : []),
         { id: "bug-tracker", icon: Bug, name: "Bug Tracker", testId: "bug-tracker-btn" },
       ]
@@ -3272,6 +3274,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Bug Tracker */}
         {activeView === "bug-tracker" && (
           <div className="p-6"><BugTrackerPanel user={user} /></div>
+        )}
+
+        {/* Roles & Permissions */}
+        {activeView === "roles-permissions" && (
+          <div className="p-6"><RolesPermissionsPanel user={user} propertyId={activePropertyId && activePropertyId !== "all" ? activePropertyId : null} /></div>
         )}
       </main>
 

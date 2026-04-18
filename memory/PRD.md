@@ -1,6 +1,18 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 80+ Modules | Mobile Responsive | 137 Test Iterations (100%)
+## 81+ Modules | Mobile Responsive | 138 Test Iterations (100%)
+
+### Iter 139: Admin Onboarding Review Panel
+- Admin/manager-only sidebar entry 'Onboarding Review' with teal-emerald hero and 4 KPIs (Total / Pending / Docs Complete / Activated)
+- Status filter tabs + search; table with per-user 4-step progress dots (ID → Address → HMRC → Contract), status badge (WAITING / READY / ACTIVATED) and context-aware Review + Activate buttons
+- **Detail drawer** with 4 cards:
+  - ID/Passport (image preview, clickable to open full-size)
+  - Address proof (image preview with PDF fallback)
+  - HMRC starter checklist (full structured data grid: name, DOB, NI, start date, postcode, statement, loans, address)
+  - Employment contract (signed/awaiting state)
+- One-click Activate (if docs complete) or Activate-anyway override, plus Deactivate for active users
+- Reuses existing `GET /api/staff-onboarding/list` + `POST /admin-activate|admin-deactivate` endpoints
+- Tested iteration 138 (15/15 backend + frontend pass)
 
 ### Iter 138: Staff Onboarding Gate — UK Right-to-Work Verification
 - New non-admin staff start with `is_activated: false`; admin/manager are activated instantly

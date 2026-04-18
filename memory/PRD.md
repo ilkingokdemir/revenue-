@@ -1,6 +1,14 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 74+ Modules | Mobile Responsive | 131 Test Iterations (100%)
+## 75+ Modules | Mobile Responsive | 132 Test Iterations (100%)
+
+### Iter 133: AI Picks — GPT-5.2 Marketplace Recommender
+- Dark indigo "AI Picks · GPT-5.2" strip on top of the Marketplace
+- `POST /api/marketplace/recommendations/{pid}/generate` — reads installed apps + booking source distribution + category coverage, sends structured signals to **GPT-5.2 via Emergent LLM Key**
+- Returns `{headline, recommendations[3]}` with `id / title / reason / impact / priority / cat / domain` — server re-validates each pick against the catalog and filters out already-installed integrations
+- Frontend: headline, analysis context line, 3 ranked cards (#1/#2/#3) with priority badges, impact chips (`+2-5% RevPAR`, `-8h/week`, etc.), per-card Connect button, Refresh Picks CTA
+- Cached in MongoDB `marketplace_recommendations` so the strip persists across reloads
+- Tested end-to-end iteration 132 (14/14 backend + full frontend)
 
 ### Iter 132: Integrations Marketplace — "Connect everything. Run anything."
 - **124 integrations** across **17 categories** (OTAs, Payments, Channel Managers, Revenue, Messaging/CRM, AI, Reviews, Smart Locks, Accounting, POS/F&B, Analytics, Ops, Marketing, Productivity, Storage/CDN, Identity/SSO, Compliance)

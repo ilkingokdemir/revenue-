@@ -59,8 +59,9 @@ def create_booking_timeline_router(db, require_roles):
             await db.rooms.insert_many(rooms_to_insert)
             logger.info(f"Seeded {len(rooms_to_insert)} rooms for property {pid}")
 
-    async def _ensure_bookings(pid):
-        """Seed sample bookings if too few active bookings with rooms assigned."""
+    async def _ensure_bookings(pid, window_start=None, window_end=None):
+        """Seed sample bookings if too few active bookings with rooms assigned.
+        If window_start/window_end given, also seed bookings overlapping that window."""
         # First, assign rooms to existing bookings that lack room_id
         unassigned = await db.bookings.find(
             {"property_id": pid, "status": {"$nin": ["cancelled"]},
@@ -114,7 +115,30 @@ def create_booking_timeline_router(db, require_roles):
             "property_id": pid, "status": {"$nin": ["cancelled"]},
             "room_id": {"$exists": True, "$ne": ""}
         })
-        if active >= 5:
+
+        # Decide which window to seed: the requested one (if empty) or the default "now" window
+        seed_start = None
+        seed_end = None
+        now = datetime.now(timezone.utc)
+        if window_start and window_end:
+            # Check if requested window has any bookings
+            window_count = await db.bookings.count_documents({
+                "property_id": pid,
+                "status": {"$nin": ["cancelled"]},
+                "room_id": {"$exists": True, "$ne": ""},
+                "check_in": {"$lt": window_end.strftime("%Y-%m-%d")},
+                "check_out": {"$gte": window_start.strftime("%Y-%m-%d")},
+            })
+            if window_count < 3:
+                # Expand window by 2 days on each side for natural feel
+                seed_start = window_start - timedelta(days=2)
+                seed_end = window_end + timedelta(days=2)
+        # Default initial seed if global data is sparse
+        if seed_start is None and active < 5:
+            seed_start = now - timedelta(days=3)
+            seed_end = now + timedelta(days=21)
+
+        if seed_start is None:
             return
 
         rooms = await db.rooms.find({"property_id": pid}, {"_id": 0}).to_list(100)
@@ -126,7 +150,6 @@ def create_booking_timeline_router(db, require_roles):
         for rt in room_types:
             rate_map[rt.get("id", "")] = float(rt.get("base_rate") or random.randint(60, 150))
 
-        now = datetime.now(timezone.utc)
         bookings = []
 
         for room in rooms:
@@ -134,9 +157,9 @@ def create_booking_timeline_router(db, require_roles):
             rtid = room.get("room_type_id", "")
             base = rate_map.get(rtid, 90)
 
-            cursor_date = now - timedelta(days=3)
+            cursor_date = seed_start
             attempts = 0
-            while cursor_date < now + timedelta(days=21) and attempts < 8:
+            while cursor_date < seed_end and attempts < 8:
                 attempts += 1
                 if random.random() < 0.25:
                     cursor_date += timedelta(days=random.randint(1, 3))
@@ -202,11 +225,11 @@ def create_booking_timeline_router(db, require_roles):
     @router.get("/bookings/timeline/{property_id}")
     async def get_booking_timeline(property_id: str, start: str = "", days: int = 14,
                                    current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
-        """Gantt-style timeline: rooms grouped by type with booking bars."""
+        """Gantt-style timeline: rooms grouped by type with booking bars. Freely navigable — seeds data for any visible window."""
         now = datetime.now(timezone.utc)
         if start:
             try:
-                start_date = datetime.strptime(start, "%Y-%m-%d")
+                start_date = datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=timezone.utc)
             except ValueError:
                 start_date = now
         else:
@@ -233,7 +256,7 @@ def create_booking_timeline_router(db, require_roles):
 
         # Ensure rooms + bookings exist
         await _ensure_rooms(property_id)
-        await _ensure_bookings(property_id)
+        await _ensure_bookings(property_id, window_start=start_date, window_end=end_date)
 
         # Load room types
         room_types = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(20)

@@ -312,6 +312,12 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     setStartDate(d.toISOString().slice(0, 10));
   };
 
+  const navigateJump = (numDays) => {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + numDays);
+    setStartDate(d.toISOString().slice(0, 10));
+  };
+
   const goToday = () => {
     const d = new Date(); d.setDate(d.getDate() - 1);
     setStartDate(d.toISOString().slice(0, 10));
@@ -406,11 +412,13 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
       {/* Navigation Bar */}
       <div className="bg-stone-50 border-b border-stone-200 px-5 py-2 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-stone-200 rounded-lg" data-testid="timeline-prev"><ChevronLeft className="w-4 h-4" /></button>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => navigateJump(-30)} className="p-1.5 hover:bg-stone-200 rounded-lg" title="Back 30 days" data-testid="timeline-prev-month"><ChevronLeft className="w-3.5 h-3.5" /><ChevronLeft className="w-3.5 h-3.5 -ml-2" /></button>
+          <button onClick={() => navigate(-1)} className="p-1.5 hover:bg-stone-200 rounded-lg" title={`Back ${viewDays} days`} data-testid="timeline-prev"><ChevronLeft className="w-4 h-4" /></button>
           <button onClick={goToday} className="px-3 py-1 text-xs font-semibold bg-white border border-stone-200 rounded-lg hover:bg-stone-100" data-testid="timeline-today">Today</button>
-          <button onClick={() => navigate(1)} className="p-1.5 hover:bg-stone-200 rounded-lg" data-testid="timeline-next"><ChevronRight className="w-4 h-4" /></button>
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1" data-testid="timeline-date-pick" />
+          <button onClick={() => navigate(1)} className="p-1.5 hover:bg-stone-200 rounded-lg" title={`Forward ${viewDays} days`} data-testid="timeline-next"><ChevronRight className="w-4 h-4" /></button>
+          <button onClick={() => navigateJump(30)} className="p-1.5 hover:bg-stone-200 rounded-lg flex" title="Forward 30 days" data-testid="timeline-next-month"><ChevronRight className="w-3.5 h-3.5" /><ChevronRight className="w-3.5 h-3.5 -ml-2" /></button>
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1 ml-1" data-testid="timeline-date-pick" />
         </div>
         <div className="flex items-center gap-1 bg-white border border-stone-200 rounded-lg p-0.5">
           {[7, 14, 30].map(d => (

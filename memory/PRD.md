@@ -1,9 +1,18 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 73+ Modules | Mobile Responsive | 130 Test Iterations (100%)
+## 74+ Modules | Mobile Responsive | 131 Test Iterations (100%)
 
-### Iter 131: Cash Flow AI Recommendations — **REMOVED per user request** (kept base Cash Flow Forecast)
+### Iter 132: Integrations Marketplace — "Connect everything. Run anything."
+- **124 integrations** across **17 categories** (OTAs, Payments, Channel Managers, Revenue, Messaging/CRM, AI, Reviews, Smart Locks, Accounting, POS/F&B, Analytics, Ops, Marketing, Productivity, Storage/CDN, Identity/SSO, Compliance)
+- Real brand logos via Google Favicon service — no emojis, no letter initials
+- Hero with live **Available / Connected / Coverage %** counters
+- Search, category chips with per-category install counts, tabs (All / Connected / Featured)
+- **Install / Toggle / Sync / Uninstall** with MongoDB `marketplace_installs` persistence
+- Detail drawer with status, connected timestamp, last-sync timestamp, role-gated connect
+- Endpoints: `GET /api/marketplace/catalog/{pid}`, `POST /install|toggle|sync`, `DELETE /uninstall` — all admin/manager gated
+- Sidebar entry `marketplace-btn` in Connections section — coexists with existing Integrations panel
 
+### Iter 131: Cash Flow AI Recommendations — **REMOVED per user request**
 ### Iter 130: Cash Flow Forecast — The CFO Dashboard
 
 **Cash Flow Forecast**
@@ -25,14 +34,16 @@
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
+- Contactless Guest Journey / Self-Service Kiosks (from Mews benchmark)
+- Maintenance Issues (Kanban/Table tracking)
 - User Contracts & granular Roles/Permissions
 - System Feedback & internal Bug Tracker
 
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks
 - Profit OS (ContributionPAR) & Distribution Cockpit
-- Integrations Hub (PMS syncing UI)
 - Rate Structure / OTA mapping configurations
+- Deprecate legacy IntegrationsPanel in favor of new Marketplace
 
 ## Refactor (low priority)
 - Split `/app/frontend/src/components/dashboard/` (95+ files) into `/operations`, `/revenue`, `/finance`, `/guest`

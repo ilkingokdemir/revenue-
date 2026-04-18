@@ -1,6 +1,14 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 78+ Modules | Mobile Responsive | 135 Test Iterations (100%)
+## 79+ Modules | Mobile Responsive | 136 Test Iterations (100%)
+
+### Iter 137: Login Gate for Pending Legal Documents
+- Full-screen blocking modal (`z-[100]` + backdrop-blur) mounts right after login inside MainApp
+- Auto-calls `/api/legal-documents/pending/me` — if non-empty, gate appears with "ACTION REQUIRED · 1 OF N" counter
+- Renders each field type from the policy: heading (purple-bordered section), text, textarea, checkbox, select, date, signature (script-font)
+- Client + server-side required validation; submits to `/accept` with `responses`; advances to next doc after each acceptance; dismisses when queue empty
+- Footer shows "Signed as **{user.name}** · your IP will be recorded for audit"
+- Tested iteration 136 — frontend + backend all pass
 
 ### Iter 136: Legal Documents & Consents — Policy Builder with E-Signature Audit
 - Inspired by myhotelbox.com benchmark screenshots — built a superset
@@ -73,8 +81,9 @@
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
+- **Payroll Rate Matrix** (from myhotelbox screenshots) — cross-tab of user × branch × pay-type × rate with split-across-branches + active toggles
+- **Clone Role** button + **Global Admin** flag on Roles & Permissions panel
 - System Feedback & internal Bug Tracker
-- Maintenance Kanban — enhancements (module already exists as MaintenancePanel, 1127 lines)
 
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks

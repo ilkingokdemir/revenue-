@@ -2,6 +2,34 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 159: Smart calendar collision detector (P1 — auto-stack lanes + "+N more" merged pill)
+
+Implemented Google-Calendar-style interval lane assignment + overflow pill for the Booking Timeline to handle double-bookings and same-room overlaps cleanly.
+
+**Algorithm** (`/app/frontend/src/components/dashboard/BookingTimeline.js`):
+- `assignLanes(bookings)` — greedy interval scheduling: sort by check_in ASC, longer stays first on ties. For each booking, find the lowest lane whose `last_end <= booking.check_in`, or open a new lane. Returns `{ laneOf, totalLanes }`.
+- `buildOverflowClusters(bookings, laneOf)` — groups bookings in `lane >= MAX_VISIBLE_LANES (2)` into time-continuous clusters so we render one merged pill per cluster rather than a pill per hidden booking.
+
+**Rendering changes:**
+- Bars in lane 0 and lane 1 stack vertically within the same 56px `ROW_H` — each lane computes `laneH = (ROW_H-8) / visibleLanes` so two bars coexist cleanly.
+- **Compact layout** activates when `laneH < 30px`: bar switches to single-row flex (logo · name · price) instead of the 2-line layout. Keeps readability even when stacked.
+- Overflow bookings (lane ≥ 2) render as a vivid rose-gradient **"⚠ +N more"** pill at the bottom of the row, sized to span the overlap time range, with `ring-2 ring-white` and `hover:scale-105` for affordance.
+- `data-lane` attribute added to every bar for automated tests.
+
+**Collision cluster modal** (click "+N more"):
+- Full-screen glass backdrop, `max-w-lg` rose-gradient header: `"Overlapping Bookings · {room.name} · {count} bookings collide in {range}"`
+- Each hidden booking shown with: source strip + platform logo + guest name + date range + nights + source, status badge + total_price
+- Clicking a row opens the regular booking detail drawer (`openDetail(bk.id)`)
+- Footer tip: *"drag a booking to another room to resolve the collision"* — dovetails with the existing drag-reassign feature
+
+**Live verified:** Seeded 5 bookings on the same Standard 04 room with cascading overlaps (Alice 0→4d, Bob 1→3d, Cara 2→6d, Dave 2→5d, Eve 3→7d). Panel rendered:
+- Lane 0 bar (Mehmet Yilmaz — but visually a real booking), Lane 1 bar (John Smith), plus "⚠ +2 more" rose pill at bottom of the row
+- Clicking the pill opened the modal listing TEST_Checkout_fff6ec £89.00 and Sarah Johnson £0.00 with full context
+- No overlap visible anywhere else (unstacked rooms still render single bars at full height)
+
+**Test data cleaned** — no leftover "Overlap" bookings in production data.
+
+
 ### Iter 158: Audit Trail Panel — enterprise security visibility (user request)
 
 Built a complete audit trail system that logs every permission-denied request and surfaces it in a dedicated Admin-only panel. Competitors like Eviivo/Mews do NOT visualize RBAC denials — this becomes a differentiating enterprise screenshot.

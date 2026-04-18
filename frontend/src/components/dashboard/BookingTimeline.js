@@ -66,6 +66,58 @@ const resolveDisplayStatus = (bk) => {
 
 const HK_COLORS = { clean: "bg-emerald-400", dirty: "bg-red-400", inspected: "bg-blue-400" };
 
+// ---------- Smart Collision Detector ----------
+// Greedy interval lane assignment (Google-Calendar style).
+// For a set of bookings in a single room, assigns each to the lowest available
+// lane (0-indexed) such that no two bookings in the same lane overlap in time.
+// Returns: { laneOf: { [bookingId]: laneIdx }, totalLanes: number }
+const assignLanes = (bookings) => {
+  const sorted = [...bookings].sort((a, b) => {
+    if (a.check_in !== b.check_in) return a.check_in < b.check_in ? -1 : 1;
+    return a.check_out > b.check_out ? -1 : 1; // longer stays first on ties
+  });
+  const laneEnds = []; // laneEnds[i] = check_out ISO of last booking in lane i
+  const laneOf = {};
+  sorted.forEach((bk) => {
+    let placed = -1;
+    for (let i = 0; i < laneEnds.length; i++) {
+      if (laneEnds[i] <= bk.check_in) { placed = i; break; }
+    }
+    if (placed === -1) {
+      laneEnds.push(bk.check_out);
+      placed = laneEnds.length - 1;
+    } else {
+      laneEnds[placed] = bk.check_out;
+    }
+    laneOf[bk.id] = placed;
+  });
+  return { laneOf, totalLanes: laneEnds.length };
+};
+
+const MAX_VISIBLE_LANES = 2; // Rows render up to 2 lanes; overflow → "+N more" pill
+
+// Build overflow clusters: group bookings in lane >= MAX_VISIBLE_LANES into
+// time-continuous clusters so we can render one "+N more" pill per cluster.
+const buildOverflowClusters = (bookings, laneOf) => {
+  const hidden = bookings
+    .filter((b) => laneOf[b.id] >= MAX_VISIBLE_LANES)
+    .sort((a, b) => (a.check_in < b.check_in ? -1 : 1));
+  if (hidden.length === 0) return [];
+  const clusters = [];
+  let cur = null;
+  hidden.forEach((bk) => {
+    if (!cur || bk.check_in >= cur.check_out) {
+      cur = { check_in: bk.check_in, check_out: bk.check_out, items: [bk] };
+      clusters.push(cur);
+    } else {
+      cur.items.push(bk);
+      if (bk.check_out > cur.check_out) cur.check_out = bk.check_out;
+    }
+  });
+  return clusters;
+};
+// ------------------------------------------------
+
 // Real platform favicons — uses Google's favicon CDN to fetch the actual brand logo
 // e.g. Booking.com's blue "B." or Airbnb's real Bélo symbol — not letter initials.
 const PLATFORM_DOMAINS = {
@@ -174,6 +226,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [showAddCharge, setShowAddCharge] = useState(false);
   const [detailTab, setDetailTab] = useState("info");
   const [upsells, setUpsells] = useState(null);
+  const [collisionCluster, setCollisionCluster] = useState(null); // { room, cluster } for "+N more" pill modal
   const scrollRef = useRef(null);
 
   const pid = activePropertyId || "all";
@@ -614,69 +667,115 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         <div key={col.date} className={`flex-shrink-0 border-r border-stone-50 ${col.is_today ? "bg-blue-50/30" : col.is_weekend ? "bg-stone-50/30" : ""}`} style={{ width: COL_W, height: ROW_H }} />
                       ))}
 
-                      {/* Booking Bars */}
-                      {room.bookings.filter(matchSearch).map(bk => {
-                        const startIdx = date_columns.findIndex(c => c.date >= bk.check_in);
-                        const endIdx = date_columns.findIndex(c => c.date >= bk.check_out);
-                        const si = startIdx >= 0 ? startIdx : 0;
-                        const ei = endIdx >= 0 ? endIdx : date_columns.length;
-                        const left = si * COL_W;
-                        const width = Math.max((ei - si) * COL_W - 4, COL_W * 0.5);
-                        const sc = STATUS_COLORS[resolveDisplayStatus(bk)] || STATUS_COLORS.confirmed;
+                      {/* Booking Bars (smart collision detector: lanes + overflow pills) */}
+                      {(() => {
+                        const visibleBookings = room.bookings.filter(matchSearch);
+                        if (visibleBookings.length === 0) return null;
+                        const { laneOf, totalLanes } = assignLanes(visibleBookings);
+                        const visibleLanes = Math.min(Math.max(totalLanes, 1), MAX_VISIBLE_LANES);
+                        const innerH = ROW_H - 8;
+                        const laneH = innerH / visibleLanes;
+                        const overflowClusters = buildOverflowClusters(visibleBookings, laneOf);
                         const todayISO = new Date().toISOString().slice(0, 10);
-                        const ctx = computeContext(bk, todayISO);
-                        const ctxMeta = ctx ? STATUS_COLORS[ctx] : null;
-                        const isSelected = selectedIds.has(bk.id);
 
-                        return (
-                          <div key={bk.id} className="absolute top-1" style={{ left: left + 2, width, height: ROW_H - 8 }}>
-                            {bulkMode && (
-                              <button onClick={(e) => { e.stopPropagation(); toggleSelect(bk.id); }} data-testid={`select-${bk.id}`}
-                                className="absolute -left-0.5 top-0.5 z-10 w-4 h-4 flex items-center justify-center">
-                                {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-violet-600" /> : <Square className="w-3.5 h-3.5 text-stone-400" />}
-                              </button>
-                            )}
-                            {(() => {
-                              const src = bk.source || bk.source_code || "";
-                              return (
-                                <button
-                                  draggable={!bulkMode}
-                                  onDragStart={(e) => handleDragStart(e, { ...bk, room_id: room.id })}
-                                  onClick={() => bulkMode ? toggleSelect(bk.id) : openDetail(bk.id)}
-                                  data-testid={`booking-bar-${bk.id}`}
-                                  data-status={bk.status}
-                                  data-context={ctx || ""}
-                                  className={`relative w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border shadow-md ${sc.shadow || ""} cursor-pointer hover:brightness-110 hover:shadow-lg transition-all overflow-hidden flex flex-col justify-center pl-2 pr-1.5 ${ctxMeta ? ctxMeta.accent : ""} ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
-                                  title={`${bk.guest_name} | ${src} | ${cur(bk.total_price)} | ${bk.check_in} → ${bk.check_out} | ${sc.label}${ctxMeta ? " · " + ctxMeta.label : ""}`}>
-                                  {/* Left-edge channel colour strip — adds multi-colour variety per source */}
-                                  <span className={`absolute left-0 top-0 bottom-0 w-1 ${getSourceStrip(src)}`} aria-hidden></span>
-                                  {/* Inner highlight for depth (except on striped/dashed variants) */}
-                                  {!["blocked","unassigned","awaiting_cleaning","being_cleaned"].includes(resolveDisplayStatus(bk)) && (
-                                    <span className="absolute inset-x-0 top-0 h-[2px] bg-white/40 rounded-t-md" aria-hidden></span>
-                                  )}
-                                  {/* Contextual pulsing dot (arrives/departs today) */}
-                                  {ctxMeta && (
-                                    <span className="absolute top-0.5 right-0.5 flex h-2 w-2" data-testid={`ctx-dot-${bk.id}`}>
-                                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${ctxMeta.dotCls}`}></span>
-                                      <span className={`relative inline-flex rounded-full h-2 w-2 ${ctxMeta.dotCls}`}></span>
-                                    </span>
-                                  )}
-                                  {/* Line 1: platform logo + guest name */}
-                                  <div className="flex items-center gap-1 min-w-0 relative z-10">
-                                    <span data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={16} /></span>
-                                    <span className="text-[11px] font-bold truncate flex-1" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
-                                  </div>
-                                  {/* Line 2: price + nights */}
-                                  <div className="flex items-center justify-between gap-1 mt-0.5 min-w-0 opacity-95 relative z-10">
-                                    <span className="text-[10px] font-bold font-mono truncate" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>
-                                    {width > 110 && <span className="text-[9px] opacity-80 flex-shrink-0">{bk.nights}n</span>}
-                                  </div>
+                        const bars = visibleBookings.map(bk => {
+                          const laneIdx = laneOf[bk.id];
+                          if (laneIdx >= MAX_VISIBLE_LANES) return null;
+                          const startIdx = date_columns.findIndex(c => c.date >= bk.check_in);
+                          const endIdx = date_columns.findIndex(c => c.date >= bk.check_out);
+                          const si = startIdx >= 0 ? startIdx : 0;
+                          const ei = endIdx >= 0 ? endIdx : date_columns.length;
+                          const left = si * COL_W;
+                          const width = Math.max((ei - si) * COL_W - 4, COL_W * 0.5);
+                          const sc = STATUS_COLORS[resolveDisplayStatus(bk)] || STATUS_COLORS.confirmed;
+                          const ctx = computeContext(bk, todayISO);
+                          const ctxMeta = ctx ? STATUS_COLORS[ctx] : null;
+                          const isSelected = selectedIds.has(bk.id);
+                          const top = 4 + laneIdx * laneH;
+                          const height = laneH - 2;
+                          const isCompact = height < 30;
+                          const src = bk.source || bk.source_code || "";
+
+                          return (
+                            <div key={bk.id} className="absolute" style={{ left: left + 2, width, top, height }}>
+                              {bulkMode && (
+                                <button onClick={(e) => { e.stopPropagation(); toggleSelect(bk.id); }} data-testid={`select-${bk.id}`}
+                                  className="absolute -left-0.5 top-0.5 z-10 w-4 h-4 flex items-center justify-center">
+                                  {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-violet-600" /> : <Square className="w-3.5 h-3.5 text-stone-400" />}
                                 </button>
-                              );
-                            })()}
-                          </div>
-                        );
-                      })}
+                              )}
+                              <button
+                                draggable={!bulkMode}
+                                onDragStart={(e) => handleDragStart(e, { ...bk, room_id: room.id })}
+                                onClick={() => bulkMode ? toggleSelect(bk.id) : openDetail(bk.id)}
+                                data-testid={`booking-bar-${bk.id}`}
+                                data-status={bk.status}
+                                data-context={ctx || ""}
+                                data-lane={laneIdx}
+                                className={`relative w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border shadow-md ${sc.shadow || ""} cursor-pointer hover:brightness-110 hover:shadow-lg transition-all overflow-hidden flex ${isCompact ? "flex-row items-center gap-1.5 px-1.5" : "flex-col justify-center pl-2 pr-1.5"} ${ctxMeta ? ctxMeta.accent : ""} ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
+                                title={`${bk.guest_name} | ${src} | ${cur(bk.total_price)} | ${bk.check_in} → ${bk.check_out} | ${sc.label}${ctxMeta ? " · " + ctxMeta.label : ""}`}>
+                                {/* Left-edge channel colour strip */}
+                                <span className={`absolute left-0 top-0 bottom-0 w-1 ${getSourceStrip(src)}`} aria-hidden></span>
+                                {/* Inner highlight */}
+                                {!["blocked","unassigned","awaiting_cleaning","being_cleaned"].includes(resolveDisplayStatus(bk)) && (
+                                  <span className="absolute inset-x-0 top-0 h-[2px] bg-white/40 rounded-t-md" aria-hidden></span>
+                                )}
+                                {/* Contextual pulsing dot */}
+                                {ctxMeta && (
+                                  <span className="absolute top-0.5 right-0.5 flex h-2 w-2" data-testid={`ctx-dot-${bk.id}`}>
+                                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${ctxMeta.dotCls}`}></span>
+                                    <span className={`relative inline-flex rounded-full h-2 w-2 ${ctxMeta.dotCls}`}></span>
+                                  </span>
+                                )}
+                                {isCompact ? (
+                                  // Compact (2-lane) layout: single row with logo + name + price
+                                  <>
+                                    <span className="ml-1 flex-shrink-0" data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={12} /></span>
+                                    <span className="text-[10px] font-bold truncate flex-1 relative z-10" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
+                                    {width > 90 && <span className="text-[9px] font-mono flex-shrink-0 opacity-90" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>}
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-1 min-w-0 relative z-10">
+                                      <span data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={16} /></span>
+                                      <span className="text-[11px] font-bold truncate flex-1" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
+                                    </div>
+                                    <div className="flex items-center justify-between gap-1 mt-0.5 min-w-0 opacity-95 relative z-10">
+                                      <span className="text-[10px] font-bold font-mono truncate" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>
+                                      {width > 110 && <span className="text-[9px] opacity-80 flex-shrink-0">{bk.nights}n</span>}
+                                    </div>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        });
+
+                        // Overflow pills for hidden lanes ("+N more")
+                        const pills = overflowClusters.map((cluster, ci) => {
+                          const startIdx = date_columns.findIndex(c => c.date >= cluster.check_in);
+                          const endIdx = date_columns.findIndex(c => c.date >= cluster.check_out);
+                          const si = startIdx >= 0 ? startIdx : 0;
+                          const ei = endIdx >= 0 ? endIdx : date_columns.length;
+                          const left = si * COL_W + 4;
+                          const width = Math.max((ei - si) * COL_W - 8, COL_W * 0.5);
+                          return (
+                            <button
+                              key={`cluster-${ci}`}
+                              onClick={(e) => { e.stopPropagation(); setCollisionCluster({ room, cluster }); }}
+                              data-testid={`collision-pill-${room.id}-${ci}`}
+                              title={`${cluster.items.length} more overlapping booking${cluster.items.length === 1 ? "" : "s"} in ${room.name}: ${cluster.items.map(b => b.guest_name).join(", ")}`}
+                              className="absolute bottom-0.5 z-20 bg-gradient-to-br from-rose-600 via-red-600 to-rose-700 text-white text-[10px] font-bold rounded-full px-2 py-0.5 shadow-lg shadow-rose-400/40 ring-2 ring-white hover:from-rose-700 hover:to-rose-800 transition-all flex items-center gap-1 hover:scale-105"
+                              style={{ left, maxWidth: width }}
+                            >
+                              <AlertTriangle className="w-2.5 h-2.5" />
+                              <span className="truncate">+{cluster.items.length} more</span>
+                            </button>
+                          );
+                        });
+
+                        return <>{bars}{pills}</>;
+                      })()}
                     </div>
                   </div>
                 ))}
@@ -685,6 +784,56 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           })}
         </div>
       </div>
+
+      {/* Collision Cluster Modal — "+N more" hidden bookings */}
+      {collisionCluster && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setCollisionCluster(null)} data-testid="collision-modal">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-rose-500 via-red-600 to-rose-700 px-5 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-white text-base">Overlapping Bookings</h3>
+                <p className="text-[11px] text-rose-100">{collisionCluster.room.name} · {collisionCluster.cluster.items.length} booking{collisionCluster.cluster.items.length === 1 ? "" : "s"} collide in {collisionCluster.cluster.check_in} → {collisionCluster.cluster.check_out}</p>
+              </div>
+              <button onClick={() => setCollisionCluster(null)} className="p-1 hover:bg-white/20 rounded-lg" data-testid="collision-close"><X className="w-4 h-4 text-white" /></button>
+            </div>
+            <div className="max-h-96 overflow-auto divide-y divide-stone-100">
+              {collisionCluster.cluster.items.map(bk => {
+                const sc = STATUS_COLORS[resolveDisplayStatus(bk)] || STATUS_COLORS.confirmed;
+                const src = bk.source || bk.source_code || "";
+                return (
+                  <button
+                    key={bk.id}
+                    onClick={() => { setCollisionCluster(null); openDetail(bk.id); }}
+                    data-testid={`collision-item-${bk.id}`}
+                    className="w-full px-5 py-3 flex items-center gap-3 hover:bg-rose-50/60 text-left transition-colors"
+                  >
+                    <div className={`w-1 h-10 rounded-full ${getSourceStrip(src)} flex-shrink-0`}></div>
+                    <PlatformLogo source={src} size={20} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-stone-800 text-sm truncate">{bk.guest_name}</div>
+                      <div className="text-[11px] text-stone-500 truncate">{bk.check_in} → {bk.check_out} · {bk.nights}n · {src || "Direct"}</div>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <Badge className={`${sc.bar} ${sc.text} text-[9px] border-0`}>{sc.label}</Badge>
+                      <div className="text-xs font-bold font-mono text-stone-700 mt-1">{cur(bk.total_price)}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="p-3 bg-stone-50 border-t border-stone-100 flex items-center justify-between">
+              <span className="text-[11px] text-stone-500 flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
+                Tip: drag a booking to another room to resolve the collision.
+              </span>
+              <button onClick={() => setCollisionCluster(null)} className="text-xs font-semibold text-stone-600 hover:text-stone-900" data-testid="collision-close-btn">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Booking Detail Slide-Over */}
       {selectedBooking && detailData && (

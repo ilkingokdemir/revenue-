@@ -1,6 +1,14 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 75+ Modules | Mobile Responsive | 132 Test Iterations (100%)
+## 76+ Modules | Mobile Responsive | 133 Test Iterations (100%)
+
+### Iter 134: Arrivals Cockpit — Contactless Guest Journey
+- One-pane command centre for every incoming guest's progress across **Link Sent → Registered → ID Verified → Paid → Digital Key Issued**
+- `GET /api/arrivals/{pid}?window=today|7d|30d|all&q=…` — aggregates bookings + guest_registrations + digital_keys into one payload with counters and per-booking `progress{}` + `stage` (0-5)
+- `POST /api/arrivals/{bid}/mark-paid` (admin|manager), `POST /api/arrivals/{bid}/issue-key` (paid-gate, 8-char code + expiry), `POST /api/arrivals/{bid}/revoke-key`
+- Frontend cockpit: emerald hero, 5 KPI cards with coverage bars, window tabs + search, table with avatar + source + 5-dot progress tracker + context-aware action buttons, per-row QR modal (QRCodeSVG of registration link) and amber digital-key-code modal
+- Navigation entry `arrivals-btn` in Operations section
+- Tested end-to-end iteration 133 (22/22 backend + full frontend)
 
 ### Iter 133: AI Picks — GPT-5.2 Marketplace Recommender
 - Dark indigo "AI Picks · GPT-5.2" strip on top of the Marketplace
@@ -42,8 +50,7 @@
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Contactless Guest Journey / Self-Service Kiosks (from Mews benchmark)
-- Maintenance Issues (Kanban/Table tracking)
+- Maintenance Issues Kanban
 - User Contracts & granular Roles/Permissions
 - System Feedback & internal Bug Tracker
 

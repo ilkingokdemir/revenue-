@@ -527,6 +527,9 @@ roles_router = create_roles_router(db, require_roles, get_current_user)
 api_router.include_router(roles_router)
 imports_router = create_imports_router(db, require_roles, get_current_user)
 api_router.include_router(imports_router)
+from routes.audit_trail import create_audit_trail_router
+audit_trail_router = create_audit_trail_router(db)
+api_router.include_router(audit_trail_router)
 
 app.include_router(api_router)
 

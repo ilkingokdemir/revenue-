@@ -120,6 +120,7 @@ def require_perm(*perm_keys, mode: str = "any"):
         current_user: dict = Depends(require_perm("approve_payroll_runs"))
         current_user: dict = Depends(require_perm("view_bookings","edit_bookings", mode="all"))
     Always allows role==admin (legacy back-compat).
+    Logs every denied attempt to db.audit_trail for enterprise security visibility.
     """
     async def perm_checker(request: Request):
         user = await get_current_user(request)
@@ -131,6 +132,28 @@ def require_perm(*perm_keys, mode: str = "any"):
         ok = needed.issubset(perms) if mode == "all" else bool(needed & perms)
         if not ok:
             missing = list(needed - perms)
+            # Record the denied attempt (fire-and-forget; do not crash on insert failure)
+            try:
+                await db.audit_trail.insert_one({
+                    "ts": datetime.now(timezone.utc).isoformat(),
+                    "user_id": user.get("_id"),
+                    "user_email": user.get("email"),
+                    "user_name": user.get("name"),
+                    "user_role": user.get("role"),
+                    "user_role_key": user.get("role_key"),
+                    "method": request.method,
+                    "path": str(request.url.path),
+                    "query": str(request.url.query),
+                    "client_ip": (request.client.host if request.client else None),
+                    "user_agent": request.headers.get("user-agent", "")[:300],
+                    "required_perms": list(needed),
+                    "mode": mode,
+                    "user_perms_count": len(perms),
+                    "missing_perms": missing,
+                    "result": "denied",
+                })
+            except Exception:
+                pass
             raise HTTPException(
                 status_code=403,
                 detail=f"Missing permission{'s' if len(missing) > 1 else ''}: {', '.join(missing[:3])}"

@@ -20,6 +20,7 @@ import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel"
 import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardingAdminPanel";
 import { PayrollRateMatrix } from "./components/dashboard/PayrollRateMatrix";
 import { BugTrackerPanel } from "./components/dashboard/BugTrackerPanel";
+import { AuditTrailPanel } from "./components/dashboard/AuditTrailPanel";
 import { RolesPermissionsPanel } from "./components/dashboard/RolesPermissionsPanel";
 import { ImportModulePanel } from "./components/dashboard/ImportModulePanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
@@ -2657,6 +2658,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "roles-permissions", icon: ShieldCheck, name: "Roles & Permissions", testId: "roles-permissions-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "import-module", icon: Upload, name: "Import Module", testId: "import-module-btn" }] : []),
+        ...(user?.role === "admin" ? [{ id: "audit-trail", icon: ShieldCheck, name: "Audit Trail", testId: "audit-trail-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings Hub", testId: "settings-hub-btn" }] : []),
         { id: "bug-tracker", icon: Bug, name: "Bug Tracker", testId: "bug-tracker-btn" },
       ]
@@ -2757,6 +2759,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "settings-hub-btn":       "settings_users_view",
     "bug-tracker-btn":        "system_feedback_view",
     "import-module-btn":      "settings_import_module_view",
+    "audit-trail-btn":        "settings_roles_view",
   };
 
   const menuPerms = permissions?.menu_permissions;
@@ -3396,6 +3399,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Import Module */}
         {activeView === "import-module" && (
           <div className="p-6"><ImportModulePanel user={user} /></div>
+        )}
+
+        {/* Audit Trail */}
+        {activeView === "audit-trail" && (
+          <div className="p-6"><AuditTrailPanel user={user} /></div>
         )}
       </main>
 

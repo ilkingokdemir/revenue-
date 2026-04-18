@@ -2,6 +2,37 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 158: Audit Trail Panel — enterprise security visibility (user request)
+
+Built a complete audit trail system that logs every permission-denied request and surfaces it in a dedicated Admin-only panel. Competitors like Eviivo/Mews do NOT visualize RBAC denials — this becomes a differentiating enterprise screenshot.
+
+**Backend** (`/app/backend/auth.py`, `/app/backend/routes/audit_trail.py`):
+- `require_perm` now writes a document to `db.audit_trail` on every denial: ts, user (id/email/name/role/role_key), request (method/path/query/ip/ua), required perms, mode, missing perms, user's total perm count, result.
+- Fire-and-forget insert (wrapped in try/except) so logging failure never breaks the request flow.
+- New endpoints:
+  - `GET /api/audit-trail` — filterable list (user_email, result, path_contains, days, limit ≤ 1000) — Admin-only
+  - `GET /api/audit-trail/stats?days=N` — aggregated KPIs: total/denied/allowed counts, top 10 offending users, top 10 blocked paths, daily denial trend, top 10 missing perms
+  - `DELETE /api/audit-trail/purge?older_than_days=90` — retention control (Admin-only, min 7 days)
+- Non-admin users receive 403 on every audit endpoint (self-verified via housekeeper token).
+
+**Frontend** (`/app/frontend/src/components/dashboard/AuditTrailPanel.js`, 440 lines):
+- Rose/red themed header with Shield icon matching "checked-in = warm-alert" semantic
+- 4 KPI cards: Total events, Denied (rose-highlighted when > 0), Distinct blocked users, Peak day denials
+- 3-column intelligence strip: **Top offenders** (click to filter by email), **Top blocked endpoints** (click to filter by path), **Most missing permissions** with percentage bars
+- **Daily denial trend** — CSS bar chart with hover tooltips showing per-day counts
+- Filter bar: search (user/path/perm), email contains, path contains, result selector, window selector (1/7/30/90 days), clear button
+- Log table with method badges (GET/POST/PUT/DELETE color-coded), role dots, missing-perm chips (first 2 + "+N"), DENIED result badge, click-to-open detail drawer
+- Detail drawer: user info, request signature, required perms, missing perms (in red), current user perm count, client IP/user agent, remediation hint
+- Purge button (admin action, confirms before deleting > 90-day entries)
+
+**Plumbing:**
+- Added sidebar entry `audit-trail-btn` (Admin-only via role check, ShieldCheck icon)
+- Added `SIDEBAR_PERM_MAP["audit-trail-btn"] = "settings_roles_view"` so non-admin managers with the perm can see it once RBAC v2 adopters roll out
+- Added route handler `activeView === "audit-trail"` in App.js
+
+**Verified live:** After triggering 4 denials from `testhk@hotelbox.com`, panel correctly rendered 4 events, top offender (Test Housekeeper × 4, 3m ago), top paths with counts, most missing perms (delete_bookings × 2, view_bookings × 1, manage_room_categories × 1), daily trend bar, and populated log table with color-coded method chips. Screenshot captured.
+
+
 ### Iter 157: Bookings API RBAC migration (P0 — legacy `require_roles` → granular `require_perm`)
 
 Migrated 40+ sensitive mutation endpoints in `/app/backend/routes/bookings.py` from legacy role-based checks to the granular permission system introduced in iter 152. Pattern applied:

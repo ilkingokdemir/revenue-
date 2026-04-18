@@ -92,13 +92,41 @@ def create_staff_onboarding_router(db, require_roles, get_current_user, resend_l
 
         doc["progress"] = _onboarding_status(doc)
         doc["hmrc_statements"] = HMRC_STATEMENTS
-        return doc
+
+        # Security: staff must NOT be able to retrieve what they uploaded or what they submitted.
+        # Only admin/manager can view those via the admin download endpoints.
+        # Strip file URLs, filenames, paths, and the HMRC data itself from the staff-facing response.
+        safe = {k: v for k, v in doc.items() if k not in (
+            "passport_filename", "passport_path", "passport_url", "passport_uploaded_at",
+            "address_proof_filename", "address_proof_path", "address_proof_url", "address_proof_uploaded_at",
+            "hmrc_data", "email_log",
+        )}
+        return safe
+
+    # -------- SERVE UPLOADED DOC (admin|manager only) --------
+    # Registered BEFORE the public /api/uploads static mount so auth kicks in first.
+    @router.get("/uploads/onboarding/{filename}")
+    async def serve_onboarding_file(filename: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        # Restrict path traversal
+        if "/" in filename or "\\" in filename or ".." in filename:
+            raise HTTPException(400, "Invalid filename")
+        path = os.path.join(UPLOAD_DIR, filename)
+        if not os.path.exists(path):
+            raise HTTPException(404, "File not found")
+        return FileResponse(path, filename=filename)
 
     # -------- UPLOAD PASSPORT --------
     @router.post("/staff-onboarding/upload/passport")
     async def upload_passport(file: UploadFile = File(...),
                               current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id")
+        # Prevent re-upload once staff has already submitted
+        existing = await db.staff_onboarding.find_one(
+            {"user_id": user_id, "passport_uploaded": True}, {"_id": 0, "passport_uploaded": 1}
+        )
+        if existing:
+            raise HTTPException(400, "ID / Passport already submitted and locked. Contact your admin to change it.")
         ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "jpg"
         if ext not in {"jpg", "jpeg", "png", "pdf", "heic", "webp"}:
             raise HTTPException(400, "Unsupported file type")
@@ -126,6 +154,11 @@ def create_staff_onboarding_router(db, require_roles, get_current_user, resend_l
     async def upload_address(file: UploadFile = File(...),
                              current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id")
+        existing = await db.staff_onboarding.find_one(
+            {"user_id": user_id, "address_proof_uploaded": True}, {"_id": 0, "address_proof_uploaded": 1}
+        )
+        if existing:
+            raise HTTPException(400, "Address proof already submitted and locked. Contact your admin to change it.")
         ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "jpg"
         if ext not in {"jpg", "jpeg", "png", "pdf", "heic", "webp"}:
             raise HTTPException(400, "Unsupported file type")
@@ -153,6 +186,12 @@ def create_staff_onboarding_router(db, require_roles, get_current_user, resend_l
     async def submit_hmrc(data: Dict,
                           current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id")
+        # Prevent re-submission once the declaration has been signed
+        existing = await db.staff_onboarding.find_one(
+            {"user_id": user_id, "hmrc_submitted": True}, {"_id": 0, "hmrc_submitted": 1}
+        )
+        if existing:
+            raise HTTPException(400, "HMRC Starter Checklist already submitted and locked. Contact your admin to correct any details.")
         # Required fields per HMRC 09/22 Starter Checklist
         required = ["last_name", "first_names", "sex", "dob",
                     "home_address", "postcode", "start_date",

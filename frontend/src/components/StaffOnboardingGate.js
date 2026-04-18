@@ -182,10 +182,10 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
     );
   };
 
-  const UploadedChip = ({ filename }) => (
+  const UploadedChip = ({ label }) => (
     <div className="mt-3 flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-lg p-2.5">
       <CheckCircle2 className="w-4 h-4" />
-      <span>Uploaded: <span className="font-semibold">{filename}</span></span>
+      <span>{label} received · <span className="font-semibold">locked</span></span>
     </div>
   );
 
@@ -227,7 +227,13 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
               <p className="text-[12px] text-stone-500 mb-4">We need a clear photo or scan. Accepted: JPG, PNG, PDF, HEIC (max 10MB).</p>
 
               {status.passport_uploaded ? (
-                <UploadedChip filename={status.passport_filename} />
+                <>
+                  <UploadedChip label="ID / Passport" />
+                  <p className="text-[10px] text-stone-400 mt-2 leading-relaxed">
+                    For your security this document is now sealed. You can't re-open, re-upload or delete it.
+                    If you've made a mistake, please ask your admin to reset this step.
+                  </p>
+                </>
               ) : (
                 <div className="border-2 border-dashed border-stone-200 rounded-xl p-8 text-center">
                   <Camera className="w-10 h-10 mx-auto text-stone-400 mb-2" />
@@ -249,13 +255,6 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
                   </div>
                 </div>
               )}
-
-              {status.passport_url && (
-                <div className="mt-3">
-                  <a href={`${process.env.REACT_APP_BACKEND_URL}${status.passport_url}`} target="_blank" rel="noreferrer"
-                     className="text-xs text-blue-600 hover:underline">View uploaded document ↗</a>
-                </div>
-              )}
             </div>
           )}
 
@@ -266,7 +265,13 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
               <p className="text-[12px] text-stone-500 mb-4">Utility bill, bank statement or council tax letter dated within the last 3 months.</p>
 
               {status.address_proof_uploaded ? (
-                <UploadedChip filename={status.address_proof_filename} />
+                <>
+                  <UploadedChip label="Address proof" />
+                  <p className="text-[10px] text-stone-400 mt-2 leading-relaxed">
+                    For your security this document is now sealed. You can't re-open, re-upload or delete it.
+                    If you've made a mistake, please ask your admin to reset this step.
+                  </p>
+                </>
               ) : (
                 <div className="border-2 border-dashed border-stone-200 rounded-xl p-8 text-center">
                   <FileText className="w-10 h-10 mx-auto text-stone-400 mb-2" />
@@ -288,25 +293,41 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
                   </div>
                 </div>
               )}
-              {status.address_proof_url && (
-                <div className="mt-3">
-                  <a href={`${process.env.REACT_APP_BACKEND_URL}${status.address_proof_url}`} target="_blank" rel="noreferrer"
-                     className="text-xs text-blue-600 hover:underline">View uploaded document ↗</a>
-                </div>
-              )}
             </div>
           )}
 
           {/* HMRC STARTER CHECKLIST — mirrors HMRC 09/22 form */}
-          {tab === "hmrc" && (
-            <div data-testid="tab-hmrc" className="space-y-5">
+          {tab === "hmrc" && status.hmrc_submitted && (
+            <div data-testid="tab-hmrc-sealed" className="space-y-4">
               <div className="flex items-start gap-3 bg-gradient-to-br from-stone-50 to-stone-100 border border-stone-200 rounded-xl p-3">
                 <div className="text-[10px] leading-tight">
                   <p className="font-black text-stone-800 uppercase tracking-wider">HM Revenue & Customs</p>
                   <p className="text-stone-500">Starter checklist · HMRC 09/22</p>
                 </div>
                 <div className="ml-auto text-right">
-                  {status.hmrc_submitted && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">SUBMITTED</Badge>}
+                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">SUBMITTED & LOCKED</Badge>
+                </div>
+              </div>
+              <div className="border-2 border-emerald-200 rounded-xl bg-emerald-50 p-6 text-center">
+                <CheckCircle2 className="w-14 h-14 mx-auto text-emerald-500 mb-2" />
+                <h3 className="text-base font-black text-stone-800">Checklist signed and submitted</h3>
+                <p className="text-[12px] text-stone-600 mt-1 max-w-md mx-auto leading-relaxed">
+                  Thank you. Your HMRC Starter Checklist has been recorded and digitally signed.
+                  For your security and HMRC audit requirements, the form is now sealed and cannot be
+                  re-opened or re-submitted from your account.
+                </p>
+                <p className="text-[11px] text-stone-500 mt-3">
+                  If any detail is incorrect, please ask your admin to reset this step.
+                </p>
+              </div>
+            </div>
+          )}
+          {tab === "hmrc" && !status.hmrc_submitted && (
+            <div data-testid="tab-hmrc" className="space-y-5">
+              <div className="flex items-start gap-3 bg-gradient-to-br from-stone-50 to-stone-100 border border-stone-200 rounded-xl p-3">
+                <div className="text-[10px] leading-tight">
+                  <p className="font-black text-stone-800 uppercase tracking-wider">HM Revenue & Customs</p>
+                  <p className="text-stone-500">Starter checklist · HMRC 09/22</p>
                 </div>
               </div>
               <p className="text-[12px] text-stone-600 leading-relaxed">
@@ -485,7 +506,7 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
               </section>
 
               <Button onClick={submitHMRC} disabled={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10" data-testid="hmrc-submit">
-                {submitting ? "Submitting..." : status.hmrc_submitted ? "Update HMRC details" : "Submit HMRC starter checklist"}
+                {submitting ? "Submitting..." : "Submit HMRC starter checklist"}
               </Button>
             </div>
           )}

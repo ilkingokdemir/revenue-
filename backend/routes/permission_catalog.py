@@ -17,6 +17,164 @@ def _p(key: str, label: str, menu: bool = False, missing: bool = False) -> Dict:
     return {"key": key, "label": label, "menu": menu, "missing": missing}
 
 
+# ======================================================================
+# Permission metadata overlay — risk levels, dependencies, categorisation
+# Applied on top of the declarative catalog so we don't have to touch
+# every entry. Anything not listed defaults to risk=low, implies=[].
+# ======================================================================
+# Risk levels: "critical" (destructive, money, access), "high" (sensitive), "medium" (everyday writes)
+PERMISSION_RISK: Dict[str, str] = {
+    # Destructive
+    "delete_bookings": "critical", "cancel_bookings": "high",
+    "delete_users": "critical", "delete_roles": "critical", "delete_branches": "critical",
+    "delete_rooms": "high", "delete_rate_plans": "high", "delete_taxes": "critical",
+    "delete_housekeeping_tasks": "medium", "delete_maintenance": "medium",
+    "delete_shifts": "medium", "delete_group_blocks": "medium",
+    "delete_webhooks": "high", "delete_secrets": "critical",
+    "delete_payroll_runs": "critical", "delete_payroll_adjustments": "high",
+    "delete_cash_advances": "high", "delete_exports": "medium",
+    "delete_document_types": "medium", "delete_charge_types": "medium",
+    "delete_booking_sources": "medium", "delete_cancellation_policies": "high",
+    "delete_channel_connections": "critical", "delete_channel_mappings": "high",
+    "delete_experiments": "medium", "delete_playbooks": "medium",
+    "delete_normalization_rules": "medium", "delete_parity_observations": "medium",
+    "delete_action_items": "medium", "delete_cost_models": "high",
+    "delete_user_contracts": "high", "delete_booking_documents": "high",
+    "delete_revenue_segments": "medium", "delete_adjustment_categories": "medium",
+    # Money / approval
+    "approve_payroll_runs": "critical", "mark_commissions_paid": "critical",
+    "process_refunds": "critical", "submit_commission_payables": "high",
+    "manage_expenses": "high", "run_recurring_expenses": "high",
+    "generate_laundry_contract_expenses": "high",
+    "create_payroll_runs": "high", "edit_payroll_runs": "high",
+    # Sensitive state transitions
+    "promote_experiment_winners": "high", "start_experiments": "medium",
+    "run_playbooks": "high", "apply_action_items": "high",
+    "trigger_rate_sync": "high", "trigger_inventory_sync": "medium",
+    "rebuild_inventory": "high", "bulk_update_rate_calendar": "high",
+    "manage_overbooking_policies": "high", "run_overbooking_simulations": "medium",
+    # Data exfiltration
+    "export_audit_logs": "high", "export_profit_data": "high",
+    "download_exports": "high", "create_exports": "medium",
+    # Secrets / security
+    "view_secrets": "critical", "create_secrets": "critical",
+    "edit_secrets": "critical", "edit_retention_policies": "high",
+    # Admin-only meta
+    "create_users": "high", "edit_users": "high",
+    "create_roles": "critical", "edit_roles": "critical",
+    "manage_property_compliance_categories": "high",
+    "verify_maintenance": "medium", "audit_housekeeping_tasks": "medium",
+    "finalize_laundry_audits": "medium",
+}
+
+# Dependencies — if you grant X, you almost certainly need Y too
+# (UI will warn; doesn't block)
+PERMISSION_IMPLIES: Dict[str, List[str]] = {
+    # Create/Edit/Delete imply View
+    "edit_bookings": ["view_bookings", "bookings_view"],
+    "create_bookings": ["view_bookings", "bookings_view"],
+    "delete_bookings": ["view_bookings", "bookings_view"],
+    "confirm_bookings": ["view_bookings"],
+    "checkin_bookings": ["view_bookings"],
+    "checkout_bookings": ["view_bookings"],
+    "cancel_bookings": ["view_bookings"],
+    "assign_rooms": ["view_bookings"],
+    "process_refunds": ["view_refunds", "view_bookings"],
+    "edit_rate_calendar": ["view_rate_calendar", "rates_calendar_view"],
+    "bulk_update_rate_calendar": ["edit_rate_calendar", "view_rate_calendar"],
+    "rebuild_inventory": ["view_inventory"],
+    "edit_inventory": ["view_inventory"],
+    "create_rate_plans": ["view_rate_plans", "settings_rate_plans_view"],
+    "edit_rate_plans": ["view_rate_plans"],
+    "delete_rate_plans": ["view_rate_plans"],
+    "create_group_blocks": ["view_group_blocks", "bookings_groups_view"],
+    "edit_group_blocks": ["view_group_blocks"],
+    "delete_group_blocks": ["view_group_blocks"],
+    "assign_housekeeping_tasks": ["view_housekeeping_tasks", "housekeeping_view"],
+    "approve_housekeeping_tasks": ["view_housekeeping_tasks"],
+    "audit_housekeeping_tasks": ["view_housekeeping_tasks"],
+    "start_maintenance": ["view_maintenance", "maintenance_view"],
+    "complete_maintenance": ["view_maintenance", "start_maintenance"],
+    "verify_maintenance": ["view_maintenance", "complete_maintenance"],
+    "approve_payroll_runs": ["view_payroll_runs", "finance_payroll_runs_view"],
+    "edit_payroll_runs": ["view_payroll_runs"],
+    "mark_commissions_paid": ["view_commissions", "reports_commission_view"],
+    "submit_commission_payables": ["view_commissions", "create_commission_payables"],
+    "run_recurring_expenses": ["view_recurring_expenses", "finance_recurring_expenses_view"],
+    "manage_expenses": ["view_expenses", "finance_expenses_view"],
+    "manage_own_expenses": ["view_expenses"],
+    "start_experiments": ["view_experiments", "revenue_experiments_view"],
+    "pause_experiments": ["view_experiments", "start_experiments"],
+    "promote_experiment_winners": ["view_experiments", "start_experiments"],
+    "run_playbooks": ["view_playbooks", "revenue_playbooks_view"],
+    "apply_action_items": ["view_action_items", "revenue_action_center_view"],
+    "dismiss_action_items": ["view_action_items"],
+    "acknowledge_benchmark_alerts": ["view_benchmark", "channel_manager_benchmark_view"],
+    "acknowledge_parity_violations": ["view_parity", "revenue_parity_view"],
+    "detect_parity_violations": ["view_parity"],
+    "export_audit_logs": ["view_audit_logs", "channel_manager_audit_logs_view"],
+    "export_profit_data": ["view_profit_reports", "revenue_profit_os_view"],
+    "download_exports": ["view_exports", "settings_exports_view"],
+    "create_channel_mappings": ["view_channel_mappings", "channel_manager_mapping_view"],
+    "test_channel_connections": ["view_channel_connections"],
+    "trigger_inventory_sync": ["view_sync_status", "channel_manager_sync_view"],
+    "trigger_rate_sync": ["view_sync_status"],
+    "resolve_sync_errors": ["view_sync_status"],
+    "generate_laundry_contract_expenses": ["view_laundry_contracts", "laundry_contracts_view"],
+    "manage_laundry_contracts": ["view_laundry_contracts"],
+    "manage_laundry_stock": ["view_laundry_stock"],
+    "finalize_laundry_audits": ["view_laundry_audits", "create_laundry_audits"],
+    "verify_laundry_daily_usage": ["view_laundry_daily_usage"],
+    "verify_laundry_orders": ["view_laundry_orders"],
+    "verify_laundry_deliveries": ["view_laundry_deliveries"],
+    "verify_laundry_dispatch": ["view_laundry_dispatch"],
+    "manage_property_compliance": ["view_property_compliance", "operations_compliance_view"],
+    "manage_property_compliance_categories": ["manage_property_compliance"],
+    "manage_room_categories": ["view_room_categories"],
+    "manage_laundry_items": ["view_laundry_items"],
+    "manage_laundry_providers": ["view_laundry_providers"],
+    "manage_expense_categories": ["view_expense_categories"],
+    "manage_benchmark_alert_rules": ["view_benchmark"],
+    "manage_overbooking_policies": ["view_overbooking"],
+    "import_parity_observations": ["create_parity_observations", "view_parity_observations"],
+    "edit_normalization_rules": ["view_normalization_rules"],
+    "delete_normalization_rules": ["view_normalization_rules"],
+    "edit_roles": ["view_roles", "settings_roles_view"],
+    "create_roles": ["view_roles"],
+    "delete_roles": ["view_roles"],
+    "edit_users": ["view_users"],
+    "create_users": ["view_users"],
+    "delete_users": ["view_users"],
+}
+
+
+def get_risk(key: str) -> str:
+    return PERMISSION_RISK.get(key, "low")
+
+
+def get_implies(key: str) -> List[str]:
+    return PERMISSION_IMPLIES.get(key, [])
+
+
+def enrich_catalog() -> List[Dict]:
+    """Return a deep-copy of PERMISSION_CATALOG with risk + implies fields merged in."""
+    out = []
+    for cat in PERMISSION_CATALOG:
+        new_cat = {**cat, "sub_groups": []}
+        for sg in cat["sub_groups"]:
+            new_sg = {**sg, "permissions": []}
+            for p in sg["permissions"]:
+                new_sg["permissions"].append({
+                    **p,
+                    "risk": get_risk(p["key"]),
+                    "implies": get_implies(p["key"]),
+                })
+            new_cat["sub_groups"].append(new_sg)
+        out.append(new_cat)
+    return out
+
+
+
 PERMISSION_CATALOG: List[Dict] = [
     # ---------- DASHBOARD ----------
     {"key": "dashboard", "label": "Dashboard", "icon": "home", "sub_groups": [

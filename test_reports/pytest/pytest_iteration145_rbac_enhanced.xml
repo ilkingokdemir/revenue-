@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="21" time="73.925" timestamp="2026-04-18T19:45:30.131711+00:00" hostname="agent-env-a9d7a5c1-de72-4617-a5b9-ed7dde4401f0"><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestEnrichedCatalog" name="test_catalog_requires_auth" time="0.225" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestEnrichedCatalog" name="test_catalog_returns_enriched_permissions" time="0.505" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestEnrichedCatalog" name="test_delete_bookings_has_critical_risk" time="0.137" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestEnrichedCatalog" name="test_create_bookings_implies_view_bookings" time="0.209" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestEnrichedCatalog" name="test_risk_levels_distribution" time="0.135" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestAISuggestEndpoint" name="test_ai_suggest_requires_auth" time="0.105" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestAISuggestEndpoint" name="test_ai_suggest_requires_admin_role" time="15.742" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestAISuggestEndpoint" name="test_ai_suggest_rejects_short_description" time="0.135" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestAISuggestEndpoint" name="test_ai_suggest_returns_valid_response" time="30.081"><failure message="requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='review-hub-108.preview.emergentagent.com', port=443): Read timed out. (read timeout=30)">/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:534: in _make_request
+    response = conn.getresponse()
+               ^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/connection.py:571: in getresponse
+    httplib_response = super().getresponse()
+                       ^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:1415: in getresponse
+    response.begin()
+/usr/local/lib/python3.11/http/client.py:330: in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/http/client.py:291: in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/socket.py:718: in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/ssl.py:1314: in recv_into
+    return self.read(nbytes, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.11/ssl.py:1166: in read
+    return self._sslobj.read(len, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TimeoutError: The read operation timed out
+
+The above exception was the direct cause of the following exception:
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:645: in send
+    resp = conn.urlopen(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:841: in urlopen
+    retries = retries.increment(
+/root/.venv/lib/python3.11/site-packages/urllib3/util/retry.py:490: in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/urllib3/util/util.py:39: in reraise
+    raise value
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:536: in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=read_timeout)
+/root/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py:367: in _raise_timeout
+    raise ReadTimeoutError(
+E   urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='review-hub-108.preview.emergentagent.com', port=443): Read timed out. (read timeout=30)
+
+During handling of the above exception, another exception occurred:
+backend/tests/test_iteration145_rbac_enhanced.py:175: in test_ai_suggest_returns_valid_response
+    resp = requests.post(f"{BASE_URL}/api/rbac/ai-suggest", headers=admin_headers, json={
+/root/.venv/lib/python3.11/site-packages/requests/api.py:115: in post
+    return request("post", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/api.py:59: in request
+    return session.request(method=method, url=url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:592: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/sessions.py:706: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/root/.venv/lib/python3.11/site-packages/requests/adapters.py:691: in send
+    raise ReadTimeout(e, request=request)
+E   requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='review-hub-108.preview.emergentagent.com', port=443): Read timed out. (read timeout=30)</failure></testcase><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestAISuggestEndpoint" name="test_ai_suggest_drops_invalid_permissions" time="23.515" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestExistingRBACEndpoints" name="test_list_roles" time="0.231" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestExistingRBACEndpoints" name="test_create_role" time="0.237" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestExistingRBACEndpoints" name="test_get_role" time="0.373" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestExistingRBACEndpoints" name="test_update_role" time="0.422" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestExistingRBACEndpoints" name="test_clone_role" time="0.567" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestExistingRBACEndpoints" name="test_delete_role" time="0.379" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestPermissionRiskMapping" name="test_critical_risk_permissions" time="0.141" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestPermissionRiskMapping" name="test_high_risk_permissions" time="0.142" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestPermissionImpliesMapping" name="test_edit_bookings_implies" time="0.140" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestPermissionImpliesMapping" name="test_approve_payroll_implies" time="0.142" /><testcase classname="backend.tests.test_iteration145_rbac_enhanced.TestPermissionImpliesMapping" name="test_edit_roles_implies" time="0.130" /></testsuite></testsuites>

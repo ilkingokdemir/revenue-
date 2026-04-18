@@ -32,6 +32,8 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
             raise HTTPException(status_code=400, detail=f"Invalid department. Must be one of: {', '.join(VALID_DEPARTMENTS)}")
 
         hashed = hash_password(user.password)
+        # Admins + managers are activated instantly. Other staff roles must complete onboarding.
+        needs_onboarding = user.role not in ("admin", "manager")
         new_user = {
             "id": str(__import__('uuid').uuid4()),
             "email": email,
@@ -40,16 +42,19 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
             "role": user.role,
             "department": user.department,
             "is_active": True,
+            "is_activated": not needs_onboarding,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         result = await db.users.insert_one(new_user)
         return {
-            "id": str(result.inserted_id),
+            "id": new_user["id"],
             "email": email,
             "name": user.name,
             "role": user.role,
             "department": user.department,
-            "is_active": True
+            "is_active": True,
+            "is_activated": not needs_onboarding,
+            "needs_onboarding": needs_onboarding,
         }
 
     @router.post("/auth/login")
@@ -94,6 +99,7 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
             "name": db_user["name"],
             "role": db_user["role"],
             "department": db_user.get("department", "front_desk"),
+            "is_activated": db_user.get("is_activated", True),
             "token": access_token
         }
 
@@ -105,7 +111,8 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
             "name": current_user["name"],
             "role": current_user["role"],
             "department": current_user.get("department", "front_desk"),
-            "is_active": current_user.get("is_active", True)
+            "is_active": current_user.get("is_active", True),
+            "is_activated": current_user.get("is_activated", True)
         }
 
     @router.post("/auth/logout")

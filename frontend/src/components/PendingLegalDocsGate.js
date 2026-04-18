@@ -22,6 +22,9 @@ export const PendingLegalDocsGate = ({ user }) => {
 
   useEffect(() => {
     if (!user) return;
+    // Only fetch pending legal docs for activated users (during onboarding, the Onboarding Gate
+    // takes priority — legal acceptance happens after the user is fully activated).
+    if (user.is_activated === false) { setLoaded(true); return; }
     (async () => {
       try {
         const { data } = await axios.get(`${API}/legal-documents/pending/me`);

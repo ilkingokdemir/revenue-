@@ -104,6 +104,7 @@ from routes.marketplace import create_marketplace_router
 from routes.arrivals import create_arrivals_router
 from routes.contracts import create_contracts_router
 from routes.legal_documents import create_legal_documents_router
+from routes.staff_onboarding import create_staff_onboarding_router
 
 # Import extracted modules
 from models import (
@@ -221,6 +222,7 @@ async def seed_admin():
             "role": "admin",
             "department": "management",
             "is_active": True,
+            "is_activated": True,
             "created_at": datetime.now(timezone.utc).isoformat()
         })
         logger.info(f"Admin user seeded: {admin_email}")
@@ -511,6 +513,8 @@ contracts_router = create_contracts_router(db, require_roles)
 api_router.include_router(contracts_router)
 legal_docs_router = create_legal_documents_router(db, require_roles, get_current_user)
 api_router.include_router(legal_docs_router)
+onboarding_router = create_staff_onboarding_router(db, require_roles, get_current_user)
+api_router.include_router(onboarding_router)
 
 app.include_router(api_router)
 

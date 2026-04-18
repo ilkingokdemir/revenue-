@@ -19,6 +19,7 @@ import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
 import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
+import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
 import { ContractSigningPage } from "./components/public/ContractSigningPage";
 import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
 import { ReportsSettings } from "./components/dashboard/ReportsSettings";
@@ -3323,6 +3324,15 @@ function MainApp() {
   return (
     <div className="App">
       <Dashboard user={user} onLogout={handleLogout} />
+      <StaffOnboardingGate
+        user={user}
+        onActivated={async () => {
+          try {
+            const { data } = await axios.get(`${API}/auth/me`);
+            setUser(data);
+          } catch { /* silent */ }
+        }}
+      />
       <PendingLegalDocsGate user={user} />
     </div>
   );

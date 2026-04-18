@@ -2,6 +2,32 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 152: AI Column Mapping — Import Module gets its magic moment
+Regex auto-map returns `{}` on foreign-language headers like `Apellido Completo`, `Fecha Nacimiento`, `Correo Electronico`. GPT-5.2 maps them all.
+
+**Backend (`POST /api/imports/ai-map`):**
+- Input: `{file_token, entity}` — reuses cached parse result
+- Prompts GPT-5.2 with: CSV headers, 3 sample rows (for semantic context), canonical fields + descriptions (28 field types documented), required fields hint
+- Handles: foreign languages (ES/JP/AR in our live test), abbreviations (`Tel#`→phone, `Rm`→room_number), typos (`Naem`→name), concatenations (`CheckInDate`→check_in), punctuation (`Guest Nm.`→guest_name)
+- Returns: `{mapping, confidence: {field: "high|medium|low"}, unmapped_headers, reasoning, total_mapped, total_fields}`
+- Auto-filters invalid keys (defensive: if AI hallucinates a field name, drop it)
+- Graceful 502 on LLM failures
+
+**Frontend:**
+- Purple gradient **"Auto-map with AI · GPT-5.2"** button top-right of Map step
+- Click → spinner "GPT-5.2 is reading..." → result card (indigo-violet gradient) with reasoning text and count
+- Each AI-mapped field gets a confidence badge (HIGH green / MEDIUM amber / LOW stone) + a matching ring around its dropdown
+- Unmapped fields stay as "— not mapped —", user can fix manually
+- Toast "GPT-5.2 mapped N fields"
+
+**Live e2e test result:**
+- Spanish CSV, 6 headers, 0 English words
+- Regex auto-map: **0 fields mapped**
+- AI auto-map: **6/6 HIGH confidence** (name, email, phone, nationality, notes, date_of_birth)
+- Reasoning: *"Spanish headers clearly correspond to full name, email, mobile phone, country of origin, remarks, and birth date; sample values confirm the intent."*
+
+**Tested iteration 149**: 12/12 backend + 100% frontend pass, zero issues.
+
 ### Iter 151: P1 Migration Sweep — permissions now enforced across 11 more endpoints + 50 more sidebar items
 
 **Backend — sensitive endpoints migrated from `require_roles` → `require_perm`:**
@@ -304,8 +330,7 @@ User requirement: "When they fill when they on board staff they don't to be reac
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Continue migrating remaining `require_roles(...)` endpoints (bookings delete/refund, channel-manager mutations) — opportunistic as we touch them
-- AI column mapping in Import Module (GPT-5.2 handles foreign/messy headers)
+- Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks

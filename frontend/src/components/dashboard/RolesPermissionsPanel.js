@@ -11,7 +11,7 @@ import {
   ShieldCheck, Search, Plus, X, RefreshCw, Copy, Trash2, Edit,
   ChevronDown, ChevronRight, ArrowLeft, Save, Users, Crown, Grid3X3,
   Sparkles, AlertTriangle, Info, Zap, Command, Eye, Wand2,
-  Check as CheckIcon, CircleAlert, MessageCircle,
+  Check as CheckIcon, CircleAlert, MessageCircle, GitCompare,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -42,6 +42,36 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
 
   const isAdmin = user?.role === "admin";
   const [explainRole, setExplainRole] = useState(null);
+  const [compareMode, setCompareMode] = useState(false);
+  const [comparePicks, setComparePicks] = useState([]); // [idA, idB]
+  const [compareResult, setCompareResult] = useState(null);
+  const [compareBusy, setCompareBusy] = useState(false);
+
+  const toggleComparePick = (id) => {
+    setComparePicks(prev => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      if (prev.length >= 2) return [prev[1], id]; // keep last 2
+      return [...prev, id];
+    });
+  };
+
+  const runCompare = async () => {
+    if (comparePicks.length !== 2) return;
+    setCompareBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/rbac/roles/compare`, {
+        role_a_id: comparePicks[0], role_b_id: comparePicks[1],
+      });
+      setCompareResult(data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Compare failed");
+    }
+    setCompareBusy(false);
+  };
+
+  const exitCompare = () => {
+    setCompareMode(false); setComparePicks([]); setCompareResult(null);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,6 +159,11 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
                   <Plus className="w-4 h-4 mr-1.5" />New Role
                 </Button>
               )}
+              <Button size="sm" onClick={() => setCompareMode(m => !m)}
+                      className={`font-bold h-10 px-4 shadow-lg shadow-black/20 ${compareMode ? "bg-fuchsia-500 hover:bg-fuchsia-400 text-white" : "bg-white/10 hover:bg-white/20 text-white border border-white/30"}`}
+                      data-testid="compare-mode-btn">
+                <GitCompare className="w-4 h-4 mr-1.5" />{compareMode ? "Cancel compare" : "Compare"}
+              </Button>
             </div>
           </div>
         </div>
@@ -142,6 +177,25 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
         </div>
         <Button size="sm" variant="outline" onClick={load}><RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /></Button>
       </div>
+
+      {/* Compare mode banner */}
+      {compareMode && (
+        <div className="bg-gradient-to-r from-fuchsia-50 to-rose-50 border border-fuchsia-200 rounded-xl p-4 flex items-center gap-3" data-testid="compare-banner">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-fuchsia-600 to-rose-600 flex items-center justify-center flex-shrink-0">
+            <GitCompare className="w-4 h-4 text-white" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-fuchsia-900">Pick two roles to compare</p>
+            <p className="text-[11px] text-fuchsia-700">{comparePicks.length === 0 ? "Click on any role below" : comparePicks.length === 1 ? "Pick one more" : "Two roles selected — ready to compare!"}</p>
+          </div>
+          {comparePicks.length === 2 && (
+            <Button size="sm" onClick={runCompare} disabled={compareBusy} className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold" data-testid="run-compare-btn">
+              {compareBusy ? <RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 mr-1" />}
+              Compare now
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* List */}
       <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden" data-testid="roles-list">
@@ -161,8 +215,18 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
           </div>
         )}
         <ul className="divide-y divide-stone-100">
-          {data.roles.map(r => (
-            <li key={r.id} className="px-5 py-4 hover:bg-stone-50 flex items-center gap-3 group transition" data-testid={`role-row-${r.id}`}>
+          {data.roles.map(r => {
+            const picked = comparePicks.includes(r.id);
+            return (
+            <li key={r.id}
+                onClick={compareMode ? () => toggleComparePick(r.id) : undefined}
+                className={`px-5 py-4 flex items-center gap-3 group transition ${compareMode ? "cursor-pointer" : ""} ${picked ? "bg-fuchsia-50 hover:bg-fuchsia-100" : "hover:bg-stone-50"}`}
+                data-testid={`role-row-${r.id}`}>
+              {compareMode && (
+                <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${picked ? "bg-fuchsia-600 border-fuchsia-600 text-white" : "border-stone-300"}`}>
+                  {picked && <CheckIcon className="w-3 h-3" />}
+                </div>
+              )}
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white font-bold shadow-sm ${r.is_global_admin ? "bg-gradient-to-br from-amber-500 to-rose-600" : "bg-gradient-to-br from-slate-700 to-slate-900"}`}>
                 {r.is_global_admin ? <Crown className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
               </div>
@@ -180,7 +244,7 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
                   {r.property_name && <><span className="text-stone-300">·</span><span>{r.property_name}</span></>}
                 </div>
               </div>
-              {isAdmin && (
+              {isAdmin && !compareMode && (
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
                   <Button size="sm" variant="ghost" onClick={() => setExplainRole(r)} data-testid={`role-explain-${r.id}`} title="Explain this role (GPT-5.2)" className="text-fuchsia-600 hover:bg-fuchsia-50"><MessageCircle className="w-3.5 h-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => { setEditingRoleId(r.id); setView("edit"); }} data-testid={`role-edit-${r.id}`}><Edit className="w-3.5 h-3.5" /></Button>
@@ -189,11 +253,13 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
                 </div>
               )}
             </li>
-          ))}
+          );
+          })}
         </ul>
       </div>
 
       {explainRole && <ExplainRoleDialog role={explainRole} onClose={() => setExplainRole(null)} />}
+      {compareResult && <CompareDialog result={compareResult} onClose={() => { setCompareResult(null); exitCompare(); }} />}
     </div>
   );
 };
@@ -895,6 +961,127 @@ const ExplainRoleDialog = ({ role, onClose }) => {
         <div className="flex items-center justify-end gap-2 p-4 border-t bg-stone-50 rounded-b-2xl">
           <Button variant="outline" onClick={onClose}>Close</Button>
         </div>
+      </div>
+    </div>
+  );
+};
+
+// ====================== Compare Dialog ======================
+
+const CompareDialog = ({ result, onClose }) => {
+  const a = result.role_a, b = result.role_b;
+  const { only_a_by_category: aCats, only_b_by_category: bCats, counts, narrative } = result;
+
+  const RiskDot = ({ risk }) => {
+    const m = { critical: "bg-rose-500", high: "bg-amber-500", medium: "bg-sky-500" }[risk];
+    if (!m) return null;
+    return <span className={`w-1.5 h-1.5 rounded-full ${m} ml-1`} title={`Risk: ${risk}`} />;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+           className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full max-w-5xl my-0 sm:my-4"
+           data-testid="compare-dialog">
+        {/* Hero */}
+        <div className="relative overflow-hidden rounded-t-none sm:rounded-t-2xl bg-gradient-to-br from-fuchsia-600 via-rose-500 to-amber-500 text-white p-6">
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 80% 20%, white, transparent 40%)" }} />
+          <div className="relative flex items-start justify-between gap-3 mb-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center"><GitCompare className="w-4 h-4" /></div>
+                <span className="text-[10px] font-bold uppercase tracking-widest opacity-90">Role Comparison</span>
+                {narrative && <Badge className="text-[9px] bg-white/20 text-white border-white/30">GPT-5.2</Badge>}
+              </div>
+              <h3 className="text-2xl font-black">{a.display_name || a.key}  ·vs·  {b.display_name || b.key}</h3>
+            </div>
+            <button onClick={onClose} className="p-1 hover:bg-white/10 rounded flex-shrink-0"><X className="w-4 h-4" /></button>
+          </div>
+
+          {/* 3-column split: only A | shared | only B */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-white/15 backdrop-blur-md rounded-xl px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-80 truncate">{a.display_name || a.key}</p>
+              <p className="text-3xl font-black mt-0.5 tabular-nums">{counts.only_a}</p>
+              <p className="text-[10px] opacity-80">unique</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md rounded-xl px-4 py-3 border-x border-white/20">
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-80">Shared</p>
+              <p className="text-3xl font-black mt-0.5 tabular-nums">{counts.shared}</p>
+              <p className="text-[10px] opacity-80">in both</p>
+            </div>
+            <div className="bg-white/15 backdrop-blur-md rounded-xl px-4 py-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider opacity-80 truncate">{b.display_name || b.key}</p>
+              <p className="text-3xl font-black mt-0.5 tabular-nums">{counts.only_b}</p>
+              <p className="text-[10px] opacity-80">unique</p>
+            </div>
+          </div>
+
+          {/* Relation badge */}
+          {(counts.identical || counts.is_superset_a_of_b || counts.is_superset_b_of_a) && (
+            <div className="mt-3 inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md rounded-full px-3 py-1 text-xs font-semibold">
+              <Sparkles className="w-3 h-3" />
+              {counts.identical && "Roles are identical"}
+              {counts.is_superset_a_of_b && `${a.display_name || a.key} includes everything ${b.display_name || b.key} can do — plus more`}
+              {counts.is_superset_b_of_a && `${b.display_name || b.key} includes everything ${a.display_name || a.key} can do — plus more`}
+            </div>
+          )}
+        </div>
+
+        {/* Narrative */}
+        {narrative?.summary && (
+          <div className="bg-gradient-to-br from-fuchsia-50 to-rose-50 border-b border-fuchsia-100 p-5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-700 mb-1">AI summary</p>
+            <p className="text-sm text-stone-800 leading-relaxed">{narrative.summary}</p>
+            {narrative.promotion_path && (
+              <p className="text-xs text-fuchsia-800 mt-2 italic">💡 {narrative.promotion_path}</p>
+            )}
+          </div>
+        )}
+
+        {/* Diff columns */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-stone-200">
+          <DiffColumn title={`Only in ${a.display_name || a.key}`} badge={counts.only_a} cats={aCats} tint="emerald" RiskDot={RiskDot} testid="col-only-a" />
+          <DiffColumn title={`Only in ${b.display_name || b.key}`} badge={counts.only_b} cats={bCats} tint="indigo" RiskDot={RiskDot} testid="col-only-b" />
+        </div>
+
+        <div className="flex items-center justify-between gap-2 p-4 border-t bg-stone-50 rounded-b-none sm:rounded-b-2xl">
+          <p className="text-[10px] text-stone-400">Use for onboarding audits · promotion decisions · role rationalisation</p>
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DiffColumn = ({ title, badge, cats, tint, RiskDot, testid }) => {
+  const tintMap = {
+    emerald: "bg-emerald-50 text-emerald-900 border-emerald-200",
+    indigo:  "bg-indigo-50 text-indigo-900 border-indigo-200",
+  };
+  return (
+    <div className="p-5 max-h-[50vh] overflow-y-auto" data-testid={testid}>
+      <div className="flex items-center gap-2 mb-3 sticky top-0 bg-white pb-2">
+        <h4 className="font-bold text-sm text-stone-800 flex-1 truncate">{title}</h4>
+        <Badge className={tintMap[tint]}>{badge}</Badge>
+      </div>
+      {!cats.length && (
+        <div className="text-center py-8 text-stone-400 text-xs">No unique permissions</div>
+      )}
+      <div className="space-y-3">
+        {cats.map(cat => (
+          <div key={cat.category} className="space-y-1.5">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-stone-500">{cat.category} · {cat.items.length}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {cat.items.map(it => (
+                <span key={it.key} className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium border ${tintMap[tint]}`} title={it.key}>
+                  {it.label}
+                  <RiskDot risk={it.risk} />
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

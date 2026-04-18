@@ -2,6 +2,19 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 148: "Compare two roles" — Side-by-side role diff with AI narrative
+- **Compare** toggle in the Roles list hero switches rows to checkbox mode; click two roles, then **Compare now**
+- `POST /api/rbac/roles/compare` (admin|manager) returns:
+  - Per-role meta (key, display, permission count, global_admin flag)
+  - `only_a[]`, `only_b[]`, `shared[]` — each enriched with label, category, risk
+  - `only_a_by_category[]`, `only_b_by_category[]` — grouped for UI rendering
+  - `counts` incl. `is_superset_a_of_b`, `is_superset_b_of_a`, `identical` booleans
+  - **GPT-5.2 narrative** {summary, promotion_path} — explains differences in plain English, spots promotion relationships
+- UI: fuchsia-rose-amber gradient hero, 3-card count strip (A unique / Shared / B unique), superset relation badge, AI summary card, two-column diff grouped by category with risk dots
+- Rejects comparing the same role with itself (400)
+- Perfect for **onboarding audits**, **promotion decisions**, **role rationalisation**
+- Live-tested: laundry role × accountant role → 11 unique / 1 shared / 38 unique + crisp AI summary identifying Finance vs Operations gap, Approve Payroll Runs as sensitive
+
 ### Iter 147: "Explain this role" — AI audit narratives (GPT-5.2)
 - Fuchsia `MessageCircle` button on every role row (admin|manager) opens the Role Explainer
 - `POST /api/rbac/roles/{role_id}/explain` sends granted permissions (with category/sub-group labels) to GPT-5.2 via Emergent LLM key

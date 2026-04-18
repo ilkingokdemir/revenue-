@@ -56,6 +56,11 @@ class AISuggestRequest(BaseModel):
     existing_permissions: List[str] = Field(default_factory=list)
 
 
+class CompareRequest(BaseModel):
+    role_a_id: str
+    role_b_id: str
+
+
 def _now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -397,5 +402,117 @@ def create_roles_router(db, require_roles, get_current_user):
         except Exception as e:
             logger.exception("Role explain failed")
             raise HTTPException(502, f"AI explain failed: {str(e)[:200]}")
+
+    # ------- AI COMPARE ROLES (GPT-5.2) -------
+    @router.post("/rbac/roles/compare")
+    async def compare_roles(body: CompareRequest,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Side-by-side diff of two roles + plain-English narrative."""
+        if body.role_a_id == body.role_b_id:
+            raise HTTPException(400, "Pick two different roles to compare")
+        a = await db.roles.find_one({"id": body.role_a_id}, {"_id": 0})
+        b = await db.roles.find_one({"id": body.role_b_id}, {"_id": 0})
+        if not a or not b:
+            raise HTTPException(404, "One or both roles not found")
+
+        set_a = set(a.get("permissions") or [])
+        set_b = set(b.get("permissions") or [])
+        only_a = sorted(set_a - set_b)
+        only_b = sorted(set_b - set_a)
+        shared = sorted(set_a & set_b)
+
+        # Build label map + group by category for the response
+        label_map = {}
+        cat_map = {}
+        for cat in PERMISSION_CATALOG:
+            for sg in cat["sub_groups"]:
+                for p in sg["permissions"]:
+                    label_map[p["key"]] = p["label"]
+                    cat_map[p["key"]] = cat["label"]
+
+        def enrich(keys):
+            return [{
+                "key": k,
+                "label": label_map.get(k, k),
+                "category": cat_map.get(k, "Unknown"),
+                "risk": get_risk(k),
+            } for k in keys]
+
+        enriched_only_a = enrich(only_a)
+        enriched_only_b = enrich(only_b)
+        enriched_shared = enrich(shared)
+
+        # Group diffs by category for the UI
+        def group_by_cat(items):
+            groups = {}
+            for it in items:
+                groups.setdefault(it["category"], []).append(it)
+            return [{"category": k, "items": v} for k, v in groups.items()]
+
+        # Ask GPT-5.2 for narrative — short, punchy comparison
+        narrative = None
+        if only_a or only_b:
+            try:
+                from emergentintegrations.llm.chat import LlmChat, UserMessage
+                api_key = os.environ.get("EMERGENT_LLM_KEY")
+                if api_key:
+                    name_a = a.get("display_name") or a["key"]
+                    name_b = b.get("display_name") or b["key"]
+
+                    def fmt(items, lim=40):
+                        return "\n".join(f"- [{it['category']}] {it['label']}" for it in items[:lim]) + \
+                               (f"\n...(+{len(items) - lim} more)" if len(items) > lim else "")
+
+                    system_msg = (
+                        "You are comparing two hotel-staff roles. Write a crisp 2-4 sentence summary "
+                        "highlighting the KEY differences in what each role can do. Mention concrete module areas "
+                        "(bookings, payroll, laundry, etc). Call out sensitive gaps (approval, delete, payroll). "
+                        "Return ONLY valid JSON: "
+                        '{"summary":"...", "promotion_path":"short note if B is a superset/promotion of A, or vice versa, else null"}'
+                    )
+                    user_content = (
+                        f"ROLE A: {name_a} ({a['key']}) — {len(set_a)} permissions\n"
+                        f"ROLE B: {name_b} ({b['key']}) — {len(set_b)} permissions\n"
+                        f"SHARED: {len(shared)} permissions\n\n"
+                        f"ONLY IN {name_a}:\n{fmt(enriched_only_a) or '(none)'}\n\n"
+                        f"ONLY IN {name_b}:\n{fmt(enriched_only_b) or '(none)'}"
+                    )
+                    chat = LlmChat(
+                        api_key=api_key,
+                        session_id=f"rbac-compare-{uuid.uuid4().hex[:8]}",
+                        system_message=system_msg,
+                    ).with_model("openai", "gpt-5")
+                    resp = await chat.send_message(UserMessage(text=user_content))
+                    resp_text = resp if isinstance(resp, str) else str(resp)
+                    import re as _re
+                    m = _re.search(r"\{[\s\S]*\}", resp_text)
+                    if m:
+                        narrative = json.loads(m.group(0))
+            except Exception as e:
+                logger.warning(f"Compare narrative skipped: {e}")
+
+        return {
+            "role_a": {
+                "id": a["id"], "key": a["key"], "display_name": a.get("display_name"),
+                "permissions_count": len(set_a), "is_global_admin": a.get("is_global_admin", False),
+            },
+            "role_b": {
+                "id": b["id"], "key": b["key"], "display_name": b.get("display_name"),
+                "permissions_count": len(set_b), "is_global_admin": b.get("is_global_admin", False),
+            },
+            "only_a": enriched_only_a,
+            "only_b": enriched_only_b,
+            "shared": enriched_shared,
+            "only_a_by_category": group_by_cat(enriched_only_a),
+            "only_b_by_category": group_by_cat(enriched_only_b),
+            "counts": {
+                "only_a": len(only_a), "only_b": len(only_b), "shared": len(shared),
+                "is_superset_a_of_b": set_b.issubset(set_a) and set_a != set_b,
+                "is_superset_b_of_a": set_a.issubset(set_b) and set_a != set_b,
+                "identical": set_a == set_b,
+            },
+            "narrative": narrative,
+            "generated_at": _now(),
+        }
 
     return router

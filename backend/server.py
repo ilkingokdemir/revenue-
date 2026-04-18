@@ -103,6 +103,7 @@ from routes.cashflow import create_cashflow_router
 from routes.marketplace import create_marketplace_router
 from routes.arrivals import create_arrivals_router
 from routes.contracts import create_contracts_router
+from routes.legal_documents import create_legal_documents_router
 
 # Import extracted modules
 from models import (
@@ -508,6 +509,8 @@ arrivals_router = create_arrivals_router(db, require_roles)
 api_router.include_router(arrivals_router)
 contracts_router = create_contracts_router(db, require_roles)
 api_router.include_router(contracts_router)
+legal_docs_router = create_legal_documents_router(db, require_roles, get_current_user)
+api_router.include_router(legal_docs_router)
 
 app.include_router(api_router)
 

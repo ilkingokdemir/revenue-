@@ -1,0 +1,217 @@
+{
+  "summary": "Iteration 135 - Legal Documents & Consents Module fully tested. All 29 backend API tests passed (100%). Frontend UI verified with all data-testid selectors working correctly. Acceptance flow, versioning, and audit trail all functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Document Form Dialog", "issues": ["Minor: Missing aria-describedby for DialogContent (accessibility warning in console)"]}
+    ]
+  },
+  "features_tested": {
+    "legal_documents_list_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/legal-documents?doc_type=&status=&q=",
+      "tests_passed": 5,
+      "features": [
+        "Returns list with computed_status (active/draft/scheduled/expired)",
+        "Enriches with acceptance_count, total_users, acceptance_pct, field_count",
+        "Filters by doc_type (privacy_policy/terms_conditions/gdpr_consent/code_of_conduct/health_safety/nda/other)",
+        "Filters by status (active/draft/scheduled/expired)",
+        "Search by title/code/description with q= parameter",
+        "Requires admin|manager auth (401 without token)"
+      ]
+    },
+    "legal_documents_stats_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/legal-documents/stats",
+      "tests_passed": 1,
+      "features": [
+        "Returns {total_documents, active, required_active, expiring_30_days, total_acceptances, total_users}",
+        "Requires admin|manager auth"
+      ]
+    },
+    "legal_documents_create_api": {
+      "status": "PASS",
+      "endpoint": "POST /api/legal-documents",
+      "tests_passed": 5,
+      "features": [
+        "Creates document with title, description, doc_type, version, effective_date, expiry_date, active, required",
+        "Supports dynamic fields array with 7 field types: heading, text, textarea, checkbox, signature, date, select",
+        "Validates doc_type enum (400 for invalid)",
+        "Validates field types (400 for invalid)",
+        "Auto-generates code if empty",
+        "Auto-generates field IDs if empty",
+        "Admin-only (403 for manager/receptionist)"
+      ]
+    },
+    "legal_documents_update_api": {
+      "status": "PASS",
+      "endpoint": "PUT /api/legal-documents/{id}",
+      "tests_passed": 3,
+      "features": [
+        "Full edit allowed when no acceptances exist",
+        "Only active/expiry_date editable when acceptances exist",
+        "Returns locked_edits flag indicating edit restrictions"
+      ]
+    },
+    "legal_documents_delete_api": {
+      "status": "PASS",
+      "endpoint": "DELETE /api/legal-documents/{id}",
+      "tests_passed": 2,
+      "features": [
+        "Deletes document when no acceptances",
+        "Blocks deletion (400) when acceptances exist with message to deactivate instead"
+      ]
+    },
+    "legal_documents_new_version_api": {
+      "status": "PASS",
+      "endpoint": "POST /api/legal-documents/{id}/new-version",
+      "tests_passed": 2,
+      "features": [
+        "Bumps version 1.0 -> 1.1",
+        "Bumps version 1.9 -> 2.0 (major bump at 10)",
+        "Creates inactive draft clone with parent_id link"
+      ]
+    },
+    "legal_documents_pending_me_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/legal-documents/pending/me",
+      "tests_passed": 2,
+      "features": [
+        "Returns active+required docs user has NOT yet accepted",
+        "Returns docs where version changed since last acceptance",
+        "Uses get_current_user (any authenticated user, not admin-gated)"
+      ]
+    },
+    "legal_documents_accept_api": {
+      "status": "PASS",
+      "endpoint": "POST /api/legal-documents/{id}/accept",
+      "tests_passed": 3,
+      "features": [
+        "Validates required fields (400 if missing required checkbox or text/signature)",
+        "Records responses + user_id + IP + version",
+        "Upserts so re-accepting latest version supersedes prior record",
+        "After accepting, pending list excludes the document"
+      ]
+    },
+    "legal_documents_acceptances_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/legal-documents/{id}/acceptances",
+      "tests_passed": 1,
+      "features": [
+        "Returns audit trail with user_name, user_role, document_version, accepted_at, ip_address",
+        "Requires admin|manager auth"
+      ]
+    },
+    "role_gates": {
+      "status": "PASS",
+      "tests_passed": 3,
+      "features": [
+        "admin+manager can list/stats/view-acceptances",
+        "Only admin can create/edit/delete/new-version",
+        "Any authenticated user can access pending/me and accept"
+      ]
+    },
+    "frontend_legal_documents_panel": {
+      "status": "PASS",
+      "data_testids_verified": [
+        "legal-docs-btn - Sidebar nav button (admin+manager only under Settings)",
+        "legal-documents - Main component container",
+        "legal-title - Hero title 'Policies in, signatures tracked, compliance proven.'",
+        "kpi-active - KPI card showing active documents",
+        "kpi-required - KPI card showing required & live",
+        "kpi-expiring - KPI card showing expiring ≤30d",
+        "kpi-acceptances - KPI card showing total acceptances",
+        "type-filter - Document type dropdown filter",
+        "status-all, status-active, status-draft, status-scheduled, status-expired - Status filter tabs",
+        "docs-search - Search input",
+        "docs-table - Documents table",
+        "new-doc-btn - New Document button",
+        "doc-form - Create/Edit dialog",
+        "f-title, f-code, f-desc, f-type, f-version, f-effective, f-expiry, f-active, f-required - Form fields",
+        "add-field-heading, add-field-text, add-field-textarea, add-field-checkbox, add-field-select, add-field-date, add-field-signature - Field builder buttons",
+        "fields-list - Dynamic fields container",
+        "del-field-{idx} - Delete field buttons",
+        "f-save - Save button",
+        "view-{id}, edit-{id}, version-{id}, del-{id} - Row action buttons",
+        "acceptances-dialog - Acceptances viewer dialog"
+      ],
+      "features_verified": [
+        "Hero section with gradient background and title",
+        "4 KPI cards with active, required, expiring, acceptances counts",
+        "Type filter dropdown with all 7 document types",
+        "Status filter tabs (All, Active, Draft, Scheduled, Expired)",
+        "Search input filters documents",
+        "Table shows document, type, version, valid dates, acceptance progress bar, status, actions",
+        "New Document form with all fields and field builder",
+        "Field builder adds 7 field types with inline editing",
+        "Acceptances dialog shows audit trail with user, role, version, timestamp"
+      ]
+    },
+    "regression_staff_contracts": {
+      "status": "PASS",
+      "tests_passed": 2,
+      "features": [
+        "GET /api/contracts/{pid} still works",
+        "GET /api/contracts/stats/{pid} still works",
+        "Frontend StaffContractsPanel loads correctly"
+      ]
+    },
+    "regression_arrivals_cockpit": {
+      "status": "PASS",
+      "tests_passed": 1,
+      "features": [
+        "GET /api/arrivals/{pid} still works",
+        "Frontend ArrivalsCockpit loads correctly with 20 arrivals"
+      ]
+    },
+    "regression_marketplace": {
+      "status": "PASS",
+      "tests_passed": 1,
+      "features": [
+        "GET /api/marketplace/catalog/{pid} still works",
+        "Frontend Marketplace loads correctly with 124 integrations"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration135_legal_documents.py",
+    "/app/test_reports/pytest/pytest_iteration135_legal_documents.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All legal documents endpoints properly protected with role-based authentication",
+    "Pending/me and accept endpoints correctly allow any authenticated user (not admin-gated)",
+    "Edit/delete restrictions on documents with acceptances work correctly (400 response)",
+    "Version bumping logic correctly handles 1.9 -> 2.0 major version increment",
+    "All data-testid attributes properly implemented for testing",
+    "Document lifecycle (draft->active->expired) computed correctly based on dates and active flag",
+    "MOCKED: Signature field records typed text only (not drawn canvas image)",
+    "MOCKED: No external legal service (DocuSign etc) integrated — consent tracking is in-app only"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration135_legal_documents.py"
+  ],
+  "success_rate": {
+    "backend": "100% (29/29 passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Backend tests created and cleaned up test documents with TEST_LEGAL_ prefix. Some documents with acceptances remain (cannot be deleted per business logic).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 135 added Legal Documents & Consents - internal policy builder with dynamic fields, versioning, effective/expiry dates, required-acceptance tracking. Backend has 9 endpoints: list, stats, get-one, create, update, delete, new-version, pending/me, accept, acceptances. Frontend has LegalDocumentsPanel (admin+manager in sidebar under Settings) with hero, 4 KPIs, type/status filters, search, table, form dialog with 7 field types, acceptances dialog. Signature field uses typed-text (MOCKED - no drawn canvas). No external legal service integration.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Signature field records typed text only (stored as string) rather than a drawn canvas image",
+      "No external legal service (DocuSign etc) integrated — consent tracking is in-app only"
+    ]
+  }
+}

@@ -1,6 +1,17 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 81+ Modules | Mobile Responsive | 138 Test Iterations (100%)
+## 81+ Modules | Mobile Responsive | 139 Test Iterations (100%)
+
+### Iter 140: HMRC Starter Checklist — Authentic HMRC 09/22 replica
+- Rewrote the onboarding HMRC tab to mirror the official UK paper form the user uploaded
+- **Section 1 · Personal details**: Last name, First names (with "Do not enter initials" helper), Sex radio (male/female as on birth certificate), DOB, Home address, Postcode, Country (new), NI number (now OPTIONAL per paper form), Employment start date
+- **Section 2 · Employee statement decision tree**: Q8 another job? Q9 pension? Q10 recent payments? — **auto-computes Statement A/B/C** with blue banner showing which applies + plain-English explanation of the tax code implication
+- **Section 3 · Student loans**: Q11/Q12/Q13 conditional flow with multi-tick Plan 1 / Plan 2 / Plan 4 / Postgraduate
+- **Section 4 · Declaration**: Full name (auto-uppercase), Date (pre-filled today), script-font typed signature, confirmation checkbox
+- Backend validates all new required fields + sex/statement enums + declaration_confirmed; stores backwards-compat aliases (first_name, gender, address) so existing admin view keeps working
+- Admin detail drawer updated to display every new HMRC field
+- Fixed a rules-of-hooks bug (computedStatement useEffect moved above early return)
+- Tested iteration 139 (29/29 backend + full frontend pass)
 
 ### Iter 139: Admin Onboarding Review Panel
 - Admin/manager-only sidebar entry 'Onboarding Review' with teal-emerald hero and 4 KPIs (Total / Pending / Docs Complete / Activated)

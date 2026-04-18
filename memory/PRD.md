@@ -2,6 +2,43 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 157: Bookings API RBAC migration (P0 — legacy `require_roles` → granular `require_perm`)
+
+Migrated 40+ sensitive mutation endpoints in `/app/backend/routes/bookings.py` from legacy role-based checks to the granular permission system introduced in iter 152. Pattern applied:
+
+**View endpoints** → `require_perm("view_bookings", "edit_bookings", mode="any")`
+- list_bookings, list_promo_codes, list_all_add_ons, get_all_upsells, get_social_proof_settings,
+  get_review_collection_settings, get_collected_reviews, list_abandoned_carts, cart_abandonment_stats,
+  list_property_translations, list_all_template_settings, list_space_bookings
+
+**Edit/Create/Update endpoints** → `require_perm("edit_bookings")`
+- save_property_facilities, save_hotel_policies, create_promo_code, toggle_promo_code,
+  create_add_on, toggle_add_on, save_property_translations, ai_translate_text,
+  create_upsell, update_upsell, seed_upsell, update_social_proof_settings, update_review_collection_settings,
+  update_checkin_settings, send_cart_recovery_emails, send_review_collection_emails, create_space, update_space,
+  seed_spaces, save_template_settings
+
+**Destructive endpoints** → `require_perm("delete_bookings")` (STRICT — no fallback to edit)
+- delete_promo_code, delete_add_on, delete_upsell, delete_space, delete_template_settings
+
+**Role-specific endpoints:**
+- update_booking_status → `require_perm("edit_bookings","cancel_bookings","checkin_bookings","checkout_bookings","confirm_bookings", mode="any")`
+- get_checkin_settings / admin_list_checkins → `require_perm("checkin_bookings","edit_bookings", mode="any")`
+- assign_room → `require_perm("assign_rooms","checkin_bookings", mode="any")`
+- list_group_bookings → `require_perm("view_group_blocks","view_bookings", mode="any")`
+- update_group_booking → `require_perm("edit_group_blocks","edit_bookings", mode="any")`
+- create/update/delete_room_type → `require_perm("manage_room_categories")` (STRICT)
+
+**Verified with curl test matrix:**
+- Admin (legacy bypass) → 200 on all endpoints ✓
+- Receptionist → 200 on list_bookings/list_upsells/update_status; 403 on delete_upsell/delete_promo/create_room_type/delete_room_type ✓
+- Housekeeper → 403 on every bookings endpoint ✓
+
+Two new activated test users seeded for perm regression: `testrecep@hotelbox.com` and `testhk@hotelbox.com` (both password `Test2026!`). Recorded in `/app/memory/test_credentials.md`.
+
+Only 1 remaining `require_roles` reference in bookings.py is the factory function parameter at line 24 (kept for backward compatibility of signature — no actual usage).
+
+
 ### Iter 156: Eviivo-style polar-opposite colour palette (user request — "opposition to recognising check in, checked out, pending… like Eviivo")
 
 Aligned to Eviivo's industry-standard semantic opposition:

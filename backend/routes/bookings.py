@@ -16,6 +16,7 @@ import resend
 import logging
 
 from routes.helpers import log_sync, fire_webhooks
+from auth import require_perm
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc or {"property_id": property_id, "facilities": []}
 
     @router.put("/property-facilities/{property_id}")
-    async def save_property_facilities(property_id: str, facilities: List[str], current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def save_property_facilities(property_id: str, facilities: List[str], current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Save property facilities"""
         existing = await db.property_facilities.find_one({"property_id": property_id})
         data = {"facilities": facilities, "updated_at": datetime.now(timezone.utc).isoformat()}
@@ -85,7 +86,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return HotelPolicies(property_id=property_id).model_dump()
 
     @router.put("/hotel-policies/{property_id}")
-    async def save_hotel_policies(property_id: str, update: HotelPoliciesUpdate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def save_hotel_policies(property_id: str, update: HotelPoliciesUpdate, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Save hotel policies"""
         existing = await db.hotel_policies.find_one({"property_id": property_id})
         update_data = {k: v for k, v in update.model_dump().items() if v is not None}
@@ -103,14 +104,14 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     # ==================== PROMO CODES ====================
 
     @router.get("/promo-codes")
-    async def list_promo_codes(property_id: str = "", current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def list_promo_codes(property_id: str = "", current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         """Admin: List promo codes"""
         q = {"property_id": property_id} if property_id else {}
         codes = await db.promo_codes.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
         return codes
 
     @router.post("/promo-codes")
-    async def create_promo_code(data: PromoCodeCreate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def create_promo_code(data: PromoCodeCreate, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Create promo code"""
         existing = await db.promo_codes.find_one({"code": data.code.upper()})
         if existing:
@@ -124,13 +125,13 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.delete("/promo-codes/{code_id}")
-    async def delete_promo_code(code_id: str, current_user: dict = Depends(require_roles("admin"))):
+    async def delete_promo_code(code_id: str, current_user: dict = Depends(require_perm("delete_bookings"))):
         """Admin: Delete promo code"""
         await db.promo_codes.delete_one({"id": code_id})
         return {"status": "deleted"}
 
     @router.put("/promo-codes/{code_id}/toggle")
-    async def toggle_promo_code(code_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def toggle_promo_code(code_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Toggle promo code active status"""
         code = await db.promo_codes.find_one({"id": code_id})
         if not code:
@@ -177,14 +178,14 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return addons
 
     @router.get("/add-ons")
-    async def list_all_add_ons(property_id: str = "", current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def list_all_add_ons(property_id: str = "", current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         """Admin: List all add-ons"""
         q = {"property_id": property_id} if property_id else {}
         addons = await db.add_on_services.find(q, {"_id": 0}).to_list(200)
         return addons
 
     @router.post("/add-ons")
-    async def create_add_on(data: AddOnServiceCreate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def create_add_on(data: AddOnServiceCreate, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Create add-on service"""
         addon = AddOnService(**data.model_dump())
         doc = addon.model_dump()
@@ -193,13 +194,13 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.delete("/add-ons/{addon_id}")
-    async def delete_add_on(addon_id: str, current_user: dict = Depends(require_roles("admin"))):
+    async def delete_add_on(addon_id: str, current_user: dict = Depends(require_perm("delete_bookings", "edit_bookings", mode="any"))):
         """Admin: Delete add-on service"""
         await db.add_on_services.delete_one({"id": addon_id})
         return {"status": "deleted"}
 
     @router.put("/add-ons/{addon_id}/toggle")
-    async def toggle_add_on(addon_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def toggle_add_on(addon_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Toggle add-on active status"""
         addon = await db.add_on_services.find_one({"id": addon_id})
         if not addon:
@@ -227,7 +228,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     async def save_property_translations(
         property_id: str, lang_code: str,
         overrides: Dict[str, str],
-        current_user: dict = Depends(require_roles("admin", "manager"))
+        current_user: dict = Depends(require_perm("edit_bookings"))
     ):
         """Admin: Save custom translation overrides for a property"""
         await db.translation_overrides.update_one(
@@ -246,7 +247,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.get("/translations/{property_id}")
-    async def list_property_translations(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def list_property_translations(property_id: str, current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         """Admin: List all translation overrides for a property"""
         docs = await db.translation_overrides.find({"property_id": property_id}, {"_id": 0}).to_list(20)
         return docs
@@ -255,7 +256,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     async def ai_translate_text(
         texts: Dict[str, str],
         target_lang: str,
-        current_user: dict = Depends(require_roles("admin", "manager"))
+        current_user: dict = Depends(require_perm("edit_bookings"))
     ):
         """Admin: AI-translate custom hotel texts to target language"""
         try:
@@ -292,13 +293,13 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return items
 
     @router.get("/upsells/admin/{property_id}")
-    async def get_all_upsells(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def get_all_upsells(property_id: str, current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         """Admin: Get all upsell items including inactive"""
         items = await db.upsell_items.find({"property_id": property_id}, {"_id": 0}).sort("sort_order", 1).to_list(50)
         return items
 
     @router.post("/upsells")
-    async def create_upsell(data: UpsellItemCreate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def create_upsell(data: UpsellItemCreate, current_user: dict = Depends(require_perm("edit_bookings"))):
         from models import UpsellItem
         item = UpsellItem(**data.model_dump())
         doc = item.model_dump()
@@ -307,7 +308,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.put("/upsells/{upsell_id}")
-    async def update_upsell(upsell_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def update_upsell(upsell_id: str, updates: Dict, current_user: dict = Depends(require_perm("edit_bookings"))):
         updates.pop("_id", None)
         updates.pop("id", None)
         await db.upsell_items.update_one({"id": upsell_id}, {"$set": updates})
@@ -315,12 +316,12 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.delete("/upsells/{upsell_id}")
-    async def delete_upsell(upsell_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def delete_upsell(upsell_id: str, current_user: dict = Depends(require_perm("delete_bookings"))):
         await db.upsell_items.delete_one({"id": upsell_id})
         return {"status": "deleted"}
 
     @router.post("/upsells/seed/{property_id}")
-    async def seed_upsells(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def seed_upsells(property_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Seed default upsell items from templates"""
         from models import UPSELL_TEMPLATES, UpsellItem
         existing = await db.upsell_items.count_documents({"property_id": property_id})
@@ -367,7 +368,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         }
 
     @router.get("/social-proof/settings/{property_id}")
-    async def get_social_proof_settings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def get_social_proof_settings(property_id: str, current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         settings = await db.social_proof_settings.find_one({"property_id": property_id}, {"_id": 0})
         if not settings:
             from models import SocialProofSettings
@@ -375,7 +376,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return settings
 
     @router.put("/social-proof/settings/{property_id}")
-    async def update_social_proof_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def update_social_proof_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_perm("edit_bookings"))):
         updates.pop("_id", None)
         updates["property_id"] = property_id
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -388,7 +389,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     # --- Guest Review Collection ---
 
     @router.get("/review-collection/settings/{property_id}")
-    async def get_review_collection_settings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def get_review_collection_settings(property_id: str, current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         doc = await db.review_collection_settings.find_one({"property_id": property_id}, {"_id": 0})
         if not doc:
             from models import ReviewCollectionSettings
@@ -396,7 +397,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.put("/review-collection/settings/{property_id}")
-    async def update_review_collection_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def update_review_collection_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_perm("edit_bookings"))):
         updates.pop("_id", None)
         updates["property_id"] = property_id
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -404,7 +405,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return await db.review_collection_settings.find_one({"property_id": property_id}, {"_id": 0})
 
     @router.get("/review-collection/reviews/{property_id}")
-    async def get_collected_reviews(property_id: str, status: str = "", current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def get_collected_reviews(property_id: str, status: str = "", current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         query = {"property_id": property_id, "source": "direct"}
         if status:
             query["status"] = status
@@ -467,7 +468,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     # --- Self Check-In ---
 
     @router.get("/checkin/settings/{property_id}")
-    async def get_checkin_settings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def get_checkin_settings(property_id: str, current_user: dict = Depends(require_perm("checkin_bookings", "edit_bookings", mode="any"))):
         doc = await db.checkin_settings.find_one({"property_id": property_id}, {"_id": 0})
         if not doc:
             from models import CheckInSettings
@@ -475,7 +476,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.put("/checkin/settings/{property_id}")
-    async def update_checkin_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def update_checkin_settings(property_id: str, updates: Dict, current_user: dict = Depends(require_perm("edit_bookings"))):
         updates.pop("_id", None)
         updates["property_id"] = property_id
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -531,12 +532,12 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.get("/checkin/admin/{property_id}")
-    async def admin_list_checkins(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    async def admin_list_checkins(property_id: str, current_user: dict = Depends(require_perm("view_bookings", "checkin_bookings", mode="any"))):
         docs = await db.guest_checkins.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
         return docs
 
     @router.put("/checkin/assign-room/{booking_ref}")
-    async def assign_room(booking_ref: str, room_assignment: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    async def assign_room(booking_ref: str, room_assignment: str, current_user: dict = Depends(require_perm("assign_rooms", "checkin_bookings", mode="any"))):
         await db.guest_checkins.update_one({"booking_ref": booking_ref}, {"$set": {"room_assignment": room_assignment}})
         doc = await db.guest_checkins.find_one({"booking_ref": booking_ref}, {"_id": 0})
         return doc
@@ -637,19 +638,19 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return cart
 
     @router.get("/cart/abandoned/{property_id}")
-    async def list_abandoned_carts(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def list_abandoned_carts(property_id: str, current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         carts = await db.abandoned_carts.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
         return carts
 
     @router.get("/cart/stats/{property_id}")
-    async def cart_abandonment_stats(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def cart_abandonment_stats(property_id: str, current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         total = await db.abandoned_carts.count_documents({"property_id": property_id})
         recovered = await db.abandoned_carts.count_documents({"property_id": property_id, "status": "recovered"})
         email_sent = await db.abandoned_carts.count_documents({"property_id": property_id, "status": "email_sent"})
         return {"total_abandoned": total, "recovered": recovered, "email_sent": email_sent, "recovery_rate": round(recovered / total * 100, 1) if total > 0 else 0}
 
     @router.post("/cart/send-recovery-emails/{property_id}")
-    async def send_cart_recovery_emails(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def send_cart_recovery_emails(property_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Send recovery emails to all abandoned carts that haven't been emailed yet"""
         # Find carts older than 1 hour that haven't been emailed
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
@@ -667,7 +668,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return {"sent": sent, "message": f"Sending recovery emails to {sent} guests"}
 
     @router.post("/review-collection/send/{property_id}")
-    async def send_review_collection_emails(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def send_review_collection_emails(property_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Send review collection emails to guests who checked out but haven't been emailed"""
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
         bookings_list = await db.bookings.find({
@@ -722,12 +723,12 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return {"status": "submitted", "id": doc["id"], "message": "Your group booking request has been submitted. Our team will contact you within 24 hours."}
 
     @router.get("/group-booking/requests/{property_id}")
-    async def list_group_bookings(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def list_group_bookings(property_id: str, current_user: dict = Depends(require_perm("view_group_blocks", "view_bookings", mode="any"))):
         docs = await db.group_bookings.find({"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
         return docs
 
     @router.put("/group-booking/{booking_id}")
-    async def update_group_booking(booking_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def update_group_booking(booking_id: str, updates: Dict, current_user: dict = Depends(require_perm("edit_group_blocks", "edit_bookings", mode="any"))):
         updates.pop("_id", None)
         updates.pop("id", None)
         await db.group_bookings.update_one({"id": booking_id}, {"$set": updates})
@@ -748,7 +749,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return spaces
 
     @router.post("/spaces")
-    async def create_space(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def create_space(data: Dict, current_user: dict = Depends(require_perm("edit_bookings"))):
         from models import PropertySpace
         space = PropertySpace(**data)
         doc = space.model_dump()
@@ -757,18 +758,18 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.put("/spaces/{space_id}")
-    async def update_space(space_id: str, updates: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def update_space(space_id: str, updates: Dict, current_user: dict = Depends(require_perm("edit_bookings"))):
         updates.pop("_id", None); updates.pop("id", None)
         await db.property_spaces.update_one({"id": space_id}, {"$set": updates})
         return await db.property_spaces.find_one({"id": space_id}, {"_id": 0})
 
     @router.delete("/spaces/{space_id}")
-    async def delete_space(space_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def delete_space(space_id: str, current_user: dict = Depends(require_perm("delete_bookings"))):
         await db.property_spaces.delete_one({"id": space_id})
         return {"status": "deleted"}
 
     @router.post("/spaces/seed/{property_id}")
-    async def seed_spaces(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def seed_spaces(property_id: str, current_user: dict = Depends(require_perm("edit_bookings"))):
         from models import SPACE_TYPES, PropertySpace
         existing = await db.property_spaces.count_documents({"property_id": property_id})
         if existing > 0:
@@ -821,7 +822,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return doc
 
     @router.get("/spaces/bookings/{property_id}")
-    async def list_space_bookings(property_id: str, date: str = "", current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    async def list_space_bookings(property_id: str, date: str = "", current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         query = {"property_id": property_id}
         if date:
             query["booking_date"] = date
@@ -907,13 +908,13 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return settings or {"property_id": property_id, "template_id": "booking-classic"}
 
     @router.get("/template-settings")
-    async def list_all_template_settings(current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def list_all_template_settings(current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         """Admin: List all template settings"""
         settings = await db.template_settings.find({}, {"_id": 0}).to_list(100)
         return settings
 
     @router.put("/template-settings/{property_id}")
-    async def save_template_settings(property_id: str, update: TemplateSettingsUpdate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def save_template_settings(property_id: str, update: TemplateSettingsUpdate, current_user: dict = Depends(require_perm("edit_bookings"))):
         """Admin: Save template customization for a property (upsert)"""
         existing = await db.template_settings.find_one({"property_id": property_id})
 
@@ -932,7 +933,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return result
 
     @router.delete("/template-settings/{property_id}")
-    async def delete_template_settings(property_id: str, current_user: dict = Depends(require_roles("admin"))):
+    async def delete_template_settings(property_id: str, current_user: dict = Depends(require_perm("delete_bookings"))):
         """Admin: Reset template settings for a property"""
         await db.template_settings.delete_one({"property_id": property_id})
         return {"status": "deleted"}
@@ -1392,7 +1393,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
 
     # Admin: Room Types CRUD
     @router.post("/room-types")
-    async def create_room_type(room: RoomTypeCreate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def create_room_type(room: RoomTypeCreate, current_user: dict = Depends(require_perm("manage_room_categories"))):
         """Create a new room type"""
         room_type = RoomType(**room.model_dump())
         doc = room_type.model_dump()
@@ -1408,7 +1409,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return rooms
 
     @router.put("/room-types/{room_id}")
-    async def update_room_type(room_id: str, update: RoomTypeUpdate, current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def update_room_type(room_id: str, update: RoomTypeUpdate, current_user: dict = Depends(require_perm("manage_room_categories"))):
         """Update a room type"""
         update_data = {k: v for k, v in update.model_dump().items() if v is not None}
         if not update_data:
@@ -1422,7 +1423,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return updated
 
     @router.delete("/room-types/{room_id}")
-    async def delete_room_type(room_id: str, current_user: dict = Depends(require_roles("admin"))):
+    async def delete_room_type(room_id: str, current_user: dict = Depends(require_perm("manage_room_categories", "delete_bookings", mode="any"))):
         """Delete a room type"""
         result = await db.room_types.delete_one({"id": room_id})
         if result.deleted_count == 0:
@@ -1431,7 +1432,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
 
     # Admin: Bookings management
     @router.get("/bookings")
-    async def list_bookings(property_id: str = "", status: str = "", current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    async def list_bookings(property_id: str = "", status: str = "", current_user: dict = Depends(require_perm("view_bookings"))):
         """List bookings with optional filters"""
         query = {}
         if property_id:
@@ -1443,7 +1444,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return bookings
 
     @router.put("/bookings/{booking_id}/status")
-    async def update_booking_status(booking_id: str, status: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    async def update_booking_status(booking_id: str, status: str, current_user: dict = Depends(require_perm("edit_bookings", "cancel_bookings", "checkin_bookings", "checkout_bookings", "confirm_bookings", mode="any"))):
         """Update booking status"""
         valid = ["confirmed", "cancelled", "checked_in", "checked_out", "no_show"]
         if status not in valid:

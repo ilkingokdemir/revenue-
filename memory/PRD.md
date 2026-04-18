@@ -2,6 +2,31 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 150: Import Module — the "Missing" feature we built
+The myhotelbox permission catalog explicitly tagged this module as **(Missing)** — 4 placeholder perms with no functionality behind them. We built the real thing.
+
+**Full wizard flow (5 steps):**
+1. **Pick entity** — 4 gradient cards (Bookings / Guests / Rooms / Rate Plans)
+2. **Upload** — drag-drop or click; CSV, XLSX, XLS supported up to 20MB / 10k rows
+3. **Auto-map** — fuzzy matches CSV headers to canonical fields (Name→name, Arrival→check_in, Phone Number→phone, etc.)
+4. **Review mapping** — dropdown per canonical field, REQUIRED badges, "skip duplicates by" option
+5. **Validate & commit** — dry-run shows total/valid/errors + first-3 JSON preview + row-level error list
+
+**Backend (`/app/backend/routes/imports.py`):**
+- `GET /api/imports/schemas` — entity definitions with required/optional fields
+- `POST /api/imports/parse` — multipart upload, parses CSV/XLSX, returns headers + sample + auto-mapping suggestions (cached in /tmp/imports/{uuid}.json)
+- `POST /api/imports` — create job with mapping + optional `skip_duplicates_by`
+- `POST /api/imports/{id}/dry-run` — validate without committing; reports missing-required and bad-date errors
+- `POST /api/imports/{id}/run` — insert valid rows into target collection with `id`, `_imported_from`, `_imported_at`, `property_id` metadata; idempotent (rejects second run)
+- `GET /api/imports` + `GET /api/imports/{id}` — history & detail
+- `DELETE /api/imports/{id}` — admin-only
+
+**Permission catalog cleanup**: `settings_import_module_view`, `view_import_module`, `create_imports`, `run_imports` no longer carry the `missing: true` flag.
+
+**Live tested end-to-end via curl**: 5-row CSV → auto-mapped 5/5 fields → dry-run 4 valid/1 error → commit 3 inserted + 1 skipped (dup email) + 1 failed (missing name) = perfect.
+
+**Tested iteration 147**: 27/27 backend + 100% frontend pass, zero issues.
+
 ### Iter 149: RBAC Enforcement + Sidebar Gating (P1 — permission system is now REAL)
 Previously: the 313 permissions were declarative but routes still used `require_roles("admin", "manager")` — perms were decorative. This iteration makes them enforced.
 
@@ -251,7 +276,6 @@ User requirement: "When they fill when they on board staff they don't to be reac
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Build **Import Module** (competitor tagged "Missing" — trivial win vs them)
 - Gradual migration of existing `require_roles(...)` endpoints to `require_perm(...)` as we touch them
 - Expand `SIDEBAR_PERM_MAP` coverage to remaining ~50 sidebar items
 

@@ -9,7 +9,7 @@ import {
   Upload, FileSpreadsheet, Users, Bed, Calendar, TrendingUp,
   ArrowRight, ArrowLeft, X, RefreshCw, CheckCircle2, AlertTriangle,
   Download, Eye, Play, Sparkles, Zap, Clock, Trash2, ChevronRight,
-  FileText, Check as CheckIcon, AlertCircle,
+  FileText, Check as CheckIcon, AlertCircle, Wand2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -299,19 +299,54 @@ const MapStep = ({ wizard, setWizard, schemas, onNext, onBack }) => {
   const setMapping = (field, header) => setWizard(w => ({ ...w, mapping: { ...w.mapping, [field]: header === "none" ? "" : header } }));
   const mappedCount = Object.values(wizard.mapping).filter(Boolean).length;
   const reqMissing = schema.required.filter(r => !wizard.mapping[r]);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+
+  const runAIMap = async () => {
+    setAiBusy(true); setAiResult(null);
+    try {
+      const { data } = await axios.post(`${API}/imports/ai-map`, {
+        file_token: parsed.file_token,
+        entity: wizard.entity,
+      });
+      setWizard(w => ({ ...w, mapping: { ...w.mapping, ...data.mapping } }));
+      setAiResult(data);
+      toast.success(`GPT-5.2 mapped ${data.total_mapped} field${data.total_mapped === 1 ? "" : "s"}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "AI mapping failed");
+    }
+    setAiBusy(false);
+  };
 
   return (
     <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4" data-testid="map-step">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <Button size="sm" variant="ghost" onClick={onBack}><ArrowLeft className="w-4 h-4 mr-1" />Back</Button>
         <h3 className="text-xl font-black text-stone-900">Map columns → fields</h3>
-        <Badge className="ml-auto bg-stone-100 text-stone-700">{parsed.rows_count} rows · {mappedCount} mapped</Badge>
+        <Badge className="bg-stone-100 text-stone-700">{parsed.rows_count} rows · {mappedCount} mapped</Badge>
+        <Button size="sm" onClick={runAIMap} disabled={aiBusy}
+                className="ml-auto bg-gradient-to-r from-indigo-600 via-fuchsia-600 to-rose-500 hover:opacity-90 text-white font-bold shadow-md shadow-fuchsia-500/30"
+                data-testid="ai-map-btn">
+          {aiBusy ? <><RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />GPT-5.2 is reading...</>
+                  : <><Wand2 className="w-3.5 h-3.5 mr-1.5" />Auto-map with AI
+                      <Badge className="ml-1.5 bg-white/20 text-white text-[9px] border-white/30">GPT-5.2</Badge></>}
+        </Button>
       </div>
 
-      {Object.keys(parsed.auto_mapping || {}).length > 0 && (
+      {aiResult && (
+        <div className="bg-gradient-to-br from-indigo-50 to-fuchsia-50 border border-indigo-200 rounded-xl p-4" data-testid="ai-result">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 mb-1 flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />GPT-5.2 mapped {aiResult.total_mapped} of {parsed.headers.length} headers
+            {aiResult.unmapped_headers?.length > 0 && <span className="text-stone-500 font-normal ml-1">· {aiResult.unmapped_headers.length} left unmapped</span>}
+          </p>
+          <p className="text-sm text-stone-800 leading-relaxed">{aiResult.reasoning}</p>
+        </div>
+      )}
+
+      {Object.keys(parsed.auto_mapping || {}).length > 0 && !aiResult && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-center gap-2">
           <Sparkles className="w-4 h-4 flex-shrink-0" />
-          We auto-mapped {Object.keys(parsed.auto_mapping).length} fields. Double-check below.
+          We auto-mapped {Object.keys(parsed.auto_mapping).length} fields. Double-check below, or try <b>Auto-map with AI</b> for messy/foreign headers.
         </div>
       )}
 
@@ -325,15 +360,20 @@ const MapStep = ({ wizard, setWizard, schemas, onNext, onBack }) => {
       <div className="space-y-3">
         {[...schema.required, ...schema.optional].map(field => {
           const isReq = schema.required.includes(field);
+          const conf = aiResult?.confidence?.[field];
+          const confCls = conf === "high" ? "ring-2 ring-emerald-300" : conf === "medium" ? "ring-1 ring-amber-300" : conf === "low" ? "ring-1 ring-stone-300" : "";
           return (
             <div key={field} className="flex items-center gap-3 py-2 border-b border-stone-100 last:border-0">
               <div className="min-w-[180px] flex items-center gap-1.5">
                 <span className="font-mono text-sm text-stone-800">{field}</span>
                 {isReq && <Badge className="text-[9px] bg-rose-100 text-rose-700 border-rose-200">REQUIRED</Badge>}
+                {conf && <Badge className={`text-[9px] ${conf === "high" ? "bg-emerald-100 text-emerald-700 border-emerald-200" : conf === "medium" ? "bg-amber-100 text-amber-700 border-amber-200" : "bg-stone-100 text-stone-600 border-stone-200"}`} title="AI confidence">
+                  <Sparkles className="w-2 h-2 mr-0.5" />{conf.toUpperCase()}
+                </Badge>}
               </div>
               <ArrowRight className="w-4 h-4 text-stone-400" />
               <Select value={wizard.mapping[field] || "none"} onValueChange={v => setMapping(field, v)}>
-                <SelectTrigger className="flex-1 h-9" data-testid={`map-${field}`}><SelectValue placeholder="— not mapped —" /></SelectTrigger>
+                <SelectTrigger className={`flex-1 h-9 ${confCls}`} data-testid={`map-${field}`}><SelectValue placeholder="— not mapped —" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">— not mapped —</SelectItem>
                   {parsed.headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}

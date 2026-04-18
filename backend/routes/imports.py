@@ -4,20 +4,15 @@ Competitor tagged this "Missing" — we're delivering it.
 
 Flow:
   1. POST /imports/parse  — upload file, return {headers, sample_rows, rows_count, file_token}
-  2. POST /imports/create — create job with {entity, property_id, file_token, mapping}
-  3. POST /imports/{id}/dry-run — validate without committing; return warnings/errors
-  4. POST /imports/{id}/run — execute the import; returns per-row outcome
-  5. GET /imports — list history, paginated
-  6. GET /imports/{id} — status + error detail
-  7. DELETE /imports/{id} — remove job record (files auto-expire)
+  2. POST /imports/ai-map — (optional) GPT-5.2 picks the mapping from messy/foreign headers
+  3. POST /imports/create — create job with {entity, property_id, file_token, mapping}
+  4. POST /imports/{id}/dry-run — validate without committing
+  5. POST /imports/{id}/run — execute
+  6. GET /imports — history
+  7. GET /imports/{id} — status + errors
+  8. DELETE /imports/{id} — remove
 
-Supported entities:
-  - bookings: guest_name, email, phone, check_in, check_out, room_type, rate, status
-  - guests:   name, email, phone, nationality, notes
-  - rooms:    room_number, room_type, floor, status
-  - rate_plans: name, room_type, base_rate, currency, policy
-
-Files cached in /tmp/imports/ keyed by uuid; older than 1h get pruned.
+Supported entities & files: see below.
 """
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
@@ -247,6 +242,130 @@ def create_imports_router(db, require_roles, get_current_user):
                 "optional": ENTITY_SCHEMAS[entity]["optional"],
             },
         }
+
+    # ------- AI COLUMN MAPPING (GPT-5.2) -------
+    class AIMapRequest(BaseModel):
+        file_token: str
+        entity: str
+
+    @router.post("/imports/ai-map")
+    async def ai_map_columns(body: AIMapRequest,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Use GPT-5.2 to map messy/foreign CSV headers to canonical fields.
+        Handles things like 'Fecha Entrada' → check_in, 'Guest Full Nm.' → guest_name, etc."""
+        if body.entity not in ENTITY_SCHEMAS:
+            raise HTTPException(400, f"Unknown entity '{body.entity}'")
+        cache_path = os.path.join(UPLOAD_DIR, f"{body.file_token}.json")
+        if not os.path.exists(cache_path):
+            raise HTTPException(404, "Upload expired — re-upload the file")
+
+        with open(cache_path) as f:
+            cache = json.load(f)
+
+        headers = cache["headers"]
+        sample_rows = cache["rows"][:3]  # tiny sample for context
+
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+        except Exception as e:
+            raise HTTPException(500, f"LLM library not available: {e}")
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(500, "EMERGENT_LLM_KEY not configured")
+
+        schema = ENTITY_SCHEMAS[body.entity]
+        all_fields = schema["required"] + schema["optional"]
+        field_descriptions = {
+            # common fields
+            "guest_name": "Full name of the guest (first + last)",
+            "name":       "Full name (for guest records)",
+            "email":      "Email address",
+            "phone":      "Phone number (any format)",
+            "check_in":   "Arrival/check-in date (YYYY-MM-DD)",
+            "check_out":  "Departure/check-out date (YYYY-MM-DD)",
+            "room_number":"Room unit number or identifier",
+            "room_type":  "Room category (e.g. Double, Suite, Deluxe)",
+            "rate":       "Price/rate per night or total",
+            "base_rate":  "Base nightly rate",
+            "currency":   "Currency code (GBP, USD, EUR)",
+            "status":     "Booking/room status (confirmed, cancelled, occupied, etc.)",
+            "source":     "Booking channel/source (Booking.com, direct, OTA)",
+            "nationality":"Country of origin",
+            "notes":      "Free-text notes/comments/remarks",
+            "adults":     "Number of adults",
+            "children":   "Number of children",
+            "date_of_birth":"Guest's birth date",
+            "address":    "Street address",
+            "vip":        "VIP flag (true/false/Y/N)",
+            "tags":       "Tags or labels",
+            "floor":      "Floor number",
+            "max_occupancy":"Maximum number of occupants",
+            "amenities":  "Room amenities list",
+            "min_stay":   "Minimum nights required",
+            "max_stay":   "Maximum nights allowed",
+            "policy":     "Policy text",
+            "cancellation_policy":"Cancellation policy",
+        }
+        fields_doc = [f"- {f}: {field_descriptions.get(f, '')}" for f in all_fields]
+
+        system_msg = (
+            "You are an expert data-mapping assistant for hotel management software. "
+            "Given a list of CSV headers (possibly in any language or messy format) and sample data, "
+            "map each CSV header to the best-matching canonical field from the schema — OR leave it unmapped if nothing fits. "
+            "Be confident when there's a clear semantic match. Handle: foreign languages "
+            "(Fecha Entrada=check_in, Apellido=name), abbreviations (Tel#=phone, Rm=room_number, Nt=notes), "
+            "typos (Naem=name), concatenations (CheckInDate=check_in), punctuation (Guest Nm.=guest_name). "
+            "Return ONLY valid JSON matching this schema:\n"
+            '{"mapping":{"canonical_field":"csv_header",...}, "confidence":{"canonical_field":"high|medium|low"}, '
+            '"unmapped_headers":["header1","header2"], "reasoning":"1-2 sentence summary"}'
+        )
+
+        user_content = (
+            f"ENTITY: {body.entity} ({schema['label']})\n\n"
+            f"CSV HEADERS:\n" + "\n".join(f"- {h}" for h in headers) + "\n\n"
+            f"SAMPLE ROWS (first {len(sample_rows)}):\n" +
+            "\n".join([" | ".join(r) for r in sample_rows]) + "\n\n"
+            f"CANONICAL FIELDS TO MAP TO:\n" + "\n".join(fields_doc) + "\n\n"
+            f"REQUIRED fields (must be mapped if possible): {', '.join(schema['required'])}"
+        )
+
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"import-aimap-{current_user.get('id','x')}-{uuid.uuid4().hex[:6]}",
+                system_message=system_msg,
+            ).with_model("openai", "gpt-5")
+            resp = await chat.send_message(UserMessage(text=user_content))
+            resp_text = resp if isinstance(resp, str) else str(resp)
+
+            import re as _re
+            m = _re.search(r"\{[\s\S]*\}", resp_text)
+            if not m:
+                raise ValueError("No JSON in response")
+            parsed = json.loads(m.group(0))
+
+            # Validate mapping keys + header values exist
+            mapping = {}
+            confidence = {}
+            valid_fields = set(all_fields)
+            valid_headers = set(headers)
+            for field, header in (parsed.get("mapping") or {}).items():
+                if field in valid_fields and header in valid_headers:
+                    mapping[field] = header
+                    confidence[field] = (parsed.get("confidence") or {}).get(field, "medium")
+
+            return {
+                "mapping": mapping,
+                "confidence": confidence,
+                "reasoning": parsed.get("reasoning", ""),
+                "unmapped_headers": [h for h in headers if h not in mapping.values()],
+                "total_mapped": len(mapping),
+                "total_fields": len(all_fields),
+            }
+        except Exception as e:
+            logger.exception("AI mapping failed")
+            raise HTTPException(502, f"AI mapping failed: {str(e)[:200]}")
 
     # ------- CREATE JOB -------
     class CreateJobBody(BaseModel):

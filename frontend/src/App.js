@@ -19,6 +19,7 @@ import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
 import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel";
 import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardingAdminPanel";
 import { PayrollRateMatrix } from "./components/dashboard/PayrollRateMatrix";
+import { BugTrackerPanel } from "./components/dashboard/BugTrackerPanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
@@ -175,6 +176,7 @@ import {
   MagicWand,
   DeviceMobile,
   TShirt,
+  Bug,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2652,6 +2654,7 @@ const Dashboard = ({ user, onLogout }) => {
         ...(user?.role !== "receptionist" ? [{ id: "legal-docs", icon: ShieldCheck, name: "Legal Documents", testId: "legal-docs-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings Hub", testId: "settings-hub-btn" }] : []),
+        { id: "bug-tracker", icon: Bug, name: "Bug Tracker", testId: "bug-tracker-btn" },
       ]
     }
   ];
@@ -3264,6 +3267,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Payroll Rate Matrix */}
         {activeView === "rate-matrix" && (
           <div className="p-6"><PayrollRateMatrix user={user} /></div>
+        )}
+
+        {/* Bug Tracker */}
+        {activeView === "bug-tracker" && (
+          <div className="p-6"><BugTrackerPanel user={user} /></div>
         )}
       </main>
 

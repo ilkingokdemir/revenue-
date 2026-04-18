@@ -1,6 +1,16 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 76+ Modules | Mobile Responsive | 133 Test Iterations (100%)
+## 77+ Modules | Mobile Responsive | 134 Test Iterations (100%)
+
+### Iter 135: Staff Contracts — Digital Employment with E-Signature
+- Full lifecycle: **draft → sent → signed → active → expired/terminated** with admin-only gating
+- Fields: contract_type (full_time/part_time/fixed_term/casual/zero_hours/freelance), start/end, probation_end, hours/week, hourly_rate, salary_annual, notice period, holiday entitlement, editable terms
+- **Public signing flow**: `GET /api/contracts/sign/{token}` (no auth) returns contract + hotel; `POST /api/contracts/sign/{token}` records typed signature + full name + IP
+- Admin UI: slate hero, 4 KPIs (active / expiring ≤30d / on probation / monthly cost with £/yr sub), status filter tabs + search, table with avatar + type + start-end + pay + status chip + context-aware actions (Edit / Send / Delete for drafts, Terminate for active)
+- Public route `/contract/sign/{token}` — mobile-friendly signing page with key-terms grid, scrollable T&Cs, typed-script signature, accept-terms checkbox
+- Monthly cost formula: `hours_per_week × hourly_rate × 4.333` or `salary_annual / 12`
+- Signed contracts are lock-edited — must be terminated to supersede
+- Tested end-to-end iteration 134 (24/24 backend + full frontend)
 
 ### Iter 134: Arrivals Cockpit — Contactless Guest Journey
 - One-pane command centre for every incoming guest's progress across **Link Sent → Registered → ID Verified → Paid → Digital Key Issued**
@@ -50,9 +60,8 @@
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Maintenance Issues Kanban
-- User Contracts & granular Roles/Permissions
 - System Feedback & internal Bug Tracker
+- Maintenance Kanban — enhancements (module already exists as MaintenancePanel, 1127 lines)
 
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks

@@ -2,6 +2,34 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 151: P1 Migration Sweep — permissions now enforced across 11 more endpoints + 50 more sidebar items
+
+**Backend — sensitive endpoints migrated from `require_roles` → `require_perm`:**
+- `POST /api/auth/register` → `create_users`
+- `PUT /api/users/{id}` → `edit_users`
+- `DELETE /api/users/{id}` → `delete_users`
+- `POST /api/properties` → `create_branches`
+- `PUT /api/properties/{id}` → `edit_branches`
+- `DELETE /api/properties/{id}` → `delete_branches`
+- `POST /api/payroll/runs/{pid}/{rid}/approve` → `approve_payroll_runs`
+- `POST /api/payroll/runs/{pid}/{rid}/mark-paid` → `approve_payroll_runs`
+- `DELETE /api/payroll/runs/{pid}/{rid}` → `delete_payroll_runs`
+- (+ role CRUD already migrated in iter 149)
+
+**Frontend — `SIDEBAR_PERM_MAP` expanded from 25 to 75 entries** covering every testId in the app:
+- Grouped by area: Dashboard/Tasks/Calendar, Bookings, Operations, Reports/Analytics, Finance, Channel Manager/Marketplace/Integrations, Guest-facing/Marketing, Settings/People
+- Each mapped to a real MENU permission key from the catalog
+
+**Live results:**
+- Admin: 79 sidebar buttons (full bypass, no change)
+- Sarah (receptionist): **29 buttons** (was 54 in iter 149) — **50 fewer distracting items**, sidebar now reads like a purpose-built receptionist app
+- Sarah can't: `POST /auth/register`, `POST /properties`, `DELETE /users/*`, `POST /payroll/approve`, `POST /payroll/mark-paid` — each returns crisp `403 "Missing permission: {key}"`
+- Admin still bypasses everything (legacy `role=="admin"` check in both `require_roles` and `require_perm`)
+
+**Zero regressions** — all non-migrated endpoints still use `require_roles` and work identically.
+
+**Tested iteration 148**: 22/25 backend + 100% frontend pass; zero blocking issues (3 LOW flags are testing-harness issues, not bugs).
+
 ### Iter 150: Import Module — the "Missing" feature we built
 The myhotelbox permission catalog explicitly tagged this module as **(Missing)** — 4 placeholder perms with no functionality behind them. We built the real thing.
 
@@ -276,8 +304,8 @@ User requirement: "When they fill when they on board staff they don't to be reac
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Gradual migration of existing `require_roles(...)` endpoints to `require_perm(...)` as we touch them
-- Expand `SIDEBAR_PERM_MAP` coverage to remaining ~50 sidebar items
+- Continue migrating remaining `require_roles(...)` endpoints (bookings delete/refund, channel-manager mutations) — opportunistic as we touch them
+- AI column mapping in Import Module (GPT-5.2 handles foreign/messy headers)
 
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks

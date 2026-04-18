@@ -1,6 +1,21 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 79+ Modules | Mobile Responsive | 136 Test Iterations (100%)
+## 80+ Modules | Mobile Responsive | 137 Test Iterations (100%)
+
+### Iter 138: Staff Onboarding Gate — UK Right-to-Work Verification
+- New non-admin staff start with `is_activated: false`; admin/manager are activated instantly
+- Blocks the entire dashboard until the user completes **4 steps**:
+  1. **ID/Passport** upload — file picker + native camera capture
+  2. **Address proof** upload — utility bill / bank statement / council tax
+  3. **HMRC Starter Checklist** — first/last name, DOB, NI number (9-char validation), address, postcode, start date, Statement A/B/C (official HMRC wording), student/postgrad loan flags
+  4. **Employment Contract** — auto-ticks when the user's email matches a signed `staff_contracts` row
+- Progress bar + per-task tick marks; Activate CTA only enabled at 4/4
+- `POST /api/staff-onboarding/complete` → flips `users.is_activated=true`
+- Admin endpoints: `GET /list` (filter by pending/activated/complete/incomplete), `POST /admin-activate/{user_id}`, `POST /admin-deactivate/{user_id}`
+- Login + `/auth/me` now expose `is_activated` to the frontend
+- Fixed flow ordering: `PendingLegalDocsGate` (legal policies) is suppressed while onboarding is incomplete — onboarding must finish first
+- Mobile-friendly: tab icons collapse to numbered badges on small screens, camera capture uses `capture=environment` to go straight to rear camera
+- **Tested**: iteration 137 — all backend + frontend flows pass end-to-end
 
 ### Iter 137: Login Gate for Pending Legal Documents
 - Full-screen blocking modal (`z-[100]` + backdrop-blur) mounts right after login inside MainApp

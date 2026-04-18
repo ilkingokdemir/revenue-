@@ -62,6 +62,82 @@ def require_roles(*roles):
         return user
     return role_checker
 
+
+# ======================================================================
+# Permission-based enforcement (RBAC v2)
+# ======================================================================
+# Legacy role → permission presets. Apply when a user has no `role_key`
+# (hasn't been migrated to the new RBAC yet). Admin = bypass (grants all).
+_LEGACY_ROLE_PERMS_CACHE = None
+
+
+def _get_legacy_role_perms():
+    """Lazy import to avoid circular deps with routes.permission_catalog."""
+    global _LEGACY_ROLE_PERMS_CACHE
+    if _LEGACY_ROLE_PERMS_CACHE is not None:
+        return _LEGACY_ROLE_PERMS_CACHE
+    try:
+        from routes.permission_catalog import expand_template_permissions, get_all_permission_keys
+        _LEGACY_ROLE_PERMS_CACHE = {
+            "admin":        set(get_all_permission_keys()),   # admin = all perms
+            "manager":      set(get_all_permission_keys()),   # manager = all (matches 'manager' template)
+            "receptionist": set(expand_template_permissions("receptionist")),
+            "housekeeper":  set(expand_template_permissions("housekeeper")),
+            "accountant":   set(expand_template_permissions("accountant")),
+            "laundry_staff": set(expand_template_permissions("laundry_staff")),
+            "maintenance":  set(expand_template_permissions("maintenance")),
+        }
+    except Exception:
+        _LEGACY_ROLE_PERMS_CACHE = {}
+    return _LEGACY_ROLE_PERMS_CACHE
+
+
+async def get_user_permissions(user: dict) -> set:
+    """Resolve a user's effective permission set.
+    Priority:
+      1. role doc in db.roles (by role_key) — is_global_admin grants all.
+      2. Legacy role presets (admin/manager/receptionist/…) — backwards compat.
+    """
+    role_key = user.get("role_key")
+    # 1. Custom role via role_key
+    if role_key:
+        role_doc = await db.roles.find_one({"key": role_key}, {"_id": 0, "permissions": 1, "is_global_admin": 1})
+        if role_doc:
+            if role_doc.get("is_global_admin"):
+                from routes.permission_catalog import get_all_permission_keys
+                return set(get_all_permission_keys())
+            return set(role_doc.get("permissions") or [])
+
+    # 2. Legacy role preset
+    legacy_role = user.get("role")
+    return _get_legacy_role_perms().get(legacy_role, set())
+
+
+def require_perm(*perm_keys, mode: str = "any"):
+    """
+    Require the user to have one (mode='any') or all (mode='all') of the given permission keys.
+    Usage:
+        current_user: dict = Depends(require_perm("approve_payroll_runs"))
+        current_user: dict = Depends(require_perm("view_bookings","edit_bookings", mode="all"))
+    Always allows role==admin (legacy back-compat).
+    """
+    async def perm_checker(request: Request):
+        user = await get_current_user(request)
+        # Always allow legacy admin role (cannot lock themselves out)
+        if user.get("role") == "admin":
+            return user
+        perms = await get_user_permissions(user)
+        needed = set(perm_keys)
+        ok = needed.issubset(perms) if mode == "all" else bool(needed & perms)
+        if not ok:
+            missing = list(needed - perms)
+            raise HTTPException(
+                status_code=403,
+                detail=f"Missing permission{'s' if len(missing) > 1 else ''}: {', '.join(missing[:3])}"
+            )
+        return user
+    return perm_checker
+
 async def verify_api_key(request: Request) -> dict:
     """Authenticate via API key (for widget/external access)"""
     api_key = request.query_params.get("api_key")

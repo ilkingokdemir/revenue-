@@ -2372,7 +2372,7 @@ async def handle_review_webhook(request: Request):
 };
 
 // Main Dashboard Component
-const Dashboard = ({ user, onLogout }) => {
+const Dashboard = ({ user, onLogout, permissions }) => {
   const { t } = useTranslation();
   const [reviews, setReviews] = useState([]);
   const [stats, setStats] = useState(null);
@@ -2661,6 +2661,50 @@ const Dashboard = ({ user, onLogout }) => {
     }
   ];
 
+  // Sidebar permission gating — mapping testId → required MENU permission key.
+  // Items not listed stay visible by default (admin, housekeeper role, etc.)
+  // Legacy admin role always sees everything (is_legacy_admin bypass).
+  const SIDEBAR_PERM_MAP = {
+    "housekeeping-btn":       "housekeeping_view",
+    "maintenance-btn":        "maintenance_view",
+    "reports-centre-btn":     "reports_overview_view",
+    "rate-manager-btn":       "rates_calendar_view",
+    "arrivals-btn":           "bookings_view",
+    "shift-scheduler-btn":    "operations_shifts_view",
+    "reception-report-btn":   "operations_reception_view",
+    "pass-over-btn":          "operations_notes_view",
+    "compliance-btn":         "operations_compliance_view",
+    "laundry-btn":            "laundry_reports_view",
+    "payroll-btn":            "finance_payroll_runs_view",
+    "rate-matrix-btn":        "finance_payroll_runs_view",
+    "expenses-btn":           "finance_expenses_view",
+    "cash-flow-btn":          "finance_dashboard_view",
+    "finance-btn":            "finance_dashboard_view",
+    "finance-pl-btn":         "finance_dashboard_view",
+    "marketplace-btn":        "channel_manager_connections_view",
+    "integrations-btn":       "channel_manager_connections_view",
+    "webhooks-btn":           "webhooks_view",
+    "team-btn":               "settings_users_view",
+    "contracts-btn":          "settings_user_contracts_view",
+    "legal-docs-btn":         "settings_roles_view",
+    "roles-permissions-btn":  "settings_roles_view",
+    "bug-tracker-btn":        "system_feedback_view",
+  };
+
+  const menuPerms = permissions?.menu_permissions;
+  const isLegacyAdmin = !!permissions?.is_legacy_admin;
+  const canSeeSidebar = (testId) => {
+    if (isLegacyAdmin) return true;                       // admin bypass
+    const perm = SIDEBAR_PERM_MAP[testId];
+    if (!perm) return true;                               // no gate → visible
+    if (!menuPerms) return true;                          // perms not loaded yet → show (avoid flicker)
+    return menuPerms.has(perm);
+  };
+  const gatedNavigation = menuSections.map(section => ({
+    ...section,
+    items: section.items.filter(it => canSeeSidebar(it.testId)),
+  })).filter(section => section.items.length > 0);
+
   return (
     <div className="min-h-screen bg-stone-50 flex" data-testid="review-dashboard">
       {/* Mobile Overlay */}
@@ -2732,7 +2776,7 @@ const Dashboard = ({ user, onLogout }) => {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 custom-scrollbar">
-          {menuSections.map((section, sIdx) => (
+          {gatedNavigation.map((section, sIdx) => (
             <div key={section.label || `section-${sIdx}`} className="mb-2">
               {sIdx > 0 && <div className="mx-4 mb-2 border-t border-stone-800" />}
               {section.label && (
@@ -3297,14 +3341,30 @@ const Dashboard = ({ user, onLogout }) => {
 function MainApp() {
   const [user, setUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [permissions, setPermissions] = useState(null); // { permissions:Set, menu_permissions:Set, is_legacy_admin:bool }
+
+  const fetchPermissions = async () => {
+    try {
+      const { data } = await axios.get(`${API}/rbac/me/permissions`);
+      setPermissions({
+        permissions: new Set(data.permissions || []),
+        menu_permissions: new Set(data.menu_permissions || []),
+        is_legacy_admin: !!data.is_legacy_admin,
+      });
+    } catch {
+      setPermissions({ permissions: new Set(), menu_permissions: new Set(), is_legacy_admin: false });
+    }
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const { data } = await axios.get(`${API}/auth/me`);
         setUser(data);
+        await fetchPermissions();
       } catch (e) {
         setUser(null);
+        setPermissions(null);
       } finally {
         setAuthChecking(false);
       }
@@ -3314,10 +3374,10 @@ function MainApp() {
 
   const handleLogin = (userData) => {
     setUser(userData);
-    // Set token in axios header for subsequent requests
     if (userData.token) {
       axios.defaults.headers.common["Authorization"] = `Bearer ${userData.token}`;
     }
+    fetchPermissions();
   };
 
   const handleLogout = async () => {
@@ -3328,6 +3388,7 @@ function MainApp() {
     }
     delete axios.defaults.headers.common["Authorization"];
     setUser(null);
+    setPermissions(null);
   };
 
   if (authChecking) {
@@ -3352,7 +3413,7 @@ function MainApp() {
 
   return (
     <div className="App">
-      <Dashboard user={user} onLogout={handleLogout} />
+      <Dashboard user={user} onLogout={handleLogout} permissions={permissions} />
       <StaffOnboardingGate
         user={user}
         onActivated={async () => {

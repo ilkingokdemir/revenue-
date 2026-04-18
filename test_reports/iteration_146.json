@@ -1,0 +1,117 @@
+{
+  "summary": "Iteration 146 - RBAC Permission Enforcement & Sidebar Gating. Backend: 18/18 tests passed. Frontend: Sidebar gating working correctly - Admin sees 76 buttons, Sarah (receptionist) sees 52 buttons with proper permission-based filtering.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PendingLegalDocsGate", "issues": ["Minor HTML nesting warning: <div> inside <p> tag causing hydration warning (non-blocking)"]}
+    ]
+  },
+  "features_tested": {
+    "rbac_me_permissions_endpoint": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/rbac/me/permissions requires authentication (401 without)",
+        "Admin gets 313+ permissions and 71+ menu permissions",
+        "Admin has is_legacy_admin=true",
+        "Receptionist (Sarah) gets 19 permissions and 7 menu permissions",
+        "Receptionist has is_legacy_admin=false",
+        "Response includes user_id, role, role_key, permissions, menu_permissions, total_permissions"
+      ]
+    },
+    "require_perm_middleware": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/rbac/roles requires create_roles permission",
+        "PUT /api/rbac/roles/{id} requires edit_roles permission",
+        "DELETE /api/rbac/roles/{id} requires delete_roles permission",
+        "POST /api/rbac/roles/{id}/clone requires create_roles permission",
+        "Admin (legacy admin) bypasses all permission checks",
+        "Receptionist gets 403 with 'Missing permission: create_roles' on POST",
+        "Receptionist gets 403 with 'Missing permission: edit_roles' on PUT",
+        "Receptionist gets 403 with 'Missing permission: delete_roles' on DELETE"
+      ]
+    },
+    "legacy_endpoints_regression": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/rbac/catalog still works",
+        "GET /api/rbac/roles still works (uses require_roles)",
+        "GET /api/bookings still works",
+        "GET /api/users still works"
+      ]
+    },
+    "frontend_sidebar_gating": {
+      "status": "PASS",
+      "tests": [
+        "Admin sees 76 sidebar buttons (no filtering)",
+        "Sarah (receptionist) sees 52 sidebar buttons",
+        "payroll-btn HIDDEN for Sarah (lacks finance_payroll_runs_view)",
+        "finance-btn HIDDEN for Sarah (lacks finance_dashboard_view)",
+        "finance-pl-btn HIDDEN for Sarah (lacks finance_dashboard_view)",
+        "cash-flow-btn HIDDEN for Sarah (lacks finance_dashboard_view)",
+        "roles-permissions-btn HIDDEN for Sarah (lacks settings_roles_view)",
+        "bug-tracker-btn HIDDEN for Sarah (lacks system_feedback_view)",
+        "housekeeping-btn HIDDEN for Sarah (lacks housekeeping_view)",
+        "maintenance-btn HIDDEN for Sarah (lacks maintenance_view)",
+        "expenses-btn HIDDEN for Sarah (lacks finance_expenses_view)",
+        "webhooks-btn HIDDEN for Sarah (lacks webhooks_view)",
+        "rate-manager-btn VISIBLE for Sarah (has rates_calendar_view) - CORRECT per SIDEBAR_PERM_MAP",
+        "arrivals-btn VISIBLE for Sarah (has bookings_view)",
+        "reception-report-btn VISIBLE for Sarah (has operations_reception_view)",
+        "pass-over-btn VISIBLE for Sarah (has operations_notes_view)",
+        "dashboard-btn VISIBLE for Sarah (has dashboard_view)"
+      ]
+    },
+    "permissions_fetch_on_login": {
+      "status": "PASS",
+      "tests": [
+        "MainApp fetches /rbac/me/permissions after successful login",
+        "Permissions stored in state as {permissions:Set, menu_permissions:Set, is_legacy_admin:bool}",
+        "Dashboard receives permissions prop",
+        "canSeeSidebar() function correctly gates sidebar items"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration146_rbac_permissions.py",
+    "/app/test_reports/pytest/pytest_iteration146_rbac_permissions.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "require_perm() middleware correctly allows legacy admin role to bypass all permission checks",
+    "get_user_permissions() correctly resolves permissions from role_key or legacy role presets",
+    "SIDEBAR_PERM_MAP correctly maps ~22 sidebar testIds to MENU permission keys",
+    "canSeeSidebar() function correctly handles: (1) legacy admin bypass, (2) no gate = visible, (3) perms not loaded = visible",
+    "gatedNavigation correctly filters menuSections based on canSeeSidebar()",
+    "NOTE: rate-manager-btn is VISIBLE for receptionist because receptionist template includes rates_calendar_view - this is CORRECT per current implementation"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration146_rbac_permissions.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 passed)",
+    "frontend": "100% (all sidebar gating tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "receptionist": "sarah@hotel.test / StaffP@ss1"
+  },
+  "seed_data_creation": "Test roles created during backend testing were cleaned up (test_iter146_*).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 146 added permission enforcement middleware (require_perm) and sidebar visibility gating. GET /api/rbac/me/permissions returns user's effective permissions + menu_permissions. POST/PUT/DELETE /api/rbac/roles now require create_roles/edit_roles/delete_roles permissions (admin bypasses). Frontend fetches permissions on login and gates sidebar items via SIDEBAR_PERM_MAP. Admin sees 76 buttons, receptionist sees 52 buttons. Note: rate-manager-btn is correctly visible for receptionist because receptionist template includes rates_calendar_view permission.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "clarification_on_expected_behavior": {
+    "rate_manager_btn": "Main agent expected this to be hidden for Sarah, but Sarah has rates_calendar_view permission (part of receptionist template), so it's correctly VISIBLE per SIDEBAR_PERM_MAP. If main agent wants to hide rate-manager for receptionists, they need to either: (1) remove rates_calendar_view from receptionist template, or (2) change SIDEBAR_PERM_MAP to use a different permission key.",
+    "shift_scheduler_btn": "Correctly HIDDEN for Sarah because she lacks operations_shifts_view permission.",
+    "calendar_btn": "The testId is 'sidebar-calendar' not 'calendar-btn' - this item is not gated in SIDEBAR_PERM_MAP so it should be visible by default."
+  }
+}

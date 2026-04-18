@@ -21,6 +21,7 @@ from routes.permission_catalog import (
     get_all_permission_keys, count_total_permissions,
     expand_template_permissions, enrich_catalog, get_risk,
 )
+from auth import require_perm
 import os
 import json
 import logging
@@ -76,6 +77,29 @@ def create_roles_router(db, require_roles, get_current_user):
             "templates": ROLE_TEMPLATES,
             "total_permissions": count_total_permissions(),
             "all_permission_keys": get_all_permission_keys(),
+        }
+
+    # ------- WHO AM I + MY PERMISSIONS -------
+    @router.get("/rbac/me/permissions")
+    async def my_permissions(current_user: dict = Depends(get_current_user)):
+        """Return the current user's effective permission set + menu keys for sidebar gating."""
+        from auth import get_user_permissions
+        perms = await get_user_permissions(current_user)
+        # Build menu-visible keys from the catalog for sidebar rendering
+        menu_visible = set()
+        for cat in PERMISSION_CATALOG:
+            for sg in cat["sub_groups"]:
+                for p in sg["permissions"]:
+                    if p.get("menu") and p["key"] in perms:
+                        menu_visible.add(p["key"])
+        return {
+            "user_id": current_user.get("id"),
+            "role": current_user.get("role"),
+            "role_key": current_user.get("role_key"),
+            "is_legacy_admin": current_user.get("role") == "admin",  # admin bypasses all checks
+            "permissions": sorted(perms),
+            "menu_permissions": sorted(menu_visible),
+            "total_permissions": len(perms),
         }
 
     # ------- AI ROLE DESIGNER (GPT-5.2) -------
@@ -190,7 +214,7 @@ def create_roles_router(db, require_roles, get_current_user):
     # ------- CREATE -------
     @router.post("/rbac/roles")
     async def create_role(body: RoleCreate,
-                          current_user: dict = Depends(require_roles("admin"))):
+                          current_user: dict = Depends(require_perm("create_roles"))):
         key = body.key.strip().lower()
         if not KEY_REGEX.match(key):
             raise HTTPException(400, "Key must be lowercase letters, digits and underscores (2-50 chars, starts with letter)")
@@ -240,7 +264,7 @@ def create_roles_router(db, require_roles, get_current_user):
     # ------- UPDATE (display_name, permissions, is_global_admin only — key is immutable) -------
     @router.put("/rbac/roles/{role_id}")
     async def update_role(role_id: str, body: RoleUpdate,
-                          current_user: dict = Depends(require_roles("admin"))):
+                          current_user: dict = Depends(require_perm("edit_roles"))):
         r = await db.roles.find_one({"id": role_id})
         if not r:
             raise HTTPException(404, "Role not found")
@@ -262,7 +286,7 @@ def create_roles_router(db, require_roles, get_current_user):
     # ------- CLONE -------
     @router.post("/rbac/roles/{role_id}/clone")
     async def clone_role(role_id: str, body: CloneRequest,
-                         current_user: dict = Depends(require_roles("admin"))):
+                         current_user: dict = Depends(require_perm("create_roles"))):
         src = await db.roles.find_one({"id": role_id}, {"_id": 0})
         if not src:
             raise HTTPException(404, "Role not found")
@@ -294,7 +318,7 @@ def create_roles_router(db, require_roles, get_current_user):
     # ------- DELETE -------
     @router.delete("/rbac/roles/{role_id}")
     async def delete_role(role_id: str,
-                          current_user: dict = Depends(require_roles("admin"))):
+                          current_user: dict = Depends(require_perm("delete_roles"))):
         r = await db.roles.find_one({"id": role_id}, {"_id": 0, "key": 1})
         if not r:
             raise HTTPException(404, "Role not found")

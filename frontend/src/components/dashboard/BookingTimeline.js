@@ -6,7 +6,7 @@ import {
   RefreshCw, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CalendarDays,
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
-  FileText, Send, Receipt
+  FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -37,15 +37,16 @@ const PLATFORM_DOMAINS = {
   "vrbo":             "vrbo.com",
   // Non-domain sources below also normalise to web icons
 };
-// Special icons for non-OTA sources (no domain)
+// Special icons for non-OTA sources — use Lucide SVG for same clean look as real favicons
 const NON_OTA = {
-  "direct":         { bg: "#1F2937", emoji: "⌂", label: "Direct" },
-  "website":        { bg: "#0EA5E9", emoji: "🌐", label: "Website" },
-  "website_widget": { bg: "#0EA5E9", emoji: "🌐", label: "Website Widget" },
-  "walk_in":        { bg: "#78716C", emoji: "👤", label: "Walk-in" },
-  "walk-in":        { bg: "#78716C", emoji: "👤", label: "Walk-in" },
-  "phone":          { bg: "#10B981", emoji: "☎", label: "Phone" },
-  "affiliate":      { bg: "#8B5CF6", emoji: "⚯", label: "Affiliate" },
+  "direct":         { bg: "#1F2937", Icon: Home,      label: "Direct" },
+  "website":        { bg: "#0EA5E9", Icon: Globe,     label: "Website" },
+  "website_widget": { bg: "#0EA5E9", Icon: Globe,     label: "Website Widget" },
+  "walk_in":        { bg: "#78716C", Icon: UserCheck, label: "Walk-in" },
+  "walk-in":        { bg: "#78716C", Icon: UserCheck, label: "Walk-in" },
+  "phone":          { bg: "#10B981", Icon: PhoneCall, label: "Phone" },
+  "affiliate":      { bg: "#8B5CF6", Icon: Share2,    label: "Affiliate" },
+  "other":          { bg: "#6366F1", Icon: Globe,     label: "Other" },
 };
 // 2-letter codes used by the PMS
 const CODE_TO_KEY = {
@@ -79,12 +80,15 @@ const PlatformLogo = ({ source, size = 16 }) => {
   }
   const non = NON_OTA[key];
   if (non) {
+    const Icon = non.Icon;
     return (
       <span
-        className="inline-flex items-center justify-center rounded-full flex-shrink-0 leading-none"
-        style={{ width: size, height: size, backgroundColor: non.bg, fontSize: size * 0.6, color: "white" }}
+        className="inline-flex items-center justify-center rounded-full flex-shrink-0"
+        style={{ width: size, height: size, backgroundColor: non.bg }}
         title={non.label}
-      >{non.emoji}</span>
+      >
+        <Icon size={size * 0.6} color="white" strokeWidth={2.5} />
+      </span>
     );
   }
   // Fallback — unknown source

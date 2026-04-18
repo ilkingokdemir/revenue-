@@ -16,6 +16,8 @@ import TurkishPayPage from "./TurkishPayPage";
 import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
 import { IntegrationsMarketplace } from "./components/dashboard/IntegrationsMarketplace";
 import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
+import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel";
+import { ContractSigningPage } from "./components/public/ContractSigningPage";
 import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
 import { ReportsSettings } from "./components/dashboard/ReportsSettings";
 import { LoginPage } from "./components/dashboard/LoginPage";
@@ -2639,6 +2641,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn" }] : []),
+        ...(user?.role === "admin" ? [{ id: "contracts", icon: FileText, name: "Staff Contracts", testId: "contracts-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings Hub", testId: "settings-hub-btn" }] : []),
       ]
@@ -3234,6 +3237,11 @@ const Dashboard = ({ user, onLogout }) => {
         {activeView === "arrivals" && (
           <div className="p-6"><ArrivalsCockpit propertyId={activePropertyId} user={user} /></div>
         )}
+
+        {/* Staff Contracts */}
+        {activeView === "contracts" && (
+          <div className="p-6"><StaffContractsPanel propertyId={activePropertyId} user={user} /></div>
+        )}
       </main>
 
       {/* Powered By Footer */}
@@ -3341,6 +3349,10 @@ function App() {
   if (window.location.pathname.startsWith("/register/")) {
     const token = window.location.pathname.split("/register/")[1];
     return <GuestRegistrationPage token={token} />;
+  }
+  if (window.location.pathname.startsWith("/contract/sign/")) {
+    const token = window.location.pathname.split("/contract/sign/")[1];
+    return <ContractSigningPage token={token} />;
   }
   if (window.location.pathname.startsWith("/feedback/")) {
     const token = window.location.pathname.split("/feedback/")[1];

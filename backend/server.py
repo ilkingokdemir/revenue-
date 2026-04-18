@@ -102,6 +102,7 @@ from routes.expenses import create_expenses_router
 from routes.cashflow import create_cashflow_router
 from routes.marketplace import create_marketplace_router
 from routes.arrivals import create_arrivals_router
+from routes.contracts import create_contracts_router
 
 # Import extracted modules
 from models import (
@@ -505,6 +506,8 @@ marketplace_router = create_marketplace_router(db, require_roles, LlmChat, UserM
 api_router.include_router(marketplace_router)
 arrivals_router = create_arrivals_router(db, require_roles)
 api_router.include_router(arrivals_router)
+contracts_router = create_contracts_router(db, require_roles)
+api_router.include_router(contracts_router)
 
 app.include_router(api_router)
 

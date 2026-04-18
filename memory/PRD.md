@@ -1,6 +1,18 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 82+ Modules | Mobile Responsive | 141 Test Iterations (100%)
+## 82+ Modules | Mobile Responsive | 142 Test Iterations (100%)
+
+### Iter 143: Admin Reset Step — unlock onboarding documents
+- Closes the loop on the iter-141 lockdown — admin can now reset any individual onboarding step when a staff member genuinely needs to correct a mistake
+- **POST /api/staff-onboarding/{user_id}/reset/{passport|address|hmrc|contract}** (admin only)
+  - passport/address: deletes the file on disk + unsets filename/path/url + flips `*_uploaded=false`
+  - hmrc: unsets `hmrc_data` + flips `hmrc_submitted=false`
+  - contract: unsets `contract_id` + flips `contract_signed=false` (doesn't touch staff_contracts)
+- **Audit trail**: every reset pushes `{step, reset_by, reset_at}` to `staff_onboarding.reset_log`
+- Admin UI: amber **RotateCcw** icon next to each document's download icon — shows window.confirm, then POST, toast + reload
+- Rejects unknown step (400) and non-admin callers (403)
+- After reset, staff can immediately re-upload / re-submit from their onboarding screen — locks release
+- Tested iteration 142 (19/19 backend + frontend pass)
 
 ### Iter 142: Staff Onboarding Security Lockdown
 User requirement: "When they fill when they on board staff they don't to be reach any document they upload and they fill they signed."

@@ -1,16 +1,30 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 84+ Modules | Mobile Responsive | 143 Test Iterations (100%)
+## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
-### Iter 144: Bug Tracker & System Feedback (new P1 module)
-- Any authenticated user can file a ticket (bug / feedback / feature request / question) with title, description, priority (low/medium/high/critical), area tag (Bookings / Payroll / Integrations / …), page-URL context
-- **Admin/manager triage**: status lifecycle `new → triaged → in_progress → resolved → closed / wont_fix`, priority edits, area edits, assignee (only admin|manager users), resolution note (auto-shown when status=resolved with emerald card)
-- **Comments thread** with author name/role/timestamp — any party (creator, assignee, admin, manager) can comment; non-admin users are scoped to their own tickets + assigned tickets
-- **Stats-powered UI**: hero shows Open / Critical / Resolved counters; status-tab pills with live counts per status
-- Endpoints: `POST/GET/PUT/DELETE /api/bug-tracker`, `POST /api/bug-tracker/{id}/comments`, `GET /api/bug-tracker-meta/assignees`
-- Admin-only deletion; `resolved` status auto-stamps `resolved_at` + `resolved_by`
-- Sidebar entry `bug-tracker-btn` under Settings — visible to **all roles** (including receptionist) so the whole team can self-serve
-- Tested iteration 143 (47/47 backend + full frontend pass, zero issues)
+### Iter 145: Enterprise RBAC — Roles & Permissions (new P1 module)
+- Reverse-engineered from **22 myhotelbox screenshots**
+- **313 permissions** across **15 categories** × ~70 sub-groups: Dashboard, My Tasks, Calendar, Bookings (42), Reports (9), Operations (54), Finance (30), Channel Manager (41), Revenue (61), Settings (65), System Feedback, Help, Webhooks (5), Secrets (4), Uncategorized — matches the competitor's full shape
+- **State-transition permissions** as first-class (Approve / Submit / Verify / Finalize / Start / Pause / Promote / Apply / Dismiss / Acknowledge / Run / Export / Import / Detect / Cancel / Mark Paid / Generate) alongside CRUD
+- **Scope modifiers** (Manage Own Expenses vs Manage Expenses) supported
+- **MENU badge** on permissions that gate sidebar visibility; **MISSING badge** on perms whose module isn't built yet (Import Module placeholder)
+- **6 quick-start role templates** (Receptionist / Housekeeper / Manager[__ALL__] / Accountant / Laundry Staff / Maintenance) as gradient tile cards with emojis
+- **Role Name** (immutable `lowercase_underscores` internal key) + **Display Name** (editable user-facing label) + **Global Admin** toggle
+- **Clone Role** with new_key validation; **Edit** keeps key disabled; **Delete** blocked when users are assigned
+- Endpoints (namespaced `/api/rbac/` to avoid collision with legacy `/api/roles`):
+  - `GET /api/rbac/catalog` (auth) — full catalog + templates
+  - `GET|POST /api/rbac/roles` (admin/manager read, admin write)
+  - `GET|PUT|DELETE /api/rbac/roles/{id}`, `POST /api/rbac/roles/{id}/clone`
+- Frontend: Role list with KPIs, crown icon for global admins, template badges, cloned-from badges; 3-level collapsible permission tree with master / per-category / per-sub-group Select All
+- Sidebar entry `roles-permissions-btn` (admin only) under Settings
+- Tested iteration 144 (38/38 backend + full frontend pass, zero issues)
+
+### Iter 144: Bug Tracker & System Feedback
+- Any authenticated user can file a ticket (bug / feedback / feature request / question) with priority, area tag, URL context
+- Admin/manager triage: status lifecycle `new → triaged → in_progress → resolved → closed/wont_fix`, assignee, resolution note
+- Comments thread with author metadata
+- Scoped visibility (staff see only own+assigned; admin/manager see all)
+- Tested iteration 143 (47/47 backend + full frontend pass)
 
 ### Iter 143: Payroll Rate Matrix (finished)
 - Cross-tab grid: users × properties with hourly/daily rate, split-across-branches toggle, active toggle per branch
@@ -177,7 +191,9 @@ User requirement: "When they fill when they on board staff they don't to be reac
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- Clone Role button + Global Admin flag on Roles & Permissions panel
+- Enforcement middleware: check `role.permissions[]` on protected endpoints (currently role names are checked, not permission keys)
+- Wire sidebar visibility to MENU permissions
+- Import Module (competitor tagged as "Missing" — build it to fully surpass)
 
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks

@@ -1,0 +1,125 @@
+{
+  "summary": "Iteration 142 - Admin Reset Step feature fully tested. Backend: 19/19 tests passed. All reset functionality working correctly: admin-only access (403 for staff), reset passport/address/hmrc/contract each with correct behavior, unknown kind returns 400, audit trail (reset_log) entries created. Frontend: Reset icons (RotateCcw amber) visible only for admin role next to download icons on passport/address/hmrc cards when documents are uploaded. Clicking reset shows confirm dialog, calls API, toasts success, reloads list, closes drawer.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "reset_endpoint_access_control": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/staff-onboarding/{user_id}/reset/{kind} returns 403 for staff role",
+        "POST /api/staff-onboarding/{user_id}/reset/{kind} returns 401 without auth",
+        "POST /api/staff-onboarding/{user_id}/reset/unknown_step returns 400 'Unknown step'",
+        "POST /api/staff-onboarding/{user_id}/reset/{kind} returns 404 for nonexistent user"
+      ]
+    },
+    "reset_passport": {
+      "status": "PASS",
+      "tests": [
+        "Admin can reset passport step - returns 200 with ok=true, step=passport",
+        "After reset, passport_uploaded=false",
+        "Staff can re-upload passport after admin reset"
+      ]
+    },
+    "reset_address": {
+      "status": "PASS",
+      "tests": [
+        "Admin can reset address step - returns 200 with ok=true, step=address",
+        "After reset, address_proof_uploaded=false",
+        "Staff can re-upload address proof after admin reset"
+      ]
+    },
+    "reset_hmrc": {
+      "status": "PASS",
+      "tests": [
+        "Admin can reset HMRC step - returns 200 with ok=true, step=hmrc",
+        "After reset, hmrc_submitted=false",
+        "Staff can re-submit HMRC checklist after admin reset"
+      ]
+    },
+    "reset_contract": {
+      "status": "PASS",
+      "tests": [
+        "Admin can reset contract step - returns 200 with ok=true, step=contract",
+        "After reset, contract_signed=false"
+      ]
+    },
+    "audit_trail": {
+      "status": "PASS",
+      "tests": [
+        "Each reset appends entry to reset_log with step, reset_by, reset_at",
+        "Admin list endpoint returns reset_log entries correctly"
+      ]
+    },
+    "frontend_reset_icons": {
+      "status": "PASS",
+      "tests": [
+        "Reset icons (RotateCcw amber) visible on passport card when passport_uploaded=true AND user is admin",
+        "Reset icons visible on address card when address_proof_uploaded=true AND user is admin",
+        "Reset icons visible on HMRC card when hmrc_submitted=true AND user is admin",
+        "Reset icons NOT visible when documents not uploaded (correctly hidden)",
+        "Reset icons NOT visible for non-admin roles (isAdmin check in code)"
+      ]
+    },
+    "regression_download_bundle_email": {
+      "status": "PASS",
+      "tests": [
+        "Download passport still works (200)",
+        "Download address still works (200)",
+        "Download HMRC PDF still works (200)",
+        "Download bundle ZIP still works (200)",
+        "Email documents button present",
+        "ZIP bundle button present"
+      ]
+    },
+    "valid_reset_kinds": {
+      "status": "PASS",
+      "tests": [
+        "passport - accepted",
+        "address - accepted",
+        "hmrc - accepted",
+        "contract - accepted"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration142_admin_reset_step.py",
+    "/app/test_reports/pytest/pytest_iteration142_admin_reset.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reset endpoint correctly uses require_roles('admin') - only admin can reset",
+    "Reset passport/address deletes file on disk before unsetting fields",
+    "Reset uses $unset for clearing fields and $set for flipping boolean flags",
+    "Audit trail uses $push to append to reset_log array",
+    "Frontend correctly checks isAdmin (user?.role === 'admin') before showing reset icons",
+    "Reset icons only appear when document is uploaded (conditional rendering)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration142_admin_reset_step.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "staff": "sarah@hotel.test / StaffP@ss1 (role=receptionist)"
+  },
+  "seed_data_creation": "Sarah has passport, address, HMRC uploaded after test. Contract=false. Reset_log has 16 entries from testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 142 added admin reset step feature. Admin can reset passport/address/hmrc/contract steps via POST /api/staff-onboarding/{user_id}/reset/{kind}. Reset deletes files, unsets fields, flips boolean flags. Audit trail in reset_log. Frontend shows amber RotateCcw icons next to download icons on each card header - only visible for admin role when document is uploaded. Clicking shows confirm dialog, calls API, toasts success, reloads list.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Email delivery via Resend (RESEND_API_KEY is placeholder - returns 502 'API key invalid' which is EXPECTED behavior)"
+    ]
+  }
+}

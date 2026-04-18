@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import {
   UserCheck, Search, RefreshCw, Eye, CheckCircle2, XCircle, Home,
   FileText, Receipt, FileSignature, ShieldCheck, Circle, Ban,
-  ExternalLink, Users, Clock, Download, Mail, Package, Send,
+  ExternalLink, Users, Clock, Download, Mail, Package, Send, RotateCcw,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -147,6 +147,21 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
       setEmailDlg(null);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Email failed");
+    }
+    setBusy(null);
+  };
+
+  const resetStep = async (r, kind, label) => {
+    if (!window.confirm(`Reset ${label} for ${r.user_name}? They'll be able to re-upload / re-submit this step from their onboarding screen.`)) return;
+    setBusy(`reset-${kind}`);
+    try {
+      await axios.post(`${API}/staff-onboarding/${r.user_id}/reset/${kind}`);
+      toast.success(`${label} reset — staff can now resubmit`);
+      // Refresh: reload list and close drawer (fresh state will show empty card)
+      load();
+      setSelected(null);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Reset failed");
     }
     setBusy(null);
   };
@@ -331,6 +346,13 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
                         <Download className="w-3.5 h-3.5 text-stone-500" />
                       </button>
                     )}
+                    {selected.passport_uploaded && isAdmin && (
+                      <button onClick={() => resetStep(selected, "passport", "ID / Passport")}
+                              className="p-1 hover:bg-amber-50 rounded" title="Reset — let staff re-upload"
+                              data-testid="oa-reset-passport">
+                        <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                      </button>
+                    )}
                     {selected.passport_uploaded
                       ? <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                       : <XCircle className="w-4 h-4 text-stone-300" />}
@@ -362,6 +384,13 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
                       <button onClick={() => download(selected, "address", "Address proof")}
                               className="p-1 hover:bg-white rounded" title="Download" data-testid="oa-dl-address">
                         <Download className="w-3.5 h-3.5 text-stone-500" />
+                      </button>
+                    )}
+                    {selected.address_proof_uploaded && isAdmin && (
+                      <button onClick={() => resetStep(selected, "address", "Address proof")}
+                              className="p-1 hover:bg-amber-50 rounded" title="Reset — let staff re-upload"
+                              data-testid="oa-reset-address">
+                        <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
                       </button>
                     )}
                     {selected.address_proof_uploaded
@@ -396,6 +425,13 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
                       <button onClick={() => download(selected, "hmrc", "HMRC PDF")}
                               className="p-1 hover:bg-white rounded" title="Download PDF" data-testid="oa-dl-hmrc">
                         <Download className="w-3.5 h-3.5 text-stone-500" />
+                      </button>
+                    )}
+                    {selected.hmrc_submitted && isAdmin && (
+                      <button onClick={() => resetStep(selected, "hmrc", "HMRC Starter Checklist")}
+                              className="p-1 hover:bg-amber-50 rounded" title="Reset — let staff re-submit"
+                              data-testid="oa-reset-hmrc">
+                        <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
                       </button>
                     )}
                     {selected.hmrc_submitted

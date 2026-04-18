@@ -588,4 +588,65 @@ def create_staff_onboarding_router(db, require_roles, get_current_user, resend_l
         )
         return {"ok": True, "sent_to": to_list, "attachments": len(attachments)}
 
+    # -------- ADMIN: RESET A STEP (unlock so staff can re-upload/re-submit) --------
+    @router.post("/staff-onboarding/{user_id}/reset/{kind}")
+    async def admin_reset_step(user_id: str, kind: str,
+                               current_user: dict = Depends(require_roles("admin"))):
+        if kind not in ("passport", "address", "hmrc", "contract"):
+            raise HTTPException(400, "Unknown step")
+        doc = await db.staff_onboarding.find_one({"user_id": user_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Onboarding not found")
+
+        now = datetime.now(timezone.utc).isoformat()
+        unset: Dict = {}
+        set_: Dict = {"updated_at": now,
+                      "last_reset_by": current_user.get("name", ""),
+                      "last_reset_at": now,
+                      "last_reset_step": kind}
+
+        if kind == "passport":
+            # Delete file on disk if present
+            p = doc.get("passport_path")
+            if p and os.path.exists(p):
+                try: os.remove(p)
+                except Exception: pass
+            unset.update({"passport_filename": "", "passport_path": "",
+                          "passport_url": "", "passport_uploaded_at": ""})
+            set_["passport_uploaded"] = False
+        elif kind == "address":
+            p = doc.get("address_proof_path")
+            if p and os.path.exists(p):
+                try: os.remove(p)
+                except Exception: pass
+            unset.update({"address_proof_filename": "", "address_proof_path": "",
+                          "address_proof_url": "", "address_proof_uploaded_at": ""})
+            set_["address_proof_uploaded"] = False
+        elif kind == "hmrc":
+            unset["hmrc_data"] = ""
+            set_["hmrc_submitted"] = False
+        elif kind == "contract":
+            set_["contract_signed"] = False
+            unset["contract_id"] = ""
+
+        update: Dict = {"$set": set_}
+        if unset:
+            update["$unset"] = unset
+
+        await db.staff_onboarding.update_one({"user_id": user_id}, update)
+
+        # Audit trail
+        await db.staff_onboarding.update_one(
+            {"user_id": user_id},
+            {"$push": {"reset_log": {
+                "step": kind, "reset_by": current_user.get("name", ""),
+                "reset_at": now,
+            }}}
+        )
+
+        # If the user was already activated, keep them activated (reset is just for correction).
+        # If you'd prefer to force re-activation, uncomment:
+        # await db.users.update_one({"id": user_id}, {"$set": {"is_activated": False}})
+        return {"ok": True, "step": kind}
+
     return router

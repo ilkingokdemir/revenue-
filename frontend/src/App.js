@@ -14,6 +14,7 @@ import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
 import TurkishPayPage from "./TurkishPayPage";
 import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
+import { IntegrationsMarketplace } from "./components/dashboard/IntegrationsMarketplace";
 import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
 import { ReportsSettings } from "./components/dashboard/ReportsSettings";
 import { LoginPage } from "./components/dashboard/LoginPage";
@@ -2622,6 +2623,7 @@ const Dashboard = ({ user, onLogout }) => {
       label: t("section.connections"),
       items: [
         { id: "setup-wizard", icon: Gear, name: t("nav.setup_wizard"), testId: "setup-wizard-btn" },
+        { id: "marketplace", icon: Sparkle, name: "Marketplace", testId: "marketplace-btn" },
         { id: "integrations", icon: PlugsConnected, name: t("nav.integrations"), testId: "integrations-btn" },
         { id: "api", icon: Key, name: t("nav.api"), testId: "api-connection-btn" },
         { id: "webhooks", icon: Code, name: t("nav.webhooks"), testId: "webhooks-btn" },
@@ -3219,6 +3221,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Cash Flow Forecast */}
         {activeView === "cash-flow" && (
           <div className="p-6"><CashFlowForecast propertyId={activePropertyId} user={user} /></div>
+        )}
+
+        {/* Integrations Marketplace */}
+        {activeView === "marketplace" && (
+          <div className="p-6"><IntegrationsMarketplace propertyId={activePropertyId} user={user} /></div>
         )}
       </main>
 

@@ -21,6 +21,7 @@ import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardin
 import { PayrollRateMatrix } from "./components/dashboard/PayrollRateMatrix";
 import { BugTrackerPanel } from "./components/dashboard/BugTrackerPanel";
 import { RolesPermissionsPanel } from "./components/dashboard/RolesPermissionsPanel";
+import { ImportModulePanel } from "./components/dashboard/ImportModulePanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
@@ -2655,6 +2656,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         ...(user?.role !== "receptionist" ? [{ id: "legal-docs", icon: ShieldCheck, name: "Legal Documents", testId: "legal-docs-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "roles-permissions", icon: ShieldCheck, name: "Roles & Permissions", testId: "roles-permissions-btn" }] : []),
+        ...(user?.role === "admin" ? [{ id: "import-module", icon: Upload, name: "Import Module", testId: "import-module-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings Hub", testId: "settings-hub-btn" }] : []),
         { id: "bug-tracker", icon: Bug, name: "Bug Tracker", testId: "bug-tracker-btn" },
       ]
@@ -2689,6 +2691,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "legal-docs-btn":         "settings_roles_view",
     "roles-permissions-btn":  "settings_roles_view",
     "bug-tracker-btn":        "system_feedback_view",
+    "import-module-btn":      "settings_import_module_view",
   };
 
   const menuPerms = permissions?.menu_permissions;
@@ -3323,6 +3326,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Roles & Permissions */}
         {activeView === "roles-permissions" && (
           <div className="p-6"><RolesPermissionsPanel user={user} propertyId={activePropertyId && activePropertyId !== "all" ? activePropertyId : null} /></div>
+        )}
+
+        {/* Import Module */}
+        {activeView === "import-module" && (
+          <div className="p-6"><ImportModulePanel user={user} /></div>
         )}
       </main>
 

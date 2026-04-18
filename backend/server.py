@@ -108,6 +108,7 @@ from routes.staff_onboarding import create_staff_onboarding_router
 from routes.payroll_matrix import create_payroll_matrix_router
 from routes.bug_tracker import create_bug_tracker_router
 from routes.roles import create_roles_router
+from routes.imports import create_imports_router
 
 # Import extracted modules
 from models import (
@@ -524,6 +525,8 @@ bug_tracker_router = create_bug_tracker_router(db, require_roles, get_current_us
 api_router.include_router(bug_tracker_router)
 roles_router = create_roles_router(db, require_roles, get_current_user)
 api_router.include_router(roles_router)
+imports_router = create_imports_router(db, require_roles, get_current_user)
+api_router.include_router(imports_router)
 
 app.include_router(api_router)
 

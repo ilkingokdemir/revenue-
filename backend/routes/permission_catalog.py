@@ -646,10 +646,10 @@ PERMISSION_CATALOG: List[Dict] = [
             _p("download_exports", "Download Exports"),
         ]},
         {"key": "settings.import_module", "label": "Import Module", "permissions": [
-            _p("settings_import_module_view", "Settings Import Module View", menu=True, missing=True),
-            _p("view_import_module", "View Import Module", missing=True),
-            _p("fetch_import_module_branches", "Fetch Import Module Branches", missing=True),
-            _p("store_import_module_mapping", "Store Import Module Mapping", missing=True),
+            _p("settings_import_module_view", "Settings Import Module View", menu=True),
+            _p("view_import_module", "View Import Module"),
+            _p("create_imports", "Create Imports"),
+            _p("run_imports", "Run Imports"),
         ]},
     ]},
 

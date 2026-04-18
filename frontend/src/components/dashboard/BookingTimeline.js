@@ -13,24 +13,38 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const STATUS_COLORS = {
-  // Base statuses
+  // Base booking statuses
   pending:     { bar: "bg-gradient-to-r from-amber-300 to-amber-400",  text: "text-amber-900", border: "border-amber-500",  label: "Pending" },
-  confirmed:   { bar: "bg-gradient-to-r from-sky-400 to-blue-500",     text: "text-white",     border: "border-blue-600",   label: "Upcoming" },
-  checked_in:  { bar: "bg-gradient-to-r from-emerald-500 to-teal-600", text: "text-white",     border: "border-emerald-700",label: "In-house" },
-  checked_out: { bar: "bg-gradient-to-r from-stone-300 to-stone-400",  text: "text-stone-800", border: "border-stone-500",  label: "Departed" },
+  confirmed:   { bar: "bg-gradient-to-r from-sky-400 to-blue-500",     text: "text-white",     border: "border-blue-600",   label: "Confirmed" },
+  checked_in:  { bar: "bg-gradient-to-r from-emerald-500 to-teal-600", text: "text-white",     border: "border-emerald-700",label: "Checked In" },
+  checked_out: { bar: "bg-gradient-to-r from-stone-300 to-stone-400",  text: "text-stone-800", border: "border-stone-500",  label: "Checked Out" },
   no_show:     { bar: "bg-gradient-to-r from-rose-400 to-red-500",     text: "text-white",     border: "border-red-700",    label: "No show" },
   cancelled:   { bar: "bg-gradient-to-r from-stone-500 to-stone-600",  text: "text-white opacity-70", border: "border-stone-700", label: "Cancelled" },
+  // Operational / housekeeping states (overlaid on bars)
+  unassigned:  { bar: "bg-white border-2 border-dashed border-stone-400", text: "text-stone-700", border: "border-stone-400", label: "Unassigned" },
+  awaiting_cleaning: { bar: "bg-white border-2 border-amber-400",         text: "text-amber-800", border: "border-amber-400", label: "Awaiting Cleaning" },
+  being_cleaned:     { bar: "bg-sky-50 border-2 border-sky-400",          text: "text-sky-800",   border: "border-sky-400",   label: "Being Cleaned" },
+  blocked:     { bar: "bg-[repeating-linear-gradient(45deg,#78716c,#78716c_6px,#57534e_6px,#57534e_12px)]", text: "text-white", border: "border-stone-700", label: "Blocked" },
   // Contextual (computed) — these decorate the base colour
   arriving_today:  { accent: "ring-2 ring-offset-0 ring-amber-400",  dotCls: "bg-amber-400",  label: "Arrives today" },
   departing_today: { accent: "ring-2 ring-offset-0 ring-fuchsia-400",dotCls: "bg-fuchsia-400",label: "Departs today" },
 };
 
-// Compute effective status based on today's date
+// Compute effective status based on today's date + booking flags
 const computeContext = (bk, todayISO) => {
   if (bk.status === "cancelled" || bk.status === "no_show") return null;
   if (bk.check_in === todayISO && bk.status !== "checked_in") return "arriving_today";
   if (bk.check_out === todayISO && bk.status === "checked_in") return "departing_today";
   return null;
+};
+
+// Resolve final display status — housekeeping/operational overrides booking status for visual
+const resolveDisplayStatus = (bk) => {
+  if (!bk.room_id || bk.room_id === "unassigned") return "unassigned";
+  if (bk.blocked) return "blocked";
+  if (bk.housekeeping_status === "being_cleaned") return "being_cleaned";
+  if (bk.housekeeping_status === "awaiting_cleaning") return "awaiting_cleaning";
+  return bk.status || "confirmed";
 };
 
 const HK_COLORS = { clean: "bg-emerald-400", dirty: "bg-red-400", inspected: "bg-blue-400" };
@@ -423,45 +437,62 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         </div>
       )}
 
-      {/* Color legend — decode the calendar at a glance */}
-      <div className="bg-gradient-to-r from-stone-50 to-white border-b border-stone-200 px-5 py-2 flex-shrink-0 overflow-x-auto" data-testid="color-legend">
-        <div className="flex items-center gap-4 text-[11px] whitespace-nowrap">
+      {/* Color legend — decode the calendar at a glance. Matches myhotelbox semantics. */}
+      <div className="bg-gradient-to-r from-stone-50 to-white border-b border-stone-200 px-5 py-2.5 flex-shrink-0 overflow-x-auto" data-testid="color-legend">
+        <div className="flex items-center gap-x-5 gap-y-1.5 text-[11px] whitespace-nowrap flex-wrap">
           <span className="font-semibold text-stone-500 uppercase tracking-wider text-[9px]">Legend:</span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-sky-400 to-blue-500 border border-blue-600"></span>
-            <span className="text-stone-700">Upcoming</span>
+
+          {/* Vertical-strip style matching the reference */}
+          <span className="flex items-center gap-1.5" data-testid="legend-pending">
+            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-amber-300 to-amber-500"></span>
+            <span className="text-stone-700">Pending</span>
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-sky-400 to-blue-500 border border-blue-600 ring-2 ring-amber-400 relative">
-              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <span className="flex items-center gap-1.5" data-testid="legend-confirmed">
+            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-sky-400 to-blue-600"></span>
+            <span className="text-stone-700">Confirmed</span>
+          </span>
+          <span className="flex items-center gap-1.5" data-testid="legend-checked-in">
+            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-emerald-500 to-teal-600"></span>
+            <span className="text-stone-700">Checked In</span>
+          </span>
+          <span className="flex items-center gap-1.5" data-testid="legend-checked-out">
+            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-stone-400 to-stone-500"></span>
+            <span className="text-stone-700">Checked Out</span>
+          </span>
+
+          {/* Operational states — icon-style */}
+          <span className="flex items-center gap-1.5" data-testid="legend-unassigned">
+            <span className="inline-flex w-4 h-4 rounded-full border-2 border-dashed border-stone-400 items-center justify-center text-stone-400 text-[8px]">?</span>
+            <span className="text-stone-700">Unassigned</span>
+          </span>
+          <span className="flex items-center gap-1.5" data-testid="legend-awaiting">
+            <span className="inline-block w-4 h-4 rounded-full border-2 border-amber-400 bg-amber-50"></span>
+            <span className="text-stone-700">Awaiting Cleaning</span>
+          </span>
+          <span className="flex items-center gap-1.5" data-testid="legend-cleaning">
+            <span className="inline-flex w-4 h-4 rounded-full border-2 border-sky-400 bg-sky-50 items-center justify-center">
+              <span className="w-1 h-1 rounded-full bg-sky-500"></span>
+            </span>
+            <span className="text-stone-700">Being Cleaned</span>
+          </span>
+          <span className="flex items-center gap-1.5" data-testid="legend-blocked">
+            <span className="inline-block w-4 h-4 rounded bg-[repeating-linear-gradient(45deg,#78716c,#78716c_2px,#d6d3d1_2px,#d6d3d1_4px)]"></span>
+            <span className="text-stone-700">Blocked</span>
+          </span>
+
+          {/* Contextual — today decorations */}
+          <span className="w-px h-4 bg-stone-300" />
+          <span className="flex items-center gap-1.5" data-testid="legend-arrives">
+            <span className="relative inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-sky-400 to-blue-600 ring-2 ring-amber-400">
+              <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-amber-400"></span>
             </span>
             <span className="text-stone-700">Arrives today</span>
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-emerald-500 to-teal-600 border border-emerald-700"></span>
-            <span className="text-stone-700">In-house</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-emerald-500 to-teal-600 border border-emerald-700 ring-2 ring-fuchsia-400 relative">
-              <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-fuchsia-400"></span>
+          <span className="flex items-center gap-1.5" data-testid="legend-departs">
+            <span className="relative inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-emerald-500 to-teal-600 ring-2 ring-fuchsia-400">
+              <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-fuchsia-400"></span>
             </span>
             <span className="text-stone-700">Departs today</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-stone-300 to-stone-400 border border-stone-500"></span>
-            <span className="text-stone-700">Departed</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-amber-300 to-amber-400 border border-amber-500"></span>
-            <span className="text-stone-700">Pending</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-rose-400 to-red-500 border border-red-700"></span>
-            <span className="text-stone-700">No-show</span>
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-3 rounded bg-gradient-to-r from-stone-500 to-stone-600 border border-stone-700"></span>
-            <span className="text-stone-700">Cancelled</span>
           </span>
         </div>
       </div>
@@ -574,7 +605,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         const ei = endIdx >= 0 ? endIdx : date_columns.length;
                         const left = si * COL_W;
                         const width = Math.max((ei - si) * COL_W - 4, COL_W * 0.5);
-                        const sc = STATUS_COLORS[bk.status] || STATUS_COLORS.confirmed;
+                        const sc = STATUS_COLORS[resolveDisplayStatus(bk)] || STATUS_COLORS.confirmed;
                         const todayISO = new Date().toISOString().slice(0, 10);
                         const ctx = computeContext(bk, todayISO);
                         const ctxMeta = ctx ? STATUS_COLORS[ctx] : null;

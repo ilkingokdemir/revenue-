@@ -2,7 +2,25 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
-### Iter 153: Calendar color-coding (user request — "you didn't give colour for check in check out checked in upcoming booking")
+### Iter 154: Calendar legend — full competitor parity + 4 new operational states
+
+User shared myhotelbox legend screenshot with 4 states we hadn't covered:
+
+- **Unassigned** — dashed circle with "?" (booking without a room assigned)
+- **Awaiting Cleaning** — amber-outlined circle on amber background
+- **Being Cleaned** — sky-blue outlined circle with dot
+- **Blocked** — diagonal-striped rectangle (classic PMS block-out visual)
+
+**Changes:**
+- `STATUS_COLORS` expanded with `unassigned`, `awaiting_cleaning`, `being_cleaned`, `blocked` entries (each with its own bar/text/border styling including CSS `repeating-linear-gradient` for the blocked stripes)
+- New `resolveDisplayStatus(bk)` helper: housekeeping + block flags override booking status for visual; unassigned rendered when `!bk.room_id` or `room_id === "unassigned"`
+- Legend row completely rewritten to match the myhotelbox visual style — vertical colour strips for booking statuses, icon-style indicators for operational states, separator between base and contextual decorations
+- All 10 legend items have unique testIds: `legend-pending`, `legend-confirmed`, `legend-checked-in`, `legend-checked-out`, `legend-unassigned`, `legend-awaiting`, `legend-cleaning`, `legend-blocked`, `legend-arrives`, `legend-departs`
+- Existing status filter toolbar auto-picked up the new states — so ops teams can now filter by cleaning states too
+
+Live verified via screenshot: all 10 legend items rendering with distinct visuals, calendar still displaying correctly with 22 bookings.
+
+### Iter 153: Calendar color-coding (user request)
 
 User referenced 3 competitor screenshots (myhotelbox, cloudbeds, eviivo). We added a full semantic color system with contextual decorations:
 

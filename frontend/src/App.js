@@ -17,6 +17,7 @@ import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
 import { IntegrationsMarketplace } from "./components/dashboard/IntegrationsMarketplace";
 import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
 import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel";
+import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardingAdminPanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
@@ -2645,6 +2646,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "contracts", icon: FileText, name: "Staff Contracts", testId: "contracts-btn" }] : []),
+        ...(user?.role !== "receptionist" ? [{ id: "onboarding-admin", icon: Users, name: "Onboarding Review", testId: "onboarding-admin-btn" }] : []),
         ...(user?.role !== "receptionist" ? [{ id: "legal-docs", icon: ShieldCheck, name: "Legal Documents", testId: "legal-docs-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings Hub", testId: "settings-hub-btn" }] : []),
@@ -3250,6 +3252,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Legal Documents & Consents */}
         {activeView === "legal-docs" && (
           <div className="p-6"><LegalDocumentsPanel user={user} /></div>
+        )}
+
+        {/* Onboarding Review (admin/manager) */}
+        {activeView === "onboarding-admin" && (
+          <div className="p-6"><StaffOnboardingAdminPanel user={user} /></div>
         )}
       </main>
 

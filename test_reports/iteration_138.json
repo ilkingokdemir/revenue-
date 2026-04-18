@@ -1,0 +1,144 @@
+{
+  "summary": "Iteration 138 - Staff Onboarding Admin Panel fully tested. All backend APIs (15/15 passed) and frontend UI working correctly. Admin can view all staff onboarding progress, preview uploaded documents, see HMRC form data, and one-click activate/deactivate accounts. Role gating correctly hides nav item from receptionist role.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PendingLegalDocsGate", "issues": ["Minor HTML nesting warning: <p> contains <div> (Badge component) - causes React hydration warning in console but doesn't affect functionality (carried over from iteration 137)"]}
+    ]
+  },
+  "features_tested": {
+    "sidebar_nav_item": {
+      "status": "PASS",
+      "tests": [
+        "Onboarding Review nav item visible for admin role",
+        "Onboarding Review nav item hidden for receptionist role",
+        "data-testid=onboarding-admin-btn present and clickable"
+      ]
+    },
+    "hero_and_kpis": {
+      "status": "PASS",
+      "tests": [
+        "Hero title (onboard-admin-title) renders correctly",
+        "KPI Total (kpi-total) shows correct count",
+        "KPI Pending (kpi-pending) shows non-activated count",
+        "KPI Complete (kpi-complete) shows docs complete count",
+        "KPI Activated (kpi-activated) shows activated count"
+      ]
+    },
+    "filter_tabs": {
+      "status": "PASS",
+      "tests": [
+        "oa-filter-all shows all records (2 rows)",
+        "oa-filter-pending shows non-activated only (1 row)",
+        "oa-filter-complete shows docs complete only (1 row)",
+        "oa-filter-incomplete shows incomplete only (1 row)",
+        "oa-filter-activated shows activated only (1 row)"
+      ]
+    },
+    "search_functionality": {
+      "status": "PASS",
+      "tests": [
+        "oa-search input filters by name",
+        "Search clears correctly to show all records"
+      ]
+    },
+    "table_display": {
+      "status": "PASS",
+      "tests": [
+        "oa-table renders with correct columns (Staff, Role, Progress, Status, Actions)",
+        "Each row shows avatar + name + email",
+        "Role badge displays correctly (Admin, Receptionist)",
+        "4 step dots show progress (green=done, grey=pending)",
+        "Progress count shows x/4 format",
+        "Status badge shows ACTIVATED/READY/WAITING correctly",
+        "Review button (oa-view-{user_id}) present for all rows",
+        "Activate button (oa-activate-{user_id}) shows for non-activated with complete=true"
+      ]
+    },
+    "detail_dialog": {
+      "status": "PASS",
+      "tests": [
+        "oa-detail dialog opens on Review click",
+        "oa-passport-card shows uploaded image or 'Not uploaded'",
+        "oa-address-card shows uploaded file or 'Not uploaded'",
+        "oa-hmrc-card shows structured data (name, DOB, NI, start date, postcode, statement, gender, loans, address)",
+        "oa-contract-card shows signed/awaiting state",
+        "oa-detail-activate button shows for non-activated users",
+        "oa-detail-deact button shows for activated users"
+      ]
+    },
+    "activate_deactivate_flow": {
+      "status": "PASS",
+      "tests": [
+        "Clicking Activate button activates user",
+        "Toast notification shows 'User activated'",
+        "KPIs update after activation",
+        "Status badge changes to ACTIVATED",
+        "Clicking Deactivate button deactivates user",
+        "Toast notification shows 'User deactivated'",
+        "Status badge changes back to READY"
+      ]
+    },
+    "backend_api_regression": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/staff-onboarding/list returns all records",
+        "GET /api/staff-onboarding/list?status=pending filters correctly",
+        "GET /api/staff-onboarding/list?status=activated filters correctly",
+        "GET /api/staff-onboarding/list?status=complete filters correctly",
+        "GET /api/staff-onboarding/list?status=incomplete filters correctly",
+        "POST /api/staff-onboarding/admin-activate/{user_id} activates user",
+        "POST /api/staff-onboarding/admin-deactivate/{user_id} deactivates user",
+        "Non-admin users get 403 on admin endpoints"
+      ]
+    },
+    "role_gating": {
+      "status": "PASS",
+      "tests": [
+        "Receptionist cannot see Onboarding Review nav item",
+        "Receptionist gets 403 on /api/staff-onboarding/list",
+        "Receptionist gets 403 on /api/staff-onboarding/admin-activate",
+        "Receptionist gets 403 on /api/staff-onboarding/admin-deactivate"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration138_admin_onboarding.py",
+    "/app/test_reports/pytest/pytest_iteration138_admin_onboarding.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "StaffOnboardingAdminPanel correctly uses user?.role check to show Activate/Deactivate buttons only for admin",
+    "Nav item correctly uses user?.role !== 'receptionist' condition to hide from receptionist",
+    "Backend admin-activate/admin-deactivate endpoints correctly use require_roles('admin') decorator",
+    "Document preview URLs correctly use REACT_APP_BACKEND_URL environment variable",
+    "HMRC data display shows all required fields in structured format"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration138_admin_onboarding.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "staff": "sarah@hotel.test / StaffP@ss1 (role=receptionist, is_activated reset to false after testing)"
+  },
+  "seed_data_creation": "Sarah's activation state was toggled during testing (activated then deactivated to reset).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 138 added Staff Onboarding Admin Panel - admin-side review panel for staff onboarding. Admins can see all staff onboarding progress, preview uploaded documents (passport photo + address proof), see HMRC form data, and one-click activate or deactivate accounts. Nav item is hidden for receptionist role. Test user sarah@hotel.test has 4/4 onboarding complete and can be used to test activate/deactivate flow.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Document preview uses static file serving from /api/uploads/onboarding/ — no real virus scan",
+      "Image previews fall back to 'PDF - click to view' when file isn't an image"
+    ]
+  }
+}

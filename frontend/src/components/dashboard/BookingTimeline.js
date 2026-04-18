@@ -13,13 +13,13 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const STATUS_COLORS = {
-  // Base booking statuses — richer, more saturated gradients with inner highlight
-  pending:     { bar: "bg-gradient-to-br from-amber-300 via-amber-400 to-orange-500",    text: "text-amber-950",   border: "border-orange-500",   label: "Pending",     shadow: "shadow-amber-500/30" },
-  confirmed:   { bar: "bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600",       text: "text-white",       border: "border-indigo-700",   label: "Confirmed",   shadow: "shadow-blue-500/40" },
-  checked_in:  { bar: "bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600",     text: "text-white",       border: "border-teal-700",     label: "Checked In",  shadow: "shadow-emerald-500/40" },
-  checked_out: { bar: "bg-gradient-to-br from-stone-200 via-stone-300 to-stone-400",     text: "text-stone-800",   border: "border-stone-500",    label: "Checked Out", shadow: "shadow-stone-400/30" },
-  no_show:     { bar: "bg-gradient-to-br from-rose-400 via-red-500 to-rose-700",         text: "text-white",       border: "border-red-800",      label: "No show",     shadow: "shadow-red-500/40" },
-  cancelled:   { bar: "bg-gradient-to-br from-stone-400 via-stone-500 to-slate-700",     text: "text-white opacity-60", border: "border-slate-800", label: "Cancelled", shadow: "shadow-slate-500/30" },
+  // Eviivo-style polar-opposite palette — warm = active/problem, cool = future, grey = past
+  pending:     { bar: "bg-gradient-to-br from-yellow-300 via-yellow-400 to-amber-500",       text: "text-amber-950",   border: "border-amber-600",   label: "Pending",     shadow: "shadow-yellow-500/40" },
+  confirmed:   { bar: "bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600",            text: "text-white",       border: "border-indigo-700",  label: "Confirmed",   shadow: "shadow-blue-500/40" },
+  checked_in:  { bar: "bg-gradient-to-br from-rose-500 via-red-600 to-rose-700",              text: "text-white",       border: "border-red-800",     label: "Checked In",  shadow: "shadow-red-500/50" },
+  checked_out: { bar: "bg-gradient-to-br from-stone-300 via-stone-400 to-stone-500",          text: "text-stone-800",   border: "border-stone-600",   label: "Checked Out", shadow: "shadow-stone-400/30" },
+  no_show:     { bar: "bg-gradient-to-br from-purple-700 via-violet-800 to-slate-900",        text: "text-white",       border: "border-purple-900",  label: "No show",     shadow: "shadow-purple-700/50" },
+  cancelled:   { bar: "bg-[repeating-linear-gradient(135deg,#64748b,#64748b_4px,#94a3b8_4px,#94a3b8_8px)]", text: "text-white", border: "border-slate-700", label: "Cancelled", shadow: "shadow-slate-500/30" },
   // Operational / housekeeping overlays
   unassigned:        { bar: "bg-gradient-to-br from-white to-stone-100 border-2 border-dashed", text: "text-stone-700", border: "border-stone-400", label: "Unassigned",       shadow: "shadow-stone-200/30" },
   awaiting_cleaning: { bar: "bg-gradient-to-br from-amber-50 to-amber-100 border-2",             text: "text-amber-900", border: "border-amber-400", label: "Awaiting Cleaning",shadow: "shadow-amber-300/30" },
@@ -461,7 +461,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
           {/* Vertical-strip style matching the reference */}
           <span className="flex items-center gap-1.5" data-testid="legend-pending">
-            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-amber-300 to-amber-500"></span>
+            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-yellow-300 to-amber-500"></span>
             <span className="text-stone-700">Pending</span>
           </span>
           <span className="flex items-center gap-1.5" data-testid="legend-confirmed">
@@ -469,11 +469,11 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             <span className="text-stone-700">Confirmed</span>
           </span>
           <span className="flex items-center gap-1.5" data-testid="legend-checked-in">
-            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-emerald-500 to-teal-600"></span>
+            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-rose-500 to-red-700"></span>
             <span className="text-stone-700">Checked In</span>
           </span>
           <span className="flex items-center gap-1.5" data-testid="legend-checked-out">
-            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-stone-400 to-stone-500"></span>
+            <span className="inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-stone-300 to-stone-500"></span>
             <span className="text-stone-700">Checked Out</span>
           </span>
 
@@ -506,7 +506,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             <span className="text-stone-700">Arrives today</span>
           </span>
           <span className="flex items-center gap-1.5" data-testid="legend-departs">
-            <span className="relative inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-emerald-500 to-teal-600 ring-2 ring-fuchsia-400">
+            <span className="relative inline-block w-1.5 h-5 rounded-sm bg-gradient-to-b from-rose-500 to-red-700 ring-2 ring-fuchsia-400">
               <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-fuchsia-400"></span>
             </span>
             <span className="text-stone-700">Departs today</span>

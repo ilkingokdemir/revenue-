@@ -2,6 +2,22 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 156: Eviivo-style polar-opposite colour palette (user request — "opposition to recognising check in, checked out, pending… like Eviivo")
+
+Aligned to Eviivo's industry-standard semantic opposition:
+- 🔴 **Checked In = RED** (rose-500 → red-600 → rose-700) — *currently on property, warm/hot = needs attention*
+- 🔵 **Confirmed = BLUE** (sky-400 → blue-500 → indigo-600) — *cool/future, awaiting*
+- 🟡 **Pending = YELLOW/AMBER** (yellow-300 → amber-500) — *caution, awaiting confirmation*
+- ⚫ **Checked Out = GREY** (stone gradient) — *neutral, past*
+- 🟣 **No show = DEEP PURPLE** (purple-700 → violet-800 → slate-900) — *serious problem*
+- ▥ **Cancelled = DIAGONAL GREY STRIPES** (repeating-linear-gradient 135°) — *explicitly nullified*
+
+This warm/cool opposition means you can now read the calendar in 0.5s: anything red needs action, blue is tomorrow's work, grey is yesterday's. The swatches in the legend row were updated to match. The "Departs today" contextual swatch in the legend now uses red (since it decorates checked-in bars).
+
+Status-tinted drop shadows retained (red bars have red glow, blue have blue glow, etc) for depth. Source-colour left-edge strips retained for channel variety.
+
+Live verified: 22 bookings rendered in correct Eviivo-semantic colours, red dominates in-house rooms, blue dominates upcoming, grey dominates past departures. Warm vs cool opposition is unmistakable.
+
 ### Iter 155: Calendar "full multi-coloured" upgrade (user request)
 
 Fixed two issues from the previous iteration:

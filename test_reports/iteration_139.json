@@ -1,0 +1,188 @@
+{
+  "summary": "Iteration 139 - HMRC Starter Checklist (HMRC 09/22) fully tested. Backend API (29/29 tests passed) validates all required fields, sex/statement enums, NI format, and declaration confirmation. Frontend renders authentic 3-page form with decision tree (Q8/Q9/Q10 → Statement A/B/C), student loans conditional flow (Q11/Q12/Q13), and declaration section. Admin panel detail drawer shows all new HMRC fields correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Detail Dialog", "issues": ["Minor React warning: Missing Description or aria-describedby for DialogContent - doesn't affect functionality"]}
+    ]
+  },
+  "features_tested": {
+    "backend_hmrc_required_fields": {
+      "status": "PASS",
+      "tests": [
+        "Missing last_name returns 400",
+        "Missing first_names returns 400",
+        "Missing sex returns 400",
+        "Missing dob returns 400",
+        "Missing home_address returns 400",
+        "Missing postcode returns 400",
+        "Missing start_date returns 400",
+        "Missing statement returns 400",
+        "Missing declaration_full_name returns 400",
+        "Missing declaration_signature returns 400",
+        "Missing declaration_date returns 400"
+      ]
+    },
+    "backend_hmrc_validation": {
+      "status": "PASS",
+      "tests": [
+        "Invalid sex (not male/female) returns 400",
+        "Invalid statement (not A/B/C) returns 400",
+        "Declaration not confirmed returns 400",
+        "Invalid NI number (not 9 chars) returns 400",
+        "Valid NI number accepted"
+      ]
+    },
+    "backend_hmrc_optional_fields": {
+      "status": "PASS",
+      "tests": [
+        "NI number is optional",
+        "Country defaults to United Kingdom",
+        "Q8/Q9/Q10 flags accepted and stored",
+        "Student loan plans filtered to valid values (plan_1, plan_2, plan_4, postgraduate)"
+      ]
+    },
+    "backend_backwards_compat_aliases": {
+      "status": "PASS",
+      "tests": [
+        "first_name alias derived from first_names (first word)",
+        "gender alias equals sex",
+        "address alias equals home_address"
+      ]
+    },
+    "backend_statement_decision_tree": {
+      "status": "PASS",
+      "tests": [
+        "Q8 Yes → Statement C stored",
+        "Q8 No + Q9 Yes → Statement C stored",
+        "Q8 No + Q9 No + Q10 Yes → Statement B stored",
+        "Q8 No + Q9 No + Q10 No → Statement A stored"
+      ]
+    },
+    "frontend_hmrc_form_fields": {
+      "status": "PASS",
+      "tests": [
+        "hmrc-last-name input present",
+        "hmrc-first-names input present",
+        "hmrc-sex-male/female radio buttons present",
+        "hmrc-dob date input present",
+        "hmrc-start date input present",
+        "hmrc-address textarea present",
+        "hmrc-postcode input present",
+        "hmrc-country input present (defaults to United Kingdom)",
+        "hmrc-ni input present (marked as optional)"
+      ]
+    },
+    "frontend_decision_tree": {
+      "status": "PASS",
+      "tests": [
+        "Q8 Yes → skips Q9/Q10 → Statement C banner shown",
+        "Q8 No → Q9 visible",
+        "Q8 No + Q9 Yes → Statement C banner shown",
+        "Q8 No + Q9 No → Q10 visible",
+        "Q8 No + Q9 No + Q10 Yes → Statement B banner shown",
+        "Q8 No + Q9 No + Q10 No → Statement A banner shown",
+        "Blue banner (hmrc-statement-picked) shows correct statement with explanation"
+      ]
+    },
+    "frontend_yes_no_pills": {
+      "status": "PASS",
+      "tests": [
+        "hmrc-q8-yes/no toggle state correctly",
+        "hmrc-q9-yes/no toggle state correctly",
+        "hmrc-q10-yes/no toggle state correctly",
+        "Selected pill visually highlighted (emerald background)"
+      ]
+    },
+    "frontend_student_loans": {
+      "status": "PASS",
+      "tests": [
+        "Q11 No hides Q12/Q13",
+        "Q11 Yes shows Q12",
+        "Q12 Yes hides Q13 (loan plans)",
+        "Q12 No shows Q13 with 4 checkboxes",
+        "hmrc-plan-plan_1 checkbox present",
+        "hmrc-plan-plan_2 checkbox present",
+        "hmrc-plan-plan_4 checkbox present",
+        "hmrc-plan-postgraduate checkbox present"
+      ]
+    },
+    "frontend_declaration": {
+      "status": "PASS",
+      "tests": [
+        "hmrc-decl-name input (uppercase transform)",
+        "hmrc-decl-date input (defaults to today)",
+        "hmrc-decl-sig input (script font style)",
+        "hmrc-decl-confirm checkbox present"
+      ]
+    },
+    "frontend_validation": {
+      "status": "PASS",
+      "tests": [
+        "Missing required field shows toast error",
+        "Declaration not confirmed shows toast error",
+        "Successful submission shows 'HMRC starter checklist submitted' toast"
+      ]
+    },
+    "admin_panel_hmrc_display": {
+      "status": "PASS",
+      "tests": [
+        "Detail drawer shows last_name",
+        "Detail drawer shows first_names",
+        "Detail drawer shows sex",
+        "Detail drawer shows dob",
+        "Detail drawer shows ni_number",
+        "Detail drawer shows start_date",
+        "Detail drawer shows postcode",
+        "Detail drawer shows country",
+        "Detail drawer shows statement",
+        "Detail drawer shows q8/q9/q10 flags",
+        "Detail drawer shows has_loan",
+        "Detail drawer shows still_studying",
+        "Detail drawer shows student_loan_plans",
+        "Detail drawer shows home_address",
+        "Detail drawer shows declaration name + date"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration139_hmrc_form.py",
+    "/app/test_reports/pytest/pytest_iteration139_hmrc_form.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "computedStatement and useEffect correctly placed before early return to satisfy React hooks rules",
+    "Backend validates sex in [male,female] per HMRC form requirements",
+    "Backend validates statement in [A,B,C] per HMRC guidance",
+    "NI number validation is soft (optional) per HMRC form 'if known' note",
+    "Student loan plans correctly filtered to valid values",
+    "Backwards-compat aliases (first_name, gender, address) ensure admin panel compatibility"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration139_hmrc_form.py"
+  ],
+  "success_rate": {
+    "backend": "100% (29/29 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "staff": "sarah@hotel.test / StaffP@ss1 (role=receptionist, is_activated=false)"
+  },
+  "seed_data_creation": "HMRC data submitted via backend tests for sarah@hotel.test with Statement A, student loans (plan_2, postgraduate)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 139 added authentic HMRC 09/22 Starter Checklist form. The form has 3 sections: Personal Details (8 fields), Employee Statement (Q8/Q9/Q10 decision tree → Statement A/B/C), Student Loans (Q11/Q12/Q13 with 4 plan checkboxes), and Declaration. Backend validates all required fields and stores backwards-compat aliases. Admin panel detail drawer shows all HMRC fields. Sarah's onboarding is at 2/4 (passport + address uploaded, HMRC submitted, contract pending).",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "HMRC RTI submission mocked (local MongoDB storage only - NOT transmitted to HMRC)",
+      "Signature is typed text (not drawn canvas)"
+    ]
+  }
+}

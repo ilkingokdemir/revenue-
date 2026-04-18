@@ -149,33 +149,62 @@ def create_staff_onboarding_router(db, require_roles, get_current_user):
     async def submit_hmrc(data: Dict,
                           current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id")
-        # Validate
-        required = ["first_name", "last_name", "dob", "ni_number", "address",
-                    "postcode", "start_date", "statement"]
-        missing = [k for k in required if not (data.get(k) or "").strip()] if isinstance(data, dict) else required
+        # Required fields per HMRC 09/22 Starter Checklist
+        required = ["last_name", "first_names", "sex", "dob",
+                    "home_address", "postcode", "start_date",
+                    "statement",
+                    "declaration_full_name", "declaration_signature", "declaration_date"]
+        missing = [k for k in required if not (data.get(k) or "").strip()]
         if missing:
             raise HTTPException(400, f"Missing fields: {', '.join(missing)}")
+
+        if data["sex"] not in ("male", "female"):
+            raise HTTPException(400, "Sex must be male or female (as shown on birth certificate)")
         if data["statement"] not in HMRC_STATEMENTS:
             raise HTTPException(400, "Statement must be A, B or C")
-        # NI format soft check (UK NI: 2 letters + 6 digits + 1 letter)
-        ni = data["ni_number"].replace(" ", "").upper()
-        if len(ni) != 9:
+        if not data.get("declaration_confirmed"):
+            raise HTTPException(400, "You must confirm the declaration")
+
+        # NI soft validation (optional, if provided)
+        ni = (data.get("ni_number") or "").replace(" ", "").upper()
+        if ni and len(ni) != 9:
             raise HTTPException(400, "NI number should be 9 characters (e.g. AB123456C)")
 
+        # Student loan plans: list of plan_1 / plan_2 / plan_4 / postgraduate
+        loan_plans = data.get("student_loan_plans") or []
+        valid_plans = {"plan_1", "plan_2", "plan_4", "postgraduate"}
+        loan_plans = [p for p in loan_plans if p in valid_plans]
+        has_loan = bool(data.get("has_loan"))
+
         hmrc_payload = {
-            "first_name": data["first_name"].strip(),
+            # Personal details
             "last_name": data["last_name"].strip(),
+            "first_names": data["first_names"].strip(),
+            "sex": data["sex"],
             "dob": data["dob"],
-            "ni_number": ni,
-            "address": data["address"].strip(),
+            "home_address": data["home_address"].strip(),
             "postcode": data["postcode"].strip().upper(),
+            "country": (data.get("country") or "United Kingdom").strip(),
+            "ni_number": ni,
             "start_date": data["start_date"],
-            "statement": data["statement"],
-            "student_loan": bool(data.get("student_loan", False)),
-            "student_loan_plan": data.get("student_loan_plan", "") if data.get("student_loan") else "",
-            "postgrad_loan": bool(data.get("postgrad_loan", False)),
-            "gender": data.get("gender", ""),
-            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            # Employee statement decision-tree answers
+            "q8_another_job":        bool(data.get("q8_another_job", False)),
+            "q9_receives_pension":   bool(data.get("q9_receives_pension", False)),
+            "q10_recent_payments":   bool(data.get("q10_recent_payments", False)),
+            "statement":             data["statement"],
+            # Student loan
+            "has_loan":              has_loan,
+            "still_studying":        bool(data.get("still_studying", False)),
+            "student_loan_plans":    loan_plans,
+            # Declaration
+            "declaration_full_name": data["declaration_full_name"].strip(),
+            "declaration_signature": data["declaration_signature"].strip(),
+            "declaration_date":      data["declaration_date"],
+            "submitted_at":          datetime.now(timezone.utc).isoformat(),
+            # Back-compat aliases for admin panel
+            "first_name":            data["first_names"].split()[0] if data["first_names"].split() else data["first_names"].strip(),
+            "gender":                data["sex"],
+            "address":               data["home_address"].strip(),
         }
         await db.staff_onboarding.update_one(
             {"user_id": user_id},

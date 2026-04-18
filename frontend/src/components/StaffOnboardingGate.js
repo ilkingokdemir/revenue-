@@ -29,11 +29,23 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
   const [completing, setCompleting] = useState(false);
   const passportRef = useRef(null);
   const addressRef = useRef(null);
-  // HMRC form state
+  // HMRC form state (HMRC 09/22 Starter Checklist)
   const [hmrc, setHmrc] = useState({
-    first_name: "", last_name: "", dob: "", ni_number: "",
-    address: "", postcode: "", start_date: "",
-    statement: "A", student_loan: false, student_loan_plan: "", postgrad_loan: false, gender: "",
+    // Personal details
+    last_name: "", first_names: "", sex: "", dob: "",
+    home_address: "", postcode: "", country: "United Kingdom",
+    ni_number: "", start_date: "",
+    // Employee statement decision tree
+    q8_another_job: false,
+    q9_receives_pension: false,
+    q10_recent_payments: false,
+    statement: "",
+    // Student loan
+    has_loan: false, still_studying: false, student_loan_plans: [],
+    // Declaration
+    declaration_full_name: "", declaration_signature: "",
+    declaration_date: new Date().toISOString().slice(0, 10),
+    declaration_confirmed: false,
   });
 
   const load = useCallback(async () => {
@@ -51,6 +63,24 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  // HMRC Statement A/B/C decision tree per HMRC guidance.
+  // Declared BEFORE any early-return so React hook rules are honoured.
+  const computedStatement = (() => {
+    if (hmrc.q8_another_job) return "C";
+    if (hmrc.q9_receives_pension) return "C";
+    if (hmrc.q10_recent_payments) return "B";
+    if (hmrc.dob) return "A";
+    return "";
+  })();
+
+  // Keep hmrc.statement in sync with the decision tree
+  useEffect(() => {
+    if (computedStatement && hmrc.statement !== computedStatement) {
+      setHmrc(h => ({ ...h, statement: computedStatement }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedStatement]);
 
   // Gate is only shown when user is authenticated but NOT activated.
   if (!user) return null;
@@ -81,11 +111,32 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
     setSubmitting(false);
   };
 
+  const togglePlan = (plan) => {
+    setHmrc(h => ({
+      ...h,
+      student_loan_plans: h.student_loan_plans.includes(plan)
+        ? h.student_loan_plans.filter(p => p !== plan)
+        : [...h.student_loan_plans, plan],
+    }));
+  };
+
   const submitHMRC = async () => {
-    const required = ["first_name", "last_name", "dob", "ni_number", "address", "postcode", "start_date"];
-    for (const r of required) {
-      if (!(hmrc[r] || "").trim()) { toast.error(`Missing: ${r.replace("_", " ")}`); return; }
+    const required = {
+      last_name: "Last name",
+      first_names: "First names",
+      sex: "Sex",
+      dob: "Date of birth",
+      home_address: "Home address",
+      postcode: "Postcode",
+      start_date: "Employment start date",
+      declaration_full_name: "Declaration full name",
+      declaration_signature: "Signature",
+    };
+    for (const [k, label] of Object.entries(required)) {
+      if (!(hmrc[k] || "").trim()) { toast.error(`Missing: ${label}`); return; }
     }
+    if (!hmrc.statement) { toast.error("Please answer the employee-statement questions"); return; }
+    if (!hmrc.declaration_confirmed) { toast.error("Please tick the declaration confirmation"); return; }
     setSubmitting(true);
     try {
       await axios.post(`${API}/staff-onboarding/hmrc`, hmrc);
@@ -246,94 +297,195 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
             </div>
           )}
 
-          {/* HMRC STARTER CHECKLIST */}
+          {/* HMRC STARTER CHECKLIST — mirrors HMRC 09/22 form */}
           {tab === "hmrc" && (
-            <div data-testid="tab-hmrc">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-base font-black text-stone-800">HMRC Starter Checklist</h3>
-                {status.hmrc_submitted && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">SUBMITTED</Badge>}
-              </div>
-              <p className="text-[12px] text-stone-500 mb-4">Required for HMRC to apply the correct tax code. Equivalent to a P46.</p>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">First name *</Label>
-                  <Input value={hmrc.first_name} onChange={e => setHmrc({ ...hmrc, first_name: e.target.value })} data-testid="hmrc-first-name" />
+            <div data-testid="tab-hmrc" className="space-y-5">
+              <div className="flex items-start gap-3 bg-gradient-to-br from-stone-50 to-stone-100 border border-stone-200 rounded-xl p-3">
+                <div className="text-[10px] leading-tight">
+                  <p className="font-black text-stone-800 uppercase tracking-wider">HM Revenue & Customs</p>
+                  <p className="text-stone-500">Starter checklist · HMRC 09/22</p>
                 </div>
-                <div>
-                  <Label className="text-xs">Last name *</Label>
-                  <Input value={hmrc.last_name} onChange={e => setHmrc({ ...hmrc, last_name: e.target.value })} data-testid="hmrc-last-name" />
-                </div>
-                <div>
-                  <Label className="text-xs">Date of birth *</Label>
-                  <Input type="date" value={hmrc.dob} onChange={e => setHmrc({ ...hmrc, dob: e.target.value })} data-testid="hmrc-dob" />
-                </div>
-                <div>
-                  <Label className="text-xs">Gender</Label>
-                  <Select value={hmrc.gender || "prefer_not_say"} onValueChange={v => setHmrc({ ...hmrc, gender: v === "prefer_not_say" ? "" : v })}>
-                    <SelectTrigger data-testid="hmrc-gender"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                      <SelectItem value="prefer_not_say">Prefer not to say</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">National Insurance number *</Label>
-                  <Input value={hmrc.ni_number} onChange={e => setHmrc({ ...hmrc, ni_number: e.target.value })} placeholder="AB123456C" className="uppercase" data-testid="hmrc-ni" />
-                </div>
-                <div>
-                  <Label className="text-xs">Start date *</Label>
-                  <Input type="date" value={hmrc.start_date} onChange={e => setHmrc({ ...hmrc, start_date: e.target.value })} data-testid="hmrc-start" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs">Home address *</Label>
-                  <Textarea rows={2} value={hmrc.address} onChange={e => setHmrc({ ...hmrc, address: e.target.value })} placeholder="123 High Street, London" data-testid="hmrc-address" />
-                </div>
-                <div>
-                  <Label className="text-xs">Postcode *</Label>
-                  <Input value={hmrc.postcode} onChange={e => setHmrc({ ...hmrc, postcode: e.target.value })} placeholder="SW1A 1AA" className="uppercase" data-testid="hmrc-postcode" />
+                <div className="ml-auto text-right">
+                  {status.hmrc_submitted && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]">SUBMITTED</Badge>}
                 </div>
               </div>
+              <p className="text-[12px] text-stone-600 leading-relaxed">
+                <span className="font-semibold">Tell your employer of your circumstances</span> so that you do not pay too much or too little tax.
+                Fill this form if you do not have a P45. Make sure you answer the questions correctly.
+              </p>
 
-              <div className="mt-5 bg-blue-50 border border-blue-200 rounded-xl p-3">
-                <p className="text-[11px] font-bold text-blue-900 mb-2">Employee statement — choose ONE *</p>
-                <div className="space-y-2">
-                  {["A", "B", "C"].map(s => (
-                    <label key={s} className={`flex items-start gap-2 p-2 rounded-lg cursor-pointer border ${hmrc.statement === s ? "bg-white border-blue-400" : "bg-white/50 border-transparent hover:border-blue-200"}`} data-testid={`hmrc-stmt-${s}`}>
-                      <input type="radio" name="stmt" className="mt-0.5" checked={hmrc.statement === s} onChange={() => setHmrc({ ...hmrc, statement: s })} />
-                      <span className="text-[11px] text-stone-700"><span className="font-bold text-blue-900">Statement {s}:</span> {status.hmrc_statements?.[s]}</span>
-                    </label>
-                  ))}
+              {/* ========== PERSONAL DETAILS ========== */}
+              <section>
+                <h4 className="text-xs font-black uppercase tracking-wider text-stone-800 border-b border-stone-200 pb-1 mb-3">Employee's personal details</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">1. Last name *</Label>
+                    <Input value={hmrc.last_name} onChange={e => setHmrc({ ...hmrc, last_name: e.target.value })} data-testid="hmrc-last-name" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">2. First names *</Label>
+                    <Input value={hmrc.first_names} onChange={e => setHmrc({ ...hmrc, first_names: e.target.value })} placeholder="Jim (not initials)" data-testid="hmrc-first-names" />
+                    <p className="text-[9px] text-stone-400 mt-0.5">Do not enter initials or shortened names — e.g. Jim for James.</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">3. What is your sex? *</Label>
+                    <p className="text-[9px] text-stone-400 mb-1">As shown on your birth certificate or gender recognition certificate.</p>
+                    <div className="flex items-center gap-3">
+                      {[{v:"male",l:"Male"},{v:"female",l:"Female"}].map(o => (
+                        <label key={o.v} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border cursor-pointer text-xs font-semibold ${hmrc.sex === o.v ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-stone-200 text-stone-600"}`} data-testid={`hmrc-sex-${o.v}`}>
+                          <input type="radio" name="sex" className="hidden" checked={hmrc.sex === o.v} onChange={() => setHmrc({ ...hmrc, sex: o.v })} />
+                          <div className={`w-3 h-3 rounded-full border ${hmrc.sex === o.v ? "bg-emerald-500 border-emerald-500" : "border-stone-300"}`} />
+                          {o.l}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs">4. Date of birth *</Label>
+                    <Input type="date" value={hmrc.dob} onChange={e => setHmrc({ ...hmrc, dob: e.target.value })} data-testid="hmrc-dob" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">7. Employment start date *</Label>
+                    <Input type="date" value={hmrc.start_date} onChange={e => setHmrc({ ...hmrc, start_date: e.target.value })} data-testid="hmrc-start" />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">5. Home address *</Label>
+                    <Textarea rows={2} value={hmrc.home_address} onChange={e => setHmrc({ ...hmrc, home_address: e.target.value })} placeholder="123 High Street, London" data-testid="hmrc-address" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Postcode *</Label>
+                    <Input value={hmrc.postcode} onChange={e => setHmrc({ ...hmrc, postcode: e.target.value })} placeholder="SW1A 1AA" className="uppercase" data-testid="hmrc-postcode" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Country</Label>
+                    <Input value={hmrc.country} onChange={e => setHmrc({ ...hmrc, country: e.target.value })} data-testid="hmrc-country" />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">6. National Insurance number <span className="text-stone-400 font-normal">(if known)</span></Label>
+                    <Input value={hmrc.ni_number} onChange={e => setHmrc({ ...hmrc, ni_number: e.target.value.toUpperCase() })} placeholder="AB123456C" className="uppercase" data-testid="hmrc-ni" />
+                  </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="mt-4 space-y-2">
-                <label className="flex items-center gap-2 text-sm text-stone-700 cursor-pointer">
-                  <input type="checkbox" checked={hmrc.student_loan} onChange={e => setHmrc({ ...hmrc, student_loan: e.target.checked })} data-testid="hmrc-student" />
-                  I have a student loan still being repaid
-                </label>
-                {hmrc.student_loan && (
-                  <Select value={hmrc.student_loan_plan || "plan_1"} onValueChange={v => setHmrc({ ...hmrc, student_loan_plan: v })}>
-                    <SelectTrigger className="ml-6 w-64" data-testid="hmrc-loan-plan"><SelectValue placeholder="Plan" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="plan_1">Plan 1</SelectItem>
-                      <SelectItem value="plan_2">Plan 2</SelectItem>
-                      <SelectItem value="plan_4">Plan 4 (Scotland)</SelectItem>
-                      <SelectItem value="plan_5">Plan 5</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {/* ========== EMPLOYEE STATEMENT ========== */}
+              <section>
+                <h4 className="text-xs font-black uppercase tracking-wider text-stone-800 border-b border-stone-200 pb-1 mb-3">Employee statement</h4>
+                <p className="text-[11px] text-stone-500 mb-3">These questions help choose the statement that matches your circumstances so your employer applies the correct tax code.</p>
+                <div className="space-y-3">
+                  <YesNo label="8. Do you have another job?"
+                         value={hmrc.q8_another_job}
+                         onChange={v => setHmrc({ ...hmrc, q8_another_job: v })}
+                         testId="hmrc-q8" />
+                  {!hmrc.q8_another_job && (
+                    <YesNo label="9. Do you receive payments from a State, workplace or private pension?"
+                           value={hmrc.q9_receives_pension}
+                           onChange={v => setHmrc({ ...hmrc, q9_receives_pension: v })}
+                           testId="hmrc-q9" />
+                  )}
+                  {!hmrc.q8_another_job && !hmrc.q9_receives_pension && (
+                    <YesNo label="10. Since 6 April have you received payments from another job which has ended, Jobseeker's Allowance (JSA), Employment and Support Allowance (ESA) or Incapacity Benefit?"
+                           value={hmrc.q10_recent_payments}
+                           onChange={v => setHmrc({ ...hmrc, q10_recent_payments: v })}
+                           testId="hmrc-q10" />
+                  )}
+                </div>
+
+                {/* Auto-computed statement */}
+                {computedStatement && (
+                  <div className="mt-3 bg-blue-50 border border-blue-200 rounded-xl p-3" data-testid="hmrc-statement-picked">
+                    <p className="text-[10px] font-bold text-blue-900 uppercase tracking-wide mb-1">Based on your answers</p>
+                    <p className="text-sm font-black text-blue-900 mb-1">Statement {computedStatement} applies</p>
+                    <p className="text-[11px] text-blue-800 leading-snug">
+                      {computedStatement === "A" && "Current personal allowance — This is your first job since 6 April with no other income."}
+                      {computedStatement === "B" && "Current personal allowance on a Week 1/Month 1 basis — Since 6 April you've had another job or taxable benefits."}
+                      {computedStatement === "C" && "Tax Code BR — You have another job or receive a State/workplace/private pension."}
+                    </p>
+                  </div>
                 )}
-                <label className="flex items-center gap-2 text-sm text-stone-700 cursor-pointer">
-                  <input type="checkbox" checked={hmrc.postgrad_loan} onChange={e => setHmrc({ ...hmrc, postgrad_loan: e.target.checked })} data-testid="hmrc-postgrad" />
-                  I have a postgraduate loan still being repaid
-                </label>
-              </div>
+              </section>
 
-              <Button onClick={submitHMRC} disabled={submitting} className="mt-5 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10" data-testid="hmrc-submit">
-                {submitting ? "Submitting..." : status.hmrc_submitted ? "Update HMRC details" : "Submit HMRC checklist"}
+              {/* ========== STUDENT LOANS ========== */}
+              <section>
+                <h4 className="text-xs font-black uppercase tracking-wider text-stone-800 border-b border-stone-200 pb-1 mb-3">Student loans</h4>
+                <div className="space-y-3">
+                  <YesNo label="11. Do you have a student or postgraduate loan?"
+                         value={hmrc.has_loan}
+                         onChange={v => setHmrc({ ...hmrc, has_loan: v, still_studying: false, student_loan_plans: [] })}
+                         testId="hmrc-q11" />
+
+                  {hmrc.has_loan && (
+                    <>
+                      <YesNo
+                        label="12. Are any of these true? You're still studying / you completed or left your course after 6 April / you've already repaid your loan in full / you're paying Student Loans Company by Direct Debit"
+                        value={hmrc.still_studying}
+                        onChange={v => setHmrc({ ...hmrc, still_studying: v, student_loan_plans: v ? [] : hmrc.student_loan_plans })}
+                        testId="hmrc-q12" />
+
+                      {!hmrc.still_studying && (
+                        <div className="bg-stone-50 border border-stone-200 rounded-xl p-3">
+                          <p className="text-[11px] font-bold text-stone-800 mb-2">13. Tick all loan plans that apply *</p>
+                          <div className="space-y-2">
+                            {[
+                              { id: "plan_1", label: "Plan 1 — Northern Ireland or started England/Wales course before 1 Sep 2012" },
+                              { id: "plan_2", label: "Plan 2 — England/Wales, started on or after 1 Sep 2012" },
+                              { id: "plan_4", label: "Plan 4 — Scotland (SAAS)" },
+                              { id: "postgraduate", label: "Postgraduate loan (England & Wales)" },
+                            ].map(p => (
+                              <label key={p.id} className="flex items-start gap-2 cursor-pointer" data-testid={`hmrc-plan-${p.id}`}>
+                                <input type="checkbox" className="mt-0.5"
+                                       checked={hmrc.student_loan_plans.includes(p.id)}
+                                       onChange={() => togglePlan(p.id)} />
+                                <span className="text-[11px] text-stone-700">{p.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </section>
+
+              {/* ========== DECLARATION ========== */}
+              <section>
+                <h4 className="text-xs font-black uppercase tracking-wider text-stone-800 border-b border-stone-200 pb-1 mb-3">Declaration</h4>
+                <p className="text-[11px] text-stone-600 mb-3">I confirm that the information I've given on this form is correct.</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Full name *</Label>
+                    <Input value={hmrc.declaration_full_name}
+                           onChange={e => setHmrc({ ...hmrc, declaration_full_name: e.target.value.toUpperCase() })}
+                           placeholder="USE CAPITAL LETTERS" className="uppercase" data-testid="hmrc-decl-name" />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Date *</Label>
+                    <Input type="date" value={hmrc.declaration_date}
+                           onChange={e => setHmrc({ ...hmrc, declaration_date: e.target.value })}
+                           data-testid="hmrc-decl-date" />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Signature *</Label>
+                    <Input value={hmrc.declaration_signature}
+                           onChange={e => setHmrc({ ...hmrc, declaration_signature: e.target.value })}
+                           placeholder="Type your full name as your signature"
+                           className="text-xl"
+                           style={{ fontFamily: "'Brush Script MT', 'Caveat', cursive" }}
+                           data-testid="hmrc-decl-sig" />
+                  </div>
+                </div>
+                <label className="flex items-start gap-2 mt-3 cursor-pointer" data-testid="hmrc-decl-confirm-wrap">
+                  <input type="checkbox" className="mt-0.5"
+                         checked={hmrc.declaration_confirmed}
+                         onChange={e => setHmrc({ ...hmrc, declaration_confirmed: e.target.checked })}
+                         data-testid="hmrc-decl-confirm" />
+                  <span className="text-[11px] text-stone-700">
+                    I confirm the information on this form is correct. I understand providing false information may result in a penalty and affect my tax code.
+                  </span>
+                </label>
+              </section>
+
+              <Button onClick={submitHMRC} disabled={submitting} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10" data-testid="hmrc-submit">
+                {submitting ? "Submitting..." : status.hmrc_submitted ? "Update HMRC details" : "Submit HMRC starter checklist"}
               </Button>
             </div>
           )}
@@ -390,3 +542,19 @@ export const StaffOnboardingGate = ({ user, onActivated }) => {
     </div>
   );
 };
+
+// Helper: Yes/No pill selector for HMRC questions
+const YesNo = ({ label, value, onChange, testId }) => (
+  <div data-testid={testId}>
+    <p className="text-[12px] text-stone-700 leading-snug mb-1.5">{label}</p>
+    <div className="flex items-center gap-2">
+      {[{v:true,l:"Yes"},{v:false,l:"No"}].map(o => (
+        <button key={o.l} type="button" onClick={() => onChange(o.v)}
+          className={`px-4 py-1 text-xs font-semibold rounded-lg border transition ${value === o.v ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-white border-stone-200 text-stone-500 hover:border-stone-300"}`}
+          data-testid={`${testId}-${o.l.toLowerCase()}`}>
+          {o.l}
+        </button>
+      ))}
+    </div>
+  </div>
+);

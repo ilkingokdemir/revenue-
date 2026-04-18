@@ -307,16 +307,23 @@ export const StaffOnboardingAdminPanel = ({ user }) => {
                 </div>
                 {selected.hmrc_submitted && selected.hmrc_data ? (
                   <div className="grid grid-cols-3 gap-2 text-[11px]">
-                    <Row label="Full name" value={`${selected.hmrc_data.first_name} ${selected.hmrc_data.last_name}`} />
+                    <Row label="Last name" value={selected.hmrc_data.last_name || "—"} />
+                    <Row label="First names" value={selected.hmrc_data.first_names || selected.hmrc_data.first_name || "—"} />
+                    <Row label="Sex" value={selected.hmrc_data.sex || selected.hmrc_data.gender || "—"} />
                     <Row label="DOB" value={selected.hmrc_data.dob} />
-                    <Row label="NI Number" value={selected.hmrc_data.ni_number} mono />
+                    <Row label="NI Number" value={selected.hmrc_data.ni_number || "not provided"} mono />
                     <Row label="Start Date" value={selected.hmrc_data.start_date} />
                     <Row label="Postcode" value={selected.hmrc_data.postcode} />
+                    <Row label="Country" value={selected.hmrc_data.country || "UK"} />
                     <Row label="Statement" value={`Statement ${selected.hmrc_data.statement}`} />
-                    <Row label="Gender" value={selected.hmrc_data.gender || "—"} />
-                    <Row label="Student Loan" value={selected.hmrc_data.student_loan ? selected.hmrc_data.student_loan_plan || "yes" : "no"} />
-                    <Row label="Postgrad Loan" value={selected.hmrc_data.postgrad_loan ? "yes" : "no"} />
-                    <div className="col-span-3"><Row label="Address" value={selected.hmrc_data.address} /></div>
+                    <Row label="Another job" value={selected.hmrc_data.q8_another_job ? "yes" : "no"} />
+                    <Row label="Pension income" value={selected.hmrc_data.q9_receives_pension ? "yes" : "no"} />
+                    <Row label="Recent payments" value={selected.hmrc_data.q10_recent_payments ? "yes" : "no"} />
+                    <Row label="Has loan" value={selected.hmrc_data.has_loan ? "yes" : "no"} />
+                    <Row label="Still studying" value={selected.hmrc_data.still_studying ? "yes" : "no"} />
+                    <Row label="Loan plans" value={(selected.hmrc_data.student_loan_plans || []).join(", ") || "—"} />
+                    <div className="col-span-3"><Row label="Home address" value={selected.hmrc_data.home_address || selected.hmrc_data.address || "—"} /></div>
+                    <div className="col-span-3"><Row label="Signed as" value={`${selected.hmrc_data.declaration_full_name || "—"} · ${selected.hmrc_data.declaration_date || "—"}`} /></div>
                     <div className="col-span-3"><Row label="Submitted" value={fmtDate(selected.hmrc_data.submitted_at)} /></div>
                   </div>
                 ) : (

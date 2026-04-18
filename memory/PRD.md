@@ -1,6 +1,19 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 81+ Modules | Mobile Responsive | 139 Test Iterations (100%)
+## 82+ Modules | Mobile Responsive | 140 Test Iterations (100%)
+
+### Iter 141: Download & Email Onboarding Documents
+- Admin can now download **individual documents** or a **full ZIP bundle** of any staff member's onboarding pack
+- Admin can **email the bundle** to any recipient(s) via Resend with selected attachments
+- **New endpoints**:
+  - `GET /api/staff-onboarding/{user_id}/download/{passport|address|hmrc}` — returns raw file (or generated PDF for HMRC)
+  - `GET /api/staff-onboarding/{user_id}/download-bundle` — ZIP with up to 4 files (ID, address, HMRC PDF, contract reference)
+  - `POST /api/staff-onboarding/{user_id}/email` — Resend-powered email with base64 attachments + audit log
+- **HMRC PDF** generated on-the-fly with reportlab: HM Revenue & Customs header, sections mirroring 09/22 paper form (Personal / Statement / Loans / Declaration), coloured table rows, "Statement X applies" highlight
+- **Admin UI enhancements**: indigo action bar atop the detail drawer with **ZIP bundle** + **Email documents** buttons; per-card download icons (eye-close-to-tick) only appear when that document exists
+- **Email dialog**: Recipients (comma-sep), pre-filled subject, optional message, 3-way include checklist (each auto-disabled when staff hasn't uploaded that doc), Resend send with audit log
+- **MOCKED**: Resend API key is a placeholder in preview env — real email returns 502 "API key is invalid" (expected; user sets valid key in production)
+- Tested iteration 140 (19/19 backend + full frontend pass)
 
 ### Iter 140: HMRC Starter Checklist — Authentic HMRC 09/22 replica
 - Rewrote the onboarding HMRC tab to mirror the official UK paper form the user uploaded

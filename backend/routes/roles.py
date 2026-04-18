@@ -300,4 +300,102 @@ def create_roles_router(db, require_roles, get_current_user):
         await db.roles.delete_one({"id": role_id})
         return {"ok": True}
 
+    # ------- AI EXPLAIN ROLE (GPT-5.2) -------
+    @router.post("/rbac/roles/{role_id}/explain")
+    async def explain_role(role_id: str,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Generate a plain-English audit narrative of what this role can do."""
+        r = await db.roles.find_one({"id": role_id}, {"_id": 0})
+        if not r:
+            raise HTTPException(404, "Role not found")
+
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+        except Exception as e:
+            raise HTTPException(500, f"LLM library not available: {e}")
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(500, "EMERGENT_LLM_KEY not configured")
+
+        # Build a label map from the catalog
+        label_map = {}
+        for cat in PERMISSION_CATALOG:
+            for sg in cat["sub_groups"]:
+                for p in sg["permissions"]:
+                    label_map[p["key"]] = {"label": p["label"], "cat": cat["label"], "sg": sg["label"]}
+
+        granted = []
+        for key in (r.get("permissions") or []):
+            info = label_map.get(key)
+            if info:
+                granted.append(f"[{info['cat']} > {info['sg']}] {info['label']} ({key})")
+
+        if r.get("is_global_admin"):
+            return {
+                "role_id": r["id"],
+                "role_key": r["key"],
+                "summary": f"⚠️ GLOBAL ADMIN — bypasses all permission checks. Has unrestricted access to every module, every property, every action.",
+                "can_do": ["Everything. No restrictions."],
+                "cannot_do": ["Nothing is blocked."],
+                "risks": ["Extreme risk — treat as super-admin. Only assign to founders / CTO / operations lead."],
+                "generated_at": _now(),
+            }
+
+        if not granted:
+            return {
+                "role_id": r["id"],
+                "role_key": r["key"],
+                "summary": "This role has no permissions assigned. Users with this role can log in but cannot access any module.",
+                "can_do": [],
+                "cannot_do": ["Everything — this role is effectively read-nothing."],
+                "risks": [],
+                "generated_at": _now(),
+            }
+
+        system_msg = (
+            "You are an RBAC auditor explaining what a hotel-staff role can do in plain English. "
+            "Given a list of granted permissions, produce a JSON response with: "
+            "(1) summary: 2-3 sentence executive summary, (2) can_do: 4-8 bullets of key capabilities, "
+            "(3) cannot_do: 3-5 bullets of notable things this role CANNOT do, "
+            "(4) risks: 0-3 bullets flagging sensitive permissions (Delete / Approve Payroll / Mark Paid / Process Refunds / View Secrets). "
+            "Be concrete — mention module names. Avoid jargon. "
+            "Return ONLY valid JSON matching: "
+            '{"summary":"...","can_do":["..."],"cannot_do":["..."],"risks":["..."]}'
+        )
+
+        user_content = (
+            f"ROLE: {r.get('display_name') or r['key']} ({r['key']})\n"
+            f"PERMISSION COUNT: {len(granted)}\n\n"
+            f"GRANTED PERMISSIONS:\n" + "\n".join(granted)
+        )
+
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"rbac-explain-{r['id'][:8]}-{uuid.uuid4().hex[:6]}",
+                system_message=system_msg,
+            ).with_model("openai", "gpt-5")
+            resp = await chat.send_message(UserMessage(text=user_content))
+            resp_text = resp if isinstance(resp, str) else str(resp)
+
+            import re as _re
+            m = _re.search(r"\{[\s\S]*\}", resp_text)
+            if not m:
+                raise ValueError("No JSON in response")
+            parsed = json.loads(m.group(0))
+
+            return {
+                "role_id": r["id"],
+                "role_key": r["key"],
+                "summary": parsed.get("summary", ""),
+                "can_do": parsed.get("can_do", []),
+                "cannot_do": parsed.get("cannot_do", []),
+                "risks": parsed.get("risks", []),
+                "generated_at": _now(),
+            }
+        except Exception as e:
+            logger.exception("Role explain failed")
+            raise HTTPException(502, f"AI explain failed: {str(e)[:200]}")
+
     return router

@@ -11,7 +11,7 @@ import {
   ShieldCheck, Search, Plus, X, RefreshCw, Copy, Trash2, Edit,
   ChevronDown, ChevronRight, ArrowLeft, Save, Users, Crown, Grid3X3,
   Sparkles, AlertTriangle, Info, Zap, Command, Eye, Wand2,
-  Check as CheckIcon, CircleAlert,
+  Check as CheckIcon, CircleAlert, MessageCircle,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -41,6 +41,7 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
   const [catalog, setCatalog] = useState(null);
 
   const isAdmin = user?.role === "admin";
+  const [explainRole, setExplainRole] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -181,6 +182,7 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
               </div>
               {isAdmin && (
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                  <Button size="sm" variant="ghost" onClick={() => setExplainRole(r)} data-testid={`role-explain-${r.id}`} title="Explain this role (GPT-5.2)" className="text-fuchsia-600 hover:bg-fuchsia-50"><MessageCircle className="w-3.5 h-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => { setEditingRoleId(r.id); setView("edit"); }} data-testid={`role-edit-${r.id}`}><Edit className="w-3.5 h-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => cloneRole(r)} data-testid={`role-clone-${r.id}`} title="Clone"><Copy className="w-3.5 h-3.5" /></Button>
                   <Button size="sm" variant="ghost" onClick={() => deleteRole(r)} data-testid={`role-delete-${r.id}`} className="text-red-600 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></Button>
@@ -190,6 +192,8 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
           ))}
         </ul>
       </div>
+
+      {explainRole && <ExplainRoleDialog role={explainRole} onClose={() => setExplainRole(null)} />}
     </div>
   );
 };
@@ -761,3 +765,137 @@ const AIDesigner = ({ aiDesc, setAiDesc, aiBusy, aiResult, onRun, onApply, onClo
     </div>
   </div>
 );
+
+// ====================== Explain Role Dialog (GPT-5.2) ======================
+
+const ExplainRoleDialog = ({ role, onClose }) => {
+  const [busy, setBusy] = useState(true);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await axios.post(`${API}/rbac/roles/${role.id}/explain`, {});
+        if (!cancelled) { setResult(data); setBusy(false); }
+      } catch (e) {
+        if (!cancelled) { setError(e?.response?.data?.detail || "AI explain failed"); setBusy(false); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [role.id]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div onClick={e => e.stopPropagation()}
+           className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto"
+           data-testid="explain-dialog">
+        <div className="relative overflow-hidden rounded-t-2xl bg-gradient-to-br from-fuchsia-600 via-rose-500 to-amber-500 text-white p-6">
+          <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 80% 20%, white, transparent 40%)" }} />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center"><MessageCircle className="w-4 h-4" /></div>
+                <span className="text-[10px] font-bold uppercase tracking-widest opacity-90">AI Role Explainer</span>
+                <Badge className="text-[9px] bg-white/20 text-white border-white/30">GPT-5.2</Badge>
+              </div>
+              <h3 className="text-2xl font-black truncate">{role.display_name || role.key}</h3>
+              <p className="text-sm opacity-90 mt-0.5 flex items-center gap-2">
+                <code className="bg-white/15 px-1.5 py-0.5 rounded text-[11px]">{role.key}</code>
+                <span>·</span>
+                <span>{role.permissions?.length || 0} permissions</span>
+                {role.is_global_admin && <Badge className="text-[9px] bg-white/20 text-white border-white/30">GLOBAL ADMIN</Badge>}
+              </p>
+            </div>
+            <button onClick={onClose} className="p-1 hover:bg-white/10 rounded flex-shrink-0"><X className="w-4 h-4" /></button>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {busy && (
+            <div className="py-12 text-center" data-testid="explain-loading">
+              <div className="inline-flex items-center gap-2 text-stone-500">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                <span className="text-sm">GPT-5.2 is auditing this role...</span>
+              </div>
+              <p className="text-[11px] text-stone-400 mt-2">Typically 3-8 seconds</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4">
+              <p className="text-sm font-bold text-rose-900 flex items-center gap-1"><AlertTriangle className="w-4 h-4" />Audit failed</p>
+              <p className="text-xs text-rose-800 mt-1">{error}</p>
+            </div>
+          )}
+
+          {result && (
+            <div className="space-y-4" data-testid="explain-result">
+              <div className="bg-gradient-to-br from-fuchsia-50 to-rose-50 border border-fuchsia-200 rounded-xl p-5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-700 mb-1">Executive summary</p>
+                <p className="text-sm text-stone-900 leading-relaxed">{result.summary}</p>
+              </div>
+
+              {result.can_do?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-2 flex items-center gap-1">
+                    <CheckIcon className="w-3 h-3" />Can do
+                  </p>
+                  <ul className="space-y-1.5" data-testid="explain-can">
+                    {result.can_do.map((b, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-stone-700">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-2 flex-shrink-0" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {result.cannot_do?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-600 mb-2 flex items-center gap-1">
+                    <X className="w-3 h-3" />Cannot do
+                  </p>
+                  <ul className="space-y-1.5" data-testid="explain-cannot">
+                    {result.cannot_do.map((b, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-stone-600">
+                        <span className="w-1.5 h-1.5 rounded-full bg-stone-400 mt-2 flex-shrink-0" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {result.risks?.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-800 mb-2 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />Risk flags
+                  </p>
+                  <ul className="space-y-1.5" data-testid="explain-risks">
+                    {result.risks.map((b, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-amber-900">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <p className="text-[10px] text-stone-400 text-center pt-2">
+                Generated {new Date(result.generated_at).toLocaleString()} · Use for audit documentation · Re-run anytime
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-end gap-2 p-4 border-t bg-stone-50 rounded-b-2xl">
+          <Button variant="outline" onClick={onClose}>Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+};

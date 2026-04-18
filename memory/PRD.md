@@ -2,6 +2,15 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 147: "Explain this role" — AI audit narratives (GPT-5.2)
+- Fuchsia `MessageCircle` button on every role row (admin|manager) opens the Role Explainer
+- `POST /api/rbac/roles/{role_id}/explain` sends granted permissions (with category/sub-group labels) to GPT-5.2 via Emergent LLM key
+- Returns structured JSON: `summary` (2-3 sentence exec), `can_do[]` (4-8 concrete bullets), `cannot_do[]` (3-5 bullets), `risks[]` (flagged sensitive perms)
+- Graceful short-circuits for **Global Admin** (fixed "bypasses all checks" narrative) and **empty permissions** (no AI call needed)
+- UI: vibrant fuchsia-rose-amber gradient header, role meta (key, permission count, GLOBAL ADMIN badge), staggered bullet sections with emerald/stone/amber colour-coding, timestamp footer
+- Perfect for audit documentation ("what can our night receptionists actually touch?") and onboarding reviews
+- Backend verified via curl: laundry role returned 8 capabilities, 4 blocked items, 0 risks — all accurate
+
 ### Iter 146: RBAC v2 — "Better than the competitor" upgrade
 User feedback: *"you should build better one"* — so we added what myhotelbox doesn't have:
 - **🤖 AI Role Designer (GPT-5.2)** via Emergent LLM key — describe the role in plain English, AI picks the minimum permission set, suggests a role_name (snake_case) + display_name, and explains its choices in 2-3 sentences. Invalid keys auto-filtered. `POST /api/rbac/ai-suggest`

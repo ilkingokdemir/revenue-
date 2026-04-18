@@ -1,8 +1,26 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 82+ Modules | Mobile Responsive | 142 Test Iterations (100%)
+## 84+ Modules | Mobile Responsive | 143 Test Iterations (100%)
 
-### Iter 143: Admin Reset Step — unlock onboarding documents
+### Iter 144: Bug Tracker & System Feedback (new P1 module)
+- Any authenticated user can file a ticket (bug / feedback / feature request / question) with title, description, priority (low/medium/high/critical), area tag (Bookings / Payroll / Integrations / …), page-URL context
+- **Admin/manager triage**: status lifecycle `new → triaged → in_progress → resolved → closed / wont_fix`, priority edits, area edits, assignee (only admin|manager users), resolution note (auto-shown when status=resolved with emerald card)
+- **Comments thread** with author name/role/timestamp — any party (creator, assignee, admin, manager) can comment; non-admin users are scoped to their own tickets + assigned tickets
+- **Stats-powered UI**: hero shows Open / Critical / Resolved counters; status-tab pills with live counts per status
+- Endpoints: `POST/GET/PUT/DELETE /api/bug-tracker`, `POST /api/bug-tracker/{id}/comments`, `GET /api/bug-tracker-meta/assignees`
+- Admin-only deletion; `resolved` status auto-stamps `resolved_at` + `resolved_by`
+- Sidebar entry `bug-tracker-btn` under Settings — visible to **all roles** (including receptionist) so the whole team can self-serve
+- Tested iteration 143 (47/47 backend + full frontend pass, zero issues)
+
+### Iter 143: Payroll Rate Matrix (finished)
+- Cross-tab grid: users × properties with hourly/daily rate, split-across-branches toggle, active toggle per branch
+- `GET/PUT/DELETE /api/payroll-matrix/[user_id]/[property_id]`  — stored on `users.branch_payments[property_id]`
+- Admin-only mutation; read is admin|manager; filters by q/role/property_id
+- Frontend: sticky left column of staff, colour-coded cells (emerald=active, stone=inactive, indigo SPLIT badge), per-cell editor dialog with payment-type toggle, rate (£) input, split & active switches, CSV export
+- Smart auto-cleanup: rate=0 AND active=false deletes the cell
+- Tested iteration 143 (all paths incl. negative-rate rejection, bogus-user 404, idempotent delete)
+
+### Iter 142: Admin Reset Step — unlock onboarding documents
 - Closes the loop on the iter-141 lockdown — admin can now reset any individual onboarding step when a staff member genuinely needs to correct a mistake
 - **POST /api/staff-onboarding/{user_id}/reset/{passport|address|hmrc|contract}** (admin only)
   - passport/address: deletes the file on disk + unsets filename/path/url + flips `*_uploaded=false`
@@ -159,9 +177,7 @@ User requirement: "When they fill when they on board staff they don't to be reac
 Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Finance (Payroll, Expenses, P&L, Cash Flow Forecast, Accounting, POS)** | **Operations (shifts, handovers, reception, compliance, laundry, maintenance)** | AI | Mobile
 
 ## Upcoming (P1 Backlog)
-- **Payroll Rate Matrix** (from myhotelbox screenshots) — cross-tab of user × branch × pay-type × rate with split-across-branches + active toggles
-- **Clone Role** button + **Global Admin** flag on Roles & Permissions panel
-- System Feedback & internal Bug Tracker
+- Clone Role button + Global Admin flag on Roles & Permissions panel
 
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks

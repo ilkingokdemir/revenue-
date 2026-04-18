@@ -22,6 +22,30 @@ const STATUS_COLORS = {
 
 const HK_COLORS = { clean: "bg-emerald-400", dirty: "bg-red-400", inspected: "bg-blue-400" };
 
+// Platform/OTA logo badges — small inline circles with brand colors + letter
+const PLATFORM_BADGES = {
+  "booking.com":  { letter: "B", bg: "#003580", fg: "white",   label: "Booking.com" },
+  "booking":      { letter: "B", bg: "#003580", fg: "white",   label: "Booking.com" },
+  "airbnb":       { letter: "A", bg: "#FF385C", fg: "white",   label: "Airbnb" },
+  "expedia":      { letter: "E", bg: "#FFC72C", fg: "#003B5C", label: "Expedia" },
+  "hotels.com":   { letter: "H", bg: "#D32F2F", fg: "white",   label: "Hotels.com" },
+  "agoda":        { letter: "A", bg: "#5392F9", fg: "white",   label: "Agoda" },
+  "google":       { letter: "G", bg: "#4285F4", fg: "white",   label: "Google" },
+  "tripadvisor":  { letter: "T", bg: "#00AF87", fg: "white",   label: "TripAdvisor" },
+  "vrbo":         { letter: "V", bg: "#3D67FF", fg: "white",   label: "VRBO" },
+  "direct":       { letter: "D", bg: "#1F2937", fg: "white",   label: "Direct" },
+  "website":      { letter: "W", bg: "#0EA5E9", fg: "white",   label: "Website" },
+  "walk_in":      { letter: "W", bg: "#78716C", fg: "white",   label: "Walk-in" },
+  "walk-in":      { letter: "W", bg: "#78716C", fg: "white",   label: "Walk-in" },
+  "phone":        { letter: "P", bg: "#10B981", fg: "white",   label: "Phone" },
+};
+const getPlatformBadge = (source) => {
+  if (!source) return { letter: "?", bg: "#78716C", fg: "white", label: "Unknown" };
+  const key = source.toString().toLowerCase().trim();
+  return PLATFORM_BADGES[key] || PLATFORM_BADGES[key.split(".")[0]] || PLATFORM_BADGES[key.replace(/[_-]/g, "")] ||
+    { letter: (source[0] || "?").toUpperCase(), bg: "#6366F1", fg: "white", label: source };
+};
+
 function getOccColor(pct) {
   if (pct >= 85) return "text-red-600 font-black";
   if (pct >= 60) return "text-amber-600 font-bold";
@@ -245,7 +269,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
   const { date_columns, daily_occupancy, groups, total_rooms, total_bookings } = data;
   const COL_W = viewDays <= 7 ? 120 : viewDays <= 14 ? 90 : 65;
-  const ROW_H = 40;
+  const ROW_H = 56;
   const ROOM_LABEL_W = 180;
 
   // Filter bookings by search
@@ -339,10 +363,21 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
               className={`px-3 py-1 text-xs font-semibold rounded-md ${viewDays === d ? "bg-stone-800 text-white" : "text-stone-500 hover:bg-stone-100"}`}>{d}d</button>
           ))}
         </div>
-        <div className="flex items-center gap-3 text-[10px]">
+        <div className="flex items-center gap-3 text-[10px] flex-wrap">
           {Object.entries(STATUS_COLORS).map(([k, v]) => (
             <span key={k} className="flex items-center gap-1"><span className={`w-3 h-2 rounded-sm ${v.bar}`} />{v.label}</span>
           ))}
+          <span className="text-stone-300">|</span>
+          <span className="text-stone-500 font-semibold">Sources:</span>
+          {[["booking","Booking"],["airbnb","Airbnb"],["expedia","Expedia"],["direct","Direct"],["google","Google"]].map(([k,label]) => {
+            const p = getPlatformBadge(k);
+            return (
+              <span key={k} className="flex items-center gap-1" data-testid={`legend-${k}`}>
+                <span className="rounded-full flex items-center justify-center font-black text-[8px]" style={{ width: 12, height: 12, backgroundColor: p.bg, color: p.fg }}>{p.letter}</span>
+                {label}
+              </span>
+            );
+          })}
         </div>
       </div>
 
@@ -434,19 +469,33 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                 {isSelected ? <CheckSquare className="w-3.5 h-3.5 text-violet-600" /> : <Square className="w-3.5 h-3.5 text-stone-400" />}
                               </button>
                             )}
-                            <button
-                              draggable={!bulkMode}
-                              onDragStart={(e) => handleDragStart(e, { ...bk, room_id: room.id })}
-                              onClick={() => bulkMode ? toggleSelect(bk.id) : openDetail(bk.id)}
-                              data-testid={`booking-bar-${bk.id}`}
-                              className={`w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border cursor-pointer hover:brightness-110 transition-all overflow-hidden flex items-center px-1.5 gap-1 shadow-sm ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
-                              title={`${bk.guest_name} | ${bk.check_in} → ${bk.check_out} | ${bk.status} | ${cur(bk.total_price)} | Drag to move`}>
-                              {!bulkMode && <GripVertical className="w-3 h-3 opacity-30 flex-shrink-0 cursor-grab" />}
-                              <span className="text-[10px] font-bold truncate">{bk.guest_name}</span>
-                              {width > 140 && <span className="text-[9px] opacity-70">{bk.source_code}</span>}
-                              {width > 180 && <span className="text-[9px] opacity-70">{cur(bk.total_price)}</span>}
-                              {width > 220 && <span className="text-[9px] opacity-70">{bk.nights}n</span>}
-                            </button>
+                            {(() => {
+                              const plat = getPlatformBadge(bk.source_code || bk.source);
+                              return (
+                                <button
+                                  draggable={!bulkMode}
+                                  onDragStart={(e) => handleDragStart(e, { ...bk, room_id: room.id })}
+                                  onClick={() => bulkMode ? toggleSelect(bk.id) : openDetail(bk.id)}
+                                  data-testid={`booking-bar-${bk.id}`}
+                                  className={`w-full h-full rounded-md ${sc.bar} ${sc.text} ${sc.border} border cursor-pointer hover:brightness-110 transition-all overflow-hidden flex flex-col justify-center px-1.5 shadow-sm ${isSelected ? "ring-2 ring-violet-500 ring-offset-1" : ""} ${dragBooking?.id === bk.id ? "opacity-50" : ""}`}
+                                  title={`${bk.guest_name} | ${plat.label} | ${cur(bk.total_price)} | ${bk.check_in} → ${bk.check_out} | ${bk.status}`}>
+                                  {/* Line 1: platform logo + guest name */}
+                                  <div className="flex items-center gap-1 min-w-0">
+                                    <span
+                                      className="flex-shrink-0 rounded-full flex items-center justify-center font-black text-[9px]"
+                                      style={{ width: 14, height: 14, backgroundColor: plat.bg, color: plat.fg }}
+                                      data-testid={`platform-badge-${bk.id}`}
+                                    >{plat.letter}</span>
+                                    <span className="text-[11px] font-bold truncate flex-1" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
+                                  </div>
+                                  {/* Line 2: price + nights */}
+                                  <div className="flex items-center justify-between gap-1 mt-0.5 min-w-0 opacity-90">
+                                    <span className="text-[10px] font-bold font-mono truncate" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>
+                                    {width > 110 && <span className="text-[9px] opacity-80 flex-shrink-0">{bk.nights}n</span>}
+                                  </div>
+                                </button>
+                              );
+                            })()}
                           </div>
                         );
                       })}

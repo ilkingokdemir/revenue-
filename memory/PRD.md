@@ -2,7 +2,18 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
-### Iter 145: Enterprise RBAC — Roles & Permissions (new P1 module)
+### Iter 146: RBAC v2 — "Better than the competitor" upgrade
+User feedback: *"you should build better one"* — so we added what myhotelbox doesn't have:
+- **🤖 AI Role Designer (GPT-5.2)** via Emergent LLM key — describe the role in plain English, AI picks the minimum permission set, suggests a role_name (snake_case) + display_name, and explains its choices in 2-3 sentences. Invalid keys auto-filtered. `POST /api/rbac/ai-suggest`
+- **⚠️ Risk scoring** on ~80 destructive/sensitive permissions (CRITICAL/HIGH/MEDIUM) — Delete, Approve Payroll, Mark Paid, Process Refunds, Edit Roles, View Secrets, etc. Shown as colour-coded badges on each perm pill.
+- **🔗 Dependency intelligence** on ~70 permissions via `implies: []` — e.g. `edit_bookings` implies `view_bookings`. UI shows amber ring on orphans + dismissible "N missing dependencies" banner with one-click **Fix all** button.
+- **🔍 Live permission search** — fuzzy filter across label/key/subgroup/category with auto-expand of matching categories, `/` keyboard shortcut to focus, Esc to clear.
+- **📊 Plain-English Capability Summary** ("Users with this role get full access to My Tasks, Bookings (13/42), Operations (3/54). Blocked from: Reports, Finance, …") — reads like a sentence, no jargon.
+- **Visual redesign**: glass-morphism hero with radial gradient + noise texture, animated SVG progress rings per category, sticky search bar, sticky save bar with live counter, premium template tiles with gradient tints.
+- Backend overlay pattern: `enrich_catalog()` merges `PERMISSION_RISK` + `PERMISSION_IMPLIES` into the catalog at request time — keeps the 500-line catalog untouched.
+- Tested iteration 145 (20/21 backend + 100% frontend pass; single soft LLM timeout is acceptable)
+
+### Iter 145: Enterprise RBAC — Roles & Permissions (v1)
 - Reverse-engineered from **22 myhotelbox screenshots**
 - **313 permissions** across **15 categories** × ~70 sub-groups: Dashboard, My Tasks, Calendar, Bookings (42), Reports (9), Operations (54), Finance (30), Channel Manager (41), Revenue (61), Settings (65), System Feedback, Help, Webhooks (5), Secrets (4), Uncategorized — matches the competitor's full shape
 - **State-transition permissions** as first-class (Approve / Submit / Verify / Finalize / Start / Pause / Promote / Apply / Dismiss / Acknowledge / Run / Export / Import / Detect / Cancel / Mark Paid / Generate) alongside CRUD

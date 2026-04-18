@@ -18,6 +18,7 @@ import { IntegrationsMarketplace } from "./components/dashboard/IntegrationsMark
 import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
 import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel";
 import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardingAdminPanel";
+import { PayrollRateMatrix } from "./components/dashboard/PayrollRateMatrix";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
@@ -2608,6 +2609,7 @@ const Dashboard = ({ user, onLogout }) => {
         { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
         { id: "payroll", icon: Wallet, name: "Payroll", testId: "payroll-btn" },
+        ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate Matrix", testId: "rate-matrix-btn" }] : []),
         { id: "expenses", icon: Receipt, name: "Expenses", testId: "expenses-btn" },
         { id: "cash-flow", icon: ChartLine, name: "Cash Flow", testId: "cash-flow-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
@@ -3257,6 +3259,11 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Onboarding Review (admin/manager) */}
         {activeView === "onboarding-admin" && (
           <div className="p-6"><StaffOnboardingAdminPanel user={user} /></div>
+        )}
+
+        {/* Payroll Rate Matrix */}
+        {activeView === "rate-matrix" && (
+          <div className="p-6"><PayrollRateMatrix user={user} /></div>
         )}
       </main>
 

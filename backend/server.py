@@ -500,7 +500,7 @@ expenses_router = create_expenses_router(db, require_roles)
 api_router.include_router(expenses_router)
 cashflow_router = create_cashflow_router(db, require_roles)
 api_router.include_router(cashflow_router)
-marketplace_router = create_marketplace_router(db, require_roles)
+marketplace_router = create_marketplace_router(db, require_roles, LlmChat, UserMessage)
 api_router.include_router(marketplace_router)
 
 app.include_router(api_router)

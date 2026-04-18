@@ -8,7 +8,7 @@ import {
   Search, Check, Zap, Star, Globe, CreditCard, Route, LineChart,
   MessageCircle, Sparkles, Lock, Wallet, Utensils, BarChart3,
   Megaphone, Cloud, Shield, FileCheck, RefreshCw, Settings2,
-  Trash2, TrendingUp, X, CheckCircle2, Plug,
+  Trash2, TrendingUp, X, CheckCircle2, Plug, Wand2, ArrowRight,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -28,6 +28,8 @@ export const IntegrationsMarketplace = ({ propertyId, user }) => {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all"); // all, installed, featured
   const [selected, setSelected] = useState(null);
+  const [rec, setRec] = useState(null);
+  const [recLoading, setRecLoading] = useState(false);
 
   const pid = propertyId || "all";
   const isManager = user?.role === "admin" || user?.role === "manager";
@@ -48,6 +50,28 @@ export const IntegrationsMarketplace = ({ propertyId, user }) => {
     const t = setTimeout(load, q ? 250 : 0);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Load cached recommendations on mount / property change
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: d } = await axios.get(`${API}/marketplace/recommendations/${pid}`);
+        if (d && d.recommendations) setRec(d);
+      } catch { /* silent */ }
+    })();
+  }, [pid]);
+
+  const generateRecs = async () => {
+    setRecLoading(true);
+    try {
+      const { data: d } = await axios.post(`${API}/marketplace/recommendations/${pid}/generate`);
+      setRec(d);
+      toast.success("AI recommendations refreshed");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "AI service unavailable");
+    }
+    setRecLoading(false);
+  };
 
   const filteredIntegrations = useMemo(() => {
     let list = data.integrations || [];
@@ -178,6 +202,98 @@ export const IntegrationsMarketplace = ({ propertyId, user }) => {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* AI Recommendations Strip */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-5 text-white shadow-xl border border-indigo-500/20 relative overflow-hidden" data-testid="ai-rec-strip">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(139,92,246,0.25),transparent_50%),radial-gradient(circle_at_80%_100%,rgba(236,72,153,0.15),transparent_50%)]" />
+        <div className="relative">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-400 to-fuchsia-500 flex items-center justify-center shadow-lg flex-shrink-0">
+                <Wand2 className="w-4.5 h-4.5 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-violet-200">AI Picks · GPT-5.2</span>
+                  <Badge className="bg-white/10 text-white text-[9px] border-white/20 backdrop-blur-sm">RECOMMENDED FOR YOU</Badge>
+                </div>
+                <h3 className="text-base font-bold leading-tight" data-testid="ai-rec-headline">
+                  {rec?.headline || "Let GPT-5.2 pick the 3 integrations that will lift your RevPAR fastest."}
+                </h3>
+                {rec?.signal_snapshot && (
+                  <p className="text-[11px] text-indigo-200/80 mt-0.5">
+                    Analysed {rec.signal_snapshot.bookings} bookings · {rec.signal_snapshot.connected_count} apps connected · top sources: {(rec.signal_snapshot.top_sources || []).join(", ")}
+                  </p>
+                )}
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={generateRecs}
+              disabled={recLoading || !isManager}
+              className="bg-white text-slate-900 hover:bg-violet-50 font-semibold shadow-lg flex-shrink-0"
+              data-testid="ai-rec-generate"
+            >
+              {recLoading ? <><RefreshCw className="w-3.5 h-3.5 mr-1 animate-spin" />Analysing...</>
+                          : <><Sparkles className="w-3.5 h-3.5 mr-1" />{rec ? "Refresh Picks" : "Get AI Picks"}</>}
+            </Button>
+          </div>
+
+          {rec?.recommendations?.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 mt-3" data-testid="ai-rec-list">
+              {rec.recommendations.map((r, idx) => (
+                <div
+                  key={r.id}
+                  className="bg-white/[0.07] hover:bg-white/[0.12] backdrop-blur-sm border border-white/10 rounded-xl p-3 transition cursor-pointer group"
+                  onClick={() => {
+                    const item = (data.integrations || []).find(i => i.id === r.id);
+                    if (item) setSelected(item);
+                  }}
+                  data-testid={`ai-rec-${r.id}`}
+                >
+                  <div className="flex items-start gap-2.5 mb-2">
+                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow">
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${r.domain}&sz=128`}
+                        alt={r.domain} className="w-5 h-5" style={{ objectFit: "contain" }}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] font-bold text-violet-300">#{idx + 1}</span>
+                        <h4 className="text-sm font-bold truncate">{r.title}</h4>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Badge className={`text-[9px] font-bold border-0 ${r.priority === "high" ? "bg-rose-500/30 text-rose-100" : "bg-amber-400/25 text-amber-100"}`}>
+                          {(r.priority || "medium").toUpperCase()}
+                        </Badge>
+                        {r.impact && (
+                          <span className="text-[10px] font-bold text-emerald-300 flex items-center gap-0.5">
+                            <TrendingUp className="w-2.5 h-2.5" />{r.impact}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-indigo-100/90 leading-snug line-clamp-2 mb-2 min-h-[28px]">{r.reason}</p>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); install(r.id); }}
+                    className="w-full py-1.5 text-[11px] font-bold rounded-lg bg-white text-slate-900 hover:bg-violet-50 flex items-center justify-center gap-1 transition"
+                    data-testid={`ai-rec-connect-${r.id}`}
+                  >
+                    <Plug className="w-3 h-3" />Connect {r.name} <ArrowRight className="w-3 h-3 opacity-60 group-hover:translate-x-0.5 transition" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {!rec && !recLoading && (
+            <p className="text-[11px] text-indigo-200/70 mt-1">
+              Tap <span className="font-semibold text-white">Get AI Picks</span> — we'll read your booking mix, payment coverage and category gaps, then surface 3 hand-picked integrations with an expected RevPAR lift.
+            </p>
+          )}
         </div>
       </div>
 

@@ -5,6 +5,9 @@ Persists installation/enabled state per property.
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from typing import Dict
+import json
+import os
+import uuid
 import logging
 
 logger = logging.getLogger(__name__)
@@ -192,7 +195,7 @@ CATEGORIES = [
 ]
 
 
-def create_marketplace_router(db, require_roles):
+def create_marketplace_router(db, require_roles, LlmChat=None, UserMessage=None):
     router = APIRouter()
 
     @router.get("/marketplace/catalog/{property_id}")
@@ -307,5 +310,165 @@ def create_marketplace_router(db, require_roles):
             {"$set": {"last_sync": now, "status": "synced", "updated_at": now}}
         )
         return {"ok": True, "last_sync": now}
+
+    # ============== AI RECOMMENDATIONS ==============
+    @router.get("/marketplace/recommendations/{property_id}")
+    async def get_recommendations(property_id: str,
+                                  current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Return cached AI recommendations if present."""
+        doc = await db.marketplace_recommendations.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
+        return doc or {"status": "none"}
+
+    @router.post("/marketplace/recommendations/{property_id}/generate")
+    async def generate_recommendations(property_id: str,
+                                       current_user: dict = Depends(require_roles("admin", "manager"))):
+        """
+        AI-powered top 3 integration recommendations for this property.
+        Analyses OTA mix, payment coverage, messaging gaps — returns the 3 integrations
+        most likely to lift RevPAR.
+        """
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key or not LlmChat or not UserMessage:
+            raise HTTPException(503, "AI service not configured")
+
+        # --- 1. Gather property signals ---
+        installs = await db.marketplace_installs.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(500)
+        install_ids = {i["integration_id"] for i in installs}
+        # Integrations enabled by default are also "connected"
+        for x in CATALOG:
+            if x.get("enabled_default"):
+                install_ids.add(x["id"])
+
+        # Booking source distribution
+        bk_query = {"status": {"$nin": ["cancelled"]}}
+        if property_id != "all":
+            bk_query["property_id"] = property_id
+        bookings = await db.bookings.find(
+            bk_query, {"_id": 0, "source": 1, "total_price": 1}
+        ).to_list(2000)
+        source_counts: Dict[str, int] = {}
+        total_rev = 0.0
+        for b in bookings:
+            src = (b.get("source") or "direct").lower()
+            source_counts[src] = source_counts.get(src, 0) + 1
+            total_rev += float(b.get("total_price") or 0)
+        top_sources = sorted(source_counts.items(), key=lambda x: -x[1])[:6]
+        total_bk = len(bookings) or 1
+
+        # Category coverage
+        cat_installed: Dict[str, int] = {}
+        cat_total: Dict[str, int] = {}
+        for x in CATALOG:
+            cat_total[x["cat"]] = cat_total.get(x["cat"], 0) + 1
+            if x["id"] in install_ids:
+                cat_installed[x["cat"]] = cat_installed.get(x["cat"], 0) + 1
+        coverage = [
+            {"cat": c["id"], "name": c["name"],
+             "installed": cat_installed.get(c["id"], 0),
+             "available": cat_total.get(c["id"], 0)}
+            for c in CATEGORIES
+        ]
+
+        # Available (not-yet-installed) catalog — names + ids + categories + descriptions
+        available = [
+            {"id": x["id"], "name": x["name"], "cat": x["cat"], "desc": x["desc"]}
+            for x in CATALOG if x["id"] not in install_ids
+        ]
+
+        # --- 2. Build prompt ---
+        data_summary = {
+            "property_id": property_id,
+            "bookings_last_window": total_bk,
+            "total_revenue_gbp": round(total_rev, 2),
+            "top_booking_sources": [{"source": s, "count": c,
+                                     "share_pct": round(100 * c / total_bk, 1)} for s, c in top_sources],
+            "already_connected": sorted(install_ids),
+            "category_coverage": coverage,
+        }
+
+        system_msg = """You are an elite hotel revenue + tech consultant advising an independent property on which integrations to connect next.
+Rules:
+- Pick EXACTLY 3 integrations from the candidate list provided, choosing the ones most likely to lift RevPAR, recover lost bookings, or cut manual work.
+- Prefer filling obvious gaps: missing channel managers, missing payment methods for the guest mix, missing review/reputation tools, missing AI or messaging when volume is high.
+- Do NOT recommend anything already connected.
+- For each pick, provide: id (must match candidate id EXACTLY), title (the product name), reason (1 short sentence, <140 chars, use British English), impact (a tight lift estimate like "+2-4% RevPAR" or "+£1,200/mo" or "-4h/week manual work"), priority ("high" | "medium").
+- Return STRICT JSON only — no markdown, no commentary. Shape:
+{"recommendations":[{"id":"...","title":"...","reason":"...","impact":"...","priority":"..."}], "headline":"ONE bold sentence summarising the biggest opportunity (max 80 chars)"}
+"""
+
+        user_text = f"""PROPERTY SIGNALS:
+{json.dumps(data_summary, indent=2)}
+
+CANDIDATE INTEGRATIONS (choose 3 by id):
+{json.dumps(available[:60], indent=2)}
+
+Return JSON only."""
+
+        try:
+            session_id = f"mkt-rec-{property_id}-{uuid.uuid4().hex[:8]}"
+            chat = LlmChat(api_key=api_key, session_id=session_id,
+                           system_message=system_msg).with_model("openai", "gpt-5.2")
+            raw = await chat.send_message(UserMessage(text=user_text))
+        except Exception as e:
+            logger.error(f"Marketplace AI error: {e}")
+            raise HTTPException(502, f"AI generation failed: {str(e)[:120]}")
+
+        # --- 3. Parse (tolerate fenced code blocks) ---
+        txt = (raw or "").strip()
+        if txt.startswith("```"):
+            txt = txt.strip("`")
+            if txt.lower().startswith("json"):
+                txt = txt[4:]
+            txt = txt.strip()
+        try:
+            parsed = json.loads(txt)
+        except Exception:
+            # Fallback: try to locate a JSON object
+            start = txt.find("{")
+            end = txt.rfind("}")
+            parsed = json.loads(txt[start:end + 1]) if start >= 0 and end > start else {}
+
+        raw_recs = parsed.get("recommendations") or []
+        catalog_by_id = {x["id"]: x for x in CATALOG}
+        recommendations = []
+        for r in raw_recs[:3]:
+            rid = r.get("id")
+            item = catalog_by_id.get(rid)
+            if not item or rid in install_ids:
+                continue
+            recommendations.append({
+                "id": rid,
+                "title": r.get("title") or item["name"],
+                "reason": (r.get("reason") or item["desc"])[:180],
+                "impact": r.get("impact") or "",
+                "priority": r.get("priority") or "medium",
+                "cat": item["cat"],
+                "domain": item["domain"],
+                "name": item["name"],
+                "desc": item["desc"],
+            })
+
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "property_id": property_id,
+            "headline": parsed.get("headline") or "Your next 3 integrations to lift RevPAR",
+            "recommendations": recommendations,
+            "generated_at": now,
+            "generated_by": current_user.get("name", ""),
+            "signal_snapshot": {
+                "bookings": total_bk,
+                "revenue": round(total_rev, 2),
+                "connected_count": len(install_ids),
+                "top_sources": [s for s, _ in top_sources[:3]],
+            },
+        }
+        await db.marketplace_recommendations.update_one(
+            {"property_id": property_id}, {"$set": doc}, upsert=True
+        )
+        return doc
 
     return router

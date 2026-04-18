@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from datetime import datetime, timezone, timedelta
 from bson import ObjectId
 import jwt
+from auth import require_perm
 
 
 def create_auth_router(db, require_roles, get_current_user, hash_password, verify_password,
@@ -20,7 +21,7 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
     # ==================== AUTH ROUTES ====================
 
     @router.post("/auth/register")
-    async def register(user: UserRegister, request: Request, response: Response, current_user: dict = Depends(require_roles("admin"))):
+    async def register(user: UserRegister, request: Request, response: Response, current_user: dict = Depends(require_perm("create_users"))):
         """Register new user (admin only)"""
         email = user.email.lower().strip()
         existing = await db.users.find_one({"email": email})
@@ -152,7 +153,7 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
         return users
 
     @router.put("/users/{user_id}")
-    async def update_user(user_id: str, update: UserUpdate, current_user: dict = Depends(require_roles("admin"))):
+    async def update_user(user_id: str, update: UserUpdate, current_user: dict = Depends(require_perm("edit_users"))):
         update_data = {k: v for k, v in update.model_dump().items() if v is not None}
         if "role" in update_data and update_data["role"] not in VALID_ROLES:
             raise HTTPException(status_code=400, detail="Invalid role")
@@ -164,7 +165,7 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
         return {"message": "User updated"}
 
     @router.delete("/users/{user_id}")
-    async def delete_user(user_id: str, current_user: dict = Depends(require_roles("admin"))):
+    async def delete_user(user_id: str, current_user: dict = Depends(require_perm("delete_users"))):
         if current_user["_id"] == user_id:
             raise HTTPException(status_code=400, detail="Cannot delete yourself")
         result = await db.users.delete_one({"_id": ObjectId(user_id)})
@@ -196,7 +197,7 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
         return [{k: v for k, v in p.items() if k != "_id"} for p in properties]
 
     @router.post("/properties")
-    async def create_property(prop: PropertyCreate, current_user: dict = Depends(require_roles("admin"))):
+    async def create_property(prop: PropertyCreate, current_user: dict = Depends(require_perm("create_branches"))):
         """Create a new property (admin only)"""
         if prop.property_type not in VALID_PROPERTY_TYPES:
             raise HTTPException(status_code=400, detail=f"Invalid property type. Must be one of: {', '.join(VALID_PROPERTY_TYPES)}")
@@ -207,7 +208,7 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
         return doc
 
     @router.put("/properties/{property_id}")
-    async def update_property(property_id: str, update: PropertyUpdate, current_user: dict = Depends(require_roles("admin"))):
+    async def update_property(property_id: str, update: PropertyUpdate, current_user: dict = Depends(require_perm("edit_branches"))):
         """Update a property (admin only)"""
         update_data = {k: v for k, v in update.model_dump().items() if v is not None}
         if "property_type" in update_data and update_data["property_type"] not in VALID_PROPERTY_TYPES:
@@ -219,7 +220,7 @@ def create_auth_router(db, require_roles, get_current_user, hash_password, verif
         return updated
 
     @router.delete("/properties/{property_id}")
-    async def delete_property(property_id: str, current_user: dict = Depends(require_roles("admin"))):
+    async def delete_property(property_id: str, current_user: dict = Depends(require_perm("delete_branches"))):
         """Delete a property (admin only)"""
         if property_id == "default":
             raise HTTPException(status_code=400, detail="Cannot delete default property")

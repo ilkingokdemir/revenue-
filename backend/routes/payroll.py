@@ -21,6 +21,7 @@ def _month_bounds(year: int, month: int):
 
 
 def create_payroll_router(db, require_roles):
+    from auth import require_perm
     router = APIRouter()
 
     # ==================== EARNED SALARIES ====================
@@ -146,7 +147,7 @@ def create_payroll_router(db, require_roles):
 
     @router.post("/payroll/runs/{property_id}/{run_id}/approve")
     async def approve_run(property_id: str, run_id: str,
-                          current_user: dict = Depends(require_roles("admin", "manager"))):
+                          current_user: dict = Depends(require_perm("approve_payroll_runs"))):
         now = datetime.now(timezone.utc).isoformat()
         r = await db.payroll_runs.update_one(
             {"id": run_id}, {"$set": {"status": "approved", "approved_at": now, "approved_by": current_user.get("name", "")}}
@@ -156,7 +157,7 @@ def create_payroll_router(db, require_roles):
 
     @router.post("/payroll/runs/{property_id}/{run_id}/mark-paid")
     async def mark_paid(property_id: str, run_id: str,
-                        current_user: dict = Depends(require_roles("admin"))):
+                        current_user: dict = Depends(require_perm("approve_payroll_runs"))):
         now = datetime.now(timezone.utc).isoformat()
         r = await db.payroll_runs.update_one(
             {"id": run_id}, {"$set": {"status": "paid", "paid_at": now, "paid_by": current_user.get("name", "")}}
@@ -175,7 +176,7 @@ def create_payroll_router(db, require_roles):
 
     @router.delete("/payroll/runs/{property_id}/{run_id}")
     async def delete_run(property_id: str, run_id: str,
-                         current_user: dict = Depends(require_roles("admin"))):
+                         current_user: dict = Depends(require_perm("delete_payroll_runs"))):
         run = await db.payroll_runs.find_one({"id": run_id}, {"_id": 0})
         if not run: raise HTTPException(404, "Run not found")
         if run.get("status") == "paid": raise HTTPException(400, "Cannot delete paid run")

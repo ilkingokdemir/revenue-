@@ -2667,29 +2667,94 @@ const Dashboard = ({ user, onLogout, permissions }) => {
   // Items not listed stay visible by default (admin, housekeeper role, etc.)
   // Legacy admin role always sees everything (is_legacy_admin bypass).
   const SIDEBAR_PERM_MAP = {
+    // Dashboard / Tasks / Calendar — broad visibility
+    "dashboard-btn":          "dashboard_view",
+    "my-tasks-btn":           "tasks_my_view",
+    "sidebar-calendar":       "bookings_calendar_view",
+
+    // Bookings
+    "booking-engine-btn":         "bookings_view",
+    "booking-engine-admin-btn":   "bookings_view",
+    "arrivals-btn":               "bookings_view",
+    "guest-profiles-btn":         "bookings_view",
+    "guest-journey-btn":          "bookings_view",
+
+    // Operations
+    "operations-hub-btn":     "operations_reception_view",
     "housekeeping-btn":       "housekeeping_view",
     "maintenance-btn":        "maintenance_view",
-    "reports-centre-btn":     "reports_overview_view",
-    "rate-manager-btn":       "rates_calendar_view",
-    "arrivals-btn":           "bookings_view",
     "shift-scheduler-btn":    "operations_shifts_view",
     "reception-report-btn":   "operations_reception_view",
     "pass-over-btn":          "operations_notes_view",
     "compliance-btn":         "operations_compliance_view",
     "laundry-btn":            "laundry_reports_view",
+    "stock-management-btn":   "view_laundry_stock",
+    "logbook-btn":            "operations_notes_view",
+    "lost-found-btn":         "operations_reception_view",
+    "night-audit-btn":        "operations_reception_view",
+    "events-btn":             "operations_reception_view",
+
+    // Reports / Analytics / Forecast
+    "reports-btn":            "reports_overview_view",
+    "reports-centre-btn":     "reports_overview_view",
+    "analytics-btn":          "revenue_analytics_performance_view",
+    "forecast-btn":           "revenue_forecasting_view",
+    "revenue-btn":            "revenue_dashboard_view",
+    "approval-queue-btn":     "revenue_approvals_view",
+    "setup-wizard-btn":       "revenue_wizard_view",
+    "rate-manager-btn":       "rates_calendar_view",
+    "scheduled-reports-btn":  "reports_overview_view",
+    "staff-performance-btn":  "reports_overview_view",
+    "concierge-analytics-btn":"reports_overview_view",
+
+    // Finance
     "payroll-btn":            "finance_payroll_runs_view",
     "rate-matrix-btn":        "finance_payroll_runs_view",
     "expenses-btn":           "finance_expenses_view",
     "cash-flow-btn":          "finance_dashboard_view",
     "finance-btn":            "finance_dashboard_view",
     "finance-pl-btn":         "finance_dashboard_view",
+    "payments-btn":           "finance_dashboard_view",
+    "accounting-btn":         "finance_dashboard_view",
+
+    // Channel Manager / Marketplace / Integrations
     "marketplace-btn":        "channel_manager_connections_view",
     "integrations-btn":       "channel_manager_connections_view",
+    "channel-settings-btn":   "channel_manager_profiles_view",
+    "property-mapping-btn":   "channel_manager_mapping_view",
+    "sync-log-btn":           "channel_manager_sync_view",
+    "api-connection-btn":     "channel_manager_connections_view",
+    "integration-guide-btn":  "channel_manager_connections_view",
     "webhooks-btn":           "webhooks_view",
+    "add-ons-btn":            "channel_manager_connections_view",
+
+    // Guest-facing / Messaging / Marketing
+    "messaging-btn":          "bookings_view",
+    "guest-app-btn":          "bookings_view",
+    "mobile-companion-btn":   "bookings_view",
+    "surveys-btn":            "bookings_view",
+    "nav-reviews":            "bookings_view",
+    "campaigns-btn":          "bookings_view",
+    "loyalty-btn":            "bookings_view",
+    "promo-codes-btn":        "bookings_view",
+    "pos-btn":                "finance_dashboard_view",
+    "smart-locks-btn":        "bookings_view",
+    "automation-btn":         "channel_manager_connections_view",
+    "templates-btn":          "settings_roles_view",
+    "website-templates-btn":  "settings_roles_view",
+    "customize-template-btn": "settings_roles_view",
+    "branding-btn":           "settings_roles_view",
+    "policies-btn":           "settings_cancellation_policies_view",
+    "notification-settings-btn": "settings_users_view",
+
+    // Settings / People
     "team-btn":               "settings_users_view",
     "contracts-btn":          "settings_user_contracts_view",
+    "onboarding-admin-btn":   "settings_users_view",
     "legal-docs-btn":         "settings_roles_view",
     "roles-permissions-btn":  "settings_roles_view",
+    "admin-panel-btn":        "settings_users_view",
+    "settings-hub-btn":       "settings_users_view",
     "bug-tracker-btn":        "system_feedback_view",
     "import-module-btn":      "settings_import_module_view",
   };

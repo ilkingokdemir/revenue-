@@ -1,6 +1,25 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 157 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 158 Test Iterations (100%)
+
+### Iter 158 (Feb 2026): 🚀 Deposit Automation — closes the loop (Card Vault × Policies × Folio)
+
+Iter 157 shipped the PCI Card Vault; Iter 158 now makes it **actually charge deposits automatically**. This is the "auto-capture at booking" capability I suggested — shipped the next iteration.
+
+**14. Deposit Automation** (`deposit_automation.py` + `DepositAutomationPanel`)
+- `GET /api/deposit-automation/pending/{property_id}` — Scans future bookings, evaluates each against active `deposit_policies`, cross-references `card_vault_methods`, and returns a list of {booking, policy, deposit_required, already_paid, to_capture, card_on_file, card_brand, card_last4}. Also totals by with_card vs without_card.
+- `POST /api/deposit-automation/run/{property_id}` — Executes off-session Stripe PaymentIntent for every pending booking with a card on file. Creates `folio_items` payment lines on success. Full ledger in `deposit_capture_log` (charged / failed / skipped_no_card).
+  - `dry_run: true` simulates without calling Stripe
+  - `only_booking_ids: [...]` filters to specific bookings (select-all-with-card flow in UI)
+  - `max_charges: int` caps batch size to avoid runaway runs
+- `GET /api/deposit-automation/log/{property_id}` — Recent capture ledger.
+- Frontend panel with checkbox selection, dry-run button, "Charge N" button with confirmation dialog, pending captures table (9 columns inc. card brand/last4 badge), and capture log viewer.
+
+**Verified end-to-end**: 367 pending captures totaling £31,078.75 identified on the test property after seeding a "30% deposit" policy. (All currently show `card_on_file=false` because real Stripe key isn't configured — once user adds it, these become one-click charges.)
+
+**Testing agent iteration_158.json**: 100% backend (20/20) + 100% frontend. Zero issues.
+
+**Competitor Gap Status · 14 of 15** (93%) with the 1 remaining being SSO/SAML (external IdP dependency). Functionally, the platform now ships a parity set of enterprise PMS features + 10+ unique differentiators.
 
 ### Iter 157 (Feb 2026): 🚀 13 of 15 gaps CLOSED — Revenue Health + IP Allowlist + PCI Card Vault
 

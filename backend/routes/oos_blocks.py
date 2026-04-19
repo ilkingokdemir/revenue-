@@ -65,4 +65,16 @@ def create_oos_router(db):
             raise HTTPException(404, "Block not found")
         return {"deleted": True}
 
+    @router.post("/rooms/oos-blocks/housekeeping-clean/{room_id}")
+    async def mark_room_clean(
+        room_id: str,
+        current_user: dict = Depends(require_perm("edit_bookings")),
+    ):
+        """Housekeeping marks the room clean → removes the most recent auto 'Deep Clean' OOS block."""
+        # Mark the room clean
+        await db.rooms.update_one({"id": room_id}, {"$set": {"housekeeping": "clean"}})
+        # Remove auto-generated Deep Clean blocks on this room (most recent wins)
+        result = await db.oos_blocks.delete_many({"room_id": room_id, "auto": True, "reason": "Deep Clean"})
+        return {"cleaned": True, "blocks_removed": result.deleted_count}
+
     return router

@@ -1474,6 +1474,30 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             await log_sync(db, "booking-engine", "outbound", "success", f"Booking {updated.get('booking_ref')} cancelled — webhook fired", updated.get("booking_ref", ""))
         elif status == "confirmed":
             asyncio.create_task(fire_webhooks(db, "booking.confirmed", wh_data))
+        elif status == "checked_out":
+            # Housekeeping auto-dispatch: block the room with a "Deep Clean" OOS so
+            # nobody double-books a dirty room. Housekeeping removes it when the
+            # room is back to "clean".
+            if updated.get("room_id"):
+                import uuid as _uuid
+                co_date = updated.get("check_out") or datetime.now(timezone.utc).date().isoformat()
+                # Block from checkout date through end-of-next-day (exclusive checkout semantics handled on render)
+                end_date = (datetime.strptime(co_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                await db.oos_blocks.insert_one({
+                    "id": str(_uuid.uuid4()),
+                    "room_id": updated["room_id"],
+                    "property_id": updated.get("property_id", ""),
+                    "start": co_date,
+                    "end": end_date,
+                    "reason": "Deep Clean",
+                    "auto": True,
+                    "booking_id": booking_id,
+                    "created_by": "system:housekeeping-autodispatch",
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+                # Mark room housekeeping status as dirty
+                await db.rooms.update_one({"id": updated["room_id"]}, {"$set": {"housekeeping": "dirty"}})
+            asyncio.create_task(fire_webhooks(db, "booking.checked_out", wh_data))
 
         return updated
 

@@ -1443,7 +1443,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
     # Admin: Bookings management
     @router.get("/bookings")
     async def list_bookings(property_id: str = "", status: str = "", current_user: dict = Depends(require_perm("view_bookings"))):
-        """List bookings with optional filters"""
+        """List bookings with optional filters, enriched with live folio balance."""
         query = {}
         if property_id:
             query["property_id"] = property_id
@@ -1451,6 +1451,45 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             query["status"] = status
 
         bookings = await db.bookings.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+        if not bookings:
+            return bookings
+
+        # One aggregated query across folio entries for all bookings in the result set.
+        # Primary collection is `folio_items` (what guest_services writes); include
+        # `folio_charges` too for any legacy rows.
+        booking_ids = [b["id"] for b in bookings if b.get("id")]
+        paid_by_booking: Dict[str, float] = {}
+        charged_by_booking: Dict[str, float] = {}
+        if booking_ids:
+            pipeline = [
+                {"$match": {"booking_id": {"$in": booking_ids}}},
+                {"$group": {
+                    "_id": {"b": "$booking_id", "t": "$type"},
+                    "sum": {"$sum": {"$toDouble": {"$ifNull": ["$amount", 0]}}},
+                }},
+            ]
+            for coll_name in ("folio_items", "folio_charges"):
+                async for row in db[coll_name].aggregate(pipeline):
+                    key = row["_id"]
+                    bid = key.get("b")
+                    if not bid:
+                        continue
+                    t = (key.get("t") or "").lower()
+                    if t == "payment":
+                        paid_by_booking[bid] = paid_by_booking.get(bid, 0) + float(row["sum"])
+                    else:
+                        # Every non-payment line contributes to gross charges
+                        charged_by_booking[bid] = charged_by_booking.get(bid, 0) + float(row["sum"])
+
+        for b in bookings:
+            bid = b.get("id")
+            paid = round(paid_by_booking.get(bid, 0), 2)
+            charged = round(charged_by_booking.get(bid, 0), 2)
+            # Gross due = folio charges if present, else booking.total_price (pre-folio bookings)
+            gross = charged if charged > 0 else round(float(b.get("total_price") or 0), 2)
+            b["folio_paid"] = paid
+            b["folio_charged"] = charged
+            b["balance_due"] = max(0.0, round(gross - paid, 2))
         return bookings
 
     @router.put("/bookings/{booking_id}/status")

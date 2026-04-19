@@ -274,6 +274,41 @@ def create_booking_timeline_router(db, require_roles):
             "check_out": {"$gt": start_str},
         }, {"_id": 0}).to_list(1000)
 
+        # Enrich with live folio balance so the pill reflects actual payments made
+        if bookings:
+            booking_ids = [b["id"] for b in bookings if b.get("id")]
+            paid_map = {}
+            charged_map = {}
+            if booking_ids:
+                pipeline = [
+                    {"$match": {"booking_id": {"$in": booking_ids}}},
+                    {"$group": {
+                        "_id": {"b": "$booking_id", "t": "$type"},
+                        "sum": {"$sum": {"$toDouble": {"$ifNull": ["$amount", 0]}}},
+                    }},
+                ]
+                # Primary collection for folio entries is `folio_items`.
+                # Some legacy code writes into `folio_charges`; include both for safety.
+                for coll_name in ("folio_items", "folio_charges"):
+                    async for row in db[coll_name].aggregate(pipeline):
+                        key = row["_id"]
+                        bid = key.get("b")
+                        if not bid:
+                            continue
+                        t = (key.get("t") or "").lower()
+                        if t == "payment":
+                            paid_map[bid] = paid_map.get(bid, 0) + float(row["sum"])
+                        else:
+                            charged_map[bid] = charged_map.get(bid, 0) + float(row["sum"])
+            for b in bookings:
+                bid = b.get("id")
+                paid = round(paid_map.get(bid, 0), 2)
+                charged = round(charged_map.get(bid, 0), 2)
+                gross = charged if charged > 0 else round(float(b.get("total_price") or 0), 2)
+                b["folio_paid"] = paid
+                b["folio_charged"] = charged
+                b["balance_due"] = max(0.0, round(gross - paid, 2))
+
         # Group rooms by type
         rooms_by_type = {}
         for r in rooms:

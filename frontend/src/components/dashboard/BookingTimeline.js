@@ -1125,7 +1125,19 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                   <>
                                     <span className="ml-1 flex-shrink-0" data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={12} /></span>
                                     <span className="text-[10px] font-bold truncate flex-1 relative z-10" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
-                                    {width > 90 && <span className="text-[9px] font-mono flex-shrink-0 opacity-90 bg-black/10 rounded-sm px-1" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>}
+                                    {width > 90 && (() => {
+                                      const bal = (bk.balance_due !== undefined && bk.balance_due !== null) ? Number(bk.balance_due) : Number(bk.total_price || 0);
+                                      const paid = bal <= 0;
+                                      return (
+                                        <span
+                                          className={`text-[9px] font-mono flex-shrink-0 opacity-90 rounded-sm px-1 ${paid ? "bg-emerald-500/30 text-emerald-50" : "bg-black/10"}`}
+                                          data-testid={`price-${bk.id}`}
+                                          title={paid ? `Paid in full (${cur(bk.total_price)})` : `Balance due · charged ${cur(bk.total_price)}`}
+                                        >
+                                          {paid ? "PAID" : cur(bal)}
+                                        </span>
+                                      );
+                                    })()}
                                   </>
                                 ) : (
                                   <>
@@ -1133,16 +1145,29 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                     <div className="flex items-center gap-1 min-w-0 relative z-10">
                                       <span className="text-[11px] font-bold truncate flex-1" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
                                     </div>
-                                    {/* Line 2: #ID · src chip · price chip · nights — myhotelbox style */}
+                                    {/* Line 2: #ID · source logo · balance · nights */}
                                     <div className="flex items-center gap-1 mt-0.5 min-w-0 relative z-10">
                                       {width > 80 && bk.booking_ref && (
                                         <span className="text-[9px] font-mono opacity-70 truncate" data-testid={`ref-${bk.id}`}>#{String(bk.booking_ref).slice(-5)}</span>
                                       )}
-                                      <span className="inline-flex items-center gap-0.5" data-testid={`platform-badge-${bk.id}`}>
+                                      <span className="inline-flex items-center" data-testid={`platform-badge-${bk.id}`} title={src}>
                                         <PlatformLogo source={src} size={12} />
-                                        {width > 120 && src && <span className="text-[8px] font-bold uppercase bg-white/50 text-stone-900 rounded-sm px-1 leading-tight">{src.slice(0, 2).toUpperCase()}</span>}
                                       </span>
-                                      <span className="text-[9px] font-bold font-mono bg-rose-100 text-rose-700 rounded-sm px-1 leading-tight flex-shrink-0" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>
+                                      {(() => {
+                                        const bal = (bk.balance_due !== undefined && bk.balance_due !== null) ? Number(bk.balance_due) : Number(bk.total_price || 0);
+                                        const paid = bal <= 0;
+                                        return (
+                                          <span
+                                            className={`text-[9px] font-bold font-mono rounded-sm px-1 leading-tight flex-shrink-0 ${
+                                              paid ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                                            }`}
+                                            data-testid={`price-${bk.id}`}
+                                            title={paid ? `Paid in full (${cur(bk.total_price)})` : `Balance due · charged ${cur(bk.total_price)}`}
+                                          >
+                                            {paid ? "PAID" : cur(bal)}
+                                          </span>
+                                        );
+                                      })()}
                                       {width > 140 && <span className="text-[9px] opacity-80 flex-shrink-0 ml-auto">{bk.nights}n</span>}
                                     </div>
                                   </>

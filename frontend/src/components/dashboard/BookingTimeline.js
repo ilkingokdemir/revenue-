@@ -244,6 +244,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [detailTab, setDetailTab] = useState("info");
   const [upsells, setUpsells] = useState(null);
   const [collisionCluster, setCollisionCluster] = useState(null); // { room, cluster } for "+N more" pill modal
+  const [quickPay, setQuickPay] = useState(null); // { booking } when the flashing balance chip is clicked
   const scrollRef = useRef(null);
 
   const pid = activePropertyId || "all";
@@ -1130,9 +1131,11 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                       const paid = bal <= 0;
                                       return (
                                         <span
-                                          className={`text-[9px] font-mono flex-shrink-0 opacity-90 rounded-sm px-1 ${paid ? "bg-emerald-500/30 text-emerald-50" : "bg-black/10"}`}
+                                          role="button"
+                                          onClick={(e) => { e.stopPropagation(); if (!paid) setQuickPay({ booking: bk }); }}
+                                          className={`text-[9px] font-mono flex-shrink-0 opacity-90 rounded-sm px-1 ${paid ? "bg-emerald-500/30 text-emerald-50" : "balance-flash"}`}
                                           data-testid={`price-${bk.id}`}
-                                          title={paid ? `Paid in full (${cur(bk.total_price)})` : `Balance due · charged ${cur(bk.total_price)}`}
+                                          title={paid ? `Paid in full (${cur(bk.total_price)})` : `Balance due ${cur(bal)} — click to take payment`}
                                         >
                                           {paid ? "PAID" : cur(bal)}
                                         </span>
@@ -1158,11 +1161,13 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                         const paid = bal <= 0;
                                         return (
                                           <span
+                                            role="button"
+                                            onClick={(e) => { e.stopPropagation(); if (!paid) setQuickPay({ booking: bk }); }}
                                             className={`text-[9px] font-bold font-mono rounded-sm px-1 leading-tight flex-shrink-0 ${
-                                              paid ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
+                                              paid ? "bg-emerald-100 text-emerald-700" : "balance-flash"
                                             }`}
                                             data-testid={`price-${bk.id}`}
-                                            title={paid ? `Paid in full (${cur(bk.total_price)})` : `Balance due · charged ${cur(bk.total_price)}`}
+                                            title={paid ? `Paid in full (${cur(bk.total_price)})` : `Balance due ${cur(bal)} — click to take payment`}
                                           >
                                             {paid ? "PAID" : cur(bal)}
                                           </span>
@@ -2112,6 +2117,112 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           </div>
         </div>
       )}
+
+      {/* Quick Pay modal — click flashing balance chip on a booking bar */}
+      {quickPay && (
+        <QuickPayModal
+          booking={quickPay.booking}
+          onClose={() => setQuickPay(null)}
+          onDone={async () => { setQuickPay(null); await load(); }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Quick-pay flow triggered from a flashing balance chip in the calendar.
+// Pre-fills the full remaining balance, defaults method to "card", one click records.
+const QuickPayModal = ({ booking, onClose, onDone }) => {
+  const balance = (booking.balance_due !== undefined && booking.balance_due !== null)
+    ? Number(booking.balance_due) : Number(booking.total_price || 0);
+  const [amount, setAmount] = useState(balance.toFixed(2));
+  const [method, setMethod] = useState("card");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const record = async () => {
+    const n = parseFloat(amount);
+    if (!n || n <= 0) return toast.error("Enter a valid amount");
+    setBusy(true);
+    try {
+      await axios.post(`${API}/folio/${booking.id}/add-payment`, {
+        amount: n,
+        method,
+        description: note || `Front-desk payment · ${method}`,
+      });
+      toast.success(`Recorded ${cur(n)} payment`);
+      onDone();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Payment failed");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="bg-gradient-to-br from-rose-500 to-pink-600 text-white p-5">
+          <div className="text-[11px] font-bold uppercase tracking-wider opacity-80">Take Payment</div>
+          <div className="text-xl font-black mt-0.5">{booking.guest_name}</div>
+          <div className="text-sm opacity-90 mt-0.5">
+            Balance due <span className="font-mono font-bold">{cur(balance)}</span>
+            <span className="opacity-70"> · charged {cur(booking.total_price)}</span>
+          </div>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setAmount(balance.toFixed(2))}
+              data-testid="quickpay-full"
+              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 hover:border-rose-400 text-sm font-semibold">
+              Pay full {cur(balance)}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAmount((balance / 2).toFixed(2))}
+              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 hover:border-rose-400 text-sm">
+              50%
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Amount</label>
+              <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
+                data-testid="quickpay-amount"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Method</label>
+              <select value={method} onChange={e => setMethod(e.target.value)}
+                data-testid="quickpay-method"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm">
+                <option value="card">Card</option>
+                <option value="cash">Cash</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="ota_prepaid">OTA Pre-paid</option>
+                <option value="stripe">Stripe</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Note (optional)</label>
+            <input value={note} onChange={e => setNote(e.target.value)}
+              className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+              placeholder="e.g. Last four 4242 · auth ABC123" />
+          </div>
+        </div>
+        <div className="flex gap-2 p-5 pt-0">
+          <button onClick={onClose} disabled={busy}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-sm font-semibold">
+            Cancel
+          </button>
+          <button onClick={record} disabled={busy}
+            data-testid="quickpay-record"
+            className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-br from-rose-600 to-pink-700 hover:from-rose-500 hover:to-pink-600 text-white text-sm font-bold shadow-lg disabled:opacity-60">
+            {busy ? "Recording…" : `Record ${cur(parseFloat(amount) || 0)}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

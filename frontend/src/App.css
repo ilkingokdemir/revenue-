@@ -144,6 +144,30 @@ body {
   animation: pulse-subtle 1.5s ease-in-out infinite;
 }
 
+/* Unpaid-balance attention flash — soft red pulse so the eye catches it */
+@keyframes balance-flash {
+  0%, 100% {
+    background-color: rgba(254, 226, 226, 1);        /* rose-100 */
+    color: rgb(190, 18, 60);                          /* rose-700 */
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45);
+  }
+  50% {
+    background-color: rgb(244, 63, 94);               /* rose-500 */
+    color: #fff;
+    box-shadow: 0 0 0 3px rgba(244, 63, 94, 0.0);
+  }
+}
+.balance-flash {
+  animation: balance-flash 1.3s ease-in-out infinite;
+  cursor: pointer;
+}
+.balance-flash:hover {
+  animation-play-state: paused;
+  background-color: rgb(225, 29, 72) !important;
+  color: #fff !important;
+}
+
+
 /* Focus ring */
 *:focus-visible {
   outline: 2px solid rgba(62, 82, 69, 0.3);

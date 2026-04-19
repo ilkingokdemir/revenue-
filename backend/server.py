@@ -548,6 +548,9 @@ api_router.include_router(tax_config_router)
 from routes.deposit_policies import create_deposit_policies_router
 deposit_policies_router = create_deposit_policies_router(db)
 api_router.include_router(deposit_policies_router)
+from routes.unified_inbox import create_unified_inbox_router
+unified_inbox_router = create_unified_inbox_router(db)
+api_router.include_router(unified_inbox_router)
 
 app.include_router(api_router)
 

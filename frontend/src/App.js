@@ -22,6 +22,7 @@ import { PayrollRateMatrix } from "./components/dashboard/finance/PayrollRateMat
 import { CityLedgerPanel } from "./components/dashboard/finance/CityLedgerPanel";
 import { TaxConfigPanel } from "./components/dashboard/finance/TaxConfigPanel";
 import { DepositPolicyPanel } from "./components/dashboard/finance/DepositPolicyPanel";
+import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -175,6 +176,7 @@ import {
   Wallet,
   Receipt,
   DeviceTablet,
+  Tray,
   Broom,
   Moon,
   Crown,
@@ -2628,6 +2630,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
         { id: "kiosk-launch", icon: DeviceTablet, name: "Self-Service Kiosk", testId: "kiosk-launch-btn", launchUrl: true },
+        { id: "unified-inbox", icon: Tray, name: "Unified Inbox", testId: "unified-inbox-btn" },
         { id: "city-ledger", icon: Wallet, name: "City Ledger (AR)", testId: "city-ledger-btn" },
         { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
         { id: "deposit-policies", icon: ShieldCheck, name: "Deposit Policies", testId: "deposit-policies-btn" },
@@ -3419,6 +3422,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Deposit Policies */}
         {activeView === "deposit-policies" && (
           <DepositPolicyPanel propertyId={activePropertyId} user={user} />
+        )}
+
+        {/* Unified Inbox */}
+        {activeView === "unified-inbox" && (
+          <UnifiedInboxPanel user={user} />
         )}
 
         {/* Bug Tracker */}

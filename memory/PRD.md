@@ -2,7 +2,36 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
-### Iter 181: Self-Service Kiosk Mode — completion polling + room/QR screen + sidebar launch
+### Iter 182: Unified Inbox — WhatsApp + SMS + Email + Booking.com + Airbnb merged per guest
+
+User accepted the final remaining P0 competitor gap. Eviivo's #1 sales-demo feature now at parity.
+
+**Backend** (`/app/backend/routes/unified_inbox.py` — new module):
+- Collection: `unified_messages` — `{id, guest_key, booking_id?, guest_name, channel, direction, body, from_addr, to_addr, subject?, attachments[], read, created_at, sent_by?}`. **Thread = all messages sharing the same `guest_key`** (email/phone/booking_id).
+- `GET /api/inbox/threads` — Mongo aggregate: groups by guest_key, returns last-message preview + channels seen + unread count, sorted by recency.
+- `GET /api/inbox/threads/{guest_key}/messages` — full chronological thread.
+- `POST /api/inbox/threads/{guest_key}/send` — saves outbound. Validates `channel ∈ {whatsapp, sms, email, booking_com, airbnb, direct}`, non-empty body. Enriches `guest_name/booking_id` from most recent prior message.
+- `POST /api/inbox/mark-read/{guest_key}` — flips all inbound to read.
+- `POST /api/inbox/webhook/{channel}` — **public** endpoint for channel providers to POST inbound. Common shape: `{guest_key|from, guest_name, body|text, booking_id?, attachments?}`. Downstream providers (Twilio, Meta WhatsApp Cloud, Booking.com extranet, Airbnb) wire here; per-channel signature verification is the caller's add-on.
+
+**Frontend** (`UnifiedInboxPanel.js`):
+- **Split-pane layout** — threads list (340px wide, searchable) + conversation pane (flex-1)
+- **Threads list:** avatar with channel icon & color (WhatsApp=emerald, SMS=sky, Email=violet, Booking.com=indigo, Airbnb=rose, Direct=stone), guest name, last preview with CheckCheck for outbound, small channel-tag chips, unread badge
+- **Conversation:** WhatsApp-style bubbles — outbound emerald on right, inbound white on left, each bubble shows channel icon + label + time. Auto-scrolls to latest.
+- **Composer:** "Reply via" channel selector + multi-line textarea + "⌘/Ctrl+Enter to send" hint + Send button (disabled when empty)
+- **Mock Inbound modal** for testing without real channel providers — simulates webhook calls for any channel
+
+**Verified end-to-end via curl + Playwright screenshot:**
+- WhatsApp inbound + SMS inbound from same phone → merged into 1 thread (Jane, SMS + WhatsApp chips)
+- Booking.com inbound from different email → separate thread (Tom Walker)
+- Outbound reply saved correctly with direction=outbound, read=true
+- mark-read → `{marked: 2}` confirming flip
+- UI renders flawlessly — Jane's thread shows all 3 messages with correct bubble alignment and channel icons
+
+**Business impact:** Reception no longer juggles WhatsApp Web + SMS app + Booking.com extranet + email client. Every message for a guest appears in one thread, they reply on the channel of their choice, no context lost. This is the single feature that sells PMS deals in 2026.
+
+
+### Iter 181: Self-Service Kiosk Mode
 
 User accepted the final gap-closer. The `/checkin-kiosk/{propertyId}` route already existed (welcome → search → results → register-iframe); what was missing was the **final "here's your room" screen** and staff discoverability. Shipped both in one iteration.
 

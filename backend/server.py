@@ -554,6 +554,15 @@ api_router.include_router(unified_inbox_router)
 from routes.currency_fx import create_currency_fx_router
 currency_fx_router = create_currency_fx_router(db)
 api_router.include_router(currency_fx_router)
+from routes.rate_structure import create_rate_structure_router
+rate_structure_router = create_rate_structure_router(db)
+api_router.include_router(rate_structure_router)
+from routes.groups import create_groups_router
+groups_router = create_groups_router(db)
+api_router.include_router(groups_router)
+from routes.gdpr import create_gdpr_router
+gdpr_router = create_gdpr_router(db)
+api_router.include_router(gdpr_router)
 
 app.include_router(api_router)
 

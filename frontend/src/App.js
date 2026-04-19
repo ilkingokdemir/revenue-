@@ -23,6 +23,9 @@ import { CityLedgerPanel } from "./components/dashboard/finance/CityLedgerPanel"
 import { TaxConfigPanel } from "./components/dashboard/finance/TaxConfigPanel";
 import { DepositPolicyPanel } from "./components/dashboard/finance/DepositPolicyPanel";
 import { CurrencyFxPanel } from "./components/dashboard/finance/CurrencyFxPanel";
+import { RateStructurePanel } from "./components/dashboard/finance/RateStructurePanel";
+import { GroupBookingsPanel } from "./components/dashboard/GroupBookingsPanel";
+import { GdprPanel } from "./components/dashboard/GdprPanel";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
@@ -2636,6 +2639,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
         { id: "deposit-policies", icon: ShieldCheck, name: "Deposit Policies", testId: "deposit-policies-btn" },
         { id: "currency-fx", icon: Globe, name: "Multi-Currency / FX", testId: "currency-fx-btn" },
+        { id: "rate-structure", icon: Tag, name: "Rate Plans & OTA Mapping", testId: "rate-structure-btn" },
+        { id: "group-bookings", icon: Users, name: "Group Bookings", testId: "group-bookings-btn" },
+        { id: "gdpr", icon: ShieldCheck, name: "GDPR Data Rights", testId: "gdpr-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "booking-engine-admin", icon: Globe, name: "Booking Engine", testId: "booking-engine-admin-btn" },
@@ -3429,6 +3435,21 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Multi-Currency / FX */}
         {activeView === "currency-fx" && (
           <CurrencyFxPanel user={user} />
+        )}
+
+        {/* Rate Structure / OTA Mapping */}
+        {activeView === "rate-structure" && (
+          <RateStructurePanel propertyId={activePropertyId} user={user} />
+        )}
+
+        {/* Group Bookings */}
+        {activeView === "group-bookings" && (
+          <GroupBookingsPanel propertyId={activePropertyId} user={user} />
+        )}
+
+        {/* GDPR Data Rights */}
+        {activeView === "gdpr" && (
+          <GdprPanel user={user} />
         )}
 
         {/* Unified Inbox */}

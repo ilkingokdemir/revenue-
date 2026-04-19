@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Check, Minus, Sparkles, Zap, ArrowRight, Shield, Globe, Users,
   MessageSquare, Wallet, Tags, Bot, Building2, X,
@@ -116,6 +116,30 @@ const advantageFor = (rows) =>
 
 export default function FeatureComparePage() {
   const [activeGroup, setActiveGroup] = useState(null);
+
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = "Feature scorecard vs Mews · Cloudbeds · Eviivo — MyHotelBox";
+    const ogImg = `${process.env.REACT_APP_BACKEND_URL}/api/og/compare.png`;
+    const tags = [
+      ["property", "og:title", "Feature scorecard vs the top PMS platforms"],
+      ["property", "og:description", "Independent audit of MyHotelBox vs Mews, Cloudbeds, and Eviivo. Every production feature mapped side-by-side."],
+      ["property", "og:image", ogImg],
+      ["name", "twitter:title", "Feature scorecard vs the top PMS platforms"],
+      ["name", "twitter:image", ogImg],
+      ["name", "description", "MyHotelBox feature comparison — independent audit vs Mews, Cloudbeds, Eviivo."],
+    ];
+    tags.forEach(([attr, val, content]) => {
+      let el = document.querySelector(`meta[${attr}="${val}"]`);
+      if (!el) {
+        el = document.createElement("meta");
+        el.setAttribute(attr, val);
+        document.head.appendChild(el);
+      }
+      el.setAttribute("content", content);
+    });
+    return () => { document.title = prevTitle; };
+  }, []);
 
   const totals = competitors.reduce((acc, c, idx) => {
     let full = 0, partial = 0, none = 0;

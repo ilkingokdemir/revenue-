@@ -563,6 +563,9 @@ api_router.include_router(groups_router)
 from routes.gdpr import create_gdpr_router
 gdpr_router = create_gdpr_router(db)
 api_router.include_router(gdpr_router)
+from routes.og_images import create_og_router
+og_router = create_og_router()
+api_router.include_router(og_router)
 
 app.include_router(api_router)
 

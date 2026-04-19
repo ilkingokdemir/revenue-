@@ -2,6 +2,29 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 166: Financial Overview rebuilt to match myhotelbox.com exact layout (user reference)
+
+User uploaded 3 screenshots of myhotelbox.com's Financial Overview showing a 3-column card layout (Previous/This Month/Next Month) with inline G/R/ADR/C/N metrics and a 3-year "Same Month History" sub-section per column. Completely rebuilt our Financial Overview to match.
+
+**Backend** (`/app/backend/routes/enhanced_dashboard.py`):
+- New helper `_mhb_financial_overview(db, now, bk_query)` that builds 3 blocks (previous / this / next month) where each block contains:
+  - `current`: gross / room_revenue / adr / commission / net / bookings for the period
+  - `history[3]`: same-month-of-year data for Y-1, Y-2, Y-3 with `delta_pct` vs current (YoY % change, capped at ±100% for zero-history edge cases)
+- Uses per-channel commission rates (`_COMM_RATES` hoisted to module scope, same as Profit OS).
+- Returned under `financial_overview.mhb_style`.
+
+**Frontend** (`EnhancedDashboard.js`):
+- New `FinancialOverviewMHB` component replacing the legacy table.
+- **Rose-tinted outer card** with `● FINANCIAL OVERVIEW` header, **Bookings Created / Stay Revenue** toggle pills (Stay Revenue default, rose-highlighted), subtle RefreshCw icon.
+- **Legend subtitle**: `G: Gross, R: Room Revenue, ADR: Avg Room Price, C: Commission, N: Net after commission by stay month` (updates to "by booking date" when Bookings Created mode is active).
+- **3-column grid** (mobile stacks): each column renders the period title (`PREVIOUS / THIS MONTH / NEXT MONTH`), an `In` row with the current-period `MetricRow` (G/R/ADR/C/N inline with color coding: emerald/emerald/stone/rose/emerald-bold), divider, then `SAME MONTH HISTORY` sub-section with 3 yearly entries.
+- Each history entry: `2025 (Mar) (+4%)` prefix with emerald/rose/stone delta color + mini inline MetricRow.
+- `curCompact2` helper — integer rounding (`£37,441` not `£37,441.34`) to match the compact myhotelbox style.
+- Toggle state stored in component (`mode` state: `stay_revenue` | `bookings_created`) for future wiring.
+
+**Live verified**: Side-by-side comparison with the user's reference — layout, colors, rose tint, toggle pills, metric inline format, "SAME MONTH HISTORY" subsection all match pixel-close. Real data: Previous Mar £37,441 gross / +£34,249 net · This Apr £9,260 gross / +£8,304 net · Next May £30,198 / +£27,805 net. Historical years show (+100%) because test dataset has no pre-2026 data — will reflect real YoY once data exists.
+
+
 ### Iter 165: Last 3 Years column added to Financial Overview table (user follow-up)
 
 User clarified they also wanted Last 3 Years alongside Last/This/Next Month in the existing comparison table (not just the history chart). Extended the existing table.

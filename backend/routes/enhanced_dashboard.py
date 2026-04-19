@@ -10,6 +10,82 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# Commission rates (per OTA) reused across Profit OS + Financial Overview
+_COMM_RATES = {
+    "Booking.com": 0.15, "Expedia": 0.18, "Airbnb": 0.03, "Agoda": 0.17,
+    "Hotelbeds": 0.22, "Google": 0.12, "Affiliate": 0.08, "Hotels.com": 0.15,
+}
+
+
+async def _mhb_financial_overview(db, now, bk_query):
+    """Generate myhotelbox-style 3-column financial overview: previous/this/next month,
+    each with 'In' totals + 3 years of SAME MONTH HISTORY with % delta vs current."""
+    from calendar import monthrange
+
+    def month_bounds(year, month):
+        last = monthrange(year, month)[1]
+        return f"{year}-{month:02d}-01", f"{year}-{month:02d}-{last:02d}"
+
+    def add_months(y, m, delta):
+        idx = (y * 12 + (m - 1)) + delta
+        return idx // 12, (idx % 12) + 1
+
+    async def period(start, end):
+        bks = await db.bookings.find(
+            {**bk_query, "check_in": {"$gte": start, "$lte": end}},
+            {"_id": 0, "total_price": 1, "nights": 1, "source": 1, "source_code": 1}
+        ).to_list(10000)
+        gross = sum(float(b.get("total_price") or 0) for b in bks)
+        nights = sum(int(b.get("nights") or 1) for b in bks)
+        commission = sum(float(b.get("total_price") or 0) * _COMM_RATES.get(b.get("source") or b.get("source_code") or "", 0.0) for b in bks)
+        return {
+            "gross": round(gross, 2),
+            "room_revenue": round(gross, 2),
+            "adr": round(gross / nights, 2) if nights else 0,
+            "commission": round(commission, 2),
+            "net": round(gross - commission, 2),
+            "bookings": len(bks),
+        }
+
+    # Build blocks for previous, this, next month
+    blocks = {}
+    for label, delta in [("previous", -1), ("this", 0), ("next", 1)]:
+        y, m = add_months(now.year, now.month, delta)
+        start, end = month_bounds(y, m)
+        month_label = datetime(y, m, 1).strftime("%b")
+        cur = await period(start, end)
+
+        # 3 years of SAME MONTH HISTORY (y-1, y-2, y-3)
+        history = []
+        for back in range(1, 4):
+            hy = y - back
+            hs, he = month_bounds(hy, m)
+            h = await period(hs, he)
+            # % delta vs current: (current - historical) / historical * 100; -100% when no history
+            delta_pct = 0
+            if h["gross"] > 0:
+                delta_pct = round((cur["gross"] - h["gross"]) / h["gross"] * 100, 0)
+            elif cur["gross"] > 0:
+                delta_pct = 100  # current exists but no history
+            else:
+                delta_pct = -100
+            history.append({
+                "year": hy,
+                "month_label": month_label,
+                "delta_pct": int(delta_pct),
+                **h,
+            })
+
+        blocks[label] = {
+            "year": y,
+            "month": m,
+            "month_label": month_label,
+            "current": cur,
+            "history": history,
+        }
+    return blocks
+
+
 def create_enhanced_dashboard_router(db, require_roles):
     router = APIRouter()
 
@@ -147,6 +223,7 @@ def create_enhanced_dashboard_router(db, require_roles):
                 "next_month": next_month,
                 "same_month_last_year": last_year,
                 "last_3_years": last_3y,
+                "mhb_style": await _mhb_financial_overview(db, now, bk_query),
             },
             "daily_revenue_7d": daily_revenue,
             "total_7d_revenue": round(total_7d, 2),

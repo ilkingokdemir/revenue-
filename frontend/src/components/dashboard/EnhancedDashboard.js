@@ -91,49 +91,9 @@ export const EnhancedDashboard = ({ propertyId }) => {
 
       {/* Financial Overview + 7-Day Revenue */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Financial Overview Table */}
-        <div className="lg:col-span-2 bg-white border border-stone-200 rounded-2xl p-5" data-testid="financial-overview">
-          <h3 className="text-sm font-bold text-stone-800 mb-3">Financial Overview</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-stone-400 border-b border-stone-100">
-                  <th className="text-left py-2 px-2"></th>
-                  <th className="text-right py-2 px-2 bg-emerald-50/60 text-emerald-800 font-bold rounded-tl">Last 3 Years</th>
-                  <th className="text-right py-2 px-2">Previous Month</th>
-                  <th className="text-right py-2 px-2 font-bold text-stone-700">This Month</th>
-                  <th className="text-right py-2 px-2">Next Month</th>
-                  <th className="text-right py-2 px-2 text-stone-400">Same Month LY</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { label: "Gross Revenue", key: "gross" },
-                  { label: "Room Revenue", key: "room_revenue" },
-                  { label: "ADR", key: "adr" },
-                  { label: "Commission", key: "commission", color: "text-red-500" },
-                  { label: "Net Revenue", key: "net", color: "text-emerald-600" },
-                ].map(row => (
-                  <tr key={row.key} className="border-b border-stone-50">
-                    <td className="py-2 px-2 font-medium text-stone-700">{row.label}</td>
-                    <td className="py-2 px-2 text-right font-bold text-emerald-700 bg-emerald-50/40" data-testid={`fo-3y-${row.key}`}>{cur((fo.last_3_years || {})[row.key])}</td>
-                    <td className="py-2 px-2 text-right text-stone-400">{cur(fo.previous_month[row.key])}</td>
-                    <td className={`py-2 px-2 text-right font-bold ${row.color || "text-stone-800"}`}>{cur(fo.this_month[row.key])}</td>
-                    <td className="py-2 px-2 text-right text-stone-400">{cur(fo.next_month[row.key])}</td>
-                    <td className="py-2 px-2 text-right text-stone-300">{cur(fo.same_month_last_year[row.key])}</td>
-                  </tr>
-                ))}
-                <tr>
-                  <td className="py-2 px-2 font-medium text-stone-700">Bookings</td>
-                  <td className="py-2 px-2 text-right font-bold text-emerald-700 bg-emerald-50/40" data-testid="fo-3y-bookings">{(fo.last_3_years || {}).bookings || 0}</td>
-                  <td className="py-2 px-2 text-right text-stone-400">{fo.previous_month.bookings}</td>
-                  <td className="py-2 px-2 text-right font-bold">{fo.this_month.bookings}</td>
-                  <td className="py-2 px-2 text-right text-stone-400">{fo.next_month.bookings}</td>
-                  <td className="py-2 px-2 text-right text-stone-300">{fo.same_month_last_year.bookings}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        {/* Financial Overview — myhotelbox-style 3-column layout */}
+        <div className="lg:col-span-2 bg-rose-50/60 border border-rose-200/70 rounded-2xl p-5" data-testid="financial-overview">
+          <FinancialOverviewMHB data={fo.mhb_style} />
         </div>
 
         {/* 7-Day Revenue Chart */}
@@ -346,6 +306,111 @@ const FinancialHistorySection = ({ history, range, onRangeChange, loading }) => 
       {loading && (
         <div className="text-center py-4 text-stone-400 text-xs flex items-center justify-center gap-1.5"><RefreshCw className="w-3 h-3 animate-spin" /> Loading history…</div>
       )}
+    </div>
+  );
+};
+
+// ======================== Financial Overview — myhotelbox style ========================
+const curCompact2 = (v) => {
+  const n = Math.round(Number(v || 0));
+  if (Math.abs(n) >= 1000) return `£${n.toLocaleString("en-GB")}`;
+  return `£${n}`;
+};
+
+const MetricRow = ({ label, data, bold = false, mini = false }) => {
+  const txt = bold ? "font-bold" : "";
+  const sizeCls = mini ? "text-[10px]" : "text-[11px]";
+  return (
+    <div className={`flex items-center gap-1 flex-wrap ${sizeCls} ${txt}`}>
+      {label && <span className="text-stone-700 font-medium mr-1">{label}</span>}
+      <span className="text-stone-400">G:</span>
+      <span className="text-emerald-700 font-semibold tabular-nums">{curCompact2(data.gross)}</span>
+      <span className="text-stone-400 ml-1">R:</span>
+      <span className="text-emerald-700 tabular-nums">{curCompact2(data.room_revenue)}</span>
+      <span className="text-stone-400 ml-1">ADR:</span>
+      <span className="text-stone-600 tabular-nums">£{Math.round(data.adr || 0)}</span>
+      <span className="text-stone-400 ml-1">C:</span>
+      <span className="text-rose-600 tabular-nums">{curCompact2(data.commission)}</span>
+      <span className="text-stone-400 ml-1">N:</span>
+      <span className="text-emerald-700 font-bold tabular-nums">{(data.net || 0) >= 0 ? "+" : ""}{curCompact2(data.net)}</span>
+    </div>
+  );
+};
+
+const FinancialOverviewMHB = ({ data }) => {
+  const [mode, setMode] = useState("stay_revenue");
+
+  if (!data || !data.previous) {
+    return <div className="text-sm text-stone-400 p-4">No financial overview data</div>;
+  }
+
+  const cols = [
+    { key: "previous", title: "PREVIOUS", block: data.previous },
+    { key: "this",     title: "THIS MONTH", block: data.this },
+    { key: "next",     title: "NEXT MONTH", block: data.next },
+  ];
+
+  return (
+    <div data-testid="mhb-financial-overview">
+      {/* Header */}
+      <div className="flex items-center flex-wrap gap-2 mb-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
+        <h3 className="text-sm font-bold text-stone-800 tracking-wide">FINANCIAL OVERVIEW</h3>
+        <div className="flex items-center gap-1 ml-2" data-testid="mhb-fo-mode">
+          <button
+            onClick={() => setMode("bookings_created")}
+            data-testid="mhb-fo-mode-created"
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full transition-all ${mode === "bookings_created" ? "bg-white text-stone-800 ring-1 ring-stone-300" : "bg-stone-100 text-stone-500 hover:text-stone-700"}`}
+          >Bookings Created</button>
+          <button
+            onClick={() => setMode("stay_revenue")}
+            data-testid="mhb-fo-mode-stay"
+            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full transition-all ${mode === "stay_revenue" ? "bg-rose-100 text-rose-800 ring-1 ring-rose-300" : "bg-stone-100 text-stone-500 hover:text-stone-700"}`}
+          >Stay Revenue</button>
+        </div>
+        <button className="ml-auto flex items-center gap-1 text-[10px] text-stone-500 hover:text-stone-800" data-testid="mhb-fo-refresh">
+          <RefreshCw className="w-3 h-3" />
+        </button>
+      </div>
+      <p className="text-[10px] text-stone-500 mb-3">
+        G: Gross, R: Room Revenue, ADR: Avg Room Price, C: Commission, N: Net after commission {mode === "stay_revenue" ? "by stay month" : "by booking date"}
+      </p>
+
+      {/* 3-column grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {cols.map((col) => (
+          <div key={col.key} className="bg-white/60 border border-rose-200/50 rounded-xl p-3" data-testid={`mhb-fo-${col.key}`}>
+            <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mb-1.5">{col.title}</div>
+
+            {/* Current period "In" row */}
+            <div className="pb-2 border-b border-rose-100">
+              <MetricRow label="In" data={col.block.current} bold />
+            </div>
+
+            {/* Same Month History */}
+            <div className="mt-2">
+              <div className="text-[9px] font-bold uppercase tracking-wider text-stone-500 mb-1.5">SAME MONTH HISTORY</div>
+              <div className="space-y-1.5">
+                {col.block.history.map((h, i) => {
+                  const pctCls = h.delta_pct > 0 ? "text-emerald-600" : h.delta_pct < 0 ? "text-rose-600" : "text-stone-400";
+                  return (
+                    <div key={i} className="flex items-start gap-1.5 text-[10px]">
+                      <div className="flex-shrink-0 text-stone-500 min-w-[68px]">
+                        <span className="font-semibold text-stone-700">{h.year}</span>
+                        <span className="text-stone-400"> ({h.month_label})</span>
+                        <span className={`ml-0.5 ${pctCls}`}>({h.delta_pct >= 0 ? "+" : ""}{h.delta_pct}%)</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <MetricRow data={h} mini />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

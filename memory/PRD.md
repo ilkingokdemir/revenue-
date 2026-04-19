@@ -2,6 +2,42 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 162: Profit OS (ContributionPAR) — revenue-side killer feature (P2)
+
+Built a complete profit analytics module that strips OTA commissions + payment processing fees from gross revenue to reveal the TRUE net contribution per channel, per room type, per day. Competitors charge ~$99/mo for this kind of profit intelligence; users often use spreadsheets instead.
+
+**Backend** (`/app/backend/routes/profit_os.py`):
+- `GET /api/revenue/profit-os?property_id=&start=&end=` — full per-channel/per-room-type breakdown. Gated via `require_perm("view_profit_reports","revenue_profit_os_view", mode="any")`.
+- **Cost model** (`DEFAULT_COMMISSION`): Booking.com 15%, Expedia 18%, Agoda 17%, Hotelbeds 22%, Airbnb 3%, Google 12%, Affiliate 8%, Direct/Web/Walk-in 0% — industry-standard rates.
+- **Payment fees**: 2.9% + £0.30 per card transaction (Stripe-style), skipped for channels that collect payment themselves (Booking.com, Expedia, Airbnb, Agoda, Hotelbeds, PayAtHotel).
+- Aggregations: total gross/commission/fees/net; per-channel (bookings, gross, commission, commission_pct, fee, net, net_margin_pct, contribution_pct to total net, adr); per-room-type (bookings, nights, gross, net, adr, **CPAR = net / window_nights**); daily trend (gross/net/bookings/cpar).
+- KPIs returned: gross_revenue, total_commission, total_payment_fees, **net_revenue**, net_margin_pct, adr, revpar, **cpar**, occupancy_pct, occupied_nights, bookings_count.
+- Also returns the cost_model assumptions block so the UI can display the inputs transparently.
+
+**Frontend** (`/app/frontend/src/components/dashboard/revenue/ProfitOSPanel.js`, ~320 lines, placed directly in the new `revenue/` sub-folder):
+- **Hero header**: emerald/teal gradient, sparkle-badge "REVENUE · PROFIT OS · CPAR", bold tagline *"What your revenue actually earns"*, window selector (7/30/60/90d), Refresh + Export CSV.
+- **KPI Row 1 — Revenue Waterfall**: Gross (sky) → Commission -amber → Payment Fees -rose → **Net Revenue (emerald, flagged `big`)**. Negative cards prefix "-".
+- **KPI Row 2 — Operational**: **CPAR** (emerald hero card w/ green ring-2 + ArrowUpRight icon), RevPAR (indigo), ADR (stone), Occupancy (amber).
+- **Channel profitability table**: sorted by net contribution desc, brand-color swatches per channel, full column set (Channel / Bookings / Gross / Commission (%) / Fees / **Net** / Margin badge / Contribution progress bar). Margin badges are colour-coded (≥85% emerald, ≥75% amber, else rose).
+- **Room-type CPAR ranking**: one card per room type, large CPAR number on the right, gradient progress bar (scaled to max CPAR), sub-row showing gross/net/margin.
+- **Daily gross vs net trend**: 30-bar chart per day with sky-200 gross bars overlaid by emerald-gradient net bars, hover tooltip showing date + gross + net + bookings.
+- **Cost-model assumption chips**: pill badges per channel showing commission rate + universal card-fee chip. Signals transparency and future edit-per-property intent.
+- Fully functional CSV export → includes KPIs + per-channel rows; saved as `profit-os-{start}-to-{end}.csv`.
+
+**Plumbing:**
+- Sidebar entry added right below "Revenue Mgmt" — `Target` icon, `testId=profit-os-btn`.
+- `SIDEBAR_PERM_MAP["profit-os-btn"] = "revenue_profit_os_view"` — perm already existed in catalog.
+- Created new `revenue/` sub-folder under `dashboard/` (continuing refactor).
+
+**Live verified**: Loaded against 117 real bookings over 30 days. Panel rendered:
+- £30,739.60 gross → £27,680.12 net (90% margin after £2,572.69 commission + £486.79 fees)
+- CPAR £19.63, RevPAR £21.80, ADR £115.56, Occ 18.9% (47 rooms × 30 nights)
+- 11 channels sorted by net contribution; Booking.com leads at £4,156.88 net (15.0% share, 85% margin), Hotels.com 97% margin (no commission mapped), Direct 96.9%
+- All source color strips, progress bars, margin badges, and expand/collapse UX working.
+
+CSV export button functional. Backend ready for per-property cost-model overrides in a future iteration (P2.1).
+
+
 ### Iter 161: Dashboard folder refactor — Phase 1 (P1)
 
 The `/app/frontend/src/components/dashboard/` directory had grown past 115 files. Did a safe, targeted refactor moving six cleanly-isolated recent additions into thematic sub-folders without breaking any imports.

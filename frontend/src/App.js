@@ -22,6 +22,7 @@ import { PayrollRateMatrix } from "./components/dashboard/finance/PayrollRateMat
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
+import { ProfitOSPanel } from "./components/dashboard/revenue/ProfitOSPanel";
 import { RolesPermissionsPanel } from "./components/dashboard/rbac/RolesPermissionsPanel";
 import { ImportModulePanel } from "./components/dashboard/imports/ImportModulePanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
@@ -2555,6 +2556,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "my-tasks", icon: Target, name: "My Tasks", testId: "my-tasks-btn" },
         { id: "calendar", icon: CalendarBlank, name: "Calendar", testId: "sidebar-calendar" },
         { id: "revenue", icon: ChartLine, name: "Revenue Mgmt", testId: "revenue-btn" },
+        { id: "profit-os", icon: Target, name: "Profit OS", testId: "profit-os-btn" },
       ]
     },
     {
@@ -2704,6 +2706,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "analytics-btn":          "revenue_analytics_performance_view",
     "forecast-btn":           "revenue_forecasting_view",
     "revenue-btn":            "revenue_dashboard_view",
+    "profit-os-btn":          "revenue_profit_os_view",
     "approval-queue-btn":     "revenue_approvals_view",
     "setup-wizard-btn":       "revenue_wizard_view",
     "rate-manager-btn":       "rates_calendar_view",
@@ -3411,6 +3414,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Collisions */}
         {activeView === "collisions" && (
           <div className="p-6"><CollisionsPanel user={user} onJumpToCalendar={(pid) => { if (pid) setActivePropertyId(pid); setActiveView("calendar"); }} /></div>
+        )}
+
+        {/* Profit OS */}
+        {activeView === "profit-os" && (
+          <div className="p-6"><ProfitOSPanel user={user} propertyId={activePropertyId} /></div>
         )}
       </main>
 

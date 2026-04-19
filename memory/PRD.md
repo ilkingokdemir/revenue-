@@ -2,6 +2,33 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 155 (Feb 2026): Payment Mix report + Competitor Gap Map
+
+**Payment Mix (Finance dashboard tile)** — leverages the new `payment_method` + `channel` fields from Iter 154 to break down how revenue is captured.
+
+**Backend** (`routes/finance.py`)
+- New endpoint `GET /api/finance/payment-mix/{property_id}?from_date=&to_date=`. Returns:
+  - `total`, `transactions`, `direct_captured`/`direct_percent`, `ota_captured`/`ota_percent`
+  - `methods[]` — 4 buckets always present (cash / card / bank_transfer / channel_collection) with amount, count, percent, label
+  - `channels[]` — OTA channels sorted desc by amount (Booking.com, Expedia, etc), each with amount, count, percent
+  - `daily[]` — day-by-day trend with all 4 method amounts + total
+- Auth: admin + manager only (receptionist blocked).
+
+**Frontend** (`FinancePanel.js`)
+- New "Payment Mix" tile in Finance Dashboard (after Operating P/L).
+- 4-segment stacked bar showing instant method distribution.
+- 4-up method cards (Cash/emerald · Card/sky · Bank/violet · Channel/fuchsia) with £ + tx count + %.
+- OTA Channel Breakdown section (horizontal progress bars) appears only when channel_collection has value.
+- Header shows Direct / OTA split ratio (e.g. "97.4% / 2.6%") — exactly what's needed for OTA contract negotiations.
+
+**Testing agent iteration_155.json**: 100% backend (14/14) + 100% frontend. Zero issues. Zero action items.
+
+**Deliverable — `/app/memory/COMPETITOR_GAP_MAP.md`**
+Comprehensive module-by-module map of the entire software (9 sidebar sections, 80+ panels) vs Mews / Cloudbeds / Eviivo / RoomRaccoon / myhotelbox. Identifies:
+- 10 ⭐ features you already beat competitors on (Self-Service Kiosk, Laundry, Market Robot AI, etc)
+- 15 prioritized gaps (P0/P1/P2/P3) totaling ~15–18 engineering days to reach Mews Enterprise parity
+- Top 3 P0 gaps: (1) PCI Card-on-File vault, (2) Commission Reconciliation report, (3) Night Audit "Close Day" lock
+
 
 ### Iter 154 (Feb 2026): Quick Pay partial-payment bug fix + 4 explicit payment types
 

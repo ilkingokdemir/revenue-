@@ -7,7 +7,7 @@ import {
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
   FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, UserX, Lock, StickyNote, LayoutList, Copy, Filter,
-  Bell, Building2, Wrench, Printer,
+  Bell, Building2, Wrench, Printer, Edit3,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -359,7 +359,20 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     } catch { toast.error("Could not open sub-folio PDF"); }
   };
 
-  const [emailSubFolioFor, setEmailSubFolioFor] = useState(null);  // {sfId, sfName}
+  const [emailSubFolioFor, setEmailSubFolioFor] = useState(null);  // {sfId, sfName, payerEmail}
+  const [editPayerFor, setEditPayerFor] = useState(null);          // {sfId, sfName, payerName, payerEmail}
+  const savePayer = async (name, email) => {
+    if (!editPayerFor || !selectedBooking) return;
+    try {
+      await axios.put(
+        `${API}/folio/${selectedBooking}/sub-folios/${editPayerFor.sfId}`,
+        { payer_name: name, payer_email: email },
+      );
+      toast.success("Payer updated");
+      setEditPayerFor(null);
+      loadFolio(selectedBooking);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
   const sendSubFolioEmail = async (to, subject, message) => {
     if (!emailSubFolioFor) return;
     try {
@@ -1750,15 +1763,22 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                 className="ml-1 text-white/70 hover:text-white cursor-pointer"
                                 title={`Print ${sf.name} folio`}><Printer className="w-3 h-3" /></span>
                               <span role="button" tabIndex={0}
-                                onClick={(e) => { e.stopPropagation(); setEmailSubFolioFor({ sfId: sf.id, sfName: sf.name, balance: sf.totals.balance, currency: sf.currency_symbol }); }}
+                                onClick={(e) => { e.stopPropagation(); setEmailSubFolioFor({ sfId: sf.id, sfName: sf.name, balance: sf.totals.balance, currency: sf.currency_symbol, payerEmail: sf.payer_email || "" }); }}
                                 data-testid={`sub-folio-email-${sf.id}`}
                                 className="text-white/70 hover:text-white cursor-pointer"
                                 title={`Email ${sf.name} folio`}><Mail className="w-3 h-3" /></span>
                               {!sf.is_default && (
-                                <span role="button" tabIndex={0}
-                                  onClick={(e) => { e.stopPropagation(); deleteSubFolio(sf.id); }}
-                                  className="ml-1 text-white/50 hover:text-rose-300 cursor-pointer"
-                                  title="Delete sub-folio"><X className="w-3 h-3" /></span>
+                                <>
+                                  <span role="button" tabIndex={0}
+                                    onClick={(e) => { e.stopPropagation(); setEditPayerFor({ sfId: sf.id, sfName: sf.name, payerName: sf.payer_name || "", payerEmail: sf.payer_email || "" }); }}
+                                    data-testid={`sub-folio-edit-payer-${sf.id}`}
+                                    className="text-white/70 hover:text-white cursor-pointer"
+                                    title={`Set payer for ${sf.name}`}><Edit3 className="w-3 h-3" /></span>
+                                  <span role="button" tabIndex={0}
+                                    onClick={(e) => { e.stopPropagation(); deleteSubFolio(sf.id); }}
+                                    className="ml-1 text-white/50 hover:text-rose-300 cursor-pointer"
+                                    title="Delete sub-folio"><X className="w-3 h-3" /></span>
+                                </>
                               )}
                             </>
                           )}
@@ -1979,12 +1999,49 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
               <button onClick={() => setEmailSubFolioFor(null)} className="p-1 hover:bg-stone-100 rounded-lg"><X className="w-4 h-4 text-stone-500" /></button>
             </div>
             <SubFolioEmailForm
-              defaultTo={detailData?.guest_email || ""}
+              defaultTo={emailSubFolioFor.payerEmail || detailData?.guest_email || ""}
               sfName={emailSubFolioFor.sfName}
               balance={emailSubFolioFor.balance}
               onSend={sendSubFolioEmail}
               onCancel={() => setEmailSubFolioFor(null)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payer modal — saves payer_name + payer_email on a sub-folio */}
+      {editPayerFor && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={() => setEditPayerFor(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()} data-testid="edit-payer-modal">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2"><Edit3 className="w-5 h-5 text-stone-600" />Set Payer · {editPayerFor.sfName}</h2>
+              <button onClick={() => setEditPayerFor(null)} className="p-1 hover:bg-stone-100 rounded-lg"><X className="w-4 h-4 text-stone-500" /></button>
+            </div>
+            <p className="text-xs text-stone-500 mb-3">Saving a payer email means the next time you click Email on this sub-folio, the To field is pre-filled with this address.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Payer Name</label>
+                <input defaultValue={editPayerFor.payerName} id="payer-name-input" autoFocus
+                  placeholder="e.g. Acme Ltd · Accounts"
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+                  data-testid="payer-name-input" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Payer Email</label>
+                <input defaultValue={editPayerFor.payerEmail} id="payer-email-input"
+                  placeholder="accounts@acme.co"
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+                  data-testid="payer-email-input" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setEditPayerFor(null)} className="px-4 py-2 text-sm">Cancel</button>
+              <button onClick={() => {
+                const n = document.getElementById("payer-name-input").value;
+                const e = document.getElementById("payer-email-input").value;
+                savePayer(n, e);
+              }} data-testid="payer-save-btn" className="px-4 py-2 bg-stone-800 hover:bg-stone-900 text-white rounded-lg text-sm font-semibold">Save</button>
+            </div>
           </div>
         </div>
       )}

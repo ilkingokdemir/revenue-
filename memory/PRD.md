@@ -2,6 +2,29 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 180: "Set payer" on sub-folios → payer email pre-fills the Email modal
+
+User accepted the enhancement. Closes the split-folio workflow by remembering who each sub-folio belongs to.
+
+**Frontend** (`BookingTimeline.js`):
+- Added **pencil (Edit3) icon** inside every non-Primary active sub-folio tab (testId `sub-folio-edit-payer-{id}`). Tooltip "Set payer for {name}".
+- Click opens a compact **Edit Payer modal** (`edit-payer-modal`) with two inputs: **Payer Name** + **Payer Email** (both default to the existing saved values). Save button calls `PUT /api/folio/{booking_id}/sub-folios/{id}` with `{payer_name, payer_email}`.
+- `sendSubFolioEmail` enriched to carry `payerEmail` in `emailSubFolioFor` state; `SubFolioEmailForm` now uses `payerEmail` as the default `To:` instead of the guest email. Guest email is fallback when no payer is set.
+- Active-tab icon stack order: **Printer · Mail · Edit3 · X** (X only on non-Primary).
+
+**Backend** — no new code; the existing `PUT /api/folio/{booking_id}/sub-folios/{id}` endpoint already accepts `payer_name` and `payer_email` in the whitelisted fields.
+
+**Verified end-to-end via Playwright:**
+- 2 sub-folios present (Primary + Company Card)
+- Clicked pencil on Company Card → modal opens → typed `Acme Ltd Accounts` / `accounts@acme.co` → Save → toast **"Payer updated"**
+- Clicked Mail icon on same tab → **Email Company Card Folio modal opens with To pre-filled as `accounts@acme.co`** (confirmed via `input_value()`)
+
+**User-facing workflow now:**
+1. Create "Company Card" sub-folio during stay.
+2. Click pencil → save `accounts@acme.co`.
+3. Every future Email click on this sub-folio pre-fills the right address — no more retyping.
+
+
 ### Iter 179: Per-Sub-Folio Print + Email (split-folio workflow complete)
 
 User accepted enhancement: print/email **individual sub-folios** instead of the whole folio. Completes the split-folio workflow — reception can now send the company just the business charges and the guest only the personal ones.

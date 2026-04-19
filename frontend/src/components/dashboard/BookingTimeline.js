@@ -1130,7 +1130,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                       const bal = (bk.balance_due !== undefined && bk.balance_due !== null) ? Number(bk.balance_due) : Number(bk.total_price || 0);
                                       const paid = bal <= 0;
                                       const today = new Date().toISOString().slice(0, 10);
-                                      const isUrgent = !paid && (bk.status === "checked_in" || bk.check_in === today || bk.check_out === today);
+                                      const isUrgent = !paid && (bk.status === "checked_in" || bk.status === "checked_out" || bk.check_in === today);
                                       return (
                                         <span
                                           role="button"
@@ -1168,7 +1168,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                         const bal = (bk.balance_due !== undefined && bk.balance_due !== null) ? Number(bk.balance_due) : Number(bk.total_price || 0);
                                         const paid = bal <= 0;
                                         const today = new Date().toISOString().slice(0, 10);
-                                        const isUrgent = !paid && (bk.status === "checked_in" || bk.check_in === today || bk.check_out === today);
+                                        const isUrgent = !paid && (bk.status === "checked_in" || bk.status === "checked_out" || bk.check_in === today);
                                         return (
                                           <span
                                             role="button"

@@ -348,6 +348,30 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     } catch { toast.error("Failed"); }
   };
 
+  // Per-sub-folio PDF print + email — uses the same blob-open trick as whole-folio print
+  const printSubFolio = async (sfId) => {
+    if (!selectedBooking) return;
+    try {
+      const { data } = await axios.get(`${API}/folio/${selectedBooking}/sub-folios/${sfId}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch { toast.error("Could not open sub-folio PDF"); }
+  };
+
+  const [emailSubFolioFor, setEmailSubFolioFor] = useState(null);  // {sfId, sfName}
+  const sendSubFolioEmail = async (to, subject, message) => {
+    if (!emailSubFolioFor) return;
+    try {
+      const { data } = await axios.post(
+        `${API}/folio/${selectedBooking}/sub-folios/${emailSubFolioFor.sfId}/email`,
+        { to, subject, message },
+      );
+      toast.success(`Sub-folio emailed to ${(data.sent_to || []).join(", ")}`);
+      setEmailSubFolioFor(null);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Send failed"); }
+  };
+
   const addCharge = async (desc, amount, category) => {
     if (!selectedBooking) return;
     try {
@@ -1718,11 +1742,25 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                           <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${activeSubFolio === sf.id ? "bg-white/20" : "bg-stone-300 text-stone-600"}`}>
                             {cur(sf.totals.balance)}
                           </span>
-                          {!sf.is_default && activeSubFolio === sf.id && (
-                            <span role="button" tabIndex={0}
-                              onClick={(e) => { e.stopPropagation(); deleteSubFolio(sf.id); }}
-                              className="ml-1 text-white/50 hover:text-rose-300 cursor-pointer"
-                              title="Delete sub-folio"><X className="w-3 h-3" /></span>
+                          {activeSubFolio === sf.id && (
+                            <>
+                              <span role="button" tabIndex={0}
+                                onClick={(e) => { e.stopPropagation(); printSubFolio(sf.id); }}
+                                data-testid={`sub-folio-print-${sf.id}`}
+                                className="ml-1 text-white/70 hover:text-white cursor-pointer"
+                                title={`Print ${sf.name} folio`}><Printer className="w-3 h-3" /></span>
+                              <span role="button" tabIndex={0}
+                                onClick={(e) => { e.stopPropagation(); setEmailSubFolioFor({ sfId: sf.id, sfName: sf.name, balance: sf.totals.balance, currency: sf.currency_symbol }); }}
+                                data-testid={`sub-folio-email-${sf.id}`}
+                                className="text-white/70 hover:text-white cursor-pointer"
+                                title={`Email ${sf.name} folio`}><Mail className="w-3 h-3" /></span>
+                              {!sf.is_default && (
+                                <span role="button" tabIndex={0}
+                                  onClick={(e) => { e.stopPropagation(); deleteSubFolio(sf.id); }}
+                                  className="ml-1 text-white/50 hover:text-rose-300 cursor-pointer"
+                                  title="Delete sub-folio"><X className="w-3 h-3" /></span>
+                              )}
+                            </>
                           )}
                         </button>
                       ))}
@@ -1932,6 +1970,25 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         </div>
       )}
 
+      {/* Sub-Folio Email modal — user composes To/Subject/Message */}
+      {emailSubFolioFor && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={() => setEmailSubFolioFor(null)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()} data-testid="sub-folio-email-modal">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2"><Mail className="w-5 h-5 text-sky-600" />Email {emailSubFolioFor.sfName} Folio</h2>
+              <button onClick={() => setEmailSubFolioFor(null)} className="p-1 hover:bg-stone-100 rounded-lg"><X className="w-4 h-4 text-stone-500" /></button>
+            </div>
+            <SubFolioEmailForm
+              defaultTo={detailData?.guest_email || ""}
+              sfName={emailSubFolioFor.sfName}
+              balance={emailSubFolioFor.balance}
+              onSend={sendSubFolioEmail}
+              onCancel={() => setEmailSubFolioFor(null)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Corporate Invoice (City Ledger) modal */}
       {corpInvoiceOpen && (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={() => setCorpInvoiceOpen(false)}>
@@ -1973,6 +2030,61 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+// Sub-folio email composition form — user writes To, Subject, Message; PDF auto-attached
+const SubFolioEmailForm = ({ defaultTo, sfName, balance, onSend, onCancel }) => {
+  const [to, setTo] = useState(defaultTo);
+  const [subject, setSubject] = useState(`Your ${sfName} folio`);
+  const [message, setMessage] = useState(
+    `Dear guest,\n\nPlease find attached your ${sfName} folio.\n\nBalance: £${Number(balance || 0).toFixed(2)}\n\nKindly review and let us know if you have any questions.\n\nThank you for your stay.`,
+  );
+  const [sending, setSending] = useState(false);
+
+  const submit = async () => {
+    if (!to.trim()) return toast.error("Please enter at least one recipient");
+    if (!subject.trim() || !message.trim()) return toast.error("Subject and message required");
+    setSending(true);
+    try { await onSend(to, subject, message.replace(/\n/g, "<br>")); }
+    finally { setSending(false); }
+  };
+
+  return (
+    <div>
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">To *</label>
+          <input value={to} onChange={e => setTo(e.target.value)}
+            placeholder="guest@example.com"
+            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+            data-testid="sub-folio-email-to" autoFocus />
+          <p className="text-[10px] text-stone-400 mt-1">You write the recipient yourself. Comma-separate for multiple.</p>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Subject *</label>
+          <input value={subject} onChange={e => setSubject(e.target.value)}
+            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+            data-testid="sub-folio-email-subject" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Message *</label>
+          <textarea value={message} onChange={e => setMessage(e.target.value)} rows={8}
+            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm font-sans"
+            data-testid="sub-folio-email-message" />
+        </div>
+        <p className="text-[11px] text-stone-500 bg-stone-50 border border-stone-200 rounded-lg p-2 flex items-center gap-1.5">
+          <Receipt className="w-3.5 h-3.5" />{sfName} folio PDF will be attached automatically
+        </p>
+      </div>
+      <div className="flex justify-end gap-2 mt-4">
+        <button onClick={onCancel} className="px-4 py-2 text-sm">Cancel</button>
+        <button onClick={submit} disabled={sending} data-testid="sub-folio-email-send"
+          className="px-4 py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-stone-300 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5">
+          <Mail className="w-3.5 h-3.5" />{sending ? "Sending…" : "Send"}
+        </button>
+      </div>
     </div>
   );
 };

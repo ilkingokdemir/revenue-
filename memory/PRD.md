@@ -2,6 +2,39 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 179: Per-Sub-Folio Print + Email (split-folio workflow complete)
+
+User accepted enhancement: print/email **individual sub-folios** instead of the whole folio. Completes the split-folio workflow — reception can now send the company just the business charges and the guest only the personal ones.
+
+**Backend** (`guest_services.py`):
+- `build_folio_pdf_bytes(db, booking_id, sub_folio_id=None)` — existing helper extended with optional `sub_folio_id` filter (accepts `"primary"` for untagged items, or a specific sub-folio UUID). Title includes the sub-folio name (e.g., `FOL-499559C1-COMPANY-CARD`).
+- `GET /api/folio/{booking_id}/sub-folios/{sub_folio_id}/pdf` — streams A4 PDF with only the items of that sub-folio + its own balance.
+- `POST /api/folio/{booking_id}/sub-folios/{sub_folio_id}/email` — body `{to, subject, message}` (all user-composed, empty values rejected 400). Generates the filtered PDF, attaches, sends via Resend. Writes `booking.email_log[]` audit entry with `document_type=sub_folio` + `sub_folio_id` for audit.
+
+**Frontend** (`BookingTimeline.js` — Folio tab):
+- Inside the **active** sub-folio tab pill, added 2 small icon buttons:
+  - **Printer icon** (`data-testid="sub-folio-print-{id}"`) → opens the sub-folio PDF in a new tab
+  - **Mail icon** (`data-testid="sub-folio-email-{id}"`) → opens `SubFolioEmailForm` modal
+- `SubFolioEmailForm` pre-fills:
+  - To: guest_email (editable)
+  - Subject: `Your {sfName} folio`
+  - Message: polite multi-line draft including the sub-folio balance
+  - All 3 fields are fully editable before Send
+- Modal shows "You write the recipient yourself" hint + "{sfName} folio PDF will be attached automatically" footer.
+
+**Verified end-to-end via curl + Playwright:**
+- Primary-only PDF → 200, 2508 bytes, valid `%PDF-1.4`
+- Custom sub-folio PDF (only its items) → 200, 2447 bytes (filtered correctly)
+- Email missing subject → 400 "Subject and message are required"
+- Email full payload → reaches Resend (502 "API key invalid" — MOCKED in preview, works in prod)
+- Playwright: screenshot confirms Print + Email icons inside the active Primary tab + `SubFolioEmailForm` modal renders with editable fields
+
+**User-facing workflow now:**
+1. Reception splits the folio during stay (Primary / Company Card).
+2. At checkout, clicks the **Printer icon inside the Primary tab** → prints just the guest-personal folio for pickup.
+3. Clicks the **Mail icon inside the Company Card tab** → writes `accounts@acme.co` → edits subject/message → Send. Company receives just their expenses as a clean PDF attachment.
+
+
 ### Iter 178: Split Folio (Sub-Folios) — Mews/Cloudbeds/Eviivo parity
 
 User accepted next competitor-gap item. Split Folio is the #1 daily use-case hotels cite: **business traveller pays room on company card, extras on personal card**. Also: couples splitting, groups dividing, VIPs with incidentals tracked separately. Shipped full-stack in one iteration.

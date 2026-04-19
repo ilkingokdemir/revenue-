@@ -17,9 +17,12 @@ logger = logging.getLogger(__name__)
 # checkout — can build & email folio PDFs without duplicating the layout).
 # ============================================================================
 
-async def build_folio_pdf_bytes(db, booking_id):
+async def build_folio_pdf_bytes(db, booking_id, sub_folio_id=None):
     """Build the Folio Receipt PDF as bytes. Returns (pdf_bytes, guest_name, guest_email, inv_num, balance, cur_sym).
-    Raises HTTPException(404) if booking missing."""
+    Raises HTTPException(404) if booking missing.
+
+    If `sub_folio_id` is provided, only items in that sub-folio are included.
+    Use "primary" to render only the Primary (untagged) items."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import mm
@@ -54,12 +57,27 @@ async def build_folio_pdf_bytes(db, booking_id):
         await db.folio_items.insert_one(dict(room_charge))
         items.append(room_charge)
 
+    # Filter to a specific sub-folio if requested
+    sub_folio_name = None
+    if sub_folio_id:
+        if sub_folio_id == "primary":
+            items = [i for i in items if not i.get("sub_folio_id")]
+            sub_folio_name = "Primary"
+        else:
+            sf = await db.sub_folios.find_one({"id": sub_folio_id, "booking_id": booking_id}, {"_id": 0})
+            if not sf:
+                raise HTTPException(404, "Sub-folio not found")
+            items = [i for i in items if i.get("sub_folio_id") == sub_folio_id]
+            sub_folio_name = sf["name"]
+
     charges = sum(i["amount"] for i in items if i.get("type") == "charge")
     payments = sum(i["amount"] for i in items if i.get("type") == "payment")
     adjustments = sum(i["amount"] for i in items if i.get("type") == "adjustment")
     balance = round(charges - payments + adjustments, 2)
     cur_sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(booking.get("currency", "GBP"), "£")
     inv_num = f"FOL-{booking_id[:8].upper()}"
+    if sub_folio_name:
+        inv_num = f"{inv_num}-{sub_folio_name.upper().replace(' ', '-')[:16]}"
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -69,7 +87,8 @@ async def build_folio_pdf_bytes(db, booking_id):
 
     prop_name = prop.get("name", "HOTEL") if prop else "HOTEL"
     story.append(Paragraph(f"<para align='left'><font size='9' color='#78716c'>{prop_name}</font></para>", styles["Normal"]))
-    story.append(Paragraph(f"<para align='left'><font size='20' color='#1c1917'><b>FOLIO · {inv_num}</b></font></para>", styles["Normal"]))
+    title_suffix = f" · {sub_folio_name}" if sub_folio_name else ""
+    story.append(Paragraph(f"<para align='left'><font size='20' color='#1c1917'><b>FOLIO · {inv_num}{title_suffix}</b></font></para>", styles["Normal"]))
     story.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#1c1917"), spaceBefore=4, spaceAfter=10))
 
     meta = Table([
@@ -953,6 +972,88 @@ def create_guest_services_router(db, require_roles, resend_lib=None):
             raise HTTPException(404, "Target sub-folio not found")
         await db.folio_items.update_one({"id": item_id}, {"$set": {"sub_folio_id": target}})
         return {"ok": True, "moved_to": target}
+
+    @router.get("/folio/{booking_id}/sub-folios/{sub_folio_id}/pdf")
+    async def sub_folio_pdf(
+        booking_id: str, sub_folio_id: str,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Print only the items in a specific sub-folio (primary or any named one)."""
+        pdf_bytes, _name, _email, inv_num, _bal, _cur = await build_folio_pdf_bytes(db, booking_id, sub_folio_id)
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes), media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{inv_num}.pdf"'},
+        )
+
+    @router.post("/folio/{booking_id}/sub-folios/{sub_folio_id}/email")
+    async def email_sub_folio(
+        booking_id: str, sub_folio_id: str, data: Dict,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Email only the items in a specific sub-folio to a user-composed recipient.
+        Body: {to, subject, message} — all user-written."""
+        import os
+        import base64
+        if not resend_lib or not os.environ.get("RESEND_API_KEY"):
+            raise HTTPException(503, "Email service not configured")
+
+        raw_to = data.get("to") or ""
+        if isinstance(raw_to, str):
+            to_list = [x.strip() for x in raw_to.split(",") if x.strip()]
+        elif isinstance(raw_to, list):
+            to_list = [x for x in raw_to if x]
+        else:
+            to_list = []
+        if not to_list:
+            raise HTTPException(400, "At least one recipient required")
+
+        subject = (data.get("subject") or "").strip()
+        message = (data.get("message") or "").strip()
+        if not subject or not message:
+            raise HTTPException(400, "Subject and message are required")
+
+        pdf_bytes, _name, _email, inv_num, _bal, _cur = await build_folio_pdf_bytes(
+            db, booking_id, sub_folio_id
+        )
+        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+
+        body_html = (
+            "<div style='font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;"
+            "max-width:640px;margin:auto;padding:24px;color:#1f2937;'>"
+            f"<h2 style='color:#1c1917;margin:0 0 8px 0;'>Folio · {inv_num}</h2>"
+            f"<p style='color:#6b7280;font-size:13px;'>Sent by {current_user.get('name', 'Reception')}</p>"
+            f"<div style='font-size:14px;line-height:1.6;'>{message.replace(chr(10), '<br>')}</div>"
+            "<p style='color:#9ca3af;font-size:11px;margin-top:24px;'>A PDF copy of the folio is attached.</p>"
+            "</div>"
+        )
+
+        try:
+            resend_lib.Emails.send({
+                "from": sender,
+                "to": to_list,
+                "subject": subject,
+                "html": body_html,
+                "attachments": [{
+                    "filename": f"{inv_num}.pdf",
+                    "content": base64.b64encode(pdf_bytes).decode(),
+                }],
+            })
+        except Exception as e:
+            raise HTTPException(502, f"Email send failed: {str(e)[:160]}")
+
+        await db.bookings.update_one(
+            {"id": booking_id},
+            {"$push": {"email_log": {
+                "document_type": "sub_folio",
+                "sub_folio_id": sub_folio_id,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "sent_by": current_user.get("email", ""),
+                "to": to_list,
+                "subject": subject,
+                "filename": f"{inv_num}.pdf",
+            }}}
+        )
+        return {"ok": True, "sent_to": to_list, "invoice_number": inv_num}
 
     return router
 

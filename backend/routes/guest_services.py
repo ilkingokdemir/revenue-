@@ -12,6 +12,197 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# ============================================================================
+# Module-level helpers (so other routers — e.g. bookings.py auto-email on
+# checkout — can build & email folio PDFs without duplicating the layout).
+# ============================================================================
+
+async def build_folio_pdf_bytes(db, booking_id):
+    """Build the Folio Receipt PDF as bytes. Returns (pdf_bytes, guest_name, guest_email, inv_num, balance, cur_sym).
+    Raises HTTPException(404) if booking missing."""
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.styles import getSampleStyleSheet
+
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    room_type = await db.room_types.find_one({"id": booking.get("room_type_id", "")}, {"_id": 0})
+    room = await db.rooms.find_one({"id": booking.get("room_id", "")}, {"_id": 0})
+    prop = await db.properties.find_one({"id": booking.get("property_id", "")}, {"_id": 0})
+    items = await db.folio_items.find({"booking_id": booking_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+
+    if not items:
+        nights = int(booking.get("nights", 1) or 1)
+        rate = float(booking.get("rate_per_night", 0) or 0)
+        total = float(booking.get("total_price", 0) or 0) or (rate * nights)
+        room_charge = {
+            "id": str(uuid.uuid4()),
+            "booking_id": booking_id,
+            "type": "charge",
+            "category": "room",
+            "description": f"Room: {room_type.get('name', 'Room') if room_type else 'Room'} x {nights} night{'s' if nights > 1 else ''}",
+            "quantity": nights,
+            "unit_price": rate,
+            "amount": total,
+            "currency": booking.get("currency", "GBP"),
+            "created_at": booking.get("created_at", datetime.now(timezone.utc).isoformat()),
+            "created_by": "System",
+        }
+        await db.folio_items.insert_one(dict(room_charge))
+        items.append(room_charge)
+
+    charges = sum(i["amount"] for i in items if i.get("type") == "charge")
+    payments = sum(i["amount"] for i in items if i.get("type") == "payment")
+    adjustments = sum(i["amount"] for i in items if i.get("type") == "adjustment")
+    balance = round(charges - payments + adjustments, 2)
+    cur_sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(booking.get("currency", "GBP"), "£")
+    inv_num = f"FOL-{booking_id[:8].upper()}"
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
+    styles = getSampleStyleSheet()
+    story = []
+
+    prop_name = prop.get("name", "HOTEL") if prop else "HOTEL"
+    story.append(Paragraph(f"<para align='left'><font size='9' color='#78716c'>{prop_name}</font></para>", styles["Normal"]))
+    story.append(Paragraph(f"<para align='left'><font size='20' color='#1c1917'><b>FOLIO · {inv_num}</b></font></para>", styles["Normal"]))
+    story.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#1c1917"), spaceBefore=4, spaceAfter=10))
+
+    meta = Table([
+        ["Guest", booking.get("guest_name", "—"), "Booking", booking.get("booking_ref") or booking_id[:8].upper()],
+        ["Check-In", booking.get("check_in", "—"), "Check-Out", booking.get("check_out", "—")],
+        ["Room", (room.get("name", "—") if room else "—"), "Room Type", (room_type.get("name", "—") if room_type else "—")],
+    ], colWidths=[22 * mm, 60 * mm, 22 * mm, 60 * mm])
+    meta.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9), ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#78716c")),
+        ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#78716c")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(meta)
+    story.append(Spacer(1, 12))
+
+    data = [["Date", "Description", "Qty", "Unit", "Amount"]]
+    for it in items:
+        dt = (it.get("created_at") or "")[:10]
+        amt = it.get("amount", 0)
+        prefix = "-" if it.get("type") == "payment" else ("" if it.get("type") == "charge" else "±")
+        data.append([dt, it.get("description", ""), str(it.get("quantity") or 1),
+                     f"{cur_sym}{it.get('unit_price', 0):.2f}" if it.get("type") == "charge" else "—",
+                     f"{prefix}{cur_sym}{amt:.2f}"])
+    tbl = Table(data, colWidths=[22 * mm, 85 * mm, 14 * mm, 22 * mm, 27 * mm])
+    tbl.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 8),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#78716c")),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.8, colors.HexColor("#1c1917")),
+        ("LINEBELOW", (0, 1), (-1, -1), 0.3, colors.HexColor("#e7e5e4")),
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 14))
+
+    tot_rows = [["Charges", f"{cur_sym}{charges:.2f}"]]
+    if payments:
+        tot_rows.append(["Payments", f"-{cur_sym}{payments:.2f}"])
+    if adjustments:
+        tot_rows.append(["Adjustments", f"{cur_sym}{adjustments:.2f}"])
+    tot_rows.append(["BALANCE DUE", f"{cur_sym}{balance:.2f}"])
+    tot = Table(tot_rows, colWidths=[140 * mm, 30 * mm])
+    tot.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -2), "Helvetica", 10),
+        ("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 12),
+        ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+        ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#059669") if balance <= 0 else colors.HexColor("#dc2626")),
+        ("LINEABOVE", (0, -1), (-1, -1), 1.2, colors.HexColor("#1c1917")),
+        ("TOPPADDING", (0, -1), (-1, -1), 8), ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
+    ]))
+    story.append(tot)
+
+    story.append(Spacer(1, 18))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d6d3d1")))
+    story.append(Paragraph(
+        f"<para align='center'><font size='7' color='#a8a29e'>Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · {inv_num} · Thank you for your stay</font></para>",
+        styles["Normal"]))
+    doc.build(story)
+
+    return buf.getvalue(), (booking.get("guest_name") or "guest"), (booking.get("guest_email") or ""), inv_num, balance, cur_sym
+
+
+async def send_folio_email(db, resend_lib, booking_id, to_list=None, sent_by="system:checkout-auto"):
+    """Build + email the folio PDF to the guest. Returns dict with send status.
+    Used by both the /email-document endpoint and the auto-send-on-checkout hook.
+    Failures are raised as HTTPException; callers can catch & log."""
+    import os
+    import base64
+
+    if not resend_lib or not os.environ.get("RESEND_API_KEY"):
+        raise HTTPException(503, "Email service not configured")
+
+    pdf_bytes, guest_name, fallback_email, inv_num, balance, cur_sym = await build_folio_pdf_bytes(db, booking_id)
+
+    if not to_list:
+        to_list = [fallback_email] if fallback_email else []
+    if isinstance(to_list, str):
+        to_list = [x.strip() for x in to_list.split(",") if x.strip()]
+    to_list = [x for x in (to_list or []) if x]
+    if not to_list:
+        raise HTTPException(400, "Guest has no email on file")
+
+    bal_line = (
+        f"Your outstanding balance is <b>{cur_sym}{balance:.2f}</b>."
+        if balance > 0 else "Your account is fully settled. Thank you!"
+    )
+    body_html = f"""<div style='font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:auto;padding:24px;color:#1f2937;'>
+<h2 style='color:#1c1917;margin:0 0 8px 0;'>Folio Receipt · {inv_num}</h2>
+<p style='color:#6b7280;font-size:13px;'>Attached: your itemised folio</p>
+<div style='font-size:14px;line-height:1.6;'>
+Dear {guest_name or 'guest'},<br><br>
+Thank you for staying with us. Please find your itemised folio attached.<br>{bal_line}<br><br>
+We hope to welcome you back soon.
+</div>
+<p style='color:#9ca3af;font-size:11px;margin-top:24px;'>This email may contain confidential information — please do not forward.</p>
+</div>"""
+
+    sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+    filename = f"folio-{booking_id[:8]}.pdf"
+
+    try:
+        resend_lib.Emails.send({
+            "from": sender,
+            "to": to_list,
+            "subject": f"Your folio receipt — {inv_num}",
+            "html": body_html,
+            "attachments": [{
+                "filename": filename,
+                "content": base64.b64encode(pdf_bytes).decode(),
+            }],
+        })
+    except Exception as e:
+        logger.error(f"send_folio_email failed: {e}")
+        raise HTTPException(502, f"Email send failed: {str(e)[:160]}")
+
+    # Audit log
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {"$push": {"email_log": {
+            "document_type": "folio",
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "sent_by": sent_by,
+            "to": to_list,
+            "subject": f"Your folio receipt — {inv_num}",
+            "filename": filename,
+        }}}
+    )
+    return {"ok": True, "sent_to": to_list, "filename": filename, "inv_num": inv_num}
+
+
 def create_guest_services_router(db, require_roles, resend_lib=None):
     router = APIRouter()
 
@@ -494,121 +685,8 @@ def create_guest_services_router(db, require_roles, resend_lib=None):
         return pdf_bytes, (booking.get("guest_name") or "guest"), guest_email
 
     async def _folio_bytes(booking_id):
-        """Build the Folio Receipt PDF as bytes. Raises 404 if booking missing."""
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib import colors
-        from reportlab.lib.units import mm
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-        from reportlab.lib.styles import getSampleStyleSheet
-
-        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
-        if not booking:
-            raise HTTPException(status_code=404, detail="Booking not found")
-        room_type = await db.room_types.find_one({"id": booking.get("room_type_id", "")}, {"_id": 0})
-        room = await db.rooms.find_one({"id": booking.get("room_id", "")}, {"_id": 0})
-        prop = await db.properties.find_one({"id": booking.get("property_id", "")}, {"_id": 0})
-        items = await db.folio_items.find({"booking_id": booking_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
-
-        if not items:
-            nights = int(booking.get("nights", 1) or 1)
-            rate = float(booking.get("rate_per_night", 0) or 0)
-            total = float(booking.get("total_price", 0) or 0) or (rate * nights)
-            room_charge = {
-                "id": str(uuid.uuid4()),
-                "booking_id": booking_id,
-                "type": "charge",
-                "category": "room",
-                "description": f"Room: {room_type.get('name', 'Room') if room_type else 'Room'} x {nights} night{'s' if nights > 1 else ''}",
-                "quantity": nights,
-                "unit_price": rate,
-                "amount": total,
-                "currency": booking.get("currency", "GBP"),
-                "created_at": booking.get("created_at", datetime.now(timezone.utc).isoformat()),
-                "created_by": "System",
-            }
-            await db.folio_items.insert_one(dict(room_charge))
-            items.append(room_charge)
-
-        charges = sum(i["amount"] for i in items if i.get("type") == "charge")
-        payments = sum(i["amount"] for i in items if i.get("type") == "payment")
-        adjustments = sum(i["amount"] for i in items if i.get("type") == "adjustment")
-        balance = round(charges - payments + adjustments, 2)
-        cur_sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(booking.get("currency", "GBP"), "£")
-        inv_num = f"FOL-{booking_id[:8].upper()}"
-
-        buf = io.BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=A4,
-                                leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
-        styles = getSampleStyleSheet()
-        story = []
-
-        prop_name = prop.get("name", "HOTEL") if prop else "HOTEL"
-        story.append(Paragraph(f"<para align='left'><font size='9' color='#78716c'>{prop_name}</font></para>", styles["Normal"]))
-        story.append(Paragraph(f"<para align='left'><font size='20' color='#1c1917'><b>FOLIO · {inv_num}</b></font></para>", styles["Normal"]))
-        story.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#1c1917"), spaceBefore=4, spaceAfter=10))
-
-        meta = Table([
-            ["Guest", booking.get("guest_name", "—"), "Booking", booking.get("booking_ref") or booking_id[:8].upper()],
-            ["Check-In", booking.get("check_in", "—"), "Check-Out", booking.get("check_out", "—")],
-            ["Room", (room.get("name", "—") if room else "—"), "Room Type", (room_type.get("name", "—") if room_type else "—")],
-        ], colWidths=[22 * mm, 60 * mm, 22 * mm, 60 * mm])
-        meta.setStyle(TableStyle([
-            ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
-            ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9), ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9),
-            ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#78716c")),
-            ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#78716c")),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ]))
-        story.append(meta)
-        story.append(Spacer(1, 12))
-
-        data = [["Date", "Description", "Qty", "Unit", "Amount"]]
-        for it in items:
-            dt = (it.get("created_at") or "")[:10]
-            amt = it.get("amount", 0)
-            prefix = "-" if it.get("type") == "payment" else ("" if it.get("type") == "charge" else "±")
-            data.append([dt, it.get("description", ""), str(it.get("quantity") or 1),
-                         f"{cur_sym}{it.get('unit_price', 0):.2f}" if it.get("type") == "charge" else "—",
-                         f"{prefix}{cur_sym}{amt:.2f}"])
-        tbl = Table(data, colWidths=[22 * mm, 85 * mm, 14 * mm, 22 * mm, 27 * mm])
-        tbl.setStyle(TableStyle([
-            ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
-            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 8),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#78716c")),
-            ("LINEBELOW", (0, 0), (-1, 0), 0.8, colors.HexColor("#1c1917")),
-            ("LINEBELOW", (0, 1), (-1, -1), 0.3, colors.HexColor("#e7e5e4")),
-            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        story.append(tbl)
-        story.append(Spacer(1, 14))
-
-        tot_rows = [["Charges", f"{cur_sym}{charges:.2f}"]]
-        if payments:
-            tot_rows.append(["Payments", f"-{cur_sym}{payments:.2f}"])
-        if adjustments:
-            tot_rows.append(["Adjustments", f"{cur_sym}{adjustments:.2f}"])
-        tot_rows.append(["BALANCE DUE", f"{cur_sym}{balance:.2f}"])
-        tot = Table(tot_rows, colWidths=[140 * mm, 30 * mm])
-        tot.setStyle(TableStyle([
-            ("FONT", (0, 0), (-1, -2), "Helvetica", 10),
-            ("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 12),
-            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
-            ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#059669") if balance <= 0 else colors.HexColor("#dc2626")),
-            ("LINEABOVE", (0, -1), (-1, -1), 1.2, colors.HexColor("#1c1917")),
-            ("TOPPADDING", (0, -1), (-1, -1), 8), ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
-        ]))
-        story.append(tot)
-
-        story.append(Spacer(1, 18))
-        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d6d3d1")))
-        story.append(Paragraph(
-            f"<para align='center'><font size='7' color='#a8a29e'>Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · {inv_num} · Thank you for your stay</font></para>",
-            styles["Normal"]))
-        doc.build(story)
-
-        guest_email = booking.get("guest_email") or ""
-        return buf.getvalue(), (booking.get("guest_name") or "guest"), guest_email, inv_num, balance, cur_sym
+        """Delegates to module-level helper for DRY."""
+        return await build_folio_pdf_bytes(db, booking_id)
 
     @router.get("/bookings/{booking_id}/registration-card.pdf")
     async def registration_card_pdf(

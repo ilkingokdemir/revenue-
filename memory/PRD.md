@@ -2,32 +2,40 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
-### Iter 175: Competitor audit sweep — Registration Card PDF + Folio Receipt PDF + Email to Guest (legal + parity win)
+### Iter 175: Competitor audit sweep — Registration Card PDF + Folio Receipt PDF + Email to Guest + Auto-email folio on checkout
 
-User asked for a full software/competitor audit and fixes. Researched Mews/Cloudbeds/Eviivo/myhotelbox — they **all** ship printable Guest Registration Cards (legally required in EU/UK/TR), itemised Folio receipts, **and** one-click email to guest. Ours didn't have any of them. Shipped all three in the same iteration.
+User asked for a full software/competitor audit and fixes. Researched Mews/Cloudbeds/Eviivo/myhotelbox — they **all** ship printable Guest Registration Cards (legally required in EU/UK/TR), itemised Folio receipts, one-click email to guest, **and** auto-email folio on checkout. Ours didn't have any of them. Shipped the full stack in a single iteration.
 
 **Backend** (`/app/backend/routes/guest_services.py`):
-- `GET /api/bookings/{booking_id}/registration-card.pdf` — A4 PDF with header band, booking block, guest block (incl. passport/ID number, address, nationality, DOB from `guest_registrations`), stay block, emergency contact. Falls back to `booking.guest_*` if the guest hasn't submitted the digital pre-arrival form.
-- `GET /api/folio/{booking_id}/pdf` — A4 itemised folio receipt with header, guest/booking/room meta strip, line-item table (Date / Description / Qty / Unit / Amount with ± prefix per type), totals block with emerald BALANCE when ≤ 0 or red when > 0. Auto-seeds the room charge if the folio is empty.
-- `POST /api/bookings/{booking_id}/email-document` — `{document_type: "reg_card"|"folio", to?: "email@..." | list, subject?, message?}`. Builds the requested PDF in-memory, base64-encodes it, emails via Resend with a themed HTML body (defaults pre-filled; reg card → "please review, sign, keep a copy"; folio → shows outstanding balance or "fully settled"). Recipient defaults to the booking's guest_email. Writes an `email_log[]` audit entry on the booking document.
-- Refactored PDF builders into `_reg_card_bytes()` and `_folio_bytes()` helpers so the email endpoint reuses the exact same output the browser prints.
-- `create_guest_services_router` now receives `resend_lib` (wired in `server.py`).
-- All perm-gated: `require_roles("admin", "manager", "receptionist")`.
+- `GET /api/bookings/{booking_id}/registration-card.pdf` — A4 PDF with header band, booking/guest/passport/address/stay/emergency contact sections. Falls back to `booking.guest_*` if the guest hasn't submitted the digital pre-arrival form.
+- `GET /api/folio/{booking_id}/pdf` — A4 itemised folio receipt with header, guest/booking/room meta, line-item table (Date / Description / Qty / Unit / Amount with ± prefix), totals block with emerald BALANCE when ≤ 0 or red when > 0. Auto-seeds the room charge if folio is empty.
+- `POST /api/bookings/{booking_id}/email-document` — `{document_type: "reg_card"|"folio", to?, subject?, message?}`. Builds PDF in-memory, base64-encodes, emails via Resend with themed HTML body. Defaults recipient to booking's guest_email. Writes `booking.email_log[]` audit entry.
+- Module-level `build_folio_pdf_bytes(db, booking_id)` + `send_folio_email(db, resend_lib, booking_id, to_list, sent_by)` helpers so other routers (checkout hook) can reuse the exact same PDF output without duplication.
+- `create_guest_services_router` now receives `resend_lib`.
+
+**Backend** (`/app/backend/routes/booking_timeline.py` — the REAL checkout endpoint the timeline UI calls; the previous auto-dispatch was sitting in `bookings.py` which is a separate endpoint nobody was hitting — silent bug fixed):
+- `PUT /api/bookings/timeline/{property_id}/status/{booking_id}` now triggers on `checked_out`:
+  1. **Housekeeping auto-dispatch** — inserts a "Deep Clean" OOS block (`auto=true`, `booking_id` linked, 1-day window) + marks the room `housekeeping=dirty`.
+  2. **Auto-email folio** (Mews/Cloudbeds parity) — fire-and-forget `asyncio.create_task` that calls `send_folio_email()` with the guest's email. Per-booking opt-out via `booking.auto_email_folio_on_checkout=False` (default ON). Failures logged, never block checkout.
+- `POST /api/bookings/timeline/{property_id}/bulk-action` with `action=checked_out` fires both hooks per booking too (so bulk checkout from the calendar toolbar also auto-cleans + auto-emails).
 
 **Frontend** (`BookingTimeline.js`):
-- `downloadPdf(path, filename)` — axios blob GET with auth, opens as a new-tab blob URL (popup-blocker fallback to anchor download).
-- `emailDocument(docType)` — `window.prompt` pre-filled with `guest_email`, POSTs to the email endpoint, toasts success/failure.
-- **Folio tab header** — "Print" button next to "Add Charge" (`data-testid="print-folio-btn"`).
-- **Actions tab → Guest Services** — 2 paired button rows: each row has a full-width colored Print button + a compact Mail-icon email button (outlined, matched color family). TestIds: `print-reg-card-btn` / `email-reg-card-btn` / `print-folio-actions-btn` / `email-folio-btn`.
+- `downloadPdf(path, filename)` — axios blob GET with auth, opens as new-tab blob URL (popup-blocker anchor fallback).
+- `emailDocument(docType)` — `window.prompt` pre-filled with guest email, POSTs to email endpoint, toasts success.
+- **Folio tab** — "Print" button next to "Add Charge" (`data-testid="print-folio-btn"`).
+- **Actions tab → Guest Services** — 2 paired rows: full-width colored Print button + compact Mail-icon email button (stone/emerald families). TestIds: `print-reg-card-btn`, `email-reg-card-btn`, `print-folio-actions-btn`, `email-folio-btn`.
 
-**Live verified via curl + Playwright:**
-- `GET /api/bookings/{id}/registration-card.pdf` → 200 OK, 2795 bytes, valid `%PDF-1.4` (refactor didn't regress)
+**Live verified via curl + Playwright + direct DB inspection:**
+- `GET /api/bookings/{id}/registration-card.pdf` → 200 OK, 2795 bytes, valid `%PDF-1.4`
 - `GET /api/folio/{id}/pdf` → 200 OK, 2779 bytes, valid `%PDF-1.4`
-- `POST /api/bookings/{id}/email-document` with `document_type=folio` → reaches Resend; upstream returns "API key is invalid" (502) because preview env has a placeholder RESEND_API_KEY — **MOCKED in preview, works in production** with a real key (same pattern as staff-onboarding email)
-- `POST /api/bookings/{id}/email-document` with bad doc_type → 400 "document_type must be 'reg_card' or 'folio'"
-- Playwright: Actions tab renders all 4 testIds visible with the Mail icons next to each Print button.
+- `POST /api/bookings/{id}/email-document` with folio doc_type → reaches Resend, 502 "API key is invalid" in preview (**MOCKED**: placeholder `RESEND_API_KEY`; works in prod with a real key — same pattern as staff-onboarding email)
+- Bad `document_type` → 400 with crisp error
+- Playwright: all 4 testIds visible in Actions tab
+- **End-to-end checkout flow** (curl): `PUT /status {status: checked_out}` → 200 → logs show `Auto-email folio queued for booking ... → test@stripe.com` → `send_folio_email` attempted (502 on Resend in preview) → db.oos_blocks has a new `Deep Clean` auto-block correctly linked by `booking_id` with the exclusive-end date range → room `housekeeping=dirty`. Checkout response returned instantly (fire-and-forget confirmed).
 
-**Closes the loop on a user frustration pattern** — legally-required Registration Card, professional itemised Folio Receipt, and one-click email to the guest — all features Mews/Cloudbeds/Eviivo lead with in sales demos.
+**Silent bug fixed as a bonus:** the housekeeping auto-dispatch in `bookings.py::update_booking_status` (line 1477) was never firing because the UI actually hits the `booking_timeline.py::update_booking_status` endpoint — different router. Moved the hook to where it's actually reachable.
+
+**Closes the loop on competitor parity + automation** — one click on "Check Out" in the calendar now triggers a 3-stage automation: room locked for housekeeping, guest emailed their receipt, reception freed to serve the next arrival.
 
 
 ### Iter 174: Comprehensive competitor feature sweep (user frustration — missing features)

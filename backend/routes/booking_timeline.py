@@ -8,6 +8,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict
 import uuid
 import random
+import asyncio
+import resend
 import logging
 
 logger = logging.getLogger(__name__)
@@ -400,7 +402,10 @@ def create_booking_timeline_router(db, require_roles):
     @router.put("/bookings/timeline/{property_id}/status/{booking_id}")
     async def update_booking_status(property_id: str, booking_id: str, data: Dict,
                                     current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
-        """Quick status change from timeline."""
+        """Quick status change from timeline. Also triggers:
+        - Housekeeping auto-dispatch (OOS 'Deep Clean' block) on checkout
+        - Auto-email folio to guest on checkout (opt-out via booking.auto_email_folio_on_checkout=False)
+        """
         new_status = data.get("status", "")
         if new_status not in ["pending", "confirmed", "checked_in", "checked_out", "no_show", "cancelled"]:
             return {"error": "Invalid status"}
@@ -410,6 +415,45 @@ def create_booking_timeline_router(db, require_roles):
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "updated_by": current_user.get("name", ""),
         }})
+
+        if new_status == "checked_out":
+            updated = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+            if updated:
+                # 1. Housekeeping auto-dispatch — block the room with "Deep Clean" OOS
+                if updated.get("room_id"):
+                    co_date = updated.get("check_out") or datetime.now(timezone.utc).date().isoformat()
+                    try:
+                        end_date = (datetime.strptime(co_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                    except Exception:
+                        end_date = co_date
+                    await db.oos_blocks.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "room_id": updated["room_id"],
+                        "property_id": updated.get("property_id", property_id or ""),
+                        "start": co_date,
+                        "end": end_date,
+                        "reason": "Deep Clean",
+                        "auto": True,
+                        "booking_id": booking_id,
+                        "created_by": "system:housekeeping-autodispatch",
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    await db.rooms.update_one({"id": updated["room_id"]}, {"$set": {"housekeeping": "dirty"}})
+
+                # 2. Auto-email folio to guest (Mews/Cloudbeds parity) — fire-and-forget
+                if updated.get("auto_email_folio_on_checkout", True) and updated.get("guest_email"):
+                    logger.info(f"Auto-email folio queued for booking {booking_id} → {updated['guest_email']}")
+                    async def _auto_email_folio():
+                        try:
+                            from routes.guest_services import send_folio_email
+                            res = await send_folio_email(db, resend, booking_id,
+                                                         to_list=[updated["guest_email"]],
+                                                         sent_by="system:checkout-auto")
+                            logger.info(f"Auto-email folio sent for {booking_id}: {res.get('sent_to')}")
+                        except Exception as e:
+                            logger.error(f"Auto-email folio failed for {booking_id}: {e}")
+                    asyncio.create_task(_auto_email_folio())
+
         return {"status": new_status, "booking_id": booking_id}
 
     @router.put("/bookings/timeline/{property_id}/reassign/{booking_id}")
@@ -501,6 +545,35 @@ def create_booking_timeline_router(db, require_roles):
                     "updated_by": current_user.get("name", ""),
                 }})
                 updated += 1
+
+                # Bulk checkout — also fire the housekeeping + auto-email hooks
+                if action == "checked_out":
+                    updated_bk = await db.bookings.find_one({"id": bid}, {"_id": 0})
+                    if updated_bk and updated_bk.get("room_id"):
+                        co_date = updated_bk.get("check_out") or datetime.now(timezone.utc).date().isoformat()
+                        try:
+                            end_date = (datetime.strptime(co_date, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+                        except Exception:
+                            end_date = co_date
+                        await db.oos_blocks.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "room_id": updated_bk["room_id"],
+                            "property_id": updated_bk.get("property_id", property_id or ""),
+                            "start": co_date, "end": end_date,
+                            "reason": "Deep Clean", "auto": True, "booking_id": bid,
+                            "created_by": "system:housekeeping-autodispatch",
+                            "created_at": now_iso,
+                        })
+                        await db.rooms.update_one({"id": updated_bk["room_id"]}, {"$set": {"housekeeping": "dirty"}})
+                    if updated_bk and updated_bk.get("auto_email_folio_on_checkout", True) and updated_bk.get("guest_email"):
+                        async def _bulk_auto_email(_bid=bid, _email=updated_bk["guest_email"]):
+                            try:
+                                from routes.guest_services import send_folio_email
+                                await send_folio_email(db, resend, _bid, to_list=[_email],
+                                                       sent_by="system:bulk-checkout-auto")
+                            except Exception as e:
+                                logger.error(f"Bulk auto-email folio failed for {_bid}: {e}")
+                        asyncio.create_task(_bulk_auto_email())
             else:
                 errors.append({"id": bid, "error": f"Cannot {action} from {current_status}"})
 

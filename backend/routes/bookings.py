@@ -1499,6 +1499,22 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
                 await db.rooms.update_one({"id": updated["room_id"]}, {"$set": {"housekeeping": "dirty"}})
             asyncio.create_task(fire_webhooks(db, "booking.checked_out", wh_data))
 
+            # Auto-email folio to guest on checkout (Mews/Cloudbeds parity).
+            # Per-booking opt-out via `auto_email_folio_on_checkout=False` (default ON).
+            # Fire-and-forget: never blocks checkout, failures are logged only.
+            if updated.get("auto_email_folio_on_checkout", True) and updated.get("guest_email"):
+                logger.info(f"Auto-email folio queued for booking {booking_id} → {updated['guest_email']}")
+                async def _auto_email_folio():
+                    try:
+                        from routes.guest_services import send_folio_email
+                        res = await send_folio_email(db, resend, booking_id,
+                                                     to_list=[updated["guest_email"]],
+                                                     sent_by="system:checkout-auto")
+                        logger.info(f"Auto-email folio sent for {booking_id}: {res}")
+                    except Exception as e:
+                        logger.error(f"Auto-email folio on checkout failed for {booking_id}: {e}")
+                asyncio.create_task(_auto_email_folio())
+
         return updated
 
     # Include the router in the main app

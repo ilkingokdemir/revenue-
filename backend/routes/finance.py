@@ -497,4 +497,109 @@ def create_finance_router(db, require_roles):
         await db.finance_recurring_expenses.delete_one({"id": rec_id})
         return {"status": "deleted"}
 
+    # ==================== PAYMENT MIX — revenue by method + channel ====================
+
+    @router.get("/finance/payment-mix/{property_id}")
+    async def payment_mix(property_id: str, from_date: str = "", to_date: str = "",
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        """
+        Breakdown of payments captured in the date range by method
+        (cash / card / bank_transfer / channel_collection) and — for OTA-collected —
+        by channel (Booking.com, Expedia, Airbnb, etc). Powers the Finance dashboard
+        "Payment Mix" tile. Uses folio_items where type=payment. Great for OTA
+        contract negotiations: shows at a glance how much revenue is direct-captured
+        vs OTA-collected (commission-bearing).
+        """
+        now = datetime.now(timezone.utc)
+        if not from_date:
+            from_date = now.replace(day=1).strftime("%Y-%m-%d")
+        if not to_date:
+            import calendar
+            last_day = calendar.monthrange(now.year, now.month)[1]
+            to_date = now.replace(day=last_day).strftime("%Y-%m-%d")
+
+        # Get bookings for the property (so we scope payments to them)
+        pq = {} if property_id == "all" else {"property_id": property_id}
+        booking_ids = [b["id"] for b in await db.bookings.find(pq, {"_id": 0, "id": 1}).to_list(10000)]
+
+        # Pull payments in range. folio_items.created_at is an ISO string; a lexical
+        # compare to "YYYY-MM-DD..." is safe because ISO-8601 sorts lexically.
+        items = await db.folio_items.find({
+            "booking_id": {"$in": booking_ids},
+            "type": "payment",
+            "created_at": {"$gte": from_date, "$lte": to_date + "T99:99:99"},
+        }, {"_id": 0}).to_list(20000)
+
+        # Method buckets
+        method_map = {"cash": 0.0, "card": 0.0, "bank_transfer": 0.0, "channel_collection": 0.0}
+        method_counts = {"cash": 0, "card": 0, "bank_transfer": 0, "channel_collection": 0}
+        channel_map: Dict[str, float] = {}
+        channel_counts: Dict[str, int] = {}
+        daily_series: Dict[str, Dict[str, float]] = {}
+
+        for it in items:
+            method = (it.get("payment_method") or it.get("category") or "card").lower()
+            if method not in method_map:
+                # legacy / unknown — map to card
+                method = "card"
+            amt = float(it.get("amount", 0) or 0)
+            method_map[method] += amt
+            method_counts[method] += 1
+
+            if method == "channel_collection":
+                ch = (it.get("channel") or "Unknown OTA").strip() or "Unknown OTA"
+                channel_map[ch] = channel_map.get(ch, 0.0) + amt
+                channel_counts[ch] = channel_counts.get(ch, 0) + 1
+
+            # Daily trend — grouped by YYYY-MM-DD
+            day = (it.get("created_at") or "")[:10]
+            if day:
+                daily_series.setdefault(day, {"cash": 0.0, "card": 0.0, "bank_transfer": 0.0, "channel_collection": 0.0})
+                daily_series[day][method] += amt
+
+        total = round(sum(method_map.values()), 2)
+        direct_captured = round(method_map["cash"] + method_map["card"] + method_map["bank_transfer"], 2)
+        ota_captured = round(method_map["channel_collection"], 2)
+
+        methods_out = []
+        for m, amt in method_map.items():
+            amt = round(amt, 2)
+            methods_out.append({
+                "method": m,
+                "label": {"cash": "Cash", "card": "Card", "bank_transfer": "Bank Transfer", "channel_collection": "Channel Collection"}[m],
+                "amount": amt,
+                "count": method_counts[m],
+                "percent": round((amt / total) * 100, 1) if total > 0 else 0,
+            })
+
+        channels_out = sorted([
+            {
+                "channel": ch,
+                "amount": round(amt, 2),
+                "count": channel_counts.get(ch, 0),
+                "percent": round((amt / ota_captured) * 100, 1) if ota_captured > 0 else 0,
+            }
+            for ch, amt in channel_map.items()
+        ], key=lambda r: -r["amount"])
+
+        daily_out = sorted([
+            {"date": d, **{k: round(v, 2) for k, v in buckets.items()}, "total": round(sum(buckets.values()), 2)}
+            for d, buckets in daily_series.items()
+        ], key=lambda r: r["date"])
+
+        return {
+            "property_id": property_id,
+            "from_date": from_date,
+            "to_date": to_date,
+            "total": total,
+            "direct_captured": direct_captured,
+            "direct_percent": round((direct_captured / total) * 100, 1) if total > 0 else 0,
+            "ota_captured": ota_captured,
+            "ota_percent": round((ota_captured / total) * 100, 1) if total > 0 else 0,
+            "methods": methods_out,
+            "channels": channels_out,
+            "daily": daily_out,
+            "transactions": len(items),
+        }
+
     return router

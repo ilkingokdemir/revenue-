@@ -15,16 +15,18 @@ const currency = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFra
 const DashboardTab = ({ propertyId, onTabSwitch }) => {
   const [data, setData] = useState(null);
   const [history, setHistory] = useState([]);
+  const [mix, setMix] = useState(null);
   const [fromDate, setFromDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; });
   const [toDate, setToDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()}`; });
 
   const load = useCallback(async () => {
     try {
-      const [{ data: d }, { data: h }] = await Promise.all([
+      const [{ data: d }, { data: h }, { data: m }] = await Promise.all([
         axios.get(`${API}/finance/dashboard/${propertyId}?from_date=${fromDate}&to_date=${toDate}`),
         axios.get(`${API}/finance/dashboard-history/${propertyId}?months=6`),
+        axios.get(`${API}/finance/payment-mix/${propertyId}?from_date=${fromDate}&to_date=${toDate}`),
       ]);
-      setData(d); setHistory(h);
+      setData(d); setHistory(h); setMix(m);
     } catch { toast.error("Failed to load finance data"); }
   }, [propertyId, fromDate, toDate]);
   useEffect(() => { load(); }, [load]);
@@ -140,6 +142,98 @@ const DashboardTab = ({ propertyId, onTabSwitch }) => {
         <div className="bg-white border border-stone-200 rounded-2xl p-6 mb-6 flex items-center justify-between">
           <div><h3 className="font-bold text-stone-800 text-lg">Operating Profit / Loss</h3><p className="text-xs text-stone-400">Calculated as gross revenue minus expenses, payroll and commission. Margin: {o.margin}%</p></div>
           <div className={`text-2xl font-bold ${o.net >= 0 ? "text-emerald-600" : "text-red-600"}`}>{currency(o.net)}</div>
+        </div>
+      )}
+
+      {/* Payment Mix — revenue by method + OTA channel breakdown */}
+      {mix && (
+        <div className="bg-white border border-stone-200 rounded-2xl p-6 mb-6" data-testid="payment-mix-tile">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-10 h-10 rounded-xl bg-fuchsia-100 flex items-center justify-center">
+              <svg className="w-5 h-5 text-fuchsia-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"/></svg>
+            </div>
+            <div className="flex-1">
+              <h3 className="font-bold text-stone-800">Payment Mix</h3>
+              <p className="text-xs text-stone-400">How {currency(mix.total)} was captured across {mix.transactions} transactions — direct vs OTA</p>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Direct / OTA</div>
+              <div className="text-sm font-mono font-bold">
+                <span className="text-emerald-600">{mix.direct_percent}%</span>
+                <span className="text-stone-300"> / </span>
+                <span className="text-fuchsia-600">{mix.ota_percent}%</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 4-segment stacked bar */}
+          {mix.total > 0 ? (
+            <div className="flex h-3 rounded-full overflow-hidden mb-3 shadow-inner" data-testid="payment-mix-bar">
+              {mix.methods.filter(m => m.amount > 0).map(m => {
+                const colors = { cash: "bg-emerald-500", card: "bg-sky-500", bank_transfer: "bg-violet-500", channel_collection: "bg-fuchsia-500" };
+                return (
+                  <div
+                    key={m.method}
+                    className={`${colors[m.method]} transition-all`}
+                    style={{ width: `${m.percent}%` }}
+                    title={`${m.label}: ${currency(m.amount)} (${m.percent}%)`}
+                    data-testid={`payment-mix-seg-${m.method}`}
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="h-3 rounded-full bg-stone-100 mb-3" />
+          )}
+
+          {/* 4-up method cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {mix.methods.map(m => {
+              const tint = {
+                cash: { bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700", dot: "bg-emerald-500" },
+                card: { bg: "bg-sky-50", border: "border-sky-200", text: "text-sky-700", dot: "bg-sky-500" },
+                bank_transfer: { bg: "bg-violet-50", border: "border-violet-200", text: "text-violet-700", dot: "bg-violet-500" },
+                channel_collection: { bg: "bg-fuchsia-50", border: "border-fuchsia-200", text: "text-fuchsia-700", dot: "bg-fuchsia-500" },
+              }[m.method];
+              return (
+                <div key={m.method} className={`${tint.bg} ${tint.border} border rounded-xl p-3`} data-testid={`payment-mix-card-${m.method}`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`w-2 h-2 rounded-full ${tint.dot}`} />
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${tint.text}`}>{m.label}</span>
+                  </div>
+                  <div className="text-lg font-bold text-stone-800">{currency(m.amount)}</div>
+                  <div className="text-[11px] text-stone-500">{m.count} tx · {m.percent}%</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* OTA channel breakdown — only when channel_collection has data */}
+          {mix.channels.length > 0 && (
+            <div className="border-t border-stone-100 pt-4" data-testid="payment-mix-channels">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-bold text-stone-700">OTA Collected — Channel Breakdown</h4>
+                <Badge className="bg-fuchsia-100 text-fuchsia-700 text-[10px]">{currency(mix.ota_captured)} total</Badge>
+              </div>
+              <div className="space-y-1.5">
+                {mix.channels.map(c => (
+                  <div key={c.channel} className="flex items-center gap-3" data-testid={`payment-mix-channel-${c.channel.replace(/[^a-z0-9]/gi, '').toLowerCase()}`}>
+                    <div className="w-28 text-xs font-medium text-stone-700 truncate">{c.channel}</div>
+                    <div className="flex-1 bg-stone-100 rounded-full h-2 overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-fuchsia-400 to-pink-500" style={{ width: `${c.percent}%` }} />
+                    </div>
+                    <div className="w-20 text-right text-xs font-mono font-semibold text-stone-700">{currency(c.amount)}</div>
+                    <div className="w-12 text-right text-[10px] text-stone-400">{c.count} tx</div>
+                    <div className="w-12 text-right text-[10px] font-bold text-fuchsia-600">{c.percent}%</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mix.total === 0 && (
+            <p className="text-center text-sm text-stone-400 py-4">No payments recorded in this period</p>
+          )}
         </div>
       )}
 

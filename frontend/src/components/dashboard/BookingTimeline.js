@@ -7,7 +7,7 @@ import {
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
   FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, UserX, Lock, StickyNote, LayoutList, Copy, Filter,
-  Bell, Building2, Wrench,
+  Bell, Building2, Wrench, Printer,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -335,6 +335,24 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
       await axios.post(`${API}/guest-checkin/send-link/${selectedBooking}`);
       toast.success("Check-in link sent to guest");
     } catch { toast.error("Failed"); }
+  };
+
+  // Download a PDF (respects auth header from axios defaults) and open it in a new tab.
+  const downloadPdf = async (path, filename) => {
+    try {
+      const { data } = await axios.get(`${API}${path}`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+      const w = window.open(url, "_blank", "noopener,noreferrer");
+      if (!w) {
+        // Popup blocked — force download instead
+        const a = document.createElement("a");
+        a.href = url; a.download = filename; a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast.success("PDF opened in new tab");
+    } catch (e) {
+      toast.error("Could not generate PDF");
+    }
   };
 
   const changeStatus = async (bookingId, newStatus) => {
@@ -1574,9 +1592,17 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                       <p className="text-sm font-bold text-stone-800 flex items-center gap-1.5"><Receipt className="w-4 h-4 text-stone-500" />{folio.invoice_number}</p>
                       <p className="text-[10px] text-stone-400">{folio.room?.type} — {folio.room?.name}</p>
                     </div>
-                    <button onClick={() => setShowAddCharge(true)} data-testid="add-charge-btn" className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200">
-                      <Plus className="w-3 h-3" />Add Charge
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => downloadPdf(`/folio/${detailData.id}/pdf`, `folio-${detailData.id.slice(0,8)}.pdf`)}
+                        data-testid="print-folio-btn"
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-stone-700 bg-white border border-stone-200 rounded-lg hover:bg-stone-50"
+                        title="Open folio PDF">
+                        <Printer className="w-3 h-3" />Print
+                      </button>
+                      <button onClick={() => setShowAddCharge(true)} data-testid="add-charge-btn" className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-stone-600 bg-stone-100 rounded-lg hover:bg-stone-200">
+                        <Plus className="w-3 h-3" />Add Charge
+                      </button>
+                    </div>
                   </div>
 
                   {/* Add Charge Form */}
@@ -1704,6 +1730,16 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     <button onClick={sendCheckinLink} data-testid="send-checkin-link"
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200">
                       <Send className="w-3.5 h-3.5" />Send Digital Check-in Link
+                    </button>
+                    <button onClick={() => downloadPdf(`/bookings/${detailData.id}/registration-card.pdf`, `reg-card-${detailData.id.slice(0,8)}.pdf`)}
+                      data-testid="print-reg-card-btn"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-lg border border-stone-200">
+                      <Printer className="w-3.5 h-3.5" />Print Registration Card
+                    </button>
+                    <button onClick={() => downloadPdf(`/folio/${detailData.id}/pdf`, `folio-${detailData.id.slice(0,8)}.pdf`)}
+                      data-testid="print-folio-actions-btn"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200">
+                      <Receipt className="w-3.5 h-3.5" />Print Folio Receipt
                     </button>
                   </div>
                 </div>

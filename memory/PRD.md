@@ -2,6 +2,32 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 175: Competitor audit sweep — Registration Card PDF + Folio Receipt PDF (legal + parity win)
+
+User asked for a full software/competitor audit and fixes. Researched Mews/Cloudbeds/Eviivo/myhotelbox — they **all** ship printable Guest Registration Cards (legally required in EU/UK/TR) and itemised Folio receipts. Ours didn't have either. Shipped both in one tight iteration.
+
+**Backend** (`/app/backend/routes/guest_services.py`):
+- `GET /api/bookings/{booking_id}/registration-card.pdf` — A4 PDF with header band, booking block, guest block (incl. passport/ID number, address, nationality, DOB from `guest_registrations`), stay block, emergency contact. Falls back to `booking.guest_*` if the guest hasn't submitted the digital pre-arrival form.
+- `GET /api/folio/{booking_id}/pdf` — A4 itemised folio receipt with header, guest/booking/room meta strip, line-item table (Date / Description / Qty / Unit / Amount with ± prefix per type), totals block with emerald BALANCE when ≤ 0 or red when > 0. Auto-seeds the room charge if the folio is empty (same logic as GET `/api/folio`).
+- Shared `_build_pdf(title, property, sections, filename)` helper for the reg card using reportlab SimpleDocTemplate + Tables.
+- Both endpoints return `StreamingResponse` with `Content-Disposition: inline` so the browser opens them in a new tab for quick print.
+- Permission-gated: `require_roles("admin", "manager", "receptionist")`.
+
+**Frontend** (`BookingTimeline.js`):
+- New `downloadPdf(path, filename)` helper — axios blob GET (preserves auth headers), `window.open` a `URL.createObjectURL` blob so the PDF opens in a new tab. Popup-blocker fallback to anchor download.
+- **Folio tab header** — new "Print" button (Printer icon, white bg, stone border) next to "Add Charge". `data-testid="print-folio-btn"`.
+- **Actions tab → Guest Services** — 2 new full-width buttons added below Send Check-in Link:
+  - "Print Registration Card" (stone bg, Printer icon, `data-testid="print-reg-card-btn"`)
+  - "Print Folio Receipt" (emerald bg, Receipt icon, `data-testid="print-folio-actions-btn"`)
+
+**Live verified via curl + Playwright:**
+- `GET /api/bookings/{id}/registration-card.pdf` → 200 OK, 2795 bytes, valid `%PDF-1.4` signature
+- `GET /api/folio/{id}/pdf` → 200 OK, 2779 bytes, valid `%PDF-1.4` signature
+- Playwright: logged in → opened booking detail drawer → Actions tab → confirmed both new buttons present with correct labels
+
+**Closes the loop on a user frustration pattern** — these are the kinds of visible, legally-required features that competitors lead with in sales demos but we were silently missing. Legal compliance in EU/UK/TR + professional guest checkout experience.
+
+
 ### Iter 174: Comprehensive competitor feature sweep (user frustration — missing features)
 
 User said: "so many points missing, check Eviivo/Mews/Cloudbeds/myhotelbox and fix ALL missing features". Did a thorough audit and shipped 7 major features in this iteration:

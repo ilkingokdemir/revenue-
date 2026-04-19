@@ -2,9 +2,11 @@
 Guest Services — Digital Check-in Registration, Invoice/Folio Management, Scheduled Reports.
 """
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import uuid
+import io
 import logging
 
 logger = logging.getLogger(__name__)
@@ -378,6 +380,268 @@ def create_guest_services_router(db, require_roles):
             "sections": data.get("sections", ["occupancy", "revenue", "arrivals", "departures", "housekeeping"]),
         }
         return await _generate_report_data(db, property_id, config)
+
+    # ===========================
+    # 3. PRINTABLE PDFs — Registration Card + Folio Receipt
+    # (Competitor parity: Mews/Cloudbeds/Eviivo — reg card legally required in EU/UK)
+    # ===========================
+
+    async def _build_pdf(title, property_name, sections, filename):
+        """Shared reportlab PDF builder. `sections` = list of (heading, rows[[k,v]...]).
+        Returns a StreamingResponse."""
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4,
+                                leftMargin=18 * mm, rightMargin=18 * mm,
+                                topMargin=16 * mm, bottomMargin=16 * mm)
+        styles = getSampleStyleSheet()
+        story = []
+
+        # Header band
+        story.append(Paragraph(
+            f"<para align='left'><font size='9' color='#78716c'>{property_name or 'HOTEL'}</font></para>",
+            styles["Normal"]))
+        story.append(Paragraph(
+            f"<para align='left'><font size='20' color='#1c1917'><b>{title}</b></font></para>",
+            styles["Normal"]))
+        story.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#1c1917"),
+                                spaceBefore=4, spaceAfter=10))
+
+        for heading, rows in sections:
+            if heading:
+                story.append(Paragraph(
+                    f"<para><font size='9' color='#a8a29e'><b>{heading.upper()}</b></font></para>",
+                    styles["Normal"]))
+                story.append(Spacer(1, 3))
+            if rows:
+                tbl = Table(rows, colWidths=[50 * mm, 110 * mm])
+                tbl.setStyle(TableStyle([
+                    ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+                    ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
+                    ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#57534e")),
+                    ("TEXTCOLOR", (1, 0), (1, -1), colors.HexColor("#1c1917")),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 4),
+                    ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#e7e5e4")),
+                ]))
+                story.append(tbl)
+                story.append(Spacer(1, 10))
+
+        # Footer + signature box (for reg card)
+        story.append(Spacer(1, 16))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d6d3d1")))
+        story.append(Paragraph(
+            f"<para align='center'><font size='7' color='#a8a29e'>Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · Powered by My Hotel Box</font></para>",
+            styles["Normal"]))
+
+        doc.build(story)
+        buf.seek(0)
+        return StreamingResponse(
+            buf, media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'}
+        )
+
+    @router.get("/bookings/{booking_id}/registration-card.pdf")
+    async def registration_card_pdf(
+        booking_id: str,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Generate a printable guest Registration Card PDF (legal requirement in EU/UK/TR)."""
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
+        from reportlab.lib.styles import getSampleStyleSheet
+
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        reg = await db.guest_registrations.find_one({"booking_id": booking_id}, {"_id": 0}) or {}
+        room_type = await db.room_types.find_one({"id": booking.get("room_type_id", "")}, {"_id": 0})
+        room = await db.rooms.find_one({"id": booking.get("room_id", "")}, {"_id": 0})
+        prop = await db.properties.find_one({"id": booking.get("property_id", "")}, {"_id": 0})
+
+        def _v(*keys):
+            for k in keys:
+                val = reg.get(k) or booking.get(k)
+                if val:
+                    return str(val)
+            return "—"
+
+        sections = [
+            ("Booking", [
+                ["Booking Ref", booking.get("booking_ref") or booking.get("id", "")[:8].upper()],
+                ["Status", booking.get("status", "—").replace("_", " ").title()],
+                ["Source", booking.get("source", "Direct")],
+            ]),
+            ("Guest", [
+                ["Full Name", _v("guest_name")],
+                ["Email", _v("email", "guest_email")],
+                ["Phone", _v("phone", "guest_phone")],
+                ["Nationality", reg.get("nationality", "—") or "—"],
+                ["Date of Birth", reg.get("date_of_birth", "—") or "—"],
+                ["ID Type / Number",
+                 f"{(reg.get('id_type') or 'Passport').title()} — {reg.get('id_number') or reg.get('passport_number') or '—'}"],
+                ["Address",
+                 ", ".join(filter(None, [reg.get("address", ""), reg.get("city", ""),
+                                         reg.get("postcode", ""), reg.get("country", "")])) or "—"],
+            ]),
+            ("Stay", [
+                ["Check-In", booking.get("check_in", "—")],
+                ["Check-Out", booking.get("check_out", "—")],
+                ["Nights", str(booking.get("nights", 1))],
+                ["Guests", f"{booking.get('adults', 1)} adult(s)" + (f", {booking.get('children', 0)} child(ren)" if booking.get("children") else "")],
+                ["Room Type", room_type.get("name", "—") if room_type else "—"],
+                ["Room", room.get("name", "—") if room else "—"],
+                ["Arrival Time", reg.get("arrival_time", "—") or "—"],
+                ["Vehicle Reg", reg.get("vehicle_reg", "—") or "—"],
+            ]),
+            ("Emergency Contact", [
+                ["Name", reg.get("emergency_contact_name", "—") or "—"],
+                ["Phone", reg.get("emergency_contact_phone", "—") or "—"],
+            ]),
+        ]
+
+        # Build base doc
+        response = await _build_pdf(
+            title="GUEST REGISTRATION CARD",
+            property_name=prop.get("name", "") if prop else "",
+            sections=sections,
+            filename=f"reg-card-{booking_id[:8]}.pdf",
+        )
+        return response
+
+    @router.get("/folio/{booking_id}/pdf")
+    async def folio_pdf(
+        booking_id: str,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Generate a printable Folio receipt PDF (itemised stay invoice)."""
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+        from reportlab.lib.styles import getSampleStyleSheet
+
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        room_type = await db.room_types.find_one({"id": booking.get("room_type_id", "")}, {"_id": 0})
+        room = await db.rooms.find_one({"id": booking.get("room_id", "")}, {"_id": 0})
+        prop = await db.properties.find_one({"id": booking.get("property_id", "")}, {"_id": 0})
+        items = await db.folio_items.find({"booking_id": booking_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+
+        # Auto-seed room charge if empty (same logic as GET /folio)
+        if not items:
+            nights = int(booking.get("nights", 1) or 1)
+            rate = float(booking.get("rate_per_night", 0) or 0)
+            total = float(booking.get("total_price", 0) or 0) or (rate * nights)
+            room_charge = {
+                "id": str(uuid.uuid4()),
+                "booking_id": booking_id,
+                "type": "charge",
+                "category": "room",
+                "description": f"Room: {room_type.get('name', 'Room') if room_type else 'Room'} x {nights} night{'s' if nights > 1 else ''}",
+                "quantity": nights,
+                "unit_price": rate,
+                "amount": total,
+                "currency": booking.get("currency", "GBP"),
+                "created_at": booking.get("created_at", datetime.now(timezone.utc).isoformat()),
+                "created_by": "System",
+            }
+            await db.folio_items.insert_one(dict(room_charge))
+            items.append(room_charge)
+
+        charges = sum(i["amount"] for i in items if i.get("type") == "charge")
+        payments = sum(i["amount"] for i in items if i.get("type") == "payment")
+        adjustments = sum(i["amount"] for i in items if i.get("type") == "adjustment")
+        balance = round(charges - payments + adjustments, 2)
+        cur_sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(booking.get("currency", "GBP"), "£")
+        inv_num = f"FOL-{booking_id[:8].upper()}"
+
+        # Build PDF directly (custom layout — items table)
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=__import__("reportlab.lib.pagesizes", fromlist=["A4"]).A4,
+                                leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
+        styles = getSampleStyleSheet()
+        story = []
+
+        prop_name = prop.get("name", "HOTEL") if prop else "HOTEL"
+        story.append(Paragraph(f"<para align='left'><font size='9' color='#78716c'>{prop_name}</font></para>", styles["Normal"]))
+        story.append(Paragraph(f"<para align='left'><font size='20' color='#1c1917'><b>FOLIO · {inv_num}</b></font></para>", styles["Normal"]))
+        story.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#1c1917"), spaceBefore=4, spaceAfter=10))
+
+        # Meta
+        meta = Table([
+            ["Guest", booking.get("guest_name", "—"), "Booking", booking.get("booking_ref") or booking_id[:8].upper()],
+            ["Check-In", booking.get("check_in", "—"), "Check-Out", booking.get("check_out", "—")],
+            ["Room", (room.get("name", "—") if room else "—"), "Room Type", (room_type.get("name", "—") if room_type else "—")],
+        ], colWidths=[22 * mm, 60 * mm, 22 * mm, 60 * mm])
+        meta.setStyle(TableStyle([
+            ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+            ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9), ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9),
+            ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#78716c")),
+            ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#78716c")),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(meta)
+        story.append(Spacer(1, 12))
+
+        # Items table
+        data = [["Date", "Description", "Qty", "Unit", "Amount"]]
+        for it in items:
+            dt = (it.get("created_at") or "")[:10]
+            amt = it.get("amount", 0)
+            prefix = "-" if it.get("type") == "payment" else ("" if it.get("type") == "charge" else "±")
+            data.append([dt, it.get("description", ""), str(it.get("quantity") or 1),
+                         f"{cur_sym}{it.get('unit_price', 0):.2f}" if it.get("type") == "charge" else "—",
+                         f"{prefix}{cur_sym}{amt:.2f}"])
+        tbl = Table(data, colWidths=[22 * mm, 85 * mm, 14 * mm, 22 * mm, 27 * mm])
+        tbl.setStyle(TableStyle([
+            ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 8),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#78716c")),
+            ("LINEBELOW", (0, 0), (-1, 0), 0.8, colors.HexColor("#1c1917")),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.3, colors.HexColor("#e7e5e4")),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(tbl)
+        story.append(Spacer(1, 14))
+
+        # Totals
+        tot_rows = [["Charges", f"{cur_sym}{charges:.2f}"]]
+        if payments:
+            tot_rows.append(["Payments", f"-{cur_sym}{payments:.2f}"])
+        if adjustments:
+            tot_rows.append(["Adjustments", f"{cur_sym}{adjustments:.2f}"])
+        tot_rows.append(["BALANCE DUE", f"{cur_sym}{balance:.2f}"])
+        tot = Table(tot_rows, colWidths=[140 * mm, 30 * mm])
+        tot.setStyle(TableStyle([
+            ("FONT", (0, 0), (-1, -2), "Helvetica", 10),
+            ("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 12),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("TEXTCOLOR", (0, -1), (-1, -1), colors.HexColor("#059669") if balance <= 0 else colors.HexColor("#dc2626")),
+            ("LINEABOVE", (0, -1), (-1, -1), 1.2, colors.HexColor("#1c1917")),
+            ("TOPPADDING", (0, -1), (-1, -1), 8), ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
+        ]))
+        story.append(tot)
+
+        story.append(Spacer(1, 18))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d6d3d1")))
+        story.append(Paragraph(
+            f"<para align='center'><font size='7' color='#a8a29e'>Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · {inv_num} · Thank you for your stay</font></para>",
+            styles["Normal"]))
+
+        doc.build(story)
+        buf.seek(0)
+        return StreamingResponse(
+            buf, media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="folio-{booking_id[:8]}.pdf"'},
+        )
 
     return router
 

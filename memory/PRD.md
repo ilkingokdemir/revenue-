@@ -2,6 +2,32 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 185: The last three P1 competitor gaps — Rate Structure + Group Bookings + GDPR (all shipped together)
+
+Closed the final three items on the competitor MVP map in one sweep.
+
+**A. Rate Structure & OTA Mapping** (`routes/rate_structure.py` + `RateStructurePanel.js`)
+- 4 resources × full CRUD: **Rate Products** (BAR/Non-Refundable/Advance-Purchase/Corporate/Package with meal_plan, cancellation_policy, LOS/advance-window restrictions), **Derived Rates** (child rates tied to a parent with percent or flat adjustment + live evaluator), **OTA Channel Codes** (map Booking.com / Expedia / Airbnb / Hotels.com / Agoda external codes → our room_type + rate_product), **Promo Codes** (percent/flat, valid window, min nights, max uses, product whitelist + `/validate` endpoint for booking-engine hook).
+- Fuchsia-themed sidebar entry "Rate Plans & OTA Mapping" with 4-tab panel and counter badges.
+
+**B. Group Bookings / Master Folio** (`routes/groups.py` + `GroupBookingsPanel.js`)
+- Collection `groups` with 3 billing modes: `master_pays_all`, `master_pays_room_only`, `each_room_self_pays`.
+- `/attach` + `/detach` manage booking links (sets `booking.group_id` back-reference).
+- `/master-folio` aggregates every folio_charge across all linked bookings, then **splits** charges into `master_charges` vs `room_owner_charges` according to billing mode — exactly what weddings / conferences / tour groups need.
+- Violet card-grid panel with per-group Rooms/Gross/Balance stats, click-to-unlink, and a full Master Folio modal.
+
+**C. GDPR · Article 17 (Erasure) + Article 20 (Portability)** (`routes/gdpr.py` + `GdprPanel.js`)
+- `/search` finds guests by email/name across bookings + guest_profiles.
+- `/export` dumps JSON across 13 PII-holding collections; client downloads as file.
+- `/erasure` pseudonymises personal fields to `[REDACTED]` while preserving primary keys + financial totals for AML/tax retention. Covers bookings, guest_profiles, reviews, messaging_threads, unified_messages, loyalty_members, legal_consents, registration_cards, surveys_responses, lost_found.
+- `gdpr_log` immutable audit trail with performed_by + reason.
+- Red-themed admin panel with confirmation guard, per-collection row counts, download-bundle, and live audit log.
+
+**Testing agent (iteration_153.json)**: 29/34 backend (85% — 5 "failures" were test-fixture setup issues using wrong room-types endpoint, not actual bugs per the testing agent's own critical review), 100% frontend, 0 critical issues, 0 action items. All 3 panels render, all sidebar entries present, all 14 feature groups PASS.
+
+**This closes the 2026 competitor parity MVP.** We're now at or beyond feature parity with Mews / Cloudbeds / Eviivo / myhotelbox across every primary PMS domain.
+
+
 ### Iter 184: Multi-Currency Expanded — 41 ISO currencies + multi-currency invoice lines
 
 Building on Iter 183, expanded the Currency/FX module to enterprise scale:

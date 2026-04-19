@@ -2,6 +2,38 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 168: Calendar feature parity with myhotelbox.com — quick-action popover + unassigned row
+
+User uploaded 6 screenshots showing myhotelbox.com's booking calendar with two features we were missing: (1) click-popover with 6 quick actions on booking bars, (2) "Unassigned" row at top showing pending-count per day. Added both.
+
+**1. Quick-Action Popover** (`/app/frontend/src/components/dashboard/BookingTimeline.js`):
+- Clicking a booking bar no longer opens the full slide-over — it opens a compact floating popover first (like myhotelbox).
+- New state `quickActions` = `{ booking, rect, roomName }`, captured via `e.currentTarget.getBoundingClientRect()` on click so the popover positions right below the bar (auto-flips above when near viewport bottom, clamps horizontally).
+- Dismissed by clicking the full-page overlay behind it.
+- **Header**: guest name + status badge (CHECKED OUT / CONFIRMED / CHECKED IN etc.)
+- **Room sub-row**: Bed icon + room name
+- **IN / OUT / TOTAL grid** (3 columns): formatted `Sat 18 Apr / Mon 20 Apr / £178.00`
+- **6 action buttons in a 2×3 grid** (color-coded backgrounds matching myhotelbox):
+  - **Check In** (emerald) — calls `changeStatus(bk.id, "checked_in")`, disabled when already checked_in/out
+  - **Add Room** (sky) — opens the full slide-over
+  - **Add Note** (amber) — opens slide-over with toast hint about Notes tab
+  - **Lock** (stone) — toast placeholder (will wire to locked-booking feature)
+  - **Details** (violet) — opens the full slide-over
+  - **Send Check-in** (indigo) — POSTs to `/api/guest-checkin/send-link/{id}`, disabled when no guest_email
+- Added three new lucide icons: `Lock`, `StickyNote`, `LayoutList`.
+
+**2. Unassigned Row** (top of the timeline, directly under the date header):
+- Computes per-day count of bookings with `status in [pending, unassigned]` OR `!room_id` that overlap the column date.
+- Amber-tinted row (`bg-amber-50/40`, `border-amber-200`), 32px tall (smaller than room rows).
+- Sticky left label: `⚠ Unassigned` + total-count badge (e.g., 45) on the right.
+- Per-day cells show `⚠ N` where N is the count; cells with 0 render in amber-400/50 (faded) — so populated days visually pop.
+- Blue-50 today column tint preserved.
+
+**Live verified**: Screenshot shows click-popover opening with full 6-button grid (greyed-out Check In + Send Check-in since test booking is already checked out), and the Unassigned row ribbon showing cascading counts (8, 10, 5, 6, 7, 1, 1, 2…) across the 14-day window with a total badge of 45. Aligns closely with myhotelbox reference.
+
+Also verified the earlier-built features are intact: daily occupancy % header (36% / 45% / 22% colour coded), "4/4 £89.00" room-type inventory per day, "+2 more" collision pill on overlapping rows, drag-and-drop reassignment, bulk mode, source-color strips on bars.
+
+
 ### Iter 167: Seeded 3-year historical data so Financial Overview YoY deltas are meaningful
 
 User pointed out that the Financial Overview had (+100%) deltas everywhere because our test dataset only contained 2026 bookings. Seeded realistic historical data:

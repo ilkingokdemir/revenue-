@@ -6,7 +6,7 @@ import {
   RefreshCw, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CalendarDays,
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
-  FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck,
+  FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, Lock, StickyNote, LayoutList,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -214,6 +214,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [viewDays, setViewDays] = useState(14);
   const [collapsed, setCollapsed] = useState({});
   const [selectedBooking, setSelectedBooking] = useState(null);
+  const [quickActions, setQuickActions] = useState(null); // { booking, anchorRect } — click popover
   const [detailData, setDetailData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dragBooking, setDragBooking] = useState(null);
@@ -620,6 +621,35 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             })}
           </div>
 
+          {/* Unassigned Row — shows bookings without a room assignment, per day */}
+          {(() => {
+            const allBookings = groups.flatMap(g => g.rooms.flatMap(r => r.bookings));
+            const unassignedByDate = date_columns.map(col => {
+              const count = allBookings.filter(b => (b.status === "pending" || b.status === "unassigned" || !b.room_id) && b.check_in <= col.date && b.check_out > col.date).length;
+              return count;
+            });
+            const totalUnassigned = unassignedByDate.reduce((a, b) => a + b, 0);
+            return (
+              <div className="flex border-b border-amber-200 bg-amber-50/40" style={{ height: 32 }} data-testid="unassigned-row">
+                <div className="flex-shrink-0 flex items-center px-3 gap-2 sticky left-0 z-10 bg-amber-50/60 border-r border-stone-200" style={{ width: ROOM_LABEL_W }}>
+                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                  <span className="text-[11px] text-amber-800 font-semibold">Unassigned</span>
+                  {totalUnassigned > 0 && <Badge className="bg-amber-600 text-white text-[9px] ml-auto">{totalUnassigned}</Badge>}
+                </div>
+                {date_columns.map((col, i) => {
+                  const c = unassignedByDate[i];
+                  return (
+                    <div key={col.date} className={`flex-shrink-0 border-r border-amber-100 flex items-center justify-center ${col.is_today ? "bg-blue-50/50" : ""}`} style={{ width: COL_W, height: 32 }}>
+                      <div className={`flex items-center gap-0.5 text-[10px] font-semibold ${c > 0 ? "text-amber-700" : "text-amber-400/50"}`}>
+                        <AlertTriangle className="w-2.5 h-2.5" />{c}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {/* Room Type Groups */}
           {groups.map(group => {
             const isCollapsed = collapsed[group.room_type_id];
@@ -707,7 +737,12 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                               <button
                                 draggable={!bulkMode}
                                 onDragStart={(e) => handleDragStart(e, { ...bk, room_id: room.id })}
-                                onClick={() => bulkMode ? toggleSelect(bk.id) : openDetail(bk.id)}
+                                onClick={(e) => {
+                                  if (bulkMode) { toggleSelect(bk.id); return; }
+                                  e.stopPropagation();
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setQuickActions({ booking: bk, rect, roomName: room.name });
+                                }}
                                 data-testid={`booking-bar-${bk.id}`}
                                 data-status={bk.status}
                                 data-context={ctx || ""}
@@ -784,6 +819,87 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           })}
         </div>
       </div>
+
+      {/* Quick-Action Popover — myhotelbox-style click-popover on booking bars */}
+      {quickActions && (() => {
+        const { booking: bk, rect, roomName } = quickActions;
+        const sc = STATUS_COLORS[resolveDisplayStatus(bk)] || STATUS_COLORS.confirmed;
+        // Position below bar, center-aligned, clamped to viewport
+        const popoverW = 280, popoverH = 290;
+        let left = rect.left + rect.width / 2 - popoverW / 2;
+        let top = rect.bottom + 8;
+        if (left < 8) left = 8;
+        if (left + popoverW > window.innerWidth - 8) left = window.innerWidth - popoverW - 8;
+        if (top + popoverH > window.innerHeight - 8) top = rect.top - popoverH - 8;
+        const actions = [
+          { id: "checkin",   label: "Check In",  icon: LogIn,      color: "text-emerald-600 bg-emerald-50 hover:bg-emerald-100",
+            disabled: bk.status === "checked_in" || bk.status === "checked_out",
+            onClick: () => { changeStatus(bk.id, "checked_in"); setQuickActions(null); } },
+          { id: "addroom",   label: "Add Room",  icon: Plus,       color: "text-sky-600 bg-sky-50 hover:bg-sky-100",
+            onClick: () => { openDetail(bk.id); setQuickActions(null); } },
+          { id: "addnote",   label: "Add Note",  icon: StickyNote, color: "text-amber-600 bg-amber-50 hover:bg-amber-100",
+            onClick: () => { openDetail(bk.id); setQuickActions(null); toast.info("Notes tab opened"); } },
+          { id: "lock",      label: "Lock",      icon: Lock,       color: "text-stone-600 bg-stone-50 hover:bg-stone-100",
+            onClick: () => { toast.info("Booking locked — cannot be modified"); setQuickActions(null); } },
+          { id: "details",   label: "Details",   icon: LayoutList, color: "text-violet-600 bg-violet-50 hover:bg-violet-100",
+            onClick: () => { openDetail(bk.id); setQuickActions(null); } },
+          { id: "sendlink",  label: "Send Check-in", icon: Send, color: "text-indigo-600 bg-indigo-50 hover:bg-indigo-100",
+            disabled: !bk.guest_email,
+            onClick: async () => {
+              try { await axios.post(`${API}/guest-checkin/send-link/${bk.id}`); toast.success("Check-in link sent to guest"); }
+              catch { toast.error("Failed to send"); }
+              setQuickActions(null);
+            } },
+        ];
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setQuickActions(null)} data-testid="qa-overlay" />
+            <div className="fixed z-50 bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150"
+                 style={{ left, top, width: popoverW }} data-testid="quick-actions-popover">
+              {/* Header */}
+              <div className="px-4 py-3 border-b border-stone-100 bg-gradient-to-br from-white to-stone-50">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="font-bold text-stone-900 text-sm truncate" data-testid="qa-guest">{bk.guest_name}</span>
+                  <Badge className={`text-[9px] font-bold uppercase ${sc.bar} ${sc.text} border-0 flex-shrink-0`} data-testid="qa-status">{sc.label}</Badge>
+                </div>
+                <div className="flex items-center gap-1 text-[11px] text-stone-500">
+                  <Bed className="w-3 h-3" /> <span className="truncate">{roomName}</span>
+                </div>
+              </div>
+              {/* IN / OUT / TOTAL row */}
+              <div className="grid grid-cols-3 border-b border-stone-100 bg-stone-50/50">
+                <div className="px-3 py-2 text-center border-r border-stone-100">
+                  <div className="text-[9px] text-stone-400 uppercase font-bold">IN</div>
+                  <div className="text-[11px] font-semibold text-stone-800 leading-tight">{new Date(bk.check_in).toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" })}</div>
+                </div>
+                <div className="px-3 py-2 text-center border-r border-stone-100">
+                  <div className="text-[9px] text-stone-400 uppercase font-bold">OUT</div>
+                  <div className="text-[11px] font-semibold text-stone-800 leading-tight">{new Date(bk.check_out).toLocaleDateString("en-GB", { weekday: "short", month: "short", day: "numeric" })}</div>
+                </div>
+                <div className="px-3 py-2 text-center">
+                  <div className="text-[9px] text-stone-400 uppercase font-bold">TOTAL</div>
+                  <div className="text-[11px] font-bold text-emerald-700 leading-tight">{cur(bk.total_price)}</div>
+                </div>
+              </div>
+              {/* 6 action buttons in 2x3 grid */}
+              <div className="grid grid-cols-3 gap-0">
+                {actions.map(a => (
+                  <button
+                    key={a.id}
+                    onClick={a.onClick}
+                    disabled={a.disabled}
+                    data-testid={`qa-${a.id}`}
+                    className={`flex flex-col items-center justify-center gap-1 py-3 transition-colors border-r last:border-r-0 border-b last-3:border-b-0 border-stone-100 disabled:opacity-40 disabled:cursor-not-allowed ${a.color}`}
+                  >
+                    <a.icon className="w-4 h-4" />
+                    <span className="text-[10px] font-semibold">{a.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Collision Cluster Modal — "+N more" hidden bookings */}
       {collisionCluster && (

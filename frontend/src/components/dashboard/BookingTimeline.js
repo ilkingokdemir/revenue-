@@ -699,12 +699,14 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             const activeProp = (properties || []).find(p => p.id === pid);
             const propLabel = activeProp ? activeProp.name : "All Properties";
             return (
-              <div className="flex sticky left-0 z-10 bg-gradient-to-r from-stone-50 to-white border-b-2 border-stone-300" data-testid="property-group-header">
-                <div className="flex-shrink-0 flex items-center px-3 gap-2 sticky left-0 z-20 border-r border-stone-200 bg-gradient-to-r from-stone-50 to-white" style={{ width: ROOM_LABEL_W, height: 28 }}>
+              <div className="flex bg-gradient-to-r from-indigo-50 via-white to-indigo-50 border-b-2 border-indigo-200" data-testid="property-group-header">
+                <div className="flex-shrink-0 flex items-center px-3 gap-2 sticky left-0 z-20 border-r border-stone-200 bg-gradient-to-r from-indigo-50 to-white" style={{ width: ROOM_LABEL_W, height: 28 }}>
                   <Building2 className="w-3.5 h-3.5 text-indigo-600" />
                   <span className="text-[11px] font-black tracking-wider uppercase text-stone-700">{propLabel}</span>
                 </div>
-                <div className="flex-1" style={{ height: 28 }}></div>
+                {date_columns.map(col => (
+                  <div key={col.date} className={`flex-shrink-0 border-r border-indigo-100 ${col.is_today ? "bg-blue-50/50" : ""}`} style={{ width: COL_W, height: 28 }} />
+                ))}
               </div>
             );
           })()}

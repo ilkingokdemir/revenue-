@@ -2,6 +2,15 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 171: Calendar grid alignment bug fix (user feedback: "column not in square")
+
+User reported "column not in square" — when I added the property-group header "ALL PROPERTIES" row in iter 170, I used a single `<div className="flex-1" />` instead of per-date cells, which broke the vertical grid alignment. The "today" blue column and cell dividers appeared broken across the property row.
+
+**Fix** (`BookingTimeline.js`): Replaced the flex-1 div with 14 individual `<div>` cells iterating `date_columns.map()`, each with `width: COL_W`, `height: 28`, and indigo-100 borders. Also tinted today's column (`col.is_today`) blue-50 so the blue "today" line now runs consistently from the date header all the way down through every row.
+
+**Live verified**: Every column now aligns perfectly across date header → Unassigned row → ALL PROPERTIES row → group inventory rows → room rows → booking bars. Blue-tinted today column is continuous.
+
+
 ### Iter 170: Complete calendar feature parity sweep — myhotelbox + Cloudbeds reference (user feedback)
 
 User uploaded additional myhotelbox + Cloudbeds screenshots calling out features I'd missed. Done a proper feature-by-feature audit and added everything.

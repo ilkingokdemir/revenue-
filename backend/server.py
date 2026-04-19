@@ -566,6 +566,9 @@ api_router.include_router(gdpr_router)
 from routes.og_images import create_og_router
 og_router = create_og_router()
 api_router.include_router(og_router)
+from routes.property_onboarding import create_onboarding_router
+onboarding_router = create_onboarding_router(db)
+api_router.include_router(onboarding_router)
 
 app.include_router(api_router)
 

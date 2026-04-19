@@ -26,6 +26,7 @@ import { CurrencyFxPanel } from "./components/dashboard/finance/CurrencyFxPanel"
 import { RateStructurePanel } from "./components/dashboard/finance/RateStructurePanel";
 import { GroupBookingsPanel } from "./components/dashboard/GroupBookingsPanel";
 import { GdprPanel } from "./components/dashboard/GdprPanel";
+import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
@@ -2643,6 +2644,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "rate-structure", icon: Tag, name: "Rate Plans & OTA Mapping", testId: "rate-structure-btn" },
         { id: "group-bookings", icon: Users, name: "Group Bookings", testId: "group-bookings-btn" },
         { id: "gdpr", icon: ShieldCheck, name: "GDPR Data Rights", testId: "gdpr-btn" },
+        { id: "onboarding", icon: MagicWand, name: "First-Run Wizard", testId: "onboarding-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "booking-engine-admin", icon: Globe, name: "Booking Engine", testId: "booking-engine-admin-btn" },
@@ -3451,6 +3453,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* GDPR Data Rights */}
         {activeView === "gdpr" && (
           <GdprPanel user={user} />
+        )}
+
+        {/* Onboarding Wizard */}
+        {activeView === "onboarding" && (
+          <div className="p-6">
+            <OnboardingWizard propertyId={activePropertyId || "default"} onClose={() => setActiveView("calendar")} />
+          </div>
         )}
 
         {/* Unified Inbox */}

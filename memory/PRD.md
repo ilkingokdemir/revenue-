@@ -2,6 +2,35 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 161: Dashboard folder refactor — Phase 1 (P1)
+
+The `/app/frontend/src/components/dashboard/` directory had grown past 115 files. Did a safe, targeted refactor moving six cleanly-isolated recent additions into thematic sub-folders without breaking any imports.
+
+**New sub-folder structure:**
+```
+/app/frontend/src/components/dashboard/
+├── rbac/
+│   ├── RolesPermissionsPanel.js
+│   └── AuditTrailPanel.js
+├── imports/
+│   └── ImportModulePanel.js
+├── ops/
+│   ├── CollisionsPanel.js
+│   └── BugTrackerPanel.js
+├── finance/
+│   └── PayrollRateMatrix.js
+└── (109 other files — still flat for Phase 2)
+```
+
+**Approach:**
+- Confirmed each target file was ONLY imported by `App.js` (no inter-panel dependencies) via a grep sweep before moving.
+- Used `git mv` to preserve file history.
+- Updated 4 import statements in `App.js` to new paths (`./components/dashboard/rbac/RolesPermissionsPanel`, `./components/dashboard/ops/CollisionsPanel`, etc.).
+- Lint clean, webpack compiles with no errors (only pre-existing ESLint warnings), and Playwright test clicked all 4 refactored panels (`audit-trail-btn`, `collisions-btn`, `bug-tracker-btn`, `roles-permissions-btn`) — each rendered correctly.
+
+**Intentionally left flat for Phase 2** (too many cross-file dependencies to move safely in one shot): `BookingTimeline.js`, `OperationsHubPanel.js`, `CalendarGSSPanel.js`, `ReservationGrid.js`, `PayrollPanel.js`, `ChannelManagerPanel.js`, and ~100 others. These will migrate in smaller, targeted batches as they're touched for feature work.
+
+
 ### Iter 160: Collisions dashboard (ops-cockpit widget) — detects same-room double-bookings cross-property
 
 Built an operations-wide collision scanner that flags every same-room overlap across all properties in a dedicated Collisions panel. Pairs beautifully with the per-room "+N more" pill (iter 159) and the Audit Trail (iter 158) to form a genuine enterprise SIEM-lite for hospitality.

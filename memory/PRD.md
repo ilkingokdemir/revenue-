@@ -2,6 +2,31 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+
+### Iter 154 (Feb 2026): Quick Pay partial-payment bug fix + 4 explicit payment types
+
+**Bug reported by user**: "when i charged half amount dosent reduct on quick pay it should show remaning on calender not full amount"
+
+**Root cause**: The `/api/bookings/timeline/{property_id}` endpoint's `bk_bars` projection in `routes/booking_timeline.py` was stripping `balance_due`, `folio_paid`, `folio_charged` — the calendar pill was falling back to `total_price`, so partial payments never reduced the displayed amount on the bar. The bookings list endpoint was already correct; this was a timeline-only projection gap.
+
+**Fix A — Timeline bar projection** (`routes/booking_timeline.py`)
+- Added `balance_due`, `folio_paid`, `folio_charged`, `notes`, `booking_ref` to the per-bar projection so the live folio aggregation propagates to the frontend.
+
+**Fix B — `payment_status` logic** (`routes/guest_services.py` `add_folio_payment`)
+- Rewrote to compute `gross = total_charges if > 0 else booking.total_price` (matching the calendar's own logic). Status transitions: `pending → partial → paid`. Previously it flipped to `"paid"` on any payment because `total_charges` was 0 for pre-folio bookings.
+- Validated & normalized `method` to one of: `cash · card · bank_transfer · channel_collection`. Unknown values fall back to `card`. Aliases (`cc`, `wire`, `transfer`, `ota`, `ota_prepaid`, `stripe`) are mapped.
+- New persisted fields on payment items: `payment_method`, `channel` (only when `channel_collection`), `reference`.
+
+**Feature — 4 explicit payment types in Quick Pay modal & Folio tab** (`BookingTimeline.js`)
+- QuickPayModal redesigned with a 4-up segmented picker: **Cash** (emerald · Banknote) · **Card** (sky · CreditCard) · **Bank Transfer** (violet · Landmark) · **Channel Collection** (fuchsia · Globe).
+- Channel Collection reveals a channel dropdown (Booking.com / Expedia / Airbnb / Agoda / Hotels.com / Trip.com / Vrbo / Direct OTA), pre-selected from `booking.source` for reconciliation reporting.
+- Amount shortcuts: Full · 50% · 30% deposit. Live "After this payment" preview shows "PAID IN FULL" or "£X remaining".
+- Reference field is label-aware: "Auth / Last-4" for card, "Transfer ref" for bank, "OTA ref" for channel.
+- Folio tab "Record Payment" block replaced by a 4-up grid (Cash / Card / Bank / Channel) of one-click full-balance buttons.
+- Folio line items now display a colored method badge (Cash/Card/Bank/OTA name) + reference next to the description.
+
+**Testing agent iteration_154.json**: 100% backend (12/12) + 100% frontend (10/10). Confirmed the calendar pill correctly updates from £132.13 → £66.07 after a half-balance payment. Zero critical issues, zero action items.
+
 ### Iter 185: The last three P1 competitor gaps — Rate Structure + Group Bookings + GDPR (all shipped together)
 
 Closed the final three items on the competitor MVP map in one sweep.

@@ -2,6 +2,44 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 178: Split Folio (Sub-Folios) — Mews/Cloudbeds/Eviivo parity
+
+User accepted next competitor-gap item. Split Folio is the #1 daily use-case hotels cite: **business traveller pays room on company card, extras on personal card**. Also: couples splitting, groups dividing, VIPs with incidentals tracked separately. Shipped full-stack in one iteration.
+
+**Backend** (`/app/backend/routes/guest_services.py`):
+- Collection: `sub_folios` — `{id, booking_id, name, notes, payer_name, payer_email, created_at}`. `folio_items.sub_folio_id` field (nullable = Primary).
+- `GET /api/folio/{booking_id}/sub-folios` — returns **all** sub-folios for a booking, with Primary always prepended as a virtual entry. Each sub-folio includes its items + per-folio totals (charges/payments/adjustments/balance) so the UI can show tabs with live balance pills without a second roundtrip.
+- `POST /api/folio/{booking_id}/sub-folios` — create (rejects duplicate "Primary" name and empty names).
+- `PUT /api/folio/{booking_id}/sub-folios/{id}` — rename/notes (blocks Primary).
+- `DELETE /api/folio/{booking_id}/sub-folios/{id}?move_items_to=primary` — deletes a sub-folio, moves its items to target (default Primary). Primary itself is undeletable.
+- `PUT /api/folio/items/{item_id}/move` — body `{sub_folio_id}` — moves a single folio item (charge, payment or adjustment) between sub-folios. `"primary"` = unset the tag.
+- `add_folio_charge` and `add_folio_payment` now honor optional `sub_folio_id` in the POST body so new items can be tagged at creation.
+
+**Frontend** (`BookingTimeline.js` — booking detail drawer → Folio tab):
+- New tab strip above the items list — each tab pill shows name + balance chip (e.g., `Primary £175.70`, `Company Card £50.00`).
+- `+ Split` button on the right of the strip → inline name input → Enter or Create.
+- Items are filtered to the active sub-folio. Each item has a per-row dropdown (`data-testid="move-item-{id}"`) to move it across sub-folios (only shown when >1 sub-folio exists).
+- Active sub-folio totals block shows `{name} — Balance` instead of generic `Balance Due`.
+- Charges/Payments added while a non-primary tab is active are auto-tagged to that sub-folio (respects `activeSubFolio` in `addCharge`/`addPayment`).
+- Non-primary active tab has a small `X` icon to delete (items auto-migrate to Primary).
+
+**Verified end-to-end via curl + Playwright:**
+- List sub-folios for a booking → returns Primary + any user-created folios with enriched items/totals
+- Create "Company Card" sub-folio → 200 OK, toast `Sub-folio "Company Card" created`
+- Add charge tagged to that sub-folio → appears only there (balance £50)
+- Move item back to Primary → `moved_to: primary`
+- Delete sub-folio → `deleted: true, moved_to: primary`
+- Rename Primary → 400 "Primary folio cannot be renamed"
+- Playwright: screenshot shows Primary tab + Company Card tab with balance pills, move-item dropdown visible on every folio row.
+
+**User-facing workflow now:**
+1. Guest checks in, stays multiple nights, puts some items on room (company-paid), orders minibar (personal).
+2. Reception opens booking → Folio tab → sees Primary tab with all charges.
+3. Clicks `+ Split` → types "Company Card" → Enter.
+4. Uses move-to dropdown on each row to tag room charges → Company Card, minibar → Primary.
+5. Processes checkout with separate payments per tab. Each tab prints/emails independently (uses existing Print/Email buttons — works against Primary by default; sub-folio-specific PDF is a future enhancement).
+
+
 ### Iter 177: Manual-click Corporate Invoice + Email-with-composed-message
 
 User clarified: **click to create invoice, write email yourself, click send** — nothing automatic. Shipped both as pure manual actions with full user control over content.

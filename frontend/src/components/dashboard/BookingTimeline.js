@@ -235,6 +235,11 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [todaysActions, setTodaysActions] = useState(null);
   const [showBulkPanel, setShowBulkPanel] = useState(false);
   const [folio, setFolio] = useState(null);
+  // Sub-folios (split folio) — list + currently-active tab
+  const [subFolios, setSubFolios] = useState([]);
+  const [activeSubFolio, setActiveSubFolio] = useState("primary");
+  const [newSubFolioOpen, setNewSubFolioOpen] = useState(false);
+  const [newSubFolioName, setNewSubFolioName] = useState("");
   const [showAddCharge, setShowAddCharge] = useState(false);
   const [detailTab, setDetailTab] = useState("info");
   const [upsells, setUpsells] = useState(null);
@@ -307,12 +312,48 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
       const { data: d } = await axios.get(`${API}/folio/${bookingId}`);
       setFolio(d);
     } catch { /* silent */ }
+    // Also load sub-folios (split folio tabs)
+    try {
+      const { data: sf } = await axios.get(`${API}/folio/${bookingId}/sub-folios`);
+      setSubFolios(sf.sub_folios || []);
+    } catch { /* silent */ }
+  };
+
+  const createSubFolio = async () => {
+    if (!selectedBooking || !newSubFolioName.trim()) return;
+    try {
+      await axios.post(`${API}/folio/${selectedBooking}/sub-folios`, { name: newSubFolioName.trim() });
+      toast.success(`Sub-folio "${newSubFolioName}" created`);
+      setNewSubFolioName(""); setNewSubFolioOpen(false);
+      loadFolio(selectedBooking);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const deleteSubFolio = async (sfId) => {
+    if (!selectedBooking) return;
+    if (!window.confirm("Delete this sub-folio? All items will be moved to Primary.")) return;
+    try {
+      await axios.delete(`${API}/folio/${selectedBooking}/sub-folios/${sfId}`);
+      toast.success("Sub-folio deleted");
+      setActiveSubFolio("primary");
+      loadFolio(selectedBooking);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const moveFolioItem = async (itemId, targetSfId) => {
+    try {
+      await axios.put(`${API}/folio/items/${itemId}/move`, { sub_folio_id: targetSfId });
+      toast.success("Moved");
+      loadFolio(selectedBooking);
+    } catch { toast.error("Failed"); }
   };
 
   const addCharge = async (desc, amount, category) => {
     if (!selectedBooking) return;
     try {
-      await axios.post(`${API}/folio/${selectedBooking}/add-charge`, { description: desc, unit_price: parseFloat(amount), quantity: 1, category });
+      const body = { description: desc, unit_price: parseFloat(amount), quantity: 1, category };
+      if (activeSubFolio && activeSubFolio !== "primary") body.sub_folio_id = activeSubFolio;
+      await axios.post(`${API}/folio/${selectedBooking}/add-charge`, body);
       toast.success("Charge added");
       loadFolio(selectedBooking);
       setShowAddCharge(false);
@@ -322,7 +363,9 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const addPayment = async (amount, method) => {
     if (!selectedBooking) return;
     try {
-      await axios.post(`${API}/folio/${selectedBooking}/add-payment`, { amount: parseFloat(amount), method });
+      const body = { amount: parseFloat(amount), method };
+      if (activeSubFolio && activeSubFolio !== "primary") body.sub_folio_id = activeSubFolio;
+      await axios.post(`${API}/folio/${selectedBooking}/add-payment`, body);
       toast.success("Payment recorded");
       loadFolio(selectedBooking);
       load();
@@ -1660,6 +1703,51 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     </div>
                   </div>
 
+                  {/* Sub-folio tabs (split folio) */}
+                  {subFolios.length > 0 && (
+                    <div className="flex items-center gap-1 overflow-x-auto border-b border-stone-200 pb-0.5" data-testid="sub-folio-tabs">
+                      {subFolios.map(sf => (
+                        <button key={sf.id} onClick={() => setActiveSubFolio(sf.id)}
+                          data-testid={`sub-folio-tab-${sf.id}`}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-t-lg whitespace-nowrap ${
+                            activeSubFolio === sf.id
+                              ? "bg-stone-800 text-white"
+                              : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                          }`}>
+                          <span>{sf.name}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${activeSubFolio === sf.id ? "bg-white/20" : "bg-stone-300 text-stone-600"}`}>
+                            {cur(sf.totals.balance)}
+                          </span>
+                          {!sf.is_default && activeSubFolio === sf.id && (
+                            <span role="button" tabIndex={0}
+                              onClick={(e) => { e.stopPropagation(); deleteSubFolio(sf.id); }}
+                              className="ml-1 text-white/50 hover:text-rose-300 cursor-pointer"
+                              title="Delete sub-folio"><X className="w-3 h-3" /></span>
+                          )}
+                        </button>
+                      ))}
+                      <button onClick={() => setNewSubFolioOpen(true)} data-testid="new-sub-folio-btn"
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-stone-500 hover:text-stone-800">
+                        <Plus className="w-3 h-3" />Split
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Inline "New sub-folio" input */}
+                  {newSubFolioOpen && (
+                    <div className="flex gap-2 bg-stone-50 p-2 rounded-lg">
+                      <input value={newSubFolioName} onChange={e => setNewSubFolioName(e.target.value)}
+                        autoFocus placeholder='e.g. "Company Card", "Personal", "Guest 2"'
+                        data-testid="new-sub-folio-name"
+                        onKeyDown={e => e.key === "Enter" && createSubFolio()}
+                        className="flex-1 border border-stone-200 rounded px-2 py-1 text-xs" />
+                      <button onClick={createSubFolio} data-testid="submit-sub-folio"
+                        className="px-3 py-1 text-xs bg-stone-800 text-white rounded">Create</button>
+                      <button onClick={() => { setNewSubFolioOpen(false); setNewSubFolioName(""); }}
+                        className="px-2 py-1 text-xs text-stone-400">Cancel</button>
+                    </div>
+                  )}
+
                   {/* Add Charge Form */}
                   {showAddCharge && (
                     <div className="bg-stone-50 rounded-xl p-3 space-y-2" data-testid="add-charge-form">
@@ -1684,28 +1772,47 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     </div>
                   )}
 
-                  {/* Items List */}
+                  {/* Items List — filtered by active sub-folio */}
                   <div className="space-y-1">
-                    {folio.items.map(item => (
-                      <div key={item.id} className={`flex items-center justify-between py-2 px-3 rounded-lg text-xs ${item.type === "payment" ? "bg-emerald-50" : item.type === "adjustment" ? "bg-amber-50" : "bg-white border border-stone-100"}`}>
-                        <div>
-                          <p className="font-medium text-stone-700">{item.description}</p>
-                          <p className="text-[10px] text-stone-400">{item.category} {item.quantity > 1 ? `x${item.quantity}` : ""}</p>
-                        </div>
-                        <span className={`font-bold ${item.type === "payment" ? "text-emerald-600" : item.type === "adjustment" ? "text-amber-600" : "text-stone-800"}`}>
-                          {item.type === "payment" ? "-" : ""}{cur(item.amount)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                    {(() => {
+                      const activeSF = subFolios.find(s => s.id === activeSubFolio);
+                      const items = activeSF ? activeSF.items : folio.items;
+                      const totals = activeSF ? activeSF.totals : folio.totals;
+                      return <>
+                        {items.map(item => (
+                          <div key={item.id} className={`flex items-center justify-between py-2 px-3 rounded-lg text-xs ${item.type === "payment" ? "bg-emerald-50" : item.type === "adjustment" ? "bg-amber-50" : "bg-white border border-stone-100"}`}>
+                            <div className="flex-1">
+                              <p className="font-medium text-stone-700">{item.description}</p>
+                              <p className="text-[10px] text-stone-400">{item.category} {item.quantity > 1 ? `x${item.quantity}` : ""}</p>
+                            </div>
+                            {subFolios.length > 1 && (
+                              <select value={item.sub_folio_id || "primary"} onChange={e => moveFolioItem(item.id, e.target.value)}
+                                data-testid={`move-item-${item.id}`}
+                                className="mr-2 text-[10px] border border-stone-200 rounded px-1 py-0.5 bg-white" title="Move to sub-folio">
+                                {subFolios.map(sf => <option key={sf.id} value={sf.id}>{sf.name}</option>)}
+                              </select>
+                            )}
+                            <span className={`font-bold ${item.type === "payment" ? "text-emerald-600" : item.type === "adjustment" ? "text-amber-600" : "text-stone-800"}`}>
+                              {item.type === "payment" ? "-" : ""}{cur(item.amount)}
+                            </span>
+                          </div>
+                        ))}
+                        {items.length === 0 && <p className="text-center text-xs text-stone-400 py-6">No items in this sub-folio yet.</p>}
 
-                  {/* Totals */}
-                  <div className="bg-stone-800 rounded-xl p-4 space-y-2 text-white" data-testid="folio-totals">
-                    <div className="flex justify-between text-xs"><span className="text-stone-400">Charges</span><span>{cur(folio.totals.charges)}</span></div>
-                    {folio.totals.payments > 0 && <div className="flex justify-between text-xs"><span className="text-stone-400">Payments</span><span className="text-emerald-400">-{cur(folio.totals.payments)}</span></div>}
-                    {folio.totals.adjustments !== 0 && <div className="flex justify-between text-xs"><span className="text-stone-400">Adjustments</span><span className="text-amber-400">{cur(folio.totals.adjustments)}</span></div>}
-                    <div className="h-px bg-stone-700" />
-                    <div className="flex justify-between text-sm font-bold"><span>Balance Due</span><span className={folio.totals.balance_due <= 0 ? "text-emerald-400" : "text-red-400"}>{cur(folio.totals.balance_due)}</span></div>
+                        {/* Totals — for active sub-folio */}
+                        <div className="bg-stone-800 rounded-xl p-4 space-y-2 text-white mt-3" data-testid="folio-totals">
+                          <div className="flex justify-between text-xs"><span className="text-stone-400">Charges</span><span>{cur(totals.charges)}</span></div>
+                          {totals.payments > 0 && <div className="flex justify-between text-xs"><span className="text-stone-400">Payments</span><span className="text-emerald-400">-{cur(totals.payments)}</span></div>}
+                          {totals.adjustments !== 0 && <div className="flex justify-between text-xs"><span className="text-stone-400">Adjustments</span><span className="text-amber-400">{cur(totals.adjustments)}</span></div>}
+                          <div className="h-px bg-stone-700" />
+                          <div className="flex justify-between text-sm font-bold"><span>{activeSF && !activeSF.is_default ? `${activeSF.name} — Balance` : "Balance Due"}</span>
+                            <span className={(activeSF ? activeSF.totals.balance : folio.totals.balance_due) <= 0 ? "text-emerald-400" : "text-red-400"}>
+                              {cur(activeSF ? activeSF.totals.balance : folio.totals.balance_due)}
+                            </span>
+                          </div>
+                        </div>
+                      </>;
+                    })()}
                   </div>
 
                   {/* Quick Payment */}

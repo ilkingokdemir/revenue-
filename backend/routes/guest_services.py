@@ -430,6 +430,7 @@ def create_guest_services_router(db, require_roles, resend_lib=None):
             "unit_price": unit,
             "amount": round(qty * unit, 2),
             "currency": booking.get("currency", "GBP"),
+            "sub_folio_id": data.get("sub_folio_id") or None,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": current_user.get("name", ""),
         }
@@ -456,6 +457,7 @@ def create_guest_services_router(db, require_roles, resend_lib=None):
             "amount": float(data.get("amount", 0)),
             "currency": booking.get("currency", "GBP"),
             "reference": data.get("reference", ""),
+            "sub_folio_id": data.get("sub_folio_id") or None,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": current_user.get("name", ""),
         }
@@ -809,6 +811,148 @@ def create_guest_services_router(db, require_roles, resend_lib=None):
             }}}
         )
         return {"ok": True, "sent_to": to_list, "document_type": doc_type, "filename": filename}
+
+    # ============================================================================
+    # 4. SPLIT FOLIO / SUB-FOLIOS
+    # (Mews/Cloudbeds parity) Multiple sub-folios per booking — business traveller
+    # pays room on company card, personal extras on personal card, etc.
+    # Each folio_item can be tagged with `sub_folio_id`; no tag = "Primary".
+    # ============================================================================
+
+    @router.get("/folio/{booking_id}/sub-folios")
+    async def list_sub_folios(
+        booking_id: str,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """List all sub-folios for a booking (always includes 'Primary' virtual).
+
+        Returns each sub-folio with its items + running balance so the UI can
+        show tabs with per-folio totals at a glance."""
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+
+        subs = await db.sub_folios.find({"booking_id": booking_id}, {"_id": 0}).sort("created_at", 1).to_list(50)
+        # Always include virtual "Primary" first
+        result = [{"id": "primary", "booking_id": booking_id, "name": "Primary",
+                   "created_at": booking.get("created_at", ""), "is_default": True}]
+        result.extend(subs)
+
+        items = await db.folio_items.find({"booking_id": booking_id}, {"_id": 0}).sort("created_at", 1).to_list(500)
+        cur_sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(booking.get("currency", "GBP"), "£")
+
+        for sf in result:
+            sf_items = [i for i in items
+                        if (i.get("sub_folio_id") or "primary") == sf["id"]]
+            charges = sum(i["amount"] for i in sf_items if i.get("type") == "charge")
+            payments = sum(i["amount"] for i in sf_items if i.get("type") == "payment")
+            adjustments = sum(i["amount"] for i in sf_items if i.get("type") == "adjustment")
+            sf["items"] = sf_items
+            sf["totals"] = {
+                "charges": round(charges, 2),
+                "payments": round(payments, 2),
+                "adjustments": round(adjustments, 2),
+                "balance": round(charges - payments + adjustments, 2),
+            }
+            sf["currency_symbol"] = cur_sym
+            sf["item_count"] = len(sf_items)
+
+        return {"booking_id": booking_id, "sub_folios": result,
+                "currency_symbol": cur_sym, "currency": booking.get("currency", "GBP")}
+
+    @router.post("/folio/{booking_id}/sub-folios")
+    async def create_sub_folio(
+        booking_id: str, data: Dict,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Create a new sub-folio (e.g., 'Company Card', 'Personal', 'Guest 2')."""
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+        name = (data.get("name") or "").strip()
+        if not name:
+            raise HTTPException(400, "Name required")
+        if name.lower() == "primary":
+            raise HTTPException(400, "'Primary' is reserved — pick another name")
+
+        doc = {
+            "id": str(uuid.uuid4()),
+            "booking_id": booking_id,
+            "name": name,
+            "notes": data.get("notes", ""),
+            "payer_name": data.get("payer_name", ""),
+            "payer_email": data.get("payer_email", ""),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": current_user.get("name", ""),
+        }
+        await db.sub_folios.insert_one(dict(doc))
+        doc.pop("_id", None)
+        return doc
+
+    @router.put("/folio/{booking_id}/sub-folios/{sub_folio_id}")
+    async def update_sub_folio(
+        booking_id: str, sub_folio_id: str, data: Dict,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        if sub_folio_id == "primary":
+            raise HTTPException(400, "Primary folio cannot be renamed")
+        update = {k: v for k, v in data.items()
+                  if k in ("name", "notes", "payer_name", "payer_email")}
+        if not update:
+            raise HTTPException(400, "No updatable fields")
+        update["updated_at"] = datetime.now(timezone.utc).isoformat()
+        r = await db.sub_folios.update_one({"id": sub_folio_id, "booking_id": booking_id},
+                                            {"$set": update})
+        if r.matched_count == 0:
+            raise HTTPException(404, "Sub-folio not found")
+        return {"updated": True, "id": sub_folio_id}
+
+    @router.delete("/folio/{booking_id}/sub-folios/{sub_folio_id}")
+    async def delete_sub_folio(
+        booking_id: str, sub_folio_id: str,
+        move_items_to: str = "primary",
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Delete a sub-folio. Items in it are moved to `move_items_to` (default: primary)."""
+        if sub_folio_id == "primary":
+            raise HTTPException(400, "Cannot delete Primary folio")
+        sf = await db.sub_folios.find_one({"id": sub_folio_id, "booking_id": booking_id}, {"_id": 0})
+        if not sf:
+            raise HTTPException(404, "Sub-folio not found")
+
+        # Move items
+        target = None if move_items_to == "primary" else move_items_to
+        if target and target != sub_folio_id:
+            # Validate target exists
+            t_exists = await db.sub_folios.find_one({"id": target, "booking_id": booking_id}, {"_id": 0})
+            if not t_exists:
+                raise HTTPException(404, "Target sub-folio not found")
+        await db.folio_items.update_many(
+            {"booking_id": booking_id, "sub_folio_id": sub_folio_id},
+            {"$set": {"sub_folio_id": target}} if target else {"$unset": {"sub_folio_id": ""}},
+        )
+        await db.sub_folios.delete_one({"id": sub_folio_id, "booking_id": booking_id})
+        return {"deleted": True, "moved_to": target or "primary"}
+
+    @router.put("/folio/items/{item_id}/move")
+    async def move_folio_item(
+        item_id: str, data: Dict,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Move a folio item (charge / payment / adjustment) to a different sub-folio."""
+        item = await db.folio_items.find_one({"id": item_id}, {"_id": 0})
+        if not item:
+            raise HTTPException(404, "Item not found")
+        target = data.get("sub_folio_id") or ""
+        if target == "primary" or not target:
+            await db.folio_items.update_one({"id": item_id}, {"$unset": {"sub_folio_id": ""}})
+            return {"ok": True, "moved_to": "primary"}
+        # Validate target
+        t = await db.sub_folios.find_one({"id": target, "booking_id": item["booking_id"]}, {"_id": 0})
+        if not t:
+            raise HTTPException(404, "Target sub-folio not found")
+        await db.folio_items.update_one({"id": item_id}, {"$set": {"sub_folio_id": target}})
+        return {"ok": True, "moved_to": target}
 
     return router
 

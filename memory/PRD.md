@@ -2,6 +2,22 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 165: Last 3 Years column added to Financial Overview table (user follow-up)
+
+User clarified they also wanted Last 3 Years alongside Last/This/Next Month in the existing comparison table (not just the history chart). Extended the existing table.
+
+**Backend** (`/app/backend/routes/enhanced_dashboard.py`):
+- Added `last_3y` computation inside the `enhanced_dashboard` endpoint using the existing `month_revenue(start, end)` helper with `three_yr_start = {today.year-3}-{today.month:02d}-01` → today.
+- Returned under `financial_overview.last_3_years` — shape identical to the other buckets (gross, room_revenue, adr, commission, net, bookings, room_nights).
+
+**Frontend** (`EnhancedDashboard.js`):
+- New first-column `<th>` "Last 3 Years" in emerald-highlighted header.
+- New first-column `<td>` per row with emerald-700 font-bold values and `bg-emerald-50/40` tint — makes it pop as the aggregate KPI column.
+- Bookings row also updated.
+
+**Live verified**: Table now shows Last 3 Years £111,461.67 gross / £94,742.42 net / 401 bookings alongside the existing Previous Month, This Month, Next Month, Same Month LY columns. All data accurate.
+
+
 ### Iter 164: Financial Overview · History on main Dashboard (user request)
 
 User flagged that the main Dashboard was missing a financial overview section with Last Month / Last 3 Years data visibility. Built it.

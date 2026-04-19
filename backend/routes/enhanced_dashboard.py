@@ -87,6 +87,10 @@ def create_enhanced_dashboard_router(db, require_roles):
             last_year_end = f"{now.year - 1}-{now.month + 1:02d}-01"
         last_year = await month_revenue(last_year_start, last_year_end)
 
+        # === Last 3 Years (36 months ending today) ===
+        three_yr_start = f"{now.year - 3}-{now.month:02d}-01"
+        last_3y = await month_revenue(three_yr_start, today)
+
         # === 7-DAY REVENUE CHART ===
         daily_revenue = []
         total_7d = 0
@@ -142,6 +146,7 @@ def create_enhanced_dashboard_router(db, require_roles):
                 "previous_month": prev_month,
                 "next_month": next_month,
                 "same_month_last_year": last_year,
+                "last_3_years": last_3y,
             },
             "daily_revenue_7d": daily_revenue,
             "total_7d_revenue": round(total_7d, 2),

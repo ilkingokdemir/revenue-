@@ -99,6 +99,7 @@ export const EnhancedDashboard = ({ propertyId }) => {
               <thead>
                 <tr className="text-stone-400 border-b border-stone-100">
                   <th className="text-left py-2 px-2"></th>
+                  <th className="text-right py-2 px-2 bg-emerald-50/60 text-emerald-800 font-bold rounded-tl">Last 3 Years</th>
                   <th className="text-right py-2 px-2">Previous Month</th>
                   <th className="text-right py-2 px-2 font-bold text-stone-700">This Month</th>
                   <th className="text-right py-2 px-2">Next Month</th>
@@ -115,6 +116,7 @@ export const EnhancedDashboard = ({ propertyId }) => {
                 ].map(row => (
                   <tr key={row.key} className="border-b border-stone-50">
                     <td className="py-2 px-2 font-medium text-stone-700">{row.label}</td>
+                    <td className="py-2 px-2 text-right font-bold text-emerald-700 bg-emerald-50/40" data-testid={`fo-3y-${row.key}`}>{cur((fo.last_3_years || {})[row.key])}</td>
                     <td className="py-2 px-2 text-right text-stone-400">{cur(fo.previous_month[row.key])}</td>
                     <td className={`py-2 px-2 text-right font-bold ${row.color || "text-stone-800"}`}>{cur(fo.this_month[row.key])}</td>
                     <td className="py-2 px-2 text-right text-stone-400">{cur(fo.next_month[row.key])}</td>
@@ -123,6 +125,7 @@ export const EnhancedDashboard = ({ propertyId }) => {
                 ))}
                 <tr>
                   <td className="py-2 px-2 font-medium text-stone-700">Bookings</td>
+                  <td className="py-2 px-2 text-right font-bold text-emerald-700 bg-emerald-50/40" data-testid="fo-3y-bookings">{(fo.last_3_years || {}).bookings || 0}</td>
                   <td className="py-2 px-2 text-right text-stone-400">{fo.previous_month.bookings}</td>
                   <td className="py-2 px-2 text-right font-bold">{fo.this_month.bookings}</td>
                   <td className="py-2 px-2 text-right text-stone-400">{fo.next_month.bookings}</td>

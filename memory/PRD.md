@@ -2,6 +2,18 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 172: Calendar grid gets visible square cells (user feedback)
+
+User wanted "grid square look" matching the myhotelbox reference where every cell is a distinct box.
+
+**Fix** (`BookingTimeline.js`): Strengthened cell borders from `border-stone-50`/`border-stone-100` (nearly invisible) to `border-stone-200` (clearly visible) across:
+- Date header row: `border-r border-stone-200`
+- Group inventory row: `border-r border-stone-200` (was `200/50`)
+- Room row cells: `border-r border-stone-200` (was `stone-50`) + `border-b border-stone-200` (was `stone-100`)
+
+**Live verified**: Every cell now renders as a distinct square box with clear vertical and horizontal grid lines — matches the reference exactly.
+
+
 ### Iter 171: Calendar grid alignment bug fix (user feedback: "column not in square")
 
 User reported "column not in square" — when I added the property-group header "ALL PROPERTIES" row in iter 170, I used a single `<div className="flex-1" />` instead of per-date cells, which broke the vertical grid alignment. The "today" blue column and cell dividers appeared broken across the property row.

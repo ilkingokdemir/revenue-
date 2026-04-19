@@ -654,7 +654,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             {date_columns.map((col, i) => {
               const occ = daily_occupancy[i];
               return (
-                <div key={col.date} className={`flex-shrink-0 border-r border-stone-100 text-center ${col.is_today ? "bg-blue-50" : col.is_weekend ? "bg-stone-50" : "bg-white"}`} style={{ width: COL_W }}>
+                <div key={col.date} className={`flex-shrink-0 border-r border-stone-200 text-center ${col.is_today ? "bg-blue-50" : col.is_weekend ? "bg-stone-50" : "bg-white"}`} style={{ width: COL_W }}>
                   <div className="h-12 flex flex-col items-center justify-center">
                     <span className="text-[9px] text-stone-400 uppercase">{col.dow}</span>
                     <span className={`text-sm ${col.is_today ? "text-red-600 font-black" : "font-bold text-stone-700"}`}>{col.day}/{col.month}</span>
@@ -728,7 +728,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     const dayBookings = group.rooms.reduce((s, r) => s + r.bookings.filter(b => b.check_in <= col.date && b.check_out > col.date).length, 0);
                     const avail = group.total_rooms - dayBookings;
                     return (
-                      <div key={col.date} className={`flex-shrink-0 border-r border-stone-200/50 flex flex-col items-center justify-center ${col.is_today ? "bg-blue-50/50" : ""}`} style={{ width: COL_W, height: ROW_H }}>
+                      <div key={col.date} className={`flex-shrink-0 border-r border-stone-200 flex flex-col items-center justify-center ${col.is_today ? "bg-blue-50/50" : ""}`} style={{ width: COL_W, height: ROW_H }}>
                         <span className="text-[10px] font-bold text-stone-600">{avail}/{group.total_rooms}</span>
                         <span className="text-[9px] text-stone-400">{cur(group.rate)}</span>
                       </div>
@@ -738,7 +738,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
                 {/* Room Rows */}
                 {!isCollapsed && group.rooms.map(room => (
-                  <div key={room.id} className={`flex border-b border-stone-100 relative transition-all ${dropTarget === room.id ? "bg-violet-100 ring-2 ring-violet-400 ring-inset" : ""}`}
+                  <div key={room.id} className={`flex border-b border-stone-200 relative transition-all ${dropTarget === room.id ? "bg-violet-100 ring-2 ring-violet-400 ring-inset" : ""}`}
                     style={{ height: ROW_H }} data-testid={`timeline-room-${room.id}`}
                     onDragOver={(e) => handleDragOver(e, room.id)}
                     onDragLeave={handleDragLeave}
@@ -758,7 +758,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         return (
                           <div
                             key={col.date}
-                            className={`flex-shrink-0 border-r border-stone-50 transition-colors ${col.is_today ? "bg-blue-50/30" : col.is_weekend ? "bg-stone-50/30" : ""} ${occupied ? "" : "hover:bg-emerald-50/60 cursor-cell"}`}
+                            className={`flex-shrink-0 border-r border-stone-200 transition-colors ${col.is_today ? "bg-blue-50/30" : col.is_weekend ? "bg-stone-50/30" : ""} ${occupied ? "" : "hover:bg-emerald-50/60 cursor-cell"}`}
                             style={{ width: COL_W, height: ROW_H }}
                             onClick={() => {
                               if (occupied || bulkMode) return;

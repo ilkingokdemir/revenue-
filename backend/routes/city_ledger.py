@@ -37,6 +37,13 @@ class CompanyIn(BaseModel):
     active: bool = True
 
 
+class InvoiceLineIn(BaseModel):
+    description: str = ""
+    amount: float = 0
+    currency: str = "GBP"
+    quantity: float = 1
+
+
 class InvoiceIn(BaseModel):
     company_id: str
     booking_ids: List[str] = Field(default_factory=list)
@@ -45,6 +52,9 @@ class InvoiceIn(BaseModel):
     amount: float
     currency: str = "GBP"
     notes: Optional[str] = ""
+    # Multi-currency: optional line items, each in its own currency. If provided,
+    # `amount` is computed from the sum converted to the invoice's base currency.
+    lines: List[InvoiceLineIn] = Field(default_factory=list)
 
 
 class PaymentIn(BaseModel):
@@ -199,6 +209,25 @@ def create_city_ledger_router(db, resend_lib=None):
         count = await db.city_ledger_invoices.count_documents({"invoice_number": {"$regex": f"^CL-{year}-"}})
         invoice_number = f"CL-{year}-{count + 1:05d}"
 
+        # Multi-currency line items: roll up to invoice currency using latest FX
+        lines = [ln.model_dump() for ln in data.lines] if data.lines else []
+        amount = float(data.amount)
+        if lines:
+            try:
+                from routes.currency_fx import _get_rate_map, _convert
+                rates = await _get_rate_map(db)
+                rolled = 0.0
+                for li in lines:
+                    line_cur = (li.get("currency") or data.currency).upper()
+                    line_gross = float(li.get("amount", 0)) * float(li.get("quantity", 1))
+                    li["line_total_native"] = round(line_gross, 2)
+                    li["line_total_invoice_cur"] = _convert(line_gross, line_cur, data.currency, rates, data.currency)
+                    rolled += li["line_total_invoice_cur"]
+                amount = round(rolled, 2)
+            except Exception:
+                # If FX module unavailable for any reason, fall back to provided amount
+                pass
+
         doc = {
             "id": str(uuid.uuid4()),
             "invoice_number": invoice_number,
@@ -206,9 +235,10 @@ def create_city_ledger_router(db, resend_lib=None):
             "booking_ids": data.booking_ids,
             "issue_date": issue,
             "due_date": due,
-            "amount": float(data.amount),
+            "amount": amount,
             "paid_amount": 0.0,
             "currency": data.currency,
+            "lines": lines,
             "status": "open",
             "notes": data.notes,
             "created_at": now.isoformat(),
@@ -465,6 +495,41 @@ async def build_invoice_pdf_bytes(db, invoice_id):
     # Amount block
     cur_sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(inv.get("currency", "GBP"), "£")
     balance = round(float(inv.get("amount", 0)) - float(inv.get("paid_amount", 0)), 2)
+
+    # Optional multi-currency line items
+    lines = inv.get("lines") or []
+    if lines:
+        story.append(Paragraph(
+            "<para><font size='9' color='#57534e'><b>Line Items</b></font></para>",
+            styles["Normal"]))
+        story.append(Spacer(1, 4))
+        line_rows = [["Description", "Qty", "Rate (native)", "Currency", f"Total ({inv.get('currency', 'GBP')})"]]
+        line_cur_syms = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺", "AED": "د.إ", "JPY": "¥",
+                         "CAD": "C$", "AUD": "A$", "CHF": "CHF", "INR": "₹"}
+        for li in lines:
+            l_cur = li.get("currency", "GBP")
+            l_sym = line_cur_syms.get(l_cur, l_cur + " ")
+            line_rows.append([
+                li.get("description", "—"),
+                f"{float(li.get('quantity', 1)):g}",
+                f"{l_sym}{float(li.get('amount', 0)):.2f}",
+                l_cur,
+                f"{cur_sym}{float(li.get('line_total_invoice_cur', 0)):.2f}",
+            ])
+        lt = Table(line_rows, colWidths=[70 * mm, 14 * mm, 30 * mm, 20 * mm, 38 * mm])
+        lt.setStyle(TableStyle([
+            ("FONT", (0, 0), (-1, -1), "Helvetica", 8),
+            ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 8),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f5f5f4")),
+            ("ALIGN", (1, 0), (-1, -1), "RIGHT"),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
+            ("ALIGN", (3, 0), (3, -1), "CENTER"),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#e7e5e4")),
+            ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(lt)
+        story.append(Spacer(1, 10))
+
     amount_rows = [
         ["Description", inv.get("notes") or "Corporate stays per attached bookings", f"{cur_sym}{float(inv.get('amount', 0)):.2f}"],
     ]

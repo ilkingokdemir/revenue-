@@ -37,23 +37,32 @@ from auth import require_perm
 # ---------- Constants ----------
 DEFAULT_BASE = "GBP"
 # Seed rates — stable defaults so portfolio math still works before admin sets any.
-# 1 unit of KEY = VALUE GBP.
+# 1 unit of KEY = VALUE GBP. Covers 40 major ISO 4217 currencies (April 2026 reference).
 SEED_RATES_TO_GBP = {
     "GBP": 1.0,
-    "USD": 0.79,
-    "EUR": 0.86,
-    "TRY": 0.024,
-    "AED": 0.215,
-    "JPY": 0.0053,
-    "CAD": 0.58,
-    "AUD": 0.52,
-    "CHF": 0.89,
-    "INR": 0.0095,
+    # Americas
+    "USD": 0.79, "CAD": 0.58, "MXN": 0.046, "BRL": 0.155, "ARS": 0.00088, "CLP": 0.00083,
+    # Europe
+    "EUR": 0.86, "CHF": 0.89, "SEK": 0.074, "NOK": 0.073, "DKK": 0.115,
+    "PLN": 0.20, "CZK": 0.035, "HUF": 0.0022, "RON": 0.173, "ISK": 0.0057, "BGN": 0.44,
+    # Middle East & Africa
+    "TRY": 0.024, "AED": 0.215, "SAR": 0.21, "QAR": 0.217, "KWD": 2.58, "BHD": 2.10, "ILS": 0.22, "ZAR": 0.042, "EGP": 0.016, "MAD": 0.079,
+    # Asia-Pacific
+    "JPY": 0.0053, "CNY": 0.11, "HKD": 0.10, "SGD": 0.59, "KRW": 0.00058, "INR": 0.0095,
+    "THB": 0.023, "IDR": 0.000049, "MYR": 0.18, "PHP": 0.014, "VND": 0.000031,
+    "AUD": 0.52, "NZD": 0.47,
 }
 
 CURRENCY_SYMBOLS = {
     "GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺", "AED": "د.إ",
     "JPY": "¥", "CAD": "C$", "AUD": "A$", "CHF": "CHF", "INR": "₹",
+    "MXN": "Mex$", "BRL": "R$", "ARS": "AR$", "CLP": "CLP$",
+    "SEK": "kr", "NOK": "kr", "DKK": "kr", "PLN": "zł", "CZK": "Kč", "HUF": "Ft",
+    "RON": "lei", "ISK": "kr", "BGN": "лв",
+    "SAR": "﷼", "QAR": "﷼", "KWD": "د.ك", "BHD": ".د.ب", "ILS": "₪", "ZAR": "R", "EGP": "£E", "MAD": "د.م.",
+    "CNY": "¥", "HKD": "HK$", "SGD": "S$", "KRW": "₩",
+    "THB": "฿", "IDR": "Rp", "MYR": "RM", "PHP": "₱", "VND": "₫",
+    "NZD": "NZ$",
 }
 
 
@@ -90,17 +99,18 @@ async def _get_settings(db) -> dict:
 
 
 async def _get_rate_map(db) -> Dict[str, float]:
-    """Return { code: rate_to_base }. Seed baseline rows on first call so the
-    UI always has something to show even before admin edits."""
-    existing = await db.fx_rates.count_documents({})
-    if existing == 0:
+    """Return { code: rate_to_base }. Seed baseline rows for any missing codes so
+    new ISO additions show up automatically after deploys."""
+    existing_codes = set(await db.fx_rates.distinct("code"))
+    missing = [c for c in SEED_RATES_TO_GBP.keys() if c not in existing_codes]
+    if missing:
         now = datetime.now(timezone.utc).isoformat()
         docs = [{
             "id": str(uuid.uuid4()),
-            "code": code, "rate_to_base": rate,
+            "code": code, "rate_to_base": SEED_RATES_TO_GBP[code],
             "as_of": now[:10], "source": "seed", "notes": "Seeded default",
             "created_at": now, "updated_at": now,
-        } for code, rate in SEED_RATES_TO_GBP.items()]
+        } for code in missing]
         await db.fx_rates.insert_many([dict(d) for d in docs])
 
     rows = await db.fx_rates.find({}, {"_id": 0}).to_list(500)

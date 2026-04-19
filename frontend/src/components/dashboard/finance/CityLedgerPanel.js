@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Building2, RefreshCw, Plus, TrendingDown, Receipt, X,
-  Mail, Phone, Printer,
+  Mail, Phone, Printer, Trash2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -11,7 +11,8 @@ const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFraction
 
 const EMPTY_COMPANY = { name: "", contact_name: "", email: "", phone: "", address: "", tax_id: "",
   credit_limit: 0, payment_terms_days: 30, notes: "", active: true };
-const EMPTY_INVOICE = { company_id: "", booking_ids: [], issue_date: "", due_date: "", amount: 0, currency: "GBP", notes: "" };
+const EMPTY_INVOICE = { company_id: "", booking_ids: [], issue_date: "", due_date: "", amount: 0, currency: "GBP", notes: "", lines: [] };
+const EMPTY_LINE = { description: "", amount: 0, currency: "GBP", quantity: 1 };
 
 export const CityLedgerPanel = () => {
   const [tab, setTab] = useState("companies");
@@ -23,18 +24,21 @@ export const CityLedgerPanel = () => {
   const [invoiceForm, setInvoiceForm] = useState(null);
   const [payFor, setPayFor] = useState(null);             // invoice being paid
   const [emailFor, setEmailFor] = useState(null);          // invoice to email
+  const [availableCurrencies, setAvailableCurrencies] = useState(["GBP", "USD", "EUR"]);
 
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [c, i, a] = await Promise.all([
+      const [c, i, a, fx] = await Promise.all([
         axios.get(`${API}/city-ledger/companies`),
         axios.get(`${API}/city-ledger/invoices`),
         axios.get(`${API}/city-ledger/aging`),
+        axios.get(`${API}/currency-fx/settings`).catch(() => ({ data: null })),
       ]);
       setCompanies(c.data || []);
       setInvoices(i.data || []);
       setAging(a.data || null);
+      if (fx.data?.available_codes?.length) setAvailableCurrencies(fx.data.available_codes);
     } catch (e) { toast.error("Failed to load city ledger"); }
     finally { setLoading(false); }
   };
@@ -59,7 +63,9 @@ export const CityLedgerPanel = () => {
   };
 
   const saveInvoice = async () => {
-    if (!invoiceForm.company_id || !invoiceForm.amount) return toast.error("Company and amount required");
+    const hasLines = (invoiceForm.lines || []).length > 0;
+    if (!invoiceForm.company_id) return toast.error("Company required");
+    if (!hasLines && !invoiceForm.amount) return toast.error("Amount or line items required");
     try {
       await axios.post(`${API}/city-ledger/invoices`, invoiceForm);
       toast.success("Invoice created");
@@ -282,8 +288,83 @@ export const CityLedgerPanel = () => {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Issue Date"><input type="date" value={invoiceForm.issue_date} onChange={e => setInvoiceForm({ ...invoiceForm, issue_date: e.target.value })} className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" /></Field>
               <Field label="Due Date (auto if empty)"><input type="date" value={invoiceForm.due_date} onChange={e => setInvoiceForm({ ...invoiceForm, due_date: e.target.value })} className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" /></Field>
-              <Field label="Amount *"><input type="number" step="0.01" value={invoiceForm.amount} onChange={e => setInvoiceForm({ ...invoiceForm, amount: parseFloat(e.target.value) || 0 })} className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="ledger-inv-amount" /></Field>
-              <Field label="Currency"><select value={invoiceForm.currency} onChange={e => setInvoiceForm({ ...invoiceForm, currency: e.target.value })} className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"><option>GBP</option><option>USD</option><option>EUR</option><option>TRY</option></select></Field>
+              <Field label={(invoiceForm.lines || []).length > 0 ? `Amount (auto from lines)` : "Amount *"}>
+                <input type="number" step="0.01" value={invoiceForm.amount}
+                  disabled={(invoiceForm.lines || []).length > 0}
+                  onChange={e => setInvoiceForm({ ...invoiceForm, amount: parseFloat(e.target.value) || 0 })}
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm disabled:bg-stone-50 disabled:text-stone-500"
+                  data-testid="ledger-inv-amount" />
+              </Field>
+              <Field label="Invoice Currency">
+                <select value={invoiceForm.currency} onChange={e => setInvoiceForm({ ...invoiceForm, currency: e.target.value })}
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="ledger-inv-currency">
+                  {availableCurrencies.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            {/* Multi-currency line items */}
+            <div className="border border-stone-200 rounded-lg p-3 bg-stone-50">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <div className="text-xs font-bold text-stone-700">Line Items (multi-currency)</div>
+                  <div className="text-[10px] text-stone-500">Each line can be in its own currency; totals roll up to the invoice currency using latest FX.</div>
+                </div>
+                <button type="button"
+                  onClick={() => setInvoiceForm({ ...invoiceForm, lines: [...(invoiceForm.lines || []), { ...EMPTY_LINE, currency: invoiceForm.currency }] })}
+                  data-testid="ledger-add-line"
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-semibold bg-white border border-stone-200 hover:border-stone-400 rounded-md">
+                  <Plus className="w-3 h-3" />Add line
+                </button>
+              </div>
+              {(invoiceForm.lines || []).length === 0 ? (
+                <p className="text-[11px] text-stone-400 text-center py-2">No line items. Using flat amount above.</p>
+              ) : (
+                <div className="space-y-2">
+                  {(invoiceForm.lines || []).map((li, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center" data-testid={`ledger-line-${idx}`}>
+                      <input placeholder="Description" value={li.description}
+                        onChange={e => {
+                          const lines = [...invoiceForm.lines];
+                          lines[idx] = { ...lines[idx], description: e.target.value };
+                          setInvoiceForm({ ...invoiceForm, lines });
+                        }}
+                        className="col-span-5 border border-stone-200 rounded-md px-2 py-1.5 text-xs bg-white" />
+                      <input type="number" step="0.01" value={li.quantity} title="Quantity"
+                        onChange={e => {
+                          const lines = [...invoiceForm.lines];
+                          lines[idx] = { ...lines[idx], quantity: parseFloat(e.target.value) || 0 };
+                          setInvoiceForm({ ...invoiceForm, lines });
+                        }}
+                        className="col-span-1 border border-stone-200 rounded-md px-2 py-1.5 text-xs bg-white text-right" />
+                      <input type="number" step="0.01" value={li.amount} title="Rate per unit"
+                        onChange={e => {
+                          const lines = [...invoiceForm.lines];
+                          lines[idx] = { ...lines[idx], amount: parseFloat(e.target.value) || 0 };
+                          setInvoiceForm({ ...invoiceForm, lines });
+                        }}
+                        className="col-span-3 border border-stone-200 rounded-md px-2 py-1.5 text-xs bg-white text-right" />
+                      <select value={li.currency}
+                        onChange={e => {
+                          const lines = [...invoiceForm.lines];
+                          lines[idx] = { ...lines[idx], currency: e.target.value };
+                          setInvoiceForm({ ...invoiceForm, lines });
+                        }}
+                        className="col-span-2 border border-stone-200 rounded-md px-1 py-1.5 text-xs bg-white">
+                        {availableCurrencies.map(c => <option key={c}>{c}</option>)}
+                      </select>
+                      <button type="button"
+                        onClick={() => setInvoiceForm({ ...invoiceForm, lines: invoiceForm.lines.filter((_, i) => i !== idx) })}
+                        className="col-span-1 p-1 text-rose-500 hover:bg-rose-50 rounded flex justify-center">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="text-right text-[11px] text-stone-500 pt-1 border-t border-stone-200 mt-2">
+                    Lines will roll up to <b>{invoiceForm.currency}</b> on save using current FX rates.
+                  </div>
+                </div>
+              )}
             </div>
             <Field label="Notes"><textarea value={invoiceForm.notes} onChange={e => setInvoiceForm({ ...invoiceForm, notes: e.target.value })} className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" rows={2} /></Field>
           </div>

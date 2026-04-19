@@ -1,0 +1,121 @@
+{
+  "summary": "Iteration 152 - Multi-Currency Line Items on City Ledger Invoices. Backend: 16/16 tests passed. Frontend: All UI elements verified - 41 currencies in dropdown, line items UI working, amount auto-calculation, line currency defaults to invoice currency.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "41_currencies_seeded": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/currency-fx/rates returns 41 currencies (expanded from 10)",
+        "New currencies present: PLN, SEK, NOK, DKK, ZAR, SGD, HKD, MXN, BRL, NZD, SAR, QAR, KWD, CZK, HUF, RON, THB, CNY, KRW, IDR, MYR, PHP, VND",
+        "KWD rate > 1 GBP (2.58) - correctly handles rates above 1"
+      ]
+    },
+    "auto_seed_on_missing_codes": {
+      "status": "PASS",
+      "tests": [
+        "_get_rate_map fills missing codes from SEED_RATES_TO_GBP without duplicating existing rows",
+        "GET /api/currency-fx/settings returns 41+ available_codes"
+      ]
+    },
+    "multi_currency_line_items": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/city-ledger/invoices accepts lines: [{description, amount, currency, quantity}]",
+        "When lines provided, server ignores posted amount and computes from line totals",
+        "Each line has line_total_native (amount × quantity in line currency)",
+        "Each line has line_total_invoice_cur (converted to invoice currency)",
+        "Invoice in GBP with EUR/USD/GBP lines correctly computes total ~£595"
+      ]
+    },
+    "kwd_high_rate_conversion": {
+      "status": "PASS",
+      "tests": [
+        "100 KWD @ 2.58 = £258 (rate > 1 handled correctly)",
+        "Cross-currency conversion via base works (EUR to USD)"
+      ]
+    },
+    "invoice_pdf_with_lines": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/city-ledger/invoices/{id}/pdf returns valid PDF",
+        "PDF starts with %PDF magic bytes",
+        "Line items table rendered in PDF when lines array is non-empty"
+      ]
+    },
+    "frontend_currency_dropdown": {
+      "status": "PASS",
+      "tests": [
+        "Invoice currency dropdown (ledger-inv-currency) contains 41 options",
+        "All new currencies present: PLN, SEK, NOK, KWD, SGD, HKD verified"
+      ]
+    },
+    "frontend_line_items_ui": {
+      "status": "PASS",
+      "tests": [
+        "ledger-add-line button adds new row with description/qty/rate/currency",
+        "Line currency dropdown also contains 41 options",
+        "Line currency defaults to currently selected invoice currency",
+        "Amount field becomes disabled and labelled 'Amount (auto from lines)' when lines exist"
+      ]
+    },
+    "frontend_invoice_creation": {
+      "status": "PASS",
+      "tests": [
+        "Create Invoice saves successfully with multi-currency lines",
+        "Invoice created toast appears",
+        "New invoice appears in list with correct converted amount"
+      ]
+    },
+    "backward_compatibility": {
+      "status": "PASS",
+      "tests": [
+        "Invoice without lines still works (uses flat amount)",
+        "City ledger companies CRUD still works",
+        "City ledger invoices CRUD still works",
+        "AR aging endpoint still works",
+        "Portfolio summary endpoint still works"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration152_multicurrency_lines.py",
+    "/app/test_reports/pytest/pytest_iteration152_multicurrency_lines.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 41 currencies correctly seeded with realistic FX rates",
+    "Multi-currency line items roll up correctly to invoice currency",
+    "KWD (rate > 1) conversion math is correct",
+    "Frontend dropdown shows all 41 currencies",
+    "Line currency correctly defaults to invoice currency when added",
+    "Amount field properly disabled when lines exist",
+    "PDF generation includes line items table",
+    "Backward compatibility maintained for invoices without lines"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration152_multicurrency_lines.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test companies and invoices created and cleaned up during testing. FX rates auto-seeded on first API call (41 currencies).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 152 extended multi-currency feature with 41 ISO currencies and multi-currency line items on City Ledger invoices. Backend: 16 tests covering currency rates (41 codes), line item creation, FX conversion (including KWD rate > 1), PDF generation. Frontend: Currency dropdown has 41 options, line items UI works correctly, line currency defaults to invoice currency, amount auto-calculates from lines. All features working end-to-end.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

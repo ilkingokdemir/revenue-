@@ -1,0 +1,120 @@
+{
+  "summary": "Iteration 159 - Scheduler feature fully tested. All 18 backend tests PASSED (100%). Frontend scheduler UI verified with all elements present and functional. Scheduler loop confirmed running in backend logs.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Sidebar navigation",
+        "issues": ["Finance section may be collapsed by default, requiring user to expand it to see Deposit Automation. This is expected behavior but may cause confusion for first-time users."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration159_scheduler.py",
+    "/app/test_reports/pytest/pytest_iteration159_scheduler.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration159_scheduler.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Used existing seed data from Iter 158. Scheduler config created during testing for aldgate-flats property.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Scheduler feature (Iter 159) fully tested. Lightweight asyncio-based scheduler runs at FastAPI startup. JOB_HANDLERS currently contains 'auto_deposit_capture' job. Scheduler loop polls every 60s and runs enabled jobs when cron time passes. Manual trigger via POST /api/scheduler/trigger/{pid}/{job} works and records to scheduler_history with trigger='manual'.",
+  "tests_verified": {
+    "backend": {
+      "authentication": [
+        "GET /api/scheduler/config requires auth - PASS",
+        "PUT /api/scheduler/config/{pid}/{job} requires auth - PASS",
+        "GET /api/scheduler/history requires auth - PASS",
+        "POST /api/scheduler/trigger/{pid}/{job} requires auth - PASS"
+      ],
+      "config_endpoint": [
+        "GET /api/scheduler/config returns list - PASS",
+        "GET /api/scheduler/config?property_id= filters correctly - PASS",
+        "PUT creates new config - PASS",
+        "PUT updates existing config - PASS",
+        "PUT with invalid cron_hour=25 returns 400 - PASS",
+        "PUT with invalid cron_minute=60 returns 400 - PASS",
+        "PUT with unknown job returns 400 - PASS"
+      ],
+      "history_endpoint": [
+        "GET /api/scheduler/history returns list sorted desc by ran_at - PASS",
+        "GET /api/scheduler/history?property_id= filters correctly - PASS",
+        "GET /api/scheduler/history?limit= respects limit - PASS"
+      ],
+      "trigger_endpoint": [
+        "POST /api/scheduler/trigger with unknown job returns 400 - PASS",
+        "POST /api/scheduler/trigger/{pid}/auto_deposit_capture runs job - PASS",
+        "Manual trigger records to scheduler_history with trigger='manual' - PASS"
+      ],
+      "integration": [
+        "Full workflow: config → trigger → history - PASS"
+      ],
+      "role_access": [
+        "Receptionist cannot access scheduler endpoints - PASS"
+      ]
+    },
+    "frontend": {
+      "navigation": [
+        "Finance section contains Deposit Automation link - PASS",
+        "deposit-automation-btn navigates to panel - PASS"
+      ],
+      "scheduler_section": [
+        "da-scheduler section renders - PASS",
+        "da-sched-enabled toggle present and functional - PASS",
+        "da-sched-hour input present - PASS",
+        "da-sched-minute input present - PASS",
+        "da-sched-save button present and functional - PASS"
+      ],
+      "iter_158_regression": [
+        "da-dry-run button present - PASS",
+        "da-run-btn button present - PASS",
+        "da-with-card KPI card present - PASS",
+        "da-without-card KPI card present - PASS",
+        "da-total shows total owed - PASS",
+        "Pending captures table renders - PASS"
+      ]
+    },
+    "scheduler_loop": [
+      "Backend logs show '🕐 Scheduler loop started' - PASS"
+    ]
+  },
+  "sample_data_observed": {
+    "scheduler_config": {
+      "property_id": "aldgate-flats",
+      "job": "auto_deposit_capture",
+      "enabled": true,
+      "cron_hour": 3,
+      "cron_minute": 30
+    },
+    "trigger_result": {
+      "status": "triggered",
+      "result": {
+        "ran": 367,
+        "charged": 0,
+        "failed": 0,
+        "skipped": 367
+      }
+    },
+    "deposit_automation_panel": {
+      "total_owed": 43482.08,
+      "count": 501,
+      "with_card": 0,
+      "without_card": 501,
+      "policies_active": 2
+    }
+  },
+  "stripe_integration_note": "STRIPE_API_KEY='sk_test_emergent' is a placeholder. All bookings have card_on_file=false because no real cards have been saved. Scheduler runs but skips all bookings due to no cards. This is expected behavior - the integration is 'ready-for-real-key'. NOT a bug."
+}

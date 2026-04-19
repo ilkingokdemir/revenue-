@@ -619,7 +619,28 @@ api_router.include_router(create_card_vault_router(db, require_roles))
 
 # Iter 158 — Deposit Automation (bridges deposit_policies + card_vault + folio_items)
 from routes.deposit_automation import create_deposit_automation_router
-api_router.include_router(create_deposit_automation_router(db, require_roles))
+deposit_auto_router = create_deposit_automation_router(db, require_roles)
+api_router.include_router(deposit_auto_router)
+
+# Iter 159 — Scheduler (async background task runner, currently nightly auto-deposit)
+from routes.scheduler import create_scheduler_router, scheduler_loop
+_auto_capture_fn = getattr(deposit_auto_router, "run_capture", None)
+
+async def _job_auto_deposit_capture(property_id: str) -> dict:
+    """Scheduled job: run a full (non-dry) deposit capture for a property."""
+    if _auto_capture_fn is None:
+        return {"error": "auto-capture helper missing"}
+    return await _auto_capture_fn(property_id=property_id, dry_run=False,
+                                  only_ids=None, max_charges=200,
+                                  triggered_by="scheduler")
+
+JOB_HANDLERS = {"auto_deposit_capture": _job_auto_deposit_capture}
+api_router.include_router(create_scheduler_router(db, require_roles, JOB_HANDLERS))
+
+@app.on_event("startup")
+async def _start_scheduler():
+    import asyncio as _asyncio
+    _asyncio.create_task(scheduler_loop(db, JOB_HANDLERS))
 
 app.include_router(api_router)
 

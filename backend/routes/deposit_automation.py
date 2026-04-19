@@ -57,6 +57,150 @@ async def _stripe_post(path: str, data: dict, api_key: str):
 def create_deposit_automation_router(db, require_roles):
     router = APIRouter()
 
+    # Module-level reusable helper so the scheduler can call it without HTTP overhead
+    async def _run_capture(property_id: str, dry_run: bool = False,
+                           only_ids: set = None, max_charges: int = 50,
+                           triggered_by: str = "system") -> Dict:
+        stripe_key = os.environ.get("STRIPE_API_KEY")
+        if not stripe_key:
+            return {"ran": 0, "charged": 0, "failed": 0, "skipped": 0, "results": [],
+                    "dry_run": dry_run, "error": "Stripe not configured"}
+
+        only_ids = only_ids or set()
+        now = datetime.now(timezone.utc).date()
+        today_str = now.strftime("%Y-%m-%d")
+        pq = {} if property_id == "all" else {"property_id": property_id}
+        policies = await db.deposit_policies.find({**pq, "active": True}, {"_id": 0}).sort("priority", 1).to_list(200)
+        if not policies:
+            return {"ran": 0, "charged": 0, "failed": 0, "skipped": 0, "results": [], "dry_run": dry_run}
+
+        bookings = await db.bookings.find({
+            **pq, "check_out": {"$gte": today_str},
+            "status": {"$nin": ["cancelled", "no_show"]},
+        }, {"_id": 0}).to_list(10000)
+
+        charged = failed = skipped = 0
+        total_amount = 0.0
+        results = []
+
+        for b in bookings:
+            if only_ids and b["id"] not in only_ids:
+                continue
+            if charged + failed >= max_charges:
+                break
+
+            paid_rows = await db.folio_items.find(
+                {"booking_id": b["id"], "type": "payment"}, {"_id": 0, "amount": 1}
+            ).to_list(50)
+            paid = sum(float(p.get("amount", 0)) for p in paid_rows)
+
+            matched = None
+            for p in policies:
+                if _match_policy(p, b.get("source", ""), _lead_days(b.get("check_in", "")), b.get("rate_plan_id", "")):
+                    matched = p
+                    break
+            if not matched:
+                continue
+
+            total_price = float(b.get("total_price") or 0)
+            if matched.get("amount_type") == "flat":
+                deposit = float(matched.get("amount_value", 0))
+            else:
+                deposit = round(total_price * float(matched.get("amount_value", 0)) / 100, 2)
+            to_capture = round(max(0.0, deposit - paid), 2)
+            if to_capture <= 0:
+                continue
+
+            em = (b.get("guest_email") or "").strip().lower()
+            card = None
+            if em:
+                card = await db.card_vault_methods.find_one(
+                    {"email": em}, {"_id": 0}, sort=[("created_at", -1)],
+                )
+
+            if not card:
+                skipped += 1
+                results.append({"booking_id": b["id"], "guest_name": b.get("guest_name", ""),
+                                "status": "no_card", "to_capture": to_capture, "reason": "No card on file"})
+                await db.deposit_capture_log.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "booking_id": b["id"], "amount": to_capture,
+                    "status": "skipped_no_card",
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "by": triggered_by, "property_id": property_id,
+                })
+                continue
+
+            if dry_run:
+                results.append({"booking_id": b["id"], "guest_name": b.get("guest_name", ""),
+                                "status": "would_charge", "to_capture": to_capture,
+                                "card": f"{card.get('brand', '').upper()} •••• {card.get('last4', '')}"})
+                continue
+
+            status_code, pi = await _stripe_post("/payment_intents", {
+                "amount": int(round(to_capture * 100)),
+                "currency": "gbp",
+                "customer": card["stripe_customer_id"],
+                "payment_method": card["payment_method_id"],
+                "off_session": "true", "confirm": "true",
+                "description": f"Auto-deposit · {matched.get('name', 'policy')} · booking {b.get('booking_ref', '')}",
+                "metadata[booking_id]": b["id"],
+                "metadata[policy_id]": matched["id"],
+                "metadata[automated]": "true",
+                "metadata[triggered_by]": triggered_by,
+            }, stripe_key)
+
+            log_id = str(uuid.uuid4())
+            if status_code >= 400:
+                failed += 1
+                err = (pi.get("error") or {}).get("message", "Stripe error")
+                results.append({"booking_id": b["id"], "guest_name": b.get("guest_name", ""),
+                                "status": "failed", "to_capture": to_capture, "error": err})
+                await db.deposit_capture_log.insert_one({
+                    "id": log_id, "booking_id": b["id"], "amount": to_capture,
+                    "status": "failed", "error": err,
+                    "at": datetime.now(timezone.utc).isoformat(),
+                    "by": triggered_by, "property_id": property_id,
+                })
+                continue
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            folio_entry = {
+                "id": str(uuid.uuid4()),
+                "booking_id": b["id"], "type": "payment", "category": "card",
+                "payment_method": "card",
+                "description": f"Auto-deposit · {matched.get('name', 'policy')} · {card.get('brand', '').title()} •••• {card.get('last4', '')}",
+                "quantity": 1, "unit_price": to_capture, "amount": to_capture,
+                "currency": "GBP", "reference": pi.get("id", ""),
+                "created_at": now_iso, "created_by": f"auto:{triggered_by}",
+                "vault_payment_method_id": card["payment_method_id"],
+                "auto_deposit": True,
+            }
+            await db.folio_items.insert_one(folio_entry)
+
+            charged += 1
+            total_amount += to_capture
+            results.append({"booking_id": b["id"], "guest_name": b.get("guest_name", ""),
+                            "status": "charged", "amount": to_capture,
+                            "payment_intent_id": pi.get("id", ""),
+                            "card": f"{card.get('brand', '').upper()} •••• {card.get('last4', '')}"})
+            await db.deposit_capture_log.insert_one({
+                "id": log_id, "booking_id": b["id"], "amount": to_capture,
+                "status": "charged", "payment_intent_id": pi.get("id", ""),
+                "policy_id": matched["id"],
+                "at": now_iso, "by": triggered_by, "property_id": property_id,
+            })
+
+        return {
+            "ran": charged + failed + skipped, "charged": charged,
+            "failed": failed, "skipped": skipped,
+            "total_amount": round(total_amount, 2),
+            "dry_run": dry_run, "results": results,
+        }
+
+    # Expose the helper on the router so server.py can wire scheduler
+    router.run_capture = _run_capture  # type: ignore
+
     @router.get("/deposit-automation/pending/{property_id}")
     async def pending(property_id: str,
                       current_user: dict = Depends(require_roles("admin", "manager"))):

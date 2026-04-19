@@ -1181,17 +1181,32 @@ export const DepositAutomationPanel = ({ activePropertyId }) => {
   const [log, setLog] = useState([]);
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState(new Set());
+  const [sched, setSched] = useState({ enabled: false, cron_hour: 2, cron_minute: 0, last_run_date: null });
+  const [schedHistory, setSchedHistory] = useState([]);
 
   const load = useCallback(async () => {
     try {
-      const [{ data: p }, { data: l }] = await Promise.all([
+      const [{ data: p }, { data: l }, { data: cfgs }, { data: hist }] = await Promise.all([
         axios.get(`${API}/deposit-automation/pending/${pid}`),
         axios.get(`${API}/deposit-automation/log/${pid}?limit=50`),
+        axios.get(`${API}/scheduler/config?property_id=${pid}`),
+        axios.get(`${API}/scheduler/history?property_id=${pid}&limit=10`),
       ]);
       setData(p); setLog(l);
+      const myCfg = cfgs.find(c => c.job === "auto_deposit_capture");
+      if (myCfg) setSched({ enabled: myCfg.enabled, cron_hour: myCfg.cron_hour, cron_minute: myCfg.cron_minute, last_run_date: myCfg.last_run_date });
+      setSchedHistory(hist);
     } catch { /* */ }
   }, [pid]);
   useEffect(() => { load(); }, [load]);
+
+  const saveSchedule = async () => {
+    try {
+      await axios.put(`${API}/scheduler/config/${pid}/auto_deposit_capture`, sched);
+      toast.success(sched.enabled ? `Nightly capture set for ${String(sched.cron_hour).padStart(2,'0')}:${String(sched.cron_minute).padStart(2,'0')} UTC` : "Schedule disabled");
+      load();
+    } catch { toast.error("Failed to save schedule"); }
+  };
 
   const run = async (dryRun) => {
     if (!dryRun && !window.confirm(`CHARGE ${selected.size || (data?.with_card || 0)} booking(s)? This cannot be undone.`)) return;
@@ -1243,6 +1258,48 @@ export const DepositAutomationPanel = ({ activePropertyId }) => {
         <div className="bg-white border rounded-xl p-4" data-testid="da-with-card"><div className="text-[10px] font-bold uppercase text-stone-400">With Card on File</div><div className="text-2xl font-bold text-emerald-600">{data.with_card || 0}</div></div>
         <div className="bg-white border rounded-xl p-4" data-testid="da-without-card"><div className="text-[10px] font-bold uppercase text-stone-400">No Card Saved</div><div className="text-2xl font-bold text-amber-600">{data.without_card || 0}</div></div>
         <div className="bg-white border rounded-xl p-4"><div className="text-[10px] font-bold uppercase text-stone-400">Recent Captures (log)</div><div className="text-2xl font-bold">{log.length}</div></div>
+      </div>
+
+      {/* Scheduler controls — nightly auto-run */}
+      <div className="bg-white border rounded-2xl p-6" data-testid="da-scheduler">
+        <div className="flex items-center gap-3 mb-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${sched.enabled ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-400"}`}><RefreshCw className="w-5 h-5" /></div>
+          <div className="flex-1">
+            <h3 className="font-bold">Nightly Scheduled Run</h3>
+            <p className="text-xs text-stone-500">Automatically capture eligible deposits every day. Runs against all bookings with cards on file matching active policies.</p>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer" data-testid="da-sched-toggle-wrap">
+            <input type="checkbox" checked={sched.enabled} onChange={e => setSched({ ...sched, enabled: e.target.checked })} data-testid="da-sched-enabled"
+              className="w-5 h-5 accent-emerald-500" />
+            <span className="text-sm font-bold">{sched.enabled ? "Enabled" : "Disabled"}</span>
+          </label>
+        </div>
+        <div className="flex items-center gap-2 mt-4">
+          <span className="text-xs text-stone-500">Run at</span>
+          <input type="number" min={0} max={23} value={sched.cron_hour} onChange={e => setSched({ ...sched, cron_hour: parseInt(e.target.value || 0) })}
+            className="border rounded px-2 py-1.5 w-16 text-center font-mono" data-testid="da-sched-hour" />
+          <span className="font-mono font-bold">:</span>
+          <input type="number" min={0} max={59} value={sched.cron_minute} onChange={e => setSched({ ...sched, cron_minute: parseInt(e.target.value || 0) })}
+            className="border rounded px-2 py-1.5 w-16 text-center font-mono" data-testid="da-sched-minute" />
+          <span className="text-xs text-stone-500">UTC</span>
+          <button onClick={saveSchedule} data-testid="da-sched-save" className="px-3 py-1.5 bg-stone-800 text-white rounded-lg text-xs font-bold">Save schedule</button>
+          {sched.last_run_date && (
+            <span className="text-xs text-stone-400 ml-2">Last ran <strong>{sched.last_run_date}</strong></span>
+          )}
+        </div>
+        {schedHistory.length > 0 && (
+          <div className="mt-4 border-t border-stone-100 pt-3">
+            <div className="text-[10px] font-bold uppercase text-stone-400 mb-2">Recent runs</div>
+            <div className="flex flex-wrap gap-2">
+              {schedHistory.slice(0, 6).map((h, i) => (
+                <Badge key={i} className={h.error ? "bg-rose-100 text-rose-700 text-[10px]" : "bg-stone-100 text-stone-600 text-[10px]"}
+                  data-testid={`da-sched-hist-${i}`}>
+                  {h.trigger === "manual" ? "👤" : "⏰"} {new Date(h.ran_at).toLocaleString().slice(5, 16)} · {h.result?.charged ?? 0}✓ / {h.result?.skipped ?? 0}⊘ / {h.result?.failed ?? 0}✗
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {data.policies_active === 0 && (

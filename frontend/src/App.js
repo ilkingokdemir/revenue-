@@ -105,6 +105,7 @@ import GuestSurveyPage from "./GuestSurveyPage";
 import GuestRegistrationPage from "./GuestRegistrationPage";
 import GuestFeedbackPage from "./GuestFeedbackPage";
 import CheckInKioskPage from "./CheckInKioskPage";
+import FeatureComparePage from "./FeatureComparePage";
 import QROrderPage from "./QROrderPage";
 import KioskPage from "./KioskPage";
 import {
@@ -3593,6 +3594,9 @@ function MainApp() {
 function App() {
   if (window.location.pathname === "/widget") {
     return <ReviewWidget />;
+  }
+  if (window.location.pathname === "/compare") {
+    return <FeatureComparePage />;
   }
   if (window.location.pathname === "/book") {
     return <BookingEngine />;

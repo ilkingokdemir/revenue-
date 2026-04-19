@@ -1,17 +1,27 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import {
   RefreshCw, Users, Bed, DollarSign, LogIn, LogOut, Sparkles, Clock,
-  TrendingUp, BarChart3, CreditCard
+  TrendingUp, BarChart3, CreditCard, ArrowUpRight, ArrowDownRight,
+  Wallet, Receipt, Banknote, Target,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const curCompact = (v) => {
+  const n = Number(v || 0);
+  if (Math.abs(n) >= 1_000_000) return `£${(n / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1_000) return `£${(n / 1_000).toFixed(1)}k`;
+  return `£${n.toFixed(0)}`;
+};
 
 export const EnhancedDashboard = ({ propertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState(null);
+  const [historyRange, setHistoryRange] = useState("last_12m");
+  const [historyLoading, setHistoryLoading] = useState(false);
   const pid = propertyId || "all";
 
   useEffect(() => {
@@ -20,6 +30,19 @@ export const EnhancedDashboard = ({ propertyId }) => {
       .then(r => { setData(r.data); setLoading(false); })
       .catch(() => setLoading(false));
   }, [pid]);
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const { data: h } = await axios.get(`${API}/dashboard/financial-history`, { params: { property_id: pid, range: historyRange } });
+      setHistory(h);
+    } catch {
+      /* silent */
+    }
+    setHistoryLoading(false);
+  }, [pid, historyRange]);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
   if (loading || !data) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Loading Dashboard...</div>;
 
@@ -57,6 +80,14 @@ export const EnhancedDashboard = ({ propertyId }) => {
           <p className="text-xs opacity-70">Daily Income</p>
         </div>
       </div>
+
+      {/* Financial Overview — Historical (Last Month / 3M / 12M / 3 Years) */}
+      <FinancialHistorySection
+        history={history}
+        range={historyRange}
+        onRangeChange={setHistoryRange}
+        loading={historyLoading}
+      />
 
       {/* Financial Overview + 7-Day Revenue */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -186,6 +217,132 @@ export const EnhancedDashboard = ({ propertyId }) => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ======================== Financial History Section ========================
+const RANGES = [
+  { id: "last_month", label: "Last Month" },
+  { id: "last_3m",    label: "Last 3 Months" },
+  { id: "last_6m",    label: "Last 6 Months" },
+  { id: "ytd",        label: "YTD" },
+  { id: "last_12m",   label: "Last 12 Months" },
+  { id: "last_3y",    label: "Last 3 Years" },
+  { id: "last_5y",    label: "Last 5 Years" },
+];
+
+const FinancialHistorySection = ({ history, range, onRangeChange, loading }) => {
+  if (!history && !loading) return null;
+
+  const series = history?.series || [];
+  const totals = history?.totals || {};
+  const delta = history?.delta || {};
+  const maxAbs = Math.max(
+    1,
+    ...series.map(s => Math.max(s.gross_revenue || 0, Math.abs(s.net_profit || 0), (s.expenses || 0) + (s.payroll || 0)))
+  );
+
+  const tiles = [
+    { key: "gross_revenue", label: "Gross Revenue",  icon: DollarSign, accent: "from-sky-500 to-blue-700",     value: totals.gross_revenue },
+    { key: "commission",    label: "Commission",     icon: Receipt,    accent: "from-amber-500 to-orange-600", value: totals.commission, negative: true },
+    { key: "net_revenue",   label: "Net Revenue",    icon: Banknote,   accent: "from-emerald-500 to-teal-700", value: totals.net_revenue, deltaPct: delta.net_revenue_pct },
+    { key: "expenses",      label: "Expenses",       icon: Receipt,    accent: "from-rose-500 to-red-700",     value: totals.expenses,   negative: true },
+    { key: "payroll",       label: "Payroll",        icon: Wallet,     accent: "from-violet-500 to-indigo-700",value: totals.payroll,    negative: true },
+    { key: "net_profit",    label: "Net Profit",     icon: Target,     accent: "from-emerald-600 to-emerald-900", value: totals.net_profit, hero: true },
+  ];
+
+  return (
+    <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="financial-history-section">
+      <div className="flex items-center flex-wrap gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center shadow">
+            <BarChart3 className="w-4 h-4 text-white" />
+          </div>
+          <div>
+            <h3 className="font-bold text-stone-800 text-base leading-tight">Financial Overview · History</h3>
+            <p className="text-[11px] text-stone-500">{history?.start} → {history?.end} · {history?.window_months || 0} months</p>
+          </div>
+        </div>
+        {/* Range pills */}
+        <div className="flex flex-wrap gap-1 ml-auto bg-stone-100 p-1 rounded-lg" data-testid="fh-range-tabs">
+          {RANGES.map(r => (
+            <button
+              key={r.id}
+              onClick={() => onRangeChange(r.id)}
+              data-testid={`fh-range-${r.id}`}
+              className={`px-3 py-1 text-[11px] font-semibold rounded-md transition-all ${range === r.id ? "bg-white text-emerald-700 shadow-sm" : "text-stone-500 hover:text-stone-700"}`}
+            >{r.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* KPI tiles */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-5">
+        {tiles.map(t => (
+          <div key={t.key} className={`rounded-xl p-3 relative overflow-hidden ${t.hero ? "bg-gradient-to-br from-emerald-50 to-teal-50 border-2 border-emerald-200" : "bg-stone-50 border border-stone-100"}`} data-testid={`fh-tile-${t.key}`}>
+            <div className={`absolute top-0 right-0 w-16 h-16 rounded-full bg-gradient-to-br ${t.accent} opacity-10 -mr-5 -mt-5`}></div>
+            <div className="flex items-center gap-1.5 mb-1 relative">
+              <div className={`w-6 h-6 rounded-md bg-gradient-to-br ${t.accent} flex items-center justify-center`}>
+                <t.icon className="w-3 h-3 text-white" />
+              </div>
+              <span className="text-[9px] font-bold text-stone-500 uppercase tracking-wider">{t.label}</span>
+            </div>
+            <div className={`${t.hero ? "text-xl" : "text-lg"} font-black ${t.hero ? "text-emerald-700" : t.negative ? "text-stone-700" : "text-stone-900"} tabular-nums relative`}>
+              {t.negative && (t.value || 0) > 0 ? "-" : ""}{curCompact(t.value)}
+            </div>
+            {t.deltaPct !== undefined && Math.abs(t.deltaPct) > 0.01 && (
+              <div className={`text-[10px] font-bold flex items-center gap-0.5 mt-0.5 ${t.deltaPct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                {t.deltaPct >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                {Math.abs(t.deltaPct).toFixed(1)}% vs prev period
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Monthly bar chart */}
+      {series.length > 0 && (
+        <div data-testid="fh-chart">
+          <div className="flex items-end gap-0.5 h-32 border-b border-stone-100 pb-1 relative">
+            {series.map((m) => {
+              const posH = Math.max(0, (m.gross_revenue / maxAbs) * 100);
+              const costH = Math.max(0, ((m.expenses + m.payroll + m.commission) / maxAbs) * 100);
+              const profit = m.net_profit;
+              const profitPositive = profit >= 0;
+              return (
+                <div key={m.month} className="flex-1 relative group flex flex-col justify-end min-w-0" title={`${m.label}\nGross: ${cur(m.gross_revenue)}\nCommission: ${cur(m.commission)}\nExpenses: ${cur(m.expenses)}\nPayroll: ${cur(m.payroll)}\nNet Profit: ${cur(profit)}\nBookings: ${m.bookings}`}>
+                  <div className="relative w-full flex flex-col justify-end" style={{ height: "100%" }}>
+                    {/* Gross (sky bar) */}
+                    <div className="absolute bottom-0 inset-x-0 bg-sky-200 rounded-t-sm" style={{ height: `${posH}%` }}></div>
+                    {/* Costs stacked (amber/rose/violet) */}
+                    <div className="absolute bottom-0 inset-x-0" style={{ height: `${costH}%` }}>
+                      <div className="bg-gradient-to-t from-rose-500 via-amber-400 to-amber-300 opacity-90 w-full h-full rounded-t-sm"></div>
+                    </div>
+                    {/* Net profit overlay (emerald vertical marker) */}
+                    <div className="absolute inset-x-0 bottom-0 pointer-events-none flex items-end justify-center">
+                      <div className={`w-1 rounded-full ${profitPositive ? "bg-emerald-500" : "bg-rose-600"}`} style={{ height: `${Math.abs((profit / maxAbs) * 100)}%` }}></div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-between mt-2 text-[9px] text-stone-400">
+            <span>{series[0]?.label}</span>
+            <span className="flex items-center gap-3">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-sky-200"></span>Gross</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-400"></span>Costs</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500"></span>Net Profit</span>
+            </span>
+            <span>{series[series.length - 1]?.label}</span>
+          </div>
+        </div>
+      )}
+
+      {loading && (
+        <div className="text-center py-4 text-stone-400 text-xs flex items-center justify-center gap-1.5"><RefreshCw className="w-3 h-3 animate-spin" /> Loading history…</div>
+      )}
     </div>
   );
 };

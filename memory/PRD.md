@@ -2,6 +2,30 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 164: Financial Overview · History on main Dashboard (user request)
+
+User flagged that the main Dashboard was missing a financial overview section with Last Month / Last 3 Years data visibility. Built it.
+
+**Backend** (`/app/backend/routes/enhanced_dashboard.py`):
+- `GET /api/dashboard/financial-history?property_id=&range=` — 7 supported ranges: `last_month`, `last_3m`, `last_6m`, `ytd`, `last_12m`, `last_3y`, `last_5y`.
+- Aggregates per-month: gross_revenue, commission (using same DEFAULT_COMMISSION map as Profit OS: Booking.com 15%, Expedia 18%, Agoda 17%, Hotelbeds 22%, Airbnb 3%, Google 12%, Affiliate 8%, Hotels.com 15%), net_revenue, expenses (from `db.expenses`), payroll (from `db.payroll_runs.total_gross`), net_profit = net_revenue - expenses - payroll, bookings_count.
+- Returns: window meta (start/end/months), sorted monthly `series`, `totals`, previous-period comparison (`prev_period` + `delta.net_revenue_pct`).
+- Property-filtered if `property_id != "all"`.
+
+**Frontend** (`/app/frontend/src/components/dashboard/EnhancedDashboard.js`):
+- New `FinancialHistorySection` component added above the existing "This Month vs Previous Month" table.
+- Header: emerald-gradient BarChart3 icon, "Financial Overview · History" title, window range label ("2025-05-01 → 2026-04-19 · 12 months").
+- **7 time-range pills** on the right (stone-100 bg, active pill in white with emerald text): Last Month / Last 3M / Last 6M / YTD / Last 12M / Last 3 Years / Last 5 Years.
+- **6 KPI tiles** in a 2/3/6 responsive grid: Gross (sky), Commission (amber, negative), Net Revenue (emerald, with YoY delta badge), Expenses (rose, negative), Payroll (violet, negative), **Net Profit** (emerald hero with ring-2 border). Compact formatting: £111.5k, -£8.8k, etc.
+- **Monthly bar chart** (CSS-only): sky gross bars with amber→rose cost-stack overlay, emerald net-profit marker centered per month. Hover tooltip shows full breakdown (Gross / Commission / Expenses / Payroll / Net Profit / Bookings).
+- Footer legend (Gross · Costs · Net Profit with color dots).
+- Calls `loadHistory()` on mount and whenever range changes.
+
+**Live verified**: Dashboard shows £111.5k gross / -£8.8k commission / £102.6k net / -£320 expenses / £0 payroll / **£102.3k Net Profit** for Last 12 Months; window label updates correctly when switching to Last 3 Years (36 months: 2023-05-01 → 2026-04-19). Chart renders with only recent 3 months populated (expected — dataset only has Feb-Apr 2026 bookings).
+
+**User friction note**: the original screenshots showed the Roles & Permissions catalog; I initially missed that the request was about the main Dashboard landing page. Asked a clarifying question, user confirmed intent, feature built within one iteration.
+
+
 ### Iter 163: AI Revenue Advisor — Claude 4.5 powered next-best-action for Profit OS
 
 Wired a live AI consultant into the Profit OS panel that reads the in-browser CPAR snapshot and returns 3 quantified, actionable revenue moves for the week.

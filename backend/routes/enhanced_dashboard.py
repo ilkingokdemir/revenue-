@@ -157,4 +157,161 @@ def create_enhanced_dashboard_router(db, require_roles):
             "stayovers": len(in_house) - arrivals_today,
         }
 
+    @router.get("/dashboard/financial-history")
+    async def financial_history(
+        property_id: str = "all",
+        range: str = "last_12m",
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Historical monthly revenue / commission / expenses / payroll / net-profit trend.
+
+        Windows: last_month | last_3m | last_6m | last_12m | ytd | last_3y | last_5y
+        """
+        now = datetime.now(timezone.utc)
+        today = now.date()
+
+        window_months = {
+            "last_month": 1, "last_3m": 3, "last_6m": 6,
+            "last_12m": 12, "ytd": today.month, "last_3y": 36, "last_5y": 60,
+        }.get(range, 12)
+
+        # Build month boundaries going back N months (inclusive of current month)
+        from calendar import monthrange
+
+        def month_start(y, m):
+            return datetime(y, m, 1, tzinfo=timezone.utc)
+
+        def add_months(dt, delta):
+            m = dt.month - 1 + delta
+            y = dt.year + m // 12
+            m = m % 12 + 1
+            return month_start(y, m)
+
+        start_dt = add_months(month_start(today.year, today.month), -(window_months - 1))
+
+        # Query bookings that checked_in during the window
+        bk_query = {
+            "status": {"$nin": ["cancelled"]},
+            "check_in": {"$gte": start_dt.strftime("%Y-%m-%d"), "$lte": today.isoformat()},
+        }
+        if property_id != "all":
+            bk_query["property_id"] = property_id
+
+        bookings = await db.bookings.find(
+            bk_query,
+            {"_id": 0, "check_in": 1, "total_price": 1, "source": 1, "nights": 1, "property_id": 1},
+        ).to_list(length=50000)
+
+        # Query expenses + payroll for same window
+        exp_query = {"date": {"$gte": start_dt.strftime("%Y-%m-%d"), "$lte": today.isoformat()}}
+        if property_id != "all":
+            exp_query["property_id"] = property_id
+        expenses = await db.expenses.find(exp_query, {"_id": 0, "date": 1, "amount": 1}).to_list(length=20000)
+
+        pay_query = {"pay_period_end": {"$gte": start_dt.strftime("%Y-%m-%d"), "$lte": today.isoformat()}}
+        payroll = await db.payroll_runs.find(pay_query, {"_id": 0, "pay_period_end": 1, "total_gross": 1, "total_net": 1}).to_list(length=5000)
+
+        # Commission rates (same as Profit OS defaults)
+        COMM = {
+            "Booking.com": 0.15, "Expedia": 0.18, "Airbnb": 0.03, "Agoda": 0.17,
+            "Hotelbeds": 0.22, "Google": 0.12, "Affiliate": 0.08, "Hotels.com": 0.15,
+        }
+
+        # Aggregate by month key YYYY-MM
+        months_map = {}
+        cursor = start_dt
+        while cursor.date() <= today.replace(day=1):
+            k = cursor.strftime("%Y-%m")
+            months_map[k] = {
+                "month": k,
+                "label": cursor.strftime("%b %Y"),
+                "gross_revenue": 0.0, "commission": 0.0, "net_revenue": 0.0,
+                "expenses": 0.0, "payroll": 0.0, "net_profit": 0.0, "bookings": 0,
+            }
+            cursor = add_months(cursor, 1)
+
+        for b in bookings:
+            ci = b.get("check_in") or ""
+            if len(ci) < 7:
+                continue
+            mk = ci[:7]
+            if mk not in months_map:
+                continue
+            gross = float(b.get("total_price") or 0)
+            src = b.get("source") or ""
+            comm = gross * COMM.get(src, 0.0)
+            months_map[mk]["gross_revenue"] += gross
+            months_map[mk]["commission"] += comm
+            months_map[mk]["net_revenue"] += (gross - comm)
+            months_map[mk]["bookings"] += 1
+
+        for e in expenses:
+            ed = e.get("date") or ""
+            if len(ed) < 7:
+                continue
+            mk = ed[:7]
+            if mk in months_map:
+                months_map[mk]["expenses"] += float(e.get("amount") or 0)
+
+        for p in payroll:
+            pd = p.get("pay_period_end") or ""
+            if len(pd) < 7:
+                continue
+            mk = pd[:7]
+            if mk in months_map:
+                months_map[mk]["payroll"] += float(p.get("total_gross") or p.get("total_net") or 0)
+
+        # Compute net_profit + round
+        series = []
+        for k in sorted(months_map.keys()):
+            m = months_map[k]
+            m["net_profit"] = m["net_revenue"] - m["expenses"] - m["payroll"]
+            for f in ["gross_revenue", "commission", "net_revenue", "expenses", "payroll", "net_profit"]:
+                m[f] = round(m[f], 2)
+            series.append(m)
+
+        # Totals
+        totals = {
+            "gross_revenue": round(sum(m["gross_revenue"] for m in series), 2),
+            "commission":    round(sum(m["commission"] for m in series), 2),
+            "net_revenue":   round(sum(m["net_revenue"] for m in series), 2),
+            "expenses":      round(sum(m["expenses"] for m in series), 2),
+            "payroll":       round(sum(m["payroll"] for m in series), 2),
+            "net_profit":    round(sum(m["net_profit"] for m in series), 2),
+            "bookings":      sum(m["bookings"] for m in series),
+        }
+
+        # Previous period comparison (same length window before start_dt)
+        prev_end = start_dt - timedelta(days=1)
+        prev_start = add_months(month_start(prev_end.year, prev_end.month), -(window_months - 1))
+        prev_bk_query = {
+            "status": {"$nin": ["cancelled"]},
+            "check_in": {"$gte": prev_start.strftime("%Y-%m-%d"), "$lte": prev_end.strftime("%Y-%m-%d")},
+        }
+        if property_id != "all":
+            prev_bk_query["property_id"] = property_id
+        prev_bookings = await db.bookings.find(prev_bk_query, {"_id": 0, "total_price": 1, "source": 1}).to_list(length=50000)
+        prev_gross = sum(float(b.get("total_price") or 0) for b in prev_bookings)
+        prev_comm = sum(float(b.get("total_price") or 0) * COMM.get(b.get("source", ""), 0.0) for b in prev_bookings)
+        prev_net = prev_gross - prev_comm
+        yoy_pct = ((totals["net_revenue"] - prev_net) / prev_net * 100.0) if prev_net else 0.0
+
+        return {
+            "range": range,
+            "window_months": window_months,
+            "start": start_dt.strftime("%Y-%m-%d"),
+            "end": today.isoformat(),
+            "series": series,
+            "totals": totals,
+            "prev_period": {
+                "gross_revenue": round(prev_gross, 2),
+                "net_revenue":   round(prev_net, 2),
+                "bookings":      len(prev_bookings),
+            },
+            "delta": {
+                "net_revenue_pct": round(yoy_pct, 2),
+                "net_revenue_abs": round(totals["net_revenue"] - prev_net, 2),
+            },
+        }
+
     return router

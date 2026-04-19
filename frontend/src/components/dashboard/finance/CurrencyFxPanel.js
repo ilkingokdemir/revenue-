@@ -19,6 +19,7 @@ export const CurrencyFxPanel = ({ user }) => {
   const [rates, setRates] = useState([]);
   const [aging, setAging] = useState(null);
   const [portfolio, setPortfolio] = useState(null);
+  const [propCurrencies, setPropCurrencies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [rateForm, setRateForm] = useState(null);
   const [converter, setConverter] = useState({ amount: 100, source: "EUR", target: "GBP", result: null });
@@ -28,16 +29,18 @@ export const CurrencyFxPanel = ({ user }) => {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [s, r, a, p] = await Promise.all([
+      const [s, r, a, p, pc] = await Promise.all([
         axios.get(`${API}/currency-fx/settings`),
         axios.get(`${API}/currency-fx/rates`),
         axios.get(`${API}/currency-fx/ar-aging`),
         axios.get(`${API}/currency-fx/portfolio-summary`),
+        axios.get(`${API}/currency-fx/properties`),
       ]);
       setSettings(s.data);
       setRates(r.data || []);
       setAging(a.data);
       setPortfolio(p.data);
+      setPropCurrencies(pc.data || []);
     } catch (e) {
       toast.error("Failed to load currency data");
     } finally {
@@ -89,6 +92,14 @@ export const CurrencyFxPanel = ({ user }) => {
       });
       setConverter((c) => ({ ...c, result: data }));
     } catch (e) { toast.error("Convert failed"); }
+  };
+
+  const setPropertyCurrency = async (propertyId, currency) => {
+    try {
+      await axios.put(`${API}/currency-fx/properties/${propertyId}`, { currency });
+      toast.success("Property currency updated");
+      loadAll();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
   const base = settings?.base_currency || "GBP";
@@ -370,6 +381,43 @@ export const CurrencyFxPanel = ({ user }) => {
               <option value="down">Truncate (down)</option>
             </select>
           </Field>
+        </div>
+      )}
+
+      {/* Property native currencies — inside Settings tab for compactness */}
+      {tab === "settings" && propCurrencies.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden max-w-2xl">
+          <div className="px-4 py-3 border-b border-stone-200 bg-stone-50">
+            <h3 className="text-sm font-bold text-stone-800">Property Native Currencies</h3>
+            <p className="text-[11px] text-stone-500">
+              Each property trades in its own currency. Changing this updates all rooms and future bookings for that property.
+            </p>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="bg-stone-50 text-[10px] uppercase text-stone-500">
+              <tr>
+                <th className="p-3 text-left">Property</th>
+                <th className="p-3 text-left">Country</th>
+                <th className="p-3 text-right">Native Currency</th>
+              </tr>
+            </thead>
+            <tbody>
+              {propCurrencies.map((p) => (
+                <tr key={p.id} className="border-t border-stone-100" data-testid={`fx-prop-${p.id}`}>
+                  <td className="p-3 font-semibold text-stone-800">{p.name}</td>
+                  <td className="p-3 text-xs text-stone-500">{p.country || "—"}</td>
+                  <td className="p-3 text-right">
+                    <select value={p.currency || "GBP"}
+                      onChange={(e) => setPropertyCurrency(p.id, e.target.value)}
+                      data-testid={`fx-prop-cur-${p.id}`}
+                      className="border border-stone-200 rounded-lg px-3 py-1.5 text-sm font-semibold">
+                      {(settings?.available_codes || []).map((c) => <option key={c}>{c}</option>)}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

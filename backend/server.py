@@ -713,6 +713,15 @@ async def startup_event():
         {"property_id": {"$exists": False}},
         {"$set": {"property_id": "default"}}
     )
+    # Migrate: ensure every property has a native currency (default GBP)
+    await db.properties.update_many(
+        {"currency": {"$exists": False}},
+        {"$set": {"currency": "GBP"}}
+    )
+    await db.properties.update_many(
+        {"currency": None},
+        {"$set": {"currency": "GBP"}}
+    )
     logger.info("Admin user seeded and indexes created")
 
 @app.on_event("shutdown")

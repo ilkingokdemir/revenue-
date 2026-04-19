@@ -1087,6 +1087,16 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
 
         total_price = room.get("base_price", 0) * nights * booking_data.rooms
 
+        # Pull native currency from property (source of truth) with fallbacks
+        prop_doc = await db.properties.find_one(
+            {"id": booking_data.property_id}, {"_id": 0, "currency": 1}
+        )
+        booking_currency = (
+            (prop_doc or {}).get("currency")
+            or room.get("currency")
+            or "GBP"
+        )
+
         booking = Booking(
             property_id=booking_data.property_id,
             room_type_id=booking_data.room_type_id,
@@ -1099,7 +1109,7 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             children=booking_data.children,
             rooms=booking_data.rooms,
             total_price=total_price,
-            currency=room.get("currency", "GBP"),
+            currency=booking_currency,
             special_requests=booking_data.special_requests,
             status="confirmed",
             payment_status="pending"

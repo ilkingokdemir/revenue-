@@ -157,6 +157,46 @@ def create_currency_fx_router(db):
         )
         return {"ok": True, **doc}
 
+    # ----- per-property native currency -----
+    @router.get("/properties")
+    async def list_property_currencies(
+        current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any")),
+    ):
+        props = await db.properties.find(
+            {"id": {"$ne": "default"}},
+            {"_id": 0, "id": 1, "name": 1, "currency": 1, "country": 1},
+        ).sort("name", 1).to_list(500)
+        for p in props:
+            if not p.get("currency"):
+                p["currency"] = "GBP"
+        return props
+
+    @router.put("/properties/{property_id}")
+    async def set_property_currency(
+        property_id: str,
+        body: dict,
+        current_user: dict = Depends(require_perm("edit_bookings")),
+    ):
+        new_cur = (body.get("currency") or "").upper()
+        if not new_cur or len(new_cur) != 3:
+            raise HTTPException(400, "3-letter currency code required")
+        r = await db.properties.update_one(
+            {"id": property_id}, {"$set": {"currency": new_cur}}
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Property not found")
+        # Cascade to rooms so future bookings widget quotes match
+        await db.room_types.update_many(
+            {"property_id": property_id}, {"$set": {"currency": new_cur}}
+        )
+        # Cascade to already-created future bookings so consolidation math is correct
+        today = datetime.now(timezone.utc).date().isoformat()
+        await db.bookings.update_many(
+            {"property_id": property_id, "check_in": {"$gte": today}},
+            {"$set": {"currency": new_cur}},
+        )
+        return {"ok": True, "property_id": property_id, "currency": new_cur}
+
     # ----- rates -----
     @router.get("/rates")
     async def list_rates(

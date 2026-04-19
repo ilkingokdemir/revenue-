@@ -1,6 +1,48 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 156 Test Iterations (100%)
+
+### Iter 156 (Feb 2026): 🚀 Top-10 Competitor Gap Features — shipped in ONE batch
+
+Huge single-session sprint to close 10 of the 15 prioritized gaps identified in `/app/memory/COMPETITOR_GAP_MAP.md`. All 10 ship with dedicated backend routes + frontend panels + sidebar entries + data-testids, and all passed 100% testing (38/38 backend + 10/10 frontend panels).
+
+**Ten new features (all LIVE):**
+
+1. **Night Audit · Close-Day Lock** (`night_audit_close.py` + `NightAuditClosePanel`) — Lock business-date folio activity with an immutable close record (totals snapshot, arrival/departure counts, in-house count). Admin-only reopen with audit log. Regulatory requirement in many jurisdictions. Sidebar under Operations.
+
+2. **Deposit / Advance-Payment Ledger** (`deposit_ledger.py` + `DepositLedgerPanel`) — Aggregates unearned revenue held against future bookings. Groups by arrival month (visual bar chart) + per-booking detail (up to 500). Sidebar under Finance.
+
+3. **Commission Reconciliation** (`commission_recon.py` + `CommissionReconPanel`) — Upload OTA statement (CSV: `booking_ref, gross, commission`) per channel/period → auto-matches each line against our ledger, classifying as `match` / `variance` / `unmatched`. Cross-checks against `payment_method=channel_collection` + `channel` fields from Iter 154. Sidebar under Finance.
+
+4. **Gift Cards / Vouchers** (`gift_cards.py` + `GiftCardsPanel`) — Issue branded prepaid vouchers with auto-generated codes (`MHB-XXXX-XXXX-XXXX`, confusables removed). Redemption creates a folio payment line with `method=gift_card`. Tracks outstanding liability in summary. Sidebar under Finance.
+
+5. **Review Sentiment AI** (`review_sentiment.py` + `ReviewSentimentPanel`) — Uses Emergent LLM Key + **Claude Sonnet 4.5** to auto-tag reviews with sentiment + themes from a 21-term fixed vocab (dirty_bathroom, friendly_staff, slow_checkin, wifi_issues, …). Theme frequency chart + sentiment distribution. Cached in `review_sentiments`. Sidebar under Review Hub.
+
+6. **Guest RFM Segmentation** (`guest_rfm.py` + `GuestRfmPanel`) — Quintile-scored Recency × Frequency × Monetary per guest. Composite 3–15 maps to 5 segments (Champions / Loyal / Potential Loyalists / At Risk / Lost) with color-coded cards + revenue per segment. Top 100 guests table. Sidebar under Guests.
+
+7. **Preventive Maintenance Scheduler** (`preventive_maintenance.py` + `PreventiveMaintenancePanel`) — Recurring PM plans (daily/weekly/biweekly/monthly/quarterly/semiannual/annual) with category (HVAC/plumbing/electrical/fire_safety/general), location, instructions. Completing a task auto-advances `next_due` by `frequency_days` and logs cost + parts used. Overdue plans flash red. Sidebar under Operations.
+
+8. **Asset Register** (`asset_register.py` + `AssetRegisterPanel`) — Track TVs/HVAC/mattresses/furniture/IT with straight-line depreciation over useful_life_years. Computes book value + age + depreciation% live on GET. Warranty tracking flags expiring ≤60 days. Summary tile shows purchase vs book value. Sidebar under Operations.
+
+9. **Cash Drawer / Float** (`cash_drawer.py` + `CashDrawerPanel`) — One-at-a-time drawer sessions per property. Open with float → log cash-in/cash-out transactions with descriptions → close with counted cash → computes variance (flags if ≥£5). Prevents double-open with 409. Session history. Sidebar under Reception.
+
+10. **Two-Factor Authentication (TOTP)** (`two_factor_auth.py` + `TwoFactorAuthPanel`) — pyotp-based enrollment with QR code (via qrserver.com public API) + manual secret fallback. Verifies 6-digit code with ±1 window. Generates 8 single-use backup codes on first activation. Disable requires current valid code. Sidebar under Settings & Developers.
+
+**Infrastructure:**
+- Added `pyotp==2.9.0` to `backend/requirements.txt`
+- All 10 routes registered in `server.py` under "Iter 156" section
+- `review_sentiment` router registered BEFORE `reviews` router to avoid `/reviews/*` route-conflict
+- One consolidated frontend file (`CompetitorGapPanels.js`) exporting all 10 panels
+- All panels accept `activePropertyId` prop and share the `API = REACT_APP_BACKEND_URL + /api` convention
+
+**Testing agent iteration_156.json**: 100% backend (38/38) + 100% frontend (10/10 panels). Zero critical/minor/UI/integration issues. Zero action items.
+
+**Remaining gaps (5 of 15)** — deferred because they require partner negotiations or are complex multi-week items:
+- PCI Card-on-File Vault (2d, needs careful Stripe tokenization)
+- Google Hotel Ads / Meta-search (2d, needs Google partner onboarding)
+- SSO / SAML (2d, needs IdP like Okta/Azure AD)
+- IP allowlist (0.5d, easy but low priority now that 2FA is live)
+- Demand overlay on Rate Manager (0.5d, polish)
 
 ### Iter 155 (Feb 2026): Payment Mix report + Competitor Gap Map
 

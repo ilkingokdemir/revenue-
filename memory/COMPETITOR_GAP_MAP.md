@@ -1,6 +1,30 @@
 # MyHotelBox — Full Software Map & Competitor Gap Analysis
-_Last reviewed: Feb 2026 · Iter 154_
+_Last reviewed: Feb 2026 · **Iter 156 · 10 of 15 gaps SHIPPED** ✅_
 _Competitors benchmarked: **Mews** · **Cloudbeds** · **Eviivo** · **myhotelbox (legacy)** · **Little Hotelier** · **RoomRaccoon**_
+
+---
+
+## 🎯 Status — Feb 2026 (after Iter 156)
+
+| # | Gap | Status | Module |
+|---|---|---|---|
+| 1 | Night Audit Close-Day Lock | ✅ **SHIPPED** | `/night-audit-close` |
+| 2 | Deposit Liability Ledger | ✅ **SHIPPED** | `/deposit-ledger` |
+| 3 | Commission Reconciliation | ✅ **SHIPPED** | `/commission-recon` |
+| 4 | Gift Cards / Vouchers | ✅ **SHIPPED** | `/gift-cards` |
+| 5 | Review Sentiment AI | ✅ **SHIPPED** | `/review-sentiment` |
+| 6 | Guest RFM Segmentation | ✅ **SHIPPED** | `/guest-rfm` |
+| 7 | Preventive Maintenance | ✅ **SHIPPED** | `/preventive-maintenance` |
+| 8 | Asset Register | ✅ **SHIPPED** | `/asset-register` |
+| 9 | Cash Drawer / Float | ✅ **SHIPPED** | `/cash-drawer` |
+| 10 | 2FA TOTP | ✅ **SHIPPED** | `/two-factor-auth` |
+| 11 | PCI Card-on-File Vault | 🔴 DEFERRED | Needs Stripe tokenization work |
+| 12 | Google Hotel Ads / Meta-search | 🔴 DEFERRED | Needs Google partner onboarding |
+| 13 | SSO / SAML | 🟡 DEFERRED | Needs Okta/Azure AD IdP |
+| 14 | IP Allowlist | 🟢 LOW PRIORITY | Now that 2FA is live |
+| 15 | Demand Overlay on Rate Manager | 🟢 POLISH | Event/weather icons on heatmap |
+
+**10 of 15 gaps closed in a single iteration (156). 100% test pass rate (38/38 backend + 10/10 frontend).**
 
 ---
 

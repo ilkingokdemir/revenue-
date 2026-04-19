@@ -376,6 +376,10 @@ api_router.include_router(auth_routes_router)
 connections_router = create_connections_router(db, require_roles)
 api_router.include_router(connections_router)
 
+# Register sentiment router BEFORE reviews router to avoid /reviews/{review_id} catching /reviews/sentiment/*
+from routes.review_sentiment import create_sentiment_router
+api_router.include_router(create_sentiment_router(db, require_roles, LlmChat, UserMessage))
+
 reviews_router = create_reviews_router(db, require_roles, get_current_user, verify_api_key, LlmChat, UserMessage, resend)
 api_router.include_router(reviews_router)
 
@@ -572,6 +576,36 @@ api_router.include_router(onboarding_router)
 from routes.demo_seeder import create_demo_seeder_router
 demo_seeder_router = create_demo_seeder_router(db)
 api_router.include_router(demo_seeder_router)
+
+# ===== Iter 156 — Top-10 competitor gap features =====
+from routes.night_audit_close import create_night_audit_close_router
+api_router.include_router(create_night_audit_close_router(db, require_roles))
+
+from routes.deposit_ledger import create_deposit_ledger_router
+api_router.include_router(create_deposit_ledger_router(db, require_roles))
+
+from routes.commission_recon import create_commission_recon_router
+api_router.include_router(create_commission_recon_router(db, require_roles))
+
+from routes.gift_cards import create_gift_cards_router
+api_router.include_router(create_gift_cards_router(db, require_roles))
+
+# Note: review_sentiment router is registered earlier (before reviews_router) to avoid route conflicts
+
+from routes.guest_rfm import create_rfm_router
+api_router.include_router(create_rfm_router(db, require_roles))
+
+from routes.preventive_maintenance import create_preventive_maintenance_router
+api_router.include_router(create_preventive_maintenance_router(db, require_roles))
+
+from routes.asset_register import create_asset_register_router
+api_router.include_router(create_asset_register_router(db, require_roles))
+
+from routes.cash_drawer import create_cash_drawer_router
+api_router.include_router(create_cash_drawer_router(db, require_roles))
+
+from routes.two_factor_auth import create_2fa_router
+api_router.include_router(create_2fa_router(db, require_roles, get_current_user))
 
 app.include_router(api_router)
 

@@ -26,6 +26,11 @@ import { CurrencyFxPanel } from "./components/dashboard/finance/CurrencyFxPanel"
 import { RateStructurePanel } from "./components/dashboard/finance/RateStructurePanel";
 import { GroupBookingsPanel } from "./components/dashboard/GroupBookingsPanel";
 import { GdprPanel } from "./components/dashboard/GdprPanel";
+import {
+  NightAuditClosePanel, DepositLedgerPanel, CommissionReconPanel, GiftCardsPanel,
+  ReviewSentimentPanel, GuestRfmPanel, PreventiveMaintenancePanel,
+  AssetRegisterPanel, CashDrawerPanel, TwoFactorAuthPanel,
+} from "./components/dashboard/CompetitorGapPanels";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
@@ -195,6 +200,7 @@ import {
   DeviceMobile,
   TShirt,
   Bug,
+  Lock,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2584,6 +2590,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "kiosk-launch", icon: DeviceTablet, name: "Self-Service Kiosk", testId: "kiosk-launch-btn", launchUrl: true },
         { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
+        { id: "cash-drawer", icon: Wallet, name: "Cash Drawer", testId: "cash-drawer-btn" },
       ],
     },
     {
@@ -2614,6 +2621,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "surveys", icon: Star, name: t("nav.surveys"), testId: "surveys-btn" },
         { id: "messaging", icon: Envelope, name: t("nav.messaging"), testId: "messaging-btn" },
         { id: "concierge-analytics", icon: Robot, name: t("nav.concierge"), testId: "concierge-analytics-btn" },
+        { id: "guest-rfm", icon: Target, name: "Guest RFM Segmentation", testId: "guest-rfm-btn" },
         { id: "automation", icon: Lightning, name: t("nav.automation"), testId: "automation-btn" },
       ],
     },
@@ -2623,8 +2631,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       items: [
         { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
         { id: "maintenance", icon: Wrench, name: t("nav.maintenance"), testId: "maintenance-btn" },
+        { id: "preventive-maintenance", icon: Wrench, name: "Preventive Maintenance", testId: "preventive-maintenance-btn" },
+        { id: "asset-register", icon: Package, name: "Asset Register", testId: "asset-register-btn" },
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
         { id: "night-audit", icon: Moon, name: t("nav.night_audit"), testId: "night-audit-btn" },
+        { id: "night-audit-close", icon: Lock, name: "Close Day (Lock)", testId: "night-audit-close-btn" },
         { id: "logbook", icon: Notebook, name: t("nav.logbook"), testId: "logbook-btn" },
         { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
@@ -2663,6 +2674,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
         { id: "deposit-policies", icon: ShieldCheck, name: "Deposit Policies", testId: "deposit-policies-btn" },
         { id: "currency-fx", icon: Globe, name: "Multi-Currency / FX", testId: "currency-fx-btn" },
+        { id: "deposit-ledger", icon: Wallet, name: "Deposit Ledger", testId: "deposit-ledger-btn" },
+        { id: "commission-recon", icon: Receipt, name: "Commission Reconciliation", testId: "commission-recon-btn" },
+        { id: "gift-cards", icon: Tag, name: "Gift Cards", testId: "gift-cards-btn" },
         { id: "onboarding", icon: MagicWand, name: "First-Run Wizard", testId: "onboarding-btn" },
       ],
     },
@@ -2671,6 +2685,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       color: "text-emerald-500",
       items: [
         { id: "reviews", icon: ChatText, name: t("nav.reviews"), testId: "nav-reviews" },
+        { id: "review-sentiment", icon: Sparkle, name: "AI Sentiment Themes", testId: "review-sentiment-btn" },
         { id: "analytics", icon: ChartBar, name: t("nav.analytics"), testId: "analytics-btn" },
         { id: "templates", icon: FileText, name: t("nav.templates"), testId: "templates-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: t("nav.approvals"), testId: "approval-queue-btn" }] : []),
@@ -2697,6 +2712,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         ...(user?.role !== "receptionist" ? [{ id: "onboarding-admin", icon: Users, name: "Onboarding Review", testId: "onboarding-admin-btn" }] : []),
         ...(user?.role !== "receptionist" ? [{ id: "legal-docs", icon: ShieldCheck, name: "Legal Documents", testId: "legal-docs-btn" }] : []),
         { id: "gdpr", icon: ShieldCheck, name: "GDPR Data Rights", testId: "gdpr-btn" },
+        { id: "two-factor-auth", icon: ShieldCheck, name: "Two-Factor Auth (2FA)", testId: "two-factor-auth-btn" },
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "roles-permissions", icon: ShieldCheck, name: "Roles & Permissions", testId: "roles-permissions-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "import-module", icon: Upload, name: "Import Module", testId: "import-module-btn" }] : []),
@@ -3494,6 +3510,18 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "gdpr" && (
           <GdprPanel user={user} />
         )}
+
+        {/* Iter 156 — Top-10 Competitor Gap Features */}
+        {activeView === "night-audit-close" && <div className="p-6"><NightAuditClosePanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "deposit-ledger" && <div className="p-6"><DepositLedgerPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "commission-recon" && <div className="p-6"><CommissionReconPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "gift-cards" && <div className="p-6"><GiftCardsPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "review-sentiment" && <div className="p-6"><ReviewSentimentPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "guest-rfm" && <div className="p-6"><GuestRfmPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "preventive-maintenance" && <div className="p-6"><PreventiveMaintenancePanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "asset-register" && <div className="p-6"><AssetRegisterPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "cash-drawer" && <div className="p-6"><CashDrawerPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "two-factor-auth" && <div className="p-6"><TwoFactorAuthPanel /></div>}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

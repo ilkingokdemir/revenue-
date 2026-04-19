@@ -27,6 +27,7 @@ import { RateStructurePanel } from "./components/dashboard/finance/RateStructure
 import { GroupBookingsPanel } from "./components/dashboard/GroupBookingsPanel";
 import { GdprPanel } from "./components/dashboard/GdprPanel";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
+import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
@@ -2935,6 +2936,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
       {/* Main Content Area */}
       <main className="flex-1 lg:ml-56 pt-14 lg:pt-0">
+        {/* First-run progress banner — auto-hides when setup is complete */}
+        {activeView !== "onboarding" && user?.role === "admin" && (
+          <OnboardingBanner
+            propertyId={activePropertyId || "default"}
+            onResume={() => setActiveView("onboarding")}
+          />
+        )}
+
         {/* Dashboard Home */}
         {activeView === "dashboard" && (
           <EnhancedDashboard propertyId={activePropertyId} />

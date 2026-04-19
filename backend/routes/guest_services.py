@@ -12,7 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def create_guest_services_router(db, require_roles):
+def create_guest_services_router(db, require_roles, resend_lib=None):
     router = APIRouter()
 
     # ===========================
@@ -382,18 +382,17 @@ def create_guest_services_router(db, require_roles):
         return await _generate_report_data(db, property_id, config)
 
     # ===========================
-    # 3. PRINTABLE PDFs — Registration Card + Folio Receipt
+    # 3. PRINTABLE PDFs — Registration Card + Folio Receipt (+ Email)
     # (Competitor parity: Mews/Cloudbeds/Eviivo — reg card legally required in EU/UK)
     # ===========================
 
-    async def _build_pdf(title, property_name, sections, filename):
-        """Shared reportlab PDF builder. `sections` = list of (heading, rows[[k,v]...]).
-        Returns a StreamingResponse."""
+    def _build_simple_pdf(title, property_name, sections):
+        """Build a simple key/value PDF (used by reg card). Returns bytes."""
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
         from reportlab.lib.units import mm
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.styles import getSampleStyleSheet
 
         buf = io.BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=A4,
@@ -401,8 +400,6 @@ def create_guest_services_router(db, require_roles):
                                 topMargin=16 * mm, bottomMargin=16 * mm)
         styles = getSampleStyleSheet()
         story = []
-
-        # Header band
         story.append(Paragraph(
             f"<para align='left'><font size='9' color='#78716c'>{property_name or 'HOTEL'}</font></para>",
             styles["Normal"]))
@@ -411,7 +408,6 @@ def create_guest_services_router(db, require_roles):
             styles["Normal"]))
         story.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#1c1917"),
                                 spaceBefore=4, spaceAfter=10))
-
         for heading, rows in sections:
             if heading:
                 story.append(Paragraph(
@@ -431,32 +427,16 @@ def create_guest_services_router(db, require_roles):
                 ]))
                 story.append(tbl)
                 story.append(Spacer(1, 10))
-
-        # Footer + signature box (for reg card)
         story.append(Spacer(1, 16))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d6d3d1")))
         story.append(Paragraph(
             f"<para align='center'><font size='7' color='#a8a29e'>Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · Powered by My Hotel Box</font></para>",
             styles["Normal"]))
-
         doc.build(story)
-        buf.seek(0)
-        return StreamingResponse(
-            buf, media_type="application/pdf",
-            headers={"Content-Disposition": f'inline; filename="{filename}"'}
-        )
+        return buf.getvalue()
 
-    @router.get("/bookings/{booking_id}/registration-card.pdf")
-    async def registration_card_pdf(
-        booking_id: str,
-        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
-    ):
-        """Generate a printable guest Registration Card PDF (legal requirement in EU/UK/TR)."""
-        from reportlab.lib import colors
-        from reportlab.lib.units import mm
-        from reportlab.platypus import Table, TableStyle, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet
-
+    async def _reg_card_bytes(booking_id):
+        """Build the Registration Card PDF as bytes. Raises 404 if booking missing."""
         booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
         if not booking:
             raise HTTPException(status_code=404, detail="Booking not found")
@@ -505,22 +485,17 @@ def create_guest_services_router(db, require_roles):
                 ["Phone", reg.get("emergency_contact_phone", "—") or "—"],
             ]),
         ]
-
-        # Build base doc
-        response = await _build_pdf(
+        pdf_bytes = _build_simple_pdf(
             title="GUEST REGISTRATION CARD",
             property_name=prop.get("name", "") if prop else "",
             sections=sections,
-            filename=f"reg-card-{booking_id[:8]}.pdf",
         )
-        return response
+        guest_email = _v("email", "guest_email")
+        return pdf_bytes, (booking.get("guest_name") or "guest"), guest_email
 
-    @router.get("/folio/{booking_id}/pdf")
-    async def folio_pdf(
-        booking_id: str,
-        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
-    ):
-        """Generate a printable Folio receipt PDF (itemised stay invoice)."""
+    async def _folio_bytes(booking_id):
+        """Build the Folio Receipt PDF as bytes. Raises 404 if booking missing."""
+        from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
         from reportlab.lib.units import mm
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
@@ -534,7 +509,6 @@ def create_guest_services_router(db, require_roles):
         prop = await db.properties.find_one({"id": booking.get("property_id", "")}, {"_id": 0})
         items = await db.folio_items.find({"booking_id": booking_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
 
-        # Auto-seed room charge if empty (same logic as GET /folio)
         if not items:
             nights = int(booking.get("nights", 1) or 1)
             rate = float(booking.get("rate_per_night", 0) or 0)
@@ -562,9 +536,8 @@ def create_guest_services_router(db, require_roles):
         cur_sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(booking.get("currency", "GBP"), "£")
         inv_num = f"FOL-{booking_id[:8].upper()}"
 
-        # Build PDF directly (custom layout — items table)
         buf = io.BytesIO()
-        doc = SimpleDocTemplate(buf, pagesize=__import__("reportlab.lib.pagesizes", fromlist=["A4"]).A4,
+        doc = SimpleDocTemplate(buf, pagesize=A4,
                                 leftMargin=18 * mm, rightMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
         styles = getSampleStyleSheet()
         story = []
@@ -574,7 +547,6 @@ def create_guest_services_router(db, require_roles):
         story.append(Paragraph(f"<para align='left'><font size='20' color='#1c1917'><b>FOLIO · {inv_num}</b></font></para>", styles["Normal"]))
         story.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#1c1917"), spaceBefore=4, spaceAfter=10))
 
-        # Meta
         meta = Table([
             ["Guest", booking.get("guest_name", "—"), "Booking", booking.get("booking_ref") or booking_id[:8].upper()],
             ["Check-In", booking.get("check_in", "—"), "Check-Out", booking.get("check_out", "—")],
@@ -590,7 +562,6 @@ def create_guest_services_router(db, require_roles):
         story.append(meta)
         story.append(Spacer(1, 12))
 
-        # Items table
         data = [["Date", "Description", "Qty", "Unit", "Amount"]]
         for it in items:
             dt = (it.get("created_at") or "")[:10]
@@ -612,7 +583,6 @@ def create_guest_services_router(db, require_roles):
         story.append(tbl)
         story.append(Spacer(1, 14))
 
-        # Totals
         tot_rows = [["Charges", f"{cur_sym}{charges:.2f}"]]
         if payments:
             tot_rows.append(["Payments", f"-{cur_sym}{payments:.2f}"])
@@ -635,13 +605,132 @@ def create_guest_services_router(db, require_roles):
         story.append(Paragraph(
             f"<para align='center'><font size='7' color='#a8a29e'>Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · {inv_num} · Thank you for your stay</font></para>",
             styles["Normal"]))
-
         doc.build(story)
-        buf.seek(0)
+
+        guest_email = booking.get("guest_email") or ""
+        return buf.getvalue(), (booking.get("guest_name") or "guest"), guest_email, inv_num, balance, cur_sym
+
+    @router.get("/bookings/{booking_id}/registration-card.pdf")
+    async def registration_card_pdf(
+        booking_id: str,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Printable guest Registration Card PDF (legal requirement in EU/UK/TR)."""
+        pdf_bytes, _name, _email = await _reg_card_bytes(booking_id)
         return StreamingResponse(
-            buf, media_type="application/pdf",
+            io.BytesIO(pdf_bytes), media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="reg-card-{booking_id[:8]}.pdf"'},
+        )
+
+    @router.get("/folio/{booking_id}/pdf")
+    async def folio_pdf(
+        booking_id: str,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Printable Folio receipt PDF (itemised stay invoice)."""
+        pdf_bytes, _name, _email, _inv, _bal, _cur = await _folio_bytes(booking_id)
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes), media_type="application/pdf",
             headers={"Content-Disposition": f'inline; filename="folio-{booking_id[:8]}.pdf"'},
         )
+
+    # -------- Email the PDF to the guest (Resend) --------
+    @router.post("/bookings/{booking_id}/email-document")
+    async def email_document(
+        booking_id: str,
+        data: Dict,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist")),
+    ):
+        """Email the Registration Card or Folio Receipt PDF to the guest (or custom recipient).
+
+        Body: { "document_type": "reg_card" | "folio", "to"?: "a@b.com" | ["a@b.com"], "subject"?, "message"? }
+        """
+        import os
+        import base64
+
+        if not resend_lib or not os.environ.get("RESEND_API_KEY"):
+            raise HTTPException(503, "Email service not configured")
+
+        doc_type = (data.get("document_type") or "").strip()
+        if doc_type not in ("reg_card", "folio"):
+            raise HTTPException(400, "document_type must be 'reg_card' or 'folio'")
+
+        # Build the requested PDF
+        if doc_type == "reg_card":
+            pdf_bytes, guest_name, fallback_email = await _reg_card_bytes(booking_id)
+            label = "Registration Card"
+            filename = f"reg-card-{booking_id[:8]}.pdf"
+            default_subject = f"Your registration card — booking {booking_id[:8].upper()}"
+            default_message = (
+                "Dear guest,<br><br>"
+                "Please find your registration card attached. Kindly review, sign, "
+                "and keep a copy for your records.<br><br>We look forward to your stay."
+            )
+        else:
+            pdf_bytes, guest_name, fallback_email, inv_num, balance, cur_sym = await _folio_bytes(booking_id)
+            label = "Folio Receipt"
+            filename = f"folio-{booking_id[:8]}.pdf"
+            default_subject = f"Your folio receipt — {inv_num}"
+            bal_line = (
+                f"Your outstanding balance is <b>{cur_sym}{balance:.2f}</b>."
+                if balance > 0 else "Your account is fully settled. Thank you!"
+            )
+            default_message = (
+                f"Dear {guest_name or 'guest'},<br><br>"
+                f"Please find your itemised folio attached.<br>{bal_line}<br><br>"
+                "Thank you for choosing us — we hope to welcome you again soon."
+            )
+
+        # Recipients
+        raw_to = data.get("to") or fallback_email
+        if isinstance(raw_to, str):
+            to_list = [x.strip() for x in raw_to.split(",") if x.strip()]
+        elif isinstance(raw_to, list):
+            to_list = [x for x in raw_to if x]
+        else:
+            to_list = []
+        if not to_list:
+            raise HTTPException(400, "Guest has no email on file — please supply 'to'")
+
+        subject = (data.get("subject") or default_subject).strip()
+        message = (data.get("message") or default_message).strip()
+        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+
+        body_html = f"""<div style='font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:auto;padding:24px;color:#1f2937;'>
+<h2 style='color:#1c1917;margin:0 0 8px 0;'>{label}</h2>
+<p style='color:#6b7280;font-size:13px;'>Sent by {current_user.get('name', 'Reception')} · 1 attachment</p>
+<div style='font-size:14px;line-height:1.6;'>{message}</div>
+<p style='color:#9ca3af;font-size:11px;margin-top:24px;'>This email may contain confidential information — please do not forward.</p>
+</div>"""
+
+        try:
+            resend_lib.Emails.send({
+                "from": sender,
+                "to": to_list,
+                "subject": subject,
+                "html": body_html,
+                "attachments": [{
+                    "filename": filename,
+                    "content": base64.b64encode(pdf_bytes).decode(),
+                }],
+            })
+        except Exception as e:
+            logger.error(f"Resend email failed: {e}")
+            raise HTTPException(502, f"Email send failed: {str(e)[:160]}")
+
+        # Audit log on the booking
+        await db.bookings.update_one(
+            {"id": booking_id},
+            {"$push": {"email_log": {
+                "document_type": doc_type,
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "sent_by": current_user.get("name", current_user.get("email", "")),
+                "to": to_list,
+                "subject": subject,
+                "filename": filename,
+            }}}
+        )
+        return {"ok": True, "sent_to": to_list, "document_type": doc_type, "filename": filename}
 
     return router
 

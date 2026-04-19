@@ -355,6 +355,23 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     }
   };
 
+  // Email the Reg Card / Folio PDF directly to the guest (or custom recipient) via Resend.
+  const emailDocument = async (docType) => {
+    if (!detailData) return;
+    const defaultTo = detailData.guest_email || "";
+    const label = docType === "reg_card" ? "Registration Card" : "Folio Receipt";
+    const to = window.prompt(`Email ${label} to (comma-separated for multiple):`, defaultTo);
+    if (!to || !to.trim()) return;
+    try {
+      const { data } = await axios.post(`${API}/bookings/${detailData.id}/email-document`,
+        { document_type: docType, to: to.trim() });
+      toast.success(`${label} emailed to ${(data.sent_to || []).join(", ")}`);
+    } catch (e) {
+      const msg = e?.response?.data?.detail || "Failed to send email";
+      toast.error(msg);
+    }
+  };
+
   const changeStatus = async (bookingId, newStatus) => {
     try {
       await axios.put(`${API}/bookings/timeline/${pid}/status/${bookingId}`, { status: newStatus });
@@ -1731,16 +1748,32 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200">
                       <Send className="w-3.5 h-3.5" />Send Digital Check-in Link
                     </button>
-                    <button onClick={() => downloadPdf(`/bookings/${detailData.id}/registration-card.pdf`, `reg-card-${detailData.id.slice(0,8)}.pdf`)}
-                      data-testid="print-reg-card-btn"
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-lg border border-stone-200">
-                      <Printer className="w-3.5 h-3.5" />Print Registration Card
-                    </button>
-                    <button onClick={() => downloadPdf(`/folio/${detailData.id}/pdf`, `folio-${detailData.id.slice(0,8)}.pdf`)}
-                      data-testid="print-folio-actions-btn"
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200">
-                      <Receipt className="w-3.5 h-3.5" />Print Folio Receipt
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => downloadPdf(`/bookings/${detailData.id}/registration-card.pdf`, `reg-card-${detailData.id.slice(0,8)}.pdf`)}
+                        data-testid="print-reg-card-btn"
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 rounded-lg border border-stone-200">
+                        <Printer className="w-3.5 h-3.5" />Print Registration Card
+                      </button>
+                      <button onClick={() => emailDocument("reg_card")}
+                        data-testid="email-reg-card-btn"
+                        title="Email to guest"
+                        className="px-3 py-2.5 text-xs font-semibold text-stone-700 bg-white hover:bg-stone-50 rounded-lg border border-stone-200">
+                        <Mail className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => downloadPdf(`/folio/${detailData.id}/pdf`, `folio-${detailData.id.slice(0,8)}.pdf`)}
+                        data-testid="print-folio-actions-btn"
+                        className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200">
+                        <Receipt className="w-3.5 h-3.5" />Print Folio Receipt
+                      </button>
+                      <button onClick={() => emailDocument("folio")}
+                        data-testid="email-folio-btn"
+                        title="Email to guest"
+                        className="px-3 py-2.5 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-50 rounded-lg border border-emerald-200">
+                        <Mail className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

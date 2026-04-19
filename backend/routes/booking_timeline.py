@@ -361,6 +361,7 @@ def create_booking_timeline_router(db, require_roles):
                 for b in room_bks:
                     bk_bars.append({
                         "id": b.get("id", ""),
+                        "booking_ref": b.get("booking_ref", ""),
                         "guest_name": b.get("guest_name", ""),
                         "check_in": b.get("check_in", ""),
                         "check_out": b.get("check_out", ""),
@@ -373,6 +374,11 @@ def create_booking_timeline_router(db, require_roles):
                         "adults": b.get("adults", 1),
                         "children": b.get("children", 0),
                         "payment_status": b.get("payment_status", "pending"),
+                        # Live folio values so the flashing balance pill reflects partial payments
+                        "balance_due": b.get("balance_due"),
+                        "folio_paid": b.get("folio_paid", 0),
+                        "folio_charged": b.get("folio_charged", 0),
+                        "notes": b.get("notes", ""),
                     })
                 room_entries.append({
                     "id": room.get("id", ""),

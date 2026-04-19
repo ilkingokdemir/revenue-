@@ -1,0 +1,58 @@
+{
+  "summary": "Iteration 154 - Quick Pay Modal & Folio Payment Types Testing. All backend and frontend tests PASSED. Bug fix verified: timeline now shows remaining balance after partial payment (not total_price). Feature verified: 4 payment types (Cash, Card, Bank Transfer, Channel Collection) work correctly in both QuickPayModal and Folio tab.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration154_quickpay_folio.py",
+    "/app/test_reports/pytest/pytest_iteration154_quickpay_folio.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration154_quickpay_folio.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Used existing bookings for testing",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Quick Pay Modal and Folio payment types fully tested. All 4 payment methods (cash, card, bank_transfer, channel_collection) work correctly. Timeline endpoint now returns balance_due, folio_paid, folio_charged fields. Payment status transitions (pending -> partial -> paid) work correctly.",
+  "tests_verified": {
+    "backend": [
+      "POST /api/folio/{booking_id}/add-payment with cash - PASS",
+      "POST /api/folio/{booking_id}/add-payment with card - PASS",
+      "POST /api/folio/{booking_id}/add-payment with bank_transfer - PASS",
+      "POST /api/folio/{booking_id}/add-payment with channel_collection (stores channel) - PASS",
+      "Invalid method falls back to 'card' - PASS",
+      "Method aliases (cc, wire, ota) normalize correctly - PASS",
+      "GET /api/bookings/timeline returns balance_due, folio_paid, folio_charged - PASS",
+      "Timeline balance_due reflects partial payments (BUG FIX VERIFIED) - PASS",
+      "Payment status transitions (pending -> partial -> paid) - PASS",
+      "Folio items include payment_method for badge display - PASS",
+      "Timeline has all required fields - PASS",
+      "Folio totals match timeline balance - PASS"
+    ],
+    "frontend": [
+      "QuickPayModal opens when clicking balance pill - PASS",
+      "4 payment type buttons present (Cash, Card, Bank Transfer, Channel Collection) - PASS",
+      "Channel Collection shows channel dropdown - PASS",
+      "Amount shortcuts (Full, 50%, 30% deposit) work - PASS",
+      "Amount input and remaining preview work - PASS",
+      "Record button submits payment - PASS",
+      "Toast notification shows payment method - PASS",
+      "CRITICAL: Calendar balance updates after partial payment (£132.13 -> £66.07) - PASS",
+      "Folio tab shows Record Payment picker with 4 buttons - PASS",
+      "Folio payment badges show payment method - PASS"
+    ]
+  }
+}

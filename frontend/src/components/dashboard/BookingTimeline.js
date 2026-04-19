@@ -7,7 +7,7 @@ import {
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
   FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, UserX, Lock, StickyNote, LayoutList, Copy, Filter,
-  Bell, Building2, Wrench, Printer, Edit3,
+  Bell, Building2, Wrench, Printer, Edit3, Banknote, Landmark,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -1881,10 +1881,24 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                       const items = activeSF ? activeSF.items : folio.items;
                       const totals = activeSF ? activeSF.totals : folio.totals;
                       return <>
-                        {items.map(item => (
-                          <div key={item.id} className={`flex items-center justify-between py-2 px-3 rounded-lg text-xs ${item.type === "payment" ? "bg-emerald-50" : item.type === "adjustment" ? "bg-amber-50" : "bg-white border border-stone-100"}`}>
-                            <div className="flex-1">
-                              <p className="font-medium text-stone-700">{item.description}</p>
+                        {items.map(item => {
+                          const isPayment = item.type === "payment";
+                          const method = (item.payment_method || item.category || "").toLowerCase();
+                          const methodBadges = {
+                            cash: { label: "Cash", cls: "bg-emerald-100 text-emerald-700" },
+                            card: { label: "Card", cls: "bg-sky-100 text-sky-700" },
+                            bank_transfer: { label: "Bank", cls: "bg-violet-100 text-violet-700" },
+                            channel_collection: { label: item.channel || "OTA", cls: "bg-fuchsia-100 text-fuchsia-700" },
+                          };
+                          const badge = isPayment ? methodBadges[method] : null;
+                          return (
+                          <div key={item.id} className={`flex items-center justify-between py-2 px-3 rounded-lg text-xs ${isPayment ? "bg-emerald-50" : item.type === "adjustment" ? "bg-amber-50" : "bg-white border border-stone-100"}`}>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-stone-700 flex items-center gap-1.5 flex-wrap">
+                                <span className="truncate">{item.description}</span>
+                                {badge && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${badge.cls}`} data-testid={`folio-payment-badge-${item.id}`}>{badge.label}</span>}
+                                {isPayment && item.reference && <span className="text-[9px] font-mono text-stone-400">· {item.reference}</span>}
+                              </p>
                               <p className="text-[10px] text-stone-400">{item.category} {item.quantity > 1 ? `x${item.quantity}` : ""}</p>
                             </div>
                             {subFolios.length > 1 && (
@@ -1894,11 +1908,12 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                 {subFolios.map(sf => <option key={sf.id} value={sf.id}>{sf.name}</option>)}
                               </select>
                             )}
-                            <span className={`font-bold ${item.type === "payment" ? "text-emerald-600" : item.type === "adjustment" ? "text-amber-600" : "text-stone-800"}`}>
-                              {item.type === "payment" ? "-" : ""}{cur(item.amount)}
+                            <span className={`font-bold ${isPayment ? "text-emerald-600" : item.type === "adjustment" ? "text-amber-600" : "text-stone-800"}`}>
+                              {isPayment ? "-" : ""}{cur(item.amount)}
                             </span>
                           </div>
-                        ))}
+                          );
+                        })}
                         {items.length === 0 && <p className="text-center text-xs text-stone-400 py-6">No items in this sub-folio yet.</p>}
 
                         {/* Totals — for active sub-folio */}
@@ -1917,12 +1932,30 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     })()}
                   </div>
 
-                  {/* Quick Payment */}
+                  {/* Quick Payment — explicit type picker (cash / card / bank / channel) */}
                   {folio.totals.balance_due > 0 && (
-                    <button onClick={() => addPayment(folio.totals.balance_due, "card")} data-testid="record-payment-btn"
-                      className="w-full py-2.5 text-xs font-bold text-white bg-emerald-500 hover:bg-emerald-600 rounded-lg flex items-center justify-center gap-1.5">
-                      <CreditCard className="w-3.5 h-3.5" />Record Full Payment ({cur(folio.totals.balance_due)})
-                    </button>
+                    <div className="space-y-2" data-testid="folio-record-payment-picker">
+                      <div className="text-[10px] font-bold uppercase text-stone-500">Record payment · {cur(folio.totals.balance_due)} due</div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        <button onClick={() => addPayment(folio.totals.balance_due, "cash")} data-testid="record-payment-cash"
+                          className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-bold">
+                          <Banknote className="w-3.5 h-3.5" />Cash
+                        </button>
+                        <button onClick={() => addPayment(folio.totals.balance_due, "card")} data-testid="record-payment-card"
+                          className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-sky-500 hover:bg-sky-600 text-white text-[10px] font-bold">
+                          <CreditCard className="w-3.5 h-3.5" />Card
+                        </button>
+                        <button onClick={() => addPayment(folio.totals.balance_due, "bank_transfer")} data-testid="record-payment-bank"
+                          className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-violet-500 hover:bg-violet-600 text-white text-[10px] font-bold">
+                          <Landmark className="w-3.5 h-3.5" />Bank
+                        </button>
+                        <button onClick={() => addPayment(folio.totals.balance_due, "channel_collection")} data-testid="record-payment-channel"
+                          className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white text-[10px] font-bold">
+                          <Globe className="w-3.5 h-3.5" />Channel
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-stone-400 text-center">Tip: click the flashing balance chip on the calendar for a partial-payment flow with amount picker.</p>
+                    </div>
                   )}
                 </>) : (
                   <div className="text-center py-8 text-stone-400"><RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2" />Loading folio...</div>
@@ -2145,35 +2178,55 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 };
 
 // Quick-pay flow triggered from a flashing balance chip in the calendar.
-// Pre-fills the full remaining balance, defaults method to "card", one click records.
+// Pre-fills the full remaining balance. Supports 4 explicit payment types:
+// Cash · Card · Bank Transfer · Channel Collection (OTA). For channel collection
+// the channel is auto-inferred from the booking source but editable.
 const QuickPayModal = ({ booking, onClose, onDone }) => {
   const balance = (booking.balance_due !== undefined && booking.balance_due !== null)
     ? Number(booking.balance_due) : Number(booking.total_price || 0);
   const [amount, setAmount] = useState(balance.toFixed(2));
   const [method, setMethod] = useState("card");
+  const [channel, setChannel] = useState(booking.source || "Booking.com");
+  const [reference, setReference] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const paymentTypes = [
+    { id: "cash", label: "Cash", icon: Banknote, activeCls: "border-emerald-500 bg-emerald-50 text-emerald-700" },
+    { id: "card", label: "Card", icon: CreditCard, activeCls: "border-sky-500 bg-sky-50 text-sky-700" },
+    { id: "bank_transfer", label: "Bank Transfer", icon: Landmark, activeCls: "border-violet-500 bg-violet-50 text-violet-700" },
+    { id: "channel_collection", label: "Channel Collection", icon: Globe, activeCls: "border-fuchsia-500 bg-fuchsia-50 text-fuchsia-700" },
+  ];
 
   const record = async () => {
     const n = parseFloat(amount);
     if (!n || n <= 0) return toast.error("Enter a valid amount");
+    if (n > balance + 0.01) {
+      if (!window.confirm(`Amount ${cur(n)} exceeds balance ${cur(balance)}. Record as overpayment?`)) return;
+    }
     setBusy(true);
     try {
-      await axios.post(`${API}/folio/${booking.id}/add-payment`, {
+      const body = {
         amount: n,
         method,
-        description: note || `Front-desk payment · ${method}`,
-      });
-      toast.success(`Recorded ${cur(n)} payment`);
+        reference: reference.trim(),
+        description: note.trim() || undefined,
+      };
+      if (method === "channel_collection") body.channel = channel.trim() || booking.source || "OTA";
+      await axios.post(`${API}/folio/${booking.id}/add-payment`, body);
+      const label = paymentTypes.find(p => p.id === method)?.label || method;
+      toast.success(`${cur(n)} recorded · ${label}`);
       onDone();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Payment failed");
     } finally { setBusy(false); }
   };
 
+  const remainingAfter = Math.max(0, balance - (parseFloat(amount) || 0));
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose} data-testid="quickpay-modal">
+      <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="bg-gradient-to-br from-rose-500 to-pink-600 text-white p-5">
           <div className="text-[11px] font-bold uppercase tracking-wider opacity-80">Take Payment</div>
           <div className="text-xl font-black mt-0.5">{booking.guest_name}</div>
@@ -2182,51 +2235,115 @@ const QuickPayModal = ({ booking, onClose, onDone }) => {
             <span className="opacity-70"> · charged {cur(booking.total_price)}</span>
           </div>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="p-5 space-y-4">
+          {/* Payment type — segmented 4-up picker */}
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1.5">Payment Type</label>
+            <div className="grid grid-cols-4 gap-2" data-testid="quickpay-type-picker">
+              {paymentTypes.map(t => {
+                const Icon = t.icon;
+                const active = method === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setMethod(t.id)}
+                    data-testid={`quickpay-type-${t.id}`}
+                    className={`flex flex-col items-center gap-1 px-1 py-2.5 rounded-lg border-2 text-[10px] font-bold transition-all ${
+                      active
+                        ? `${t.activeCls} shadow-sm`
+                        : "border-stone-200 text-stone-500 hover:border-stone-300 hover:bg-stone-50"
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span className="leading-tight text-center">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Channel selector — only for channel_collection */}
+          {method === "channel_collection" && (
+            <div>
+              <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Collected by</label>
+              <select value={channel} onChange={e => setChannel(e.target.value)}
+                data-testid="quickpay-channel"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm bg-fuchsia-50 border-fuchsia-200">
+                <option value="Booking.com">Booking.com</option>
+                <option value="Expedia">Expedia</option>
+                <option value="Airbnb">Airbnb</option>
+                <option value="Agoda">Agoda</option>
+                <option value="Hotels.com">Hotels.com</option>
+                <option value="Trip.com">Trip.com</option>
+                <option value="Vrbo">Vrbo</option>
+                <option value="Direct OTA">Direct OTA</option>
+              </select>
+              <p className="text-[10px] text-stone-400 mt-1">Booking source: <strong>{booking.source || "n/a"}</strong> · for reconciliation reporting</p>
+            </div>
+          )}
+
+          {/* Quick amount shortcuts */}
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setAmount(balance.toFixed(2))}
               data-testid="quickpay-full"
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 hover:border-rose-400 text-sm font-semibold">
-              Pay full {cur(balance)}
+              className="flex-1 px-2 py-1.5 rounded-lg border border-stone-200 hover:border-rose-400 text-[11px] font-semibold">
+              Full {cur(balance)}
             </button>
             <button
               type="button"
               onClick={() => setAmount((balance / 2).toFixed(2))}
-              className="flex-1 px-3 py-2 rounded-lg border border-stone-200 hover:border-rose-400 text-sm">
+              data-testid="quickpay-half"
+              className="flex-1 px-2 py-1.5 rounded-lg border border-stone-200 hover:border-rose-400 text-[11px]">
               50%
             </button>
+            <button
+              type="button"
+              onClick={() => setAmount((balance * 0.3).toFixed(2))}
+              className="flex-1 px-2 py-1.5 rounded-lg border border-stone-200 hover:border-rose-400 text-[11px]">
+              30% deposit
+            </button>
           </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Amount</label>
               <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
                 data-testid="quickpay-amount"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm font-mono font-bold" />
             </div>
             <div>
-              <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Method</label>
-              <select value={method} onChange={e => setMethod(e.target.value)}
-                data-testid="quickpay-method"
-                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm">
-                <option value="card">Card</option>
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="ota_prepaid">OTA Pre-paid</option>
-                <option value="stripe">Stripe</option>
-              </select>
+              <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">
+                {method === "card" ? "Auth / Last-4" : method === "bank_transfer" ? "Transfer ref" : method === "channel_collection" ? "OTA ref" : "Receipt #"}
+              </label>
+              <input value={reference} onChange={e => setReference(e.target.value)}
+                data-testid="quickpay-reference"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
+                placeholder={method === "card" ? "•••• 4242" : method === "bank_transfer" ? "TRF-123" : "optional"} />
             </div>
           </div>
+
           <div>
             <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Note (optional)</label>
             <input value={note} onChange={e => setNote(e.target.value)}
+              data-testid="quickpay-note"
               className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm"
-              placeholder="e.g. Last four 4242 · auth ABC123" />
+              placeholder="Internal note" />
+          </div>
+
+          {/* Preview after this payment */}
+          <div className="rounded-lg bg-stone-900 text-white p-3 flex items-center justify-between text-xs">
+            <span className="opacity-70">After this payment</span>
+            <span className={`font-mono font-bold ${remainingAfter <= 0 ? "text-emerald-400" : "text-amber-300"}`} data-testid="quickpay-remaining">
+              {remainingAfter <= 0 ? "PAID IN FULL" : `${cur(remainingAfter)} remaining`}
+            </span>
           </div>
         </div>
         <div className="flex gap-2 p-5 pt-0">
           <button onClick={onClose} disabled={busy}
+            data-testid="quickpay-cancel"
             className="flex-1 px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-sm font-semibold">
             Cancel
           </button>

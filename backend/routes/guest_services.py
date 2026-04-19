@@ -460,22 +460,45 @@ def create_guest_services_router(db, require_roles, resend_lib=None):
     @router.post("/folio/{booking_id}/add-payment")
     async def add_folio_payment(booking_id: str, data: Dict,
                                 current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
-        """Record a payment against the folio."""
+        """Record a payment against the folio.
+
+        Payment method is validated to one of: cash, card, bank_transfer, channel_collection.
+        For channel_collection, the source channel (Booking.com, Expedia, etc.) is captured
+        for reconciliation. payment_status on the booking is kept in sync with the live
+        folio balance (charges or total_price fallback minus payments).
+        """
         booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
         if not booking:
             raise HTTPException(status_code=404, detail="Booking not found")
+
+        # Normalize / validate payment method
+        method_raw = str(data.get("method", "card")).lower().strip()
+        method_map = {
+            "card": "card", "credit_card": "card", "cc": "card", "stripe": "card",
+            "cash": "cash",
+            "bank_transfer": "bank_transfer", "transfer": "bank_transfer", "wire": "bank_transfer", "bank": "bank_transfer",
+            "channel_collection": "channel_collection", "ota": "channel_collection", "ota_prepaid": "channel_collection", "channel": "channel_collection",
+        }
+        method = method_map.get(method_raw, "card")
+
+        amount = float(data.get("amount", 0))
+        # Channel info — if OTA-collected, capture which channel for reconciliation
+        channel = (data.get("channel") or booking.get("source") or "").strip() if method == "channel_collection" else ""
+        reference = (data.get("reference") or "").strip()
 
         item = {
             "id": str(uuid.uuid4()),
             "booking_id": booking_id,
             "type": "payment",
-            "category": data.get("method", "card"),
-            "description": data.get("description", f"Payment ({data.get('method', 'card')})"),
+            "category": method,
+            "payment_method": method,
+            "channel": channel,
+            "description": data.get("description") or (f"Channel collection · {channel}" if channel else f"Payment · {method.replace('_', ' ').title()}"),
             "quantity": 1,
-            "unit_price": float(data.get("amount", 0)),
-            "amount": float(data.get("amount", 0)),
+            "unit_price": amount,
+            "amount": amount,
             "currency": booking.get("currency", "GBP"),
-            "reference": data.get("reference", ""),
+            "reference": reference,
             "sub_folio_id": data.get("sub_folio_id") or None,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "created_by": current_user.get("name", ""),
@@ -483,11 +506,19 @@ def create_guest_services_router(db, require_roles, resend_lib=None):
         await db.folio_items.insert_one(item)
         item.pop("_id", None)
 
-        # Update booking payment status
-        folio_items = await db.folio_items.find({"booking_id": booking_id}, {"_id": 0}).to_list(100)
-        total_charges = sum(i["amount"] for i in folio_items if i.get("type") == "charge")
-        total_payments = sum(i["amount"] for i in folio_items if i.get("type") == "payment")
-        new_status = "paid" if total_payments >= total_charges else "partial"
+        # Update booking payment_status using the SAME logic as the calendar balance:
+        # gross = folio charges if present, else booking.total_price (pre-folio bookings).
+        folio_items = await db.folio_items.find({"booking_id": booking_id}, {"_id": 0}).to_list(500)
+        total_charges = sum(float(i.get("amount", 0)) for i in folio_items if i.get("type") == "charge")
+        total_payments = sum(float(i.get("amount", 0)) for i in folio_items if i.get("type") == "payment")
+        gross = round(total_charges if total_charges > 0 else float(booking.get("total_price") or 0), 2)
+        balance = round(max(0.0, gross - total_payments), 2)
+        if balance <= 0:
+            new_status = "paid"
+        elif total_payments > 0:
+            new_status = "partial"
+        else:
+            new_status = "pending"
         await db.bookings.update_one({"id": booking_id}, {"$set": {"payment_status": new_status}})
 
         return item

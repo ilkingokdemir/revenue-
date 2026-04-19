@@ -569,6 +569,9 @@ api_router.include_router(og_router)
 from routes.property_onboarding import create_onboarding_router
 onboarding_router = create_onboarding_router(db)
 api_router.include_router(onboarding_router)
+from routes.demo_seeder import create_demo_seeder_router
+demo_seeder_router = create_demo_seeder_router(db)
+api_router.include_router(demo_seeder_router)
 
 app.include_router(api_router)
 

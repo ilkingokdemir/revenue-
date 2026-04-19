@@ -204,35 +204,7 @@ export const OnboardingWizard = ({ propertyId = "default", onClose }) => {
   };
 
   if (finished) {
-    return (
-      <div className="max-w-3xl mx-auto p-6 text-center" data-testid="onboarding-done">
-        <div className="bg-gradient-to-br from-fuchsia-50 via-violet-50 to-sky-50 border border-fuchsia-200 rounded-3xl p-10">
-          <div className="inline-flex w-20 h-20 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-600 items-center justify-center text-white mb-5 shadow-xl shadow-fuchsia-500/20">
-            <PartyPopper className="w-10 h-10" />
-          </div>
-          <h1 className="text-4xl font-black text-stone-900">You're live.</h1>
-          <p className="text-stone-600 mt-3 max-w-xl mx-auto">
-            Your property is configured, rooms are live in the inventory, rate plans are ready for OTA distribution,
-            tax rules are attached, and there's a demo booking on the calendar for next week.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-8">
-            {STEP_META.map(s => (
-              <div key={s.id} className="p-3 rounded-xl bg-white border border-stone-200">
-                <div className={`inline-flex w-8 h-8 rounded-lg bg-gradient-to-br ${TINT_CLASSES[s.tint].bg} items-center justify-center text-white mb-2`}>
-                  <s.icon className="w-4 h-4" />
-                </div>
-                <div className="text-[10px] uppercase text-stone-400 font-bold">{s.label}</div>
-                <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-1 mx-auto" />
-              </div>
-            ))}
-          </div>
-          <button onClick={onClose} data-testid="onboarding-go-dashboard"
-            className="mt-8 px-8 py-3.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-sm inline-flex items-center gap-2">
-            Go to Dashboard <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    );
+    return <FinishedScreen propertyId={propertyId} onClose={onClose} />;
   }
 
   return (
@@ -435,6 +407,115 @@ export const OnboardingWizard = ({ propertyId = "default", onClose }) => {
 };
 
 // Helpers
+const FinishedScreen = ({ propertyId, onClose }) => {
+  const [demoCount, setDemoCount] = useState(0);
+  const [seeding, setSeeding] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const loadDemoCount = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/demo-seeder/status/${propertyId}`);
+      setDemoCount(data.demo_booking_count || 0);
+    } catch { /* silent */ }
+  }, [propertyId]);
+  useEffect(() => { loadDemoCount(); }, [loadDemoCount]);
+
+  const seed = async (count) => {
+    setSeeding(true);
+    try {
+      const { data } = await axios.post(`${API}/demo-seeder/seed/${propertyId}?count=${count}`);
+      toast.success(`Created ${data.created} demo bookings`);
+      loadDemoCount();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to seed demo data");
+    } finally { setSeeding(false); }
+  };
+  const clear = async () => {
+    if (!window.confirm("Remove all demo bookings? Your real bookings will stay untouched.")) return;
+    setClearing(true);
+    try {
+      const { data } = await axios.post(`${API}/demo-seeder/clear/${propertyId}`);
+      toast.success(`Removed ${data.deleted} demo bookings`);
+      loadDemoCount();
+    } catch (e) { toast.error("Clear failed"); }
+    finally { setClearing(false); }
+  };
+
+  return (
+    <div className="max-w-3xl mx-auto p-6" data-testid="onboarding-done">
+      <div className="bg-gradient-to-br from-fuchsia-50 via-violet-50 to-sky-50 border border-fuchsia-200 rounded-3xl p-10 text-center">
+        <div className="inline-flex w-20 h-20 rounded-full bg-gradient-to-br from-fuchsia-500 to-violet-600 items-center justify-center text-white mb-5 shadow-xl shadow-fuchsia-500/20">
+          <PartyPopper className="w-10 h-10" />
+        </div>
+        <h1 className="text-4xl font-black text-stone-900">You're live.</h1>
+        <p className="text-stone-600 mt-3 max-w-xl mx-auto">
+          Your property is configured, rooms are in the inventory, rate plans are ready for OTA distribution,
+          tax rules are attached, and your first booking is on the calendar.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-8">
+          {STEP_META.map(s => (
+            <div key={s.id} className="p-3 rounded-xl bg-white border border-stone-200">
+              <div className={`inline-flex w-8 h-8 rounded-lg bg-gradient-to-br ${TINT_CLASSES[s.tint].bg} items-center justify-center text-white mb-2`}>
+                <s.icon className="w-4 h-4" />
+              </div>
+              <div className="text-[10px] uppercase text-stone-400 font-bold">{s.label}</div>
+              <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-1 mx-auto" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Demo seeder */}
+      <div className="mt-5 bg-white border border-stone-200 rounded-3xl p-6 md:p-7" data-testid="demo-seeder-card">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-lg">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <h2 className="text-xl font-black text-stone-900">Want to see it live?</h2>
+            <p className="text-sm text-stone-500 mt-1">
+              Populate the calendar with realistic demo bookings across the next 60 days —
+              varied guests, channels (Booking.com, Expedia, Airbnb, walk-in), room types
+              and revenue. Finance dashboards and charts light up instantly. You can remove
+              it all with one click later.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              {[10, 20, 50].map(n => (
+                <button key={n} onClick={() => seed(n)} disabled={seeding}
+                  data-testid={`demo-seed-${n}`}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-br from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white text-xs font-bold disabled:opacity-50 shadow hover:-translate-y-0.5 transition-transform">
+                  {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  Seed {n} bookings
+                </button>
+              ))}
+              {demoCount > 0 && (
+                <button onClick={clear} disabled={clearing}
+                  data-testid="demo-clear"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold disabled:opacity-50">
+                  {clearing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  Clear {demoCount} demo booking{demoCount === 1 ? "" : "s"}
+                </button>
+              )}
+            </div>
+            {demoCount > 0 && (
+              <p className="text-[11px] text-stone-400 mt-3">
+                <CheckCircle2 className="w-3 h-3 inline text-emerald-500" /> {demoCount} demo booking{demoCount === 1 ? "" : "s"} currently in the system.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 flex justify-center">
+        <button onClick={onClose} data-testid="onboarding-go-dashboard"
+          className="px-8 py-3.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-sm inline-flex items-center gap-2">
+          Go to Dashboard <ArrowRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const StepBody = ({ tint, icon: Icon, title, subtitle, children }) => (
   <>
     <div className="flex items-start gap-4 mb-6">

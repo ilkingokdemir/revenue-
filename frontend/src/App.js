@@ -2939,7 +2939,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* First-run progress banner — auto-hides when setup is complete */}
         {activeView !== "onboarding" && user?.role === "admin" && (
           <OnboardingBanner
-            propertyId={activePropertyId || "default"}
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : "default"}
             onResume={() => setActiveView("onboarding")}
           />
         )}
@@ -3467,7 +3467,10 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (
           <div className="p-6">
-            <OnboardingWizard propertyId={activePropertyId || "default"} onClose={() => setActiveView("calendar")} />
+            <OnboardingWizard
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : "default"}
+              onClose={() => setActiveView("calendar")}
+            />
           </div>
         )}
 

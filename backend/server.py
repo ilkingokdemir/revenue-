@@ -539,6 +539,15 @@ api_router.include_router(profit_os_router)
 from routes.oos_blocks import create_oos_router
 oos_router = create_oos_router(db)
 api_router.include_router(oos_router)
+from routes.city_ledger import create_city_ledger_router
+city_ledger_router = create_city_ledger_router(db)
+api_router.include_router(city_ledger_router)
+from routes.tax_config import create_tax_config_router
+tax_config_router = create_tax_config_router(db)
+api_router.include_router(tax_config_router)
+from routes.deposit_policies import create_deposit_policies_router
+deposit_policies_router = create_deposit_policies_router(db)
+api_router.include_router(deposit_policies_router)
 
 app.include_router(api_router)
 

@@ -19,6 +19,9 @@ import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
 import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel";
 import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardingAdminPanel";
 import { PayrollRateMatrix } from "./components/dashboard/finance/PayrollRateMatrix";
+import { CityLedgerPanel } from "./components/dashboard/finance/CityLedgerPanel";
+import { TaxConfigPanel } from "./components/dashboard/finance/TaxConfigPanel";
+import { DepositPolicyPanel } from "./components/dashboard/finance/DepositPolicyPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2623,6 +2626,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "cash-flow", icon: ChartLine, name: "Cash Flow", testId: "cash-flow-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
+        { id: "city-ledger", icon: Wallet, name: "City Ledger (AR)", testId: "city-ledger-btn" },
+        { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
+        { id: "deposit-policies", icon: ShieldCheck, name: "Deposit Policies", testId: "deposit-policies-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "booking-engine-admin", icon: Globe, name: "Booking Engine", testId: "booking-engine-admin-btn" },
@@ -3389,6 +3395,21 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Payroll Rate Matrix */}
         {activeView === "rate-matrix" && (
           <div className="p-6"><PayrollRateMatrix user={user} /></div>
+        )}
+
+        {/* City Ledger (Corporate AR) */}
+        {activeView === "city-ledger" && (
+          <CityLedgerPanel user={user} />
+        )}
+
+        {/* Tax Configuration */}
+        {activeView === "tax-config" && (
+          <TaxConfigPanel propertyId={activePropertyId} user={user} />
+        )}
+
+        {/* Deposit Policies */}
+        {activeView === "deposit-policies" && (
+          <DepositPolicyPanel propertyId={activePropertyId} user={user} />
         )}
 
         {/* Bug Tracker */}

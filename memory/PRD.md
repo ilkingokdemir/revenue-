@@ -2,22 +2,21 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
-### Iter 175: Competitor audit sweep — Registration Card PDF + Folio Receipt PDF + Email to Guest + Auto-email folio on checkout
+### Iter 175: Competitor audit sweep — Registration Card PDF + Folio Receipt PDF + Email-to-Guest (manual) + Housekeeping auto-dispatch
 
-User asked for a full software/competitor audit and fixes. Researched Mews/Cloudbeds/Eviivo/myhotelbox — they **all** ship printable Guest Registration Cards (legally required in EU/UK/TR), itemised Folio receipts, one-click email to guest, **and** auto-email folio on checkout. Ours didn't have any of them. Shipped the full stack in a single iteration.
+User asked for a full software/competitor audit and fixes. Researched Mews/Cloudbeds/Eviivo/myhotelbox — they all ship printable Guest Registration Cards (legally required in EU/UK/TR), itemised Folio receipts, one-click email to guest, and auto-housekeeping on checkout. Shipped everything except auto-email-on-checkout (user explicitly opted out — reception keeps manual control).
 
 **Backend** (`/app/backend/routes/guest_services.py`):
-- `GET /api/bookings/{booking_id}/registration-card.pdf` — A4 PDF with header band, booking/guest/passport/address/stay/emergency contact sections. Falls back to `booking.guest_*` if the guest hasn't submitted the digital pre-arrival form.
-- `GET /api/folio/{booking_id}/pdf` — A4 itemised folio receipt with header, guest/booking/room meta, line-item table (Date / Description / Qty / Unit / Amount with ± prefix), totals block with emerald BALANCE when ≤ 0 or red when > 0. Auto-seeds the room charge if folio is empty.
+- `GET /api/bookings/{booking_id}/registration-card.pdf` — A4 PDF with header band, booking/guest/passport/address/stay/emergency contact sections. Falls back to `booking.guest_*` if guest hasn't submitted the digital pre-arrival form.
+- `GET /api/folio/{booking_id}/pdf` — A4 itemised folio receipt with line-item table (Date / Description / Qty / Unit / Amount with ± prefix) + totals block (emerald if balance ≤ 0, red otherwise). Auto-seeds the room charge if folio is empty.
 - `POST /api/bookings/{booking_id}/email-document` — `{document_type: "reg_card"|"folio", to?, subject?, message?}`. Builds PDF in-memory, base64-encodes, emails via Resend with themed HTML body. Defaults recipient to booking's guest_email. Writes `booking.email_log[]` audit entry.
-- Module-level `build_folio_pdf_bytes(db, booking_id)` + `send_folio_email(db, resend_lib, booking_id, to_list, sent_by)` helpers so other routers (checkout hook) can reuse the exact same PDF output without duplication.
-- `create_guest_services_router` now receives `resend_lib`.
+- Module-level `build_folio_pdf_bytes(db, booking_id)` + `send_folio_email(db, resend_lib, booking_id, to_list, sent_by)` helpers — reusable, no duplication.
 
-**Backend** (`/app/backend/routes/booking_timeline.py` — the REAL checkout endpoint the timeline UI calls; the previous auto-dispatch was sitting in `bookings.py` which is a separate endpoint nobody was hitting — silent bug fixed):
-- `PUT /api/bookings/timeline/{property_id}/status/{booking_id}` now triggers on `checked_out`:
-  1. **Housekeeping auto-dispatch** — inserts a "Deep Clean" OOS block (`auto=true`, `booking_id` linked, 1-day window) + marks the room `housekeeping=dirty`.
-  2. **Auto-email folio** (Mews/Cloudbeds parity) — fire-and-forget `asyncio.create_task` that calls `send_folio_email()` with the guest's email. Per-booking opt-out via `booking.auto_email_folio_on_checkout=False` (default ON). Failures logged, never block checkout.
-- `POST /api/bookings/timeline/{property_id}/bulk-action` with `action=checked_out` fires both hooks per booking too (so bulk checkout from the calendar toolbar also auto-cleans + auto-emails).
+**Backend** (`/app/backend/routes/booking_timeline.py` — the REAL checkout endpoint the timeline UI calls):
+- `PUT /api/bookings/timeline/{property_id}/status/{booking_id}` and `POST .../bulk-action` now trigger on `checked_out`:
+  1. **Housekeeping auto-dispatch** — inserts a "Deep Clean" OOS block (`auto=true`, `booking_id` linked, 1-day window) + marks room `housekeeping=dirty`.
+  2. **Auto-email-folio intentionally disabled** per user preference. Reception still has the manual "Email" button on the Actions tab for on-demand sending.
+- Silent bug fix: the prior housekeeping hook was wired on the orphan `bookings.py::update_booking_status` endpoint which the UI never hits. Moved it to the reachable `booking_timeline.py` endpoint.
 
 **Frontend** (`BookingTimeline.js`):
 - `downloadPdf(path, filename)` — axios blob GET with auth, opens as new-tab blob URL (popup-blocker anchor fallback).
@@ -26,16 +25,14 @@ User asked for a full software/competitor audit and fixes. Researched Mews/Cloud
 - **Actions tab → Guest Services** — 2 paired rows: full-width colored Print button + compact Mail-icon email button (stone/emerald families). TestIds: `print-reg-card-btn`, `email-reg-card-btn`, `print-folio-actions-btn`, `email-folio-btn`.
 
 **Live verified via curl + Playwright + direct DB inspection:**
-- `GET /api/bookings/{id}/registration-card.pdf` → 200 OK, 2795 bytes, valid `%PDF-1.4`
-- `GET /api/folio/{id}/pdf` → 200 OK, 2779 bytes, valid `%PDF-1.4`
-- `POST /api/bookings/{id}/email-document` with folio doc_type → reaches Resend, 502 "API key is invalid" in preview (**MOCKED**: placeholder `RESEND_API_KEY`; works in prod with a real key — same pattern as staff-onboarding email)
-- Bad `document_type` → 400 with crisp error
+- Reg Card PDF → 200 OK, 2795 bytes, valid `%PDF-1.4`
+- Folio PDF → 200 OK, 2779 bytes, valid `%PDF-1.4`
+- Email endpoint reaches Resend, returns 502 "API key is invalid" in preview (**MOCKED**: placeholder `RESEND_API_KEY`; works in prod — same pattern as staff-onboarding email)
+- Bad document_type → 400 with crisp error
 - Playwright: all 4 testIds visible in Actions tab
-- **End-to-end checkout flow** (curl): `PUT /status {status: checked_out}` → 200 → logs show `Auto-email folio queued for booking ... → test@stripe.com` → `send_folio_email` attempted (502 on Resend in preview) → db.oos_blocks has a new `Deep Clean` auto-block correctly linked by `booking_id` with the exclusive-end date range → room `housekeeping=dirty`. Checkout response returned instantly (fire-and-forget confirmed).
+- Checkout → 200 instant → `db.oos_blocks` has new Deep Clean block with correct dates + booking link → room `housekeeping=dirty`. NO auto-email attempt (confirmed via log filter).
 
-**Silent bug fixed as a bonus:** the housekeeping auto-dispatch in `bookings.py::update_booking_status` (line 1477) was never firing because the UI actually hits the `booking_timeline.py::update_booking_status` endpoint — different router. Moved the hook to where it's actually reachable.
-
-**Closes the loop on competitor parity + automation** — one click on "Check Out" in the calendar now triggers a 3-stage automation: room locked for housekeeping, guest emailed their receipt, reception freed to serve the next arrival.
+**User-facing outcome:** Reg Card + Folio Receipt PDFs available on-demand (print or email to guest); checkout still auto-locks the room for housekeeping but no longer emails anything without human action.
 
 
 ### Iter 174: Comprehensive competitor feature sweep (user frustration — missing features)

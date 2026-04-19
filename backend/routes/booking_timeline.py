@@ -440,19 +440,8 @@ def create_booking_timeline_router(db, require_roles):
                     })
                     await db.rooms.update_one({"id": updated["room_id"]}, {"$set": {"housekeeping": "dirty"}})
 
-                # 2. Auto-email folio to guest (Mews/Cloudbeds parity) — fire-and-forget
-                if updated.get("auto_email_folio_on_checkout", True) and updated.get("guest_email"):
-                    logger.info(f"Auto-email folio queued for booking {booking_id} → {updated['guest_email']}")
-                    async def _auto_email_folio():
-                        try:
-                            from routes.guest_services import send_folio_email
-                            res = await send_folio_email(db, resend, booking_id,
-                                                         to_list=[updated["guest_email"]],
-                                                         sent_by="system:checkout-auto")
-                            logger.info(f"Auto-email folio sent for {booking_id}: {res.get('sent_to')}")
-                        except Exception as e:
-                            logger.error(f"Auto-email folio failed for {booking_id}: {e}")
-                    asyncio.create_task(_auto_email_folio())
+                # 2. (Auto-email folio on checkout intentionally disabled per user preference —
+                #     reception can still email manually via the "Email" button on the Actions tab.)
 
         return {"status": new_status, "booking_id": booking_id}
 
@@ -565,15 +554,6 @@ def create_booking_timeline_router(db, require_roles):
                             "created_at": now_iso,
                         })
                         await db.rooms.update_one({"id": updated_bk["room_id"]}, {"$set": {"housekeeping": "dirty"}})
-                    if updated_bk and updated_bk.get("auto_email_folio_on_checkout", True) and updated_bk.get("guest_email"):
-                        async def _bulk_auto_email(_bid=bid, _email=updated_bk["guest_email"]):
-                            try:
-                                from routes.guest_services import send_folio_email
-                                await send_folio_email(db, resend, _bid, to_list=[_email],
-                                                       sent_by="system:bulk-checkout-auto")
-                            except Exception as e:
-                                logger.error(f"Bulk auto-email folio failed for {_bid}: {e}")
-                        asyncio.create_task(_bulk_auto_email())
             else:
                 errors.append({"id": bid, "error": f"Cannot {action} from {current_status}"})
 

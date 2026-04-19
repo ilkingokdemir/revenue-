@@ -1,6 +1,44 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
+
+### Iter 176 (competitor MVP sweep): City Ledger (Corporate AR) + Tax Configuration + Deposit Policies
+
+User asked for a **full competitor audit + MVP gap-map + complete the missing points**. Researched Mews/Cloudbeds/Eviivo/myhotelbox and mapped our 95 backend routers vs theirs — discovered 3 P0 gaps for B2B hotel operations. Shipped all 3 in a single iteration.
+
+**1. City Ledger (Corporate AR)** — `/app/backend/routes/city_ledger.py` + `/app/frontend/src/components/dashboard/finance/CityLedgerPanel.js`
+- Collections: `city_ledger_companies`, `city_ledger_invoices`
+- Endpoints: GET/POST/PUT/DELETE `/api/city-ledger/companies`, GET `/companies/{id}/statement`, GET/POST/PUT `/invoices`, POST `/invoices/{id}/pay`, GET `/aging`
+- Auto-numbered invoices `CL-YYYY-NNNNN` (sequential per year)
+- Auto-calculates `due_date = issue_date + company.payment_terms_days`
+- Partial payment support (status transitions: open → partial → paid)
+- Classic 0-30 / 31-60 / 61-90 / 90+ aging buckets with per-company breakdown
+- Delete protection: can't delete a company with open invoices (400 error)
+- Frontend: 3 tabs (Companies · Invoices · Aging Report) with KPI hero (Total AR, Overdue, Company count, Open Invoices), in-place CRUD modals, payment recording modal
+- Sidebar: "City Ledger (AR)" under Operations section
+
+**2. Tax Configuration** — `/app/backend/routes/tax_config.py` + `TaxConfigPanel.js`
+- Collection: `tax_profiles` with rules[] each having kind (vat/city_tax/tourist_tax/service_charge/resort_fee), basis (percent/per_night_per_guest/per_night/flat), applies_to[] (room/fnb/spa/all), channels[] (per-channel overrides), included_in_rate flag
+- Endpoints: GET/POST/PUT/DELETE `/api/tax-config/profiles`, POST `/calculate`
+- `/calculate` correctly handles all 4 basis types, separates `taxes_added` (on top) vs `taxes_included` (inside rate), filters by category + channel
+- Frontend: profile list with rule chips + live calculator showing breakdown per rule
+- Sidebar: "Tax Configuration" under Operations
+
+**3. Deposit Policies** — `/app/backend/routes/deposit_policies.py` + `DepositPolicyPanel.js`
+- Collection: `deposit_policies` with trigger (channels[], lead_days_lte, rate_plan_ids[]), amount_type (percent|flat), amount_value, due_within_hours, non_refundable, priority (lower = matches first)
+- Endpoints: GET/POST/PUT/DELETE `/api/deposit-policies/`, POST `/evaluate`
+- `/evaluate` given booking context returns matched policy + computed deposit
+- Frontend: priority-ordered policy table + live evaluator
+- Sidebar: "Deposit Policies" under Operations
+
+**Testing (iteration 150 — 100% green):**
+- Backend: 30/30 tests passed — all endpoints validated end-to-end with seeded test data
+- Frontend: 3/3 panels render, sidebar buttons navigate correctly, data-testids all present
+- Testing subagent found and fixed a minor syntax hiccup + missing imports during verification
+- No action items remaining, `retest_needed=false`, `should_main_agent_self_test=false`
+
+**Business impact:** Unlocks the B2B/corporate hotel segment (companies, OTAs with deferred billing, travel agents on 30/60-day terms), multi-region tax compliance (VAT + city tax + tourist tax + resort fees with OTA-included-in-rate logic), and rule-based deposit enforcement (non-refundable last-minute bookings at 50%, corporate rate plans at flat £100, etc.) — three universally-shipped PMS features we were silently missing.
+
 
 ### Iter 175: Competitor audit sweep — Registration Card PDF + Folio Receipt PDF + Email-to-Guest (manual) + Housekeeping auto-dispatch
 

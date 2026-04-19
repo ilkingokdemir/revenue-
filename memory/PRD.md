@@ -1,6 +1,34 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 158 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 159 Test Iterations (100%)
+
+### Iter 159 (Feb 2026): 🕐 Lightweight Scheduler + Nightly Auto-Deposit
+
+The missing piece after Iter 158: **scheduled auto-runs** so staff never manually trigger deposit capture. Asyncio-based, no external scheduler lib.
+
+**Infrastructure** (`routes/scheduler.py`)
+- 4 new endpoints under `/api/scheduler/*`:
+  - `GET /scheduler/config` — list all scheduled job configs
+  - `PUT /scheduler/config/{pid}/{job}` — upsert config (enabled, cron_hour 0-23, cron_minute 0-59)
+  - `POST /scheduler/trigger/{pid}/{job}` — manual on-demand run
+  - `GET /scheduler/history` — history of runs with trigger=manual|scheduled + results
+- `scheduler_loop(db, JOB_HANDLERS)` — asyncio coroutine sleeps 60s and checks for due jobs. Launched at FastAPI startup via `@app.on_event("startup")` → `asyncio.create_task(...)`.
+- Extensible via `JOB_HANDLERS` dict — currently wired to `auto_deposit_capture`, future jobs slot in cleanly.
+- `scheduler_history` collection records every run with {trigger, ran_at, ran_by, result|error}.
+
+**Integration** — `deposit_automation.py` refactored to expose a reusable `_run_capture(property_id, dry_run, only_ids, max_charges, triggered_by)` function via `router.run_capture`. Scheduler calls it directly without HTTP overhead.
+
+**Frontend** (`CompetitorGapPanels.js` — DepositAutomationPanel updated)
+- New "Nightly Scheduled Run" section with Enable/Disable toggle, hour:minute picker (UTC), Save button.
+- Shows "Last ran YYYY-MM-DD" indicator + recent run history as badges (✓ charged / ⊘ skipped / ✗ failed).
+- 👤 icon for manual triggers · ⏰ icon for scheduled triggers.
+
+**Verified**: Backend logs confirm `🕐 Scheduler loop started` on startup. Manual trigger via API ran 367 scans (all skipped — no cards yet, expected). Config upsert + history both working.
+
+**Testing agent iteration_159.json**: 100% backend (18/18) + 100% frontend. Zero issues.
+
+**Final gap-map status — 14 of 15 closed + fully automated pipeline** ✅
+Only SSO/SAML remains (external IdP dependency). Card Vault + Deposit Policies + Folio + Scheduler = end-to-end hands-off deposit collection once Stripe keys are provided.
 
 ### Iter 158 (Feb 2026): 🚀 Deposit Automation — closes the loop (Card Vault × Policies × Folio)
 

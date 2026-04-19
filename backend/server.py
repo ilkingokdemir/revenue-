@@ -540,7 +540,7 @@ from routes.oos_blocks import create_oos_router
 oos_router = create_oos_router(db)
 api_router.include_router(oos_router)
 from routes.city_ledger import create_city_ledger_router
-city_ledger_router = create_city_ledger_router(db)
+city_ledger_router = create_city_ledger_router(db, resend)
 api_router.include_router(city_ledger_router)
 from routes.tax_config import create_tax_config_router
 tax_config_router = create_tax_config_router(db)

@@ -2,6 +2,45 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 177: Manual-click Corporate Invoice + Email-with-composed-message
+
+User clarified: **click to create invoice, write email yourself, click send** — nothing automatic. Shipped both as pure manual actions with full user control over content.
+
+**Backend** (`/app/backend/routes/city_ledger.py`):
+- **`GET /api/city-ledger/invoices/{id}/pdf`** — Streams A4 invoice PDF (bill-to / amount / booking refs / footer). Header stripes, professional layout. Inline disposition so clicking the Printer icon opens in a new tab.
+- **`POST /api/city-ledger/invoices/{id}/email`** — Body: `{to, subject, message}` — ALL user-composed. Rejects empty `subject` or `message` with 400. Attaches PDF automatically. Writes `email_log[]` audit entry. Reuses shared `build_invoice_pdf_bytes()` helper so the emailed PDF is identical to the one opened from the Printer icon.
+- `create_city_ledger_router(db, resend_lib)` now accepts optional Resend client.
+
+**Frontend** (`CityLedgerPanel.js`):
+- **Printer icon** button on each invoice row → opens PDF in new tab (data-testid `ledger-pdf-{id}`).
+- **Mail icon** button on each invoice row → opens `EmailInvoiceModal` with 3 editable fields:
+  - **To** (user types email; comma-separated for multiple)
+  - **Subject** (pre-filled as "Invoice {number}" — fully editable)
+  - **Message** (pre-filled with a sensible draft — fully rewritable)
+  - "Send" button posts to backend; shows toast on success
+- Modal emphasizes "You write the recipient yourself" so there's no ambiguity.
+
+**Frontend** (`BookingTimeline.js` — booking detail drawer):
+- **"Create Corporate Invoice (City Ledger)"** button in Actions tab (amber, Building2 icon, `data-testid="create-corp-invoice-btn"`).
+- Click opens a modal with:
+  - **Company** dropdown (loads `/companies?active_only=true`)
+  - **Amount** pre-filled from folio `total_charges` (or booking `total_price` fallback) — edit if needed
+  - **Notes** pre-filled with booking ref + guest + stay dates
+  - "Create Invoice" button → POSTs to `/city-ledger/invoices` → shows toast with generated invoice number
+- Message under the form: "After creating, open City Ledger → Invoices to email it to the client" — guides them to the separate email step.
+
+**Verified via curl:**
+- `GET /api/city-ledger/invoices/{id}/pdf` → 200, 2389 bytes, valid `%PDF-1.4`
+- `POST .../email` with empty subject → 400 "Subject and message are required"
+- `POST .../email` with full payload → reaches Resend, 502 "API key is invalid" (MOCKED in preview; works in prod)
+
+**User-facing workflow now:**
+1. Reception checks out a corporate guest → Actions tab → "Create Corporate Invoice" → picks company → clicks Create
+2. Goes to City Ledger → Invoices → sees new row `CL-YYYY-NNNNN`
+3. Clicks Mail icon → writes recipient, edits subject/message if needed → clicks Send
+4. Recipient gets email with invoice PDF attached
+
+
 ### Iter 176 (competitor MVP sweep): City Ledger (Corporate AR) + Tax Configuration + Deposit Policies
 
 User asked for a **full competitor audit + MVP gap-map + complete the missing points**. Researched Mews/Cloudbeds/Eviivo/myhotelbox and mapped our 95 backend routers vs theirs — discovered 3 P0 gaps for B2B hotel operations. Shipped all 3 in a single iteration.

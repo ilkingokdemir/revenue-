@@ -372,6 +372,44 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     }
   };
 
+  // Corporate Invoice modal state + companies cache
+  const [corpInvoiceOpen, setCorpInvoiceOpen] = useState(false);
+  const [corpCompanies, setCorpCompanies] = useState([]);
+  const [corpForm, setCorpForm] = useState({ company_id: "", amount: 0, notes: "" });
+
+  const openCorpInvoiceModal = async () => {
+    if (!detailData) return;
+    try {
+      const { data } = await axios.get(`${API}/city-ledger/companies?active_only=true`);
+      setCorpCompanies(data || []);
+      // Pre-fill amount from folio total_charges if we have it, else booking.total_price
+      const prefillAmount = (folio && folio.total_charges) ? folio.total_charges :
+        parseFloat(detailData.total_price || detailData.amount || 0);
+      setCorpForm({
+        company_id: "",
+        amount: prefillAmount,
+        notes: `Booking ${detailData.booking_ref || detailData.id?.slice(0, 8).toUpperCase()} — ${detailData.guest_name || ""} · ${detailData.check_in} → ${detailData.check_out}`,
+      });
+      setCorpInvoiceOpen(true);
+    } catch { toast.error("Failed to load companies"); }
+  };
+
+  const createCorpInvoice = async () => {
+    if (!corpForm.company_id) return toast.error("Select a company");
+    if (!corpForm.amount || corpForm.amount <= 0) return toast.error("Amount must be positive");
+    try {
+      const { data } = await axios.post(`${API}/city-ledger/invoices`, {
+        company_id: corpForm.company_id,
+        amount: parseFloat(corpForm.amount),
+        notes: corpForm.notes,
+        booking_ids: [detailData.id],
+        currency: detailData.currency || "GBP",
+      });
+      toast.success(`Invoice ${data.invoice_number} created — you can now email it from the City Ledger panel`);
+      setCorpInvoiceOpen(false);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed to create invoice"); }
+  };
+
   const changeStatus = async (bookingId, newStatus) => {
     try {
       await axios.put(`${API}/bookings/timeline/${pid}/status/${bookingId}`, { status: newStatus });
@@ -1774,10 +1812,56 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         <Mail className="w-3.5 h-3.5" />
                       </button>
                     </div>
+                    <button onClick={openCorpInvoiceModal} data-testid="create-corp-invoice-btn"
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200">
+                      <Building2 className="w-3.5 h-3.5" />Create Corporate Invoice (City Ledger)
+                    </button>
                   </div>
                 </div>
               </div>
               </>)}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Corporate Invoice (City Ledger) modal */}
+      {corpInvoiceOpen && (
+        <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={() => setCorpInvoiceOpen(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()} data-testid="corp-invoice-modal">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-stone-900 flex items-center gap-2"><Building2 className="w-5 h-5 text-amber-600" />Create Corporate Invoice</h2>
+              <button onClick={() => setCorpInvoiceOpen(false)} className="p-1 hover:bg-stone-100 rounded-lg"><X className="w-4 h-4 text-stone-500" /></button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Bill to Company *</label>
+                <select value={corpForm.company_id} onChange={e => setCorpForm({ ...corpForm, company_id: e.target.value })}
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="corp-inv-company">
+                  <option value="">— Select company —</option>
+                  {corpCompanies.map(c => <option key={c.id} value={c.id}>{c.name}{c.payment_terms_days ? ` (${c.payment_terms_days}d terms)` : ""}</option>)}
+                </select>
+                {corpCompanies.length === 0 && <p className="text-[11px] text-rose-600 mt-1">No active companies. Create one in City Ledger → Companies first.</p>}
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Amount *</label>
+                <input type="number" step="0.01" value={corpForm.amount} onChange={e => setCorpForm({ ...corpForm, amount: parseFloat(e.target.value) || 0 })}
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="corp-inv-amount" />
+                <p className="text-[10px] text-stone-400 mt-1">Pre-filled from folio total — edit if needed.</p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Notes</label>
+                <textarea value={corpForm.notes} onChange={e => setCorpForm({ ...corpForm, notes: e.target.value })} rows={3}
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <p className="text-[11px] text-stone-500 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                Invoice will be auto-numbered (<code>CL-YYYY-NNNNN</code>). Due date is auto-calculated from company payment terms.
+                After creating, open <strong>City Ledger → Invoices</strong> to email it to the client.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setCorpInvoiceOpen(false)} className="px-4 py-2 text-sm">Cancel</button>
+              <button onClick={createCorpInvoice} data-testid="corp-inv-create" className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold">Create Invoice</button>
             </div>
           </div>
         </div>

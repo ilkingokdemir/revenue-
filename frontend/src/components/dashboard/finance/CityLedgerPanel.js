@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Building2, RefreshCw, Plus, TrendingDown, Receipt, X,
-  Mail, Phone,
+  Mail, Phone, Printer,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -22,6 +22,7 @@ export const CityLedgerPanel = () => {
   const [companyForm, setCompanyForm] = useState(null);   // null = hidden, {} = new, {id,...} = edit
   const [invoiceForm, setInvoiceForm] = useState(null);
   const [payFor, setPayFor] = useState(null);             // invoice being paid
+  const [emailFor, setEmailFor] = useState(null);          // invoice to email
 
   const loadAll = async () => {
     setLoading(true);
@@ -71,6 +72,23 @@ export const CityLedgerPanel = () => {
       toast.success("Payment recorded");
       setPayFor(null); loadAll();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const openInvoicePdf = async (inv) => {
+    try {
+      const { data } = await axios.get(`${API}/city-ledger/invoices/${inv.id}/pdf`, { responseType: "blob" });
+      const url = URL.createObjectURL(new Blob([data], { type: "application/pdf" }));
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch { toast.error("Could not open PDF"); }
+  };
+
+  const sendInvoiceEmail = async (to, subject, message) => {
+    try {
+      const { data } = await axios.post(`${API}/city-ledger/invoices/${emailFor.id}/email`, { to, subject, message });
+      toast.success(`Invoice emailed to ${(data.sent_to || []).join(", ")}`);
+      setEmailFor(null); loadAll();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Send failed"); }
   };
 
   const totalOpen = companies.reduce((s, c) => s + (c.open_balance || 0), 0);
@@ -276,6 +294,15 @@ export const CityLedgerPanel = () => {
         </Modal>
       )}
 
+      {/* Email Invoice modal — YOU write to/subject/message, then click Send */}
+      {emailFor && (
+        <EmailInvoiceModal
+          invoice={emailFor}
+          onClose={() => setEmailFor(null)}
+          onSend={sendInvoiceEmail}
+        />
+      )}
+
       {/* Payment modal */}
       {payFor && (
         <Modal title={`Record Payment · ${payFor.invoice_number}`} onClose={() => setPayFor(null)}>
@@ -332,5 +359,58 @@ const Modal = ({ title, onClose, children }) => (
     </div>
   </div>
 );
+
+// --- Email Invoice modal: user composes recipient / subject / message manually ---
+const EmailInvoiceModal = ({ invoice, onClose, onSend }) => {
+  const [to, setTo] = useState("");
+  const [subject, setSubject] = useState(`Invoice ${invoice.invoice_number}`);
+  const [message, setMessage] = useState(
+    `Dear ${invoice.company_name || "Accounts team"},\n\nPlease find attached invoice ${invoice.invoice_number} for your review.\n\nAmount due: £${Number(invoice.balance).toFixed(2)}\nDue date: ${invoice.due_date}\n\nKindly arrange settlement within the agreed payment terms.\n\nThank you.`
+  );
+  const [sending, setSending] = useState(false);
+
+  const submit = async () => {
+    if (!to.trim()) return toast.error("Please enter at least one recipient");
+    if (!subject.trim() || !message.trim()) return toast.error("Subject and message required");
+    setSending(true);
+    try {
+      // Send message as HTML with newlines → <br>
+      await onSend(to, subject, message.replace(/\n/g, "<br>"));
+    } finally { setSending(false); }
+  };
+
+  return (
+    <Modal title={`Email Invoice · ${invoice.invoice_number}`} onClose={onClose}>
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">To *</label>
+          <input value={to} onChange={e => setTo(e.target.value)} placeholder="accounts@company.com (comma-separated for multiple)"
+            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="email-inv-to" autoFocus />
+          <p className="text-[10px] text-stone-400 mt-1">You write the recipient yourself. Hint: company contact email is <strong>{invoice.company_name}</strong>.</p>
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Subject *</label>
+          <input value={subject} onChange={e => setSubject(e.target.value)}
+            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="email-inv-subject" />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase text-stone-500 mb-1">Message *</label>
+          <textarea value={message} onChange={e => setMessage(e.target.value)} rows={8}
+            className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm font-sans" data-testid="email-inv-message" />
+        </div>
+        <p className="text-[11px] text-stone-500 bg-stone-50 border border-stone-200 rounded-lg p-2 flex items-center gap-1.5">
+          <Receipt className="w-3.5 h-3.5" />Invoice PDF will be attached automatically
+        </p>
+      </div>
+      <div className="flex justify-end gap-2 mt-4">
+        <button onClick={onClose} className="px-4 py-2 text-sm">Cancel</button>
+        <button onClick={submit} disabled={sending} data-testid="email-inv-send"
+          className="px-4 py-2 bg-sky-600 hover:bg-sky-700 disabled:bg-stone-300 text-white rounded-lg text-sm font-semibold flex items-center gap-1.5">
+          <Mail className="w-3.5 h-3.5" />{sending ? "Sending…" : "Send"}
+        </button>
+      </div>
+    </Modal>
+  );
+};
 
 export default CityLedgerPanel;

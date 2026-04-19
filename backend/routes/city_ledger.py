@@ -18,7 +18,7 @@ Endpoints (all /api/city-ledger/*):
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict
 import uuid
 
 from auth import require_perm
@@ -53,7 +53,7 @@ class PaymentIn(BaseModel):
     reference: Optional[str] = ""
 
 
-def create_city_ledger_router(db):
+def create_city_ledger_router(db, resend_lib=None):
     router = APIRouter(prefix="/city-ledger")
 
     # ------------------------------ COMPANIES ------------------------------
@@ -148,8 +148,10 @@ def create_city_ledger_router(db):
         current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any")),
     ):
         q = {}
-        if status: q["status"] = status
-        if company_id: q["company_id"] = company_id
+        if status:
+            q["status"] = status
+        if company_id:
+            q["company_id"] = company_id
         rows = await db.city_ledger_invoices.find(q, {"_id": 0}).sort("issue_date", -1).to_list(500)
         # enrich with company name
         ids = list({r["company_id"] for r in rows if r.get("company_id")})
@@ -269,6 +271,89 @@ def create_city_ledger_router(db):
             raise HTTPException(404, "Invoice not found")
         return {"deleted": True}
 
+    # ------------------------------ INVOICE PDF + EMAIL ------------------------------
+    @router.get("/invoices/{invoice_id}/pdf")
+    async def invoice_pdf(
+        invoice_id: str,
+        current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any")),
+    ):
+        """Stream the invoice as a printable A4 PDF (inline)."""
+        import io
+        from fastapi.responses import StreamingResponse
+        pdf_bytes, inv_num, _email = await build_invoice_pdf_bytes(db, invoice_id)
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes), media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{inv_num}.pdf"'},
+        )
+
+    @router.post("/invoices/{invoice_id}/email")
+    async def email_invoice(
+        invoice_id: str, data: Dict,
+        current_user: dict = Depends(require_perm("edit_bookings")),
+    ):
+        """Manually email the invoice PDF to a recipient chosen by the user.
+
+        Body: { "to": "a@b.com" | ["a@b.com", ...], "subject": "...", "message": "html string" }
+        All three fields are composed by the user (no auto-defaults silently sent).
+        """
+        import os
+        import base64
+        if not resend_lib or not os.environ.get("RESEND_API_KEY"):
+            raise HTTPException(503, "Email service not configured")
+
+        raw_to = data.get("to") or ""
+        if isinstance(raw_to, str):
+            to_list = [x.strip() for x in raw_to.split(",") if x.strip()]
+        elif isinstance(raw_to, list):
+            to_list = [x for x in raw_to if x]
+        else:
+            to_list = []
+        if not to_list:
+            raise HTTPException(400, "At least one recipient required")
+
+        subject = (data.get("subject") or "").strip()
+        message = (data.get("message") or "").strip()
+        if not subject or not message:
+            raise HTTPException(400, "Subject and message are required")
+
+        pdf_bytes, inv_num, _ = await build_invoice_pdf_bytes(db, invoice_id)
+        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+
+        body_html = (
+            "<div style='font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;"
+            "max-width:640px;margin:auto;padding:24px;color:#1f2937;'>"
+            f"<h2 style='color:#1c1917;margin:0 0 8px 0;'>Invoice · {inv_num}</h2>"
+            f"<p style='color:#6b7280;font-size:13px;'>Sent by {current_user.get('name', 'Accounts team')}</p>"
+            f"<div style='font-size:14px;line-height:1.6;'>{message}</div>"
+            "<p style='color:#9ca3af;font-size:11px;margin-top:24px;'>A PDF copy of the invoice is attached.</p>"
+            "</div>"
+        )
+
+        try:
+            resend_lib.Emails.send({
+                "from": sender,
+                "to": to_list,
+                "subject": subject,
+                "html": body_html,
+                "attachments": [{
+                    "filename": f"{inv_num}.pdf",
+                    "content": base64.b64encode(pdf_bytes).decode(),
+                }],
+            })
+        except Exception as e:
+            raise HTTPException(502, f"Email send failed: {str(e)[:160]}")
+
+        await db.city_ledger_invoices.update_one(
+            {"id": invoice_id},
+            {"$push": {"email_log": {
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "sent_by": current_user.get("email", ""),
+                "to": to_list,
+                "subject": subject,
+            }}}
+        )
+        return {"ok": True, "sent_to": to_list, "invoice_number": inv_num}
+
     # ------------------------------ AGING REPORT ------------------------------
     @router.get("/aging")
     async def aging_report(
@@ -322,3 +407,95 @@ def create_city_ledger_router(db):
         return {"buckets": buckets, "total": total, "by_company": rows, "as_of": today.isoformat()}
 
     return router
+
+
+# ============================================================================
+# Module-level helper: build PDF bytes for an invoice (reusable by email endpoint
+# and any future GET /invoices/{id}/pdf). No side-effects.
+# ============================================================================
+
+async def build_invoice_pdf_bytes(db, invoice_id):
+    """Build a simple A4 invoice PDF. Returns (bytes, invoice_number, company_email)."""
+    import io
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.styles import getSampleStyleSheet
+
+    inv = await db.city_ledger_invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    company = await db.city_ledger_companies.find_one({"id": inv.get("company_id", "")}, {"_id": 0}) or {}
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=18 * mm, rightMargin=18 * mm,
+                            topMargin=16 * mm, bottomMargin=16 * mm)
+    styles = getSampleStyleSheet()
+    story = []
+    story.append(Paragraph(
+        "<para align='left'><font size='9' color='#78716c'>Corporate Invoice · My Hotel Box</font></para>",
+        styles["Normal"]))
+    story.append(Paragraph(
+        f"<para align='left'><font size='20' color='#1c1917'><b>INVOICE · {inv['invoice_number']}</b></font></para>",
+        styles["Normal"]))
+    story.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#1c1917"),
+                            spaceBefore=4, spaceAfter=10))
+
+    # Bill-to
+    bill_to = [
+        ["Bill To", company.get("name", "—"), "Issue Date", inv.get("issue_date", "—")],
+        ["Contact", company.get("contact_name", "—"), "Due Date", inv.get("due_date", "—")],
+        ["Email", company.get("email", "—"), "Currency", inv.get("currency", "GBP")],
+        ["Tax ID", company.get("tax_id", "—"), "Status", inv.get("status", "open").title()],
+    ]
+    tbl = Table(bill_to, colWidths=[22 * mm, 78 * mm, 22 * mm, 50 * mm])
+    tbl.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 9),
+        ("FONT", (2, 0), (2, -1), "Helvetica-Bold", 9),
+        ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#78716c")),
+        ("TEXTCOLOR", (2, 0), (2, -1), colors.HexColor("#78716c")),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4), ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    story.append(tbl)
+    story.append(Spacer(1, 12))
+
+    # Amount block
+    cur_sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(inv.get("currency", "GBP"), "£")
+    balance = round(float(inv.get("amount", 0)) - float(inv.get("paid_amount", 0)), 2)
+    amount_rows = [
+        ["Description", inv.get("notes") or "Corporate stays per attached bookings", f"{cur_sym}{float(inv.get('amount', 0)):.2f}"],
+    ]
+    if float(inv.get("paid_amount", 0)) > 0:
+        amount_rows.append(["Payments received", "", f"-{cur_sym}{float(inv.get('paid_amount', 0)):.2f}"])
+    amount_rows.append(["BALANCE DUE", "", f"{cur_sym}{balance:.2f}"])
+    at = Table(amount_rows, colWidths=[40 * mm, 90 * mm, 42 * mm])
+    at.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, -1), (-1, -1), "Helvetica-Bold", 12),
+        ("ALIGN", (2, 0), (2, -1), "RIGHT"),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#e7e5e4")),
+        ("LINEABOVE", (0, -1), (-1, -1), 1.2, colors.HexColor("#1c1917")),
+        ("TEXTCOLOR", (0, -1), (-1, -1),
+         colors.HexColor("#059669") if balance <= 0 else colors.HexColor("#dc2626")),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.append(at)
+
+    # Booking refs
+    if inv.get("booking_ids"):
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(
+            f"<para><font size='8' color='#78716c'>Covered bookings: {', '.join(inv['booking_ids'])}</font></para>",
+            styles["Normal"]))
+
+    story.append(Spacer(1, 20))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d6d3d1")))
+    story.append(Paragraph(
+        f"<para align='center'><font size='7' color='#a8a29e'>Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} · Payment terms: {company.get('payment_terms_days', 30)} days · Thank you</font></para>",
+        styles["Normal"]))
+    doc.build(story)
+
+    return buf.getvalue(), inv["invoice_number"], company.get("email", "")

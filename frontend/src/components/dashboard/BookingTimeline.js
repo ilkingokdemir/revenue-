@@ -1129,13 +1129,21 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                     {width > 90 && (() => {
                                       const bal = (bk.balance_due !== undefined && bk.balance_due !== null) ? Number(bk.balance_due) : Number(bk.total_price || 0);
                                       const paid = bal <= 0;
+                                      const today = new Date().toISOString().slice(0, 10);
+                                      const isUrgent = !paid && (bk.status === "checked_in" || bk.check_in === today || bk.check_out === today);
                                       return (
                                         <span
                                           role="button"
                                           onClick={(e) => { e.stopPropagation(); if (!paid) setQuickPay({ booking: bk }); }}
-                                          className={`text-[9px] font-mono flex-shrink-0 opacity-90 rounded-sm px-1 ${paid ? "bg-emerald-500/30 text-emerald-50" : "balance-flash"}`}
+                                          className={`text-[9px] font-mono flex-shrink-0 opacity-90 rounded-sm px-1 ${
+                                            paid ? "bg-emerald-500/30 text-emerald-50"
+                                                 : isUrgent ? "balance-flash"
+                                                            : "bg-rose-100 text-rose-700 cursor-pointer"
+                                          }`}
                                           data-testid={`price-${bk.id}`}
-                                          title={paid ? `Paid in full (${cur(bk.total_price)})` : `Balance due ${cur(bal)} — click to take payment`}
+                                          title={paid ? `Paid in full (${cur(bk.total_price)})`
+                                                      : isUrgent ? `Balance due ${cur(bal)} — click to take payment`
+                                                                 : `Balance due ${cur(bal)} · future booking`}
                                         >
                                           {paid ? "PAID" : cur(bal)}
                                         </span>
@@ -1159,15 +1167,21 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                       {(() => {
                                         const bal = (bk.balance_due !== undefined && bk.balance_due !== null) ? Number(bk.balance_due) : Number(bk.total_price || 0);
                                         const paid = bal <= 0;
+                                        const today = new Date().toISOString().slice(0, 10);
+                                        const isUrgent = !paid && (bk.status === "checked_in" || bk.check_in === today || bk.check_out === today);
                                         return (
                                           <span
                                             role="button"
                                             onClick={(e) => { e.stopPropagation(); if (!paid) setQuickPay({ booking: bk }); }}
                                             className={`text-[9px] font-bold font-mono rounded-sm px-1 leading-tight flex-shrink-0 ${
-                                              paid ? "bg-emerald-100 text-emerald-700" : "balance-flash"
+                                              paid ? "bg-emerald-100 text-emerald-700"
+                                                   : isUrgent ? "balance-flash"
+                                                              : "bg-rose-100 text-rose-700 cursor-pointer"
                                             }`}
                                             data-testid={`price-${bk.id}`}
-                                            title={paid ? `Paid in full (${cur(bk.total_price)})` : `Balance due ${cur(bal)} — click to take payment`}
+                                            title={paid ? `Paid in full (${cur(bk.total_price)})`
+                                                        : isUrgent ? `Balance due ${cur(bal)} — click to take payment`
+                                                                   : `Balance due ${cur(bal)} · future booking`}
                                           >
                                             {paid ? "PAID" : cur(bal)}
                                           </span>

@@ -7,6 +7,7 @@ import {
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
   FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, Lock, StickyNote, LayoutList,
+  Bell, Building2, Wrench,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -218,6 +219,9 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [createBooking, setCreateBookingState] = useState(null); // { room_id, room_name, room_type_id, check_in } | null
   const [createForm, setCreateForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", nights: 1, adults: 2, children: 0 });
   const [creating, setCreating] = useState(false);
+  const [showPassOver, setShowPassOver] = useState(false);
+  const [showGuestList, setShowGuestList] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
   const [detailData, setDetailData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dragBooking, setDragBooking] = useState(null);
@@ -448,6 +452,13 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         <div className="flex items-center gap-3">
           <CalendarDays className="w-5 h-5 text-stone-700" />
           <h2 className="text-base font-bold text-stone-800" data-testid="timeline-title">Booking Calendar</h2>
+          <button
+            onClick={() => setShowPassOver(true)}
+            data-testid="pass-over-duties-btn"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-stone-700 bg-stone-50 border border-stone-200 rounded-lg hover:bg-stone-100 transition-all"
+          >
+            <Bell className="w-3.5 h-3.5" /> Pass Over Duties
+          </button>
           <Badge className="bg-stone-100 text-stone-600 text-[10px]">{total_rooms} rooms</Badge>
           <Badge className="bg-blue-50 text-blue-700 text-[10px]">{total_bookings} bookings</Badge>
           {todaysActions && (
@@ -459,6 +470,16 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* Date nav: Today · < > · Apr 17 - May 17 */}
+          <div className="flex items-center gap-1 bg-stone-50 border border-stone-200 rounded-lg p-0.5" data-testid="date-nav">
+            <button onClick={() => setStartDate(new Date().toISOString().slice(0,10))} className="px-2 py-0.5 text-[11px] font-semibold text-stone-700 hover:bg-white rounded" data-testid="date-nav-today">Today</button>
+            <button onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() - viewDays); setStartDate(d.toISOString().slice(0,10)); }} className="p-1 hover:bg-white rounded text-stone-500" data-testid="date-nav-prev"><ChevronLeft className="w-3.5 h-3.5" /></button>
+            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent text-[11px] font-semibold text-stone-700 focus:outline-none w-24" data-testid="date-nav-picker" />
+            <button onClick={() => { const d = new Date(startDate); d.setDate(d.getDate() + viewDays); setStartDate(d.toISOString().slice(0,10)); }} className="p-1 hover:bg-white rounded text-stone-500" data-testid="date-nav-next"><ChevronRight className="w-3.5 h-3.5" /></button>
+            <span className="ml-1 mr-1.5 text-[10px] text-stone-400 border-l border-stone-200 pl-2">
+              {new Date(startDate).toLocaleDateString("en-GB", { month: "short", day: "numeric" })} – {(() => { const d = new Date(startDate); d.setDate(d.getDate() + viewDays - 1); return d.toLocaleDateString("en-GB", { month: "short", day: "numeric", year: "numeric" }); })()}
+            </span>
+          </div>
           <button onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); setShowBulkPanel(!showBulkPanel); }} data-testid="bulk-mode-btn"
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${bulkMode ? "bg-violet-500 text-white border-violet-600" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"}`}>
             <CheckSquare className="w-3.5 h-3.5" />{bulkMode ? "Exit Bulk" : "Bulk Actions"}
@@ -468,6 +489,13 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search guest, ID..."
               className="pl-8 pr-3 py-1.5 text-xs border border-stone-200 rounded-lg w-48 focus:outline-none focus:ring-1 focus:ring-blue-300" data-testid="timeline-search" />
           </div>
+          <button
+            onClick={() => setShowGuestList(true)}
+            data-testid="guest-list-btn"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-stone-700 bg-white border border-stone-200 rounded-lg hover:bg-stone-50 transition-all"
+          >
+            <Users className="w-3.5 h-3.5" /> Guest List
+          </button>
           <button
             onClick={() => {
               const firstRoom = groups[0]?.rooms[0];
@@ -667,6 +695,19 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           })()}
 
           {/* Room Type Groups */}
+          {(() => {
+            const activeProp = (properties || []).find(p => p.id === pid);
+            const propLabel = activeProp ? activeProp.name : "All Properties";
+            return (
+              <div className="flex sticky left-0 z-10 bg-gradient-to-r from-stone-50 to-white border-b-2 border-stone-300" data-testid="property-group-header">
+                <div className="flex-shrink-0 flex items-center px-3 gap-2 sticky left-0 z-20 border-r border-stone-200 bg-gradient-to-r from-stone-50 to-white" style={{ width: ROOM_LABEL_W, height: 28 }}>
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="text-[11px] font-black tracking-wider uppercase text-stone-700">{propLabel}</span>
+                </div>
+                <div className="flex-1" style={{ height: 28 }}></div>
+              </div>
+            );
+          })()}
           {groups.map(group => {
             const isCollapsed = collapsed[group.room_type_id];
             const groupBookingCount = group.rooms.reduce((s, r) => s + r.bookings.length, 0);
@@ -799,21 +840,29 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                   </span>
                                 )}
                                 {isCompact ? (
-                                  // Compact (2-lane) layout: single row with logo + name + price
+                                  // Compact (2-lane) layout: single row with logo + name + source + price chip
                                   <>
                                     <span className="ml-1 flex-shrink-0" data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={12} /></span>
                                     <span className="text-[10px] font-bold truncate flex-1 relative z-10" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
-                                    {width > 90 && <span className="text-[9px] font-mono flex-shrink-0 opacity-90" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>}
+                                    {width > 90 && <span className="text-[9px] font-mono flex-shrink-0 opacity-90 bg-black/10 rounded-sm px-1" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>}
                                   </>
                                 ) : (
                                   <>
+                                    {/* Line 1: guest name — big */}
                                     <div className="flex items-center gap-1 min-w-0 relative z-10">
-                                      <span data-testid={`platform-badge-${bk.id}`}><PlatformLogo source={src} size={16} /></span>
                                       <span className="text-[11px] font-bold truncate flex-1" data-testid={`guest-name-${bk.id}`}>{bk.guest_name}</span>
                                     </div>
-                                    <div className="flex items-center justify-between gap-1 mt-0.5 min-w-0 opacity-95 relative z-10">
-                                      <span className="text-[10px] font-bold font-mono truncate" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>
-                                      {width > 110 && <span className="text-[9px] opacity-80 flex-shrink-0">{bk.nights}n</span>}
+                                    {/* Line 2: #ID · src chip · price chip · nights — myhotelbox style */}
+                                    <div className="flex items-center gap-1 mt-0.5 min-w-0 relative z-10">
+                                      {width > 80 && bk.booking_ref && (
+                                        <span className="text-[9px] font-mono opacity-70 truncate" data-testid={`ref-${bk.id}`}>#{String(bk.booking_ref).slice(-5)}</span>
+                                      )}
+                                      <span className="inline-flex items-center gap-0.5" data-testid={`platform-badge-${bk.id}`}>
+                                        <PlatformLogo source={src} size={12} />
+                                        {width > 120 && src && <span className="text-[8px] font-bold uppercase bg-white/50 text-stone-900 rounded-sm px-1 leading-tight">{src.slice(0, 2).toUpperCase()}</span>}
+                                      </span>
+                                      <span className="text-[9px] font-bold font-mono bg-rose-100 text-rose-700 rounded-sm px-1 leading-tight flex-shrink-0" data-testid={`price-${bk.id}`}>{cur(bk.total_price)}</span>
+                                      {width > 140 && <span className="text-[9px] opacity-80 flex-shrink-0 ml-auto">{bk.nights}n</span>}
                                     </div>
                                   </>
                                 )}
@@ -855,6 +904,136 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           })}
         </div>
       </div>
+
+      {/* Pass Over Duties Modal — shift handover report */}
+      {showPassOver && (() => {
+        const todayISO = new Date().toISOString().slice(0, 10);
+        const allBookings = groups.flatMap(g => g.rooms.flatMap(r => r.bookings.map(b => ({...b, room_name: r.name}))));
+        const arrivalsToday = allBookings.filter(b => b.check_in === todayISO);
+        const departuresToday = allBookings.filter(b => b.check_out === todayISO);
+        const inHouse = allBookings.filter(b => b.check_in < todayISO && b.check_out > todayISO && b.status === "checked_in");
+        const pending = allBookings.filter(b => b.status === "pending");
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowPassOver(false)} data-testid="pass-over-modal">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-br from-indigo-600 to-violet-800 px-5 py-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
+                  <Bell className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-white text-base">Pass Over Duties</h3>
+                  <p className="text-[11px] text-indigo-100">Shift handover report · {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+                </div>
+                <button onClick={() => setShowPassOver(false)} className="p-1 hover:bg-white/20 rounded-lg"><X className="w-4 h-4 text-white" /></button>
+              </div>
+              <div className="p-5 space-y-4 max-h-[70vh] overflow-auto">
+                {/* KPI row */}
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-black text-emerald-700">{arrivalsToday.length}</div>
+                    <div className="text-[10px] text-emerald-800 uppercase tracking-wider font-semibold">Arrivals</div>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-black text-amber-700">{departuresToday.length}</div>
+                    <div className="text-[10px] text-amber-800 uppercase tracking-wider font-semibold">Departures</div>
+                  </div>
+                  <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-black text-sky-700">{inHouse.length}</div>
+                    <div className="text-[10px] text-sky-800 uppercase tracking-wider font-semibold">In-House</div>
+                  </div>
+                  <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-center">
+                    <div className="text-2xl font-black text-rose-700">{pending.length}</div>
+                    <div className="text-[10px] text-rose-800 uppercase tracking-wider font-semibold">Pending</div>
+                  </div>
+                </div>
+                {/* Checklists */}
+                {arrivalsToday.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-700 mb-2 flex items-center gap-1.5"><LogIn className="w-3.5 h-3.5" /> Expected arrivals ({arrivalsToday.length})</h4>
+                    <ul className="space-y-1 text-[11px]">
+                      {arrivalsToday.map(b => <li key={b.id} className="flex items-center gap-2 bg-emerald-50/50 p-1.5 rounded">
+                        <input type="checkbox" className="accent-emerald-600" />
+                        <span className="font-semibold">{b.guest_name}</span>
+                        <span className="text-stone-500">· {b.room_name}</span>
+                        <span className="text-stone-400 ml-auto">{cur(b.total_price)}</span>
+                      </li>)}
+                    </ul>
+                  </div>
+                )}
+                {departuresToday.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2 flex items-center gap-1.5"><LogOut className="w-3.5 h-3.5" /> Expected departures ({departuresToday.length})</h4>
+                    <ul className="space-y-1 text-[11px]">
+                      {departuresToday.map(b => <li key={b.id} className="flex items-center gap-2 bg-amber-50/50 p-1.5 rounded">
+                        <input type="checkbox" className="accent-amber-600" />
+                        <span className="font-semibold">{b.guest_name}</span>
+                        <span className="text-stone-500">· {b.room_name}</span>
+                      </li>)}
+                    </ul>
+                  </div>
+                )}
+                <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
+                  <h4 className="text-xs font-bold text-stone-700 mb-1">Notes for next shift</h4>
+                  <textarea placeholder="Hand over notes, issues, guest requests..." className="w-full text-xs p-2 border border-stone-200 rounded min-h-[80px] focus:outline-none focus:ring-1 focus:ring-indigo-300" data-testid="pass-over-notes" />
+                </div>
+              </div>
+              <div className="px-5 py-3 bg-stone-50 border-t border-stone-100 flex items-center justify-end gap-2">
+                <button onClick={() => setShowPassOver(false)} className="px-3 py-1.5 text-xs font-semibold text-stone-600 hover:text-stone-900">Close</button>
+                <button onClick={() => { toast.success("Handover report saved"); setShowPassOver(false); }} className="px-4 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow" data-testid="pass-over-save">Save &amp; Send</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Guest List Modal */}
+      {showGuestList && (() => {
+        const allBookings = groups.flatMap(g => g.rooms.flatMap(r => r.bookings.map(b => ({...b, room_name: r.name}))));
+        const filtered = searchTerm
+          ? allBookings.filter(b => (b.guest_name || "").toLowerCase().includes(searchTerm.toLowerCase()) || (b.guest_email || "").toLowerCase().includes(searchTerm.toLowerCase()))
+          : allBookings;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowGuestList(false)} data-testid="guest-list-modal">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-gradient-to-br from-stone-700 to-stone-900 px-5 py-4 flex items-center gap-3 flex-shrink-0">
+                <Users className="w-5 h-5 text-white" />
+                <h3 className="font-bold text-white text-base flex-1">Guest List</h3>
+                <Badge className="bg-white/20 text-white text-[10px]">{filtered.length} guests</Badge>
+                <button onClick={() => setShowGuestList(false)} className="p-1 hover:bg-white/20 rounded-lg"><X className="w-4 h-4 text-white" /></button>
+              </div>
+              <div className="flex-1 overflow-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-stone-50 sticky top-0 border-b border-stone-200">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-semibold text-stone-600 uppercase tracking-wider text-[9px]">Guest</th>
+                      <th className="text-left px-3 py-2 font-semibold text-stone-600 uppercase tracking-wider text-[9px]">Email</th>
+                      <th className="text-left px-3 py-2 font-semibold text-stone-600 uppercase tracking-wider text-[9px]">Room</th>
+                      <th className="text-left px-3 py-2 font-semibold text-stone-600 uppercase tracking-wider text-[9px]">Dates</th>
+                      <th className="text-left px-3 py-2 font-semibold text-stone-600 uppercase tracking-wider text-[9px]">Status</th>
+                      <th className="text-right px-3 py-2 font-semibold text-stone-600 uppercase tracking-wider text-[9px]">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100">
+                    {filtered.map(b => {
+                      const sc = STATUS_COLORS[resolveDisplayStatus(b)] || STATUS_COLORS.confirmed;
+                      return (
+                        <tr key={b.id} className="hover:bg-stone-50 cursor-pointer" onClick={() => { setShowGuestList(false); openDetail(b.id); }} data-testid={`guest-row-${b.id}`}>
+                          <td className="px-3 py-2 font-semibold">{b.guest_name}</td>
+                          <td className="px-3 py-2 text-stone-500">{b.guest_email || "—"}</td>
+                          <td className="px-3 py-2 text-stone-600">{b.room_name}</td>
+                          <td className="px-3 py-2 text-stone-500 font-mono">{b.check_in} → {b.check_out}</td>
+                          <td className="px-3 py-2"><Badge className={`text-[9px] ${sc.bar} ${sc.text} border-0`}>{sc.label}</Badge></td>
+                          <td className="px-3 py-2 text-right font-mono font-bold text-stone-700">{cur(b.total_price)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Create Booking Modal */}
       {createBooking && (

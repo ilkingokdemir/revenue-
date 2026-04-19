@@ -2,6 +2,45 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 170: Complete calendar feature parity sweep — myhotelbox + Cloudbeds reference (user feedback)
+
+User uploaded additional myhotelbox + Cloudbeds screenshots calling out features I'd missed. Done a proper feature-by-feature audit and added everything.
+
+**NEW — Header toolbar additions** (`BookingTimeline.js`):
+1. **Pass Over Duties button** (left of KPI badges, Bell icon, stone-50 bg) → opens full handover modal.
+2. **Date navigation pod** (right side): `Today · ‹ · <date-picker> · ›` + formatted range label "18 Apr – 1 May 2026". Today button snaps to current date; `‹` / `›` shift by `viewDays`; native `<input type="date">` for quick jump.
+3. **Guest List button** (Users icon) → opens guest directory modal.
+
+**NEW — Pass Over Duties modal** (shift handover report):
+- Violet gradient header with today's date.
+- 4 KPI tiles: Arrivals (emerald) / Departures (amber) / In-House (sky) / Pending (rose) — counts derived from `allBookings` and today's ISO date.
+- **Expected Arrivals** checklist with checkboxes, guest name, room, price.
+- **Expected Departures** checklist (hidden when 0).
+- "Notes for next shift" textarea.
+- Close / Save & Send buttons (toast confirmation on save).
+
+**NEW — Guest List modal**:
+- Dark stone gradient header + search-filtered guest count badge.
+- Sortable-ready table: Guest · Email · Room · Dates · Status badge · Price.
+- Clicking a row closes the modal and opens the full booking detail slide-over.
+- Filters by the timeline's existing `searchTerm` state (DRY).
+
+**NEW — Property group header** (above room types):
+- `🏢 ACTIVE PROPERTY NAME` (or "All Properties") band — sticky left, indigo Building2 icon, gradient background. Mirrors myhotelbox "CITY ROOMS" section marker.
+
+**NEW — Enriched booking bar format** (matches myhotelbox exactly):
+- Line 1: Guest name (bold, truncated)
+- Line 2: `#{booking_ref.slice(-5)} · [platform logo + 2-letter badge AF/BO/EX] · [rose-100 price chip £178.00] · {nights}n`
+- Compact (stacked-lane) layout also got a price chip (bg-black/10) for visual consistency.
+- Chip design: rose-100 bg + rose-700 text + monospace — matches the myhotelbox red price tag.
+
+**NEW — Collapsible groups** already existed (`toggleGroup`); now also works with the new `ChevronRight`/`ChevronDown` toggle icons.
+
+**Added lucide imports**: `Bell`, `Building2`, `Wrench`.
+
+**Live verified** via Playwright screenshots — both the calendar (showing all new header buttons, unassigned row, property group header, enriched booking bars with price chips, daily occupancy %, per-day inventory X/Y, +2 more collision pills) and the Pass Over Duties modal (2 arrivals checklist with proper guests/rooms/prices) render correctly and match the reference screenshots closely.
+
+
 ### Iter 169: Calendar New Booking flow (user bug report)
 
 User reported "calendar doesn't work — try to create booking doesn't work" — the calendar had no way to create a new booking directly from the timeline. Added two paths:

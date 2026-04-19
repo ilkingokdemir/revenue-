@@ -2,6 +2,21 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 184: Multi-Currency Expanded — 41 ISO currencies + multi-currency invoice lines
+
+Building on Iter 183, expanded the Currency/FX module to enterprise scale:
+
+**Backend:**
+- `routes/currency_fx.py` seed table expanded from 10 → **41 ISO 4217 currencies** covering Americas, Europe, MEA, Asia-Pacific (GBP USD EUR CHF CAD MXN BRL ARS CLP SEK NOK DKK PLN CZK HUF RON ISK BGN TRY AED SAR QAR KWD BHD ILS ZAR EGP MAD JPY CNY HKD SGD KRW INR THB IDR MYR PHP VND AUD NZD). `_get_rate_map` now upserts missing codes instead of only seeding on empty collection — future additions land automatically.
+- `routes/city_ledger.py` — new `InvoiceLineIn` model: `{description, amount, currency, quantity}`. `create_invoice` accepts a `lines` array; each line is converted to the invoice currency via `_convert()` and the invoice `amount` is the rolled-up total. Each stored line includes `line_total_native` + `line_total_invoice_cur` for audit.
+- Invoice PDF (`build_invoice_pdf_bytes`) now renders a Line Items table showing description / qty / rate (native) / currency / total in invoice currency.
+
+**Frontend:**
+- `CityLedgerPanel` — invoice modal now lets user build arbitrary multi-currency line items with Add/Delete rows; per-line currency dropdown + invoice currency dropdown both pull from `/api/currency-fx/settings` (41 options). When lines exist the Amount input is auto-disabled and labelled "Amount (auto from lines)". Helper copy explains FX roll-up.
+
+**Verified:** Sample invoice (GBP) with lines [€150×3 @ 0.86 = £387] + [$100×2 @ 0.79 = £158] + [£50×1] → total = **£595.00**. Math exact. PDF valid. Testing agent iteration_152 = 16/16 backend, 100% frontend, 0 issues.
+
+
 ### Iter 183: Multi-Currency / FX Consolidation (P1 closed)
 
 New Currency & FX admin panel consolidates revenue and AR across multi-property portfolios into a single reporting base currency.

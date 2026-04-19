@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Lock, Unlock, Receipt, Wallet, Gift, Sparkles, Users, Wrench, Package, Banknote,
   Shield, CheckCircle, AlertTriangle, Plus, Trash2, RefreshCw, Copy, QrCode,
+  Heart, CreditCard, Globe, Activity, KeyRound,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -898,6 +899,277 @@ export const TwoFactorAuthPanel = () => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+/* ═══════════ 11. REVENUE HEALTH COMPOSITE TILE ═══════════ */
+export const RevenueHealthPanel = ({ activePropertyId }) => {
+  const pid = activePropertyId || "aldgate-flats";
+  const [data, setData] = useState(null);
+  const [fromDate, setFromDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; });
+  const [toDate, setToDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${new Date(d.getFullYear(), d.getMonth()+1, 0).getDate()}`; });
+
+  const load = useCallback(async () => {
+    try { const { data } = await axios.get(`${API}/revenue-health/${pid}?from_date=${fromDate}&to_date=${toDate}`); setData(data); }
+    catch { /* */ }
+  }, [pid, fromDate, toDate]);
+  useEffect(() => { load(); }, [load]);
+
+  if (!data) return <div className="p-8 text-center" data-testid="rh-loading">Loading…</div>;
+  const gradeColor = { "A+": "from-emerald-500 to-green-600", "A": "from-emerald-500 to-green-600", "B": "from-sky-500 to-blue-600", "C": "from-amber-500 to-orange-600", "D": "from-rose-500 to-red-600", "F": "from-rose-700 to-red-800" }[data.grade] || "from-stone-500 to-stone-600";
+  const tintBg = { sky: "bg-sky-500", violet: "bg-violet-500", fuchsia: "bg-fuchsia-500", emerald: "bg-emerald-500" };
+  const tintBorder = { sky: "border-sky-200 bg-sky-50", violet: "border-violet-200 bg-violet-50", fuchsia: "border-fuchsia-200 bg-fuchsia-50", emerald: "border-emerald-200 bg-emerald-50" };
+
+  return (
+    <div data-testid="revenue-health-panel" className="space-y-4">
+      <div className={`bg-gradient-to-br ${gradeColor} text-white rounded-2xl p-8`}>
+        <div className="flex items-center gap-2 mb-2"><Heart className="w-4 h-4" /><span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Revenue Health · Composite Pulse</span></div>
+        <div className="flex items-end gap-8">
+          <div>
+            <div className="text-[10px] font-bold uppercase opacity-70">Grade</div>
+            <div className="text-7xl font-black leading-none tracking-tighter" data-testid="rh-grade">{data.grade}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase opacity-70">Score</div>
+            <div className="text-5xl font-bold" data-testid="rh-score">{data.overall_score}<span className="text-2xl opacity-70">/100</span></div>
+          </div>
+          <div className="ml-auto flex gap-2">
+            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="text-xs bg-white/20 text-white rounded px-2 py-1" data-testid="rh-from" />
+            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="text-xs bg-white/20 text-white rounded px-2 py-1" data-testid="rh-to" />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {data.metrics.map(m => (
+          <div key={m.key} className={`border-2 rounded-2xl p-5 ${tintBorder[m.color]}`} data-testid={`rh-metric-${m.key}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-bold text-stone-800">{m.label}</div>
+              <div className="text-2xl font-black">{m.score}<span className="text-xs text-stone-400">/100</span></div>
+            </div>
+            <div className="w-full bg-white/60 rounded-full h-2 overflow-hidden mb-3">
+              <div className={`h-full ${tintBg[m.color]}`} style={{ width: `${m.score}%` }} />
+            </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-[10px] font-bold uppercase text-stone-500">Current</div>
+                <div className="text-xl font-bold">{m.value}{m.unit}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-bold uppercase text-stone-400">Target</div>
+                <div className="text-sm text-stone-600">{m.target}{m.unit}</div>
+              </div>
+            </div>
+            <p className="text-xs text-stone-500 mt-3">{m.summary}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════ 12. IP ALLOWLIST ═══════════ */
+export const IpAllowlistPanel = () => {
+  const [data, setData] = useState({ rules: [], enabled: false });
+  const [myIp, setMyIp] = useState("");
+  const [newRule, setNewRule] = useState({ cidr_or_ip: "", label: "" });
+  const [checkIp, setCheckIp] = useState("");
+  const [checkResult, setCheckResult] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [{ data: d }, { data: m }] = await Promise.all([
+        axios.get(`${API}/ip-allowlist`),
+        axios.get(`${API}/ip-allowlist/my-ip`),
+      ]);
+      setData(d); setMyIp(m.ip);
+    } catch { /* */ }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const addRule = async () => {
+    if (!newRule.cidr_or_ip) return toast.error("IP or CIDR required");
+    try { await axios.post(`${API}/ip-allowlist`, newRule); setNewRule({ cidr_or_ip: "", label: "" }); load(); toast.success("Rule added"); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+  const delRule = async (id) => {
+    if (!window.confirm("Remove this rule?")) return;
+    try { await axios.delete(`${API}/ip-allowlist/${id}`); load(); } catch { /* */ }
+  };
+  const check = async () => {
+    if (!checkIp) return;
+    try { const { data } = await axios.post(`${API}/ip-allowlist/check`, { ip: checkIp }); setCheckResult(data); }
+    catch { /* */ }
+  };
+
+  return (
+    <div data-testid="ip-allowlist-panel" className="space-y-4">
+      <div className="bg-gradient-to-br from-stone-900 to-slate-800 text-white rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-1"><Globe className="w-4 h-4" /><span className="text-[11px] font-bold uppercase tracking-wider opacity-80">IP Allowlist · Admin Access Control</span></div>
+        <h2 className="text-2xl font-bold">{data.enabled ? `${data.count} rule${data.count !== 1 ? 's' : ''} active` : "Allowlist empty — all IPs allowed"}</h2>
+        <p className="text-sm opacity-70 mt-1">Restrict admin-panel access to known office/VPN IPs. Leave empty to allow all.</p>
+        <div className="mt-3 text-xs bg-white/10 rounded-lg px-3 py-2 inline-block">Your current IP: <code className="font-mono font-bold">{myIp}</code> <button onClick={() => { setNewRule({ cidr_or_ip: myIp, label: "My current IP" }); toast.success("Filled in form below"); }} data-testid="ip-fill-mine" className="ml-2 underline">Use this</button></div>
+      </div>
+
+      <div className="bg-white border rounded-2xl p-6">
+        <h3 className="font-bold mb-3">Add Rule</h3>
+        <div className="grid grid-cols-3 gap-2">
+          <input value={newRule.cidr_or_ip} onChange={e => setNewRule({ ...newRule, cidr_or_ip: e.target.value })} placeholder="1.2.3.4 or 10.0.0.0/24" className="border rounded px-3 py-2 text-sm font-mono" data-testid="ip-input" />
+          <input value={newRule.label} onChange={e => setNewRule({ ...newRule, label: e.target.value })} placeholder="Label (e.g. London Office)" className="border rounded px-3 py-2 text-sm" data-testid="ip-label" />
+          <button onClick={addRule} data-testid="ip-add-btn" className="px-4 py-2 bg-stone-800 text-white rounded-lg text-sm font-bold">Add</button>
+        </div>
+      </div>
+
+      <div className="bg-white border rounded-2xl p-6">
+        <h3 className="font-bold mb-3">Rules ({data.rules.length})</h3>
+        <div className="divide-y divide-stone-100">
+          {data.rules.map(r => (
+            <div key={r.id} className="py-2 flex items-center gap-3" data-testid={`ip-rule-${r.id}`}>
+              <Shield className="w-4 h-4 text-stone-400" />
+              <code className="font-mono font-bold text-sm">{r.cidr_or_ip}</code>
+              <span className="text-xs text-stone-400 flex-1">{r.label} {r.note && `· ${r.note}`}</span>
+              <span className="text-[10px] text-stone-400">by {r.created_by}</span>
+              <button onClick={() => delRule(r.id)} data-testid={`ip-del-${r.id}`} className="text-rose-600"><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          {data.rules.length === 0 && <p className="text-center text-sm text-stone-400 py-6">No rules — allowlist is permissive</p>}
+        </div>
+      </div>
+
+      <div className="bg-white border rounded-2xl p-6">
+        <h3 className="font-bold mb-3">Test an IP</h3>
+        <div className="flex gap-2">
+          <input value={checkIp} onChange={e => setCheckIp(e.target.value)} placeholder="Enter IP to test" className="flex-1 border rounded px-3 py-2 text-sm font-mono" data-testid="ip-check-input" />
+          <button onClick={check} data-testid="ip-check-btn" className="px-4 py-2 bg-stone-100 rounded-lg text-sm">Check</button>
+        </div>
+        {checkResult && (
+          <div className={`mt-3 p-3 rounded-lg text-sm ${checkResult.allowed ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`} data-testid="ip-check-result">
+            <strong>{checkResult.allowed ? "✓ ALLOWED" : "✗ BLOCKED"}</strong> · {checkResult.reason}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════ 13. PCI CARD-ON-FILE VAULT ═══════════ */
+export const CardVaultPanel = ({ activePropertyId }) => {
+  const [email, setEmail] = useState("");
+  const [cards, setCards] = useState([]);
+  const [name, setName] = useState("");
+  const [intent, setIntent] = useState(null);
+  const [config, setConfig] = useState({ mode: "test" });
+  const [chargeForm, setChargeForm] = useState({ amount: 0, booking_id: "", description: "" });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    axios.get(`${API}/card-vault/config`).then(({ data }) => setConfig(data)).catch(() => {});
+  }, []);
+
+  const lookup = async () => {
+    if (!email) return;
+    try { const { data } = await axios.get(`${API}/card-vault/guest/${encodeURIComponent(email)}`); setCards(data); }
+    catch { /* */ }
+  };
+
+  const createIntent = async () => {
+    if (!email) return toast.error("Guest email required");
+    setBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/card-vault/setup-intent`, { email, name });
+      setIntent(data);
+      toast.success("Setup Intent created — pass client_secret to Stripe.js Payment Element");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  const detach = async (id) => {
+    if (!window.confirm("Detach this saved card?")) return;
+    try { await axios.delete(`${API}/card-vault/methods/${id}`); lookup(); toast.success("Detached"); } catch { /* */ }
+  };
+
+  const charge = async (pmId) => {
+    if (!chargeForm.amount || chargeForm.amount <= 0) return toast.error("Amount required");
+    setBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/card-vault/charge`, {
+        payment_method_id: pmId, amount_gbp: chargeForm.amount,
+        booking_id: chargeForm.booking_id, description: chargeForm.description,
+      });
+      toast.success(`Charge ${data.status}: £${data.amount_charged_gbp}${data.folio_entry ? " · folio updated" : ""}`);
+      setChargeForm({ amount: 0, booking_id: "", description: "" });
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div data-testid="card-vault-panel" className="space-y-4">
+      <div className="bg-gradient-to-br from-purple-700 to-pink-700 text-white rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-1"><CreditCard className="w-4 h-4" /><span className="text-[11px] font-bold uppercase tracking-wider opacity-80">PCI Card-on-File Vault · Stripe</span></div>
+        <h2 className="text-2xl font-bold">Tokenized 1-click charging</h2>
+        <p className="text-sm opacity-80 mt-1">Card details never touch our servers (PCI SAQ-A scope). Frontend uses Stripe Payment Element.</p>
+        <div className="mt-3 flex gap-2 items-center text-xs">
+          <Badge className={config.mode === "live" ? "bg-emerald-500 text-white" : "bg-amber-400 text-stone-900"}>{config.mode.toUpperCase()} MODE</Badge>
+          {!config.publishable_key && <span className="opacity-80">Set <code className="bg-white/20 px-1 rounded">STRIPE_PUBLISHABLE_KEY</code> env var to finalize in-browser card collection</span>}
+        </div>
+      </div>
+
+      <div className="bg-white border rounded-2xl p-6">
+        <h3 className="font-bold mb-3">Guest Lookup</h3>
+        <div className="flex gap-2">
+          <input value={email} onChange={e => setEmail(e.target.value.toLowerCase())} placeholder="guest@example.com" className="flex-1 border rounded px-3 py-2 text-sm" data-testid="cv-email" />
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="Guest name (optional)" className="flex-1 border rounded px-3 py-2 text-sm" />
+          <button onClick={lookup} data-testid="cv-lookup-btn" className="px-4 py-2 bg-stone-100 rounded-lg text-sm">Lookup</button>
+          <button onClick={createIntent} disabled={busy} data-testid="cv-setup-btn" className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold">Create Setup Intent</button>
+        </div>
+
+        {intent && (
+          <div className="mt-4 bg-purple-50 border-2 border-purple-200 rounded-xl p-4" data-testid="cv-intent">
+            <div className="text-xs font-bold text-purple-800 uppercase mb-2">Setup Intent created</div>
+            <div className="space-y-1 text-xs font-mono">
+              <div><strong>Setup Intent ID:</strong> {intent.setup_intent_id}</div>
+              <div><strong>Customer ID:</strong> {intent.customer_id}</div>
+              <div className="truncate"><strong>Client Secret:</strong> <span className="text-purple-700">{intent.client_secret}</span></div>
+            </div>
+            <p className="text-[11px] text-purple-700 mt-2">→ Pass this client_secret to a Stripe.js Payment Element on your booking form. After successful confirmation, call <code>POST /api/card-vault/save-method</code> with the resulting payment_method_id.</p>
+          </div>
+        )}
+      </div>
+
+      {cards.length > 0 && (
+        <div className="bg-white border rounded-2xl p-6">
+          <h3 className="font-bold mb-3">Cards on File ({cards.length})</h3>
+          <div className="space-y-3">
+            {cards.map(c => (
+              <div key={c.id} className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl" data-testid={`cv-card-${c.id}`}>
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 text-white flex items-center justify-center"><CreditCard className="w-5 h-5" /></div>
+                <div className="flex-1">
+                  <div className="font-mono font-bold text-sm">{c.brand?.toUpperCase()} •••• {c.last4}</div>
+                  <div className="text-[10px] text-stone-400">exp {c.exp_month}/{c.exp_year} · added {c.created_at?.slice(0, 10)} by {c.created_by}</div>
+                </div>
+                <input type="number" placeholder="£" value={chargeForm.amount || ""} onChange={e => setChargeForm({ ...chargeForm, amount: parseFloat(e.target.value) })}
+                  className="border rounded px-2 py-1 w-24 text-sm" data-testid={`cv-amt-${c.id}`} />
+                <input placeholder="Booking ID" value={chargeForm.booking_id} onChange={e => setChargeForm({ ...chargeForm, booking_id: e.target.value })}
+                  className="border rounded px-2 py-1 w-28 text-sm" />
+                <button onClick={() => charge(c.payment_method_id)} disabled={busy} data-testid={`cv-charge-${c.id}`}
+                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold">Charge</button>
+                <button onClick={() => detach(c.id)} data-testid={`cv-detach-${c.id}`} className="text-rose-600"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-stone-50 border border-stone-200 rounded-2xl p-5 text-xs text-stone-600">
+        <div className="font-bold mb-1 text-stone-800">How the full flow works</div>
+        <ol className="list-decimal list-inside space-y-1">
+          <li>Front-desk or booking form calls <code className="bg-white px-1 rounded">POST /api/card-vault/setup-intent</code> with guest email.</li>
+          <li>Response returns <code>client_secret</code>. Frontend mounts Stripe.js Payment Element with it and calls <code>stripe.confirmSetup()</code>.</li>
+          <li>On success, capture <code>payment_method.id</code> and POST to <code className="bg-white px-1 rounded">/api/card-vault/save-method</code>.</li>
+          <li>Later, any staff member can charge the saved card with <code className="bg-white px-1 rounded">POST /api/card-vault/charge</code> — off-session, no guest action needed. Charge auto-creates a folio payment line.</li>
+        </ol>
+      </div>
     </div>
   );
 };

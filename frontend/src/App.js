@@ -30,6 +30,7 @@ import {
   NightAuditClosePanel, DepositLedgerPanel, CommissionReconPanel, GiftCardsPanel,
   ReviewSentimentPanel, GuestRfmPanel, PreventiveMaintenancePanel,
   AssetRegisterPanel, CashDrawerPanel, TwoFactorAuthPanel,
+  RevenueHealthPanel, IpAllowlistPanel, CardVaultPanel,
 } from "./components/dashboard/CompetitorGapPanels";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
@@ -201,6 +202,7 @@ import {
   TShirt,
   Bug,
   Lock,
+  CreditCard,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2664,6 +2666,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       items: [
         { id: "accounting", icon: Wallet, name: t("nav.accounting"), testId: "accounting-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
+        { id: "revenue-health", icon: ChartLine, name: "Revenue Health", testId: "revenue-health-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
         { id: "cash-flow", icon: ChartLine, name: "Cash Flow", testId: "cash-flow-btn" },
         { id: "expenses", icon: Receipt, name: "Expenses", testId: "expenses-btn" },
@@ -2677,6 +2680,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "deposit-ledger", icon: Wallet, name: "Deposit Ledger", testId: "deposit-ledger-btn" },
         { id: "commission-recon", icon: Receipt, name: "Commission Reconciliation", testId: "commission-recon-btn" },
         { id: "gift-cards", icon: Tag, name: "Gift Cards", testId: "gift-cards-btn" },
+        { id: "card-vault", icon: CreditCard, name: "Card Vault (Stripe)", testId: "card-vault-btn" },
         { id: "onboarding", icon: MagicWand, name: "First-Run Wizard", testId: "onboarding-btn" },
       ],
     },
@@ -2713,6 +2717,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         ...(user?.role !== "receptionist" ? [{ id: "legal-docs", icon: ShieldCheck, name: "Legal Documents", testId: "legal-docs-btn" }] : []),
         { id: "gdpr", icon: ShieldCheck, name: "GDPR Data Rights", testId: "gdpr-btn" },
         { id: "two-factor-auth", icon: ShieldCheck, name: "Two-Factor Auth (2FA)", testId: "two-factor-auth-btn" },
+        ...(user?.role === "admin" ? [{ id: "ip-allowlist", icon: Globe, name: "IP Allowlist", testId: "ip-allowlist-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "roles-permissions", icon: ShieldCheck, name: "Roles & Permissions", testId: "roles-permissions-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "import-module", icon: Upload, name: "Import Module", testId: "import-module-btn" }] : []),
@@ -3522,6 +3527,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "asset-register" && <div className="p-6"><AssetRegisterPanel activePropertyId={activePropertyId} /></div>}
         {activeView === "cash-drawer" && <div className="p-6"><CashDrawerPanel activePropertyId={activePropertyId} /></div>}
         {activeView === "two-factor-auth" && <div className="p-6"><TwoFactorAuthPanel /></div>}
+
+        {/* Iter 157 — Remaining gaps: Revenue Health, IP Allowlist, PCI Card Vault */}
+        {activeView === "revenue-health" && <div className="p-6"><RevenueHealthPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "ip-allowlist" && <div className="p-6"><IpAllowlistPanel /></div>}
+        {activeView === "card-vault" && <div className="p-6"><CardVaultPanel activePropertyId={activePropertyId} /></div>}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

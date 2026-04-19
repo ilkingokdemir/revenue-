@@ -607,6 +607,16 @@ api_router.include_router(create_cash_drawer_router(db, require_roles))
 from routes.two_factor_auth import create_2fa_router
 api_router.include_router(create_2fa_router(db, require_roles, get_current_user))
 
+# ===== Iter 157 — Revenue Health + IP Allowlist + PCI Card Vault =====
+from routes.revenue_health import create_revenue_health_router
+api_router.include_router(create_revenue_health_router(db, require_roles))
+
+from routes.ip_allowlist import create_ip_allowlist_router
+api_router.include_router(create_ip_allowlist_router(db, require_roles))
+
+from routes.card_vault import create_card_vault_router
+api_router.include_router(create_card_vault_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

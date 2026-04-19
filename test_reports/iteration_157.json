@@ -1,0 +1,92 @@
+{
+  "summary": "Iteration 157 - 3 new competitor-gap features (Revenue Health, IP Allowlist, Card Vault). All 20 backend tests PASSED (100%). All 3 frontend panels render correctly with full functionality.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration157_revenue_ip_vault.py",
+    "/app/test_reports/pytest/pytest_iteration157_revenue_ip_vault.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration157_revenue_ip_vault.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (all 3 new panels verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Used existing seed data. Revenue Health shows Grade D (51/100) with real metrics.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 3 Iter 157 features fully tested. Revenue Health shows composite KPI with 4 metrics. IP Allowlist allows CIDR rules and IP checking. Card Vault correctly returns Stripe error with placeholder key (expected behavior). Total shipped features now 13 of 15 gaps.",
+  "tests_verified": {
+    "backend": {
+      "revenue_health": [
+        "GET /api/revenue-health/{pid} returns overall_score (0-100), grade (A+/A/B/C/D/F), 4 metrics - PASS",
+        "GET /api/revenue-health/all works without property filter - PASS",
+        "Non-admin/non-manager gets 403 Forbidden - PASS"
+      ],
+      "ip_allowlist": [
+        "GET /api/ip-allowlist returns {enabled:false, rules:[], count:0} when empty - PASS",
+        "GET /api/ip-allowlist/my-ip returns {ip, via_proxy} - PASS",
+        "POST /api/ip-allowlist with valid CIDR succeeds - PASS",
+        "POST /api/ip-allowlist with invalid IP returns 400 - PASS",
+        "POST /api/ip-allowlist duplicate returns 409 - PASS",
+        "POST /api/ip-allowlist/check returns {allowed:true, matched_rule} for matching IP - PASS",
+        "POST /api/ip-allowlist/check returns {allowed:false} for non-matching IP - PASS",
+        "DELETE /api/ip-allowlist/{id} returns {status:'deleted'} - PASS",
+        "Only admin role can access IP allowlist - PASS"
+      ],
+      "card_vault": [
+        "GET /api/card-vault/config returns {publishable_key, mode:'test'} - PASS",
+        "POST /api/card-vault/setup-intent with placeholder key returns 400 with Stripe error (expected) - PASS",
+        "POST /api/card-vault/setup-intent without email returns 400 - PASS",
+        "GET /api/card-vault/guest/{email} returns [] for new guest - PASS",
+        "POST /api/card-vault/save-method requires email + payment_method_id - PASS",
+        "POST /api/card-vault/charge with bogus payment_method_id returns 404 - PASS",
+        "POST /api/card-vault/charge without amount returns 400 - PASS",
+        "Receptionist can access card vault config - PASS"
+      ]
+    },
+    "frontend": {
+      "sidebar_entries": [
+        "revenue-health-btn - FOUND (Finance section)",
+        "ip-allowlist-btn - FOUND (Settings section, admin-only)",
+        "card-vault-btn - FOUND (Finance section)"
+      ],
+      "panels_render": [
+        "revenue-health-panel - RENDERS with Grade D, Score 51/100",
+        "ip-allowlist-panel - RENDERS with rule management and IP check",
+        "card-vault-panel - RENDERS with lookup and setup-intent flow"
+      ],
+      "flows_tested": [
+        "Revenue Health: Grade D displayed, 4 metric cards (Direct Capture 100, Deposit Security 4, Commission Match 0, Champion Revenue 100), date inputs work - PASS",
+        "IP Allowlist: 'Use this' populates form, added 172.16.0.0/12 rule, IP check shows 'ALLOWED · matches rule Test Range' - PASS",
+        "Card Vault: Lookup executed, Setup intent shows expected Stripe error toast 'Invalid API Key provided: sk_test_****gent' - PASS"
+      ]
+    }
+  },
+  "stripe_integration_note": "STRIPE_API_KEY='sk_test_emergent' is a placeholder. Card Vault endpoints correctly proxy to Stripe and return Stripe's own error ('Invalid API Key'). This is expected behavior - the integration is 'ready-for-real-key'. NOT a bug.",
+  "sample_data_observed": {
+    "revenue_health": {
+      "grade": "D",
+      "overall_score": 51,
+      "metrics": {
+        "direct_capture": {"score": 100, "value": "98.6%"},
+        "deposit_security": {"score": 4, "value": "1.7%"},
+        "commission_match": {"score": 0, "value": "100% variance"},
+        "champion_revenue": {"score": 100, "value": "35.1%"}
+      }
+    },
+    "ip_allowlist_rule_added": "172.16.0.0/12 'Test Range'",
+    "ip_check_result": "172.16.5.10 ALLOWED"
+  }
+}

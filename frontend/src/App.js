@@ -2533,6 +2533,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
   };
 
   const [activeView, setActiveView] = useState("dashboard");
+  const [collapsedSections, setCollapsedSections] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isBatchResponding, setIsBatchResponding] = useState(false);
   const [batchResult, setBatchResult] = useState(null);
@@ -2560,20 +2561,114 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     setIsBatchResponding(false);
   };
 
-  // Sidebar menu items
+  // Sidebar menu items — organised by topic, collapsible
   const menuSections = [
     {
-      label: "",
+      label: "Overview",
+      color: "text-stone-400",
       items: [
         { id: "dashboard", icon: House, name: t("nav.dashboard"), testId: "dashboard-btn" },
         { id: "my-tasks", icon: Target, name: "My Tasks", testId: "my-tasks-btn" },
         { id: "calendar", icon: CalendarBlank, name: "Calendar", testId: "sidebar-calendar" },
+      ],
+    },
+    {
+      label: "Reception",
+      color: "text-emerald-400",
+      items: [
+        { id: "arrivals", icon: Bed, name: "Arrivals Cockpit", testId: "arrivals-btn" },
+        { id: "unified-inbox", icon: Tray, name: "Unified Inbox", testId: "unified-inbox-btn" },
+        { id: "collisions", icon: ShieldCheck, name: "Collisions", testId: "collisions-btn" },
+        { id: "reception-report", icon: Notebook, name: "Reception Report", testId: "reception-report-btn" },
+        { id: "pass-over", icon: Notebook, name: "Pass Over Duties", testId: "pass-over-btn" },
+        { id: "kiosk-launch", icon: DeviceTablet, name: "Self-Service Kiosk", testId: "kiosk-launch-btn", launchUrl: true },
+        { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
+        { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
+      ],
+    },
+    {
+      label: "Reservations & Booking",
+      color: "text-blue-400",
+      items: [
+        { id: "booking", icon: Bed, name: t("nav.booking"), testId: "booking-engine-btn" },
+        { id: "booking-engine-admin", icon: Globe, name: "Booking Engine", testId: "booking-engine-admin-btn" },
+        { id: "website-templates", icon: Layout, name: t("nav.website_templates"), testId: "website-templates-btn" },
+        { id: "customize-template", icon: PaintBrush, name: t("nav.customize_template"), testId: "customize-template-btn" },
+        { id: "group-bookings", icon: Users, name: "Group Bookings", testId: "group-bookings-btn" },
+        { id: "rate-structure", icon: Tag, name: "Rate Plans & OTA Mapping", testId: "rate-structure-btn" },
+        { id: "promo-codes", icon: Tag, name: t("nav.promo_codes"), testId: "promo-codes-btn" },
+        { id: "add-ons", icon: Package, name: t("nav.add_ons"), testId: "add-ons-btn" },
+        { id: "policies", icon: Scroll, name: t("nav.policies"), testId: "policies-btn" },
+      ],
+    },
+    {
+      label: "Guests",
+      color: "text-rose-400",
+      items: [
+        { id: "guest-profiles", icon: AddressBook, name: t("nav.guest_profiles"), testId: "guest-profiles-btn" },
+        { id: "guest-journey", icon: SignIn, name: t("nav.guest_journey"), testId: "guest-journey-btn" },
+        { id: "guest-app", icon: MapPin, name: t("nav.guest_app"), testId: "guest-app-btn" },
+        { id: "loyalty", icon: Crown, name: t("nav.loyalty"), testId: "loyalty-btn" },
+        { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
+        { id: "campaigns", icon: Megaphone, name: t("nav.campaigns"), testId: "campaigns-btn" },
+        { id: "surveys", icon: Star, name: t("nav.surveys"), testId: "surveys-btn" },
+        { id: "messaging", icon: Envelope, name: t("nav.messaging"), testId: "messaging-btn" },
+        { id: "concierge-analytics", icon: Robot, name: t("nav.concierge"), testId: "concierge-analytics-btn" },
+        { id: "automation", icon: Lightning, name: t("nav.automation"), testId: "automation-btn" },
+      ],
+    },
+    {
+      label: "Operations",
+      color: "text-amber-400",
+      items: [
+        { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
+        { id: "maintenance", icon: Wrench, name: t("nav.maintenance"), testId: "maintenance-btn" },
+        { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
+        { id: "night-audit", icon: Moon, name: t("nav.night_audit"), testId: "night-audit-btn" },
+        { id: "logbook", icon: Notebook, name: t("nav.logbook"), testId: "logbook-btn" },
+        { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
+        { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
+        { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
+        { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
+        { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
+        { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
+      ],
+    },
+    {
+      label: "Revenue & Rates",
+      color: "text-violet-400",
+      items: [
         { id: "revenue", icon: ChartLine, name: "Revenue Mgmt", testId: "revenue-btn" },
         { id: "profit-os", icon: Target, name: "Profit OS", testId: "profit-os-btn" },
-      ]
+        { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
+        ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate Matrix", testId: "rate-matrix-btn" }] : []),
+        { id: "forecast", icon: ChartLine, name: t("nav.forecast"), testId: "forecast-btn" },
+        { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
+        { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
+      ],
+    },
+    {
+      label: "Finance",
+      color: "text-sky-400",
+      items: [
+        { id: "accounting", icon: Wallet, name: t("nav.accounting"), testId: "accounting-btn" },
+        { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
+        { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
+        { id: "cash-flow", icon: ChartLine, name: "Cash Flow", testId: "cash-flow-btn" },
+        { id: "expenses", icon: Receipt, name: "Expenses", testId: "expenses-btn" },
+        { id: "payroll", icon: Wallet, name: "Payroll", testId: "payroll-btn" },
+        { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
+        { id: "pos", icon: Receipt, name: t("nav.pos"), testId: "pos-btn" },
+        { id: "city-ledger", icon: Wallet, name: "City Ledger (AR)", testId: "city-ledger-btn" },
+        { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
+        { id: "deposit-policies", icon: ShieldCheck, name: "Deposit Policies", testId: "deposit-policies-btn" },
+        { id: "currency-fx", icon: Globe, name: "Multi-Currency / FX", testId: "currency-fx-btn" },
+        { id: "onboarding", icon: MagicWand, name: "First-Run Wizard", testId: "onboarding-btn" },
+      ],
     },
     {
       label: t("section.review_hub"),
+      color: "text-emerald-500",
       items: [
         { id: "reviews", icon: ChatText, name: t("nav.reviews"), testId: "nav-reviews" },
         { id: "analytics", icon: ChartBar, name: t("nav.analytics"), testId: "analytics-btn" },
@@ -2581,88 +2676,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: t("nav.approvals"), testId: "approval-queue-btn" }] : []),
         { id: "alerts", icon: Bell, name: t("nav.alerts"), testId: "notification-settings-btn" },
         { id: "reports", icon: CalendarBlank, name: t("nav.reports"), testId: "reports-btn" },
-      ]
+      ],
     },
     {
-      label: t("section.booking_engine"),
-      items: [
-        { id: "booking", icon: Bed, name: t("nav.booking"), testId: "booking-engine-btn" },
-        { id: "website-templates", icon: Layout, name: t("nav.website_templates"), testId: "website-templates-btn" },
-        { id: "customize-template", icon: PaintBrush, name: t("nav.customize_template"), testId: "customize-template-btn" },
-        { id: "promo-codes", icon: Tag, name: t("nav.promo_codes"), testId: "promo-codes-btn" },
-        { id: "add-ons", icon: Package, name: t("nav.add_ons"), testId: "add-ons-btn" },
-        { id: "policies", icon: Scroll, name: t("nav.policies"), testId: "policies-btn" },
-      ]
-    },
-    {
-      label: t("section.guest_experience"),
-      items: [
-        { id: "guest-profiles", icon: AddressBook, name: t("nav.guest_profiles"), testId: "guest-profiles-btn" },
-        { id: "guest-journey", icon: SignIn, name: t("nav.guest_journey"), testId: "guest-journey-btn" },
-        { id: "loyalty", icon: Crown, name: t("nav.loyalty"), testId: "loyalty-btn" },
-        { id: "guest-app", icon: MapPin, name: t("nav.guest_app"), testId: "guest-app-btn" },
-        { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
-        { id: "campaigns", icon: Megaphone, name: t("nav.campaigns"), testId: "campaigns-btn" },
-        { id: "surveys", icon: Star, name: t("nav.surveys"), testId: "surveys-btn" },
-      ]
-    },
-    {
-      label: t("section.operations"),
-      items: [
-        { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
-        { id: "maintenance", icon: Wrench, name: t("nav.maintenance"), testId: "maintenance-btn" },
-        { id: "night-audit", icon: Moon, name: t("nav.night_audit"), testId: "night-audit-btn" },
-        { id: "logbook", icon: Notebook, name: t("nav.logbook"), testId: "logbook-btn" },
-        { id: "forecast", icon: ChartLine, name: t("nav.forecast"), testId: "forecast-btn" },
-        { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
-        { id: "accounting", icon: Wallet, name: t("nav.accounting"), testId: "accounting-btn" },
-        { id: "pos", icon: Receipt, name: t("nav.pos"), testId: "pos-btn" },
-        { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
-        { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
-        { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
-        { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
-        { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
-        { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
-        { id: "collisions", icon: ShieldCheck, name: "Collisions", testId: "collisions-btn" },
-        { id: "arrivals", icon: Bed, name: "Arrivals Cockpit", testId: "arrivals-btn" },
-        { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
-        { id: "reception-report", icon: Notebook, name: "Reception Report", testId: "reception-report-btn" },
-        { id: "pass-over", icon: Notebook, name: "Pass Over Duties", testId: "pass-over-btn" },
-        { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
-        { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
-        { id: "payroll", icon: Wallet, name: "Payroll", testId: "payroll-btn" },
-        ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate Matrix", testId: "rate-matrix-btn" }] : []),
-        { id: "expenses", icon: Receipt, name: "Expenses", testId: "expenses-btn" },
-        { id: "cash-flow", icon: ChartLine, name: "Cash Flow", testId: "cash-flow-btn" },
-        { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
-        { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
-        { id: "kiosk-launch", icon: DeviceTablet, name: "Self-Service Kiosk", testId: "kiosk-launch-btn", launchUrl: true },
-        { id: "unified-inbox", icon: Tray, name: "Unified Inbox", testId: "unified-inbox-btn" },
-        { id: "city-ledger", icon: Wallet, name: "City Ledger (AR)", testId: "city-ledger-btn" },
-        { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
-        { id: "deposit-policies", icon: ShieldCheck, name: "Deposit Policies", testId: "deposit-policies-btn" },
-        { id: "currency-fx", icon: Globe, name: "Multi-Currency / FX", testId: "currency-fx-btn" },
-        { id: "rate-structure", icon: Tag, name: "Rate Plans & OTA Mapping", testId: "rate-structure-btn" },
-        { id: "group-bookings", icon: Users, name: "Group Bookings", testId: "group-bookings-btn" },
-        { id: "gdpr", icon: ShieldCheck, name: "GDPR Data Rights", testId: "gdpr-btn" },
-        { id: "onboarding", icon: MagicWand, name: "First-Run Wizard", testId: "onboarding-btn" },
-        { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
-        { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
-        { id: "booking-engine-admin", icon: Globe, name: "Booking Engine", testId: "booking-engine-admin-btn" },
-      ]
-    },
-    {
-      label: t("section.guest_messaging"),
-      items: [
-        { id: "messaging", icon: Envelope, name: t("nav.messaging"), testId: "messaging-btn" },
-        { id: "automation", icon: Lightning, name: t("nav.automation"), testId: "automation-btn" },
-        { id: "channel-settings", icon: Gear, name: t("nav.channel_settings"), testId: "channel-settings-btn" },
-        { id: "concierge-analytics", icon: Robot, name: t("nav.concierge"), testId: "concierge-analytics-btn" },
-        { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
-      ]
-    },
-    {
-      label: t("section.connections"),
+      label: "Settings & Developers",
+      color: "text-stone-500",
       items: [
         { id: "setup-wizard", icon: Gear, name: t("nav.setup_wizard"), testId: "setup-wizard-btn" },
         { id: "marketplace", icon: Sparkle, name: "Marketplace", testId: "marketplace-btn" },
@@ -2671,25 +2689,22 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "webhooks", icon: Code, name: t("nav.webhooks"), testId: "webhooks-btn" },
         { id: "synclog", icon: ArrowsClockwise, name: t("nav.synclog"), testId: "sync-log-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
-      ]
-    },
-    {
-      label: t("section.settings"),
-      items: [
+        { id: "channel-settings", icon: Gear, name: t("nav.channel_settings"), testId: "channel-settings-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "contracts", icon: FileText, name: "Staff Contracts", testId: "contracts-btn" }] : []),
         ...(user?.role !== "receptionist" ? [{ id: "onboarding-admin", icon: Users, name: "Onboarding Review", testId: "onboarding-admin-btn" }] : []),
         ...(user?.role !== "receptionist" ? [{ id: "legal-docs", icon: ShieldCheck, name: "Legal Documents", testId: "legal-docs-btn" }] : []),
+        { id: "gdpr", icon: ShieldCheck, name: "GDPR Data Rights", testId: "gdpr-btn" },
         ...(user?.role === "admin" ? [{ id: "admin-panel", icon: ShieldCheck, name: t("nav.admin_panel"), testId: "admin-panel-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "roles-permissions", icon: ShieldCheck, name: "Roles & Permissions", testId: "roles-permissions-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "import-module", icon: Upload, name: "Import Module", testId: "import-module-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "audit-trail", icon: ShieldCheck, name: "Audit Trail", testId: "audit-trail-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "settings-hub", icon: Gear, name: "Settings Hub", testId: "settings-hub-btn" }] : []),
         { id: "bug-tracker", icon: Bug, name: "Bug Tracker", testId: "bug-tracker-btn" },
-      ]
-    }
+      ],
+    },
   ];
 
   // Sidebar permission gating — mapping testId → required MENU permission key.
@@ -2875,45 +2890,61 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 custom-scrollbar">
-          {gatedNavigation.map((section, sIdx) => (
-            <div key={section.label || `section-${sIdx}`} className="mb-2">
-              {sIdx > 0 && <div className="mx-4 mb-2 border-t border-stone-800" />}
-              {section.label && (
-                <div className="px-4 mb-1.5">
-                  <span className={`text-[10px] uppercase tracking-[0.15em] font-bold ${
-                    section.label === "Review Hub" ? "text-emerald-500" :
-                    section.label === "Booking Engine" ? "text-blue-400" :
-                    section.label === "Guest Messaging" ? "text-purple-400" :
-                    section.label === "Guest Experience" ? "text-rose-400" :
-                    section.label === "Operations" ? "text-emerald-400" :
-                    "text-stone-500"
-                  }`}>{section.label}</span>
-                </div>
-              )}
-              {section.items.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    if (item.launchUrl && item.id === "kiosk-launch") {
-                      // Launch the self-service kiosk in a fresh tab for the active property
-                      window.open(`/checkin-kiosk/${activePropertyId || "default"}`, "_blank", "noopener,noreferrer");
-                      return;
-                    }
-                    setActiveView(item.id); setSidebarOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
-                    activeView === item.id
-                      ? "bg-stone-800 text-white font-medium border-l-2 border-emerald-500"
-                      : "text-stone-400 hover:text-stone-200 hover:bg-stone-800/50 border-l-2 border-transparent"
-                  }`}
-                  data-testid={item.testId}
-                >
-                  <item.icon size={16} weight={activeView === item.id ? "fill" : "regular"} />
-                  {item.name}
-                </button>
-              ))}
-            </div>
-          ))}
+          {gatedNavigation.map((section, sIdx) => {
+            const sectionKey = section.label || `section-${sIdx}`;
+            // Auto-expand the section that contains the active view
+            const containsActive = section.items.some((it) => it.id === activeView);
+            const storedClosed = (typeof localStorage !== "undefined"
+              ? (localStorage.getItem(`nav-closed-${sectionKey}`) === "1")
+              : false);
+            const reallyOpen = containsActive || (collapsedSections[sectionKey] === undefined
+              ? !storedClosed : !collapsedSections[sectionKey]);
+            const toggleSection = () => {
+              const now = reallyOpen; // currently open → will close
+              const next = { ...collapsedSections, [sectionKey]: now };
+              setCollapsedSections(next);
+              try { localStorage.setItem(`nav-closed-${sectionKey}`, now ? "1" : "0"); } catch {}
+            };
+            return (
+              <div key={sectionKey} className="mb-1">
+                {sIdx > 0 && <div className="mx-4 mb-2 border-t border-stone-800" />}
+                {section.label && (
+                  <button onClick={toggleSection} data-testid={`nav-section-${sectionKey}`}
+                    className="w-full flex items-center justify-between px-4 py-1.5 text-left hover:bg-stone-800/30 transition-colors group">
+                    <span className={`text-[10px] uppercase tracking-[0.15em] font-bold ${section.color || "text-stone-500"}`}>
+                      {section.label}
+                    </span>
+                    <CaretRight
+                      size={10}
+                      weight="bold"
+                      className={`text-stone-600 group-hover:text-stone-400 transition-transform duration-200 ${reallyOpen ? "rotate-90" : ""}`}
+                    />
+                  </button>
+                )}
+                {reallyOpen && section.items.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      if (item.launchUrl && item.id === "kiosk-launch") {
+                        window.open(`/checkin-kiosk/${activePropertyId || "default"}`, "_blank", "noopener,noreferrer");
+                        return;
+                      }
+                      setActiveView(item.id); setSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
+                      activeView === item.id
+                        ? "bg-stone-800 text-white font-medium border-l-2 border-emerald-500"
+                        : "text-stone-400 hover:text-stone-200 hover:bg-stone-800/50 border-l-2 border-transparent"
+                    }`}
+                    data-testid={item.testId}
+                  >
+                    <item.icon size={16} weight={activeView === item.id ? "fill" : "regular"} />
+                    {item.name}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Language & User & Logout */}

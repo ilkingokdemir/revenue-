@@ -6,7 +6,7 @@ import {
   RefreshCw, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CalendarDays,
   Search, Plus, X, User, Phone, Mail, CreditCard, Bed, Clock, MapPin,
   GripVertical, CheckSquare, Square, LogIn, LogOut, Users, AlertTriangle,
-  FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, Lock, StickyNote, LayoutList,
+  FileText, Send, Receipt, Home, Globe, PhoneCall, Share2, UserCheck, UserX, Lock, StickyNote, LayoutList, Copy, Filter,
   Bell, Building2, Wrench,
 } from "lucide-react";
 
@@ -222,6 +222,10 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [showPassOver, setShowPassOver] = useState(false);
   const [showGuestList, setShowGuestList] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+  const [statusFilter, setStatusFilter] = useState("all"); // all|pending|confirmed|checked_in|checked_out|no_show
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [oosBlocks, setOosBlocks] = useState([]); // [{room_id, start, end, reason}]
+  const [oosForm, setOosForm] = useState(null); // {room_id, room_name, start} when modal open
   const [detailData, setDetailData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dragBooking, setDragBooking] = useState(null);
@@ -257,7 +261,14 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     } catch { /* silent */ }
   };
 
-  useEffect(() => { loadTodaysActions(); }, [pid]);
+  const loadOosBlocks = useCallback(async () => {
+    try {
+      const { data: d } = await axios.get(`${API}/rooms/oos-blocks${pid && pid !== "all" ? `?property_id=${pid}` : ""}`);
+      setOosBlocks(d || []);
+    } catch { /* silent */ }
+  }, [pid]);
+
+  useEffect(() => { loadTodaysActions(); loadOosBlocks(); }, [pid, loadOosBlocks]);
 
   const openDetail = async (bookingId) => {
     setSelectedBooking(bookingId);
@@ -440,10 +451,24 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
   // Filter bookings by search
   const matchSearch = (b) => {
+    if (statusFilter !== "all" && (resolveDisplayStatus(b) !== statusFilter)) return false;
+    if (sourceFilter !== "all" && (b.source || b.source_code || "") !== sourceFilter) return false;
     if (!searchTerm) return true;
     const s = searchTerm.toLowerCase();
     return b.guest_name?.toLowerCase().includes(s) || b.source?.toLowerCase().includes(s) || b.id?.toLowerCase().includes(s);
   };
+
+  // Compute all distinct sources for the filter dropdown
+  const allSources = Array.from(new Set(groups.flatMap(g => g.rooms.flatMap(r => r.bookings.map(b => b.source || b.source_code))).filter(Boolean))).sort();
+
+  // Check for overbooking: any room-day with more than 1 active booking (not cancelled/checked_out)
+  const overbookingCount = groups.reduce((acc, g) => {
+    return acc + g.rooms.reduce((a, r) => {
+      const active = r.bookings.filter(b => !["cancelled", "checked_out", "no_show"].includes(b.status));
+      const overlap = active.filter((b1, i) => active.slice(i + 1).some(b2 => b1.check_in < b2.check_out && b2.check_in < b1.check_out)).length;
+      return a + overlap;
+    }, 0);
+  }, 0);
 
   return (
     <div className="h-full flex flex-col" data-testid="booking-timeline">
@@ -552,6 +577,44 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         </div>
       )}
 
+      {/* Overbooking Warning Banner */}
+      {overbookingCount > 0 && (
+        <div className="bg-gradient-to-r from-rose-100 via-red-50 to-rose-100 border-b-2 border-rose-300 px-5 py-2 flex items-center gap-2" data-testid="overbooking-banner">
+          <AlertTriangle className="w-4 h-4 text-rose-600 animate-pulse" />
+          <span className="text-xs font-bold text-rose-800">OVERBOOKING ALERT</span>
+          <span className="text-[11px] text-rose-700">{overbookingCount} same-room conflict{overbookingCount === 1 ? "" : "s"} detected — resolve by dragging bookings to other rooms.</span>
+        </div>
+      )}
+
+      {/* Filter Chip Bar */}
+      <div className="bg-white border-b border-stone-200 px-5 py-2 flex items-center gap-2 flex-wrap flex-shrink-0" data-testid="filter-bar">
+        <Filter className="w-3.5 h-3.5 text-stone-500" />
+        <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mr-1">Filters:</span>
+        {[
+          { id: "all", label: "All", bg: "bg-stone-100 text-stone-700" },
+          { id: "pending", label: "Pending", bg: "bg-amber-100 text-amber-800" },
+          { id: "confirmed", label: "Confirmed", bg: "bg-indigo-100 text-indigo-800" },
+          { id: "checked_in", label: "Checked In", bg: "bg-rose-100 text-rose-800" },
+          { id: "checked_out", label: "Checked Out", bg: "bg-stone-200 text-stone-700" },
+          { id: "no_show", label: "No-Show", bg: "bg-rose-600 text-white" },
+          { id: "cancelled", label: "Cancelled", bg: "bg-stone-300 text-stone-800" },
+        ].map(s => (
+          <button key={s.id} onClick={() => setStatusFilter(s.id)} data-testid={`filter-status-${s.id}`}
+            className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full transition-all ${statusFilter === s.id ? `${s.bg} ring-2 ring-offset-1 ring-stone-400 shadow-sm` : "bg-white text-stone-500 border border-stone-200 hover:bg-stone-50"}`}>
+            {s.label}
+          </button>
+        ))}
+        <span className="text-stone-300 mx-1">|</span>
+        <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)} data-testid="filter-source"
+          className="text-[10px] font-semibold px-2 py-0.5 border border-stone-200 rounded-full bg-white text-stone-600 focus:outline-none focus:ring-1 focus:ring-blue-300">
+          <option value="all">All sources</option>
+          {allSources.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        {(statusFilter !== "all" || sourceFilter !== "all") && (
+          <button onClick={() => { setStatusFilter("all"); setSourceFilter("all"); }} className="text-[10px] text-rose-600 hover:underline ml-2" data-testid="filter-clear">Clear filters</button>
+        )}
+      </div>
+
       {/* Color legend — decode the calendar at a glance. Matches myhotelbox semantics. */}
       <div className="bg-gradient-to-r from-stone-50 to-white border-b border-stone-200 px-5 py-2.5 flex-shrink-0 overflow-x-auto" data-testid="color-legend">
         <div className="flex items-center gap-x-5 gap-y-1.5 text-[11px] whitespace-nowrap flex-wrap">
@@ -645,7 +708,18 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
       {/* Timeline Grid */}
       <div className="flex-1 overflow-auto" ref={scrollRef} data-testid="timeline-grid">
-        <div className="inline-block min-w-full">
+        <div className="inline-block min-w-full relative">
+          {/* TODAY vertical red line across the whole grid */}
+          {(() => {
+            const todayIdx = date_columns.findIndex(c => c.is_today);
+            if (todayIdx < 0) return null;
+            const left = ROOM_LABEL_W + todayIdx * COL_W + COL_W / 2;
+            return (
+              <div className="absolute top-0 bottom-0 w-px bg-rose-500/70 z-30 pointer-events-none" style={{ left }} data-testid="today-line">
+                <div className="absolute -top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-rose-500"></div>
+              </div>
+            );
+          })()}
           {/* Date Header */}
           <div className="flex sticky top-0 z-20 bg-white border-b border-stone-200">
             <div className="flex-shrink-0 bg-white border-r border-stone-200 z-30 sticky left-0" style={{ width: ROOM_LABEL_W }}>
@@ -738,7 +812,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
                 {/* Room Rows */}
                 {!isCollapsed && group.rooms.map((room, rowIdx) => (
-                  <div key={room.id} className={`flex border-b border-stone-300 relative transition-all ${rowIdx % 2 === 1 ? "bg-stone-50/50" : "bg-white"} ${dropTarget === room.id ? "bg-violet-100 ring-2 ring-violet-400 ring-inset" : ""}`}
+                  <div key={room.id} className={`flex border-b border-stone-300 relative transition-all group ${rowIdx % 2 === 1 ? "bg-stone-50/50" : "bg-white"} ${dropTarget === room.id ? "bg-violet-100 ring-2 ring-violet-400 ring-inset" : ""}`}
                     style={{ height: ROW_H }} data-testid={`timeline-room-${room.id}`}
                     onDragOver={(e) => handleDragOver(e, room.id)}
                     onDragLeave={handleDragLeave}
@@ -746,7 +820,15 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     {/* Room Label */}
                     <div className={`flex-shrink-0 flex items-center px-3 gap-2 sticky left-0 z-10 border-r border-stone-300 ${rowIdx % 2 === 1 ? "bg-stone-50/70" : "bg-white"}`} style={{ width: ROOM_LABEL_W }}>
                       <span className={`w-2 h-2 rounded-full ${HK_COLORS[room.housekeeping] || "bg-stone-300"}`} title={room.housekeeping} />
-                      <span className="text-[11px] text-stone-600 truncate">{room.name}</span>
+                      <span className="text-[11px] text-stone-600 truncate flex-1">{room.name}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setOosForm({ room_id: room.id, room_name: room.name, property_id: group.property_id, start: new Date().toISOString().slice(0,10), end: "", reason: "" }); }}
+                        data-testid={`room-oos-btn-${room.id}`}
+                        title="Block room (out of service)"
+                        className="p-0.5 text-stone-300 hover:text-amber-600 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <Wrench className="w-3 h-3" />
+                      </button>
                       {dropTarget === room.id && dragBooking && <span className="text-[9px] text-violet-500 font-bold ml-auto">Drop here</span>}
                     </div>
 
@@ -776,6 +858,41 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         );
                       })}
 
+                      {/* Out-of-Service / Maintenance blocks — grey striped bars */}
+                      {oosBlocks.filter(b => b.room_id === room.id).map(block => {
+                        const startIdx = date_columns.findIndex(c => c.date >= block.start);
+                        const endIdx = date_columns.findIndex(c => c.date >= block.end);
+                        if (startIdx < 0 && endIdx < 0) return null;
+                        const si = startIdx >= 0 ? startIdx : 0;
+                        const ei = endIdx >= 0 ? endIdx : date_columns.length;
+                        if (ei <= 0 || si >= date_columns.length) return null;
+                        const left = si * COL_W + 2;
+                        const width = Math.max((ei - si) * COL_W - 4, COL_W * 0.5);
+                        return (
+                          <div
+                            key={block.id}
+                            className="absolute top-1 bottom-1 rounded-md shadow cursor-pointer group overflow-hidden"
+                            style={{
+                              left, width,
+                              backgroundImage: "repeating-linear-gradient(45deg, #9ca3af 0, #9ca3af 6px, #d1d5db 6px, #d1d5db 12px)",
+                            }}
+                            title={`OUT OF SERVICE · ${block.reason} · ${block.start} → ${block.end}`}
+                            data-testid={`oos-block-${block.id}`}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Remove OOS block "${block.reason}"?`)) {
+                                try { await axios.delete(`${API}/rooms/oos-blocks/${block.id}`); toast.success("Block removed"); loadOosBlocks(); }
+                                catch { toast.error("Failed"); }
+                              }
+                            }}
+                          >
+                            <div className="absolute inset-0 bg-black/20 flex items-center gap-1 px-2">
+                              <Wrench className="w-3 h-3 text-white flex-shrink-0" />
+                              <span className="text-[10px] text-white font-bold uppercase tracking-wider truncate">{block.reason}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                       {/* Booking Bars (smart collision detector: lanes + overflow pills) */}
                       {(() => {
                         const visibleBookings = room.bookings.filter(matchSearch);
@@ -840,6 +957,15 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                                     <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${ctxMeta.dotCls}`}></span>
                                     <span className={`relative inline-flex rounded-full h-2 w-2 ${ctxMeta.dotCls}`}></span>
                                   </span>
+                                )}
+                                {/* Payment status badge — bottom-left corner */}
+                                {width > 60 && (
+                                  <span className={`absolute bottom-0.5 left-1.5 w-1.5 h-1.5 rounded-full ring-1 ring-white ${bk.payment_status === "paid" ? "bg-emerald-500" : bk.payment_status === "partial" ? "bg-amber-500" : "bg-rose-500"}`}
+                                    data-testid={`pay-dot-${bk.id}`} title={`Payment: ${bk.payment_status || "unpaid"}`}></span>
+                                )}
+                                {/* Notes indicator — if booking has notes, show sticky-note icon top-right */}
+                                {bk.notes && width > 80 && (
+                                  <StickyNote className="absolute top-0.5 right-3.5 w-2.5 h-2.5 text-white/90 drop-shadow" data-testid={`note-icon-${bk.id}`} />
                                 )}
                                 {isCompact ? (
                                   // Compact (2-lane) layout: single row with logo + name + source + price chip
@@ -1037,6 +1163,68 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         );
       })()}
 
+      {/* Out-of-Service Block Modal */}
+      {oosForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setOosForm(null)} data-testid="oos-modal">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-stone-600 to-stone-900 px-5 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
+                <Wrench className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-white text-base">Block Room (Out of Service)</h3>
+                <p className="text-[11px] text-stone-200">{oosForm.room_name} will be unavailable for the selected range</p>
+              </div>
+              <button onClick={() => setOosForm(null)} className="p-1 hover:bg-white/20 rounded-lg"><X className="w-4 h-4 text-white" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Start *</label>
+                  <input type="date" value={oosForm.start} onChange={e => setOosForm({...oosForm, start: e.target.value})} className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-stone-400" data-testid="oos-start" />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">End (exclusive) *</label>
+                  <input type="date" value={oosForm.end} onChange={e => setOosForm({...oosForm, end: e.target.value})} className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-stone-400" data-testid="oos-end" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Reason *</label>
+                <select value={oosForm.reason} onChange={e => setOosForm({...oosForm, reason: e.target.value})} className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-stone-400" data-testid="oos-reason">
+                  <option value="">Select reason...</option>
+                  <option value="Painting">Painting</option>
+                  <option value="Deep Clean">Deep Clean</option>
+                  <option value="Maintenance">Maintenance</option>
+                  <option value="Plumbing">Plumbing</option>
+                  <option value="Refurbishment">Refurbishment</option>
+                  <option value="Inspection">Inspection</option>
+                  <option value="Pest Control">Pest Control</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+            <div className="px-5 py-3 bg-stone-50 border-t border-stone-100 flex items-center justify-end gap-2">
+              <button onClick={() => setOosForm(null)} className="px-3 py-1.5 text-xs font-semibold text-stone-600 hover:text-stone-900">Cancel</button>
+              <button
+                onClick={async () => {
+                  if (!oosForm.start || !oosForm.end || !oosForm.reason) { toast.error("All fields required"); return; }
+                  try {
+                    await axios.post(`${API}/rooms/oos-blocks`, { room_id: oosForm.room_id, property_id: oosForm.property_id, start: oosForm.start, end: oosForm.end, reason: oosForm.reason });
+                    toast.success(`${oosForm.room_name} blocked: ${oosForm.reason}`);
+                    setOosForm(null);
+                    loadOosBlocks();
+                  } catch (err) {
+                    toast.error(err?.response?.data?.detail || "Failed to block room");
+                  }
+                }}
+                data-testid="oos-submit"
+                className="px-4 py-1.5 text-xs font-bold text-white bg-stone-800 hover:bg-stone-900 rounded-lg shadow"
+              >Block Room</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create Booking Modal */}
       {createBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => !creating && setCreateBookingState(null)} data-testid="create-booking-modal">
@@ -1142,7 +1330,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         const { booking: bk, rect, roomName } = quickActions;
         const sc = STATUS_COLORS[resolveDisplayStatus(bk)] || STATUS_COLORS.confirmed;
         // Position below bar, center-aligned, clamped to viewport
-        const popoverW = 280, popoverH = 290;
+        const popoverW = 320, popoverH = 370;
         let left = rect.left + rect.width / 2 - popoverW / 2;
         let top = rect.bottom + 8;
         if (left < 8) left = 8;
@@ -1150,17 +1338,33 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
         if (top + popoverH > window.innerHeight - 8) top = rect.top - popoverH - 8;
         const actions = [
           { id: "checkin",   label: "Check In",  icon: LogIn,      color: "text-emerald-600 bg-emerald-50 hover:bg-emerald-100",
-            disabled: bk.status === "checked_in" || bk.status === "checked_out",
+            disabled: bk.status === "checked_in" || bk.status === "checked_out" || bk.status === "no_show",
             onClick: () => { changeStatus(bk.id, "checked_in"); setQuickActions(null); } },
-          { id: "addroom",   label: "Add Room",  icon: Plus,       color: "text-sky-600 bg-sky-50 hover:bg-sky-100",
-            onClick: () => { openDetail(bk.id); setQuickActions(null); } },
+          { id: "checkout",  label: "Check Out", icon: LogOut,     color: "text-amber-600 bg-amber-50 hover:bg-amber-100",
+            disabled: bk.status !== "checked_in",
+            onClick: () => { changeStatus(bk.id, "checked_out"); setQuickActions(null); } },
+          { id: "noshow",    label: "No-Show",   icon: UserX,      color: "text-rose-600 bg-rose-50 hover:bg-rose-100",
+            disabled: bk.status === "checked_out" || bk.status === "no_show",
+            onClick: () => { if (window.confirm(`Mark ${bk.guest_name} as NO-SHOW? This charges the booking and blocks the room.`)) { changeStatus(bk.id, "no_show"); } setQuickActions(null); } },
           { id: "addnote",   label: "Add Note",  icon: StickyNote, color: "text-amber-600 bg-amber-50 hover:bg-amber-100",
             onClick: () => { openDetail(bk.id); setQuickActions(null); toast.info("Notes tab opened"); } },
+          { id: "copy",      label: "Duplicate", icon: Copy,       color: "text-sky-600 bg-sky-50 hover:bg-sky-100",
+            onClick: () => {
+              const co = new Date(bk.check_out);
+              const nextCi = new Date(co);
+              setCreateBookingState({ room_id: bk.room_id, room_name: roomName, room_type_id: bk.room_type_id, check_in: nextCi.toISOString().slice(0, 10) });
+              setCreateForm({ guest_name: bk.guest_name || "", guest_email: bk.guest_email || "", guest_phone: bk.guest_phone || "", nights: bk.nights || 1, adults: bk.adults || 2, children: bk.children || 0 });
+              setQuickActions(null);
+              toast.info("Duplicate booking — edit dates and save");
+            } },
           { id: "lock",      label: "Lock",      icon: Lock,       color: "text-stone-600 bg-stone-50 hover:bg-stone-100",
             onClick: () => { toast.info("Booking locked — cannot be modified"); setQuickActions(null); } },
           { id: "details",   label: "Details",   icon: LayoutList, color: "text-violet-600 bg-violet-50 hover:bg-violet-100",
             onClick: () => { openDetail(bk.id); setQuickActions(null); } },
-          { id: "sendlink",  label: "Send Check-in", icon: Send, color: "text-indigo-600 bg-indigo-50 hover:bg-indigo-100",
+          { id: "cancel",    label: "Cancel",    icon: X,          color: "text-rose-700 bg-rose-50 hover:bg-rose-100",
+            disabled: bk.status === "cancelled" || bk.status === "checked_out",
+            onClick: () => { if (window.confirm(`Cancel booking for ${bk.guest_name}?`)) { changeStatus(bk.id, "cancelled"); } setQuickActions(null); } },
+          { id: "sendlink",  label: "Send Link", icon: Send, color: "text-indigo-600 bg-indigo-50 hover:bg-indigo-100",
             disabled: !bk.guest_email,
             onClick: async () => {
               try { await axios.post(`${API}/guest-checkin/send-link/${bk.id}`); toast.success("Check-in link sent to guest"); }

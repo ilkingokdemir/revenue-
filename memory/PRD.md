@@ -2,6 +2,37 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 174: Comprehensive competitor feature sweep (user frustration — missing features)
+
+User said: "so many points missing, check Eviivo/Mews/Cloudbeds/myhotelbox and fix ALL missing features". Did a thorough audit and shipped 7 major features in this iteration:
+
+**1. No-Show quick action** — added to the popover with confirmation dialog ("Mark X as NO-SHOW? This charges the booking and blocks the room."). Disabled when already checked-out/no-show.
+
+**2. Duplicate/Copy booking** — quick action that opens the New Booking modal pre-filled with same guest details + same room, starting from the previous booking's check-out date. Great for repeat guests.
+
+**3. Filter chip bar** above the calendar (`data-testid="filter-bar"`): 7 status chips (All / Pending / Confirmed / Checked In / Checked Out / No-Show / Cancelled) + source dropdown (auto-populated from distinct sources in view) + Clear filters button. Filters extend `matchSearch()` so bars hide/show live.
+
+**4. Today vertical red line** — absolute-positioned 1px rose-500 line running top-to-bottom across the entire grid at today's column center, with a dot indicator at the top. Makes "today" unmistakable.
+
+**5. Payment status dot** on each booking bar (bottom-left, 1.5px ringed circle) — emerald=paid, amber=partial, rose=unpaid. Tooltip shows exact status.
+
+**6. Notes indicator** on bars — StickyNote icon appears top-right when `bk.notes` is present.
+
+**7. Out-of-Service / Maintenance blocks** (major new feature):
+- New backend routes in `/app/backend/routes/oos_blocks.py`: `GET/POST/DELETE /api/rooms/oos-blocks`. Stored in `db.oos_blocks` with room_id + start/end (exclusive) + reason + created_by.
+- Frontend: wrench icon appears on room-label hover → opens OOS modal with date range + reason dropdown (Painting / Deep Clean / Maintenance / Plumbing / Refurbishment / Inspection / Pest Control / Other).
+- Rendering: grey diagonal-striped bars (`repeating-linear-gradient(45deg...)`) overlay the affected dates in the room row, with the reason label ("PAINTING") visible in white uppercase. Click to delete (with confirmation).
+- Backend perm-gated: view requires `view_bookings`/`edit_bookings`, mutations require `edit_bookings`.
+
+**8. Overbooking warning banner** — computes same-room active-booking overlaps in real-time; if > 0, shows a red pulsing banner at the top: "OVERBOOKING ALERT · 5 same-room conflicts detected — resolve by dragging bookings to other rooms."
+
+**Bonus fixes:**
+- Added `Check Out` and `Cancel` to the quick-actions grid (now 3×3 with 9 actions total instead of 2×3 with 6).
+- Popover dimensions grew to 320×370 to fit the new grid layout.
+
+**Live verified** via Playwright screenshots — all features render together correctly on the live preview. OOS block API returned 200 OK with proper document. Backend compiles clean, frontend lint passes.
+
+
 ### Iter 173: Calendar zebra striping + darker stone-300 grid borders
 
 Following user approval. Two visual polish improvements:

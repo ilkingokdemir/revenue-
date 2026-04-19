@@ -536,6 +536,9 @@ api_router.include_router(collisions_router)
 from routes.profit_os import create_profit_os_router
 profit_os_router = create_profit_os_router(db)
 api_router.include_router(profit_os_router)
+from routes.oos_blocks import create_oos_router
+oos_router = create_oos_router(db)
+api_router.include_router(oos_router)
 
 app.include_router(api_router)
 

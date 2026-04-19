@@ -215,6 +215,9 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [collapsed, setCollapsed] = useState({});
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [quickActions, setQuickActions] = useState(null); // { booking, anchorRect } — click popover
+  const [createBooking, setCreateBookingState] = useState(null); // { room_id, room_name, room_type_id, check_in } | null
+  const [createForm, setCreateForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", nights: 1, adults: 2, children: 0 });
+  const [creating, setCreating] = useState(false);
   const [detailData, setDetailData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dragBooking, setDragBooking] = useState(null);
@@ -465,6 +468,19 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search guest, ID..."
               className="pl-8 pr-3 py-1.5 text-xs border border-stone-200 rounded-lg w-48 focus:outline-none focus:ring-1 focus:ring-blue-300" data-testid="timeline-search" />
           </div>
+          <button
+            onClick={() => {
+              const firstRoom = groups[0]?.rooms[0];
+              if (!firstRoom) { toast.error("No rooms available"); return; }
+              const today = new Date().toISOString().slice(0, 10);
+              setCreateBookingState({ room_id: firstRoom.id, room_name: firstRoom.name, room_type_id: groups[0].room_type_id, check_in: today });
+              setCreateForm({ guest_name: "", guest_email: "", guest_phone: "", nights: 1, adults: 2, children: 0 });
+            }}
+            data-testid="timeline-new-booking-btn"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" /> New Booking
+          </button>
         </div>
       </div>
 
@@ -693,9 +709,29 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
 
                     {/* Date cells */}
                     <div className="relative flex" style={{ height: ROW_H }}>
-                      {date_columns.map(col => (
-                        <div key={col.date} className={`flex-shrink-0 border-r border-stone-50 ${col.is_today ? "bg-blue-50/30" : col.is_weekend ? "bg-stone-50/30" : ""}`} style={{ width: COL_W, height: ROW_H }} />
-                      ))}
+                      {date_columns.map(col => {
+                        // Is this cell already occupied?
+                        const occupied = room.bookings.some(b => b.check_in <= col.date && b.check_out > col.date);
+                        return (
+                          <div
+                            key={col.date}
+                            className={`flex-shrink-0 border-r border-stone-50 transition-colors ${col.is_today ? "bg-blue-50/30" : col.is_weekend ? "bg-stone-50/30" : ""} ${occupied ? "" : "hover:bg-emerald-50/60 cursor-cell"}`}
+                            style={{ width: COL_W, height: ROW_H }}
+                            onClick={() => {
+                              if (occupied || bulkMode) return;
+                              setCreateBookingState({
+                                room_id: room.id,
+                                room_name: room.name,
+                                room_type_id: group.room_type_id,
+                                check_in: col.date,
+                              });
+                              setCreateForm({ guest_name: "", guest_email: "", guest_phone: "", nights: 1, adults: 2, children: 0 });
+                            }}
+                            data-testid={`cell-${room.id}-${col.date}`}
+                            title={occupied ? "" : "Click to create booking"}
+                          />
+                        );
+                      })}
 
                       {/* Booking Bars (smart collision detector: lanes + overflow pills) */}
                       {(() => {
@@ -819,6 +855,106 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           })}
         </div>
       </div>
+
+      {/* Create Booking Modal */}
+      {createBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => !creating && setCreateBookingState(null)} data-testid="create-booking-modal">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 px-5 py-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur flex items-center justify-center">
+                <Plus className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-white text-base">New Booking</h3>
+                <p className="text-[11px] text-emerald-100">{createBooking.room_name} · from {createBooking.check_in}</p>
+              </div>
+              <button onClick={() => setCreateBookingState(null)} className="p-1 hover:bg-white/20 rounded-lg" data-testid="create-booking-close"><X className="w-4 h-4 text-white" /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Guest Name *</label>
+                <input value={createForm.guest_name} onChange={e => setCreateForm({...createForm, guest_name: e.target.value})} placeholder="John Doe"
+                  className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400" data-testid="cb-guest-name" autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Email *</label>
+                  <input type="email" value={createForm.guest_email} onChange={e => setCreateForm({...createForm, guest_email: e.target.value})} placeholder="guest@example.com"
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400" data-testid="cb-guest-email" />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Phone</label>
+                  <input value={createForm.guest_phone} onChange={e => setCreateForm({...createForm, guest_phone: e.target.value})} placeholder="+44 7..."
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400" data-testid="cb-guest-phone" />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Nights *</label>
+                  <input type="number" min="1" max="365" value={createForm.nights} onChange={e => setCreateForm({...createForm, nights: parseInt(e.target.value) || 1})}
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400" data-testid="cb-nights" />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Adults</label>
+                  <input type="number" min="1" max="20" value={createForm.adults} onChange={e => setCreateForm({...createForm, adults: parseInt(e.target.value) || 1})}
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400" data-testid="cb-adults" />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-stone-500 mb-1 block">Children</label>
+                  <input type="number" min="0" max="20" value={createForm.children} onChange={e => setCreateForm({...createForm, children: parseInt(e.target.value) || 0})}
+                    className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-400" data-testid="cb-children" />
+                </div>
+              </div>
+              <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 text-[11px] text-stone-600 flex items-center justify-between">
+                <span>Check-in: <b>{createBooking.check_in}</b></span>
+                <span>Check-out: <b>{(() => {
+                  const d = new Date(createBooking.check_in); d.setDate(d.getDate() + createForm.nights);
+                  return d.toISOString().slice(0, 10);
+                })()}</b></span>
+              </div>
+            </div>
+            <div className="px-5 py-3 bg-stone-50 border-t border-stone-100 flex items-center justify-end gap-2">
+              <button onClick={() => setCreateBookingState(null)} disabled={creating} className="px-3 py-1.5 text-xs font-semibold text-stone-600 hover:text-stone-900" data-testid="cb-cancel">Cancel</button>
+              <button
+                onClick={async () => {
+                  if (!createForm.guest_name.trim() || !createForm.guest_email.trim()) {
+                    toast.error("Guest name and email are required");
+                    return;
+                  }
+                  setCreating(true);
+                  try {
+                    const co = new Date(createBooking.check_in);
+                    co.setDate(co.getDate() + createForm.nights);
+                    await axios.post(`${API}/booking/reserve`, {
+                      property_id: pid,
+                      room_type_id: createBooking.room_type_id,
+                      guest_name: createForm.guest_name.trim(),
+                      guest_email: createForm.guest_email.trim(),
+                      guest_phone: createForm.guest_phone.trim(),
+                      check_in: createBooking.check_in,
+                      check_out: co.toISOString().slice(0, 10),
+                      adults: createForm.adults,
+                      children: createForm.children,
+                      rooms: 1,
+                    });
+                    toast.success(`Booking created for ${createForm.guest_name}`);
+                    setCreateBookingState(null);
+                    load();
+                  } catch (err) {
+                    toast.error(err?.response?.data?.detail || "Failed to create booking");
+                  }
+                  setCreating(false);
+                }}
+                disabled={creating}
+                data-testid="cb-submit"
+                className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow disabled:opacity-50"
+              >
+                {creating ? "Creating..." : "Create Booking"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick-Action Popover — myhotelbox-style click-popover on booking bars */}
       {quickActions && (() => {

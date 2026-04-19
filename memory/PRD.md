@@ -2,6 +2,31 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 169: Calendar New Booking flow (user bug report)
+
+User reported "calendar doesn't work — try to create booking doesn't work" — the calendar had no way to create a new booking directly from the timeline. Added two paths:
+
+**1. "+ New Booking" button in timeline header** (`BookingTimeline.js`):
+- Green emerald-600 button with Plus icon, sits next to the search input.
+- Uses the first room of the first group as the default target so the modal always has a valid room context.
+
+**2. Click-on-empty-cell** to create booking at that exact room + date:
+- Each date cell now checks if it's occupied (any booking overlaps `col.date`).
+- Occupied cells behave as before (hover-only).
+- Empty cells get `cursor-cell`, `hover:bg-emerald-50/60`, and a "Click to create booking" tooltip.
+- Clicking opens the modal with the room + date pre-selected.
+
+**3. Create Booking modal**:
+- Emerald gradient header showing target room + check-in date.
+- Fields: Guest Name * (required, autofocus), Email * (required), Phone, Nights * (default 1, min 1, max 365), Adults (default 2), Children (default 0).
+- Live check-out preview box: "Check-in: 2026-04-19 · Check-out: 2026-04-20" — recomputes when nights change.
+- Cancel / "Create Booking" buttons (disabled during submit; button text swaps to "Creating…").
+- Calls `POST /api/booking/reserve` (existing public endpoint) with full payload; on success toasts "Booking created for {name}" and triggers `load()` to refresh the timeline.
+- Error handling: shows backend's `detail` on failure; validates guest_name + email client-side before submit.
+
+**Live verified via Playwright**: clicked "+ New Booking" → modal opened → filled "Test Walk-In Guest" / "walkin@test.com" / "+447700900123" → submitted → green toast "Booking created for Test Walk-In Guest" appeared → calendar refreshed. Test booking cleaned up from DB.
+
+
 ### Iter 168: Calendar feature parity with myhotelbox.com — quick-action popover + unassigned row
 
 User uploaded 6 screenshots showing myhotelbox.com's booking calendar with two features we were missing: (1) click-popover with 6 quick actions on booking bars, (2) "Unassigned" row at top showing pending-count per day. Added both.

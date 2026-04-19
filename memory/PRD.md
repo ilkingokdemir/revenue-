@@ -2,6 +2,23 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 167: Seeded 3-year historical data so Financial Overview YoY deltas are meaningful
+
+User pointed out that the Financial Overview had (+100%) deltas everywhere because our test dataset only contained 2026 bookings. Seeded realistic historical data:
+- 490 bookings across Mar/Apr/May 2023/2024/2025
+- Growth curve: 2023 baseline (~22 bookings/month) → 2024 (+95% YoY, ~44/month) → 2025 (+120% YoY, ~97/month)
+- Random room, source (Booking.com/Expedia/Airbnb/Direct/Website/Google/Agoda), nights (1-7), rate variance 85-135% of base, deterministic seed for reproducibility
+- Status: `checked_out` (historical) vs current month `confirmed`
+
+**Financial Overview now shows realistic YoY deltas:**
+- PREVIOUS Mar 2026 (£37,441): 2025 (+32%), 2024 (+224%), 2023 (+445%) — green deltas showing YoY growth
+- THIS Apr 2026 (£9,260): 2025 (-74%), 2024 (-41%), 2023 (+7%) — rose deltas showing current month underperforming historical
+- NEXT May 2026 (£30,198): 2025 (-29%), 2024 (+47%), 2023 (+172%) — mixed pattern
+- Financial Overview · History chart above now reflects real 12-month totals: £154.2k gross / £140.7k net / £140.4k net profit with "↗ 80.7% vs prev period" delta badge active.
+
+Delta colour semantics confirmed: emerald for positive YoY, rose for negative, stone for zero — matches myhotelbox exactly.
+
+
 ### Iter 166: Financial Overview rebuilt to match myhotelbox.com exact layout (user reference)
 
 User uploaded 3 screenshots of myhotelbox.com's Financial Overview showing a 3-column card layout (Previous/This Month/Next Month) with inline G/R/ADR/C/N metrics and a 3-year "Same Month History" sub-section per column. Completely rebuilt our Financial Overview to match.

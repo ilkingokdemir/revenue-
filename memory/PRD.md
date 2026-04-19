@@ -2,6 +2,25 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 173: Calendar zebra striping + darker stone-300 grid borders
+
+Following user approval. Two visual polish improvements:
+
+**1. Darker borders (stone-200 → stone-300)**:
+- Date header cells
+- Group inventory row cells
+- Room row cells (vertical + horizontal)
+- Property header row cells
+- Room label column dividers
+
+**2. Zebra striping on alternate rooms** (`rowIdx % 2 === 1 ? "bg-stone-50/50" : "bg-white"`):
+- Odd rooms get a subtle stone-50 tint
+- Room label column matches the row bg (stone-50/70 vs white) so the sticky label doesn't break the zebra effect
+- Hover, drop-target, and today-column tints still layer cleanly on top
+
+**Live verified**: Every cell now renders as a distinct bounded square, alternate room rows clearly alternate (Standard 01 white / Standard 02 grey / Standard 03 white / ...), making it much easier to track horizontally across the 14-day grid. Matches myhotelbox reference exactly.
+
+
 ### Iter 172: Calendar grid gets visible square cells (user feedback)
 
 User wanted "grid square look" matching the myhotelbox reference where every cell is a distinct box.

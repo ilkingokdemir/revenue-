@@ -654,7 +654,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             {date_columns.map((col, i) => {
               const occ = daily_occupancy[i];
               return (
-                <div key={col.date} className={`flex-shrink-0 border-r border-stone-200 text-center ${col.is_today ? "bg-blue-50" : col.is_weekend ? "bg-stone-50" : "bg-white"}`} style={{ width: COL_W }}>
+                <div key={col.date} className={`flex-shrink-0 border-r border-stone-300 text-center ${col.is_today ? "bg-blue-50" : col.is_weekend ? "bg-stone-50" : "bg-white"}`} style={{ width: COL_W }}>
                   <div className="h-12 flex flex-col items-center justify-center">
                     <span className="text-[9px] text-stone-400 uppercase">{col.dow}</span>
                     <span className={`text-sm ${col.is_today ? "text-red-600 font-black" : "font-bold text-stone-700"}`}>{col.day}/{col.month}</span>
@@ -728,7 +728,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                     const dayBookings = group.rooms.reduce((s, r) => s + r.bookings.filter(b => b.check_in <= col.date && b.check_out > col.date).length, 0);
                     const avail = group.total_rooms - dayBookings;
                     return (
-                      <div key={col.date} className={`flex-shrink-0 border-r border-stone-200 flex flex-col items-center justify-center ${col.is_today ? "bg-blue-50/50" : ""}`} style={{ width: COL_W, height: ROW_H }}>
+                      <div key={col.date} className={`flex-shrink-0 border-r border-stone-300 flex flex-col items-center justify-center ${col.is_today ? "bg-blue-50/50" : ""}`} style={{ width: COL_W, height: ROW_H }}>
                         <span className="text-[10px] font-bold text-stone-600">{avail}/{group.total_rooms}</span>
                         <span className="text-[9px] text-stone-400">{cur(group.rate)}</span>
                       </div>
@@ -737,14 +737,14 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                 </div>
 
                 {/* Room Rows */}
-                {!isCollapsed && group.rooms.map(room => (
-                  <div key={room.id} className={`flex border-b border-stone-200 relative transition-all ${dropTarget === room.id ? "bg-violet-100 ring-2 ring-violet-400 ring-inset" : ""}`}
+                {!isCollapsed && group.rooms.map((room, rowIdx) => (
+                  <div key={room.id} className={`flex border-b border-stone-300 relative transition-all ${rowIdx % 2 === 1 ? "bg-stone-50/50" : "bg-white"} ${dropTarget === room.id ? "bg-violet-100 ring-2 ring-violet-400 ring-inset" : ""}`}
                     style={{ height: ROW_H }} data-testid={`timeline-room-${room.id}`}
                     onDragOver={(e) => handleDragOver(e, room.id)}
                     onDragLeave={handleDragLeave}
                     onDrop={(e) => handleDrop(e, room.id)}>
                     {/* Room Label */}
-                    <div className="flex-shrink-0 flex items-center px-3 gap-2 sticky left-0 bg-white z-10 border-r border-stone-200" style={{ width: ROOM_LABEL_W }}>
+                    <div className={`flex-shrink-0 flex items-center px-3 gap-2 sticky left-0 z-10 border-r border-stone-300 ${rowIdx % 2 === 1 ? "bg-stone-50/70" : "bg-white"}`} style={{ width: ROOM_LABEL_W }}>
                       <span className={`w-2 h-2 rounded-full ${HK_COLORS[room.housekeeping] || "bg-stone-300"}`} title={room.housekeeping} />
                       <span className="text-[11px] text-stone-600 truncate">{room.name}</span>
                       {dropTarget === room.id && dragBooking && <span className="text-[9px] text-violet-500 font-bold ml-auto">Drop here</span>}
@@ -758,7 +758,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
                         return (
                           <div
                             key={col.date}
-                            className={`flex-shrink-0 border-r border-stone-200 transition-colors ${col.is_today ? "bg-blue-50/30" : col.is_weekend ? "bg-stone-50/30" : ""} ${occupied ? "" : "hover:bg-emerald-50/60 cursor-cell"}`}
+                            className={`flex-shrink-0 border-r border-stone-300 transition-colors ${col.is_today ? "bg-blue-50/40" : col.is_weekend ? "bg-stone-100/50" : ""} ${occupied ? "" : "hover:bg-emerald-50/80 cursor-cell"}`}
                             style={{ width: COL_W, height: ROW_H }}
                             onClick={() => {
                               if (occupied || bulkMode) return;

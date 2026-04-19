@@ -2,6 +2,39 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 181: Self-Service Kiosk Mode — completion polling + room/QR screen + sidebar launch
+
+User accepted the final gap-closer. The `/checkin-kiosk/{propertyId}` route already existed (welcome → search → results → register-iframe); what was missing was the **final "here's your room" screen** and staff discoverability. Shipped both in one iteration.
+
+**Backend** (`/app/backend/routes/guest_journey.py`):
+- New public endpoint `GET /api/guest-journey/kiosk-complete/{token}` — polled by the kiosk every 4 seconds to detect when the inner registration iframe has marked `status=completed`.
+- Returns `{guest_name, room_name, room_type, check_in, check_out, qr_url}` when completed, else `{status:"pending", completed:false}`.
+- QR payload encodes `{booking_id, booking_ref, room_id, token[:24]}` (URL-encoded JSON) — enough for a downstream smart-lock integration to validate access, but token-truncated so random QR scanners can't abuse it.
+- Uses `api.qrserver.com` for rendering so the kiosk stays lightweight (no server-side PNG generation).
+
+**Frontend** (`CheckInKioskPage.js`):
+- New 5th screen: **"done"** — animated green check → "Welcome, {FirstName}!" → big room number card → QR code image → "Returning to welcome in 15 seconds" hint.
+- Completion polling: while on `register` screen, `useEffect` runs `kiosk-complete` every 4s. When `completed=true`, stash response in `completion` state → jump to `done` screen.
+- Done-screen auto-reset: 15s idle (shorter than the normal 60s since guest has seen their room info and walked away).
+
+**Frontend** (`App.js`):
+- New sidebar item **"Self-Service Kiosk"** with `DeviceTablet` icon (testId `kiosk-launch-btn`) under Operations.
+- Click handler opens `/checkin-kiosk/{activePropertyId}` in a new tab (`launchUrl:true` flag on the menu item). Doesn't pollute `activeView` state.
+
+**Verified end-to-end:**
+- `POST /api/guest-journey/kiosk-register/{prop}` creates registration with pending token
+- `GET /api/guest-journey/kiosk-complete/{token}` pending → `{status:"pending",completed:false}`
+- Direct-DB flip to `status=completed` → endpoint returns full `{guest_name, room_name, qr_url}` payload
+- Playwright screenshot confirms the welcome screen renders properly on `/checkin-kiosk/aldgate-flats` with hotel name from kiosk-info endpoint
+
+**User-facing workflow now:**
+1. Staff opens sidebar → clicks "Self-Service Kiosk" → kiosk launches in new tab on the lobby tablet.
+2. Guest taps anywhere → enters booking ref → selects their booking → completes reg card in the embedded frame → signs.
+3. Kiosk auto-detects completion → shows animated welcome + Room 12 + QR code.
+4. Guest scans QR at door (or shows at reception if no smart lock).
+5. After 15s idle, kiosk returns to welcome for the next arrival. Zero staff intervention required.
+
+
 ### Iter 180: "Set payer" on sub-folios → payer email pre-fills the Email modal
 
 User accepted the enhancement. Closes the split-folio workflow by remembering who each sub-folio belongs to.

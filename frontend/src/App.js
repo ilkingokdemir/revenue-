@@ -174,6 +174,7 @@ import {
   MapPin,
   Wallet,
   Receipt,
+  DeviceTablet,
   Broom,
   Moon,
   Crown,
@@ -2626,6 +2627,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "cash-flow", icon: ChartLine, name: "Cash Flow", testId: "cash-flow-btn" },
         { id: "finance", icon: Wallet, name: "Finance", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & Loss", testId: "finance-pl-btn" },
+        { id: "kiosk-launch", icon: DeviceTablet, name: "Self-Service Kiosk", testId: "kiosk-launch-btn", launchUrl: true },
         { id: "city-ledger", icon: Wallet, name: "City Ledger (AR)", testId: "city-ledger-btn" },
         { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
         { id: "deposit-policies", icon: ShieldCheck, name: "Deposit Policies", testId: "deposit-policies-btn" },
@@ -2876,7 +2878,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
               {section.items.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => { setActiveView(item.id); setSidebarOpen(false); }}
+                  onClick={() => {
+                    if (item.launchUrl && item.id === "kiosk-launch") {
+                      // Launch the self-service kiosk in a fresh tab for the active property
+                      window.open(`/checkin-kiosk/${activePropertyId || "default"}`, "_blank", "noopener,noreferrer");
+                      return;
+                    }
+                    setActiveView(item.id); setSidebarOpen(false);
+                  }}
                   className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
                     activeView === item.id
                       ? "bg-stone-800 text-white font-medium border-l-2 border-emerald-500"

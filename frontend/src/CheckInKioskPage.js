@@ -7,13 +7,15 @@ const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 const IDLE_TIMEOUT = 60000; // 60s reset
 
 export default function CheckInKioskPage({ propertyId }) {
-  const [screen, setScreen] = useState("welcome"); // welcome, search, results, register
+  const [screen, setScreen] = useState("welcome"); // welcome, search, results, register, done
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [regToken, setRegToken] = useState(null);
   const [hotelName, setHotelName] = useState("Hotel");
+  const [completion, setCompletion] = useState(null);    // { guest_name, room_name, qr_url, ... }
   const idleTimer = useRef(null);
+  const pollTimer = useRef(null);
 
   // Load hotel name
   useEffect(() => {
@@ -22,14 +24,39 @@ export default function CheckInKioskPage({ propertyId }) {
     }).catch(() => {});
   }, [propertyId]);
 
+  // Poll the inner registration status every 4s while on register screen.
+  // When completed → fetch room assignment + QR → jump to 'done' screen.
+  useEffect(() => {
+    if (screen !== "register" || !regToken) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const { data } = await axios.get(`${API}/guest-journey/kiosk-complete/${regToken}`);
+        if (cancelled) return;
+        if (data.completed) {
+          setCompletion(data);
+          setScreen("done");
+        }
+      } catch { /* keep polling silently */ }
+    };
+    pollTimer.current = setInterval(poll, 4000);
+    return () => { cancelled = true; clearInterval(pollTimer.current); };
+  }, [screen, regToken]);
+
   // Idle reset
   useEffect(() => {
     const reset = () => {
       clearTimeout(idleTimer.current);
-      if (screen !== "welcome") {
+      if (screen !== "welcome" && screen !== "done") {
         idleTimer.current = setTimeout(() => {
-          setScreen("welcome"); setQuery(""); setResults([]); setRegToken(null);
+          setScreen("welcome"); setQuery(""); setResults([]); setRegToken(null); setCompletion(null);
         }, IDLE_TIMEOUT);
+      }
+      // Done screen has its own shorter 15s idle (show room, then reset)
+      if (screen === "done") {
+        idleTimer.current = setTimeout(() => {
+          setScreen("welcome"); setQuery(""); setResults([]); setRegToken(null); setCompletion(null);
+        }, 15000);
       }
     };
     window.addEventListener("touchstart", reset);
@@ -165,6 +192,39 @@ export default function CheckInKioskPage({ propertyId }) {
           </button>
         </div>
         <iframe src={`${BASE_URL}/register/${regToken}`} className="w-full border-0" style={{ height: "calc(100vh - 50px)" }} title="Guest Registration" data-testid="kiosk-registration-iframe" />
+      </div>
+    );
+  }
+
+  // Done — Welcome screen with room number + QR
+  if (screen === "done" && completion) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0f2440] via-[#15304f] to-[#1e3a5f] flex items-center justify-center p-8" data-testid="kiosk-done">
+        <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center text-white max-w-xl">
+          <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 200, delay: 0.2 }}
+            className="w-24 h-24 bg-emerald-500/20 backdrop-blur rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-emerald-400">
+            <svg className="w-14 h-14 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </motion.div>
+          <h1 className="text-3xl font-bold mb-2">Welcome, {completion.guest_name.split(" ")[0] || "guest"}!</h1>
+          <p className="text-white/60 mb-8">Your check-in is complete. Enjoy your stay.</p>
+          <div className="bg-white/10 backdrop-blur rounded-2xl p-6 mb-6 border border-white/10">
+            <p className="text-xs uppercase text-amber-300 font-bold tracking-wider mb-1">Your Room</p>
+            <p className="text-4xl font-black mb-1" data-testid="kiosk-room-name">{completion.room_name}</p>
+            <p className="text-sm text-white/60">{completion.room_type}</p>
+            <div className="h-px bg-white/10 my-4" />
+            <p className="text-xs uppercase text-white/40 mb-1">Stay</p>
+            <p className="text-sm">{completion.check_in} → {completion.check_out}</p>
+          </div>
+          {completion.qr_url && (
+            <div className="bg-white rounded-2xl p-4 inline-block mb-6" data-testid="kiosk-qr">
+              <img src={completion.qr_url} alt="Room access QR" className="w-[220px] h-[220px]" />
+              <p className="text-[10px] text-stone-500 mt-2">Scan at your room door · or show at reception</p>
+            </div>
+          )}
+          <p className="text-white/30 text-xs">Returning to welcome screen in 15 seconds...</p>
+        </motion.div>
       </div>
     );
   }

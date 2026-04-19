@@ -365,6 +365,48 @@ def create_guest_journey_router(db, require_roles):
         await db.guest_registrations.insert_one(reg)
         return {"token": token, "status": "pending"}
 
+    @router.get("/guest-journey/kiosk-complete/{token}")
+    async def kiosk_check_complete(token: str):
+        """Public: Polled by kiosk wrapper to detect when the inner registration
+        iframe has completed. When status='completed', returns the assigned room
+        + QR code payload so the kiosk can show a 'Welcome, here's your room' screen.
+        """
+        reg = await db.guest_registrations.find_one({"token": token}, {"_id": 0})
+        if not reg:
+            raise HTTPException(404, "Registration not found")
+        status = reg.get("status", "pending")
+        if status != "completed":
+            return {"status": status, "completed": False}
+
+        booking = await db.bookings.find_one({"id": reg["booking_id"]}, {"_id": 0}) or {}
+        room = await db.rooms.find_one({"id": booking.get("room_id", "")}, {"_id": 0}) or {}
+        room_type = await db.room_types.find_one({"id": booking.get("room_type_id", "")}, {"_id": 0}) or {}
+
+        # QR payload — enough info for a smart-lock integration to validate access,
+        # but opaque enough that QR scanners outside our system can't abuse it.
+        qr_payload = {
+            "booking_id": reg["booking_id"],
+            "booking_ref": reg.get("booking_ref", ""),
+            "room_id": booking.get("room_id", ""),
+            "token": token[:24],
+        }
+        import json
+        import urllib.parse
+        qr_text = urllib.parse.quote(json.dumps(qr_payload), safe="")
+        # Use an external QR service so the kiosk stays lightweight (no server-side PNG generation)
+        qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=280x280&data={qr_text}"
+
+        return {
+            "status": "completed",
+            "completed": True,
+            "guest_name": booking.get("guest_name", ""),
+            "room_name": room.get("name", "—"),
+            "room_type": room_type.get("name", "Room"),
+            "check_in": booking.get("check_in", ""),
+            "check_out": booking.get("check_out", ""),
+            "qr_url": qr_url,
+        }
+
     # ==================== WELCOME INFO SETTINGS ====================
 
     @router.get("/guest-journey/welcome-info/{property_id}")

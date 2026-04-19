@@ -1,6 +1,42 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 156 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 157 Test Iterations (100%)
+
+### Iter 157 (Feb 2026): 🚀 13 of 15 gaps CLOSED — Revenue Health + IP Allowlist + PCI Card Vault
+
+Three more competitor-gap features shipped on top of Iter 156. **100% test pass rate** (20/20 backend + 3/3 frontend panels, zero issues).
+
+**11. Revenue Health Composite Tile** (`revenue_health.py` + `RevenueHealthPanel`)
+- New endpoint `GET /api/revenue-health/{property_id}` aggregates 4 sub-systems into a single A+/A/B/C/D/F grade + 0-100 score:
+  - **Direct Capture** (Payment Mix) — target 80%+ direct payments
+  - **Deposit Security** (Deposit Ledger) — target 40%+ of future revenue pre-collected
+  - **Commission Match** — target 0% variance across recent reconciliations
+  - **Champion Revenue** (RFM) — target 25%+ revenue from repeat guests
+- Each metric is scored 0-100 with color-coded progress bar. Overall score is the average, mapped to grade.
+- Sidebar under Revenue & Rates / Finance section. This is the board-meeting KPI.
+
+**12. IP Allowlist** (`ip_allowlist.py` + `IpAllowlistPanel`)
+- CRUD for admin-panel IP whitelist (single IP or CIDR block). Empty allowlist = permissive (all IPs allowed); populated = restrictive.
+- Includes helpful endpoints: `/my-ip` (auto-fill current IP), `/check` (test whether an IP would pass). CIDR validation via stdlib `ipaddress`.
+- Admin-only sidebar entry under Settings & Developers. Pairs with 2FA for enterprise security.
+
+**13. PCI Card-on-File Vault** (`card_vault.py` + `CardVaultPanel`)
+- Full Stripe integration via direct REST API (httpx): SetupIntent → PaymentMethod → off-session PaymentIntent.
+- `POST /api/card-vault/setup-intent` creates/reuses a Stripe Customer (idempotent by email) and returns `client_secret` for frontend Stripe.js Payment Element.
+- `POST /api/card-vault/save-method` records the saved PM in `card_vault_methods` after Stripe.js confirms.
+- `GET /api/card-vault/guest/{email}` lists saved cards.
+- `POST /api/card-vault/charge` does an off-session PaymentIntent and auto-writes a `folio_items` payment line so the booking balance reduces in real time.
+- `DELETE /api/card-vault/methods/{id}` detaches from Stripe and deletes local record.
+- **PCI Scope**: SAQ-A — card details never touch our servers. Stripe handles all PAN processing.
+- Sidebar under Finance. Ready for a real Stripe test key (user-configurable via `STRIPE_API_KEY` env var; current placeholder `sk_test_emergent` correctly surfaces a Stripe API error rather than failing silently).
+
+**Testing agent iteration_157.json**: 100% backend (20/20) + 100% frontend (3/3 panels). Zero issues.
+
+**Competitor Gap Status — 13 of 15 SHIPPED** ✅
+- ✅ Shipped in Iter 156–157: Night Audit Close-Day, Deposit Ledger, Commission Recon, Gift Cards, Review Sentiment AI, Guest RFM, Preventive Maintenance, Asset Register, Cash Drawer, 2FA TOTP, Revenue Health, IP Allowlist, PCI Card Vault
+- 🔴 Deferred — requires external partner credentials: **Google Hotel Ads** (Google partner onboarding), **SSO/SAML** (Okta/Azure AD IdP agreement)
+
+Only 2 gaps remain; both require external business relationships, not engineering work.
 
 ### Iter 156 (Feb 2026): 🚀 Top-10 Competitor Gap Features — shipped in ONE batch
 

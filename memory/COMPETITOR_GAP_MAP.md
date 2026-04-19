@@ -1,30 +1,31 @@
 # MyHotelBox — Full Software Map & Competitor Gap Analysis
-_Last reviewed: Feb 2026 · **Iter 156 · 10 of 15 gaps SHIPPED** ✅_
+_Last reviewed: Feb 2026 · **Iter 157 · 13 of 15 gaps SHIPPED** ✅_
 _Competitors benchmarked: **Mews** · **Cloudbeds** · **Eviivo** · **myhotelbox (legacy)** · **Little Hotelier** · **RoomRaccoon**_
 
 ---
 
-## 🎯 Status — Feb 2026 (after Iter 156)
+## 🎯 Status — Feb 2026 (after Iter 157)
 
-| # | Gap | Status | Module |
-|---|---|---|---|
-| 1 | Night Audit Close-Day Lock | ✅ **SHIPPED** | `/night-audit-close` |
-| 2 | Deposit Liability Ledger | ✅ **SHIPPED** | `/deposit-ledger` |
-| 3 | Commission Reconciliation | ✅ **SHIPPED** | `/commission-recon` |
-| 4 | Gift Cards / Vouchers | ✅ **SHIPPED** | `/gift-cards` |
-| 5 | Review Sentiment AI | ✅ **SHIPPED** | `/review-sentiment` |
-| 6 | Guest RFM Segmentation | ✅ **SHIPPED** | `/guest-rfm` |
-| 7 | Preventive Maintenance | ✅ **SHIPPED** | `/preventive-maintenance` |
-| 8 | Asset Register | ✅ **SHIPPED** | `/asset-register` |
-| 9 | Cash Drawer / Float | ✅ **SHIPPED** | `/cash-drawer` |
-| 10 | 2FA TOTP | ✅ **SHIPPED** | `/two-factor-auth` |
-| 11 | PCI Card-on-File Vault | 🔴 DEFERRED | Needs Stripe tokenization work |
-| 12 | Google Hotel Ads / Meta-search | 🔴 DEFERRED | Needs Google partner onboarding |
-| 13 | SSO / SAML | 🟡 DEFERRED | Needs Okta/Azure AD IdP |
-| 14 | IP Allowlist | 🟢 LOW PRIORITY | Now that 2FA is live |
-| 15 | Demand Overlay on Rate Manager | 🟢 POLISH | Event/weather icons on heatmap |
+| # | Gap | Status | Module | Iter |
+|---|---|---|---|---|
+| 1 | Night Audit Close-Day Lock | ✅ **SHIPPED** | `/night-audit-close` | 156 |
+| 2 | Deposit Liability Ledger | ✅ **SHIPPED** | `/deposit-ledger` | 156 |
+| 3 | Commission Reconciliation | ✅ **SHIPPED** | `/commission-recon` | 156 |
+| 4 | Gift Cards / Vouchers | ✅ **SHIPPED** | `/gift-cards` | 156 |
+| 5 | Review Sentiment AI | ✅ **SHIPPED** | `/review-sentiment` | 156 |
+| 6 | Guest RFM Segmentation | ✅ **SHIPPED** | `/guest-rfm` | 156 |
+| 7 | Preventive Maintenance | ✅ **SHIPPED** | `/preventive-maintenance` | 156 |
+| 8 | Asset Register | ✅ **SHIPPED** | `/asset-register` | 156 |
+| 9 | Cash Drawer / Float | ✅ **SHIPPED** | `/cash-drawer` | 156 |
+| 10 | 2FA TOTP | ✅ **SHIPPED** | `/two-factor-auth` | 156 |
+| 11 | Revenue Health Composite | ✅ **SHIPPED** | `/revenue-health` | 157 |
+| 12 | IP Allowlist | ✅ **SHIPPED** | `/ip-allowlist` | 157 |
+| 13 | PCI Card-on-File Vault | ✅ **SHIPPED** | `/card-vault` | 157 |
+| 14 | Google Hotel Ads / Meta-search | 🔴 DEFERRED | Requires Google partner onboarding | — |
+| 15 | SSO / SAML | 🔴 DEFERRED | Requires Okta/Azure AD IdP agreement | — |
 
-**10 of 15 gaps closed in a single iteration (156). 100% test pass rate (38/38 backend + 10/10 frontend).**
+**13 of 15 gaps closed in two iterations. 100% test pass rate throughout.**
+**Remaining 2 are not engineering gaps — they require external business relationships.**
 
 ---
 

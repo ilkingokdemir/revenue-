@@ -2,6 +2,21 @@
 
 ## 88+ Modules | Mobile Responsive | 150 Test Iterations (100%)
 
+### Iter 183: Multi-Currency / FX Consolidation (P1 closed)
+
+New Currency & FX admin panel consolidates revenue and AR across multi-property portfolios into a single reporting base currency.
+
+**Backend** (`/app/backend/routes/currency_fx.py` — new module):
+- Collections: `fx_rates` `{id, code, rate_to_base, as_of, source, notes, ...}` (upsert by `code + as_of`); `currency_settings` singleton `{base_currency, rounding_mode, auto_refresh}`.
+- Seeds 10 realistic currencies on first read (GBP/USD/EUR/TRY/AED/JPY/CAD/AUD/CHF/INR). Rate convention: `rate_to_base = value of 1 code in base units` (e.g. 1 EUR = 0.86 GBP).
+- Endpoints `/api/currency-fx/*`: `GET/PUT /settings`, `GET/POST /rates`, `DELETE /rates/{code}` (base-currency delete blocked with 400), `POST /convert`, `GET /ar-aging` (consolidated city-ledger aging normalised to base), `GET /portfolio-summary` (per-property revenue & AR in native + base, with totals).
+
+**Frontend** (`CurrencyFxPanel.js` wired into sidebar `currency-fx-btn`):
+- 4 gradient KPIs (Portfolio Revenue, Total Open AR, Overdue, Active Currencies) — all in base currency.
+- 5 tabs: **Portfolio Consolidation** (native vs base per property), **Consolidated AR Aging** (0-30/31-60/61-90/90+ buckets + by-currency breakdown), **FX Rate Table** (CRUD with modal), **Converter** (amount/from/to with live result card), **Settings** (base currency + rounding mode).
+
+**Verified via testing agent v3 (iteration_151.json)**: 100% backend (15/15) + 100% frontend. 0 issues, 0 regressions.
+
 ### Iter 182: Unified Inbox — WhatsApp + SMS + Email + Booking.com + Airbnb merged per guest
 
 User accepted the final remaining P0 competitor gap. Eviivo's #1 sales-demo feature now at parity.

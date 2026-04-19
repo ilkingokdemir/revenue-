@@ -31,6 +31,7 @@ import {
   ReviewSentimentPanel, GuestRfmPanel, PreventiveMaintenancePanel,
   AssetRegisterPanel, CashDrawerPanel, TwoFactorAuthPanel,
   RevenueHealthPanel, IpAllowlistPanel, CardVaultPanel,
+  DepositAutomationPanel,
 } from "./components/dashboard/CompetitorGapPanels";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
@@ -2681,6 +2682,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "commission-recon", icon: Receipt, name: "Commission Reconciliation", testId: "commission-recon-btn" },
         { id: "gift-cards", icon: Tag, name: "Gift Cards", testId: "gift-cards-btn" },
         { id: "card-vault", icon: CreditCard, name: "Card Vault (Stripe)", testId: "card-vault-btn" },
+        { id: "deposit-automation", icon: Lightning, name: "Deposit Automation", testId: "deposit-automation-btn" },
         { id: "onboarding", icon: MagicWand, name: "First-Run Wizard", testId: "onboarding-btn" },
       ],
     },
@@ -3532,6 +3534,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "revenue-health" && <div className="p-6"><RevenueHealthPanel activePropertyId={activePropertyId} /></div>}
         {activeView === "ip-allowlist" && <div className="p-6"><IpAllowlistPanel /></div>}
         {activeView === "card-vault" && <div className="p-6"><CardVaultPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "deposit-automation" && <div className="p-6"><DepositAutomationPanel activePropertyId={activePropertyId} /></div>}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

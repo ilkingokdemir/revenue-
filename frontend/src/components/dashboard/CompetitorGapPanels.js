@@ -1173,3 +1173,155 @@ export const CardVaultPanel = ({ activePropertyId }) => {
     </div>
   );
 };
+
+/* ═══════════ 14. DEPOSIT AUTOMATION (Card Vault × Deposit Policies × Folio) ═══════════ */
+export const DepositAutomationPanel = ({ activePropertyId }) => {
+  const pid = activePropertyId || "aldgate-flats";
+  const [data, setData] = useState(null);
+  const [log, setLog] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+
+  const load = useCallback(async () => {
+    try {
+      const [{ data: p }, { data: l }] = await Promise.all([
+        axios.get(`${API}/deposit-automation/pending/${pid}`),
+        axios.get(`${API}/deposit-automation/log/${pid}?limit=50`),
+      ]);
+      setData(p); setLog(l);
+    } catch { /* */ }
+  }, [pid]);
+  useEffect(() => { load(); }, [load]);
+
+  const run = async (dryRun) => {
+    if (!dryRun && !window.confirm(`CHARGE ${selected.size || (data?.with_card || 0)} booking(s)? This cannot be undone.`)) return;
+    setBusy(true);
+    try {
+      const body = {
+        dry_run: dryRun,
+        only_booking_ids: selected.size > 0 ? Array.from(selected) : [],
+      };
+      const { data: res } = await axios.post(`${API}/deposit-automation/run/${pid}`, body);
+      toast.success(`${dryRun ? "Dry run" : "Run"} complete: ${res.charged} charged, ${res.failed} failed, ${res.skipped} skipped · £${res.total_amount}`);
+      setSelected(new Set());
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    finally { setBusy(false); }
+  };
+
+  const toggle = (id) => {
+    const s = new Set(selected);
+    if (s.has(id)) s.delete(id); else s.add(id);
+    setSelected(s);
+  };
+
+  const selectAllWithCard = () => {
+    const s = new Set((data?.pending || []).filter(p => p.card_on_file).map(p => p.booking_id));
+    setSelected(s);
+  };
+
+  if (!data) return <div className="p-8 text-center" data-testid="da-loading">Loading…</div>;
+  return (
+    <div data-testid="deposit-automation-panel" className="space-y-4">
+      <div className="bg-gradient-to-br from-purple-700 to-fuchsia-700 text-white rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-1"><Activity className="w-4 h-4" /><span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Deposit Automation · Card Vault × Policies × Folio</span></div>
+        <div className="flex items-end gap-6">
+          <div>
+            <h2 className="text-3xl font-black" data-testid="da-total">{cur(data.total_owed)}</h2>
+            <p className="text-sm opacity-80">owed across {data.count || 0} bookings · {data.policies_active} active policies</p>
+          </div>
+          <div className="ml-auto flex gap-2">
+            <button onClick={() => run(true)} disabled={busy} data-testid="da-dry-run"
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-bold flex items-center gap-2"><RefreshCw className="w-4 h-4" />Dry Run</button>
+            <button onClick={() => run(false)} disabled={busy || (data.with_card || 0) === 0} data-testid="da-run-btn"
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 rounded-lg text-sm font-bold flex items-center gap-2 disabled:opacity-50"><Activity className="w-4 h-4" />{busy ? "Running…" : `Charge ${selected.size || data.with_card || 0}`}</button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border rounded-xl p-4" data-testid="da-with-card"><div className="text-[10px] font-bold uppercase text-stone-400">With Card on File</div><div className="text-2xl font-bold text-emerald-600">{data.with_card || 0}</div></div>
+        <div className="bg-white border rounded-xl p-4" data-testid="da-without-card"><div className="text-[10px] font-bold uppercase text-stone-400">No Card Saved</div><div className="text-2xl font-bold text-amber-600">{data.without_card || 0}</div></div>
+        <div className="bg-white border rounded-xl p-4"><div className="text-[10px] font-bold uppercase text-stone-400">Recent Captures (log)</div><div className="text-2xl font-bold">{log.length}</div></div>
+      </div>
+
+      {data.policies_active === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex items-center gap-2" data-testid="da-no-policies">
+          <AlertTriangle className="w-4 h-4" />
+          <span>No active deposit policies. Configure one in <strong>Finance → Deposit Policies</strong> first — e.g. "30% deposit for non-refundable rate plans".</span>
+        </div>
+      )}
+
+      <div className="bg-white border rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold">Pending Captures ({data.count || 0})</h3>
+          {(data.with_card || 0) > 0 && (
+            <button onClick={selectAllWithCard} data-testid="da-select-all" className="text-xs text-purple-600 hover:underline">Select all with card ({data.with_card})</button>
+          )}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-stone-50">
+              <tr className="text-left">
+                <th className="p-2 w-8"></th>
+                <th className="p-2">Booking</th>
+                <th className="p-2">Guest</th>
+                <th className="p-2">Check-in</th>
+                <th className="p-2">Policy</th>
+                <th className="p-2 text-right">Required</th>
+                <th className="p-2 text-right">Already Paid</th>
+                <th className="p-2 text-right">To Capture</th>
+                <th className="p-2">Card</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.pending || []).map(p => (
+                <tr key={p.booking_id} className="border-b border-stone-100" data-testid={`da-row-${p.booking_id}`}>
+                  <td className="p-2">
+                    <input type="checkbox" checked={selected.has(p.booking_id)} onChange={() => toggle(p.booking_id)} disabled={!p.card_on_file}
+                      data-testid={`da-check-${p.booking_id}`} />
+                  </td>
+                  <td className="p-2 font-mono text-[10px]">{p.booking_ref || String(p.booking_id).slice(-6)}</td>
+                  <td className="p-2 font-medium">{p.guest_name}<div className="text-[10px] text-stone-400">{p.guest_email}</div></td>
+                  <td className="p-2">{p.check_in}</td>
+                  <td className="p-2"><Badge className="text-[10px]">{p.policy?.name}</Badge></td>
+                  <td className="p-2 text-right font-mono">{cur(p.deposit_required)}</td>
+                  <td className="p-2 text-right font-mono text-stone-500">{cur(p.already_paid)}</td>
+                  <td className="p-2 text-right font-mono font-bold text-purple-700">{cur(p.to_capture)}</td>
+                  <td className="p-2">
+                    {p.card_on_file ? (
+                      <Badge className="bg-emerald-100 text-emerald-700 text-[10px]">{p.card_brand?.toUpperCase()} •••• {p.card_last4}</Badge>
+                    ) : (
+                      <Badge className="bg-amber-100 text-amber-700 text-[10px]">no card</Badge>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {(data.pending || []).length === 0 && (
+                <tr><td colSpan={9} className="p-6 text-center text-stone-400">No pending captures</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {log.length > 0 && (
+        <div className="bg-white border rounded-2xl p-6">
+          <h3 className="font-bold mb-3">Capture Log</h3>
+          <div className="divide-y divide-stone-100 max-h-96 overflow-y-auto">
+            {log.map(l => (
+              <div key={l.id} className="py-2 flex items-center gap-3 text-xs" data-testid={`da-log-${l.id}`}>
+                <Badge className={l.status === "charged" ? "bg-emerald-100 text-emerald-700" : l.status === "failed" ? "bg-rose-100 text-rose-700" : "bg-stone-100 text-stone-600"}>{l.status}</Badge>
+                <span className="font-mono text-[10px]">{String(l.booking_id).slice(-6)}</span>
+                <span className="flex-1">{l.error || l.payment_intent_id || "—"}</span>
+                <span className="font-mono font-bold">{cur(l.amount)}</span>
+                <span className="text-[10px] text-stone-400">{new Date(l.at).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+

@@ -617,6 +617,10 @@ api_router.include_router(create_ip_allowlist_router(db, require_roles))
 from routes.card_vault import create_card_vault_router
 api_router.include_router(create_card_vault_router(db, require_roles))
 
+# Iter 158 — Deposit Automation (bridges deposit_policies + card_vault + folio_items)
+from routes.deposit_automation import create_deposit_automation_router
+api_router.include_router(create_deposit_automation_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

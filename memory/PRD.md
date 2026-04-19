@@ -2,6 +2,32 @@
 
 ## 85+ Modules | Mobile Responsive | 144 Test Iterations (100%)
 
+### Iter 160: Collisions dashboard (ops-cockpit widget) — detects same-room double-bookings cross-property
+
+Built an operations-wide collision scanner that flags every same-room overlap across all properties in a dedicated Collisions panel. Pairs beautifully with the per-room "+N more" pill (iter 159) and the Audit Trail (iter 158) to form a genuine enterprise SIEM-lite for hospitality.
+
+**Backend** (`/app/backend/routes/collisions.py`):
+- `GET /api/operations/collisions?property_id=...` — scans all active bookings (`pending|confirmed|checked_in|hold`), groups by room_id, detects every pair whose date ranges overlap (exclusive checkout), returns groups sorted by conflict count with full booking details + property/room names resolved against `db.properties` and `db.room_types`.
+- `GET /api/operations/collisions/stats` — lean KPI: total_collisions + affected_rooms + affected_properties.
+- Both gated behind `require_perm("view_bookings","edit_bookings", mode="any")` — receptionists can see, housekeepers cannot.
+- Response shape includes per-room `bookings[]` (only the colliding ones), `pairs[][2]` (booking_id pairs), `collision_count`, `property_name`, `room_name`.
+
+**Frontend** (`/app/frontend/src/components/dashboard/CollisionsPanel.js`, ~180 lines):
+- Smart header swaps from rose-gradient AlertTriangle → emerald-gradient ShieldCheck when `total_collisions === 0` (conflict-free state).
+- **4 KPI cards**: Bookings scanned, Collision pairs (rose when > 0), Rooms affected (amber), Properties affected (indigo).
+- **Empty state**: Large emerald "All clear" hero with sparkles icon when no conflicts.
+- **Group cards**: rose-tinted border, rose-gradient icon, property name + bookings count in sub-row, "Open calendar" CTA that uses the new `onJumpToCalendar(pid)` prop to switch property + route to calendar.
+- **Booking row**: source-color left strip (Booking.com blue, Airbnb coral, Expedia yellow, etc.), guest name, date range + nights + source + ref, status badge (`STATUS_CLS` map), monospace right-aligned price.
+- **Resolution hint banner** at the bottom of each group.
+
+**Plumbing:**
+- Sidebar entry added under Operations Hub with `ShieldCheck` icon.
+- `SIDEBAR_PERM_MAP["collisions-btn"] = "bookings_view"` so housekeepers get filtered out automatically.
+- Route handler added; `onJumpToCalendar` callback wires `setActivePropertyId` + `setActiveView("calendar")` for one-click drill-down.
+
+**Live verified**: Admin panel loaded and rendered 5 group cards (double-aldgate-flats-r4 × 7, double-aldgate-flats-r1 × 3, twin-aldgate-flats-r2 × 1, double-aldgate-flats-r3 × 1, double-aldgate-flats-r2 × 1) with all 494 active bookings scanned. Source-color strips, status badges, "Open calendar" buttons, and resolution hints all rendered correctly.
+
+
 ### Iter 159: Smart calendar collision detector (P1 — auto-stack lanes + "+N more" merged pill)
 
 Implemented Google-Calendar-style interval lane assignment + overflow pill for the Booking Timeline to handle double-bookings and same-room overlaps cleanly.

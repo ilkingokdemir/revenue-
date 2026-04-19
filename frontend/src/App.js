@@ -21,6 +21,7 @@ import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardin
 import { PayrollRateMatrix } from "./components/dashboard/PayrollRateMatrix";
 import { BugTrackerPanel } from "./components/dashboard/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/AuditTrailPanel";
+import { CollisionsPanel } from "./components/dashboard/CollisionsPanel";
 import { RolesPermissionsPanel } from "./components/dashboard/RolesPermissionsPanel";
 import { ImportModulePanel } from "./components/dashboard/ImportModulePanel";
 import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
@@ -2607,6 +2608,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
+        { id: "collisions", icon: ShieldCheck, name: "Collisions", testId: "collisions-btn" },
         { id: "arrivals", icon: Bed, name: "Arrivals Cockpit", testId: "arrivals-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "reception-report", icon: Notebook, name: "Reception Report", testId: "reception-report-btn" },
@@ -3404,6 +3406,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Audit Trail */}
         {activeView === "audit-trail" && (
           <div className="p-6"><AuditTrailPanel user={user} /></div>
+        )}
+
+        {/* Collisions */}
+        {activeView === "collisions" && (
+          <div className="p-6"><CollisionsPanel user={user} onJumpToCalendar={(pid) => { if (pid) setActivePropertyId(pid); setActiveView("calendar"); }} /></div>
         )}
       </main>
 

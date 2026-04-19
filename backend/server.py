@@ -530,6 +530,9 @@ api_router.include_router(imports_router)
 from routes.audit_trail import create_audit_trail_router
 audit_trail_router = create_audit_trail_router(db)
 api_router.include_router(audit_trail_router)
+from routes.collisions import create_collisions_router
+collisions_router = create_collisions_router(db)
+api_router.include_router(collisions_router)
 
 app.include_router(api_router)
 

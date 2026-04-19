@@ -11,11 +11,19 @@ Key metric: ContributionPAR (CPAR) = net_contribution / available_rooms
 Sources: Booking.com / Airbnb / Expedia / Agoda / Hotelbeds / Direct / Stripe / Google
 """
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from datetime import datetime, timezone, timedelta, date
 from typing import Optional
 from collections import defaultdict
+import os
+import uuid
+import json
+import logging
+import re
 
 from auth import require_perm
+
+logger = logging.getLogger(__name__)
 
 
 # Default industry-standard cost assumptions. These are per-channel percentages
@@ -233,5 +241,114 @@ def create_profit_os_router(db):
                 "channels_without_card_fee": sorted(CHANNELS_NO_CARD_FEE),
             },
         }
+
+    @router.post("/revenue/profit-os/advisor")
+    async def profit_os_advisor(
+        body: dict,
+        current_user: dict = Depends(require_perm("view_profit_reports", "revenue_profit_os_view", mode="any")),
+    ):
+        """Call GPT-5 to analyze a Profit OS snapshot and suggest 3 actionable revenue moves."""
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(500, "EMERGENT_LLM_KEY not configured")
+
+        kpis = body.get("kpis") or {}
+        channels = body.get("by_channel") or []
+        room_types = body.get("by_room_type") or []
+
+        if not kpis or not channels:
+            raise HTTPException(400, "kpis and by_channel are required in the payload")
+
+        # Keep the prompt compact — top 8 channels, top 6 room types is enough signal.
+        channel_rows = [
+            {
+                "src": c.get("source"),
+                "bookings": c.get("bookings"),
+                "gross": round(c.get("gross", 0), 2),
+                "commission_pct": round(c.get("commission_pct", 0), 1),
+                "net": round(c.get("net", 0), 2),
+                "margin_pct": round(c.get("net_margin_pct", 0), 1),
+                "contribution_pct": round(c.get("contribution_pct", 0), 1),
+                "adr": round(c.get("adr", 0), 2),
+            }
+            for c in channels[:8]
+        ]
+        room_rows = [
+            {
+                "room": r.get("room_type_name"),
+                "bookings": r.get("bookings"),
+                "gross": round(r.get("gross", 0), 2),
+                "net": round(r.get("net", 0), 2),
+                "cpar": round(r.get("cpar", 0), 2),
+                "adr": round(r.get("adr", 0), 2),
+                "margin_pct": round(r.get("net_margin_pct", 0), 1),
+            }
+            for r in room_types[:6]
+        ]
+
+        system_msg = (
+            "You are a seasoned hotel revenue management consultant (ex-IDeaS / Duetto). "
+            "Given a ContributionPAR (CPAR) snapshot, surface the 3 most actionable, quantified "
+            "revenue moves a General Manager could make THIS WEEK. Prioritise channel mix "
+            "rebalancing, room-type yield, and commission-leakage. Be specific: cite the exact "
+            "channel or room type, quantify the projected monthly impact in GBP, and state the "
+            "operational next step (e.g., 'tighten last-room availability on Agoda', "
+            "'boost Direct via a 5% residual-stay discount', 'lift Executive Suite floor rate £15'). "
+            "Return STRICT JSON: "
+            '{"headline": "<one-line diagnosis>", '
+            '"recommendations": ['
+            '  {"title": "<short>", "channel_or_room": "<name>", "impact_gbp_per_month": <number>, '
+            '   "severity": "high|medium|low", "rationale": "<1 sentence>", "action": "<1 sentence>"},'
+            '  ... (exactly 3) ], '
+            '"risk_flag": "<optional one-line risk to watch, or empty string>"}'
+            " No markdown, no explanation outside the JSON."
+        )
+
+        user_content = (
+            "CPAR SNAPSHOT\n"
+            f"Window: {body.get('window', {})}\n"
+            f"KPIs: {json.dumps(kpis, default=str)}\n\n"
+            f"Top channels (up to 8):\n{json.dumps(channel_rows, indent=2)}\n\n"
+            f"Top room types (up to 6):\n{json.dumps(room_rows, indent=2)}\n\n"
+            "Produce the 3 highest-leverage recommendations now."
+        )
+
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"profit-os-advisor-{current_user.get('id','x')}-{uuid.uuid4().hex[:8]}",
+                system_message=system_msg,
+            ).with_model("anthropic", "claude-sonnet-4-5")
+            resp = await chat.send_message(UserMessage(text=user_content))
+            resp_text = resp if isinstance(resp, str) else str(resp)
+            m = re.search(r"\{[\s\S]*\}", resp_text)
+            if not m:
+                raise ValueError("No JSON in LLM response")
+            parsed = json.loads(m.group(0))
+
+            recs = parsed.get("recommendations") or []
+            # Normalize
+            out = []
+            for r in recs[:3]:
+                out.append({
+                    "title": str(r.get("title") or "Recommendation"),
+                    "channel_or_room": str(r.get("channel_or_room") or "—"),
+                    "impact_gbp_per_month": float(r.get("impact_gbp_per_month") or 0),
+                    "severity": (r.get("severity") or "medium").lower(),
+                    "rationale": str(r.get("rationale") or ""),
+                    "action": str(r.get("action") or ""),
+                })
+            return {
+                "headline": parsed.get("headline") or "Revenue pulse",
+                "recommendations": out,
+                "risk_flag": parsed.get("risk_flag") or "",
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "model": "claude-sonnet-4-5",
+            }
+        except Exception as e:
+            logger.exception("Profit OS advisor failed")
+            raise HTTPException(500, f"AI advisor failed: {e}")
 
     return router

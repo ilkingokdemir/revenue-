@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   TrendingUp, DollarSign, Percent, Receipt, Wallet, BarChart3,
   RefreshCw, Download, Sparkles, ChevronDown, Bed, Globe,
-  ArrowUpRight, ArrowDownRight, Target,
+  ArrowUpRight, ArrowDownRight, Target, Brain, Zap, AlertTriangle,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -40,6 +40,8 @@ export const ProfitOSPanel = ({ user, propertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState("30");
+  const [advisor, setAdvisor] = useState(null);
+  const [advisorLoading, setAdvisorLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +62,20 @@ export const ProfitOSPanel = ({ user, propertyId }) => {
   }, [days, propertyId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const runAdvisor = async () => {
+    if (!data) return;
+    setAdvisorLoading(true);
+    setAdvisor(null);
+    try {
+      const { data: res } = await axios.post(`${API}/revenue/profit-os/advisor`, data, { timeout: 90000 });
+      setAdvisor(res);
+      toast.success(`AI advisor generated ${res.recommendations?.length || 0} recommendations`);
+    } catch (e) {
+      toast.error("AI advisor is busy — please retry in a moment");
+    }
+    setAdvisorLoading(false);
+  };
 
   const onExport = () => {
     if (!data) return;
@@ -146,6 +162,108 @@ export const ProfitOSPanel = ({ user, propertyId }) => {
             <KpiCard testId="po-revpar" label="RevPAR" value={fmt(data.kpis.revpar)} sub="Gross per available room" icon={BarChart3} accent="from-indigo-500 to-violet-700" />
             <KpiCard testId="po-adr" label="ADR" value={fmt(data.kpis.adr)} sub={`${data.kpis.occupied_nights} occupied nights`} icon={TrendingUp} accent="from-stone-500 to-stone-700" />
             <KpiCard testId="po-occ" label="Occupancy" value={pct(data.kpis.occupancy_pct)} sub={`${data.scope.total_rooms} rooms × ${data.window.nights} nights`} icon={Bed} accent="from-amber-500 to-orange-600" />
+          </div>
+
+          {/* AI Revenue Advisor */}
+          <div className="bg-gradient-to-br from-violet-950 via-indigo-900 to-violet-900 rounded-2xl p-5 shadow-xl relative overflow-hidden" data-testid="po-advisor">
+            <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-violet-500/20 -mr-20 -mt-20 blur-3xl"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full bg-indigo-400/10 -ml-16 -mb-16 blur-3xl"></div>
+            <div className="relative">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-400 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/40">
+                    <Brain className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-white/10 backdrop-blur rounded-full text-[9px] font-bold uppercase tracking-wider text-violet-200 mb-1">
+                      <Sparkles className="w-2.5 h-2.5" /> AI REVENUE ADVISOR · CLAUDE 4.5
+                    </div>
+                    <h3 className="font-black text-white text-lg">What would a revenue consultant do?</h3>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={runAdvisor}
+                  disabled={advisorLoading || !data}
+                  className="bg-gradient-to-r from-violet-500 to-indigo-600 text-white border-0 hover:from-violet-400 hover:to-indigo-500 shadow-lg shadow-violet-500/30"
+                  data-testid="po-advisor-run"
+                >
+                  {advisorLoading ? <><RefreshCw className="w-4 h-4 mr-1.5 animate-spin" /> Analyzing…</> : <><Zap className="w-4 h-4 mr-1.5" /> Generate recommendations</>}
+                </Button>
+              </div>
+
+              {!advisor && !advisorLoading && (
+                <p className="text-sm text-violet-200/80" data-testid="po-advisor-hint">
+                  Click <span className="font-semibold text-white">Generate recommendations</span> to have Claude 4.5 analyze this CPAR snapshot and surface the 3 highest-leverage revenue moves for this week — quantified in £/month.
+                </p>
+              )}
+
+              {advisorLoading && (
+                <div className="bg-white/5 backdrop-blur rounded-xl p-8 text-center text-violet-200">
+                  <Brain className="w-8 h-8 mx-auto mb-2 animate-pulse" />
+                  <div className="text-sm">Analyzing {data?.by_channel?.length || 0} channels and {data?.by_room_type?.length || 0} room types…</div>
+                </div>
+              )}
+
+              {advisor && (
+                <div className="space-y-3" data-testid="po-advisor-result">
+                  <div className="bg-white/10 backdrop-blur rounded-xl p-3 border border-violet-400/30">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-300 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-white font-medium italic leading-relaxed">{advisor.headline}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {advisor.recommendations.map((r, i) => {
+                      const sev = (r.severity || "medium").toLowerCase();
+                      const sevCls = sev === "high" ? "bg-rose-500/20 text-rose-200 border-rose-400/40" : sev === "low" ? "bg-stone-500/20 text-stone-200 border-stone-400/40" : "bg-amber-500/20 text-amber-200 border-amber-400/40";
+                      return (
+                        <div key={i} className="bg-white/10 backdrop-blur rounded-xl p-4 border border-violet-400/20 hover:border-violet-300/40 transition-all" data-testid={`po-advisor-rec-${i}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <Badge className={`text-[9px] uppercase tracking-wider border ${sevCls}`}>{sev}</Badge>
+                            <div className="text-right">
+                              <div className="text-[9px] uppercase tracking-wider text-violet-300">Projected</div>
+                              <div className="text-lg font-black text-emerald-300 leading-none flex items-center gap-0.5">
+                                <ArrowUpRight className="w-4 h-4" />
+                                £{Math.round(r.impact_gbp_per_month).toLocaleString()}
+                                <span className="text-[9px] text-violet-300 font-normal ml-0.5">/mo</span>
+                              </div>
+                            </div>
+                          </div>
+                          <h4 className="font-bold text-white text-sm leading-snug mb-1">{r.title}</h4>
+                          <Badge variant="outline" className="text-[10px] bg-white/5 text-violet-100 border-violet-300/30 mb-2">
+                            <Target className="w-2.5 h-2.5 mr-1" /> {r.channel_or_room}
+                          </Badge>
+                          <p className="text-[11px] text-violet-100/90 leading-relaxed mb-2">{r.rationale}</p>
+                          <div className="bg-violet-950/50 rounded-lg p-2 border-l-2 border-emerald-400">
+                            <div className="text-[9px] uppercase tracking-wider text-emerald-300 font-bold mb-0.5 flex items-center gap-1">
+                              <Zap className="w-2.5 h-2.5" /> Next step
+                            </div>
+                            <p className="text-[11px] text-white leading-relaxed">{r.action}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {advisor.risk_flag && (
+                    <div className="bg-rose-500/15 backdrop-blur rounded-xl p-3 border border-rose-400/40 flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-rose-300 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-rose-300 font-bold mb-0.5">Risk flag</div>
+                        <p className="text-xs text-rose-100">{advisor.risk_flag}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 text-[10px] text-violet-300">
+                    <Brain className="w-3 h-3" />
+                    Generated by {advisor.model} · {new Date(advisor.generated_at).toLocaleString()}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Channel breakdown */}

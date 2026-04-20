@@ -171,6 +171,76 @@ def create_expenses_router(db, require_roles):
         if r.deleted_count == 0: raise HTTPException(404, "Not found")
         return {"deleted": True}
 
+    # ==================== LAUNDRY COST AGGREGATE (admin/manager/accountant only) ====================
+    @router.get("/expenses/laundry-summary/{property_id}")
+    async def laundry_summary(property_id: str, year: int = 0, month: int = 0,
+                              current_user: dict = Depends(require_roles("admin", "manager", "accountant"))):
+        """Aggregate all laundry-related costs for the month: dispatches sent, deliveries paid,
+        stock transactions (disposal/write-off). Also returns active contract count & total
+        monthly flat fees for admin visibility."""
+        now = datetime.now(timezone.utc)
+        if year == 0: year = now.year
+        if month == 0: month = now.month
+        start = date(year, month, 1).isoformat()
+        end = date(year, month, calendar.monthrange(year, month)[1]).isoformat()
+        prop_q = {} if property_id == "all" else {"property_id": property_id}
+
+        # Dispatches sent in month
+        disp = await db.laundry_dispatches.find(
+            {**prop_q, "sent_date": {"$gte": start, "$lte": end}}, {"_id": 0}
+        ).to_list(1000)
+        dispatch_cost = round(sum(float(d.get("total_cost") or 0) for d in disp), 2)
+        dispatch_count = len(disp)
+        dispatch_pieces = sum(int(i.get("qty_sent") or 0) for d in disp for i in d.get("items", []))
+
+        # Deliveries paid in month (net_payable)
+        deliv = await db.laundry_deliveries.find(
+            {**prop_q, "delivery_date": {"$gte": start, "$lte": end}}, {"_id": 0}
+        ).to_list(1000)
+        delivery_net = round(sum(float(d.get("net_payable") or 0) for d in deliv), 2)
+        delivery_gross = round(sum(float(d.get("gross_amount") or 0) for d in deliv), 2)
+        delivery_deductions = round(sum(float(d.get("deduction_amount") or 0) for d in deliv), 2)
+
+        # Stock transactions: disposal/write-off are losses
+        stx = await db.laundry_stock_transactions.find(
+            {**prop_q, "transaction_date": {"$gte": start, "$lte": end}}, {"_id": 0}
+        ).to_list(500)
+        loss_cost = round(sum(
+            float(s.get("total_cost") or 0)
+            for s in stx if s.get("tx_type") in ("disposal", "write_off", "maintenance")
+        ), 2)
+        loss_pieces = sum(
+            int(s.get("quantity") or 0)
+            for s in stx if s.get("tx_type") in ("disposal", "write_off", "maintenance")
+        )
+
+        # Active contracts with monthly obligation
+        contracts = await db.laundry_contracts.find(
+            {**prop_q, "active": True}, {"_id": 0}
+        ).to_list(200)
+        monthly_flat = round(sum(
+            float(c.get("flat_amount") or 0)
+            for c in contracts if c.get("pricing_model") in ("flat_rate", "hybrid")
+            and (c.get("billing_period") or "monthly") == "monthly"
+        ), 2)
+
+        total = round(dispatch_cost + delivery_net + loss_cost, 2)
+
+        return {
+            "year": year, "month": month, "start": start, "end": end,
+            "total": total,
+            "breakdown": [
+                {"key": "dispatches", "label": "Dispatches Sent", "amount": dispatch_cost,
+                 "count": dispatch_count, "pieces": dispatch_pieces},
+                {"key": "deliveries", "label": "Deliveries Paid (Net)", "amount": delivery_net,
+                 "count": len(deliv), "gross": delivery_gross, "deductions": delivery_deductions},
+                {"key": "losses", "label": "Losses (Disposal/Write-off/Maintenance)", "amount": loss_cost,
+                 "count": sum(1 for s in stx if s.get("tx_type") in ("disposal", "write_off", "maintenance")),
+                 "pieces": loss_pieces},
+            ],
+            "contracts": {"active": len(contracts), "monthly_flat_fees": monthly_flat},
+        }
+
     # ==================== RECURRING ====================
     @router.get("/expenses/recurring/{property_id}")
     async def list_recurring(property_id: str,

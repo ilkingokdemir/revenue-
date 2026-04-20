@@ -73,6 +73,13 @@ export const LaundryManagement = ({ propertyId, user }) => {
 
   const pid = propertyId || "all";
   const isManager = user?.role === "admin" || user?.role === "manager";
+  const canSeeCosts = ["admin", "manager", "accountant"].includes(user?.role);
+  // Filter tabs: housekeeper + receptionist should NOT see contracts
+  const visibleTabs = TABS.filter(t => t.id !== "contracts" || canSeeCosts);
+  // If a restricted user somehow has 'contracts' selected, force them to dispatch
+  useEffect(() => {
+    if (!canSeeCosts && tab === "contracts") setTab("dispatch");
+  }, [canSeeCosts, tab]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -247,17 +254,21 @@ export const LaundryManagement = ({ propertyId, user }) => {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-5 gap-3" data-testid="laundry-kpis">
+      <div className={`grid gap-3 ${canSeeCosts ? "grid-cols-5" : "grid-cols-3"}`} data-testid="laundry-kpis">
         <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-center"><p className="text-2xl font-black text-stone-700">{k.total_items || 0}</p><p className="text-[10px] text-stone-500">Items Sent YTD</p></div>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center"><Send className="w-4 h-4 mx-auto mb-1 text-amber-600" /><p className="text-2xl font-black text-amber-700">{k.sent || 0}</p><p className="text-[10px] text-amber-600">Awaiting Return</p></div>
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center"><CheckCircle2 className="w-4 h-4 mx-auto mb-1 text-emerald-600" /><p className="text-2xl font-black text-emerald-700">{k.received || 0}</p><p className="text-[10px] text-emerald-600">Deliveries</p></div>
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center"><Building2 className="w-4 h-4 mx-auto mb-1 text-blue-600" /><p className="text-2xl font-black text-blue-700">{contracts.length}</p><p className="text-[10px] text-blue-600">Contracts</p></div>
-        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center"><p className="text-2xl font-black text-violet-700">{fmt(k.total_cost)}</p><p className="text-[10px] text-violet-600">Total Spend</p></div>
+        {canSeeCosts && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center"><Building2 className="w-4 h-4 mx-auto mb-1 text-blue-600" /><p className="text-2xl font-black text-blue-700">{contracts.length}</p><p className="text-[10px] text-blue-600">Contracts</p></div>
+        )}
+        {canSeeCosts && (
+          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center"><p className="text-2xl font-black text-violet-700">{fmt(k.total_cost)}</p><p className="text-[10px] text-violet-600">Total Spend</p></div>
+        )}
       </div>
 
       {/* Big Colored Tiles (like the mobile screenshot) */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3" data-testid="laundry-tiles">
-        {TABS.map(t => {
+      <div className={`grid grid-cols-2 gap-3 ${visibleTabs.length === 6 ? "md:grid-cols-6" : visibleTabs.length === 5 ? "md:grid-cols-5" : "md:grid-cols-4"}`} data-testid="laundry-tiles">
+        {visibleTabs.map(t => {
           const Icon = t.icon;
           const active = tab === t.id;
           return (
@@ -297,7 +308,7 @@ export const LaundryManagement = ({ propertyId, user }) => {
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Sent</th>
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Expected</th>
                       <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Items</th>
-                      <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Cost</th>
+                      {canSeeCosts && <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Cost</th>}
                       <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Status</th>
                       <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Actions</th>
                     </tr>
@@ -309,7 +320,7 @@ export const LaundryManagement = ({ propertyId, user }) => {
                         <td className="py-2.5 px-3 text-stone-600">{d.sent_date}</td>
                         <td className="py-2.5 px-3 text-stone-600">{d.expected_return || "—"}</td>
                         <td className="py-2.5 px-3 text-center font-semibold text-stone-700">{d.items.reduce((s, i) => s + i.qty_sent, 0)}</td>
-                        <td className="py-2.5 px-3 text-right font-mono text-stone-700">£{d.total_cost?.toFixed(2)}</td>
+                        {canSeeCosts && <td className="py-2.5 px-3 text-right font-mono text-stone-700">£{d.total_cost?.toFixed(2)}</td>}
                         <td className="py-2.5 px-3 text-center"><Badge className={`${DISPATCH_STATUS_STYLE[d.status] || "bg-stone-100"} text-[9px] capitalize`}>{d.status}</Badge></td>
                         <td className="py-2.5 px-3 text-right">
                           <button onClick={() => receiveDispatch(d)} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100 font-semibold" data-testid={`receive-btn-${d.id}`}>
@@ -331,7 +342,7 @@ export const LaundryManagement = ({ propertyId, user }) => {
 
           {/* FORECAST */}
           {tab === "forecast" && (
-            <ForecastTab pid={pid} onCreated={load} />
+            <ForecastTab pid={pid} onCreated={load} canSeeCosts={canSeeCosts} />
           )}
 
           {/* DAILY USAGE */}
@@ -1102,7 +1113,7 @@ const DeliveriesTab = ({ pid, dispatches, stock }) => {
 
 
 /* ═══════════════════ ORDER FORECAST TAB ═══════════════════ */
-const ForecastTab = ({ pid, onCreated }) => {
+const ForecastTab = ({ pid, onCreated, canSeeCosts = true }) => {
   const nextMonday = () => {
     const d = new Date();
     const day = d.getDay();                 // 0=Sun, 1=Mon, ...
@@ -1255,7 +1266,7 @@ const ForecastTab = ({ pid, onCreated }) => {
       {forecast && (
         <>
           {/* Summary KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className={`grid gap-3 ${canSeeCosts ? "grid-cols-2 md:grid-cols-6" : "grid-cols-2 md:grid-cols-5"}`}>
             <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
               <p className="text-2xl font-black text-stone-700">{forecast.bookings_in_window}</p>
               <p className="text-[11px] text-stone-500">Bookings in window</p>
@@ -1272,10 +1283,12 @@ const ForecastTab = ({ pid, onCreated }) => {
               <p className="text-2xl font-black text-fuchsia-600">{t.qty}</p>
               <p className="text-[11px] text-stone-500">Total pieces to order</p>
             </div>
-            <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
-              <p className="text-2xl font-black text-emerald-600">{fmt(t.cost)}</p>
-              <p className="text-[11px] text-stone-500">Estimated cost</p>
-            </div>
+            {canSeeCosts && (
+              <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+                <p className="text-2xl font-black text-emerald-600">{fmt(t.cost)}</p>
+                <p className="text-[11px] text-stone-500">Estimated cost</p>
+              </div>
+            )}
             <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
               <p className="text-2xl font-black text-amber-600">{editableItems.filter(i => i.order_qty > 0).length}</p>
               <p className="text-[11px] text-stone-500">Items to order</p>
@@ -1354,8 +1367,8 @@ const ForecastTab = ({ pid, onCreated }) => {
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Shortfall</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Safety +%</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Order Qty</th>
-                  <th className="text-right py-2 px-3 font-semibold text-stone-600">Unit £</th>
-                  <th className="text-right py-2 px-3 font-semibold text-stone-600">Line Total</th>
+                  {canSeeCosts && <th className="text-right py-2 px-3 font-semibold text-stone-600">Unit £</th>}
+                  {canSeeCosts && <th className="text-right py-2 px-3 font-semibold text-stone-600">Line Total</th>}
                 </tr>
               </thead>
               <tbody>
@@ -1402,8 +1415,8 @@ const ForecastTab = ({ pid, onCreated }) => {
                           )}
                         </div>
                       </td>
-                      <td className="py-2 px-3 text-right font-mono text-stone-600">{fmt(i.washing_cost)}</td>
-                      <td className="py-2 px-3 text-right font-mono font-bold text-stone-800">{fmt(line)}</td>
+                      <td className="py-2 px-3 text-right font-mono text-stone-600">{canSeeCosts ? fmt(i.washing_cost) : null}</td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-stone-800">{canSeeCosts ? fmt(line) : null}</td>
                     </tr>
                   );
                 })}
@@ -1412,8 +1425,8 @@ const ForecastTab = ({ pid, onCreated }) => {
                 <tr>
                   <td colSpan={8} className="py-2 px-3 text-right font-bold text-stone-700">Totals</td>
                   <td className="py-2 px-3 text-center font-mono font-black text-fuchsia-700">{t.qty}</td>
-                  <td></td>
-                  <td className="py-2 px-3 text-right font-mono font-black text-stone-900">{fmt(t.cost)}</td>
+                  {canSeeCosts && <td></td>}
+                  {canSeeCosts && <td className="py-2 px-3 text-right font-mono font-black text-stone-900">{fmt(t.cost)}</td>}
                 </tr>
               </tfoot>
             </table>

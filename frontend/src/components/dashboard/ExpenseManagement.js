@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import {
   RefreshCw, Plus, Receipt, Repeat, Layers, Trash2, Edit3, PlayCircle,
   DollarSign, Calendar, ExternalLink, Zap, Package, Wrench, Megaphone,
-  Users, Home, Utensils, Cpu, MoreHorizontal, AlertCircle, Settings2,
+  Users, Home, Utensils, Cpu, MoreHorizontal, AlertCircle, Settings2, Shirt,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -34,6 +34,7 @@ export const ExpenseManagement = ({ propertyId, user }) => {
   const [cats, setCats] = useState([]);
   const [data, setData] = useState({ expenses: [], kpis: {}, by_category: {} });
   const [recurring, setRecurring] = useState({ recurring: [], due_count: 0 });
+  const [laundry, setLaundry] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expOpen, setExpOpen] = useState(false);
   const [recOpen, setRecOpen] = useState(false);
@@ -50,14 +51,16 @@ export const ExpenseManagement = ({ propertyId, user }) => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, e, r] = await Promise.all([
+      const [c, e, r, l] = await Promise.all([
         axios.get(`${API}/expenses/categories/${pid}?year=${year}&month=${month}`),
         axios.get(`${API}/expenses/${pid}?year=${year}&month=${month}${categoryFilter ? `&category=${categoryFilter}` : ""}`),
         axios.get(`${API}/expenses/recurring/${pid}`),
+        axios.get(`${API}/expenses/laundry-summary/${pid}?year=${year}&month=${month}`).catch(() => ({ data: null })),
       ]);
       setCats(c.data.categories || []);
       setData(e.data);
       setRecurring(r.data);
+      setLaundry(l.data);
     } catch { /* silent */ }
     setLoading(false);
   }, [pid, year, month, categoryFilter]);
@@ -152,6 +155,45 @@ export const ExpenseManagement = ({ propertyId, user }) => {
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center"><p className="text-2xl font-black text-blue-700">£{(k.avg || 0).toFixed(0)}</p><p className="text-[10px] text-blue-600">Avg / Expense</p></div>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center"><Repeat className="w-4 h-4 mx-auto mb-1 text-amber-600" /><p className="text-2xl font-black text-amber-700">{recurring.recurring.length}</p><p className="text-[10px] text-amber-600">Recurring</p></div>
       </div>
+
+      {/* Laundry Spend Summary (admin/manager/accountant) */}
+      {laundry && (
+        <div className="bg-gradient-to-br from-sky-50 to-white border border-sky-200 rounded-xl p-4" data-testid="laundry-spend-card">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Shirt className="w-4 h-4 text-sky-700" />
+              <h3 className="text-sm font-bold text-sky-900">Laundry Spend — {MONTHS[month - 1]} {year}</h3>
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-black text-sky-900" data-testid="laundry-spend-total">£{(laundry.total || 0).toFixed(2)}</p>
+              <p className="text-[10px] text-sky-600">Total this month</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {(laundry.breakdown || []).map(b => (
+              <div key={b.key} className="bg-white border border-sky-100 rounded-lg p-3" data-testid={`laundry-breakdown-${b.key}`}>
+                <p className="text-[10px] font-semibold uppercase text-sky-500">{b.label}</p>
+                <p className="text-lg font-black text-stone-800">£{(b.amount || 0).toFixed(2)}</p>
+                <p className="text-[10px] text-stone-500">
+                  {b.count || 0} {b.key === "dispatches" ? "dispatches" : b.key === "deliveries" ? "deliveries" : "events"}
+                  {b.pieces ? ` · ${b.pieces} pcs` : ""}
+                  {b.deductions ? ` · £${b.deductions.toFixed(2)} deducted` : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+          {laundry.contracts?.active > 0 && (
+            <div className="mt-3 pt-3 border-t border-sky-100 flex items-center justify-between text-xs">
+              <span className="text-sky-700">
+                <b>{laundry.contracts.active}</b> active contract{laundry.contracts.active !== 1 ? "s" : ""}
+              </span>
+              <span className="text-stone-600">
+                Monthly flat fees: <b className="text-stone-800">£{(laundry.contracts.monthly_flat_fees || 0).toFixed(2)}</b>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center justify-between">

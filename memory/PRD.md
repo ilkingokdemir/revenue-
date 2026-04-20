@@ -2,6 +2,30 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.4 (Feb 2026): 🔐 Role-based cost visibility + Admin Laundry Spend card
+
+User request: reception + housekeeper should NOT see contracts or payment amounts. Only admin/manager/accountant. Also, admin Expenses section should show all laundry costs.
+
+**Frontend role gating** (`LaundryManagement.js`)
+- New `canSeeCosts = ["admin","manager","accountant"].includes(user?.role)` flag
+- **Contracts tile is hidden** for receptionist/housekeeper (tile grid auto-reflows to 5 columns; auto-switches away from `contracts` if selected)
+- Main KPIs: "Contracts" and "Total Spend" cards conditionally rendered (3-col grid for restricted roles, 5-col for privileged)
+- Dispatch table: "Cost" column conditionally rendered
+- Forecast tab: Unit £ / Line Total columns + Estimated Cost KPI all conditionally rendered (prop `canSeeCosts` passed through)
+
+**Backend — new endpoint** `GET /api/expenses/laundry-summary/{property_id}?year=&month=`
+- Admin/manager/accountant only
+- Returns total laundry spend for the month with 3-way breakdown:
+  - Dispatches Sent (amount + count + pieces)
+  - Deliveries Paid (net amount + gross + deductions)
+  - Losses (disposal + write-off + maintenance cost + pieces)
+- Active contract count + monthly flat-fee obligation
+
+**Frontend — Admin Expense page** (`ExpenseManagement.js`)
+- New gradient "Laundry Spend — {Month} {Year}" card below the 4 KPI tiles
+- Shows total + 3-column breakdown + footer with active contract count and monthly flat fees
+- Verified: £581.60 / 7 dispatches (454 pcs) / £79.50 net deliveries / £28.50 losses / 3 contracts £1,200 flat fees
+
 ### Iter 166.3 (Feb 2026): 🧹 Split Housekeeper Usage — Clean Used vs Dirty Collected
 
 User request: "housekeeper kulandığı temiz stoğu ve çıkan kirliyi ayrı ayrı yazsın".

@@ -38,6 +38,8 @@ import {
   ChannelMappingsPanel, SyncQueuePanel,
 } from "./components/dashboard/ChannelManagerMvpPanels";
 import ChannelManagerHub from "./components/dashboard/ChannelManagerHub";
+import GroupBlocksPanel from "./components/dashboard/GroupBlocksPanel";
+import SmartRateControlPanel from "./components/dashboard/SmartRateControlPanel";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
@@ -2612,7 +2614,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "website-templates", icon: Layout, name: t("nav.website_templates"), testId: "website-templates-btn" },
         { id: "customize-template", icon: PaintBrush, name: t("nav.customize_template"), testId: "customize-template-btn" },
         { id: "group-bookings", icon: Users, name: "Group Bookings", testId: "group-bookings-btn" },
+        { id: "group-blocks", icon: Users, name: "Group Blocks", testId: "group-blocks-btn" },
         { id: "rate-structure", icon: Tag, name: "Rate Plans & OTA Mapping", testId: "rate-structure-btn" },
+        { id: "smart-rate-control", icon: Tag, name: "Smart Rate Control", testId: "smart-rate-control-btn" },
         { id: "promo-codes", icon: Tag, name: t("nav.promo_codes"), testId: "promo-codes-btn" },
         { id: "add-ons", icon: Package, name: t("nav.add_ons"), testId: "add-ons-btn" },
         { id: "policies", icon: Scroll, name: t("nav.policies"), testId: "policies-btn" },
@@ -3561,6 +3565,10 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Iter 163 — Channel Manager Hub (Dashboard, Channels, Mappings, Rate Structure, Publish Jobs, Audit Logs, Benchmark, Profiles, Overrides) */}
         {activeView === "chmgr-hub" && <ChannelManagerHub activePropertyId={activePropertyId} />}
         {activeView?.startsWith?.("chmgr-hub:") && <ChannelManagerHub activePropertyId={activePropertyId} initialPanel={activeView.split(":")[1]} />}
+
+        {/* Iter 165 — Group Blocks + Smart Rate Control (Mews/Eviivo/Cloudbeds/SiteMinder parity) */}
+        {activeView === "group-blocks" && <GroupBlocksPanel activePropertyId={activePropertyId} />}
+        {activeView === "smart-rate-control" && <SmartRateControlPanel activePropertyId={activePropertyId} />}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

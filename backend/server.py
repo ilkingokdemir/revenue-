@@ -684,6 +684,14 @@ JOB_HANDLERS["nightly_dry_publish"] = _job_nightly_dry_publish
 from routes.inventory_allocations import create_inventory_allocations_router
 api_router.include_router(create_inventory_allocations_router(db, require_roles))
 
+# Iter 165 — Group Blocks (group reservations)
+from routes.group_blocks import create_group_blocks_router
+api_router.include_router(create_group_blocks_router(db, require_roles))
+
+# Iter 165 — Smart Rate Control (bulk rate/availability editor)
+from routes.smart_rate_control import create_smart_rate_control_router
+api_router.include_router(create_smart_rate_control_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

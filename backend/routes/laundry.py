@@ -801,13 +801,14 @@ def create_laundry_router(db, require_roles):
         now = datetime.now(timezone.utc).isoformat()
         created = []
         for it in items:
-            # Read both fields, fall back to legacy `qty`
+            # Read fields, fall back to legacy `qty`
             legacy_qty = int(it.get("qty") or 0)
             clean_used = int(it.get("clean_used") if it.get("clean_used") is not None else legacy_qty)
             dirty_collected = int(it.get("dirty_collected") if it.get("dirty_collected") is not None else legacy_qty)
-            if clean_used <= 0 and dirty_collected <= 0:
+            factory_unusable = int(it.get("factory_unusable") or 0)   # came back unusable from laundry
+            guest_damaged = int(it.get("guest_damaged") or 0)         # damaged by guest in room
+            if clean_used <= 0 and dirty_collected <= 0 and factory_unusable <= 0 and guest_damaged <= 0:
                 continue
-            # For stats/reports, keep `qty` = dirty_collected (pieces that went to laundry)
             qty = dirty_collected if dirty_collected > 0 else clean_used
             doc = {
                 "id": str(uuid.uuid4()),
@@ -820,15 +821,25 @@ def create_laundry_router(db, require_roles):
                 "qty": qty,                        # legacy summary field
                 "clean_used": clean_used,
                 "dirty_collected": dirty_collected,
+                "factory_unusable": factory_unusable,
+                "guest_damaged": guest_damaged,
                 "notes": notes,
                 "recorded_by": current_user.get("name", "") or current_user.get("email", ""),
                 "created_at": now,
             }
             await db.laundry_daily_usage.insert_one({**doc})
-            # Independent stock adjustment: clean stock drops by clean_used,
-            # dirty stock rises by dirty_collected (may differ, e.g. extras were used).
-            await _adjust_stock(db, property_id, it.get("item_id", ""), it.get("item_name", ""),
-                                clean=-clean_used, dirty=dirty_collected)
+            # Stock side-effects:
+            #   clean_used    → clean stock decreases (linen brought into room)
+            #   dirty_collected → dirty stock increases (soiled linen taken from room)
+            #   factory_unusable → damaged increases (items came back unusable from laundry)
+            #   guest_damaged → damaged increases (written off — guest ruined it)
+            await _adjust_stock(
+                db, property_id,
+                it.get("item_id", ""), it.get("item_name", ""),
+                clean=-clean_used,
+                dirty=dirty_collected,
+                damaged=factory_unusable + guest_damaged,
+            )
             created.append(doc)
         return {"created": created, "count": len(created)}
 
@@ -838,12 +849,19 @@ def create_laundry_router(db, require_roles):
         doc = await db.laundry_daily_usage.find_one({"id": usage_id}, {"_id": 0})
         if not doc:
             raise HTTPException(404, "Not found")
-        # Reverse the stock adjustment — honour split fields if present
+        # Reverse every stock side-effect
         legacy_qty = int(doc.get("qty", 0))
         clean_used = int(doc.get("clean_used") if doc.get("clean_used") is not None else legacy_qty)
         dirty_collected = int(doc.get("dirty_collected") if doc.get("dirty_collected") is not None else legacy_qty)
-        await _adjust_stock(db, property_id, doc.get("item_id", ""), doc.get("item_name", ""),
-                            clean=clean_used, dirty=-dirty_collected)
+        factory_unusable = int(doc.get("factory_unusable") or 0)
+        guest_damaged = int(doc.get("guest_damaged") or 0)
+        await _adjust_stock(
+            db, property_id,
+            doc.get("item_id", ""), doc.get("item_name", ""),
+            clean=clean_used,
+            dirty=-dirty_collected,
+            damaged=-(factory_unusable + guest_damaged),
+        )
         await db.laundry_daily_usage.delete_one({"id": usage_id})
         return {"deleted": True}
 

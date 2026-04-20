@@ -2,6 +2,21 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.7 (Feb 2026): 📝 Housekeeper-friendly "New Daily Laundry Usage" ready-table
+
+User feedback (verbatim): _"housekeeper eğitimsiz ve zorlanıyor, o sadece numaralar yazsın kullandığı temiz malzeme, çıkardığı kirli, fabrikadan gelen kullanılamaz malzeme, müşterinin kullandığı zarar görmüş. Hazır tablo olsun, onlar sadece numara yazsın ve onaylasınlar. Tek tek seçmek zor."_
+
+**Backend** (`routes/laundry.py` — `create_usage` / `delete_usage`)
+- Usage doc now persists 4 independent counters per item: `clean_used`, `dirty_collected`, `factory_unusable`, `guest_damaged` (legacy `qty` kept as a summary).
+- Stock side-effects: `clean -= clean_used`, `dirty += dirty_collected`, `damaged += factory_unusable + guest_damaged`. Delete reverses all.
+- Verified end-to-end: `{clean_used:3, dirty_collected:5, factory_unusable:2, guest_damaged:1}` → stock moved clean `-3`, dirty `+5`, damaged `+3`. Delete flipped it cleanly.
+
+**Frontend** (`LaundryManagement.js`)
+- Replaced the dropdown-heavy modal with a **pre-populated ready-table**. When the user clicks "New Daily Laundry Usage", the form auto-loads **every active catalog item as a row** — no dropdowns, no "Add Item" button.
+- 4 colour-coded numeric columns per row: 🟢 Used (emerald) · 🟡 Collected (amber) · 🔴 Unusable (rose) · 🟣 Damaged (fuchsia). Live Totals footer.
+- Housekeeper workflow: pick Room → type numbers in the relevant cells → click **Submit & Confirm**. Untrained staff-friendly, zero category selection required.
+- Daily Usage list updated with the 2 new columns.
+
 ### Iter 166.6 (Feb 2026): 📋 Laundry Items default catalog aligned to user's real product list
 
 User uploaded their operational Laundry Items screen ("Hotel Ops"). Replaced the generic 11-item default list with the exact 8-item catalog from the screenshot, with matching display names and slugs:

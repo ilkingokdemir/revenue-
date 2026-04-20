@@ -69,7 +69,22 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
     vendor: "", contact_name: "", contact_email: "", contact_phone: "",
     start_date: "", end_date: "", pickup_schedule: "weekly", terms: "", rates: [], active: true,
   });
-  const [usageForm, setUsageForm] = useState({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", items: [] });
+  const [usageForm, setUsageForm] = useState({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
+
+  // Pre-populate the usage form with ALL catalog items (housekeeper-friendly ready-table)
+  const openUsageForm = () => {
+    const prefilled = (catalog || []).map(c => ({
+      item_id: c.id, item_name: c.name,
+      clean_used: 0, dirty_collected: 0, factory_unusable: 0, guest_damaged: 0,
+    }));
+    setUsageForm(f => ({
+      ...f,
+      date: new Date().toISOString().slice(0, 10),
+      room_id: "", room_number: "", notes: "",
+      items: prefilled,
+    }));
+    setUsageOpen(true);
+  };
 
   const pid = propertyId || "all";
   const isManager = user?.role === "admin" || user?.role === "manager";
@@ -154,11 +169,16 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
   const removeUsageItem = (idx) => setUsageForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
   const submitUsage = async () => {
     if (!usageForm.room_number.trim() || usageForm.items.length === 0) { toast.error("Room and items required"); return; }
-    const validItems = usageForm.items.filter(i => (i.clean_used || 0) > 0 || (i.dirty_collected || 0) > 0);
-    if (validItems.length === 0) { toast.error("At least one item with clean used or dirty collected > 0"); return; }
+    const validItems = usageForm.items.filter(i =>
+      (i.clean_used || 0) > 0 ||
+      (i.dirty_collected || 0) > 0 ||
+      (i.factory_unusable || 0) > 0 ||
+      (i.guest_damaged || 0) > 0
+    );
+    if (validItems.length === 0) { toast.error("Enter at least one quantity > 0"); return; }
     try {
       await axios.post(`${API}/laundry/usage/${pid}`, { ...usageForm, items: validItems });
-      toast.success(`Recorded ${validItems.length} item(s) for room ${usageForm.room_number}`);
+      toast.success(`Saved · ${validItems.length} item(s) · room ${usageForm.room_number}`);
       setUsageOpen(false);
       setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
       load();
@@ -353,8 +373,8 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="usage-panel">
               <div className="p-3 border-b border-stone-200 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-stone-800">Room-by-Room Usage ({usage.count})</h3>
-                <Button size="sm" onClick={() => setUsageOpen(true)} className="bg-stone-800 hover:bg-stone-700 text-white" data-testid="new-usage-btn">
-                  <Plus className="w-4 h-4 mr-1.5" />Record Usage
+                <Button size="sm" onClick={openUsageForm} className="bg-stone-800 hover:bg-stone-700 text-white" data-testid="new-usage-btn">
+                  <Plus className="w-4 h-4 mr-1" />New Daily Laundry Usage
                 </Button>
               </div>
               {usage.records.length === 0 ? (
@@ -366,8 +386,10 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Date</th>
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Room</th>
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Item</th>
-                      <th className="text-center py-2.5 px-3 font-semibold text-emerald-700">Clean Used ↓</th>
-                      <th className="text-center py-2.5 px-3 font-semibold text-amber-700">Dirty Collected ↑</th>
+                      <th className="text-center py-2.5 px-3 font-semibold text-emerald-700">Used ↓</th>
+                      <th className="text-center py-2.5 px-3 font-semibold text-amber-700">Collected ↑</th>
+                      <th className="text-center py-2.5 px-3 font-semibold text-rose-700">Unusable</th>
+                      <th className="text-center py-2.5 px-3 font-semibold text-fuchsia-700">Damaged</th>
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Notes</th>
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Recorded By</th>
                       <th className="text-right py-2.5 px-3 font-semibold text-stone-600"></th>
@@ -377,6 +399,8 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                     {usage.records.map(r => {
                       const clean = r.clean_used ?? r.qty ?? 0;
                       const dirty = r.dirty_collected ?? r.qty ?? 0;
+                      const unusable = r.factory_unusable ?? 0;
+                      const damaged = r.guest_damaged ?? 0;
                       const mismatch = clean !== dirty;
                       return (
                       <tr key={r.id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`usage-row-${r.id}`}>
@@ -388,6 +412,8 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                           <span className={`font-bold ${mismatch ? "text-rose-600" : "text-amber-700"}`}>{dirty}</span>
                           {mismatch && <span className="ml-1 text-[9px] text-rose-500" title="Differs from clean used">≠</span>}
                         </td>
+                        <td className="py-2 px-3 text-center font-bold text-rose-700">{unusable || "—"}</td>
+                        <td className="py-2 px-3 text-center font-bold text-fuchsia-700">{damaged || "—"}</td>
                         <td className="py-2 px-3 text-[10px] text-stone-500 italic">{r.notes || "—"}</td>
                         <td className="py-2 px-3 text-[10px] text-stone-500">{r.recorded_by}</td>
                         <td className="py-2 px-3 text-right">
@@ -603,74 +629,117 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Usage Dialog */}
+      {/* Usage Dialog — Ready table, housekeeper-friendly */}
       <Dialog open={usageOpen} onOpenChange={setUsageOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>Record Room Usage</DialogTitle><DialogDescription>Log linen collected from a specific room. This updates stock (clean→dirty) automatically.</DialogDescription></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <div><label className="text-xs font-semibold text-stone-600">Date</label><Input type="date" value={usageForm.date} onChange={e => setUsageForm({ ...usageForm, date: e.target.value })} data-testid="usage-date-input" /></div>
-              <div className="col-span-2">
-                <label className="text-xs font-semibold text-stone-600">Room</label>
+        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Daily Laundry Usage</DialogTitle>
+            <DialogDescription>Pick the room, then enter numbers for each linen. You don't need to select items — all items are pre-listed.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Date + Room */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-stone-600">Date &amp; Time <span className="text-red-500">*</span></label>
+                <Input type="date" value={usageForm.date} onChange={e => setUsageForm({ ...usageForm, date: e.target.value })} data-testid="usage-date-input" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-600">Room <span className="text-red-500">*</span></label>
                 {rooms.length > 0 ? (
                   <Select value={usageForm.room_id} onValueChange={v => {
                     const r = rooms.find(x => (x.id || x.room_id) === v);
                     setUsageForm({ ...usageForm, room_id: v, room_number: r?.number || r?.room_number || v });
                   }}>
                     <SelectTrigger data-testid="usage-room-select"><SelectValue placeholder="Select room" /></SelectTrigger>
-                    <SelectContent>{rooms.slice(0, 100).map(r => <SelectItem key={r.id || r.room_id} value={r.id || r.room_id}>{r.number || r.room_number || r.name}</SelectItem>)}</SelectContent>
+                    <SelectContent>{rooms.slice(0, 200).map(r => <SelectItem key={r.id || r.room_id} value={r.id || r.room_id}>{r.number || r.room_number || r.name}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
                   <Input value={usageForm.room_number} onChange={e => setUsageForm({ ...usageForm, room_number: e.target.value, room_id: e.target.value })} placeholder="Room number (e.g. 204)" data-testid="usage-room-input" />
                 )}
               </div>
             </div>
+
+            {/* Pre-filled ready table — one row per catalog item */}
+            <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
+              <table className="w-full text-sm" data-testid="usage-readytable">
+                <thead className="bg-stone-50 border-b border-stone-200">
+                  <tr>
+                    <th className="text-left py-2.5 px-3 font-semibold text-stone-700 w-[40%]">Item</th>
+                    <th className="text-center py-2.5 px-3 font-semibold text-emerald-700" title="Pieces brought from clean stock into the room">Used ↓</th>
+                    <th className="text-center py-2.5 px-3 font-semibold text-amber-700" title="Pieces taken from the room to laundry">Collected ↑</th>
+                    <th className="text-center py-2.5 px-3 font-semibold text-rose-700" title="Items returned from the factory that are unusable">Unusable</th>
+                    <th className="text-center py-2.5 px-3 font-semibold text-fuchsia-700" title="Damaged by the guest — write-off">Damaged</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usageForm.items.length === 0 ? (
+                    <tr><td colSpan={5} className="py-6 text-center text-sm text-stone-400">Loading items…</td></tr>
+                  ) : (
+                    usageForm.items.map((it, i) => (
+                      <tr key={it.item_id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`usage-row-${it.item_id}`}>
+                        <td className="py-2 px-3">
+                          <div className="font-semibold text-stone-800">{it.item_name}</div>
+                          <div className="text-[10px] text-stone-400">{it.item_id}</div>
+                        </td>
+                        <td className="py-1 px-3">
+                          <Input type="number" min="0" inputMode="numeric" value={it.clean_used || 0}
+                                 onChange={e => updateUsageItem(i, { clean_used: parseInt(e.target.value) || 0 })}
+                                 className="h-9 text-center font-mono font-bold bg-emerald-50 border-emerald-200" data-testid={`usage-clean-${it.item_id}`} />
+                        </td>
+                        <td className="py-1 px-3">
+                          <Input type="number" min="0" inputMode="numeric" value={it.dirty_collected || 0}
+                                 onChange={e => updateUsageItem(i, { dirty_collected: parseInt(e.target.value) || 0 })}
+                                 className="h-9 text-center font-mono font-bold bg-amber-50 border-amber-200" data-testid={`usage-dirty-${it.item_id}`} />
+                        </td>
+                        <td className="py-1 px-3">
+                          <Input type="number" min="0" inputMode="numeric" value={it.factory_unusable || 0}
+                                 onChange={e => updateUsageItem(i, { factory_unusable: parseInt(e.target.value) || 0 })}
+                                 className="h-9 text-center font-mono font-bold bg-rose-50 border-rose-200" data-testid={`usage-unusable-${it.item_id}`} />
+                        </td>
+                        <td className="py-1 px-3">
+                          <Input type="number" min="0" inputMode="numeric" value={it.guest_damaged || 0}
+                                 onChange={e => updateUsageItem(i, { guest_damaged: parseInt(e.target.value) || 0 })}
+                                 className="h-9 text-center font-mono font-bold bg-fuchsia-50 border-fuchsia-200" data-testid={`usage-damaged-${it.item_id}`} />
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+                {usageForm.items.length > 0 && (
+                  <tfoot className="bg-stone-50 border-t-2 border-stone-200">
+                    <tr>
+                      <td className="py-2 px-3 text-right font-bold text-stone-700">Totals</td>
+                      <td className="py-2 px-3 text-center font-mono font-black text-emerald-700">{usageForm.items.reduce((s, i) => s + (i.clean_used || 0), 0)}</td>
+                      <td className="py-2 px-3 text-center font-mono font-black text-amber-700">{usageForm.items.reduce((s, i) => s + (i.dirty_collected || 0), 0)}</td>
+                      <td className="py-2 px-3 text-center font-mono font-black text-rose-700">{usageForm.items.reduce((s, i) => s + (i.factory_unusable || 0), 0)}</td>
+                      <td className="py-2 px-3 text-center font-mono font-black text-fuchsia-700">{usageForm.items.reduce((s, i) => s + (i.guest_damaged || 0), 0)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+
+            {/* Column legend */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span><b>Used:</b> temiz stoktan oda</div>
+              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-amber-500"></span><b>Collected:</b> odadan kirli çıkan</div>
+              <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-rose-500"></span><b>Unusable:</b> fabrikadan bozuk gelen</div>
+              <div className="flex items-center gap-1.5 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-fuchsia-500"></span><b>Damaged:</b> müşteri hasarı</div>
+            </div>
+
+            {/* Notes */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-stone-600">Housekeeping Record</label>
-                <Button size="sm" variant="outline" onClick={addUsageItem} data-testid="add-usage-item"><Plus className="w-3 h-3 mr-1" />Add Item</Button>
-              </div>
-              <p className="text-[10px] text-stone-500 mb-2">
-                <b>Clean Used</b> = pieces brought from clean stock into the room ·
-                <b className="ml-1">Dirty Collected</b> = pieces taken from the room to laundry
-              </p>
-              {usageForm.items.length === 0 && <p className="text-[10px] text-stone-400 py-2">Add at least one item to record.</p>}
-              {usageForm.items.length > 0 && (
-                <div className="grid grid-cols-12 gap-1.5 mb-1 text-[10px] font-bold uppercase text-stone-500">
-                  <div className="col-span-6">Item</div>
-                  <div className="col-span-2 text-center">Clean Used ↓</div>
-                  <div className="col-span-2 text-center">Dirty Collected ↑</div>
-                  <div className="col-span-2"></div>
-                </div>
-              )}
-              {usageForm.items.map((it, i) => (
-                <div key={i} className="grid grid-cols-12 gap-1.5 mb-1.5 items-center">
-                  <Select value={it.item_id} onValueChange={v => updateUsageItem(i, { item_id: v })}>
-                    <SelectTrigger className="col-span-6 h-8 text-xs"><SelectValue placeholder="Select item" /></SelectTrigger>
-                    <SelectContent>{catalog.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Input type="number" min="0" value={it.clean_used || 0}
-                         onChange={e => updateUsageItem(i, { clean_used: parseInt(e.target.value) || 0 })}
-                         placeholder="Clean" className="col-span-2 h-8 text-xs text-right bg-emerald-50 border-emerald-200" data-testid={`usage-clean-${i}`} />
-                  <Input type="number" min="0" value={it.dirty_collected || 0}
-                         onChange={e => updateUsageItem(i, { dirty_collected: parseInt(e.target.value) || 0 })}
-                         placeholder="Dirty" className="col-span-2 h-8 text-xs text-right bg-amber-50 border-amber-200" data-testid={`usage-dirty-${i}`} />
-                  <div className="col-span-2 flex items-center justify-end gap-1">
-                    {(it.clean_used || 0) !== (it.dirty_collected || 0) && (it.clean_used || it.dirty_collected) ? (
-                      <span className="text-[9px] text-rose-500 font-semibold" title="Clean used and dirty collected differ">≠</span>
-                    ) : null}
-                    <button onClick={() => removeUsageItem(i)} className="text-red-500 hover:bg-red-50 rounded p-1"><Trash2 className="w-3 h-3" /></button>
-                  </div>
-                </div>
-              ))}
-              <div className="mt-3">
-                <label className="text-xs font-semibold text-stone-600">Notes (optional)</label>
-                <Input value={usageForm.notes || ""} onChange={e => setUsageForm(f => ({ ...f, notes: e.target.value }))}
-                       placeholder="e.g. extra towel requested, sheet damage, etc." className="h-8 text-xs" data-testid="usage-notes-input" />
-              </div>
+              <label className="text-xs font-semibold text-stone-600">Notes (optional)</label>
+              <Textarea value={usageForm.notes || ""} onChange={e => setUsageForm(f => ({ ...f, notes: e.target.value }))}
+                     rows={2} placeholder="Additional notes…" className="text-xs" data-testid="usage-notes-input" />
             </div>
           </div>
-          <DialogFooter><Button variant="outline" size="sm" onClick={() => setUsageOpen(false)}>Cancel</Button><Button size="sm" className="bg-stone-800 hover:bg-stone-700 text-white" onClick={submitUsage} data-testid="usage-submit-btn">Record</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setUsageOpen(false)}>Cancel</Button>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={submitUsage} data-testid="usage-submit-btn">
+              <CheckCircle2 className="w-4 h-4 mr-1" />Submit &amp; Confirm
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

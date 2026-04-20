@@ -11,7 +11,7 @@ import { RevenueSetupWizard } from "./RevenueSetupWizard";
 import { RevenueForecasting } from "./RevenueForecasting";
 import { RevenueAnalytics } from "./RevenueAnalytics";
 import { RevenuePlaybooks, RevenueExperiments } from "./RevenuePlaybooksExperiments";
-import { RevenueParity, RevenueOverbooking, RevenueActionCenter, RevenueProfitOS, RevenueDistribution, RevenueCompetitors } from "./RevenueModules";
+import { RevenueOverbooking, RevenueActionCenter, RevenueProfitOS, RevenueDistribution, RevenueCompetitors } from "./RevenueModules";
 import { RevenueAICopilot } from "./RevenueAICopilot";
 import { RateCalendarEditable } from "./RateCalendarEditable";
 import { ExportBar } from "./RevenueExports";
@@ -33,7 +33,7 @@ import { WeeklyDigest } from "./WeeklyDigest";
 import { RateScraper } from "./RateScraper";
 import {
   BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2,
-  LineChart, PieChart, BookOpen, FlaskConical, Shield, Hotel, Bell, DollarSign,
+  LineChart, PieChart, BookOpen, FlaskConical, Hotel, Bell, DollarSign,
   Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper, History, Activity, Trophy, AlertTriangle, Scale, Timer, Sparkles, ScanLine
 } from "lucide-react";
 
@@ -92,7 +92,6 @@ const NAV_SECTIONS = [
     items: [
       { id: "channel-manager", label: "Channel Manager", icon: Network },
       { id: "segments", label: "Segments", icon: Users },
-      { id: "parity", label: "Parity", icon: Shield },
       { id: "overbooking", label: "Overbooking", icon: Hotel },
       { id: "distribution", label: "Distribution", icon: Network },
     ],
@@ -226,7 +225,6 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "segments" && <RevenueSegments propertyId={pid} />}
               {tab === "playbooks" && <RevenuePlaybooks propertyId={pid} />}
               {tab === "experiments" && <RevenueExperiments propertyId={pid} />}
-              {tab === "parity" && <RevenueParity propertyId={pid} />}
               {tab === "overbooking" && <RevenueOverbooking propertyId={pid} />}
               {tab === "action-center" && <RevenueActionCenter propertyId={pid} />}
               {tab === "profit-os" && <RevenueProfitOS propertyId={pid} />}

@@ -1417,6 +1417,21 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 164.3 (Apr 2026) — Deduplication: Channel Manager ↔ Revenue module
+- User flagged duplication between Channel Manager Hub and Revenue module
+- Audit identified 3 duplicate tabs and 1 duplicate sub-tab
+- Removed from **ChannelManagerHub.js**:
+  - `Rate Structure (Variants)` tab → owned by Revenue → sidebar `Rate Plans & OTA Mapping`
+  - `Derived Rates` tab → owned by Revenue → sidebar `Rate Plans & OTA Mapping` (same `/api/rate-structure/derived` backend)
+  - `Benchmark Cockpit` tab → owned by Revenue → `Compset Intelligence` + `Competitors`
+- Removed from **RevenuePanel.js** Distribution section:
+  - `Parity` stub (RevenueParity) → real implementation lives in sidebar's `ChannelParityPanel` (backed by `/api/channel-parity/`)
+- Hub now has **9 tabs**, all distribution-layer specific: Dashboard · Channels · Mappings · Allocations · Stop-Sell · Publish Jobs · Audit Logs · Profiles · Overrides
+- `verify_rate_structure` setup checklist step now points to the Mappings tab (user can complete it there or jump to Rate Plans sidebar entry)
+- Quick-nav cards on Dashboard updated to 8 cards reflecting the cleaned tab set
+- Backend endpoints untouched — all `/api/rate-structure/*` and `/api/benchmark/*` routes remain for the Revenue module
+- Smoke-tested: hub loads 9 tabs · Revenue endpoints return 200 · backend healthy
+
 ## Iter 164.2 (Apr 2026) — Copy-Down / Copy-Across Bulk Cell Editor
 - Backend: new `POST /api/inventory-allocations/{pid}/cell/propagate` endpoint supporting **consecutive** (next N days) and **same_weekday** (every N-th weekday) propagation modes, with null cap to clear overrides in range
 - Frontend: `AllocationCell` popover — clicking a cell now reveals quick actions: *Save for this day · Propagate 7/14/30 consecutive days · Same weekday (auto-detected) for 30/60/90 days · Clear override*

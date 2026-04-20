@@ -20,11 +20,11 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import {
-  LayoutDashboard, Plug, Link2, Grid3x3, UploadCloud, ScrollText,
-  BarChart3, FileCode2, Percent, CheckCircle2, CircleDashed, Lock,
-  Zap, Plus, RefreshCw, Play, Trash2, TrendingUp, TrendingDown,
-  AlertTriangle, Activity, Sparkles, Globe2, Shield, ChevronRight,
-  GitBranch, Layers, Ban, Calendar as CalIcon,
+  LayoutDashboard, Plug, Link2, UploadCloud, ScrollText,
+  FileCode2, Percent, CheckCircle2, CircleDashed, Lock,
+  Plus, RefreshCw, Play, Trash2, TrendingUp,
+  AlertTriangle, Activity, Sparkles, Globe2, ChevronRight,
+  Layers, Ban, Calendar as CalIcon,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -33,13 +33,10 @@ const PANELS = [
   { key: "dashboard",       label: "Dashboard",       icon: LayoutDashboard },
   { key: "channels",        label: "Channels",        icon: Plug },
   { key: "mappings",        label: "Mappings",        icon: Link2 },
-  { key: "rate-structure",  label: "Rate Structure",  icon: Grid3x3 },
-  { key: "derived-rates",   label: "Derived Rates",   icon: GitBranch },
   { key: "allocations",     label: "Allocations",     icon: Layers },
   { key: "stop-sell",       label: "Stop-Sell",       icon: Ban },
   { key: "publish-jobs",    label: "Publish Jobs",    icon: UploadCloud },
   { key: "audit-logs",      label: "Audit Logs",      icon: ScrollText },
-  { key: "benchmark",       label: "Benchmark",       icon: BarChart3 },
   { key: "profiles",        label: "Profiles",        icon: FileCode2 },
   { key: "overrides",       label: "Overrides",       icon: Percent },
 ];
@@ -165,7 +162,7 @@ const HubDashboard = ({ pid, goTo }) => {
                   <button
                     data-testid={`chmgr-step-go-${s.id}`}
                     onClick={() => {
-                      const map = { create_config: "channels", enter_credentials: "channels", run_certification: "channels", create_payload: "profiles", complete_mappings: "mappings", verify_rate_structure: "rate-structure", dry_run: "publish-jobs", enable_autopublish: "channels" };
+                      const map = { create_config: "channels", enter_credentials: "channels", run_certification: "channels", create_payload: "profiles", complete_mappings: "mappings", verify_rate_structure: "mappings", dry_run: "publish-jobs", enable_autopublish: "channels" };
                       goTo(map[s.id] || "channels");
                     }}
                     className="px-4 py-1.5 text-xs rounded-lg border border-emerald-300 text-emerald-700 font-semibold hover:bg-emerald-50 transition"
@@ -195,11 +192,11 @@ const HubDashboard = ({ pid, goTo }) => {
         {[
           { k: "channels", l: "Channels", d: "Manage connections", i: Globe2 },
           { k: "mappings", l: "Mappings", d: "Room & Rate map", i: Link2 },
-          { k: "rate-structure", l: "Rate Structure", d: "Pricing rules", i: Grid3x3 },
+          { k: "allocations", l: "Allocations", d: "Pooled inventory", i: Layers },
+          { k: "stop-sell", l: "Stop-Sell", d: "Pause channels", i: Ban },
           { k: "publish-jobs", l: "Publish Jobs", d: "Distribution status", i: UploadCloud },
           { k: "audit-logs", l: "Audit Logs", d: "History & Errors", i: ScrollText },
           { k: "overrides", l: "Overrides", d: "Price adjustments", i: Percent },
-          { k: "benchmark", l: "Benchmark", d: "Compset index", i: BarChart3 },
           { k: "profiles", l: "Profiles", d: "Payload fields", i: FileCode2 },
         ].map(c => (
           <button key={c.k} onClick={() => goTo(c.k)} className="p-5 rounded-xl border border-stone-200 hover:border-emerald-300 hover:shadow-md text-left transition" data-testid={`chmgr-nav-${c.k}`}>
@@ -437,81 +434,6 @@ const MappingsPanel = ({ pid }) => {
   );
 };
 
-/* ═══════════ RATE STRUCTURE (Variants) ═══════════ */
-const RateStructurePanel = ({ pid }) => {
-  const [rows, setRows] = useState([]);
-  const [channels, setChannels] = useState([]);
-
-  const load = useCallback(async () => {
-    try {
-      const [v, c] = await Promise.all([
-        axios.get(`${API}/rate-variants/${pid}`),
-        axios.get(`${API}/channel-configs/${pid}`),
-      ]);
-      setRows(v.data.rows || []); setChannels(c.data.configs || []);
-    } catch { /* */ }
-  }, [pid]);
-  useEffect(() => { load(); }, [load]);
-
-  const autoGen = async () => {
-    try {
-      const { data } = await axios.post(`${API}/rate-variants/${pid}/auto-generate`, {});
-      toast.success(`Generated ${data.generated} variants from ${data.from_mappings} mappings`);
-      load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
-  };
-
-  const del = async (id) => {
-    await axios.delete(`${API}/rate-variants/${id}`);
-    toast.success("Removed"); load();
-  };
-
-  return (
-    <div className="space-y-4" data-testid="chmgr-ratestructure">
-      <div>
-        <h2 className="text-xl font-bold">Rate Structure / Variants</h2>
-        <p className="text-sm text-stone-500">Same rate plan → different occupancy / meal / cancel / tax combinations → OTA rate code. Required step after Channel Mapping (technical mapping ≠ price variation).</p>
-      </div>
-
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm space-y-1">
-        <div className="flex items-center gap-2 font-semibold text-blue-900"><Shield className="w-4 h-4" /> What this screen does</div>
-        <div className="text-blue-800">Channel Mapping (another screen) links room+rate to a single code. Here we bind the same rate plan's different occupancy/meal/cancel/tax combinations to OTA codes.</div>
-        <div className="text-blue-800 pt-1"><b>Example:</b> "Standard Rate" on Booking.com:</div>
-        <ul className="list-disc list-inside text-blue-700 text-xs space-y-0.5">
-          <li>2 pax + BB + Flexible → <code className="bg-blue-100 px-1 rounded">STD_BB_FLEX</code></li>
-          <li>2 pax + RO + Non-Refundable → <code className="bg-blue-100 px-1 rounded">STD_RO_NR</code></li>
-          <li>4 pax + BB + Flexible → <code className="bg-blue-100 px-1 rounded">STD_BB_FLEX_4PAX</code></li>
-        </ul>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <button onClick={autoGen} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-variants-autogen">
-          <Zap className="w-4 h-4" /> Auto-generate from Mappings
-        </button>
-        <span className="text-xs text-stone-400">{rows.length} variants</span>
-      </div>
-
-      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[auto,1fr,1fr,1fr,1fr,auto,auto] gap-3 px-4 py-3 bg-stone-50 text-xs font-semibold text-stone-500 uppercase tracking-wider">
-          <div>ID</div><div>Channel</div><div>Internal Segment</div><div>Details</div><div>Room Code</div><div>Rate Code</div><div></div>
-        </div>
-        {rows.map(v => (
-          <div key={v.id} className="grid grid-cols-[auto,1fr,1fr,1fr,1fr,auto,auto] gap-3 px-4 py-3 border-t border-stone-100 items-center text-sm">
-            <div className="font-mono text-xs text-stone-400">{v.id.slice(0, 6)}</div>
-            <div className="font-semibold">{channels.find(c => c.channel_id === v.channel_id)?.name || v.channel_id}</div>
-            <div>{v.internal_segment}</div>
-            <div className="text-xs text-stone-500">{v.occupancy}px · {v.meal_plan} · {v.cancellation}</div>
-            <div className="font-mono text-xs">{v.channel_room_code}</div>
-            <div className="font-mono text-xs font-bold">{v.channel_rate_code}</div>
-            <button onClick={() => del(v.id)} className="text-rose-500" data-testid={`chmgr-var-del-${v.id.slice(0,6)}`}><Trash2 className="w-4 h-4" /></button>
-          </div>
-        ))}
-        {rows.length === 0 && <div className="p-10 text-center text-sm text-stone-400">No variants yet — click <b>Auto-generate from Mappings</b> to populate.</div>}
-      </div>
-    </div>
-  );
-};
-
 /* ═══════════ PUBLISH JOBS ═══════════ */
 const PublishJobsPanel = ({ pid }) => {
   const [jobs, setJobs] = useState([]);
@@ -643,139 +565,6 @@ const AuditLogsPanel = ({ pid }) => {
           </div>
         ))}
         {data.rows.length === 0 && <div className="p-10 text-center text-sm text-stone-400">No audit events match</div>}
-      </div>
-    </div>
-  );
-};
-
-/* ═══════════ BENCHMARK ═══════════ */
-const BenchmarkPanel = ({ pid }) => {
-  const [data, setData] = useState(null);
-  const [drift, setDrift] = useState(null);
-
-  const load = useCallback(async () => {
-    try {
-      const [b, d] = await Promise.all([
-        axios.get(`${API}/benchmark/${pid}`),
-        axios.get(`${API}/nightly-drift/${pid}`),
-      ]);
-      setData(b.data); setDrift(d.data);
-    } catch { /* */ }
-  }, [pid]);
-  useEffect(() => { load(); }, [load]);
-
-  const calc = async () => {
-    try { await axios.post(`${API}/benchmark/${pid}/calculate`); toast.success("Snapshot captured"); load(); }
-    catch { toast.error("Failed"); }
-  };
-
-  const runDrift = async () => {
-    try {
-      const { data } = await axios.post(`${API}/nightly-drift/${pid}/run-now`);
-      toast.success(`Dry-run: ${data.channels_checked} channels · ${data.total_errors}/${data.total_items} errors · ${data.drift_alerts} alerts`);
-      load();
-    } catch { toast.error("Dry-run failed"); }
-  };
-
-  const cur = data?.current;
-  const fmt = (v) => v == null ? "—" : v;
-  const color = (v) => v == null ? "text-stone-400" : v >= 100 ? "text-emerald-600" : v >= 90 ? "text-amber-500" : "text-rose-600";
-  const trend = (v) => v == null ? null : v >= 100 ? TrendingUp : TrendingDown;
-
-  return (
-    <div className="space-y-4" data-testid="chmgr-benchmark">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold">Benchmark Cockpit</h2>
-          <p className="text-sm text-stone-500">Compare performance against competitors (STR-style Occ/ADR/RevPAR index).</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={runDrift} className="px-4 py-2 bg-white border border-violet-300 text-violet-700 rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-drift-run">
-            <Zap className="w-4 h-4" /> Run Nightly Dry-Run
-          </button>
-          <button onClick={calc} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-bench-calc">
-            <RefreshCw className="w-4 h-4" /> Calculate Snapshot
-          </button>
-        </div>
-      </div>
-
-      {/* Nightly Drift widget */}
-      {drift?.latest && (
-        <div className={`border rounded-xl p-5 ${drift.latest.drift_alerts?.length > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`} data-testid="chmgr-drift-widget">
-          <div className="flex items-start gap-4">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${drift.latest.drift_alerts?.length > 0 ? "bg-amber-200 text-amber-800" : "bg-emerald-200 text-emerald-800"}`}>
-              {drift.latest.drift_alerts?.length > 0 ? <AlertTriangle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold">OTA Payload Drift — Nightly Dry-Run</h3>
-                <span className="text-xs text-stone-500">{new Date(drift.latest.ran_at).toLocaleString()}</span>
-              </div>
-              <p className="text-sm mt-1">
-                Checked <b>{drift.latest.channels_checked}</b> channels · <b>{drift.latest.total_errors}</b>/{drift.latest.total_items} items failed validation
-                {drift.latest.drift_alerts?.length > 0
-                  ? <span className="text-amber-900"> · <b>{drift.latest.drift_alerts.length}</b> channel{drift.latest.drift_alerts.length === 1 ? "" : "s"} over 5% error threshold</span>
-                  : <span className="text-emerald-900"> · no drift alerts</span>}
-              </p>
-              {drift.latest.drift_alerts?.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {drift.latest.drift_alerts.map((a, i) => (
-                    <Badge key={i} className="bg-amber-100 text-amber-800 border border-amber-300">{a.channel_id} · {a.err_pct}% err</Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { l: "Occupancy Index", v: cur?.occupancy_index, our: cur?.our_occupancy, comp: cur?.compset_occupancy, suffix: "%" },
-          { l: "ADR Index",       v: cur?.adr_index,       our: cur?.our_adr,       comp: cur?.compset_adr,       prefix: "£" },
-          { l: "RevPAR Index",    v: cur?.revpar_index,    our: cur?.our_revpar,    comp: cur?.compset_revpar,    prefix: "£" },
-        ].map(k => {
-          const Trend = trend(k.v);
-          return (
-            <div key={k.l} className="bg-white border border-stone-200 rounded-xl p-6 text-center">
-              <div className="text-sm text-stone-500 mb-2">{k.l}</div>
-              <div className={`text-5xl font-bold mb-1 ${color(k.v)}`}>{fmt(k.v)}{k.v != null && <span className="text-2xl">…</span>}</div>
-              {Trend && <Trend className={`w-5 h-5 mx-auto ${color(k.v)}`} />}
-              <div className="flex justify-around mt-4 text-xs">
-                <div><div className="text-stone-400">You</div><div className="font-semibold">{k.prefix || ""}{fmt(k.our)}{k.suffix || ""}</div></div>
-                <div><div className="text-stone-400">Compset</div><div className="font-semibold">{k.prefix || ""}{fmt(k.comp)}{k.suffix || ""}</div></div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white border border-stone-200 rounded-xl p-5">
-          <h3 className="font-bold mb-3 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-500" /> Open Alerts ({data?.alerts?.length || 0})</h3>
-          {(data?.alerts || []).length === 0 && <p className="text-sm text-stone-400 text-center py-6">No open alerts</p>}
-          {(data?.alerts || []).map(a => (
-            <div key={a.id} className="flex items-start gap-3 py-2 border-b border-stone-100 last:border-0">
-              <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5" />
-              <div className="flex-1 text-xs"><div className="font-semibold">{a.metric.toUpperCase()}</div><div className="text-stone-500">{a.message}</div></div>
-            </div>
-          ))}
-        </div>
-        <div className="bg-white border border-stone-200 rounded-xl p-5">
-          <h3 className="font-bold mb-3">Recent Snapshots</h3>
-          <div className="grid grid-cols-[1fr,auto,auto,auto] gap-2 text-xs font-semibold text-stone-500 pb-2 border-b">
-            <div>Date</div><div>Occ</div><div>ADR</div><div>RevPAR</div>
-          </div>
-          {(data?.recent || []).slice(-6).reverse().map(s => (
-            <div key={s.id} className="grid grid-cols-[1fr,auto,auto,auto] gap-2 text-xs py-1.5 border-b border-stone-50 last:border-0">
-              <div>{s.snapshot_date}</div>
-              <div className={color(s.occupancy_index)}>{s.occupancy_index}</div>
-              <div className={color(s.adr_index)}>{s.adr_index}</div>
-              <div className={color(s.revpar_index)}>{s.revpar_index}</div>
-            </div>
-          ))}
-          {(!data?.recent || data.recent.length === 0) && <p className="text-center text-sm text-stone-400 py-6">No snapshots yet</p>}
-        </div>
       </div>
     </div>
   );
@@ -1182,106 +971,6 @@ const AllocationsPanel = ({ pid }) => {
   );
 };
 
-/* ═══════════ DERIVED RATES ═══════════ */
-const DerivedRatesPanel = ({ pid }) => {
-  const [products, setProducts] = useState([]);
-  const [derived, setDerived] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", parent_product_id: "", basis: "percent", adjustment: -10, active: true });
-  const [baseRate, setBaseRate] = useState(150);
-
-  const load = useCallback(async () => {
-    try {
-      const [p, d] = await Promise.all([
-        axios.get(`${API}/rate-structure/products?property_id=${pid}`),
-        axios.get(`${API}/rate-structure/derived?property_id=${pid}`),
-      ]);
-      setProducts(p.data || []); setDerived(d.data || []);
-      setForm(f => ({ ...f, parent_product_id: f.parent_product_id || p.data?.[0]?.id || "" }));
-    } catch { /* */ }
-  }, [pid]);
-  useEffect(() => { load(); }, [load]);
-
-  const create = async () => {
-    if (!form.name || !form.parent_product_id) return toast.error("Name and parent required");
-    try {
-      await axios.post(`${API}/rate-structure/derived`, { ...form, property_id: pid });
-      toast.success("Derived rate created");
-      setShowForm(false); setForm({ name: "", parent_product_id: products[0]?.id || "", basis: "percent", adjustment: -10, active: true });
-      load();
-    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
-  };
-  const del = async (id) => { await axios.delete(`${API}/rate-structure/derived/${id}`); toast.success("Deleted"); load(); };
-
-  const preview = (r) => {
-    const base = parseFloat(baseRate) || 0;
-    if (r.basis === "percent") return Math.round(base * (1 + r.adjustment / 100) * 100) / 100;
-    return Math.round((base + r.adjustment) * 100) / 100;
-  };
-
-  return (
-    <div className="space-y-4" data-testid="chmgr-derived-rates">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold">Derived Rate Plans</h2>
-          <p className="text-sm text-stone-500">Child rate plans that float X% above/below a parent rate. When the parent changes, derivatives auto-cascade.</p>
-        </div>
-        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-derived-new">
-          <Plus className="w-4 h-4" /> New Derived Plan
-        </button>
-      </div>
-
-      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm space-y-1">
-        <div className="flex items-center gap-2 font-semibold text-violet-900"><GitBranch className="w-4 h-4" /> Why this matters</div>
-        <div className="text-violet-800">Example: your BAR is £150. A "Non-Refundable" plan at -15% auto-calculates to £127.50. A "Mobile-only" plan at -8% becomes £138. If you raise BAR to £170, both cascade instantly.</div>
-      </div>
-
-      {showForm && (
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Name (e.g. BAR -10% Mobile)" className="px-3 py-2 border rounded-lg text-sm md:col-span-2" />
-            <select value={form.parent_product_id} onChange={e => setForm(f => ({ ...f, parent_product_id: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm">
-              {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
-            </select>
-            <select value={form.basis} onChange={e => setForm(f => ({ ...f, basis: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm">
-              <option value="percent">Percent (%)</option>
-              <option value="flat">Flat (+/-)</option>
-            </select>
-            <input type="number" step="0.01" value={form.adjustment} onChange={e => setForm(f => ({ ...f, adjustment: parseFloat(e.target.value) || 0 }))} placeholder="Adjustment (-10 = 10% off)" className="px-3 py-2 border rounded-lg text-sm" />
-          </div>
-          <div className="flex gap-2">
-            <button onClick={create} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold" data-testid="chmgr-derived-save">Create</button>
-            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-white border rounded-lg text-sm">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white border border-stone-200 rounded-xl p-4">
-        <div className="flex items-center gap-3 mb-3">
-          <span className="text-sm font-semibold">Cascade Preview</span>
-          <span className="text-xs text-stone-500">Set parent rate:</span>
-          <input type="number" value={baseRate} onChange={e => setBaseRate(e.target.value)} className="w-24 px-2 py-1 border rounded text-sm" />
-          <span className="text-xs text-stone-400">£ base</span>
-        </div>
-        <div className="grid grid-cols-[1fr,1fr,auto,auto,auto,auto] gap-3 px-2 py-2 bg-stone-50 text-xs font-semibold text-stone-500 uppercase tracking-wider rounded">
-          <div>Name</div><div>Parent</div><div>Basis</div><div>Adjust</div><div>Preview</div><div></div>
-        </div>
-        {derived.map(r => (
-          <div key={r.id} className="grid grid-cols-[1fr,1fr,auto,auto,auto,auto] gap-3 px-2 py-3 border-t border-stone-100 items-center text-sm">
-            <div className="font-semibold">{r.name}</div>
-            <div>{products.find(p => p.id === r.parent_product_id)?.name || r.parent_product_id}</div>
-            <Badge className="bg-blue-100 text-blue-700">{r.basis}</Badge>
-            <div className="font-mono">{r.adjustment > 0 ? "+" : ""}{r.adjustment}{r.basis === "percent" ? "%" : "£"}</div>
-            <div className="font-mono font-bold text-emerald-700">£{preview(r)}</div>
-            <button onClick={() => del(r.id)} className="text-rose-500"><Trash2 className="w-4 h-4" /></button>
-          </div>
-        ))}
-        {derived.length === 0 && <div className="p-8 text-center text-sm text-stone-400">No derived rates yet — create one to see cascade preview.</div>}
-      </div>
-    </div>
-  );
-};
-
 /* ═══════════ STOP SELL CALENDAR ═══════════ */
 const StopSellPanel = ({ pid }) => {
   const [data, setData] = useState(null);
@@ -1430,13 +1119,10 @@ export const ChannelManagerHub = ({ activePropertyId, initialPanel }) => {
       {panel === "dashboard"      && <HubDashboard pid={pid} goTo={setPanel} />}
       {panel === "channels"       && <ChannelsPanel pid={pid} />}
       {panel === "mappings"       && <MappingsPanel pid={pid} />}
-      {panel === "rate-structure" && <RateStructurePanel pid={pid} />}
-      {panel === "derived-rates"  && <DerivedRatesPanel pid={pid} />}
       {panel === "allocations"    && <AllocationsPanel pid={pid} />}
       {panel === "stop-sell"      && <StopSellPanel pid={pid} />}
       {panel === "publish-jobs"   && <PublishJobsPanel pid={pid} />}
       {panel === "audit-logs"     && <AuditLogsPanel pid={pid} />}
-      {panel === "benchmark"      && <BenchmarkPanel pid={pid} />}
       {panel === "profiles"       && <ProfilesPanel pid={pid} />}
       {panel === "overrides"      && <OverridesPanel pid={pid} />}
     </div>

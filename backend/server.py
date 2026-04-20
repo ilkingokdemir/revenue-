@@ -656,6 +656,19 @@ api_router.include_router(create_channel_parity_router(db, require_roles))
 from routes.ota_health import create_ota_health_router
 api_router.include_router(create_ota_health_router(db, require_roles))
 
+# Iter 162 — Channel mappings + Sync queue with exponential backoff
+from routes.channel_mappings import create_channel_mappings_router
+api_router.include_router(create_channel_mappings_router(db, require_roles))
+
+from routes.sync_queue import create_sync_queue_router, process_due_tasks
+api_router.include_router(create_sync_queue_router(db, require_roles))
+
+# Wire the sync-queue worker into the scheduler engine from Iter 159
+async def _job_sync_queue_tick(property_id: str) -> dict:
+    return await process_due_tasks(db, max_tasks=50)
+
+JOB_HANDLERS["sync_queue_tick"] = _job_sync_queue_tick
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

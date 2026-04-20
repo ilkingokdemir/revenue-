@@ -35,6 +35,7 @@ import {
 } from "./components/dashboard/CompetitorGapPanels";
 import {
   ChannelRestrictionsPanel, ChannelInboundPanel, ChannelParityPanel, OtaHealthPanel,
+  ChannelMappingsPanel, SyncQueuePanel,
 } from "./components/dashboard/ChannelManagerMvpPanels";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";

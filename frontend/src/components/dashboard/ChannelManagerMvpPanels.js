@@ -455,3 +455,208 @@ export const OtaHealthPanel = ({ activePropertyId }) => {
   );
 };
 
+
+/* ═══════════ 19. CHANNEL MAPPINGS MATRIX ═══════════ */
+export const ChannelMappingsPanel = ({ activePropertyId }) => {
+  const pid = activePropertyId || "aldgate-flats";
+  const [data, setData] = useState(null);
+  const [tab, setTab] = useState("room");
+
+  const load = useCallback(async () => {
+    try { const { data } = await axios.get(`${API}/channel-mappings/${pid}`); setData(data); }
+    catch { /* */ }
+  }, [pid]);
+  useEffect(() => { load(); }, [load]);
+
+  const saveCell = async (kind, internalId, channelId, externalId, externalLabel) => {
+    try {
+      await axios.put(`${API}/channel-mappings/${pid}/upsert`, {
+        kind, internal_id: internalId, channel_id: channelId,
+        external_id: externalId, external_label: externalLabel || "",
+      });
+      if (externalId) toast.success("Saved"); else toast.success("Cleared");
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  if (!data) return <div className="p-8 text-center" data-testid="cm-loading">Loading…</div>;
+  const items = tab === "room" ? data.room_types : data.rate_plans;
+  const s = data.stats || {};
+
+  return (
+    <div data-testid="channel-mappings-panel" className="space-y-4">
+      <div className="bg-gradient-to-br from-indigo-700 to-purple-800 text-white rounded-2xl p-6">
+        <div className="flex items-center gap-2 mb-1"><Link2 className="w-4 h-4" /><span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Channel Mappings · Internal ↔ OTA IDs</span></div>
+        <div className="flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl font-bold" data-testid="cm-coverage">{s.coverage_pct}% coverage</h2>
+            <p className="text-sm opacity-80">{s.total_mapped}/{s.total_mappings_expected} cells mapped · rates can only push where mappings exist</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-2 border-b border-stone-200">
+        {["room", "rate_plan"].map(t => (
+          <button key={t} onClick={() => setTab(t)} data-testid={`cm-tab-${t}`}
+            className={`px-4 py-2 text-sm font-bold ${tab === t ? "border-b-2 border-indigo-600 text-indigo-700" : "text-stone-500"}`}>
+            {t === "room" ? "Room Types" : "Rate Plans"}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white border rounded-2xl p-4 overflow-auto">
+        {items.length === 0 ? (
+          <p className="text-center text-sm text-stone-400 py-8">No {tab === "room" ? "room types" : "rate plans"} defined yet. Create some first in Room Types / Rate Plans.</p>
+        ) : (
+          <table className="min-w-max text-xs">
+            <thead className="sticky top-0 bg-white">
+              <tr className="text-left">
+                <th className="p-2 pr-6 whitespace-nowrap">Internal {tab === "room" ? "Room Type" : "Rate Plan"}</th>
+                {(data.channels || []).map(c => (
+                  <th key={c.channel_id} className="p-2 text-center min-w-[180px]" data-testid={`cm-ch-${c.channel_id}`}>
+                    {c.name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map(item => (
+                <tr key={item.id} className="border-t border-stone-100" data-testid={`cm-row-${item.id}`}>
+                  <td className="p-2 pr-6 font-semibold whitespace-nowrap">{item.name || item.id}<div className="text-[10px] text-stone-400 font-mono">{item.id}</div></td>
+                  {(data.channels || []).map(c => {
+                    const cur = data.index?.[tab]?.[item.id]?.[c.channel_id];
+                    return (
+                      <td key={c.channel_id} className="p-1" data-testid={`cm-cell-${item.id}-${c.channel_id}`}>
+                        <input
+                          defaultValue={cur?.external_id || ""}
+                          placeholder="—"
+                          onBlur={e => {
+                            const val = e.target.value.trim();
+                            if ((cur?.external_id || "") !== val) saveCell(tab, item.id, c.channel_id, val, cur?.external_label || "");
+                          }}
+                          className={`w-full border rounded px-2 py-1.5 text-[11px] font-mono ${cur?.external_id ? "border-emerald-200 bg-emerald-50" : "border-stone-200"}`}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-xs text-stone-600">
+        <strong>How it works:</strong> enter the OTA's own room/rate ID into each cell. When pushing rates, the payload is translated per channel using these mappings. Empty cell = that room/rate is not distributed to that channel. Green cell = mapping is live.
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════ 20. SYNC QUEUE WITH BACKOFF ═══════════ */
+export const SyncQueuePanel = ({ activePropertyId }) => {
+  const pid = activePropertyId || "aldgate-flats";
+  const [data, setData] = useState(null);
+  const [filter, setFilter] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { const { data } = await axios.get(`${API}/sync-queue/${pid}${filter ? `?status=${filter}` : ""}`); setData(data); }
+    catch { /* */ }
+  }, [pid, filter]);
+  useEffect(() => { load(); }, [load]);
+
+  const runTick = async () => {
+    setBusy(true);
+    try { const { data } = await axios.post(`${API}/sync-queue/run-tick`); toast.success(`Tick: ${data.succeeded} ok, ${data.rescheduled} retry, ${data.dead_lettered} dead`); load(); }
+    catch { toast.error("Failed"); }
+    finally { setBusy(false); }
+  };
+  const retry = async (id) => {
+    try { await axios.post(`${API}/sync-queue/${id}/retry`); load(); toast.success("Re-queued"); }
+    catch { /* */ }
+  };
+  const clearDead = async () => {
+    if (!window.confirm("Clear all dead-letter items?")) return;
+    try { const { data } = await axios.post(`${API}/sync-queue/${pid}/clear-dead-letter`); toast.success(`Deleted ${data.deleted}`); load(); }
+    catch { /* */ }
+  };
+
+  if (!data) return <div className="p-8 text-center" data-testid="sq-loading">Loading…</div>;
+  const c = data.counts || {};
+
+  return (
+    <div data-testid="sync-queue-panel" className="space-y-4">
+      <div className="bg-gradient-to-br from-cyan-600 to-sky-700 text-white rounded-2xl p-6 flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1"><RefreshCw className="w-4 h-4" /><span className="text-[11px] font-bold uppercase tracking-wider opacity-80">Sync Queue · Exponential Backoff</span></div>
+          <h2 className="text-2xl font-bold">{c.pending || 0} pending · {c.succeeded || 0} succeeded · {c.dead_letter || 0} dead-letter</h2>
+          <p className="text-sm opacity-80 mt-1">Failed OTA pushes retry with backoff: 1min → 5min → 15min → 1h → 4h. After 6 attempts they land in dead-letter for manual review.</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button onClick={runTick} disabled={busy} data-testid="sq-run-tick" className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-bold flex items-center gap-2"><RefreshCw className="w-4 h-4" />{busy ? "Running…" : "Run Tick"}</button>
+          {c.dead_letter > 0 && <button onClick={clearDead} data-testid="sq-clear-dead" className="px-4 py-2 bg-rose-500 hover:bg-rose-600 rounded-lg text-sm font-bold">Clear dead</button>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-5 gap-2">
+        {[
+          { k: "", label: "All", v: data.total, color: "bg-stone-600" },
+          { k: "pending", label: "Pending", v: c.pending || 0, color: "bg-amber-500" },
+          { k: "processing", label: "Processing", v: c.processing || 0, color: "bg-sky-500" },
+          { k: "succeeded", label: "Succeeded", v: c.succeeded || 0, color: "bg-emerald-500" },
+          { k: "dead_letter", label: "Dead letter", v: c.dead_letter || 0, color: "bg-rose-600" },
+        ].map(b => (
+          <button key={b.k} onClick={() => setFilter(b.k)}
+            data-testid={`sq-filter-${b.k || 'all'}`}
+            className={`rounded-xl p-3 text-white ${b.color} ${filter === b.k ? "ring-2 ring-offset-2 ring-stone-400" : "opacity-75"} transition hover:opacity-100`}>
+            <div className="text-[10px] font-bold uppercase opacity-80">{b.label}</div>
+            <div className="text-2xl font-bold">{b.v}</div>
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white border rounded-2xl p-4 overflow-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-stone-50"><tr className="text-left">
+            <th className="p-2">Status</th>
+            <th className="p-2">Channel</th>
+            <th className="p-2">Kind</th>
+            <th className="p-2">Payload</th>
+            <th className="p-2 text-center">Attempts</th>
+            <th className="p-2">Next retry</th>
+            <th className="p-2">Error</th>
+            <th className="p-2"></th>
+          </tr></thead>
+          <tbody>
+            {(data.rows || []).map(r => (
+              <tr key={r.id} className="border-t border-stone-100" data-testid={`sq-row-${r.id}`}>
+                <td className="p-2">
+                  <Badge className={
+                    r.status === "succeeded" ? "bg-emerald-100 text-emerald-700" :
+                    r.status === "pending" ? "bg-amber-100 text-amber-700" :
+                    r.status === "processing" ? "bg-sky-100 text-sky-700" :
+                    r.status === "dead_letter" ? "bg-rose-500 text-white" : "bg-stone-100 text-stone-600"
+                  }>{r.status}</Badge>
+                </td>
+                <td className="p-2 font-mono text-[10px]">{r.channel_id}</td>
+                <td className="p-2"><Badge className="text-[10px]">{r.kind}</Badge></td>
+                <td className="p-2 font-mono text-[10px] text-stone-500 max-w-[200px] truncate">{JSON.stringify(r.payload)}</td>
+                <td className="p-2 text-center font-mono">{r.attempts}/{r.max_attempts}</td>
+                <td className="p-2 text-[10px] text-stone-400">{r.next_retry_at ? new Date(r.next_retry_at).toLocaleString() : "—"}</td>
+                <td className="p-2 text-[10px] text-rose-600 max-w-[150px] truncate">{r.error || ""}</td>
+                <td className="p-2">
+                  {(r.status === "failed" || r.status === "dead_letter") && (
+                    <button onClick={() => retry(r.id)} data-testid={`sq-retry-${r.id}`} className="text-xs text-sky-600 hover:underline">Retry</button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {(data.rows || []).length === 0 && <tr><td colSpan={8} className="p-6 text-center text-stone-400">No items</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+

@@ -1417,6 +1417,26 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 163 (Apr 2026) — Channel Manager Hub
+- New backend: `/app/backend/routes/channel_hub.py` (~680 lines, ~20 endpoints)
+  - Channel Configs CRUD + certify
+  - Setup Checklist (8-step gated wizard with live completion state)
+  - Payload Profile discovery (per-channel supported field catalogue)
+  - Publish Jobs queue (create + run + delete, with dry-run support)
+  - Price Overrides (per-channel, per-room price adjustments)
+  - Channel Audit Log (distribution event history, separate from RBAC audit_trail)
+  - Benchmark Cockpit (STR-style Occ/ADR/RevPAR index snapshots)
+  - Rate Structure Variants (auto-generate from mappings, BB_FLEX/RO_NR/BB_FLEX_4PAX patterns)
+  - One-click demo seeder for instant populated state
+- New frontend: `/app/frontend/src/components/dashboard/ChannelManagerHub.js` (~900 lines)
+  - 9 consolidated panels behind tab-based navigation (Dashboard, Channels, Mappings, Rate Structure, Publish Jobs, Audit Logs, Benchmark, Profiles, Overrides)
+  - Circular Channel Health progress ring + 4 feature callouts
+  - KPI tiles (Active Channels / Sync Health / Channel Bookings)
+  - 8-step setup checklist with gated Go buttons
+  - Recent Activity feed + quick-nav card grid
+- Sidebar: new `Channel Manager Hub` entry (Lightning icon), plus previously-orphaned `Channel Mappings` and `Sync Queue` entries now routed
+- Testing: iteration_161.json — 53/53 backend (100%) + 9/9 frontend tabs (100%) — zero critical/integration/ui bugs
+
 ## Future (P2)
 - A/B Experiments & Pricing Playbooks
 - Profit OS (ContributionPAR) & Distribution Cockpit

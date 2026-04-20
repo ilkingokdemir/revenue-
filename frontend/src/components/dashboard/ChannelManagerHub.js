@@ -620,8 +620,8 @@ const AuditLogsPanel = ({ pid }) => {
       <div className="flex items-center gap-2 flex-wrap">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search events…" className="px-3 py-2 border rounded-lg text-sm w-64" data-testid="chmgr-audit-search" />
         <select value={event} onChange={e => setEvent(e.target.value)} className="px-3 py-2 border rounded-lg text-sm" data-testid="chmgr-audit-filter">
-          <option value="">All Events ({data.events?.reduce((s, e) => s + e.count, 0)})</option>
-          {data.events?.map(e => <option key={e.event} value={e.event}>{e.event} ({e.count})</option>)}
+          <option value="">{`All Events (${data.events?.reduce((s, e) => s + e.count, 0) || 0})`}</option>
+          {data.events?.map(e => <option key={e.event} value={e.event}>{`${e.event} (${e.count})`}</option>)}
         </select>
       </div>
 

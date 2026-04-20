@@ -3453,7 +3453,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Laundry Management */}
         {activeView === "laundry" && (
-          <div className="p-6"><LaundryManagement propertyId={activePropertyId} user={user} /></div>
+          <div className="p-6"><LaundryManagement propertyId={activePropertyId} user={user} permissions={permissions} /></div>
         )}
 
         {/* Payroll Management */}
@@ -3463,7 +3463,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Expense Management */}
         {activeView === "expenses" && (
-          <div className="p-6"><ExpenseManagement propertyId={activePropertyId} user={user} /></div>
+          <div className="p-6"><ExpenseManagement propertyId={activePropertyId} user={user} permissions={permissions} /></div>
         )}
 
         {/* Cash Flow Forecast */}

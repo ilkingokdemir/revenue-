@@ -171,10 +171,20 @@ def create_expenses_router(db, require_roles):
         if r.deleted_count == 0: raise HTTPException(404, "Not found")
         return {"deleted": True}
 
-    # ==================== LAUNDRY COST AGGREGATE (admin/manager/accountant only) ====================
+    # ==================== LAUNDRY COST AGGREGATE (permission-gated) ====================
     @router.get("/expenses/laundry-summary/{property_id}")
     async def laundry_summary(property_id: str, year: int = 0, month: int = 0,
-                              current_user: dict = Depends(require_roles("admin", "manager", "accountant"))):
+                              current_user: dict = Depends(require_roles(
+                                  "admin", "manager", "accountant",
+                                  "receptionist", "housekeeper", "laundry_staff", "maintenance",
+                              ))):
+        # Honour admin-configured `view_laundry_costs` permission (Roles & Permissions panel).
+        # Legacy admin bypasses. All other roles must have the permission on their role doc.
+        if current_user.get("role") != "admin":
+            from auth import get_user_permissions
+            perms = await get_user_permissions(current_user)
+            if "view_laundry_costs" not in perms:
+                raise HTTPException(403, "view_laundry_costs permission required")
         """Aggregate all laundry-related costs for the month: dispatches sent, deliveries paid,
         stock transactions (disposal/write-off). Also returns active contract count & total
         monthly flat fees for admin visibility."""

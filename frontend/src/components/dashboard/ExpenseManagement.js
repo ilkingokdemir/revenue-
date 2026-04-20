@@ -27,7 +27,7 @@ const TABS = [
 ];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export const ExpenseManagement = ({ propertyId, user }) => {
+export const ExpenseManagement = ({ propertyId, user, permissions }) => {
   const [tab, setTab] = useState("expenses");
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth() + 1);
@@ -47,23 +47,33 @@ export const ExpenseManagement = ({ propertyId, user }) => {
 
   const pid = propertyId || "all";
   const isManager = user?.role === "admin" || user?.role === "manager";
+  const canSeeLaundryCosts = !!permissions?.is_legacy_admin
+                          || !!permissions?.permissions?.has?.("view_laundry_costs");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, e, r, l] = await Promise.all([
+      const baseCalls = [
         axios.get(`${API}/expenses/categories/${pid}?year=${year}&month=${month}`),
         axios.get(`${API}/expenses/${pid}?year=${year}&month=${month}${categoryFilter ? `&category=${categoryFilter}` : ""}`),
         axios.get(`${API}/expenses/recurring/${pid}`),
-        axios.get(`${API}/expenses/laundry-summary/${pid}?year=${year}&month=${month}`).catch(() => ({ data: null })),
-      ]);
+      ];
+      const [c, e, r] = await Promise.all(baseCalls);
       setCats(c.data.categories || []);
       setData(e.data);
       setRecurring(r.data);
-      setLaundry(l.data);
+      // Only fetch laundry summary if user is allowed to see costs (saves a 403 network call)
+      if (canSeeLaundryCosts) {
+        try {
+          const l = await axios.get(`${API}/expenses/laundry-summary/${pid}?year=${year}&month=${month}`);
+          setLaundry(l.data);
+        } catch { setLaundry(null); }
+      } else {
+        setLaundry(null);
+      }
     } catch { /* silent */ }
     setLoading(false);
-  }, [pid, year, month, categoryFilter]);
+  }, [pid, year, month, categoryFilter, canSeeLaundryCosts]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -156,8 +166,8 @@ export const ExpenseManagement = ({ propertyId, user }) => {
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center"><Repeat className="w-4 h-4 mx-auto mb-1 text-amber-600" /><p className="text-2xl font-black text-amber-700">{recurring.recurring.length}</p><p className="text-[10px] text-amber-600">Recurring</p></div>
       </div>
 
-      {/* Laundry Spend Summary (admin/manager/accountant) */}
-      {laundry && (
+      {/* Laundry Spend Summary (gated by `view_laundry_costs` permission) */}
+      {canSeeLaundryCosts && laundry && (
         <div className="bg-gradient-to-br from-sky-50 to-white border border-sky-200 rounded-xl p-4" data-testid="laundry-spend-card">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">

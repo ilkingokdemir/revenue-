@@ -2,6 +2,28 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.5 (Feb 2026): 🔑 RBAC-driven cost visibility — admin-configurable
+
+Previous iteration hard-coded role names (`admin/manager/accountant`) for cost visibility. User feedback: _"yaptığın modüllerde admin Roles and Permissions'dan neyi kimin görüp görmeyeceğine izin vermeli, bütün modüllerde bu olmalı"_.
+
+**Catalog** (`routes/permission_catalog.py`)
+- New permission `view_laundry_costs` registered under `operations.laundry` → **total permission count 313 → 314**, visible in the Roles & Permissions UI.
+- `accountant` role template now includes `view_laundry_costs`, `view_laundry_contracts`, `laundry_contracts_view` (so default accountants retain visibility).
+- `admin` + `manager` auto-inherit via `__ALL__`.
+- `receptionist`, `housekeeper`, `laundry_staff`, `maintenance` → do NOT have the permission by default.
+
+**Backend enforcement** (`routes/expenses.py::laundry_summary`)
+- Widened `require_roles(...)` to include all operational roles, then added explicit `get_user_permissions(user)` check for `view_laundry_costs`. Legacy `admin` role bypasses.
+- Returns `403 {"detail":"view_laundry_costs permission required"}` for unauthorised users.
+- Verified: admin → 200, housekeeper → 403.
+
+**Frontend gate** (`LaundryManagement.js`, `ExpenseManagement.js`)
+- Dashboard passes `permissions` prop into both modules.
+- `canSeeCosts = permissions?.is_legacy_admin || permissions?.permissions?.has?.("view_laundry_costs")`.
+- Used to conditionally render: Contracts tile, Total Spend KPI, Dispatch Cost column, Forecast Unit £ + Line Total + Estimated Cost KPI, Admin Expenses "Laundry Spend" card, and to skip the summary network call when the user isn't allowed.
+
+**End-user workflow now:** Admin opens Roles & Permissions → picks any role (custom or template) → toggles `View Laundry Costs & Contracts` → that role immediately gains or loses both UI visibility and API access. No code changes needed.
+
 ### Iter 166.4 (Feb 2026): 🔐 Role-based cost visibility + Admin Laundry Spend card
 
 User request: reception + housekeeper should NOT see contracts or payment amounts. Only admin/manager/accountant. Also, admin Expenses section should show all laundry costs.

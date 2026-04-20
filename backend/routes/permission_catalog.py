@@ -311,6 +311,7 @@ PERMISSION_CATALOG: List[Dict] = [
         ]},
         {"key": "operations.laundry", "label": "Laundry", "permissions": [
             _p("laundry_reports_view", "Laundry Reports View", menu=True),
+            _p("view_laundry_costs", "View Laundry Costs & Contracts"),
             _p("view_laundry_daily_usage", "View Laundry Daily Usage"),
             _p("create_laundry_daily_usage", "Create Laundry Daily Usage"),
             _p("verify_laundry_daily_usage", "Verify Laundry Daily Usage"),
@@ -753,6 +754,7 @@ ROLE_TEMPLATES: List[Dict] = [
             "finance_payroll_cash_advances_view", "view_cash_advances", "create_cash_advances", "edit_cash_advances",
             "finance_expenses_view", "view_expenses", "manage_expenses",
             "finance_recurring_expenses_view", "view_recurring_expenses", "manage_recurring_expenses", "run_recurring_expenses",
+            "view_laundry_costs", "view_laundry_contracts", "laundry_contracts_view",
             "settings_taxes_view", "view_taxes", "create_taxes", "edit_taxes",
             "settings_exports_view", "view_exports", "create_exports", "download_exports",
         ],

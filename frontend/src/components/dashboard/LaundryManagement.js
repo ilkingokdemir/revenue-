@@ -47,7 +47,7 @@ const DISPATCH_STATUS_STYLE = {
   paid:     "bg-violet-100 text-violet-700",
 };
 
-export const LaundryManagement = ({ propertyId, user }) => {
+export const LaundryManagement = ({ propertyId, user, permissions }) => {
   const [tab, setTab] = useState("dispatch");
   const [dispatches, setDispatches] = useState({ dispatches: [], kpis: {} });
   const [usage, setUsage] = useState({ records: [], count: 0 });
@@ -73,7 +73,10 @@ export const LaundryManagement = ({ propertyId, user }) => {
 
   const pid = propertyId || "all";
   const isManager = user?.role === "admin" || user?.role === "manager";
-  const canSeeCosts = ["admin", "manager", "accountant"].includes(user?.role);
+  // Permission-gated cost visibility: configured by admin in Roles & Permissions.
+  // Legacy admin always allowed; otherwise requires `view_laundry_costs` perm.
+  const canSeeCosts = !!permissions?.is_legacy_admin
+                   || !!permissions?.permissions?.has?.("view_laundry_costs");
   // Filter tabs: housekeeper + receptionist should NOT see contracts
   const visibleTabs = TABS.filter(t => t.id !== "contracts" || canSeeCosts);
   // If a restricted user somehow has 'contracts' selected, force them to dispatch

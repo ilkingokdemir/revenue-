@@ -252,6 +252,9 @@ def create_laundry_router(db, require_roles):
         status = "complete" if (coverage is None or coverage >= 100) and deduction == 0 \
                  else "short" if coverage and coverage < 100 \
                  else "with_deductions"
+        # Photos (optional, up to 3 base64 data URLs)
+        photos_raw = data.get("photos") or []
+        photos = [p for p in photos_raw if isinstance(p, str) and p.startswith("data:image/")][:3]
         doc = {
             "id": str(uuid.uuid4()),
             "property_id": property_id,
@@ -260,6 +263,7 @@ def create_laundry_router(db, require_roles):
             "invoice_number": data.get("invoice_number", ""),
             "notes": data.get("notes", ""),
             "items": items,
+            "photos": photos,
             "gross_amount": round(gross, 2),
             "deduction_amount": round(deduction, 2),
             "net_payable": round(gross - deduction, 2),
@@ -854,6 +858,9 @@ def create_laundry_router(db, require_roles):
         if not items or not isinstance(items, list):
             raise HTTPException(400, "items array required")
         now = datetime.now(timezone.utc).isoformat()
+        # Photos (optional, up to 3 base64 data URLs, shared at form level)
+        photos_raw = data.get("photos") or []
+        photos = [p for p in photos_raw if isinstance(p, str) and p.startswith("data:image/")][:3]
         created = []
         for it in items:
             # Read fields, fall back to legacy `qty`
@@ -879,6 +886,7 @@ def create_laundry_router(db, require_roles):
                 "factory_unusable": factory_unusable,
                 "guest_damaged": guest_damaged,
                 "notes": notes,
+                "photos": photos,
                 "recorded_by": current_user.get("name", "") or current_user.get("email", ""),
                 "created_at": now,
             }

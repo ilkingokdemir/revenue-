@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { QRCodeSVG } from "qrcode.react";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,7 @@ import {
   RefreshCw, Plus, Send, Package, FileText, Shirt, CheckCircle2,
   Trash2, ArrowDown, Building2, Inbox, DoorOpen, BarChart3, AlertCircle,
   Calendar, FileBarChart, ShieldCheck, RotateCcw, Download, Sparkles,
-  TrendingUp, QrCode, Printer, Mail, FileSpreadsheet,
+  TrendingUp, QrCode, Printer, Mail, FileSpreadsheet, Camera,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -115,6 +115,9 @@ const LAUNDRY_I18N = {
     repDispatch: "Dispatch Report", repDispatchDesc: "Dirty send with date ranges",
     repMonthly: "Monthly Audit", repMonthlyDesc: "End of month audit report",
     repGroup: "Group Update", repGroupDesc: "Rolling cycle ledger",
+    // Photos
+    photosTitle: "Photos (Broken / Damaged evidence)", photosHint: "Snap up to 3 photos of broken or damaged items",
+    photoAdd: "Take / Add Photo", photoRemove: "Remove", photoTooLarge: "Image too large (max 5MB)",
     // Offline
     offlineN: "queued offline (will auto-sync)",
   },
@@ -179,6 +182,9 @@ const LAUNDRY_I18N = {
     repDispatch: "Sevkıyat Raporu", repDispatchDesc: "Tarih aralıklı kirli gönderimi",
     repMonthly: "Aylık Denetim", repMonthlyDesc: "Ay sonu denetim raporu",
     repGroup: "Grup Güncellemesi", repGroupDesc: "Döngü defteri",
+    // Fotoğraflar
+    photosTitle: "Fotoğraflar (Bozuk / Hasarlı kanıt)", photosHint: "Bozuk veya hasarlı ürünlerin en fazla 3 fotoğrafını çekin",
+    photoAdd: "Foto Çek / Ekle", photoRemove: "Kaldır", photoTooLarge: "Resim çok büyük (max 5MB)",
     offlineN: "offline sırada (bağlantı gelince otomatik yollanır)",
   },
   bg: {
@@ -242,6 +248,9 @@ const LAUNDRY_I18N = {
     repDispatch: "Отчет за доставки", repDispatchDesc: "Изпращане на мръсно",
     repMonthly: "Месечен одит", repMonthlyDesc: "Отчет в края на месеца",
     repGroup: "Групова актуализация", repGroupDesc: "Ротационен дневник",
+    // Снимки
+    photosTitle: "Снимки (доказателство за счупени/повредени)", photosHint: "Направете до 3 снимки на счупените или повредените артикули",
+    photoAdd: "Снимай / Добави", photoRemove: "Премахни", photoTooLarge: "Снимката е твърде голяма (макс. 5MB)",
     offlineN: "опашка офлайн (ще се синхронизира автоматично)",
   },
 };
@@ -275,7 +284,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
     vendor: "", contact_name: "", contact_email: "", contact_phone: "",
     start_date: "", end_date: "", pickup_schedule: "weekly", terms: "", rates: [], active: true,
   });
-  const [usageForm, setUsageForm] = useState({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
+  const [usageForm, setUsageForm] = useState({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [], photos: [] });
 
   // Pre-populate the usage form with ALL catalog items (housekeeper-friendly ready-table)
   const openUsageForm = () => {
@@ -512,7 +521,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
       await axios.post(`${API}/laundry/usage/${pid}`, payload);
       toast.success(`${L.saved} · ${validItems.length} · ${L.room} ${usageForm.room_number}`);
       setUsageOpen(false);
-      setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
+      setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [], photos: [] });
       load();
     } catch {
       // Offline fallback — push to localStorage queue
@@ -523,7 +532,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
         localStorage.setItem(LAUNDRY_QUEUE_KEY, JSON.stringify(queue));
         toast.success(`${validItems.length} ${L.offlineN}`);
         setUsageOpen(false);
-        setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
+        setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [], photos: [] });
       } catch {
         toast.error("Failed");
       }
@@ -1227,6 +1236,9 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
               <div className="flex items-start gap-1.5 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-fuchsia-500 mt-1 shrink-0"></span><div><b>{L.damaged}:</b> {L.damagedHint}</div></div>
             </div>
 
+            {/* Photos */}
+            <PhotoCapture photos={usageForm.photos || []} onChange={(ps) => setUsageForm(f => ({ ...f, photos: ps }))} L={L} />
+
             {/* Notes */}
             <div>
               <label className="text-xs font-semibold text-stone-600">{L.notes}</label>
@@ -1597,7 +1609,7 @@ const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L,
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     dispatch_id: "", delivery_date: today,
-    invoice_number: "", notes: "", items: [],
+    invoice_number: "", notes: "", items: [], photos: [],
   });
 
   // Open the modal with ALL catalog items pre-listed (like Daily Laundry Usage)
@@ -1610,7 +1622,7 @@ const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L,
     setForm({
       dispatch_id: "", delivery_date: today,
       invoice_number: "", notes: "",
-      items: prefilled,
+      items: prefilled, photos: [],
     });
     setShowForm(true);
   };
@@ -1634,7 +1646,7 @@ const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L,
       await axios.post(`${API}/laundry/deliveries/${pid}`, { ...form, items: validItems });
       toast.success(L?.delvSaved || "Delivery recorded");
       setShowForm(false);
-      setForm({ dispatch_id: "", delivery_date: today, invoice_number: "", notes: "", items: [] });
+      setForm({ dispatch_id: "", delivery_date: today, invoice_number: "", notes: "", items: [], photos: [] });
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
@@ -1874,6 +1886,9 @@ const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L,
                   </div>
                 )}
               </div>
+
+              {/* Photos */}
+              <PhotoCapture photos={form.photos || []} onChange={(ps) => setForm(f => ({ ...f, photos: ps }))} L={L} />
 
               {/* Totals */}
               <div className="border border-stone-200 rounded-xl p-3 text-sm">
@@ -2274,6 +2289,79 @@ const ForecastTab = ({ pid, onCreated, canSeeCosts = true }) => {
             </table>
           </div>
         </>
+      )}
+    </div>
+  );
+};
+
+
+/* ═══════════ PhotoCapture — up to 3 photos, downsize to ~1280px jpeg base64 ═══════════ */
+const PhotoCapture = ({ photos = [], onChange, L, max = 3 }) => {
+  const inputRef = useRef(null);
+
+  const downscale = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1280;
+        let w = img.width, h = img.height;
+        if (w > maxDim || h > maxDim) {
+          const r = Math.min(maxDim / w, maxDim / h);
+          w = Math.round(w * r); h = Math.round(h * r);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.78));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const handle = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    for (const f of files) {
+      if (photos.length >= max) break;
+      if (f.size > 5 * 1024 * 1024) { toast.error(L?.photoTooLarge || "Image too large"); continue; }
+      try {
+        const b64 = await downscale(f);
+        onChange([...(photos || []), b64].slice(0, max));
+      } catch { /* ignore */ }
+    }
+  };
+
+  return (
+    <div className="border border-stone-200 rounded-xl p-3 bg-stone-50/50" data-testid="photo-capture">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div>
+          <div className="text-xs font-bold uppercase text-stone-700">{L?.photosTitle || "Photos"}</div>
+          <div className="text-[10px] text-stone-500">{L?.photosHint || "Up to 3 photos"}</div>
+        </div>
+        {photos.length < max && (
+          <button type="button" onClick={() => inputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-lg"
+            data-testid="photo-add-btn">
+            <Camera className="w-4 h-4" />{L?.photoAdd || "Add Photo"} ({photos.length}/{max})
+          </button>
+        )}
+        <input ref={inputRef} type="file" accept="image/*" capture="environment" multiple onChange={handle} className="hidden" data-testid="photo-input" />
+      </div>
+      {photos.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {photos.map((src, i) => (
+            <div key={i} className="relative group aspect-square" data-testid={`photo-${i}`}>
+              <img src={src} alt={`proof-${i}`} className="w-full h-full object-cover rounded-lg border border-stone-200" />
+              <button type="button" onClick={() => onChange(photos.filter((_, idx) => idx !== i))}
+                className="absolute -top-2 -right-2 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold w-6 h-6 rounded-full shadow"
+                data-testid={`photo-remove-${i}`} title={L?.photoRemove || "Remove"}>×</button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

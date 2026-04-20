@@ -359,3 +359,99 @@ export const ChannelParityPanel = ({ activePropertyId }) => {
     </div>
   );
 };
+
+/* ═══════════ 18. OTA HEALTH DASHBOARD — composite board-ready tile ═══════════ */
+export const OtaHealthPanel = ({ activePropertyId }) => {
+  const pid = activePropertyId || "aldgate-flats";
+  const [data, setData] = useState(null);
+
+  const load = useCallback(async () => {
+    try { const { data } = await axios.get(`${API}/ota-health/${pid}`); setData(data); }
+    catch { /* */ }
+  }, [pid]);
+  useEffect(() => { load(); }, [load]);
+
+  if (!data) return <div className="p-8 text-center" data-testid="oh-loading">Loading…</div>;
+  const gradeColor = {
+    "A+": "from-emerald-500 to-green-600",
+    "A": "from-emerald-500 to-green-600",
+    "B": "from-sky-500 to-blue-600",
+    "C": "from-amber-500 to-orange-600",
+    "D": "from-rose-500 to-red-600",
+    "F": "from-rose-700 to-red-800",
+  }[data.grade] || "from-stone-500 to-stone-600";
+
+  const tintBg = { sky: "bg-sky-500", fuchsia: "bg-fuchsia-500", emerald: "bg-emerald-500", violet: "bg-violet-500" };
+  const tintBorder = {
+    sky: "border-sky-200 bg-sky-50",
+    fuchsia: "border-fuchsia-200 bg-fuchsia-50",
+    emerald: "border-emerald-200 bg-emerald-50",
+    violet: "border-violet-200 bg-violet-50",
+  };
+
+  return (
+    <div data-testid="ota-health-panel" className="space-y-4">
+      <div className={`bg-gradient-to-br ${gradeColor} text-white rounded-2xl p-8`}>
+        <div className="flex items-center gap-2 mb-2"><Activity className="w-4 h-4" /><span className="text-[11px] font-bold uppercase tracking-wider opacity-80">OTA Health · Board-ready composite</span></div>
+        <div className="flex items-end gap-8">
+          <div>
+            <div className="text-[10px] font-bold uppercase opacity-70">Grade</div>
+            <div className="text-7xl font-black leading-none tracking-tighter" data-testid="oh-grade">{data.grade}</div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold uppercase opacity-70">Score</div>
+            <div className="text-5xl font-bold" data-testid="oh-score">{data.overall_score}<span className="text-2xl opacity-70">/100</span></div>
+          </div>
+          <div className="ml-auto text-right opacity-80">
+            <div className="text-xs">Last 30d revenue</div>
+            <div className="text-2xl font-mono font-bold">{cur(data.total_revenue_30d)}</div>
+            <div className="text-[10px]">{data.channel_mix?.length || 0} active channels</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {(data.metrics || []).map(m => (
+          <div key={m.key} className={`border-2 rounded-2xl p-5 ${tintBorder[m.color]}`} data-testid={`oh-metric-${m.key}`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-bold text-stone-800">{m.label}</div>
+              <div className="text-2xl font-black">{m.score}<span className="text-xs text-stone-400">/100</span></div>
+            </div>
+            <div className="w-full bg-white/60 rounded-full h-2 overflow-hidden mb-3">
+              <div className={`h-full ${tintBg[m.color]}`} style={{ width: `${m.score}%` }} />
+            </div>
+            <div className="flex items-end justify-between">
+              <div>
+                <div className="text-[10px] font-bold uppercase text-stone-500">Current</div>
+                <div className="text-xl font-bold">{m.value}{m.unit}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] font-bold uppercase text-stone-400">Target</div>
+                <div className="text-sm text-stone-600">{m.target}{m.unit}</div>
+              </div>
+            </div>
+            <p className="text-xs text-stone-500 mt-3">{m.summary}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white border rounded-2xl p-6">
+        <h3 className="font-bold mb-3">Channel Revenue Share — Last 30 days</h3>
+        <div className="space-y-2">
+          {(data.channel_mix || []).map(c => (
+            <div key={c.channel} className="flex items-center gap-3" data-testid={`oh-ch-${c.channel.replace(/[^a-z0-9]/gi, '').toLowerCase()}`}>
+              <div className="w-32 text-sm font-semibold truncate">{c.channel}</div>
+              <div className="flex-1 bg-stone-100 rounded-full h-2 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-sky-500 to-indigo-600" style={{ width: `${c.share_pct}%` }} />
+              </div>
+              <div className="w-24 text-right font-mono font-bold">{cur(c.revenue)}</div>
+              <div className="w-14 text-right text-xs text-stone-500">{c.share_pct}%</div>
+            </div>
+          ))}
+          {(data.channel_mix || []).length === 0 && <p className="text-center text-sm text-stone-400 py-4">No bookings in last 30 days</p>}
+        </div>
+      </div>
+    </div>
+  );
+};
+

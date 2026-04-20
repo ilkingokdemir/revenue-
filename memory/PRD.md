@@ -1,6 +1,24 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 160 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 161 Test Iterations (100%)
+
+### Iter 161 (Feb 2026): 💚 OTA Health Dashboard — composite board tile
+
+Ships the "board-ready" composite suggested in Iter 160. Pulls 4 data sources into one grade:
+
+**18. OTA Health Dashboard** (`ota_health.py` + `OtaHealthPanel`)
+- New endpoint `GET /api/ota-health/{property_id}` returns composite A+/A/B/C/D/F grade + 0-100 score + 4 sub-metrics:
+  - **Rate Parity** — % of channel rate-points within ±5% of direct (reuses parity logic from Iter 160)
+  - **Commission Match** — % of recent OTA statement lines without variance (reuses Iter 156 data)
+  - **Direct Capture** — % of last-30d payments via cash/card/bank (reuses Iter 155 Payment Mix data)
+  - **Channel Balance** — flags over-concentration (largest single channel > 60% of revenue). 60% = score 100, 100% = score 0.
+- Also returns channel revenue share for last 30 days (per-channel bar chart).
+- Frontend panel (`/ota-health` under Channel Manager sidebar) displays grade + score + 4 sub-metric cards (color-coded with sub-score, current, target, summary), plus channel revenue leaderboard.
+- Test: aldgate-flats shows **Grade B · Score 75** — Parity 100 · Commission 0 (variance in last 2 OTA statements) · Direct 100 · Balance 100.
+
+**Manual validation** (curl): `{grade: "B", overall_score: 75, metrics: [4], channel_mix: [11 channels], total_revenue_30d: £31,197.60}`. Frontend compiles, all 18 panels load correctly.
+
+**Running totals**: 161 iterations, 18 major panels shipped across the last 6 sessions, 6 consecutive full sprints at 97-100% pass rate.
 
 ### Iter 160 (Feb 2026): 📡 Channel Manager MVP — Restrictions · Inbound · Parity
 

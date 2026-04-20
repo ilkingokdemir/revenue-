@@ -34,7 +34,7 @@ import {
   DepositAutomationPanel,
 } from "./components/dashboard/CompetitorGapPanels";
 import {
-  ChannelRestrictionsPanel, ChannelInboundPanel, ChannelParityPanel,
+  ChannelRestrictionsPanel, ChannelInboundPanel, ChannelParityPanel, OtaHealthPanel,
 } from "./components/dashboard/ChannelManagerMvpPanels";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
@@ -208,6 +208,7 @@ import {
   Lock,
   CreditCard,
   Scales,
+  Heart,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2718,6 +2719,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "channel-restrictions", icon: Lock, name: "Channel Restrictions", testId: "channel-restrictions-btn" },
         { id: "channel-inbound", icon: Link, name: "Inbound Reservations", testId: "channel-inbound-btn" },
         { id: "channel-parity", icon: Scales, name: "Parity Monitor", testId: "channel-parity-btn" },
+        { id: "ota-health", icon: Heart, name: "OTA Health", testId: "ota-health-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn" }] : []),
@@ -3547,6 +3549,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "channel-restrictions" && <div className="p-6"><ChannelRestrictionsPanel activePropertyId={activePropertyId} /></div>}
         {activeView === "channel-inbound" && <div className="p-6"><ChannelInboundPanel activePropertyId={activePropertyId} /></div>}
         {activeView === "channel-parity" && <div className="p-6"><ChannelParityPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "ota-health" && <div className="p-6"><OtaHealthPanel activePropertyId={activePropertyId} /></div>}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

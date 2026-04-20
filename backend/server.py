@@ -652,6 +652,10 @@ api_router.include_router(create_channel_inbound_router(db, require_roles))
 from routes.channel_parity import create_channel_parity_router
 api_router.include_router(create_channel_parity_router(db, require_roles))
 
+# Iter 161 — OTA Health Dashboard (composite of parity + commission + direct + balance)
+from routes.ota_health import create_ota_health_router
+api_router.include_router(create_ota_health_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

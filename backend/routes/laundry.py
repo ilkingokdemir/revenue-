@@ -556,8 +556,9 @@ def create_laundry_router(db, require_roles):
         Returns per-item {needed, on_hand_clean, shortfall=order_qty} plus daily breakdown.
         """
         from datetime import date as _date
+        today = _date.today()
         if not delivery_date:
-            delivery_date = _date.today().isoformat()
+            delivery_date = today.isoformat()
         try:
             start = datetime.fromisoformat(delivery_date).date()
         except Exception:
@@ -565,25 +566,23 @@ def create_laundry_router(db, require_roles):
         horizon_days = max(1, min(int(horizon_days or 7), 30))
         in_house_every = max(1, int(in_house_cleaning_every or 2))
         end = start + timedelta(days=horizon_days)
+        # Pre-delivery window: from today up to (not including) delivery_date
+        pre_start = min(today, start)
+        pre_days = max(0, (start - pre_start).days)
 
-        # Pull bookings overlapping the window
+        # Pull bookings overlapping the full window (pre + horizon)
         prop_q = {} if property_id == "all" else {"property_id": property_id}
         bookings = await db.bookings.find({
             **prop_q,
             "status": {"$in": ["confirmed", "pending", "checked_in"]},
             "check_in": {"$lt": end.isoformat()},
-            "check_out": {"$gt": start.isoformat()},
+            "check_out": {"$gt": pre_start.isoformat()},
         }, {"_id": 0, "id": 1, "check_in": 1, "check_out": 1, "room_id": 1,
             "guest_name": 1, "status": 1}).to_list(2000)
 
-        # Build daily events
-        daily = []  # [{date, arrivals, in_house_cleanings, events_total}]
-        total_events = 0
-        for d_offset in range(horizon_days):
-            day = start + timedelta(days=d_offset)
-            day_iso = day.isoformat()
+        def _count_events_on_day(day):
             arrivals = 0
-            in_house_cleanings = 0
+            in_house = 0
             for b in bookings:
                 ci = b.get("check_in")
                 co = b.get("check_out")
@@ -594,19 +593,32 @@ def create_laundry_router(db, require_roles):
                     co_d = datetime.fromisoformat(co).date()
                 except Exception:
                     continue
-                # Arrival on this day
                 if ci_d == day:
                     arrivals += 1
-                    continue  # day-0 cleaning counted as arrival
-                # In-house on this day (between check_in exclusive and check_out exclusive)
+                    continue
                 if ci_d < day < co_d:
-                    day_index = (day - ci_d).days  # >= 1
+                    day_index = (day - ci_d).days
                     if day_index % in_house_every == 0:
-                        in_house_cleanings += 1
+                        in_house += 1
+            return arrivals, in_house
+
+        # Pre-delivery events (today → delivery_date-1): consumed from current stock
+        pre_events = 0
+        for d_offset in range(pre_days):
+            day = pre_start + timedelta(days=d_offset)
+            a, h = _count_events_on_day(day)
+            pre_events += a + h
+
+        # Horizon events (delivery_date → delivery_date + horizon-1): to be covered by new order
+        daily = []
+        total_events = 0
+        for d_offset in range(horizon_days):
+            day = start + timedelta(days=d_offset)
+            arrivals, in_house_cleanings = _count_events_on_day(day)
             events = arrivals + in_house_cleanings
             total_events += events
             daily.append({
-                "date": day_iso,
+                "date": day.isoformat(),
                 "arrivals": arrivals,
                 "in_house_cleanings": in_house_cleanings,
                 "events": events,
@@ -629,9 +641,12 @@ def create_laundry_router(db, require_roles):
                 # Skip items that don't participate in a cleaning event (e.g. napkins)
                 continue
             needed = per_clean * total_events
+            used_before_delivery = per_clean * pre_events
             slug = it.get("slug") or it["id"]
             on_hand = stock_map.get(slug, 0)
-            shortfall = max(0, needed - on_hand)
+            # Stock actually available on delivery day after today's consumption
+            remaining_at_delivery = max(0, on_hand - used_before_delivery)
+            shortfall = max(0, needed - remaining_at_delivery)
             washing_cost = float(it.get("washing_cost") or 0)
             per_item.append({
                 "item_id": slug,
@@ -639,8 +654,10 @@ def create_laundry_router(db, require_roles):
                 "per_cleaning_qty": per_clean,
                 "cleaning_events": total_events,
                 "needed": needed,
-                "on_hand_clean": on_hand,
-                "shortfall": shortfall,
+                "on_hand_clean": on_hand,                      # stock NOW
+                "used_before_delivery": used_before_delivery,  # consumed before delivery day
+                "remaining_at_delivery": remaining_at_delivery,# available on delivery day
+                "shortfall": shortfall,                        # true order requirement
                 "washing_cost": round(washing_cost, 2),
                 "estimated_order_cost": round(shortfall * washing_cost, 2),
             })
@@ -653,6 +670,8 @@ def create_laundry_router(db, require_roles):
             "delivery_date": start.isoformat(),
             "horizon_days": horizon_days,
             "in_house_cleaning_every": in_house_every,
+            "pre_delivery_days": pre_days,
+            "pre_delivery_events": pre_events,
             "bookings_in_window": len(bookings),
             "total_cleaning_events": total_events,
             "daily": daily,

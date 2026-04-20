@@ -1216,14 +1216,18 @@ const ForecastTab = ({ pid, onCreated }) => {
       {forecast && (
         <>
           {/* Summary KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
               <p className="text-2xl font-black text-stone-700">{forecast.bookings_in_window}</p>
               <p className="text-[11px] text-stone-500">Bookings in window</p>
             </div>
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-center" title={`Cleaning events between today and ${delivery}`}>
+              <p className="text-2xl font-black text-rose-600">{forecast.pre_delivery_events || 0}</p>
+              <p className="text-[11px] text-rose-600">Pre-delivery events ({forecast.pre_delivery_days || 0}d)</p>
+            </div>
             <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
               <p className="text-2xl font-black text-blue-600">{forecast.total_cleaning_events}</p>
-              <p className="text-[11px] text-stone-500">Cleaning events</p>
+              <p className="text-[11px] text-stone-500">Horizon cleaning events</p>
             </div>
             <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
               <p className="text-2xl font-black text-fuchsia-600">{t.qty}</p>
@@ -1304,8 +1308,10 @@ const ForecastTab = ({ pid, onCreated }) => {
                 <tr>
                   <th className="text-left py-2 px-3 font-semibold text-stone-600">Item</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Per Cleaning</th>
-                  <th className="text-center py-2 px-3 font-semibold text-stone-600">Needed</th>
-                  <th className="text-center py-2 px-3 font-semibold text-stone-600">On-hand Clean</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600" title="Current clean stock on hand today">Stock Now</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600" title={`Consumed between today and ${delivery} (pre-delivery)`}>Used Before Delivery</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600" title="Stock Now minus Used Before Delivery">Remain @ Delivery</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600" title={`Pieces needed during the ${horizon}-day horizon after delivery`}>Horizon Need</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Shortfall</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Safety +%</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Order Qty</th>
@@ -1321,8 +1327,12 @@ const ForecastTab = ({ pid, onCreated }) => {
                     <tr key={i.item_id} className={`border-b border-stone-100 ${i.shortfall > 0 ? "" : "opacity-60"}`} data-testid={`forecast-row-${i.item_id}`}>
                       <td className="py-2 px-3 font-semibold text-stone-800">{i.name}</td>
                       <td className="py-2 px-3 text-center text-stone-600">× {i.per_cleaning_qty}</td>
+                      <td className="py-2 px-3 text-center font-mono text-stone-700">{i.on_hand_clean}</td>
+                      <td className="py-2 px-3 text-center font-mono text-rose-600">
+                        {i.used_before_delivery > 0 ? `-${i.used_before_delivery}` : "0"}
+                      </td>
+                      <td className="py-2 px-3 text-center font-mono font-bold text-blue-700">{i.remaining_at_delivery}</td>
                       <td className="py-2 px-3 text-center font-mono text-stone-700">{i.needed}</td>
-                      <td className="py-2 px-3 text-center font-mono text-stone-500">{i.on_hand_clean}</td>
                       <td className="py-2 px-3 text-center">
                         {i.shortfall > 0
                           ? <Badge className="bg-rose-100 text-rose-700 font-mono">{i.shortfall}</Badge>
@@ -1361,7 +1371,7 @@ const ForecastTab = ({ pid, onCreated }) => {
               </tbody>
               <tfoot className="bg-stone-50 border-t-2 border-stone-200">
                 <tr>
-                  <td colSpan={6} className="py-2 px-3 text-right font-bold text-stone-700">Totals</td>
+                  <td colSpan={8} className="py-2 px-3 text-right font-bold text-stone-700">Totals</td>
                   <td className="py-2 px-3 text-center font-mono font-black text-fuchsia-700">{t.qty}</td>
                   <td></td>
                   <td className="py-2 px-3 text-right font-mono font-black text-stone-900">{fmt(t.cost)}</td>

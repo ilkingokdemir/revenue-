@@ -2,6 +2,21 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.2 (Feb 2026): 📦 Pre-delivery consumption in Order Forecast
+
+User request: "elimizdeki stoğu düşürerek ihtiyaç olacak siparişi hesaplasın — total stock - used = remaining, total needs - remaining = order".
+
+**Backend** (`routes/laundry.py` forecast endpoint)
+- Added pre-delivery window calculation: events between `today` and `delivery_date` are counted separately.
+- Each item now exposes 4 stock steps: `on_hand_clean` (now) → `used_before_delivery` → `remaining_at_delivery` → `needed` → `shortfall`.
+- Formula: `remaining_at_delivery = max(0, on_hand - used_before_delivery)`; `shortfall = max(0, needed - remaining_at_delivery)`. Previously the forecast ignored pre-delivery consumption and compared needed directly against current stock, which under-estimated orders.
+- Response adds `pre_delivery_days` and `pre_delivery_events` for UI display.
+
+**Frontend** (`LaundryManagement.js` ForecastTab)
+- New 6th KPI card "Pre-delivery events (Nd)" in rose.
+- Order table now shows the full pipeline: **Stock Now → Used Before Delivery → Remain @ Delivery → Horizon Need → Shortfall → Safety +% → Order Qty**.
+- Verified end-to-end: Bath Towel with stock=47, used_before=140, remain=0, needed=142 → shortfall=142 ✓.
+
 ### Iter 166.1 (Feb 2026): 🛡️ Safety Buffer on Order Forecast
 
 Follow-up to Iter 166 per user request: "ekstra ihtiyaç olduğunda +10-15% buffer verebileyim."

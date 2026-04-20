@@ -1417,6 +1417,20 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 165 (Apr 2026) — Competitor Parity Batch A: Group Blocks + Smart Rate Control
+- Analyzed Mews / Eviivo / Cloudbeds / SiteMinder → picked the 2 most-critical parity gaps
+- New backend: `/app/backend/routes/group_blocks.py` (~200 lines, 7 endpoints)
+  - List / get / create / update / cancel (soft) / hard-delete (admin) / **materialize** (converts block allocations into individual bookings in one click)
+  - Fields: name, code (auto-gen), from/to/cutoff, status (tentative/definite/cancelled), allocations[{room_type_id, quantity, rate}], contact (name/email/phone/company), notes, version tracking
+- New backend: `/app/backend/routes/smart_rate_control.py` (~180 lines, 2 endpoints)
+  - POST apply — action × target × unit × value × date range with optional rate_plan_ids + room_type_ids scoping
+  - Targets: rates, availability, min_los, max_los, cta, ctd, stop_sell
+  - Writes to `rate_calendar_cells` + `channel_audit` trail
+- New frontend: `GroupBlocksPanel.js` (~230 lines) — stat chips, search, status filter, table, modal form with dynamic allocations, materialize button
+- New frontend: `SmartRateControlPanel.js` (~150 lines) — natural-language builder (Type → to → by → for) + rate-plan / room-type multi-select scoping
+- Sidebar: 2 new entries under Reservations & Booking (Group Blocks, Smart Rate Control)
+- Testing: iteration_163.json — **32/32 backend tests (100%)** + all frontend UI verified, zero critical/integration bugs
+
 ## Iter 164.3 (Apr 2026) — Deduplication: Channel Manager ↔ Revenue module
 - User flagged duplication between Channel Manager Hub and Revenue module
 - Audit identified 3 duplicate tabs and 1 duplicate sub-tab

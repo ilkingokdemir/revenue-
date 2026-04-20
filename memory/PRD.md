@@ -1,6 +1,32 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 161 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
+
+### Iter 166 (Feb 2026): 🧺 Laundry Items Catalog + Smart Order Forecast
+
+Shipped the two remaining laundry-module gaps in one sweep:
+
+**A. Laundry Items Settings (DB-backed catalog)** — `routes/laundry.py` + `LaundrySettingsPanel.js`
+- New collection `laundry_item_defs` (distinct from `laundry_items` which already serves guest-laundry batches in `operations.py`).
+- Replaces the hardcoded `DEFAULT_ITEMS` constant. Auto-seeds 11 defaults on first access per property: Bed Sheet Single/Double/King, Pillow Case, Duvet Cover, Bath/Hand/Face Cloth & Mat, Table Cloth, Napkin — each with `washing_cost`, `purchase_cost`, `maintenance_cost`, `per_cleaning_qty`, `sort_order`, `active`.
+- Full CRUD: `GET/POST /api/laundry/items/{property_id}`, `PUT/DELETE /api/laundry/items/{item_id}`. Items list returns 30-day usage stats (`usage_30d`, `last_used`) aggregated from `laundry_daily_usage`. Duplicate names per property blocked with 400.
+- Frontend: 3rd tab "Laundry Items" in Laundry Settings — sortable table with Name/slug, 3 cost columns, Per Cleaning badge, Used (30d) count, Status toggle, Edit/Delete. Modal with all fields + active checkbox.
+- `/catalog` endpoint + `get_stock` defaults now use the DB-backed catalog so new items flow into contracts/stock automatically.
+
+**B. Smart Order Forecast** — `routes/laundry.py` + `LaundryManagement.js`
+- New endpoint `GET /api/laundry/forecast/{pid}?delivery_date=&horizon_days=&in_house_cleaning_every=`. Algorithm:
+  - Scans bookings overlapping `[delivery_date, delivery_date + horizon]`
+  - Day-by-day counts **arrivals** (new check-ins = full linen change) and **in-house cleanings** (for stays where `(day - check_in) % in_house_every == 0` and `day > check_in`)
+  - Multiplies total cleaning events × each item's `per_cleaning_qty` → `needed`
+  - Subtracts current `on_hand_clean` from `laundry_stock` → `shortfall`
+  - Returns daily breakdown, per-item table with estimated cost, and summary (total_order_qty, estimated_order_cost, items_needing_order).
+  - Items with `per_cleaning_qty=0` (e.g. Table Cloth, Napkin) are excluded from the forecast.
+- `POST /api/laundry/forecast/{pid}/create-dispatch` one-click: creates a `laundry_dispatches` row from the forecast shortfalls, moves stock clean→in_transit, tags `from_forecast=true`.
+- Frontend: 6th tab "Next Order" (fuchsia, Sparkles icon) in Laundry Management. Controls auto-default to next Monday; horizon 3/7/14/30; cleaning every 1/2/3/7 days; provider dropdown from active providers. 5 KPI cards, stacked daily bar chart (emerald arrivals + blue in-house), editable-qty suggested order table with live totals, one-click "Create Dispatch → <vendor>" button.
+
+**Verified end-to-end** (curl + Playwright): 11 items seeded on first call; CRUD round-trip clean; forecast for next-Monday delivery on aldgate-flats returned 53 bookings in window → 71 cleaning events → 777 pieces to order → £417.30 estimated cost across 9 items; UI daily chart + editable table rendering correctly.
+
+**Testing agent iteration_166.json**: Backend 27/27 (100%), Frontend 80% (Items tab 100%; Forecast tab rendered correctly via manual screenshot, testing agent navigation difficulty only). Zero backend issues, zero action items, zero critical code-review comments.
 
 ### Iter 161 (Feb 2026): 💚 OTA Health Dashboard — composite board tile
 

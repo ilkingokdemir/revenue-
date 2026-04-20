@@ -599,7 +599,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
 
           {/* DELIVERIES */}
           {tab === "deliveries" && (
-            <DeliveriesTab pid={pid} dispatches={sentDispatches} stock={stock} L={L} canSeeCosts={canSeeCosts} />
+            <DeliveriesTab pid={pid} dispatches={sentDispatches} stock={stock} catalog={catalog} lang={lang} setLang={setLang} L={L} canSeeCosts={canSeeCosts} />
           )}
 
           {/* FORECAST */}
@@ -1441,15 +1441,30 @@ const StockTab = ({ pid, stock, updateStockCell }) => {
     </div>
   );
 };
-const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
+const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L, canSeeCosts = true }) => {
   const [rows, setRows] = useState([]);
   const [showForm, setShowForm] = useState(false);
-  const emptyItem = { item_id: "", name: "", qty_received: 0, qty_shortage: 0, qty_damage: 0, qty_rejected: 0, reason: "", unit_cost: 0 };
+  const emptyItem = { item_id: "", name: "", qty_sent: 0, qty_received: 0, qty_shortage: 0, qty_damage: 0, qty_rejected: 0, reason: "", unit_cost: 0 };
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
     dispatch_id: "", delivery_date: today,
-    invoice_number: "", notes: "", items: [{ ...emptyItem }],
+    invoice_number: "", notes: "", items: [],
   });
+
+  // Open the modal with ALL catalog items pre-listed (like Daily Laundry Usage)
+  const openForm = () => {
+    const prefilled = (catalog && catalog.length ? catalog : stock).map(c => ({
+      ...emptyItem,
+      item_id: c.id || c.item_id,
+      name: c.name,
+    }));
+    setForm({
+      dispatch_id: "", delivery_date: today,
+      invoice_number: "", notes: "",
+      items: prefilled,
+    });
+    setShowForm(true);
+  };
 
   const load = async () => {
     try { const { data } = await axios.get(`${API}/laundry/deliveries/${pid}`); setRows(data.rows || []); }
@@ -1458,12 +1473,19 @@ const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [pid]);
 
   const save = async () => {
-    if (form.items.length === 0 || !form.items.some(i => i.item_id)) return toast.error("Add at least one item");
+    // Only submit items that have at least one non-zero quantity
+    const validItems = form.items.filter(i => i.item_id && (
+      (i.qty_received || 0) > 0 ||
+      (i.qty_shortage || 0) > 0 ||
+      (i.qty_damage || 0) > 0 ||
+      (i.qty_rejected || 0) > 0
+    ));
+    if (validItems.length === 0) return toast.error(L?.fillQty || "Enter at least one quantity > 0");
     try {
-      await axios.post(`${API}/laundry/deliveries/${pid}`, form);
-      toast.success("Delivery recorded");
+      await axios.post(`${API}/laundry/deliveries/${pid}`, { ...form, items: validItems });
+      toast.success(L?.delvSaved || "Delivery recorded");
       setShowForm(false);
-      setForm({ dispatch_id: "", delivery_date: today, invoice_number: "", notes: "", items: [{ ...emptyItem }] });
+      setForm({ dispatch_id: "", delivery_date: today, invoice_number: "", notes: "", items: [] });
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
@@ -1479,14 +1501,24 @@ const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
   const rmItem = (i) => setForm(f => { const arr = [...f.items]; arr.splice(i, 1); return { ...f, items: arr }; });
 
   const loadFromDispatch = (dispatch_id) => {
+    if (!dispatch_id) {
+      // Clear sent + received qty while keeping the pre-filled catalog
+      setForm(f => ({ ...f, dispatch_id: "", items: f.items.map(it => ({ ...it, qty_sent: 0, qty_received: 0 })) }));
+      return;
+    }
     const d = dispatches.find(x => x.id === dispatch_id);
     if (!d) return;
+    // Build sentMap: item_id → qty sent in dispatch
+    const sentMap = Object.fromEntries((d.items || []).map(it => [it.item_id, it.qty_sent]));
+    const rateMap = Object.fromEntries((d.items || []).map(it => [it.item_id, it.rate || it.unit_cost || 0]));
     setForm(f => ({
       ...f, dispatch_id,
-      items: (d.items || []).map(it => ({
-        ...emptyItem, item_id: it.item_id, name: it.name,
-        qty_received: it.qty_sent,
-        unit_cost: it.unit_cost || 0,
+      // Keep pre-filled full catalog; annotate sent + received from the dispatch
+      items: f.items.map(it => ({
+        ...it,
+        qty_sent: sentMap[it.item_id] || 0,
+        qty_received: sentMap[it.item_id] || 0,
+        unit_cost: rateMap[it.item_id] || it.unit_cost || 0,
       })),
     }));
   };
@@ -1504,8 +1536,8 @@ const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
           <h3 className="text-sm font-bold text-stone-800">Laundry Deliveries ({rows.length})</h3>
           <p className="text-xs text-stone-500">Track items received from laundry company with discrepancy tracking.</p>
         </div>
-        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowForm(true)} data-testid="delivery-new-btn">
-          + Record Delivery
+        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={openForm} data-testid="delivery-new-btn">
+          + {L?.delvReceived2 || "Record Delivery"}
         </Button>
       </div>
 
@@ -1548,14 +1580,27 @@ const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
 
       {/* Record Delivery Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6" onClick={() => setShowForm(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-3 sm:p-6" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[98vw] sm:w-[95vw] max-w-4xl max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-stone-100 flex items-center justify-between flex-wrap gap-2">
               <div>
-                <h3 className="font-bold">Record Delivery</h3>
-                <p className="text-xs text-stone-500">Record items received from laundry company.</p>
+                <h3 className="font-bold text-base sm:text-lg">{L?.delvTitle || "Record Delivery"}</h3>
+                <p className="text-xs text-stone-500">{L?.delvSubtitle || "Record items received from laundry company."}</p>
               </div>
-              <button onClick={() => setShowForm(false)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+              <div className="flex items-center gap-2">
+                {setLang && (
+                  <div className="flex gap-1 bg-stone-100 rounded-lg p-1">
+                    {Object.keys(LAUNDRY_I18N).map(code => (
+                      <button key={code} onClick={() => setLang(code)}
+                        className={`px-2 py-1 text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow" : "text-stone-500 hover:text-stone-700"}`}
+                        data-testid={`delv-lang-${code}`}>
+                        {LAUNDRY_I18N[code].flag} {code.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <button onClick={() => setShowForm(false)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+              </div>
             </div>
             <div className="p-4 space-y-4">
               {/* Link to Dispatch */}
@@ -1586,54 +1631,82 @@ const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
                 </div>
               </div>
 
-              {/* Items — desktop grid */}
+              {/* Items — hazır tablo (pre-filled with full catalog like Daily Usage) */}
               <div className="border border-stone-200 rounded-xl p-3">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <div className="text-xs font-semibold text-stone-600 uppercase">{L?.item || "Items"}</div>
-                  <button onClick={addItem} className="text-xs px-2 py-1 rounded border border-emerald-300 text-emerald-700" data-testid="delivery-add-item">+ {L?.item || "Add Item"}</button>
-                </div>
-                {/* Desktop */}
-                <div className="hidden sm:block">
-                  <div className="grid grid-cols-[2fr,repeat(5,1fr),auto] gap-2 text-[10px] font-semibold text-stone-500 uppercase px-1 mb-1">
-                    <div>{L?.item || "Item"}</div><div>{L?.delvReceived || "Received"}</div><div>{L?.delvShortage || "Shortage"}</div><div>{L?.delvDamagedArr || "Damage"}</div><div>Rejected</div><div>{L?.dispRate || "Cost £"}</div><div></div>
+                  <div className="text-[10px] text-stone-500">
+                    {L?.delvSubtitle || "Count every piece delivered. Shortage / Damaged on arrival are deducted."}
                   </div>
-                  {form.items.map((it, i) => (
-                    <div key={i} className="grid grid-cols-[2fr,repeat(5,1fr),auto] gap-2 items-center mb-1">
-                      <select value={it.item_id} onChange={e => {
-                        const match = stock.find(s => s.item_id === e.target.value);
-                        updItem(i, "item_id", e.target.value);
-                        if (match) updItem(i, "name", match.name);
-                      }} className="px-2 py-1 border rounded text-xs">
-                        <option value="">{L?.selectRoom ? "—" : "Select item…"}</option>
-                        {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
-                      </select>
-                      <input type="number" min="0" inputMode="numeric" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs bg-emerald-50" />
-                      <input type="number" min="0" inputMode="numeric" value={it.qty_shortage} onChange={e => updItem(i, "qty_shortage", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs bg-rose-50" />
-                      <input type="number" min="0" inputMode="numeric" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs bg-fuchsia-50" />
-                      <input type="number" min="0" inputMode="numeric" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs bg-amber-50" />
-                      <input type="number" step="0.01" min="0" value={it.unit_cost} onChange={e => updItem(i, "unit_cost", parseFloat(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
-                      <button onClick={() => rmItem(i)} className="text-rose-500 text-xs">×</button>
-                    </div>
-                  ))}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-sm" data-testid="delivery-readytable">
+                    <thead className="bg-stone-50 border-b border-stone-200">
+                      <tr>
+                        <th className="text-left py-2 px-2 font-semibold text-stone-700 w-[28%]">{L?.item || "Item"}</th>
+                        <th className="text-center py-2 px-2 font-semibold text-stone-500">{L?.delvSent || "Sent"}</th>
+                        <th className="text-center py-2 px-2 font-semibold text-emerald-700">{L?.delvReceived || "Received"} ↓</th>
+                        <th className="text-center py-2 px-2 font-semibold text-rose-700">{L?.delvShortage || "Shortage"}</th>
+                        <th className="text-center py-2 px-2 font-semibold text-fuchsia-700">{L?.delvDamagedArr || "Damage"}</th>
+                        <th className="text-center py-2 px-2 font-semibold text-amber-700">Rejected</th>
+                        {canSeeCosts && <th className="text-right py-2 px-2 font-semibold text-stone-600">{L?.dispRate || "£"}</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {form.items.map((it, i) => {
+                        const diff = (it.qty_sent || 0) - (it.qty_received || 0);
+                        return (
+                          <tr key={it.item_id || i} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`delivery-row-${it.item_id}`}>
+                            <td className="py-1.5 px-2">
+                              <div className="font-semibold text-stone-800">{it.name}</div>
+                              <div className="text-[10px] text-stone-400">{it.item_id}</div>
+                            </td>
+                            <td className="py-1 px-2 text-center">
+                              {it.qty_sent > 0 ? (
+                                <span className={`inline-block min-w-[36px] px-2 py-1 rounded font-mono text-xs bg-stone-100 text-stone-700`}>
+                                  {it.qty_sent}
+                                </span>
+                              ) : <span className="text-stone-300">—</span>}
+                            </td>
+                            <td className="py-1 px-1"><input type="number" min="0" inputMode="numeric" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="w-full h-9 text-center font-mono font-bold bg-emerald-50 border border-emerald-200 rounded" data-testid={`delv-received-${it.item_id}`} /></td>
+                            <td className="py-1 px-1"><input type="number" min="0" inputMode="numeric" value={it.qty_shortage} onChange={e => updItem(i, "qty_shortage", parseInt(e.target.value) || 0)} className="w-full h-9 text-center font-mono font-bold bg-rose-50 border border-rose-200 rounded" data-testid={`delv-short-${it.item_id}`} /></td>
+                            <td className="py-1 px-1"><input type="number" min="0" inputMode="numeric" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="w-full h-9 text-center font-mono font-bold bg-fuchsia-50 border border-fuchsia-200 rounded" data-testid={`delv-dmg-${it.item_id}`} /></td>
+                            <td className="py-1 px-1"><input type="number" min="0" inputMode="numeric" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="w-full h-9 text-center font-mono font-bold bg-amber-50 border border-amber-200 rounded" /></td>
+                            {canSeeCosts && <td className="py-1 px-1"><input type="number" step="0.01" min="0" value={it.unit_cost} onChange={e => updItem(i, "unit_cost", parseFloat(e.target.value) || 0)} className="w-full h-9 text-right font-mono border border-stone-200 rounded px-1" /></td>}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-stone-50 border-t-2 border-stone-200">
+                      <tr>
+                        <td className="py-2 px-2 text-right font-bold text-stone-700">{L?.totals || "Totals"}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-stone-700">{form.items.reduce((s, i) => s + (i.qty_sent || 0), 0)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-emerald-700">{form.items.reduce((s, i) => s + (i.qty_received || 0), 0)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-rose-700">{form.items.reduce((s, i) => s + (i.qty_shortage || 0), 0)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-fuchsia-700">{form.items.reduce((s, i) => s + (i.qty_damage || 0), 0)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-amber-700">{form.items.reduce((s, i) => s + (i.qty_rejected || 0), 0)}</td>
+                        {canSeeCosts && <td></td>}
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
 
                 {/* Mobile cards */}
                 <div className="sm:hidden space-y-2">
                   {form.items.map((it, i) => (
-                    <div key={i} className="bg-white border border-stone-200 rounded-xl p-3">
+                    <div key={it.item_id || i} className="bg-white border border-stone-200 rounded-xl p-3">
                       <div className="flex items-start justify-between mb-2">
-                        <select value={it.item_id} onChange={e => {
-                          const match = stock.find(s => s.item_id === e.target.value);
-                          updItem(i, "item_id", e.target.value);
-                          if (match) updItem(i, "name", match.name);
-                        }} className="flex-1 px-2 py-2 border rounded text-sm font-semibold">
-                          <option value="">Select item…</option>
-                          {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
-                        </select>
-                        <button onClick={() => rmItem(i)} className="ml-2 text-rose-500 p-2"><Trash2 className="w-4 h-4" /></button>
+                        <div>
+                          <div className="font-bold text-sm text-stone-800">{it.name}</div>
+                          {it.qty_sent > 0 && (
+                            <div className="text-[11px] text-stone-500">{L?.delvSent || "Sent"}: <b className="font-mono">{it.qty_sent}</b></div>
+                          )}
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <div><label className="text-[10px] font-bold uppercase text-emerald-700">{L?.delvReceived || "Received"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-emerald-50 border-emerald-200 border rounded mt-0.5" /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-emerald-700">{L?.delvReceived || "Received"} ↓</label><input type="number" min="0" inputMode="numeric" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-emerald-50 border-emerald-200 border rounded mt-0.5" /></div>
                         <div><label className="text-[10px] font-bold uppercase text-rose-700">{L?.delvShortage || "Shortage"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_shortage} onChange={e => updItem(i, "qty_shortage", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-rose-50 border-rose-200 border rounded mt-0.5" /></div>
                         <div><label className="text-[10px] font-bold uppercase text-fuchsia-700">{L?.delvDamagedArr || "Damage"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-fuchsia-50 border-fuchsia-200 border rounded mt-0.5" /></div>
                         <div><label className="text-[10px] font-bold uppercase text-amber-700">Rejected</label><input type="number" min="0" inputMode="numeric" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-amber-50 border-amber-200 border rounded mt-0.5" /></div>
@@ -1644,9 +1717,10 @@ const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
                 </div>
 
                 {form.items.some(it => it.qty_shortage || it.qty_damage || it.qty_rejected) && (
-                  <div className="mt-2 space-y-1">
+                  <div className="mt-3 space-y-1">
+                    <div className="text-[10px] font-bold uppercase text-stone-500">Discrepancy reasons:</div>
                     {form.items.map((it, i) => ((it.qty_shortage || it.qty_damage || it.qty_rejected) ? (
-                      <input key={i} value={it.reason} onChange={e => updItem(i, "reason", e.target.value)} placeholder={`Reason for ${it.name || "this item"} discrepancy…`} className="w-full px-2 py-2 border rounded text-xs bg-rose-50" />
+                      <input key={i} value={it.reason} onChange={e => updItem(i, "reason", e.target.value)} placeholder={`Reason for ${it.name} discrepancy…`} className="w-full px-2 py-2 border rounded text-xs bg-rose-50" />
                     ) : null))}
                   </div>
                 )}

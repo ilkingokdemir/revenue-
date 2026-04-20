@@ -2,6 +2,25 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.10 (Feb 2026): 📱 QR code on each dispatch (future-ready factory scan)
+
+Per user: factory doesn't support QR scanning yet, but build it now for future adoption.
+
+**Added** (`LaundryManagement.js`)
+- `qrcode.react` dependency (tiny, pure-JS, offline-capable)
+- Each dispatch row in the "Awaiting Return" table gets a blue **QR** button next to **Receive**
+- Clicking opens a modal showing a 220px SVG QR code encoding:
+  ```json
+  { "t": "laundry_dispatch", "id": "<uuid>", "pid": "...", "vendor": "...", "sent": "YYYY-MM-DD", "dirty": <n>, "unusable": <n> }
+  ```
+- Modal shows a summary card (Dispatch ID · Vendor · Date · Dirty Sent · Unusable Sent) below the QR
+- **Print** button (opens native print dialog, `print:hidden` class hides footer in print)
+- Copy explains the future use case: factory or receiving staff scans → delivery form auto-populates instantly
+
+**Why it matters now**
+- Operational benefit TODAY: housekeeper/reception can photograph the bag+QR as evidence of what left the building.
+- Future-proof: when the factory adopts scanning, we just add a scan button to DeliveriesTab that decodes the JSON and calls the existing `loadFromDispatch()` function — zero backend changes needed.
+
 ### Iter 166.9 (Feb 2026): 🏭 Dispatch + Delivery ready-tables (mobile + i18n) + Offline queue
 
 Biggest operational upgrade so far. Three-in-one release.

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { QRCodeSVG } from "qrcode.react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import {
   RefreshCw, Plus, Send, Package, FileText, Shirt, CheckCircle2,
   Trash2, ArrowDown, Building2, Inbox, DoorOpen, BarChart3, AlertCircle,
   Calendar, FileBarChart, ShieldCheck, RotateCcw, Download, Sparkles,
-  TrendingUp,
+  TrendingUp, QrCode, Printer,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -306,6 +307,8 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
 
   // Count queued items for UI badge
   const [queueLen, setQueueLen] = useState(0);
+  // QR code preview modal for dispatches — future-ready, factory can scan on arrival
+  const [qrDispatch, setQrDispatch] = useState(null);
   useEffect(() => {
     const tick = () => {
       try {
@@ -512,6 +515,9 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                         {canSeeCosts && <td className="py-2.5 px-3 text-right font-mono text-stone-700">£{d.total_cost?.toFixed(2)}</td>}
                         <td className="py-2.5 px-3 text-center"><Badge className={`${DISPATCH_STATUS_STYLE[d.status] || "bg-stone-100"} text-[9px] capitalize`}>{d.status}</Badge></td>
                         <td className="py-2.5 px-3 text-right">
+                          <button onClick={() => setQrDispatch(d)} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 font-semibold mr-1" data-testid={`qr-btn-${d.id}`} title="Show QR code (future factory scan)">
+                            <QrCode className="w-3 h-3 inline mr-1" />QR
+                          </button>
                           <button onClick={() => receiveDispatch(d)} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100 font-semibold" data-testid={`receive-btn-${d.id}`}>
                             <ArrowDown className="w-3 h-3 inline mr-1" />Receive
                           </button>
@@ -1066,6 +1072,55 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
             <div><label className="text-xs font-semibold text-stone-600">Terms</label><Textarea value={contractForm.terms} onChange={e => setContractForm({ ...contractForm, terms: e.target.value })} rows={3} /></div>
           </div>
           <DialogFooter><Button variant="outline" size="sm" onClick={() => setContractOpen(false)}>Cancel</Button><Button size="sm" className="bg-stone-800 hover:bg-stone-700 text-white" onClick={submitContract} data-testid="contract-submit-btn">Create Contract</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* QR Code Dialog — future-ready for factory scan */}
+      <Dialog open={!!qrDispatch} onOpenChange={o => !o && setQrDispatch(null)}>
+        <DialogContent className="w-[95vw] max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <QrCode className="w-4 h-4" /> Dispatch QR Code
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Print this QR and attach to the dispatch bag. In the future, when the factory or receiving staff scans it, the entire dispatch list opens instantly — no manual search.
+            </DialogDescription>
+          </DialogHeader>
+          {qrDispatch && (
+            <div className="space-y-3 print:p-4" id="qr-print-area">
+              <div className="flex justify-center bg-white p-6 rounded-xl border-2 border-stone-200">
+                <QRCodeSVG
+                  value={JSON.stringify({
+                    t: "laundry_dispatch",
+                    id: qrDispatch.id,
+                    pid: qrDispatch.property_id,
+                    vendor: qrDispatch.vendor,
+                    sent: qrDispatch.sent_date,
+                    dirty: qrDispatch.total_dirty_sent || qrDispatch.items?.reduce((s, i) => s + (i.qty_sent || 0), 0) || 0,
+                    unusable: qrDispatch.total_unusable_sent || qrDispatch.items?.reduce((s, i) => s + (i.qty_unusable_sent || 0), 0) || 0,
+                  })}
+                  size={220} level="M" includeMargin={true}
+                  data-testid="dispatch-qr-svg"
+                />
+              </div>
+              <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 text-xs space-y-1">
+                <div className="flex justify-between"><span className="text-stone-500">Dispatch ID:</span><span className="font-mono font-semibold">{qrDispatch.id.slice(0, 8)}…</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{L.vendor}:</span><span className="font-semibold">{qrDispatch.vendor}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{L.date}:</span><span className="font-semibold">{qrDispatch.sent_date}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{L.dispDirtySent}:</span><span className="font-mono font-black text-amber-700">{qrDispatch.total_dirty_sent || qrDispatch.items?.reduce((s, i) => s + (i.qty_sent || 0), 0) || 0}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{L.dispUnusableSent}:</span><span className="font-mono font-black text-rose-700">{qrDispatch.total_unusable_sent || qrDispatch.items?.reduce((s, i) => s + (i.qty_unusable_sent || 0), 0) || 0}</span></div>
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 text-[11px] text-blue-800">
+                💡 QR payload: JSON containing dispatch ID + vendor + counts. Any QR-enabled scanner app can decode it. When factory adopts scanning, we'll add instant delivery auto-fill.
+              </div>
+            </div>
+          )}
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2 print:hidden">
+            <Button variant="outline" size="sm" onClick={() => setQrDispatch(null)} className="w-full sm:w-auto">{L.cancel}</Button>
+            <Button size="sm" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white" onClick={() => window.print()} data-testid="qr-print-btn">
+              <Printer className="w-4 h-4 mr-1" />Print
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

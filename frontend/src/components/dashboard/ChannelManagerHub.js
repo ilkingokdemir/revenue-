@@ -945,6 +945,60 @@ const OverridesPanel = ({ pid }) => {
 };
 
 /* ═══════════ ALLOCATIONS (Pooled Inventory) ═══════════ */
+const AllocationCell = ({ pid, row, cell, onChanged }) => {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(String(cell.effective_cap ?? ""));
+
+  const save = async () => {
+    const trimmed = String(value).trim();
+    const payload = {
+      channel_id: row.channel_id, room_type_id: row.room_type_id,
+      date: cell.date,
+      allocation_cap: trimmed === "" ? null : parseInt(trimmed),
+    };
+    try {
+      await axios.put(`${API}/inventory-allocations/${pid}/cell`, payload);
+      toast.success(trimmed === "" ? "Cleared" : `Cap → ${trimmed}`);
+      setEditing(false);
+      onChanged();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed");
+    }
+  };
+
+  const ratio = row.total_inventory ? cell.available / row.total_inventory : 0;
+  const bg = cell.available === 0 ? "bg-rose-100 text-rose-700" : ratio < 0.3 ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700";
+  const edited = cell.edited ? "ring-2 ring-violet-500 ring-inset" : "";
+
+  if (editing) {
+    return (
+      <td className="p-0.5 border-r border-stone-100">
+        <input
+          autoFocus
+          type="number"
+          min="0"
+          value={value}
+          onChange={e => setValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+          className="w-full h-8 text-center font-mono text-xs border-violet-500 border rounded px-1 focus:outline-none"
+          data-testid={`chmgr-alloc-cell-input-${row.room_type_id}-${row.channel_id}-${cell.date}`}
+        />
+      </td>
+    );
+  }
+  return (
+    <td
+      onClick={() => setEditing(true)}
+      className={`p-1 text-center font-mono cursor-pointer hover:opacity-80 ${bg} ${edited} border-r border-stone-100`}
+      title={`${cell.edited ? "Date-specific cap: " + cell.effective_cap + " · " : ""}Sold on channel: ${cell.sold_on_channel} · Sold all: ${cell.sold_all} · Total: ${cell.total_inventory} · Click to edit`}
+      data-testid={`chmgr-alloc-cell-${row.room_type_id}-${row.channel_id}-${cell.date}`}
+    >
+      {cell.available}
+    </td>
+  );
+};
+
 const AllocationsPanel = ({ pid }) => {
   const [rules, setRules] = useState([]);
   const [channels, setChannels] = useState([]);
@@ -1043,7 +1097,7 @@ const AllocationsPanel = ({ pid }) => {
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="font-bold">Availability per Channel</h3>
-            <p className="text-xs text-stone-500">Computed units the channel manager would push for each date.</p>
+            <p className="text-xs text-stone-500">Click any cell to override the cap for that specific date. Cells with a violet ring have date-level overrides.</p>
           </div>
           <div className="flex items-center gap-2">
             <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
@@ -1071,15 +1125,9 @@ const AllocationsPanel = ({ pid }) => {
                       <div className="font-semibold">{row.room_type_name}</div>
                       <div className="text-[10px] text-stone-400">{row.channel_name} · <span className="font-mono">{row.mode}</span></div>
                     </td>
-                    {row.cells.map((c, j) => {
-                      const ratio = row.total_inventory ? c.available / row.total_inventory : 0;
-                      const bg = c.available === 0 ? "bg-rose-100 text-rose-700" : ratio < 0.3 ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700";
-                      return (
-                        <td key={j} className={`p-1 text-center font-mono ${bg} border-r border-stone-100`} title={`Sold on channel: ${c.sold_on_channel} · Sold all: ${c.sold_all} · Total: ${c.total_inventory}`}>
-                          {c.available}
-                        </td>
-                      );
-                    })}
+                    {row.cells.map((c, j) => (
+                      <AllocationCell key={j} pid={pid} row={row} cell={c} onChanged={loadCal} />
+                    ))}
                   </tr>
                 ))}
                 {cal.grid.length === 0 && <tr><td colSpan={cal.dates.length + 1} className="p-10 text-center text-stone-400">No channels or rooms configured</td></tr>}

@@ -1417,6 +1417,13 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 164.1 (Apr 2026) — Click-editable Allocation Cells
+- Backend: new `PUT /api/inventory-allocations/{pid}/cell` endpoint upserts/clears date-level overrides in `channel_allocation_overrides`
+- Calendar endpoint now merges date-level overrides on top of rule-level caps and returns `edited` + `effective_cap` per cell
+- Frontend: `AllocationCell` component makes every heatmap cell click-editable (inline number input, Enter to save, Esc to cancel, empty string to clear); edited cells render with a violet ring
+- Matches SiteMinder's allocation-grid UX — one-click cap adjustment per (channel, room, date) tuple
+- Smoke-tested: click cell → toast "Cap → 2" → cell shows 2 with violet ring → clear via empty value → cell reverts
+
 ## Iter 164 (Apr 2026) — Wave 1 Competitor Parity: Pooled Inventory + Derived Rates + Stop-Sell
 - Competitor gap analysis against SiteMinder/Cloudbeds/RateTiger/Mews/STAAH identified 9 missing modules; Wave 1 P0 built here
 - New backend: `/app/backend/routes/inventory_allocations.py` (~180 lines)

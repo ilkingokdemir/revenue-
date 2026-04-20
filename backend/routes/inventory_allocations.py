@@ -84,6 +84,42 @@ def create_inventory_allocations_router(db, require_roles):
         return {"status": "deleted" if res.deleted_count else "not_found"}
 
     # ──────────────────────────────────────────────────────────────
+    # DATE-LEVEL OVERRIDES — edit a single cell in the allocation grid
+    # ──────────────────────────────────────────────────────────────
+    @router.put("/inventory-allocations/{property_id}/cell")
+    async def upsert_cell(property_id: str, data: Dict,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Body: {channel_id, room_type_id, date, allocation_cap}
+        Upserts a date-level cap that overrides the rule-level cap for that
+        (channel, room, date) cell. Pass allocation_cap=null to clear."""
+        for f in ("channel_id", "room_type_id", "date"):
+            if not data.get(f):
+                raise HTTPException(400, f"{f} required")
+        cap = data.get("allocation_cap")
+        key = {"property_id": property_id,
+               "channel_id": data["channel_id"],
+               "room_type_id": data["room_type_id"],
+               "date": data["date"]}
+        if cap is None or (isinstance(cap, str) and cap.strip() == ""):
+            res = await db.channel_allocation_overrides.delete_one(key)
+            return {"status": "cleared", "deleted": res.deleted_count}
+        try:
+            cap_int = int(cap)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "allocation_cap must be an integer or null")
+        if cap_int < 0:
+            raise HTTPException(400, "allocation_cap must be >= 0")
+        now = datetime.now(timezone.utc).isoformat()
+        await db.channel_allocation_overrides.update_one(
+            key,
+            {"$set": {**key, "allocation_cap": cap_int, "updated_at": now,
+                      "updated_by": current_user.get("email", "")},
+             "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
+            upsert=True,
+        )
+        return {"status": "ok", "allocation_cap": cap_int}
+
+    # ──────────────────────────────────────────────────────────────
     # AVAILABILITY CALENDAR — compute per (date, channel, room) what
     # the channel manager WOULD push as available
     # ──────────────────────────────────────────────────────────────
@@ -113,6 +149,16 @@ def create_inventory_allocations_router(db, require_roles):
         rule_idx: Dict[str, Dict] = {}
         for r in rules:
             rule_idx[f"{r['channel_id']}|{r['room_type_id']}"] = r
+
+        # Date-level overrides (channel × room × date → cap)
+        overrides_rows = await db.channel_allocation_overrides.find(
+            {"property_id": property_id,
+             "date": {"$gte": d_from.isoformat(), "$lte": d_to.isoformat()}},
+            {"_id": 0}
+        ).to_list(5000)
+        override_idx: Dict[str, int] = {}
+        for o in overrides_rows:
+            override_idx[f"{o['channel_id']}|{o['room_type_id']}|{o['date']}"] = o["allocation_cap"]
 
         # Sold per (room, channel, date) from bookings
         q = {"property_id": property_id}
@@ -165,17 +211,25 @@ def create_inventory_allocations_router(db, require_roles):
                 for d in dates:
                     sold_here = sold.get(f"{rt['id']}|{ch['channel_id']}|{d}", 0)
                     sold_all = sold_pooled.get(f"{rt['id']}|{d}", 0)
+                    override_key = f"{ch['channel_id']}|{rt['id']}|{d}"
+                    cell_cap = override_idx.get(override_key, cap)
+                    edited = override_key in override_idx
                     if mode == "dedicated":
-                        avail = max(0, cap - sold_here - buf)
+                        avail = max(0, cell_cap - sold_here - buf)
                     elif mode == "capped":
-                        avail = max(0, min(cap - sold_here, total_inv - sold_all) - buf)
-                    else:  # pooled
-                        avail = max(0, total_inv - sold_all - buf)
+                        avail = max(0, min(cell_cap - sold_here, total_inv - sold_all) - buf)
+                    else:  # pooled — override means "cap this channel on this date"
+                        if edited:
+                            avail = max(0, min(cell_cap - sold_here, total_inv - sold_all) - buf)
+                        else:
+                            avail = max(0, total_inv - sold_all - buf)
                     row_cells.append({
                         "date": d, "available": avail,
                         "sold_on_channel": sold_here,
                         "sold_all": sold_all,
                         "total_inventory": total_inv,
+                        "effective_cap": cell_cap if (edited or mode in ("dedicated", "capped")) else total_inv,
+                        "edited": edited,
                     })
                 grid.append({
                     "room_type_id": rt["id"],

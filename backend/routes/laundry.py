@@ -1395,6 +1395,86 @@ def create_laundry_router(db, require_roles):
         )
         return {"ok": True, "sent_to": to_list}
 
+    @router.post("/laundry/deliveries/{delivery_id}/email")
+    async def email_delivery(delivery_id: str, data: Dict,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Email a delivery dispute with photos as attachments to the vendor."""
+        to_list = data.get("to") or []
+        if isinstance(to_list, str):
+            to_list = [to_list]
+        to_list = [x for x in to_list if x and "@" in x]
+        if not to_list:
+            raise HTTPException(400, "Recipient email required")
+        if resend is None or not resend.api_key:
+            raise HTTPException(503, "Email service not configured")
+        dlv = await db.laundry_deliveries.find_one({"id": delivery_id}, {"_id": 0})
+        if not dlv:
+            raise HTTPException(404, "Delivery not found")
+        pname = await _resolve_property_name(dlv.get("property_id", ""))
+        import base64 as _b64
+        attachments = []
+        for idx, p in enumerate(dlv.get("photos") or []):
+            if not isinstance(p, str) or "," not in p or not p.startswith("data:image/"):
+                continue
+            header, payload = p.split(",", 1)
+            ext = "jpg" if "jpeg" in header else ("png" if "png" in header else "img")
+            try:
+                # validate base64
+                _b64.b64decode(payload, validate=True)
+                attachments.append({
+                    "filename": f"photo_{idx+1}.{ext}",
+                    "content": payload,
+                })
+            except Exception:
+                continue
+        subject = data.get("subject") or f"Laundry Delivery Dispute — {pname} — {dlv.get('delivery_date','')}"
+        rows_html = "".join(
+            f"<tr><td>{i.get('name','')}</td>"
+            f"<td style='text-align:right'>{i.get('qty_sent',0)}</td>"
+            f"<td style='text-align:right'>{i.get('qty_received',0)}</td>"
+            f"<td style='text-align:right;color:#b91c1c'>{i.get('qty_shortage',0)}</td>"
+            f"<td style='text-align:right;color:#a21caf'>{i.get('qty_damage',0)}</td>"
+            f"<td style='text-align:right;color:#b45309'>{i.get('qty_rejected',0)}</td></tr>"
+            for i in (dlv.get("items") or [])
+            if any(int(i.get(k) or 0) for k in ("qty_shortage","qty_damage","qty_rejected"))
+        )
+        body_html = data.get("message_html") or f"""
+        <div style="font-family:Helvetica,Arial,sans-serif;color:#111;max-width:640px;margin:0 auto;">
+          <h2 style="color:#111827;margin:0 0 8px">Laundry Delivery Dispute</h2>
+          <p style="color:#6b7280;margin:0 0 16px">{pname} · Delivery {dlv.get('delivery_date','')} · Invoice {dlv.get('invoice_number') or '—'}</p>
+          <p>Dear vendor,</p>
+          <p>We've recorded discrepancies on the delivery below. Please find the photo evidence attached and respond at your earliest convenience.</p>
+          <table cellpadding="6" style="border-collapse:collapse;border:1px solid #e5e7eb;font-size:13px;width:100%;">
+            <thead><tr style="background:#f9fafb"><th align="left">Item</th><th>Sent</th><th>Received</th><th>Shortage</th><th>Broken (factory)</th><th>Damaged (room)</th></tr></thead>
+            <tbody>{rows_html or '<tr><td colspan=6 style="text-align:center;color:#9ca3af">No line-level discrepancies — photos only.</td></tr>'}</tbody>
+          </table>
+          <p style="margin-top:14px;color:#374151">Photos attached: <b>{len(attachments)}</b>. Notes: {dlv.get('notes') or '—'}</p>
+        </div>
+        """
+        try:
+            sender = os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev"
+            payload = {
+                "from": sender,
+                "to": to_list,
+                "subject": subject,
+                "html": body_html,
+            }
+            if attachments:
+                payload["attachments"] = attachments
+            await asyncio.to_thread(resend.Emails.send, payload)
+        except Exception as e:
+            logger.exception("Delivery email failed")
+            raise HTTPException(502, f"Email send failed: {e}")
+        await db.laundry_deliveries.update_one(
+            {"id": delivery_id},
+            {"$push": {"email_history": {
+                "to": to_list, "at": datetime.now(timezone.utc).isoformat(),
+                "by": current_user.get("email", ""),
+                "attachments": len(attachments),
+            }}}
+        )
+        return {"ok": True, "sent_to": to_list, "attachments": len(attachments)}
+
     return router
 
 

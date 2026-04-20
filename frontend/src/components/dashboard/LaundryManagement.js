@@ -118,6 +118,9 @@ const LAUNDRY_I18N = {
     // Photos
     photosTitle: "Photos (Broken / Damaged evidence)", photosHint: "Snap up to 3 photos of broken or damaged items",
     photoAdd: "Take / Add Photo", photoRemove: "Remove", photoTooLarge: "Image too large (max 5MB)",
+    photosView: "View Photos", emailVendor: "Email Vendor", emailWithPhotos: "Email vendor with photos",
+    emailRecipient: "Recipient email(s)", emailSend: "Send", emailSending: "Sending...",
+    emailSent: "Sent", emailFail: "Email failed",
     // Offline
     offlineN: "queued offline (will auto-sync)",
   },
@@ -185,6 +188,9 @@ const LAUNDRY_I18N = {
     // Fotoğraflar
     photosTitle: "Fotoğraflar (Bozuk / Hasarlı kanıt)", photosHint: "Bozuk veya hasarlı ürünlerin en fazla 3 fotoğrafını çekin",
     photoAdd: "Foto Çek / Ekle", photoRemove: "Kaldır", photoTooLarge: "Resim çok büyük (max 5MB)",
+    photosView: "Fotoğrafları Gör", emailVendor: "Tedarikçiye Mail", emailWithPhotos: "Tedarikçiye fotoğraflarla mail gönder",
+    emailRecipient: "Alıcı e-posta(lar)", emailSend: "Gönder", emailSending: "Gönderiliyor...",
+    emailSent: "Gönderildi", emailFail: "Mail gönderilemedi",
     offlineN: "offline sırada (bağlantı gelince otomatik yollanır)",
   },
   bg: {
@@ -251,6 +257,9 @@ const LAUNDRY_I18N = {
     // Снимки
     photosTitle: "Снимки (доказателство за счупени/повредени)", photosHint: "Направете до 3 снимки на счупените или повредените артикули",
     photoAdd: "Снимай / Добави", photoRemove: "Премахни", photoTooLarge: "Снимката е твърде голяма (макс. 5MB)",
+    photosView: "Виж снимки", emailVendor: "Изпрати на доставчик", emailWithPhotos: "Изпрати на доставчика със снимки",
+    emailRecipient: "Получател(и)", emailSend: "Изпрати", emailSending: "Изпращане...",
+    emailSent: "Изпратено", emailFail: "Неуспешно изпращане",
     offlineN: "опашка офлайн (ще се синхронизира автоматично)",
   },
 };
@@ -445,6 +454,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
   }, [pid]);
   // QR code preview modal for dispatches — future-ready, factory can scan on arrival
   const [qrDispatch, setQrDispatch] = useState(null);
+  const [lightboxPhotos, setLightboxPhotos] = useState(null);
   // Email-to-vendor modal state
   const [emailDispatch, setEmailDispatch] = useState(null);
   const [emailTo, setEmailTo] = useState("");
@@ -804,7 +814,15 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                         <td className="py-2 px-3 text-[10px] text-stone-500 italic">{r.notes || "—"}</td>
                         <td className="py-2 px-3 text-[10px] text-stone-500">{r.recorded_by}</td>
                         <td className="py-2 px-3 text-right">
-                          {isManager && <button onClick={() => deleteUsage(r.id)} className="p-1 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3 text-red-500" /></button>}
+                          <div className="inline-flex items-center gap-1 justify-end">
+                            {(r.photos || []).length > 0 && (
+                              <button onClick={() => setLightboxPhotos(r.photos)} className="p-1 hover:bg-violet-50 rounded text-violet-600" title={L?.photosView || "View Photos"} data-testid={`usage-photos-${r.id}`}>
+                                <Camera className="w-3.5 h-3.5 inline" />
+                                <span className="text-[10px] font-bold ml-0.5">{r.photos.length}</span>
+                              </button>
+                            )}
+                            {isManager && <button onClick={() => deleteUsage(r.id)} className="p-1 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3 text-red-500" /></button>}
+                          </div>
                         </td>
                       </tr>
                       );
@@ -1378,6 +1396,9 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Photo Lightbox */}
+      {lightboxPhotos && <PhotoLightbox photos={lightboxPhotos} onClose={() => setLightboxPhotos(null)} />}
     </div>
   );
 };
@@ -1605,6 +1626,8 @@ const StockTab = ({ pid, stock, updateStockCell, lang, setLang, L }) => {
 const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L, canSeeCosts = true }) => {
   const [rows, setRows] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [lightboxPhotos, setLightboxPhotos] = useState(null);
+  const [emailDelivery, setEmailDelivery] = useState(null);
   const emptyItem = { item_id: "", name: "", qty_sent: 0, qty_received: 0, qty_shortage: 0, qty_damage: 0, qty_rejected: 0, reason: "", unit_cost: 0 };
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
@@ -1731,13 +1754,32 @@ const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L,
                   <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">£{r.net_payable?.toFixed(2)}</td>
                   <td className="py-2.5 px-3 text-center text-stone-700">{r.coverage_pct != null ? `${r.coverage_pct}%` : "—"}</td>
                   <td className="py-2.5 px-3 text-center"><Badge className={statusBadge(r.status)}>{r.status}</Badge></td>
-                  <td><button onClick={() => del(r.id)} className="text-rose-500 text-xs">Del</button></td>
+                  <td className="py-2.5 px-3 text-right">
+                    <div className="inline-flex items-center gap-1.5 justify-end flex-wrap">
+                      {(r.photos || []).length > 0 && (
+                        <button onClick={() => setLightboxPhotos(r.photos)} className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 hover:bg-violet-100 font-semibold" title={L?.photosView || "View Photos"} data-testid={`delv-photos-${r.id.slice(0,6)}`}>
+                          <Camera className="w-3 h-3 inline mr-0.5" />{r.photos.length}
+                        </button>
+                      )}
+                      {(r.photos || []).length > 0 && (
+                        <button onClick={() => setEmailDelivery(r)} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold" title={L?.emailWithPhotos || "Email vendor with photos"} data-testid={`delv-email-${r.id.slice(0,6)}`}>
+                          <Mail className="w-3 h-3 inline mr-0.5" />Mail
+                        </button>
+                      )}
+                      <button onClick={() => del(r.id)} className="text-rose-500 text-xs">Del</button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* Photo Lightbox */}
+      {lightboxPhotos && <PhotoLightbox photos={lightboxPhotos} onClose={() => setLightboxPhotos(null)} />}
+      {/* Vendor Email Modal */}
+      {emailDelivery && <VendorEmailModal delivery={emailDelivery} onClose={() => setEmailDelivery(null)} L={L} />}
 
       {/* Record Delivery Modal */}
       {showForm && (
@@ -2366,3 +2408,83 @@ const PhotoCapture = ({ photos = [], onChange, L, max = 3 }) => {
     </div>
   );
 };
+
+/* ═══════════ PhotoLightbox — fullscreen viewer with ← → navigation ═══════════ */
+const PhotoLightbox = ({ photos = [], onClose }) => {
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowRight") setIdx(i => (i + 1) % photos.length);
+      else if (e.key === "ArrowLeft") setIdx(i => (i - 1 + photos.length) % photos.length);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [photos.length, onClose]);
+
+  if (!photos.length) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4" onClick={onClose} data-testid="photo-lightbox">
+      <button onClick={onClose} className="absolute top-4 right-4 text-white text-4xl leading-none hover:text-stone-300" data-testid="lightbox-close">×</button>
+      <div className="absolute top-4 left-4 text-white text-sm font-semibold bg-black/40 px-3 py-1 rounded-full">
+        {idx + 1} / {photos.length}
+      </div>
+      {photos.length > 1 && (
+        <>
+          <button onClick={e => { e.stopPropagation(); setIdx(i => (i - 1 + photos.length) % photos.length); }}
+            className="absolute left-4 text-white text-5xl hover:text-stone-300 z-10" data-testid="lightbox-prev">‹</button>
+          <button onClick={e => { e.stopPropagation(); setIdx(i => (i + 1) % photos.length); }}
+            className="absolute right-4 text-white text-5xl hover:text-stone-300 z-10" data-testid="lightbox-next">›</button>
+        </>
+      )}
+      <img src={photos[idx]} alt={`proof-${idx + 1}`} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+    </div>
+  );
+};
+
+/* ═══════════ VendorEmailModal — send photos as attachments ═══════════ */
+const VendorEmailModal = ({ delivery, onClose, L }) => {
+  const [to, setTo] = useState("");
+  const [sending, setSending] = useState(false);
+  if (!delivery) return null;
+  const send = async () => {
+    if (!to || !to.includes("@")) { toast.error("Valid email required"); return; }
+    setSending(true);
+    try {
+      const resp = await axios.post(`${API}/laundry/deliveries/${delivery.id}/email`, {
+        to: to.split(",").map(x => x.trim()).filter(Boolean),
+      });
+      toast.success(`${L?.emailSent || "Sent"} · ${resp.data?.attachments || 0} photos attached`);
+      onClose();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || L?.emailFail || "Email failed");
+    }
+    setSending(false);
+  };
+  return (
+    <div className="fixed inset-0 bg-black/40 z-[55] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()} data-testid="email-modal">
+        <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+          <h3 className="font-bold">{L?.emailVendor || "Email Vendor"}</h3>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="text-xs text-stone-500">{L?.emailWithPhotos || "Email vendor with photos"} · <b>{(delivery.photos || []).length}</b> photo(s)</div>
+          <div>
+            <label className="text-xs text-stone-500">{L?.emailRecipient || "Recipient email(s)"} *</label>
+            <input value={to} onChange={e => setTo(e.target.value)} placeholder="vendor@example.com" className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="email-to-input" />
+          </div>
+          <div className="text-[10px] text-stone-400">Multiple addresses can be comma-separated.</div>
+        </div>
+        <div className="p-4 border-t border-stone-100 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>{L?.cancel || "Cancel"}</Button>
+          <Button size="sm" disabled={sending} onClick={send} className="bg-violet-600 hover:bg-violet-700 text-white" data-testid="email-send-btn">
+            <Mail className="w-4 h-4 mr-1" />{sending ? (L?.emailSending || "Sending...") : (L?.emailSend || "Send")}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+

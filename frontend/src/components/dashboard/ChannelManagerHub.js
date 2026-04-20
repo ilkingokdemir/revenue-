@@ -951,14 +951,33 @@ const AllocationCell = ({ pid, row, cell, onChanged }) => {
 
   const save = async () => {
     const trimmed = String(value).trim();
-    const payload = {
-      channel_id: row.channel_id, room_type_id: row.room_type_id,
-      date: cell.date,
-      allocation_cap: trimmed === "" ? null : parseInt(trimmed),
-    };
     try {
-      await axios.put(`${API}/inventory-allocations/${pid}/cell`, payload);
+      await axios.put(`${API}/inventory-allocations/${pid}/cell`, {
+        channel_id: row.channel_id, room_type_id: row.room_type_id,
+        date: cell.date,
+        allocation_cap: trimmed === "" ? null : parseInt(trimmed),
+      });
       toast.success(trimmed === "" ? "Cleared" : `Cap → ${trimmed}`);
+      setEditing(false);
+      onChanged();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed");
+    }
+  };
+
+  const propagate = async (days, mode = "consecutive") => {
+    const trimmed = String(value).trim();
+    try {
+      const { data } = await axios.post(`${API}/inventory-allocations/${pid}/cell/propagate`, {
+        channel_id: row.channel_id, room_type_id: row.room_type_id,
+        from_date: cell.date, days, mode,
+        allocation_cap: trimmed === "" ? null : parseInt(trimmed),
+      });
+      const verb = trimmed === "" ? "Cleared" : `Cap → ${trimmed}`;
+      const scope = mode === "same_weekday"
+        ? `${data.dates_affected} ${new Date(cell.date).toLocaleDateString("en-GB", { weekday: "long" })}s`
+        : `${data.dates_affected} consecutive days`;
+      toast.success(`${verb} on ${scope}`);
       setEditing(false);
       onChanged();
     } catch (e) {
@@ -972,18 +991,41 @@ const AllocationCell = ({ pid, row, cell, onChanged }) => {
 
   if (editing) {
     return (
-      <td className="p-0.5 border-r border-stone-100">
+      <td className="p-0.5 border-r border-stone-100 relative">
         <input
           autoFocus
           type="number"
           min="0"
           value={value}
           onChange={e => setValue(e.target.value)}
-          onBlur={save}
-          onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+          onKeyDown={e => { if (e.key === "Enter") save(); if (e.key === "Escape") { setEditing(false); } }}
           className="w-full h-8 text-center font-mono text-xs border-violet-500 border rounded px-1 focus:outline-none"
           data-testid={`chmgr-alloc-cell-input-${row.room_type_id}-${row.channel_id}-${cell.date}`}
         />
+        {/* Popover with quick actions */}
+        <div className="absolute z-20 top-full left-1/2 -translate-x-1/2 mt-1 bg-white border border-stone-200 rounded-xl shadow-xl p-2 min-w-[180px]" onMouseDown={e => e.preventDefault()}>
+          <button onClick={save} className="w-full text-left px-3 py-1.5 rounded hover:bg-emerald-50 text-xs font-semibold text-emerald-700" data-testid={`chmgr-alloc-save-1-${cell.date}`}>
+            Save for this day
+          </button>
+          <div className="border-t border-stone-100 my-1" />
+          <div className="text-[10px] text-stone-400 uppercase tracking-wider px-3 pt-1">Propagate — next</div>
+          {[7, 14, 30].map(d => (
+            <button key={d} onClick={() => propagate(d, "consecutive")} className="w-full text-left px-3 py-1 rounded hover:bg-violet-50 text-xs text-violet-700" data-testid={`chmgr-alloc-prop-${d}d-${cell.date}`}>
+              {d} consecutive days
+            </button>
+          ))}
+          <div className="border-t border-stone-100 my-1" />
+          <div className="text-[10px] text-stone-400 uppercase tracking-wider px-3 pt-1">Same weekday — next</div>
+          {[30, 60, 90].map(d => (
+            <button key={d} onClick={() => propagate(d, "same_weekday")} className="w-full text-left px-3 py-1 rounded hover:bg-violet-50 text-xs text-violet-700" data-testid={`chmgr-alloc-propw-${d}d-${cell.date}`}>
+              every {new Date(cell.date).toLocaleDateString("en-GB", { weekday: "long" })} for {d} days
+            </button>
+          ))}
+          <div className="border-t border-stone-100 my-1" />
+          <button onClick={() => { setValue(""); setTimeout(save, 0); }} className="w-full text-left px-3 py-1.5 rounded hover:bg-rose-50 text-xs text-rose-600" data-testid={`chmgr-alloc-clear-${cell.date}`}>
+            Clear override
+          </button>
+        </div>
       </td>
     );
   }

@@ -1417,6 +1417,12 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 164.2 (Apr 2026) — Copy-Down / Copy-Across Bulk Cell Editor
+- Backend: new `POST /api/inventory-allocations/{pid}/cell/propagate` endpoint supporting **consecutive** (next N days) and **same_weekday** (every N-th weekday) propagation modes, with null cap to clear overrides in range
+- Frontend: `AllocationCell` popover — clicking a cell now reveals quick actions: *Save for this day · Propagate 7/14/30 consecutive days · Same weekday (auto-detected) for 30/60/90 days · Clear override*
+- Matches peak-week / weekend-capping flows from SiteMinder & STAAH
+- Smoke-tested: `cap=1 same_weekday days=30 from=May 2` → 5 Saturdays upserted (May 2/9/16/23/30) ✅ · consecutive `days=7 cap=2` → 7 dates ✅ · null cap same_weekday → 5 deleted ✅
+
 ## Iter 164.1 (Apr 2026) — Click-editable Allocation Cells
 - Backend: new `PUT /api/inventory-allocations/{pid}/cell` endpoint upserts/clears date-level overrides in `channel_allocation_overrides`
 - Calendar endpoint now merges date-level overrides on top of rule-level caps and returns `edited` + `effective_cap` per cell

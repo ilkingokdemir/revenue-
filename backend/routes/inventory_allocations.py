@@ -119,6 +119,77 @@ def create_inventory_allocations_router(db, require_roles):
         )
         return {"status": "ok", "allocation_cap": cap_int}
 
+    @router.post("/inventory-allocations/{property_id}/cell/propagate")
+    async def propagate_cell(property_id: str, data: Dict,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Bulk copy a cap value across a date range.
+
+        Body: {channel_id, room_type_id, from_date, days, allocation_cap,
+               mode: 'consecutive' | 'same_weekday'}
+
+        - consecutive: override the next N days including from_date
+        - same_weekday: override every same-weekday up to from_date + days-1
+        Pass allocation_cap=null to clear (delete) overrides in the range.
+        """
+        for f in ("channel_id", "room_type_id", "from_date"):
+            if not data.get(f):
+                raise HTTPException(400, f"{f} required")
+        try:
+            d_from = date_cls.fromisoformat(data["from_date"])
+        except ValueError:
+            raise HTTPException(400, "from_date must be YYYY-MM-DD")
+        days = int(data.get("days") or 7)
+        if days < 1 or days > 90:
+            raise HTTPException(400, "days 1-90")
+        mode = data.get("mode", "consecutive")
+        if mode not in ("consecutive", "same_weekday"):
+            raise HTTPException(400, "mode must be consecutive|same_weekday")
+
+        cap = data.get("allocation_cap")
+        clearing = cap is None or (isinstance(cap, str) and cap.strip() == "")
+        if not clearing:
+            try:
+                cap_int = int(cap)
+            except (TypeError, ValueError):
+                raise HTTPException(400, "allocation_cap must be integer or null")
+            if cap_int < 0:
+                raise HTTPException(400, "allocation_cap must be >= 0")
+
+        target_dates: List[str] = []
+        if mode == "consecutive":
+            for i in range(days):
+                target_dates.append((d_from + timedelta(days=i)).isoformat())
+        else:  # same_weekday
+            for i in range(days):
+                d = d_from + timedelta(days=i)
+                if d.weekday() == d_from.weekday():
+                    target_dates.append(d.isoformat())
+
+        now = datetime.now(timezone.utc).isoformat()
+        upserted, deleted = 0, 0
+        for td in target_dates:
+            key = {"property_id": property_id,
+                   "channel_id": data["channel_id"],
+                   "room_type_id": data["room_type_id"],
+                   "date": td}
+            if clearing:
+                r = await db.channel_allocation_overrides.delete_one(key)
+                deleted += r.deleted_count
+            else:
+                await db.channel_allocation_overrides.update_one(
+                    key,
+                    {"$set": {**key, "allocation_cap": cap_int,
+                              "updated_at": now,
+                              "updated_by": current_user.get("email", "")},
+                     "$setOnInsert": {"id": str(uuid.uuid4()),
+                                      "created_at": now}},
+                    upsert=True,
+                )
+                upserted += 1
+        return {"status": "ok", "mode": mode,
+                "dates_affected": len(target_dates),
+                "upserted": upserted, "deleted": deleted}
+
     # ──────────────────────────────────────────────────────────────
     # AVAILABILITY CALENDAR — compute per (date, channel, room) what
     # the channel manager WOULD push as available

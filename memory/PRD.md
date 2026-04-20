@@ -1417,6 +1417,18 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 165.4 (Apr 2026) — Laundry Settings (Providers + Contracts) with Hybrid pricing
+- Competitor settings-side analysis (MyHotelBox) revealed: Providers entity, 3-model pricing, day-of-week schedule
+- Backend upgrade to `laundry.py`:
+  - New Providers CRUD (`GET/POST/PUT/DELETE /api/laundry/providers/*`) with `active_contracts` + `items_count` rollups
+  - Contracts model extended: `provider_id` foreign key · `pricing_model` (per_piece | flat_rate | **hybrid**) · `quota` · `overage_rate` · `billing_period` · `dispatch_days[]` · `return_days[]`
+  - Delete guard on provider if active contracts exist
+- New frontend: `LaundrySettingsPanel.js` (~350 lines) — 2 tabs (Providers · Contracts)
+  - Providers tab: table with Contact/Active Contracts/Status · Add/Edit/Delete modal · one-click status toggle
+  - Contracts tab: provider filter · pricing-model-aware form (Hybrid reveals Monthly Flat + Quota + Overage fields) · day-of-week pill selectors for Dispatch/Return Days · per-item rates for Per Piece
+- Sidebar: new "Laundry Settings" entry next to "Laundry"
+- Smoke-tested end-to-end: Rishad Laundry Services created · Hybrid contract (quota=500, overage=£0.45, flat=£1200) · active_contracts rollup shows 1
+
 ## Iter 165.3 (Apr 2026) — Laundry Stock Transactions (maintenance/disposal/write-off audit)
 - User workflow clarification: housekeeping records dirty/used/damaged, reception counts returns, stock maintains audit trail
 - Existing gaps identified: Stock tab had editable cells but zero audit trail; no way to record maintenance/disposal/write-off

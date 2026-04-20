@@ -265,29 +265,117 @@ def create_laundry_router(db, require_roles):
         return doc
 
     # ========================= CONTRACTS =========================
+    # ========================= PROVIDERS (settings entity) =========================
+    @router.get("/laundry/providers/{property_id}")
+    async def list_providers(property_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        query = {} if property_id == "all" else {"property_id": property_id}
+        providers = await db.laundry_providers.find(query, {"_id": 0}).sort("name", 1).to_list(200)
+        # Enrich each with items_count + active_contracts_count
+        for p in providers:
+            p["items_count"] = await db.laundry_contract_items.count_documents({"provider_id": p["id"]})
+            p["active_contracts"] = await db.laundry_contracts.count_documents({
+                "provider_id": p["id"], "active": True,
+            })
+        return {"providers": providers}
+
+    @router.post("/laundry/providers/{property_id}")
+    async def create_provider(property_id: str, data: Dict,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        name = (data.get("name") or "").strip()
+        if not name:
+            raise HTTPException(400, "name required")
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "name": name,
+            "contact_name": data.get("contact_name", ""),
+            "contact_email": data.get("contact_email", ""),
+            "contact_phone": data.get("contact_phone", ""),
+            "address": data.get("address", ""),
+            "notes": data.get("notes", ""),
+            "status": "active",
+            "created_at": now,
+            "created_by": current_user.get("email", ""),
+        }
+        await db.laundry_providers.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.put("/laundry/providers/{provider_id}")
+    async def update_provider(provider_id: str, data: Dict,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        allowed = {"name", "contact_name", "contact_email", "contact_phone",
+                   "address", "notes", "status"}
+        patch = {k: v for k, v in data.items() if k in allowed}
+        if not patch:
+            raise HTTPException(400, "No valid fields")
+        patch["updated_at"] = datetime.now(timezone.utc).isoformat()
+        res = await db.laundry_providers.update_one({"id": provider_id}, {"$set": patch})
+        if not res.matched_count:
+            raise HTTPException(404, "Provider not found")
+        return {"status": "updated", "patch": patch}
+
+    @router.delete("/laundry/providers/{provider_id}")
+    async def delete_provider(provider_id: str,
+                              current_user: dict = Depends(require_roles("admin"))):
+        active = await db.laundry_contracts.count_documents({"provider_id": provider_id, "active": True})
+        if active > 0:
+            raise HTTPException(400, f"Provider has {active} active contract(s) — deactivate them first")
+        res = await db.laundry_providers.delete_one({"id": provider_id})
+        return {"status": "deleted" if res.deleted_count else "not_found"}
+
     @router.get("/laundry/contracts/{property_id}")
     async def list_contracts(property_id: str,
                              current_user: dict = Depends(require_roles("admin", "manager"))):
         query = {"property_id": property_id} if property_id != "all" else {}
         contracts = await db.laundry_contracts.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+        # Enrich with provider name
+        provider_ids = list({c.get("provider_id") for c in contracts if c.get("provider_id")})
+        if provider_ids:
+            providers = await db.laundry_providers.find(
+                {"id": {"$in": provider_ids}}, {"_id": 0, "id": 1, "name": 1}
+            ).to_list(len(provider_ids))
+            pmap = {p["id"]: p["name"] for p in providers}
+            for c in contracts:
+                c["provider_name"] = pmap.get(c.get("provider_id") or "", c.get("vendor", ""))
         return {"contracts": contracts}
 
     @router.post("/laundry/contracts/{property_id}")
     async def create_contract(property_id: str, data: Dict,
                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Supports 3 pricing models (Mews/Eviivo/Cloudbeds parity):
+           • per_piece  — rates[] charged per item
+           • flat_rate  — flat_amount per billing period
+           • hybrid     — quota (pieces included) + overage_rate (£ per piece over)
+        """
+        provider_id = data.get("provider_id") or ""
         vendor = (data.get("vendor") or "").strip()
-        if not vendor:
-            raise HTTPException(400, "Vendor required")
+        if not provider_id and not vendor:
+            raise HTTPException(400, "provider_id or vendor required")
+        pricing_model = data.get("pricing_model", "per_piece")
+        if pricing_model not in ("per_piece", "flat_rate", "hybrid"):
+            raise HTTPException(400, "pricing_model must be per_piece|flat_rate|hybrid")
         now = datetime.now(timezone.utc).isoformat()
         doc = {
             "id": str(uuid.uuid4()),
             "property_id": property_id,
+            "provider_id": provider_id,
             "vendor": vendor,
             "contact_name": data.get("contact_name", ""),
             "contact_email": data.get("contact_email", ""),
             "contact_phone": data.get("contact_phone", ""),
             "start_date": data.get("start_date", ""),
             "end_date": data.get("end_date", ""),
+            "currency": data.get("currency", "GBP"),
+            "pricing_model": pricing_model,
+            "flat_amount": float(data.get("flat_amount") or 0),
+            "quota": int(data.get("quota") or 0),
+            "overage_rate": float(data.get("overage_rate") or 0),
+            "billing_period": data.get("billing_period", "monthly"),
+            "dispatch_days": data.get("dispatch_days") or [],
+            "return_days": data.get("return_days") or [],
             "pickup_schedule": data.get("pickup_schedule", ""),
             "terms": (data.get("terms") or "").strip(),
             "rates": data.get("rates", []),  # [{item_id, name, rate}]

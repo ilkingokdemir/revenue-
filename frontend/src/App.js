@@ -39,6 +39,7 @@ import {
 } from "./components/dashboard/ChannelManagerMvpPanels";
 import ChannelManagerHub from "./components/dashboard/ChannelManagerHub";
 import GroupBlocksPanel from "./components/dashboard/GroupBlocksPanel";
+import LaundrySettingsPanel from "./components/dashboard/LaundrySettingsPanel";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
@@ -2646,6 +2647,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "preventive-maintenance", icon: Wrench, name: "Preventive Maintenance", testId: "preventive-maintenance-btn" },
         { id: "asset-register", icon: Package, name: "Asset Register", testId: "asset-register-btn" },
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
+        { id: "laundry-settings", icon: TShirt, name: "Laundry Settings", testId: "laundry-settings-btn" },
         { id: "night-audit", icon: Moon, name: t("nav.night_audit"), testId: "night-audit-btn" },
         { id: "night-audit-close", icon: Lock, name: "Close Day (Lock)", testId: "night-audit-close-btn" },
         { id: "logbook", icon: Notebook, name: t("nav.logbook"), testId: "logbook-btn" },
@@ -3566,6 +3568,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Iter 165 — Group Blocks (Smart Rate Control lives inside Revenue → Pricing tab to avoid duplication) */}
         {activeView === "group-blocks" && <GroupBlocksPanel activePropertyId={activePropertyId} />}
+
+        {/* Iter 165.4 — Laundry Settings (Providers + Contracts with Per Piece / Flat Rate / Hybrid pricing) */}
+        {activeView === "laundry-settings" && <LaundrySettingsPanel activePropertyId={activePropertyId} />}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

@@ -2,6 +2,25 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.13 (Feb 2026): 🗓️ Forecast honours contract dispatch days
+
+Follow-up to 166.12 per user approval: the Order Forecast now reads the active contract's `dispatch_days` and guides the operator to valid delivery dates.
+
+**Frontend** (`LaundryManagement.js` — `ForecastTab`)
+- On mount, fetches `/api/laundry/contracts/{pid}` and picks the first active contract.
+- `allowedDispatchDays` state stores day names (e.g. `["monday","thursday"]`).
+- New helper `nextAllowedDate(days)` returns the next calendar day whose weekday matches — replaces the old hard-coded "next Monday" default.
+- "Delivery Date" section now shows:
+  - Emerald chips listing the allowed dispatch days (e.g. `MON`, `THU`) pulled from the contract.
+  - A blue **"Next valid →"** button that jumps the date to the next allowed day with one click.
+  - An amber warning banner ("⚠ Tuesday is not a contract dispatch day.") shown live under the input when the selected weekday is NOT in the allowed set.
+- Sparkles header now shows an "Active contract · <provider name>" pill on the right so operators immediately see which contract the rules come from.
+- Forecast auto-recomputes via a dedicated `useEffect([delivery])`.
+
+**Behaviour**
+- Example (Rishad contract MON/THU): opens forecast → date defaults to the coming Monday/Thursday (whichever is next).
+- If operator manually picks Tuesday → warning appears, they can tap "Next valid →" to jump to Thursday.
+
 ### Iter 166.12 (Feb 2026): 📅 Editable Laundry Contract (change delivery days)
 
 User request: _"delivery günlerini değiştirebilimiyoz."_ — contracts were create-only via UI.

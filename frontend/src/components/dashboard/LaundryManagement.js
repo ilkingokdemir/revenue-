@@ -1673,14 +1673,30 @@ const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
 
 /* ═══════════════════ ORDER FORECAST TAB ═══════════════════ */
 const ForecastTab = ({ pid, onCreated, canSeeCosts = true }) => {
-  const nextMonday = () => {
+  // Map day-name → JS weekday (0=Sun ... 6=Sat)
+  const DAY_MAP = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+  const nextMondayISO = () => {
     const d = new Date();
-    const day = d.getDay();                 // 0=Sun, 1=Mon, ...
-    const diff = (8 - day) % 7 || 7;        // days until next Monday (>=1)
+    const diff = (8 - d.getDay()) % 7 || 7;
     d.setDate(d.getDate() + diff);
     return d.toISOString().slice(0, 10);
   };
-  const [delivery, setDelivery] = useState(nextMonday());
+  // Contract-aware: find the next date whose weekday is in the allowed set
+  const nextAllowedDate = (allowedDays) => {
+    if (!allowedDays || allowedDays.length === 0) return nextMondayISO();
+    const wanted = new Set(allowedDays.map(x => DAY_MAP[String(x).toLowerCase()]).filter(v => v !== undefined));
+    if (wanted.size === 0) return nextMondayISO();
+    const d = new Date();
+    for (let i = 1; i <= 14; i++) {
+      const cand = new Date(d);
+      cand.setDate(d.getDate() + i);
+      if (wanted.has(cand.getDay())) return cand.toISOString().slice(0, 10);
+    }
+    return nextMondayISO();
+  };
+  const [delivery, setDelivery] = useState("");
+  const [allowedDispatchDays, setAllowedDispatchDays] = useState([]);   // e.g. ["monday","thursday"]
+  const [contractInfo, setContractInfo] = useState(null);               // { provider_name, vendor?, etc }
   const [horizon, setHorizon] = useState(7);
   const [everyN, setEveryN] = useState(2);
   const [providers, setProviders] = useState([]);
@@ -1711,14 +1727,30 @@ const ForecastTab = ({ pid, onCreated, canSeeCosts = true }) => {
   }, [pid, delivery, horizon, everyN, globalBuffer]);
 
   useEffect(() => {
+    // Fetch active laundry contract to learn allowed dispatch days
+    axios.get(`${API}/laundry/contracts/${pid}`).then(r => {
+      const all = r.data.contracts || [];
+      const act = all.find(c => c.active !== false) || all[0];
+      const days = act?.dispatch_days || [];
+      setAllowedDispatchDays(days);
+      setContractInfo(act || null);
+      setDelivery(nextAllowedDate(days));
+    }).catch(() => { setAllowedDispatchDays([]); setDelivery(nextMondayISO()); });
+
     axios.get(`${API}/laundry/providers/${pid}`).then(r => {
       const active = (r.data.providers || []).filter(p => p.status === "active");
       setProviders(active);
       if (active.length && !vendor) setVendor(active[0].name);
     }).catch(() => setProviders([]));
-    runForecast();
+    // runForecast() fires via its own useEffect (delivery change)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pid]);
+
+  // When delivery is set by contract load, run the forecast once
+  useEffect(() => {
+    if (delivery) runForecast();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [delivery]);
 
   const updateQty = (item_id, v) => {
     setEditableItems(arr => arr.map(x => x.item_id === item_id ? { ...x, order_qty: Math.max(0, parseInt(v) || 0) } : x));
@@ -1775,15 +1807,43 @@ const ForecastTab = ({ pid, onCreated, canSeeCosts = true }) => {
     <div className="space-y-4" data-testid="forecast-panel">
       {/* Controls */}
       <div className="bg-gradient-to-br from-fuchsia-50 to-white border border-fuchsia-200 rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <Sparkles className="w-4 h-4 text-fuchsia-600" />
           <h3 className="text-sm font-bold text-stone-800">Smart Order Forecast</h3>
           <span className="text-xs text-stone-500">Computes next-week linen needs based on arrivals + in-house cleanings</span>
+          {contractInfo && (
+            <span className="ml-auto text-[11px] bg-emerald-50 border border-emerald-200 text-emerald-700 rounded px-2 py-0.5 font-semibold" data-testid="forecast-active-contract">
+              Active contract · {contractInfo.provider_name || contractInfo.provider_id || "—"}
+            </span>
+          )}
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-          <div>
+        <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
+          <div className="md:col-span-2">
             <label className="text-[11px] font-semibold text-stone-500 uppercase">Delivery Date</label>
             <input type="date" value={delivery} onChange={e => setDelivery(e.target.value)} className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-lg text-sm" data-testid="forecast-delivery-date" />
+            {allowedDispatchDays.length > 0 && (() => {
+              const selWd = delivery ? new Date(delivery + "T00:00:00").getDay() : -1;
+              const allowedSet = new Set(allowedDispatchDays.map(x => DAY_MAP[String(x).toLowerCase()]).filter(v => v !== undefined));
+              const ok = allowedSet.has(selWd);
+              return (
+                <>
+                  <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                    <span className="text-[10px] font-semibold text-stone-500 uppercase mr-1">Contract dispatch days:</span>
+                    {allowedDispatchDays.map(d => (
+                      <span key={d} className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold">{String(d).slice(0, 3).toUpperCase()}</span>
+                    ))}
+                    <button type="button" onClick={() => setDelivery(nextAllowedDate(allowedDispatchDays))}
+                            className="ml-1 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-semibold"
+                            data-testid="forecast-next-allowed-btn">Next valid →</button>
+                  </div>
+                  {!ok && delivery && (
+                    <p className="mt-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1" data-testid="forecast-day-warn">
+                      ⚠ {new Date(delivery + "T00:00:00").toLocaleDateString("en-GB", { weekday: "long" })} is not a contract dispatch day.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </div>
           <div>
             <label className="text-[11px] font-semibold text-stone-500 uppercase">Forecast Horizon</label>

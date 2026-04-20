@@ -1,11 +1,21 @@
 """
 Laundry Management — Dispatches, Deliveries, Stock tracking, Contracts.
 """
+import os
+import io
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import uuid
 import logging
+
+try:
+    import resend
+    resend.api_key = os.environ.get("RESEND_API_KEY", "")
+except Exception:
+    resend = None
 
 logger = logging.getLogger(__name__)
 
@@ -1095,6 +1105,257 @@ def create_laundry_router(db, require_roles):
                                current_user: dict = Depends(require_roles("admin", "manager"))):
         res = await db.laundry_stock_transactions.delete_one({"id": txn_id})
         return {"status": "deleted" if res.deleted_count else "not_found"}
+
+    # ========================= DISPATCH EXPORTS (PDF / Excel / Email) =========================
+    def _build_dispatch_pdf(dispatch: Dict, property_name: str = "") -> bytes:
+        """Render a clean A4 dispatch note PDF."""
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer,
+                                        Table, TableStyle)
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=A4,
+                                leftMargin=15 * mm, rightMargin=15 * mm,
+                                topMargin=15 * mm, bottomMargin=15 * mm)
+        styles = getSampleStyleSheet()
+        h = ParagraphStyle("H", parent=styles["Heading1"], fontSize=18, spaceAfter=6)
+        sub = ParagraphStyle("Sub", parent=styles["Normal"], fontSize=9, textColor=colors.grey)
+        body = styles["Normal"]
+
+        story = []
+        story.append(Paragraph("LAUNDRY DISPATCH NOTE", h))
+        story.append(Paragraph(f"{property_name or dispatch.get('property_id','')} · Dispatch ID: <b>{dispatch.get('id','')[:8]}…</b>", sub))
+        story.append(Spacer(1, 8))
+
+        meta_rows = [
+            ["Vendor", dispatch.get("vendor", "")],
+            ["Sent Date", dispatch.get("sent_date", "")],
+            ["Expected Return", dispatch.get("expected_return", "—")],
+            ["Status", (dispatch.get("status") or "").title()],
+            ["Created By", dispatch.get("created_by", "")],
+        ]
+        mt = Table(meta_rows, colWidths=[45 * mm, 120 * mm])
+        mt.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("TEXTCOLOR", (0, 0), (0, -1), colors.grey),
+            ("FONTNAME", (1, 0), (1, -1), "Helvetica-Bold"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(mt)
+        story.append(Spacer(1, 10))
+
+        # Items table
+        head = ["#", "Item", "Dirty Sent", "Unusable Sent", "Rate £", "Line Total £"]
+        data = [head]
+        dirty_total = unusable_total = 0
+        cost_total = 0.0
+        for idx, it in enumerate(dispatch.get("items", []), start=1):
+            q = int(it.get("qty_sent") or 0)
+            u = int(it.get("qty_unusable_sent") or 0)
+            r = float(it.get("rate") or 0)
+            line = round(q * r, 2)
+            dirty_total += q
+            unusable_total += u
+            cost_total += line
+            data.append([str(idx), it.get("name", ""), str(q), str(u),
+                         f"£{r:.2f}", f"£{line:.2f}"])
+        data.append(["", "TOTALS", str(dirty_total), str(unusable_total), "",
+                     f"£{cost_total:.2f}"])
+
+        t = Table(data, colWidths=[10 * mm, 60 * mm, 25 * mm, 28 * mm, 20 * mm, 25 * mm])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#111827")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ("ALIGN", (0, 0), (0, -1), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#9ca3af")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -2), [colors.white, colors.HexColor("#f9fafb")]),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#fef3c7")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ]))
+        story.append(t)
+        story.append(Spacer(1, 8))
+
+        if dispatch.get("notes"):
+            story.append(Paragraph(f"<b>Notes:</b> {dispatch['notes']}", body))
+            story.append(Spacer(1, 6))
+
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(
+            "Please count all items on arrival. Sign &amp; email a copy of this note with any discrepancies.",
+            ParagraphStyle("Foot", parent=body, fontSize=8, textColor=colors.grey)
+        ))
+
+        doc.build(story)
+        buf.seek(0)
+        return buf.read()
+
+    def _build_dispatch_xlsx(dispatch: Dict, property_name: str = "") -> bytes:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Dispatch"
+        # Header
+        ws["A1"] = "LAUNDRY DISPATCH NOTE"
+        ws["A1"].font = Font(size=16, bold=True)
+        ws["A2"] = f"{property_name} · {dispatch.get('id','')[:8]}"
+        ws["A2"].font = Font(size=9, color="6b7280")
+        ws.append([])
+        # Meta
+        meta = [
+            ("Vendor", dispatch.get("vendor", "")),
+            ("Sent Date", dispatch.get("sent_date", "")),
+            ("Expected Return", dispatch.get("expected_return", "—")),
+            ("Status", (dispatch.get("status") or "").title()),
+            ("Created By", dispatch.get("created_by", "")),
+        ]
+        for k, v in meta:
+            ws.append([k, v])
+        ws.append([])
+        # Items header
+        headers = ["#", "Item", "Dirty Sent", "Unusable Sent", "Rate £", "Line Total £"]
+        ws.append(headers)
+        header_row = ws.max_row
+        for col in range(1, len(headers) + 1):
+            c = ws.cell(row=header_row, column=col)
+            c.font = Font(bold=True, color="FFFFFF")
+            c.fill = PatternFill("solid", fgColor="111827")
+            c.alignment = Alignment(horizontal="center")
+        dirty_total = unusable_total = 0
+        cost_total = 0.0
+        for idx, it in enumerate(dispatch.get("items", []), start=1):
+            q = int(it.get("qty_sent") or 0)
+            u = int(it.get("qty_unusable_sent") or 0)
+            r = float(it.get("rate") or 0)
+            line = round(q * r, 2)
+            dirty_total += q
+            unusable_total += u
+            cost_total += line
+            ws.append([idx, it.get("name", ""), q, u, r, line])
+        ws.append(["", "TOTALS", dirty_total, unusable_total, "", cost_total])
+        total_row = ws.max_row
+        for col in range(1, len(headers) + 1):
+            c = ws.cell(row=total_row, column=col)
+            c.font = Font(bold=True)
+            c.fill = PatternFill("solid", fgColor="fef3c7")
+        # Column widths
+        widths = {1: 5, 2: 32, 3: 14, 4: 16, 5: 10, 6: 14}
+        for k, v in widths.items():
+            ws.column_dimensions[chr(64 + k)].width = v
+        # Thin borders
+        thin = Side(border_style="thin", color="d1d5db")
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        for row in ws.iter_rows(min_row=header_row, max_row=total_row,
+                                min_col=1, max_col=len(headers)):
+            for c in row:
+                c.border = border
+        if dispatch.get("notes"):
+            ws.append([])
+            ws.append(["Notes:", dispatch["notes"]])
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        return buf.read()
+
+    async def _load_dispatch_or_404(dispatch_id: str):
+        doc = await db.laundry_dispatches.find_one({"id": dispatch_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Dispatch not found")
+        return doc
+
+    async def _resolve_property_name(property_id: str) -> str:
+        if not property_id:
+            return ""
+        p = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1})
+        return (p or {}).get("name") or property_id
+
+    @router.get("/laundry/dispatches/{dispatch_id}/pdf")
+    async def dispatch_pdf(dispatch_id: str,
+                           current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        d = await _load_dispatch_or_404(dispatch_id)
+        pname = await _resolve_property_name(d.get("property_id", ""))
+        content = _build_dispatch_pdf(d, pname)
+        filename = f"dispatch_{d.get('vendor','').replace(' ','_')}_{d.get('sent_date','')}.pdf"
+        return StreamingResponse(io.BytesIO(content), media_type="application/pdf",
+                                 headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+    @router.get("/laundry/dispatches/{dispatch_id}/excel")
+    async def dispatch_excel(dispatch_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        d = await _load_dispatch_or_404(dispatch_id)
+        pname = await _resolve_property_name(d.get("property_id", ""))
+        content = _build_dispatch_xlsx(d, pname)
+        filename = f"dispatch_{d.get('vendor','').replace(' ','_')}_{d.get('sent_date','')}.xlsx"
+        return StreamingResponse(
+            io.BytesIO(content),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    @router.post("/laundry/dispatches/{dispatch_id}/email")
+    async def email_dispatch(dispatch_id: str, data: Dict,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Email the dispatch note PDF to a vendor / recipient."""
+        to_list = data.get("to") or []
+        if isinstance(to_list, str):
+            to_list = [to_list]
+        to_list = [x for x in to_list if x and "@" in x]
+        if not to_list:
+            raise HTTPException(400, "Recipient email required")
+        if resend is None or not resend.api_key:
+            raise HTTPException(503, "Email service not configured")
+        d = await _load_dispatch_or_404(dispatch_id)
+        pname = await _resolve_property_name(d.get("property_id", ""))
+        pdf_bytes = _build_dispatch_pdf(d, pname)
+        import base64
+        attachment = {
+            "filename": f"dispatch_{d.get('vendor','').replace(' ','_')}_{d.get('sent_date','')}.pdf",
+            "content": base64.b64encode(pdf_bytes).decode("ascii"),
+        }
+        subject = data.get("subject") or f"Laundry Dispatch — {pname} — {d.get('sent_date','')}"
+        dirty = sum(int(i.get("qty_sent") or 0) for i in d.get("items", []))
+        unusable = sum(int(i.get("qty_unusable_sent") or 0) for i in d.get("items", []))
+        body_html = data.get("message_html") or f"""
+        <div style="font-family:Helvetica,Arial,sans-serif;color:#111;max-width:600px;margin:0 auto;">
+          <h2 style="color:#111827;margin:0 0 8px">Laundry Dispatch Note</h2>
+          <p style="color:#6b7280;margin:0 0 16px">{pname} · ID {d.get('id','')[:8]}</p>
+          <table cellpadding="6" style="border-collapse:collapse;font-size:14px;">
+            <tr><td style="color:#6b7280">Vendor:</td><td><b>{d.get('vendor','')}</b></td></tr>
+            <tr><td style="color:#6b7280">Sent Date:</td><td>{d.get('sent_date','')}</td></tr>
+            <tr><td style="color:#6b7280">Expected Return:</td><td>{d.get('expected_return') or '—'}</td></tr>
+            <tr><td style="color:#6b7280">Dirty Pieces:</td><td><b>{dirty}</b></td></tr>
+            <tr><td style="color:#6b7280">Unusable (return):</td><td><b>{unusable}</b></td></tr>
+          </table>
+          <p style="margin-top:16px;color:#374151">Full item breakdown is attached as PDF. Please count all pieces on arrival and reply with any discrepancies.</p>
+        </div>
+        """
+        try:
+            sender = os.environ.get("SENDER_EMAIL") or "onboarding@resend.dev"
+            await asyncio.to_thread(resend.Emails.send, {
+                "from": sender,
+                "to": to_list,
+                "subject": subject,
+                "html": body_html,
+                "attachments": [attachment],
+            })
+        except Exception as e:
+            logger.exception("Dispatch email failed")
+            raise HTTPException(502, f"Email send failed: {e}")
+        # Audit
+        await db.laundry_dispatches.update_one(
+            {"id": dispatch_id},
+            {"$push": {"email_history": {
+                "to": to_list, "at": datetime.now(timezone.utc).isoformat(),
+                "by": current_user.get("email", ""),
+            }}}
+        )
+        return {"ok": True, "sent_to": to_list}
 
     return router
 

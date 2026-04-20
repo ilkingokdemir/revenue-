@@ -17,7 +17,7 @@ import {
   RefreshCw, Plus, Send, Package, FileText, Shirt, CheckCircle2,
   Trash2, ArrowDown, Building2, Inbox, DoorOpen, BarChart3, AlertCircle,
   Calendar, FileBarChart, ShieldCheck, RotateCcw, Download, Sparkles,
-  TrendingUp, QrCode, Printer,
+  TrendingUp, QrCode, Printer, Mail, FileSpreadsheet,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -307,8 +307,64 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
 
   // Count queued items for UI badge
   const [queueLen, setQueueLen] = useState(0);
+  // Providers list (used for auto-email prefill + Forecast vendor dropdown)
+  const [laundryProviders, setLaundryProviders] = useState([]);
+  useEffect(() => {
+    axios.get(`${API}/laundry/providers/${pid}`)
+      .then(r => setLaundryProviders((r.data.providers || []).filter(p => p.status === "active")))
+      .catch(() => setLaundryProviders([]));
+  }, [pid]);
   // QR code preview modal for dispatches — future-ready, factory can scan on arrival
   const [qrDispatch, setQrDispatch] = useState(null);
+  // Email-to-vendor modal state
+  const [emailDispatch, setEmailDispatch] = useState(null);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+
+  const downloadDispatch = async (dispatchId, format) => {
+    // format = "pdf" | "excel"
+    try {
+      const { data, headers } = await axios.get(
+        `${API}/laundry/dispatches/${dispatchId}/${format}`,
+        { responseType: "blob" }
+      );
+      const ext = format === "pdf" ? "pdf" : "xlsx";
+      const blob = new Blob([data], { type: headers["content-type"] });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `dispatch_${dispatchId.slice(0, 8)}.${ext}`;
+      document.body.appendChild(a); a.click();
+      a.remove(); URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Download failed");
+    }
+  };
+
+  const openEmailDispatch = (d) => {
+    setEmailDispatch(d);
+    // Try to prefill from provider records
+    const match = laundryProviders?.find?.(p => p.name === d.vendor);
+    setEmailTo(match?.email || "");
+  };
+
+  const sendDispatchEmail = async () => {
+    if (!emailDispatch) return;
+    if (!emailTo || !emailTo.includes("@")) {
+      toast.error("Valid recipient email required");
+      return;
+    }
+    setEmailSending(true);
+    try {
+      await axios.post(`${API}/laundry/dispatches/${emailDispatch.id}/email`, {
+        to: emailTo.split(",").map(x => x.trim()).filter(Boolean),
+      });
+      toast.success(`Dispatch emailed to ${emailTo}`);
+      setEmailDispatch(null); setEmailTo("");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Email failed");
+    }
+    setEmailSending(false);
+  };
   useEffect(() => {
     const tick = () => {
       try {
@@ -515,12 +571,23 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                         {canSeeCosts && <td className="py-2.5 px-3 text-right font-mono text-stone-700">£{d.total_cost?.toFixed(2)}</td>}
                         <td className="py-2.5 px-3 text-center"><Badge className={`${DISPATCH_STATUS_STYLE[d.status] || "bg-stone-100"} text-[9px] capitalize`}>{d.status}</Badge></td>
                         <td className="py-2.5 px-3 text-right">
-                          <button onClick={() => setQrDispatch(d)} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 font-semibold mr-1" data-testid={`qr-btn-${d.id}`} title="Show QR code (future factory scan)">
-                            <QrCode className="w-3 h-3 inline mr-1" />QR
-                          </button>
-                          <button onClick={() => receiveDispatch(d)} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100 font-semibold" data-testid={`receive-btn-${d.id}`}>
-                            <ArrowDown className="w-3 h-3 inline mr-1" />Receive
-                          </button>
+                          <div className="inline-flex flex-wrap gap-1 justify-end">
+                            <button onClick={() => downloadDispatch(d.id, "pdf")} className="text-[10px] px-2 py-1 bg-rose-50 text-rose-700 rounded hover:bg-rose-100 font-semibold" data-testid={`pdf-btn-${d.id}`} title="Download PDF">
+                              <FileText className="w-3 h-3 inline mr-1" />PDF
+                            </button>
+                            <button onClick={() => downloadDispatch(d.id, "excel")} className="text-[10px] px-2 py-1 bg-emerald-50 text-emerald-700 rounded hover:bg-emerald-100 font-semibold" data-testid={`xlsx-btn-${d.id}`} title="Download Excel">
+                              <FileSpreadsheet className="w-3 h-3 inline mr-1" />XLS
+                            </button>
+                            <button onClick={() => openEmailDispatch(d)} className="text-[10px] px-2 py-1 bg-violet-50 text-violet-700 rounded hover:bg-violet-100 font-semibold" data-testid={`email-btn-${d.id}`} title="Email to vendor">
+                              <Mail className="w-3 h-3 inline mr-1" />Email
+                            </button>
+                            <button onClick={() => setQrDispatch(d)} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 font-semibold" data-testid={`qr-btn-${d.id}`} title="Show QR code (future factory scan)">
+                              <QrCode className="w-3 h-3 inline mr-1" />QR
+                            </button>
+                            <button onClick={() => receiveDispatch(d)} className="text-[10px] px-2 py-1 bg-amber-50 text-amber-700 rounded hover:bg-amber-100 font-semibold" data-testid={`receive-btn-${d.id}`}>
+                              <ArrowDown className="w-3 h-3 inline mr-1" />Receive
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1072,6 +1139,48 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
             <div><label className="text-xs font-semibold text-stone-600">Terms</label><Textarea value={contractForm.terms} onChange={e => setContractForm({ ...contractForm, terms: e.target.value })} rows={3} /></div>
           </div>
           <DialogFooter><Button variant="outline" size="sm" onClick={() => setContractOpen(false)}>Cancel</Button><Button size="sm" className="bg-stone-800 hover:bg-stone-700 text-white" onClick={submitContract} data-testid="contract-submit-btn">Create Contract</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Dispatch Dialog */}
+      <Dialog open={!!emailDispatch} onOpenChange={o => !o && setEmailDispatch(null)}>
+        <DialogContent className="w-[95vw] max-w-md p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base flex items-center gap-2">
+              <Mail className="w-4 h-4" /> Email Dispatch to Vendor
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              PDF will be attached automatically. Use commas for multiple recipients.
+            </DialogDescription>
+          </DialogHeader>
+          {emailDispatch && (
+            <div className="space-y-3">
+              <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 text-xs space-y-1">
+                <div className="flex justify-between"><span className="text-stone-500">{L.vendor}:</span><span className="font-bold">{emailDispatch.vendor}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">{L.date}:</span><span className="font-bold">{emailDispatch.sent_date}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500">Pieces:</span><span className="font-mono font-bold">{(emailDispatch.items || []).reduce((s, i) => s + (i.qty_sent || 0) + (i.qty_unusable_sent || 0), 0)}</span></div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-stone-600">Recipient email(s) *</label>
+                <Input type="email" value={emailTo} onChange={e => setEmailTo(e.target.value)}
+                       placeholder="vendor@example.com, second@example.com" className="h-10"
+                       data-testid="email-dispatch-to-input" />
+              </div>
+              {emailDispatch.email_history?.length > 0 && (
+                <div className="text-[11px] text-stone-500">
+                  Previously sent: {emailDispatch.email_history.length}× —
+                  last on {emailDispatch.email_history[emailDispatch.email_history.length - 1]?.at?.slice(0, 10)}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" size="sm" onClick={() => { setEmailDispatch(null); setEmailTo(""); }} className="w-full sm:w-auto">{L.cancel}</Button>
+            <Button size="sm" className="w-full sm:w-auto bg-violet-600 hover:bg-violet-700 text-white" onClick={sendDispatchEmail} disabled={emailSending} data-testid="email-dispatch-send">
+              {emailSending ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Mail className="w-4 h-4 mr-1" />}
+              Send Email
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

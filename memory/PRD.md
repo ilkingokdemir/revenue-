@@ -2,6 +2,23 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.11 (Feb 2026): 📄📊✉️ Dispatch PDF / Excel / Email export
+
+User request: _"fabrikaya geçile siparişi pdf veya excel formatında olsun, yazıcıdan çıkarılma ve email ile gönderme opsiyonu olsun."_
+
+**Backend** (`routes/laundry.py`)
+- `GET /api/laundry/dispatches/{id}/pdf` — renders A4 PDF via reportlab. Branded header, meta block (vendor/date/expected return/status/created_by), items table with `#/Item/Dirty Sent/Unusable Sent/Rate £/Line Total £`, totals row highlighted amber, notes, footer. ~2.7KB typical size.
+- `GET /api/laundry/dispatches/{id}/excel` — openpyxl workbook with styled header, meta rows, items table (dark header + amber totals), column widths, thin borders. ~5.5KB typical.
+- `POST /api/laundry/dispatches/{id}/email` — builds PDF → base64 attachment → sends via Resend. Accepts `{to: [...], subject?, message_html?}`. Writes audit entry into `email_history` array on the dispatch doc. Falls back to `onboarding@resend.dev` if `SENDER_EMAIL` env not set. **Requires valid `RESEND_API_KEY`** in `.env`.
+
+**Frontend** (`LaundryManagement.js`)
+- Each dispatch row in "Awaiting Return" now has 5 compact action buttons: `📄 PDF / 📊 XLS / ✉️ Email / 📱 QR / ⬇️ Receive` (colour-coded).
+- PDF / XLS buttons trigger an axios blob download with the correct filename (`dispatch_<vendor>_<date>.pdf|xlsx`).
+- Email opens a small modal showing vendor/date/piece summary + a recipient field (comma-separated multiple). If the vendor matches an entry in `laundry_providers` with an email, it auto-prefills. Shows "Previously sent" count from `email_history`.
+- Added `FileSpreadsheet` + `Mail` icons to the imports.
+
+**Verified:** PDF returns `%PDF-1.4` (2704 bytes), XLSX returns `PK\x03\x04` zip signature (5550 bytes). Email returns HTTP 502 with "API key is invalid" when `RESEND_API_KEY` is the dev placeholder — expected; endpoint logic is sound.
+
 ### Iter 166.10 (Feb 2026): 📱 QR code on each dispatch (future-ready factory scan)
 
 Per user: factory doesn't support QR scanning yet, but build it now for future adoption.

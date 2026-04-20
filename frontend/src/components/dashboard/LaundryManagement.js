@@ -51,42 +51,77 @@ const DISPATCH_STATUS_STYLE = {
 const LAUNDRY_I18N = {
   en: {
     label: "English", flag: "🇬🇧",
+    // Shared
+    date: "Date", room: "Room", vendor: "Vendor", notes: "Notes (optional)", notesPh: "Additional notes…",
+    submit: "Submit & Confirm", cancel: "Cancel", totals: "Totals", item: "Item",
+    used: "Used", collected: "Collected", unusable: "Unusable", damaged: "Damaged",
+    // Usage
     title: "New Daily Laundry Usage",
     subtitle: "Pick the room, then enter numbers for each linen. You don't need to select items — all items are pre-listed.",
-    date: "Date & Time", room: "Room", selectRoom: "Select room", roomPlaceholder: "Room number (e.g. 204)",
-    item: "Item", used: "Used", collected: "Collected", unusable: "Unusable", damaged: "Damaged",
+    selectRoom: "Select room", roomPlaceholder: "Room number (e.g. 204)",
     usedHint: "clean → room", collectedHint: "room → laundry", unusableHint: "returned bad from factory", damagedHint: "guest write-off",
-    totals: "Totals", notes: "Notes (optional)", notesPh: "Additional notes…",
-    submit: "Submit & Confirm", cancel: "Cancel",
     saved: "Saved", fillRoom: "Pick a room first", fillQty: "Enter at least one quantity > 0",
-    newBtn: "New Daily Laundry Usage",
-    loading: "Loading items…",
+    newBtn: "New Daily Laundry Usage", loading: "Loading items…",
+    // Dispatch
+    dispTitle: "New Dispatch · Send to Factory", dispSubtitle: "Enter dirty pieces & unusable pieces being sent back. Factory will count them on arrival.",
+    dispDirtySent: "Dirty Sent", dispUnusableSent: "Unusable Sent",
+    dispDirtyHint: "to wash", dispUnusableHint: "write-off pieces returned",
+    dispRate: "Rate £", dispLineTotal: "Line £", dispExpectedReturn: "Expected Return",
+    dispAutofill: "Auto-fill from stock (dirty+damaged)", dispNewBtn: "New Dispatch",
+    dispSaved: "Dispatch sent",
+    // Delivery / Receive
+    delvTitle: "Receive Delivery · Count on Arrival", delvSubtitle: "Count every piece delivered. Enter Received + any Shortage / Damaged on arrival.",
+    delvSent: "Sent", delvReceived: "Received", delvShortage: "Shortage", delvDamagedArr: "Damaged",
+    delvReceivedHint: "good pieces arrived", delvShortageHint: "missing pieces", delvDamagedHint: "bad pieces on arrival",
+    delvReceived2: "Receive", delvSaved: "Delivery received",
+    // Offline
+    offlineN: "queued offline (will auto-sync)",
   },
   tr: {
     label: "Türkçe", flag: "🇹🇷",
+    date: "Tarih", room: "Oda", vendor: "Tedarikçi", notes: "Notlar (opsiyonel)", notesPh: "Ek notlar…",
+    submit: "Kaydet & Onayla", cancel: "İptal", totals: "Toplam", item: "Ürün",
+    used: "Kullanılan", collected: "Toplanan", unusable: "Bozuk", damaged: "Hasarlı",
     title: "Yeni Günlük Çamaşır Kaydı",
     subtitle: "Odayı seçin ve her malzeme için sayı yazın. Menüden item seçmenize gerek yok — hepsi hazır.",
-    date: "Tarih & Saat", room: "Oda", selectRoom: "Oda seç", roomPlaceholder: "Oda numarası (örn. 204)",
-    item: "Ürün", used: "Kullanılan", collected: "Toplanan", unusable: "Bozuk", damaged: "Hasarlı",
+    selectRoom: "Oda seç", roomPlaceholder: "Oda numarası (örn. 204)",
     usedHint: "temiz → oda", collectedHint: "oda → çamaşırhane", unusableHint: "fabrikadan bozuk geldi", damagedHint: "müşteri zararı",
-    totals: "Toplam", notes: "Notlar (opsiyonel)", notesPh: "Ek notlar…",
-    submit: "Kaydet & Onayla", cancel: "İptal",
     saved: "Kaydedildi", fillRoom: "Önce oda seçin", fillQty: "En az bir alana 0'dan büyük sayı yazın",
-    newBtn: "Yeni Günlük Kayıt",
-    loading: "Ürünler yükleniyor…",
+    newBtn: "Yeni Günlük Kayıt", loading: "Ürünler yükleniyor…",
+    dispTitle: "Yeni Sevkıyat · Fabrikaya Gönder", dispSubtitle: "Gönderilen kirli miktarını ve geri iade edilen kullanılamaz miktarı yazın. Fabrika da sayım yapacak.",
+    dispDirtySent: "Gönderilen Kirli", dispUnusableSent: "Gönderilen Bozuk",
+    dispDirtyHint: "yıkanacak", dispUnusableHint: "iade ediliyor",
+    dispRate: "Birim £", dispLineTotal: "Toplam £", dispExpectedReturn: "Beklenen İade Tarihi",
+    dispAutofill: "Stoktan otomatik doldur (kirli+hasarlı)", dispNewBtn: "Yeni Sevkıyat",
+    dispSaved: "Sevkıyat gönderildi",
+    delvTitle: "Teslim Al · Gelişte Say", delvSubtitle: "Gelen her parçayı sayın. Alınan + varsa Eksik / Gelişte Hasarlı miktarını yazın.",
+    delvSent: "Gönderilen", delvReceived: "Gelen", delvShortage: "Eksik", delvDamagedArr: "Hasarlı",
+    delvReceivedHint: "sağlam gelen", delvShortageHint: "eksik gelen", delvDamagedHint: "gelişte bozuk",
+    delvReceived2: "Teslim Al", delvSaved: "Teslim alındı",
+    offlineN: "offline sırada (bağlantı gelince otomatik yollanır)",
   },
   bg: {
     label: "Български", flag: "🇧🇬",
+    date: "Дата", room: "Стая", vendor: "Доставчик", notes: "Бележки (по избор)", notesPh: "Допълнителни бележки…",
+    submit: "Запази и потвърди", cancel: "Отказ", totals: "Общо", item: "Артикул",
+    used: "Използвани", collected: "Събрани", unusable: "Негодни", damaged: "Повредени",
     title: "Нов дневен запис на пране",
     subtitle: "Изберете стая и въведете брой за всеки артикул. Не е нужно да избирате от меню — всички артикули са предварително показани.",
-    date: "Дата и час", room: "Стая", selectRoom: "Изберете стая", roomPlaceholder: "Номер на стая (напр. 204)",
-    item: "Артикул", used: "Използвани", collected: "Събрани", unusable: "Негодни", damaged: "Повредени",
+    selectRoom: "Изберете стая", roomPlaceholder: "Номер на стая (напр. 204)",
     usedHint: "чисто → стая", collectedHint: "стая → пране", unusableHint: "върнати негодни от пералнята", damagedHint: "повредени от госта",
-    totals: "Общо", notes: "Бележки (по избор)", notesPh: "Допълнителни бележки…",
-    submit: "Запази и потвърди", cancel: "Отказ",
     saved: "Записано", fillRoom: "Изберете стая", fillQty: "Въведете поне едно число > 0",
-    newBtn: "Нов дневен запис",
-    loading: "Зареждане на артикули…",
+    newBtn: "Нов дневен запис", loading: "Зареждане на артикули…",
+    dispTitle: "Нова доставка · Към фабрика", dispSubtitle: "Въведете мръсни парчета и негодни за връщане. Фабриката ще ги преброи.",
+    dispDirtySent: "Изпратени мръсни", dispUnusableSent: "Изпратени негодни",
+    dispDirtyHint: "за пране", dispUnusableHint: "връщаме",
+    dispRate: "Цена £", dispLineTotal: "Общо £", dispExpectedReturn: "Очаквано връщане",
+    dispAutofill: "Автоматично от склад (мръсно+повредено)", dispNewBtn: "Нова доставка",
+    dispSaved: "Доставката е изпратена",
+    delvTitle: "Получаване · Преброяване при пристигане", delvSubtitle: "Пребройте всяко парче. Въведете Получени + всякакви Липсващи / Повредени при пристигане.",
+    delvSent: "Изпратени", delvReceived: "Получени", delvShortage: "Липсващи", delvDamagedArr: "Повредени",
+    delvReceivedHint: "добри парчета", delvShortageHint: "липсват", delvDamagedHint: "лоши при пристигане",
+    delvReceived2: "Получи", delvSaved: "Получаването е записано",
+    offlineN: "опашка офлайн (ще се синхронизира автоматично)",
   },
 };
 
@@ -173,7 +208,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
   useEffect(() => { load(); }, [load]);
 
   // ============ DISPATCH HELPERS ============
-  const addDispItem = () => setDispForm(f => ({ ...f, items: [...f.items, { item_id: "", name: "", qty_sent: 0, rate: 0 }] }));
+  const addDispItem = () => setDispForm(f => ({ ...f, items: [...f.items, { item_id: "", name: "", qty_sent: 0, qty_unusable_sent: 0, rate: 0 }] }));
   const updateDispItem = (idx, patch) => {
     setDispForm(f => {
       const items = [...f.items];
@@ -185,12 +220,35 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
       return { ...f, items };
     });
   };
+
+  // Pre-populate dispatch with ALL active catalog items + auto-fill dirty/damaged from current stock
+  const openDispForm = () => {
+    const stockMap = Object.fromEntries((stock || []).map(s => [s.item_id, s]));
+    const prefilled = (catalog || []).map(c => {
+      const s = stockMap[c.id] || {};
+      return {
+        item_id: c.id, name: c.name,
+        qty_sent: Number(s.dirty || 0),                 // all current dirty goes to factory
+        qty_unusable_sent: Number(s.damaged || 0),      // all current damaged returned too
+        rate: 0,
+      };
+    });
+    setDispForm(f => ({
+      ...f,
+      vendor: f.vendor || "", sent_date: new Date().toISOString().slice(0, 10),
+      expected_return: "", notes: "",
+      items: prefilled,
+    }));
+    setDispOpen(true);
+  };
   const removeDispItem = (idx) => setDispForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
   const submitDispatch = async () => {
-    if (!dispForm.vendor.trim() || dispForm.items.length === 0) { toast.error("Vendor and at least one item required"); return; }
+    if (!dispForm.vendor.trim()) { toast.error(L.vendor + " ?"); return; }
+    const validItems = (dispForm.items || []).filter(i => (i.qty_sent || 0) > 0 || (i.qty_unusable_sent || 0) > 0);
+    if (validItems.length === 0) { toast.error(L.fillQty); return; }
     try {
-      await axios.post(`${API}/laundry/dispatches/${pid}`, dispForm);
-      toast.success("Dispatch created");
+      await axios.post(`${API}/laundry/dispatches/${pid}`, { ...dispForm, items: validItems });
+      toast.success(L.dispSaved);
       setDispOpen(false);
       setDispForm({ vendor: "", sent_date: new Date().toISOString().slice(0, 10), expected_return: "", items: [], notes: "" });
       load();
@@ -217,6 +275,50 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
     return { ...f, items };
   });
   const removeUsageItem = (idx) => setUsageForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
+  const LAUNDRY_QUEUE_KEY = `laundry_usage_queue_${pid}`;
+
+  // Flush any queued (offline) usage entries to the server
+  const flushOfflineQueue = useCallback(async () => {
+    try {
+      const raw = localStorage.getItem(LAUNDRY_QUEUE_KEY);
+      if (!raw) return;
+      const queue = JSON.parse(raw) || [];
+      if (queue.length === 0) return;
+      const remaining = [];
+      for (const payload of queue) {
+        try { await axios.post(`${API}/laundry/usage/${pid}`, payload); }
+        catch { remaining.push(payload); }
+      }
+      localStorage.setItem(LAUNDRY_QUEUE_KEY, JSON.stringify(remaining));
+      const synced = queue.length - remaining.length;
+      if (synced > 0) toast.success(`${synced} offline entr${synced === 1 ? "y" : "ies"} synced`);
+    } catch { /* non-fatal */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pid]);
+
+  // Auto-flush on online event + on mount
+  useEffect(() => {
+    flushOfflineQueue();
+    const handler = () => flushOfflineQueue();
+    window.addEventListener("online", handler);
+    return () => window.removeEventListener("online", handler);
+  }, [flushOfflineQueue]);
+
+  // Count queued items for UI badge
+  const [queueLen, setQueueLen] = useState(0);
+  useEffect(() => {
+    const tick = () => {
+      try {
+        const raw = localStorage.getItem(LAUNDRY_QUEUE_KEY);
+        setQueueLen(raw ? (JSON.parse(raw) || []).length : 0);
+      } catch { setQueueLen(0); }
+    };
+    tick();
+    const iv = setInterval(tick, 3000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pid, usageOpen]);
+
   const submitUsage = async () => {
     if (!usageForm.room_number.trim() || usageForm.items.length === 0) { toast.error(L.fillRoom); return; }
     const validItems = usageForm.items.filter(i =>
@@ -226,13 +328,27 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
       (i.guest_damaged || 0) > 0
     );
     if (validItems.length === 0) { toast.error(L.fillQty); return; }
+    const payload = { ...usageForm, items: validItems };
     try {
-      await axios.post(`${API}/laundry/usage/${pid}`, { ...usageForm, items: validItems });
+      await axios.post(`${API}/laundry/usage/${pid}`, payload);
       toast.success(`${L.saved} · ${validItems.length} · ${L.room} ${usageForm.room_number}`);
       setUsageOpen(false);
       setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
       load();
-    } catch { toast.error("Failed"); }
+    } catch {
+      // Offline fallback — push to localStorage queue
+      try {
+        const raw = localStorage.getItem(LAUNDRY_QUEUE_KEY);
+        const queue = raw ? (JSON.parse(raw) || []) : [];
+        queue.push(payload);
+        localStorage.setItem(LAUNDRY_QUEUE_KEY, JSON.stringify(queue));
+        toast.success(`${validItems.length} ${L.offlineN}`);
+        setUsageOpen(false);
+        setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
+      } catch {
+        toast.error("Failed");
+      }
+    }
   };
   const deleteUsage = async (id) => {
     if (!window.confirm("Delete this usage record? Stock will be reversed.")) return;
@@ -367,8 +483,8 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="dispatch-panel">
               <div className="p-3 border-b border-stone-200 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-stone-800">Awaiting Return ({sentDispatches.length})</h3>
-                <Button size="sm" onClick={() => setDispOpen(true)} className="bg-stone-800 hover:bg-stone-700 text-white" data-testid="new-dispatch-btn">
-                  <Plus className="w-4 h-4 mr-1.5" />New Dispatch
+                <Button size="sm" onClick={openDispForm} className="bg-stone-800 hover:bg-stone-700 text-white" data-testid="new-dispatch-btn">
+                  <Plus className="w-4 h-4 mr-1.5" />{L.dispNewBtn}
                 </Button>
               </div>
               {sentDispatches.length === 0 ? (
@@ -410,7 +526,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
 
           {/* DELIVERIES */}
           {tab === "deliveries" && (
-            <DeliveriesTab pid={pid} dispatches={sentDispatches} stock={stock} />
+            <DeliveriesTab pid={pid} dispatches={sentDispatches} stock={stock} L={L} canSeeCosts={canSeeCosts} />
           )}
 
           {/* FORECAST */}
@@ -423,9 +539,16 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="usage-panel">
               <div className="p-3 border-b border-stone-200 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-stone-800">Room-by-Room Usage ({usage.count})</h3>
-                <Button size="sm" onClick={openUsageForm} className="bg-stone-800 hover:bg-stone-700 text-white" data-testid="new-usage-btn">
-                  <Plus className="w-4 h-4 mr-1" />{L.newBtn}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {queueLen > 0 && (
+                    <Badge className="bg-amber-100 text-amber-800 border border-amber-300 font-mono" data-testid="offline-queue-badge">
+                      ⏳ {queueLen} {L.offlineN}
+                    </Badge>
+                  )}
+                  <Button size="sm" onClick={openUsageForm} className="bg-stone-800 hover:bg-stone-700 text-white" data-testid="new-usage-btn">
+                    <Plus className="w-4 h-4 mr-1" />{L.newBtn}
+                  </Button>
+                </div>
               </div>
               {usage.records.length === 0 ? (
                 <p className="text-center text-sm text-stone-400 py-12">No usage recorded. Record a room's daily linen collection to track circulation.</p>
@@ -648,34 +771,96 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Dispatch Dialog */}
+      {/* Dispatch Dialog — Ready table (dirty + unusable) · mobile + i18n */}
       <Dialog open={dispOpen} onOpenChange={setDispOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>New Laundry Dispatch</DialogTitle><DialogDescription>Send linen to a vendor and track the return.</DialogDescription></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <div><label className="text-xs font-semibold text-stone-600">Vendor</label><Input value={dispForm.vendor} onChange={e => setDispForm({ ...dispForm, vendor: e.target.value })} data-testid="dispatch-vendor-input" /></div>
-              <div><label className="text-xs font-semibold text-stone-600">Sent Date</label><Input type="date" value={dispForm.sent_date} onChange={e => setDispForm({ ...dispForm, sent_date: e.target.value })} /></div>
-              <div><label className="text-xs font-semibold text-stone-600">Expected Return</label><Input type="date" value={dispForm.expected_return} onChange={e => setDispForm({ ...dispForm, expected_return: e.target.value })} /></div>
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[95vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="space-y-2">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <DialogTitle className="text-base sm:text-lg">{L.dispTitle}</DialogTitle>
+              <div className="flex gap-1 bg-stone-100 rounded-lg p-1" data-testid="disp-lang-switcher">
+                {Object.keys(LAUNDRY_I18N).map(code => (
+                  <button key={code} onClick={() => setLang(code)}
+                    className={`px-2 py-1 text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow" : "text-stone-500"}`}>
+                    {LAUNDRY_I18N[code].flag} {code.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div>
-              <div className="flex items-center justify-between mb-1"><label className="text-xs font-semibold text-stone-600">Items</label><Button size="sm" variant="outline" onClick={addDispItem} data-testid="add-dispatch-item"><Plus className="w-3 h-3 mr-1" />Add Line</Button></div>
-              {dispForm.items.length === 0 && <p className="text-[10px] text-stone-400 py-2">No items yet. Click "Add Line" to start.</p>}
-              {dispForm.items.map((it, i) => (
-                <div key={i} className="grid grid-cols-12 gap-1.5 mb-1.5 items-center">
-                  <Select value={it.item_id} onValueChange={v => updateDispItem(i, { item_id: v })}>
-                    <SelectTrigger className="col-span-6 h-8 text-xs"><SelectValue placeholder="Select item" /></SelectTrigger>
-                    <SelectContent>{catalog.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                  <Input type="number" value={it.qty_sent} onChange={e => updateDispItem(i, { qty_sent: parseInt(e.target.value) || 0 })} placeholder="Qty" className="col-span-2 h-8 text-xs" />
-                  <Input type="number" step="0.01" value={it.rate} onChange={e => updateDispItem(i, { rate: parseFloat(e.target.value) || 0 })} placeholder="Rate £" className="col-span-3 h-8 text-xs" />
-                  <button onClick={() => removeDispItem(i)} className="col-span-1 text-red-500 hover:bg-red-50 rounded p-1"><Trash2 className="w-3 h-3" /></button>
+            <DialogDescription className="text-xs sm:text-sm">{L.dispSubtitle}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 sm:space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div><label className="text-xs font-semibold text-stone-600">{L.vendor} *</label><Input value={dispForm.vendor} onChange={e => setDispForm({ ...dispForm, vendor: e.target.value })} className="h-10" data-testid="dispatch-vendor-input" /></div>
+              <div><label className="text-xs font-semibold text-stone-600">{L.date}</label><Input type="date" value={dispForm.sent_date} onChange={e => setDispForm({ ...dispForm, sent_date: e.target.value })} className="h-10" /></div>
+              <div><label className="text-xs font-semibold text-stone-600">{L.dispExpectedReturn}</label><Input type="date" value={dispForm.expected_return} onChange={e => setDispForm({ ...dispForm, expected_return: e.target.value })} className="h-10" /></div>
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden sm:block border border-stone-200 rounded-xl overflow-hidden bg-white">
+              <table className="w-full text-sm" data-testid="dispatch-readytable">
+                <thead className="bg-stone-50 border-b border-stone-200">
+                  <tr>
+                    <th className="text-left py-2.5 px-3 font-semibold text-stone-700 w-[40%]">{L.item}</th>
+                    <th className="text-center py-2.5 px-2 font-semibold text-amber-700">{L.dispDirtySent}</th>
+                    <th className="text-center py-2.5 px-2 font-semibold text-rose-700">{L.dispUnusableSent}</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-stone-600">{L.dispRate}</th>
+                    <th className="text-right py-2.5 px-2 font-semibold text-stone-600">{L.dispLineTotal}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(dispForm.items || []).map((it, i) => {
+                    const lineTotal = (it.qty_sent || 0) * (it.rate || 0);
+                    return (
+                    <tr key={it.item_id || i} className="border-b border-stone-100">
+                      <td className="py-2 px-3"><div className="font-semibold text-stone-800">{it.name || "—"}</div><div className="text-[10px] text-stone-400">{it.item_id}</div></td>
+                      <td className="py-1 px-2"><Input type="number" min="0" inputMode="numeric" value={it.qty_sent || 0} onChange={e => updateDispItem(i, { qty_sent: parseInt(e.target.value) || 0 })} className="h-9 text-center font-mono font-bold bg-amber-50 border-amber-200" data-testid={`disp-dirty-${it.item_id}`} /></td>
+                      <td className="py-1 px-2"><Input type="number" min="0" inputMode="numeric" value={it.qty_unusable_sent || 0} onChange={e => updateDispItem(i, { qty_unusable_sent: parseInt(e.target.value) || 0 })} className="h-9 text-center font-mono font-bold bg-rose-50 border-rose-200" data-testid={`disp-unus-${it.item_id}`} /></td>
+                      <td className="py-1 px-2"><Input type="number" step="0.01" min="0" value={it.rate || 0} onChange={e => updateDispItem(i, { rate: parseFloat(e.target.value) || 0 })} className="h-9 text-right font-mono bg-white" /></td>
+                      <td className="py-2 px-2 text-right font-mono font-bold text-stone-800">£{lineTotal.toFixed(2)}</td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-stone-50 border-t-2 border-stone-200">
+                  <tr>
+                    <td className="py-2 px-3 text-right font-bold text-stone-700">{L.totals}</td>
+                    <td className="py-2 px-2 text-center font-mono font-black text-amber-700">{dispForm.items?.reduce((s, i) => s + (i.qty_sent || 0), 0) || 0}</td>
+                    <td className="py-2 px-2 text-center font-mono font-black text-rose-700">{dispForm.items?.reduce((s, i) => s + (i.qty_unusable_sent || 0), 0) || 0}</td>
+                    <td></td>
+                    <td className="py-2 px-2 text-right font-mono font-black text-stone-900">£{(dispForm.items?.reduce((s, i) => s + ((i.qty_sent || 0) * (i.rate || 0)), 0) || 0).toFixed(2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="sm:hidden space-y-2">
+              {(dispForm.items || []).map((it, i) => (
+                <div key={it.item_id || i} className="bg-white border border-stone-200 rounded-xl p-3">
+                  <div className="font-bold text-sm text-stone-800 mb-2">{it.name || "—"}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-[10px] font-bold uppercase text-amber-700">{L.dispDirtySent}</label><Input type="number" min="0" inputMode="numeric" value={it.qty_sent || 0} onChange={e => updateDispItem(i, { qty_sent: parseInt(e.target.value) || 0 })} className="h-11 text-center text-base font-mono font-bold bg-amber-50 border-amber-200" /></div>
+                    <div><label className="text-[10px] font-bold uppercase text-rose-700">{L.dispUnusableSent}</label><Input type="number" min="0" inputMode="numeric" value={it.qty_unusable_sent || 0} onChange={e => updateDispItem(i, { qty_unusable_sent: parseInt(e.target.value) || 0 })} className="h-11 text-center text-base font-mono font-bold bg-rose-50 border-rose-200" /></div>
+                    <div><label className="text-[10px] font-bold uppercase text-stone-500">{L.dispRate}</label><Input type="number" step="0.01" min="0" value={it.rate || 0} onChange={e => updateDispItem(i, { rate: parseFloat(e.target.value) || 0 })} className="h-11 text-right text-base font-mono" /></div>
+                    <div className="flex flex-col justify-end"><label className="text-[10px] font-bold uppercase text-stone-500">{L.dispLineTotal}</label><div className="h-11 flex items-center justify-end pr-2 font-mono font-black text-stone-800">£{((it.qty_sent || 0) * (it.rate || 0)).toFixed(2)}</div></div>
+                  </div>
                 </div>
               ))}
             </div>
-            <div><label className="text-xs font-semibold text-stone-600">Notes</label><Textarea value={dispForm.notes} onChange={e => setDispForm({ ...dispForm, notes: e.target.value })} rows={2} /></div>
+
+            <div className="grid grid-cols-2 gap-2 text-[10px] sm:text-[11px]">
+              <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-amber-500 mt-1 shrink-0"></span><div><b>{L.dispDirtySent}:</b> {L.dispDirtyHint}</div></div>
+              <div className="flex items-start gap-1.5 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 mt-1 shrink-0"></span><div><b>{L.dispUnusableSent}:</b> {L.dispUnusableHint}</div></div>
+            </div>
+
+            <div><label className="text-xs font-semibold text-stone-600">{L.notes}</label><Textarea value={dispForm.notes} onChange={e => setDispForm({ ...dispForm, notes: e.target.value })} rows={2} placeholder={L.notesPh} /></div>
           </div>
-          <DialogFooter><Button variant="outline" size="sm" onClick={() => setDispOpen(false)}>Cancel</Button><Button size="sm" className="bg-stone-800 hover:bg-stone-700 text-white" onClick={submitDispatch} data-testid="dispatch-submit-btn">Create Dispatch</Button></DialogFooter>
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDispOpen(false)} className="w-full sm:w-auto">{L.cancel}</Button>
+            <Button size="sm" className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white h-11 sm:h-9" onClick={submitDispatch} data-testid="dispatch-submit-btn">
+              <CheckCircle2 className="w-4 h-4 mr-1" />{L.submit}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1092,7 +1277,7 @@ const StockTab = ({ pid, stock, updateStockCell }) => {
     </div>
   );
 };
-const DeliveriesTab = ({ pid, dispatches, stock }) => {
+const DeliveriesTab = ({ pid, dispatches, stock, L, canSeeCosts = true }) => {
   const [rows, setRows] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const emptyItem = { item_id: "", name: "", qty_received: 0, qty_shortage: 0, qty_damage: 0, qty_rejected: 0, reason: "", unit_cost: 0 };
@@ -1237,37 +1422,67 @@ const DeliveriesTab = ({ pid, dispatches, stock }) => {
                 </div>
               </div>
 
-              {/* Items */}
+              {/* Items — desktop grid */}
               <div className="border border-stone-200 rounded-xl p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-semibold text-stone-600 uppercase">Items</div>
-                  <button onClick={addItem} className="text-xs px-2 py-1 rounded border border-emerald-300 text-emerald-700" data-testid="delivery-add-item">+ Add Item</button>
+                  <div className="text-xs font-semibold text-stone-600 uppercase">{L?.item || "Items"}</div>
+                  <button onClick={addItem} className="text-xs px-2 py-1 rounded border border-emerald-300 text-emerald-700" data-testid="delivery-add-item">+ {L?.item || "Add Item"}</button>
                 </div>
-                <div className="grid grid-cols-[2fr,repeat(5,1fr),auto] gap-2 text-[10px] font-semibold text-stone-500 uppercase px-1 mb-1">
-                  <div>Item</div><div>Received</div><div>Shortage</div><div>Damage</div><div>Rejected</div><div>Cost £</div><div></div>
-                </div>
-                {form.items.map((it, i) => (
-                  <div key={i} className="grid grid-cols-[2fr,repeat(5,1fr),auto] gap-2 items-center mb-1">
-                    <select value={it.item_id} onChange={e => {
-                      const match = stock.find(s => s.item_id === e.target.value);
-                      updItem(i, "item_id", e.target.value);
-                      if (match) updItem(i, "name", match.name);
-                    }} className="px-2 py-1 border rounded text-xs">
-                      <option value="">Select item…</option>
-                      {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
-                    </select>
-                    <input type="number" min="0" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
-                    <input type="number" min="0" value={it.qty_shortage} onChange={e => updItem(i, "qty_shortage", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
-                    <input type="number" min="0" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
-                    <input type="number" min="0" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
-                    <input type="number" step="0.01" min="0" value={it.unit_cost} onChange={e => updItem(i, "unit_cost", parseFloat(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
-                    <button onClick={() => rmItem(i)} className="text-rose-500 text-xs">×</button>
+                {/* Desktop */}
+                <div className="hidden sm:block">
+                  <div className="grid grid-cols-[2fr,repeat(5,1fr),auto] gap-2 text-[10px] font-semibold text-stone-500 uppercase px-1 mb-1">
+                    <div>{L?.item || "Item"}</div><div>{L?.delvReceived || "Received"}</div><div>{L?.delvShortage || "Shortage"}</div><div>{L?.delvDamagedArr || "Damage"}</div><div>Rejected</div><div>{L?.dispRate || "Cost £"}</div><div></div>
                   </div>
-                ))}
+                  {form.items.map((it, i) => (
+                    <div key={i} className="grid grid-cols-[2fr,repeat(5,1fr),auto] gap-2 items-center mb-1">
+                      <select value={it.item_id} onChange={e => {
+                        const match = stock.find(s => s.item_id === e.target.value);
+                        updItem(i, "item_id", e.target.value);
+                        if (match) updItem(i, "name", match.name);
+                      }} className="px-2 py-1 border rounded text-xs">
+                        <option value="">{L?.selectRoom ? "—" : "Select item…"}</option>
+                        {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
+                      </select>
+                      <input type="number" min="0" inputMode="numeric" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs bg-emerald-50" />
+                      <input type="number" min="0" inputMode="numeric" value={it.qty_shortage} onChange={e => updItem(i, "qty_shortage", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs bg-rose-50" />
+                      <input type="number" min="0" inputMode="numeric" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs bg-fuchsia-50" />
+                      <input type="number" min="0" inputMode="numeric" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs bg-amber-50" />
+                      <input type="number" step="0.01" min="0" value={it.unit_cost} onChange={e => updItem(i, "unit_cost", parseFloat(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
+                      <button onClick={() => rmItem(i)} className="text-rose-500 text-xs">×</button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Mobile cards */}
+                <div className="sm:hidden space-y-2">
+                  {form.items.map((it, i) => (
+                    <div key={i} className="bg-white border border-stone-200 rounded-xl p-3">
+                      <div className="flex items-start justify-between mb-2">
+                        <select value={it.item_id} onChange={e => {
+                          const match = stock.find(s => s.item_id === e.target.value);
+                          updItem(i, "item_id", e.target.value);
+                          if (match) updItem(i, "name", match.name);
+                        }} className="flex-1 px-2 py-2 border rounded text-sm font-semibold">
+                          <option value="">Select item…</option>
+                          {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
+                        </select>
+                        <button onClick={() => rmItem(i)} className="ml-2 text-rose-500 p-2"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div><label className="text-[10px] font-bold uppercase text-emerald-700">{L?.delvReceived || "Received"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-emerald-50 border-emerald-200 border rounded mt-0.5" /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-rose-700">{L?.delvShortage || "Shortage"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_shortage} onChange={e => updItem(i, "qty_shortage", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-rose-50 border-rose-200 border rounded mt-0.5" /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-fuchsia-700">{L?.delvDamagedArr || "Damage"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-fuchsia-50 border-fuchsia-200 border rounded mt-0.5" /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-amber-700">Rejected</label><input type="number" min="0" inputMode="numeric" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-amber-50 border-amber-200 border rounded mt-0.5" /></div>
+                        {canSeeCosts && <div className="col-span-2"><label className="text-[10px] font-bold uppercase text-stone-500">{L?.dispRate || "Unit Cost £"}</label><input type="number" step="0.01" min="0" value={it.unit_cost} onChange={e => updItem(i, "unit_cost", parseFloat(e.target.value) || 0)} className="w-full h-11 text-right text-base font-mono border rounded mt-0.5" /></div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 {form.items.some(it => it.qty_shortage || it.qty_damage || it.qty_rejected) && (
                   <div className="mt-2 space-y-1">
                     {form.items.map((it, i) => ((it.qty_shortage || it.qty_damage || it.qty_rejected) ? (
-                      <input key={i} value={it.reason} onChange={e => updItem(i, "reason", e.target.value)} placeholder={`Reason for ${it.name || "this item"} discrepancy…`} className="w-full px-2 py-1 border rounded text-xs bg-rose-50" />
+                      <input key={i} value={it.reason} onChange={e => updItem(i, "reason", e.target.value)} placeholder={`Reason for ${it.name || "this item"} discrepancy…`} className="w-full px-2 py-2 border rounded text-xs bg-rose-50" />
                     ) : null))}
                   </div>
                 )}

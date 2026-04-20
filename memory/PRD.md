@@ -2,6 +2,26 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.9 (Feb 2026): 🏭 Dispatch + Delivery ready-tables (mobile + i18n) + Offline queue
+
+Biggest operational upgrade so far. Three-in-one release.
+
+**A. Dispatch Ready-Table** (`LaundryManagement.js` + `routes/laundry.py`)
+- Backend: `create_dispatch` accepts a new `qty_unusable_sent` per item (write-off pieces being returned to the factory). Stock impact: `dirty -= qty_sent`, `damaged -= qty_unusable_sent`, `in_transit += (qty_sent + qty_unusable_sent)`. Dispatch doc exposes aggregate `total_dirty_sent` / `total_unusable_sent`. Cost is charged only on `qty_sent` (vendor doesn't wash write-offs).
+- Frontend: modal redesigned. Opens pre-filled with **every active catalog item**, qty_sent auto-seeded from current `dirty` stock and `qty_unusable_sent` auto-seeded from `damaged` stock — so the staff member can just confirm/adjust. No dropdowns.
+- Responsive: desktop table / mobile 2×2 cards per item, `h-11` inputs, `inputMode="numeric"`.
+- i18n: TR / EN / BG labels, description, column headers, legend, buttons, toasts. Verified screenshot in TR: "Yeni Sevkıyat · Fabrikaya Gönder" with "Gönderilen Kirli / Gönderilen Bozuk" columns.
+
+**B. Delivery Verification Ready-Table**
+- `DeliveriesTab` gets the same mobile card layout. On desktop the existing wide grid stays; on `sm<` each item becomes a card with 4 numeric inputs (Received / Shortage / Damage / Rejected) + unit cost (hidden for non-cost roles).
+- All column headers pass through `L` so they localize with the user's picked language.
+
+**C. Offline Queue for Usage**
+- New `laundry_usage_queue_{pid}` localStorage buffer.
+- If the POST `/laundry/usage/{pid}` fails (network/offline), the payload is pushed into the queue and the user sees a localized toast `N offline sırada (bağlantı gelince otomatik yollanır)`.
+- Auto-flush runs on module mount, every 3 s (badge counter refresh), and on `window.online` event. Successful flushes notify `N offline entries synced`.
+- A small amber badge (`⏳ N offline`) appears next to the New Usage button whenever the queue is non-empty, so housekeepers know they have unsent entries.
+
 ### Iter 166.8 (Feb 2026): 📱🌐 Mobile-responsive + EN/TR/BG i18n on Laundry Usage
 
 User request: _"telefondan bunu yapacaklarından telefona uyumlu olsun. Bu modülde İngilizce, Türkçe ve Bulgarca dil seçeneği olsun."_

@@ -100,18 +100,26 @@ def create_laundry_router(db, require_roles):
 
         total_cost = 0.0
         normalized = []
+        total_dirty = 0
+        total_unusable = 0
         for i in items:
-            qty = int(i.get("qty_sent", 0))
-            rate = float(i.get("rate", 0))
+            qty = int(i.get("qty_sent") or 0)                   # DIRTY pieces sent to be washed
+            unusable = int(i.get("qty_unusable_sent") or 0)     # UNUSABLE pieces sent back to factory
+            rate = float(i.get("rate") or 0)
+            if qty == 0 and unusable == 0:
+                continue
             normalized.append({
                 "item_id": i.get("item_id", ""),
                 "name": i.get("name", ""),
                 "qty_sent": qty,
+                "qty_unusable_sent": unusable,
                 "qty_received": 0,
                 "rate": rate,
-                "line_total": round(qty * rate, 2),
+                "line_total": round(qty * rate, 2),   # we pay only for washable items
             })
             total_cost += qty * rate
+            total_dirty += qty
+            total_unusable += unusable
 
         now = datetime.now(timezone.utc).isoformat()
         doc = {
@@ -123,14 +131,21 @@ def create_laundry_router(db, require_roles):
             "expected_return": data.get("expected_return", ""),
             "status": "sent",
             "total_cost": round(total_cost, 2),
+            "total_dirty_sent": total_dirty,
+            "total_unusable_sent": total_unusable,
             "notes": (data.get("notes") or "").strip(),
             "created_at": now,
             "created_by": current_user.get("name", ""),
         }
         await db.laundry_dispatches.insert_one({**doc})
-        # Update stock — move from clean→in_transit
+        # Update stock:
+        #   dirty pieces sent → dirty -= qty_sent, in_transit += qty_sent (awaiting return clean)
+        #   unusable pieces sent back to factory → damaged -= qty_unusable_sent (write-off leaves stock)
         for it in normalized:
-            await _adjust_stock(db, property_id, it["item_id"], it["name"], clean=-it["qty_sent"], in_transit=it["qty_sent"])
+            await _adjust_stock(db, property_id, it["item_id"], it["name"],
+                                dirty=-it["qty_sent"],
+                                in_transit=it["qty_sent"],
+                                damaged=-int(it.get("qty_unusable_sent") or 0))
         return doc
 
     @router.post("/laundry/dispatches/{property_id}/{dispatch_id}/receive")

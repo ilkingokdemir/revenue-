@@ -91,6 +91,30 @@ const LAUNDRY_I18N = {
     stockTxItem: "Item", stockTxImpact: "Total impact:", stockTxBy: "By",
     stockTxDelConfirm: "Delete this transaction?", stockTxType: "Type",
     stockDeleted: "Deleted", stockRecorded: "recorded", stockSelectItem: "Select item",
+    // Module-level
+    moduleTitle: "Laundry Management", moduleSubtitle: "Manage dispatches, deliveries and view reports",
+    kpiItemsSentYTD: "Items Sent YTD", kpiAwaitingReturn: "Awaiting Return",
+    kpiDeliveries: "Deliveries", kpiContracts: "Contracts", kpiTotalSpend: "Total Spend",
+    // Tiles
+    tileDispatch: "Dispatch", tileDispatchSub: "Send to laundry",
+    tileDeliveries: "Deliveries", tileDeliveriesSub: "Receive from laundry",
+    tileForecast: "Next Order", tileForecastSub: "Forecast & order",
+    tileUsage: "Daily Usage", tileUsageSub: "Room collections",
+    tileStock: "Stock", tileStockSub: "Inventory levels",
+    tileContracts: "Contracts", tileContractsSub: "Vendor agreements",
+    // Dispatch tab table
+    dispAwaiting: "Awaiting Return", dispNoAwaiting: "No dispatches awaiting return.",
+    dispColExpected: "Expected", dispColItems: "Items", dispColCost: "Cost",
+    dispColStatus: "Status", dispColActions: "Actions", dispColVendor: "Vendor", dispColSent: "Sent",
+    receiveBtn: "Receive", loadingMsg: "Loading...",
+    // Reports section
+    reportsTitle: "Reports",
+    repDailyUsage: "Daily Usage Report", repDailyUsageDesc: "Room-wise daily usage breakdown",
+    repCount: "Count Report", repCountDesc: "Aggregated usage with anomalies",
+    repOrder: "Order Report", repOrderDesc: "Order vs Received comparison",
+    repDispatch: "Dispatch Report", repDispatchDesc: "Dirty send with date ranges",
+    repMonthly: "Monthly Audit", repMonthlyDesc: "End of month audit report",
+    repGroup: "Group Update", repGroupDesc: "Rolling cycle ledger",
     // Offline
     offlineN: "queued offline (will auto-sync)",
   },
@@ -131,6 +155,30 @@ const LAUNDRY_I18N = {
     stockTxItem: "Ürün", stockTxImpact: "Toplam etki:", stockTxBy: "Kaydeden",
     stockTxDelConfirm: "Bu işlem silinsin mi?", stockTxType: "Tür",
     stockDeleted: "Silindi", stockRecorded: "kaydedildi", stockSelectItem: "Ürün seç",
+    // Modül seviyesi
+    moduleTitle: "Çamaşırhane Yönetimi", moduleSubtitle: "Sevkıyat, teslim alma ve raporları yönet",
+    kpiItemsSentYTD: "Yıl Başından Gönderilen", kpiAwaitingReturn: "İade Bekleyen",
+    kpiDeliveries: "Teslim Alınan", kpiContracts: "Sözleşmeler", kpiTotalSpend: "Toplam Harcama",
+    // Kareler
+    tileDispatch: "Sevkıyat", tileDispatchSub: "Fabrikaya gönder",
+    tileDeliveries: "Teslim Alma", tileDeliveriesSub: "Fabrikadan gelen",
+    tileForecast: "Yeni Sipariş", tileForecastSub: "Tahmin ve sipariş",
+    tileUsage: "Günlük Kullanım", tileUsageSub: "Oda toplamaları",
+    tileStock: "Stok", tileStockSub: "Envanter seviyeleri",
+    tileContracts: "Sözleşmeler", tileContractsSub: "Tedarikçi anlaşmaları",
+    // Sevkıyat tablosu
+    dispAwaiting: "İade Bekleyen", dispNoAwaiting: "İade bekleyen sevkıyat yok.",
+    dispColExpected: "Beklenen", dispColItems: "Adet", dispColCost: "Maliyet",
+    dispColStatus: "Durum", dispColActions: "İşlem", dispColVendor: "Tedarikçi", dispColSent: "Gönderildi",
+    receiveBtn: "Teslim Al", loadingMsg: "Yükleniyor...",
+    // Rapor bölümü
+    reportsTitle: "Raporlar",
+    repDailyUsage: "Günlük Kullanım Raporu", repDailyUsageDesc: "Oda bazlı günlük kullanım dökümü",
+    repCount: "Sayım Raporu", repCountDesc: "Kullanım ve anomaliler özeti",
+    repOrder: "Sipariş Raporu", repOrderDesc: "Sipariş vs Teslim karşılaştırması",
+    repDispatch: "Sevkıyat Raporu", repDispatchDesc: "Tarih aralıklı kirli gönderimi",
+    repMonthly: "Aylık Denetim", repMonthlyDesc: "Ay sonu denetim raporu",
+    repGroup: "Grup Güncellemesi", repGroupDesc: "Döngü defteri",
     offlineN: "offline sırada (bağlantı gelince otomatik yollanır)",
   },
   bg: {
@@ -170,6 +218,30 @@ const LAUNDRY_I18N = {
     stockTxItem: "Артикул", stockTxImpact: "Общо въздействие:", stockTxBy: "От",
     stockTxDelConfirm: "Да изтрия ли тази операция?", stockTxType: "Тип",
     stockDeleted: "Изтрито", stockRecorded: "записано", stockSelectItem: "Изберете артикул",
+    // Модул
+    moduleTitle: "Управление на пране", moduleSubtitle: "Управлявайте доставки, получавания и отчети",
+    kpiItemsSentYTD: "Изпратени от началото на годината", kpiAwaitingReturn: "Чака се връщане",
+    kpiDeliveries: "Получени", kpiContracts: "Договори", kpiTotalSpend: "Общ разход",
+    // Плочки
+    tileDispatch: "Доставка", tileDispatchSub: "Към фабрика",
+    tileDeliveries: "Получаване", tileDeliveriesSub: "От фабрика",
+    tileForecast: "Нова поръчка", tileForecastSub: "Прогноза и поръчка",
+    tileUsage: "Дневна употреба", tileUsageSub: "Събиране от стая",
+    tileStock: "Склад", tileStockSub: "Нива на запаси",
+    tileContracts: "Договори", tileContractsSub: "Споразумения с доставчик",
+    // Таблица доставки
+    dispAwaiting: "Чака се връщане", dispNoAwaiting: "Няма доставки в очакване.",
+    dispColExpected: "Очаквано", dispColItems: "Артикули", dispColCost: "Стойност",
+    dispColStatus: "Статус", dispColActions: "Действия", dispColVendor: "Доставчик", dispColSent: "Изпратено",
+    receiveBtn: "Получи", loadingMsg: "Зареждане...",
+    // Отчети
+    reportsTitle: "Отчети",
+    repDailyUsage: "Дневен отчет", repDailyUsageDesc: "Употреба по стая",
+    repCount: "Отчет за броене", repCountDesc: "Обобщение с аномалии",
+    repOrder: "Отчет за поръчки", repOrderDesc: "Поръчано срещу получено",
+    repDispatch: "Отчет за доставки", repDispatchDesc: "Изпращане на мръсно",
+    repMonthly: "Месечен одит", repMonthlyDesc: "Отчет в края на месеца",
+    repGroup: "Групова актуализация", repGroupDesc: "Ротационен дневник",
     offlineN: "опашка офлайн (ще се синхронизира автоматично)",
   },
 };
@@ -539,26 +611,36 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
   return (
     <div className="space-y-5" data-testid="laundry-management">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <div className="flex items-center gap-3">
             <Shirt className="w-5 h-5 text-stone-700" />
-            <h2 className="text-base font-bold text-stone-800" data-testid="laundry-title">Laundry Management</h2>
+            <h2 className="text-base font-bold text-stone-800" data-testid="laundry-title">{L.moduleTitle || "Laundry Management"}</h2>
           </div>
-          <p className="text-[11px] text-stone-500 mt-0.5">Manage dispatches, deliveries and view reports</p>
+          <p className="text-[11px] text-stone-500 mt-0.5">{L.moduleSubtitle || "Manage dispatches, deliveries and view reports"}</p>
+        </div>
+        {/* Global language toggle */}
+        <div className="flex gap-1 bg-stone-100 rounded-lg p-1" data-testid="laundry-lang-toggle">
+          {Object.keys(LAUNDRY_I18N).map(code => (
+            <button key={code} onClick={() => setLang(code)}
+              className={`px-2.5 py-1 text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow" : "text-stone-500 hover:text-stone-700"}`}
+              data-testid={`laundry-lang-${code}`}>
+              {LAUNDRY_I18N[code].flag} {code.toUpperCase()}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* KPIs */}
       <div className={`grid gap-3 ${canSeeCosts ? "grid-cols-5" : "grid-cols-3"}`} data-testid="laundry-kpis">
-        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-center"><p className="text-2xl font-black text-stone-700">{k.total_items || 0}</p><p className="text-[10px] text-stone-500">Items Sent YTD</p></div>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center"><Send className="w-4 h-4 mx-auto mb-1 text-amber-600" /><p className="text-2xl font-black text-amber-700">{k.sent || 0}</p><p className="text-[10px] text-amber-600">Awaiting Return</p></div>
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center"><CheckCircle2 className="w-4 h-4 mx-auto mb-1 text-emerald-600" /><p className="text-2xl font-black text-emerald-700">{k.received || 0}</p><p className="text-[10px] text-emerald-600">Deliveries</p></div>
+        <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-center"><p className="text-2xl font-black text-stone-700">{k.total_items || 0}</p><p className="text-[10px] text-stone-500">{L.kpiItemsSentYTD || "Items Sent YTD"}</p></div>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center"><Send className="w-4 h-4 mx-auto mb-1 text-amber-600" /><p className="text-2xl font-black text-amber-700">{k.sent || 0}</p><p className="text-[10px] text-amber-600">{L.kpiAwaitingReturn || "Awaiting Return"}</p></div>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center"><CheckCircle2 className="w-4 h-4 mx-auto mb-1 text-emerald-600" /><p className="text-2xl font-black text-emerald-700">{k.received || 0}</p><p className="text-[10px] text-emerald-600">{L.kpiDeliveries || "Deliveries"}</p></div>
         {canSeeCosts && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center"><Building2 className="w-4 h-4 mx-auto mb-1 text-blue-600" /><p className="text-2xl font-black text-blue-700">{contracts.length}</p><p className="text-[10px] text-blue-600">Contracts</p></div>
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center"><Building2 className="w-4 h-4 mx-auto mb-1 text-blue-600" /><p className="text-2xl font-black text-blue-700">{contracts.length}</p><p className="text-[10px] text-blue-600">{L.kpiContracts || "Contracts"}</p></div>
         )}
         {canSeeCosts && (
-          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center"><p className="text-2xl font-black text-violet-700">{fmt(k.total_cost)}</p><p className="text-[10px] text-violet-600">Total Spend</p></div>
+          <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-center"><p className="text-2xl font-black text-violet-700">{fmt(k.total_cost)}</p><p className="text-[10px] text-violet-600">{L.kpiTotalSpend || "Total Spend"}</p></div>
         )}
       </div>
 
@@ -567,14 +649,16 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
         {visibleTabs.map(t => {
           const Icon = t.icon;
           const active = tab === t.id;
+          const tileLabel = { dispatch: L.tileDispatch, deliveries: L.tileDeliveries, forecast: L.tileForecast, usage: L.tileUsage, stock: L.tileStock, contracts: L.tileContracts }[t.id] || t.label;
+          const tileSub   = { dispatch: L.tileDispatchSub, deliveries: L.tileDeliveriesSub, forecast: L.tileForecastSub, usage: L.tileUsageSub, stock: L.tileStockSub, contracts: L.tileContractsSub }[t.id] || t.subtitle;
           return (
             <button key={t.id} onClick={() => setTab(t.id)} data-testid={`tab-${t.id}`}
               className={`${t.color} text-white rounded-xl p-4 text-left transition-all ${active ? "ring-4 ring-offset-2 ring-stone-800 scale-[1.02]" : "hover:scale-[1.02] opacity-90 hover:opacity-100"}`}>
               <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mb-3">
                 <Icon className="w-5 h-5" />
               </div>
-              <h3 className="text-sm font-black">{t.label}</h3>
-              <p className="text-[11px] opacity-90">{t.subtitle}</p>
+              <h3 className="text-sm font-black">{tileLabel}</h3>
+              <p className="text-[11px] opacity-90">{tileSub}</p>
             </button>
           );
         })}
@@ -582,31 +666,31 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
 
       {/* Tab Content */}
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Loading...</div>
+        <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />{L.loadingMsg || "Loading..."}</div>
       ) : (
         <>
           {/* DISPATCH */}
           {tab === "dispatch" && (
             <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="dispatch-panel">
               <div className="p-3 border-b border-stone-200 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-stone-800">Awaiting Return ({sentDispatches.length})</h3>
+                <h3 className="text-sm font-bold text-stone-800">{L.dispAwaiting || "Awaiting Return"} ({sentDispatches.length})</h3>
                 <Button size="sm" onClick={openDispForm} className="bg-stone-800 hover:bg-stone-700 text-white" data-testid="new-dispatch-btn">
                   <Plus className="w-4 h-4 mr-1.5" />{L.dispNewBtn}
                 </Button>
               </div>
               {sentDispatches.length === 0 ? (
-                <p className="text-center text-sm text-stone-400 py-12">No dispatches awaiting return.</p>
+                <p className="text-center text-sm text-stone-400 py-12">{L.dispNoAwaiting || "No dispatches awaiting return."}</p>
               ) : (
                 <table className="w-full text-xs">
                   <thead className="bg-stone-50 border-b border-stone-200">
                     <tr>
-                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Vendor</th>
-                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Sent</th>
-                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Expected</th>
-                      <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Items</th>
-                      {canSeeCosts && <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Cost</th>}
-                      <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Status</th>
-                      <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Actions</th>
+                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">{L.dispColVendor || "Vendor"}</th>
+                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">{L.dispColSent || "Sent"}</th>
+                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">{L.dispColExpected || "Expected"}</th>
+                      <th className="text-center py-2.5 px-3 font-semibold text-stone-600">{L.dispColItems || "Items"}</th>
+                      {canSeeCosts && <th className="text-right py-2.5 px-3 font-semibold text-stone-600">{L.dispColCost || "Cost"}</th>}
+                      <th className="text-center py-2.5 px-3 font-semibold text-stone-600">{L.dispColStatus || "Status"}</th>
+                      <th className="text-right py-2.5 px-3 font-semibold text-stone-600">{L.dispColActions || "Actions"}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -633,7 +717,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                               <QrCode className="w-3 h-3 inline mr-1" />QR
                             </button>
                             <button onClick={() => receiveDispatch(d)} className="text-[10px] px-2 py-1 bg-amber-50 text-amber-700 rounded hover:bg-amber-100 font-semibold" data-testid={`receive-btn-${d.id}`}>
-                              <ArrowDown className="w-3 h-3 inline mr-1" />Receive
+                              <ArrowDown className="w-3 h-3 inline mr-1" />{L.receiveBtn || "Receive"}
                             </button>
                           </div>
                         </td>
@@ -778,11 +862,13 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
       {/* REPORTS SECTION */}
       <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="laundry-reports">
         <h3 className="text-sm font-bold text-stone-800 mb-3 flex items-center gap-2">
-          <FileBarChart className="w-4 h-4" />Reports
+          <FileBarChart className="w-4 h-4" />{L.reportsTitle || "Reports"}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {REPORTS.map(r => {
             const Icon = r.icon;
+            const label = { "daily-usage": L.repDailyUsage, count: L.repCount, order: L.repOrder, dispatch: L.repDispatch, "monthly-audit": L.repMonthly, "group-update": L.repGroup }[r.id] || r.label;
+            const desc  = { "daily-usage": L.repDailyUsageDesc, count: L.repCountDesc, order: L.repOrderDesc, dispatch: L.repDispatchDesc, "monthly-audit": L.repMonthlyDesc, "group-update": L.repGroupDesc }[r.id] || r.desc;
             return (
               <button key={r.id} onClick={() => openReport(r)} data-testid={`report-${r.id}`}
                 className="flex items-center gap-3 p-3 rounded-lg border border-stone-200 hover:border-stone-400 hover:bg-stone-50 text-left transition">
@@ -790,8 +876,8 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                   <Icon className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-xs font-bold text-stone-800">{r.label}</h4>
-                  <p className="text-[10px] text-stone-500 truncate">{r.desc}</p>
+                  <h4 className="text-xs font-bold text-stone-800">{label}</h4>
+                  <p className="text-[10px] text-stone-500 truncate">{desc}</p>
                 </div>
               </button>
             );

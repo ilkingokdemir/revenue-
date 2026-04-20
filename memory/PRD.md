@@ -1417,6 +1417,14 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 165.1 (Apr 2026) — Smart Rate Control relocated into Revenue module
+- User flagged duplication between new Smart Rate Control and existing Revenue module
+- Moved `SmartRateControlPanel` from standalone top-level sidebar entry to **Revenue → Pricing → Smart Rate Control** tab
+- Removed standalone sidebar entry + route + import from App.js
+- Revenue Pricing section now contains: AI Dynamic Pricing · Rate Calendar · **Smart Rate Control** (new) · Pricing Strategy · Smart Pricing · Approvals
+- Group Blocks remains as standalone sidebar entry under Reservations & Booking (correctly — it's a bookings/reservations concern, not a revenue concern)
+- Backend endpoints (`/api/smart-rate-control/*`) unchanged — still works
+
 ## Iter 165 (Apr 2026) — Competitor Parity Batch A: Group Blocks + Smart Rate Control
 - Analyzed Mews / Eviivo / Cloudbeds / SiteMinder → picked the 2 most-critical parity gaps
 - New backend: `/app/backend/routes/group_blocks.py` (~200 lines, 7 endpoints)

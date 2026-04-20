@@ -17,6 +17,7 @@ import { RateCalendarEditable } from "./RateCalendarEditable";
 import { ExportBar } from "./RevenueExports";
 import { MarketRobot } from "./MarketRobot";
 import { DynamicPricingEngine } from "./DynamicPricingEngine";
+import SmartRateControlPanel from "./SmartRateControlPanel";
 import { EventIntelligence } from "./EventIntelligence";
 import { ChannelManager } from "./ChannelManager";
 import { HistoricalPricing } from "./HistoricalPricing";
@@ -53,6 +54,7 @@ const NAV_SECTIONS = [
     items: [
       { id: "dynamic-pricing", label: "AI Dynamic Pricing", icon: BrainCircuit },
       { id: "calendar", label: "Rate Calendar", icon: CalendarDays },
+      { id: "smart-rate-control", label: "Smart Rate Control", icon: Zap },
       { id: "strategy", label: "Pricing Strategy", icon: Settings2 },
       { id: "smart-pricing", label: "Smart Pricing", icon: Zap },
       { id: "approvals", label: "Approvals", icon: CheckSquare },
@@ -202,6 +204,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "dashboard" && <RevenueDashboardEnhanced propertyId={pid} onNavigate={handleNavigate} />}
               {tab === "ai-copilot" && <RevenueAICopilot propertyId={pid} />}
               {tab === "calendar" && <RateCalendarEditable propertyId={pid} />}
+              {tab === "smart-rate-control" && <SmartRateControlPanel activePropertyId={pid} />}
               {tab === "dynamic-pricing" && <DynamicPricingEngine propertyId={pid} />}
               {tab === "strategy" && <RevenuePricingStrategy propertyId={pid} />}
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}

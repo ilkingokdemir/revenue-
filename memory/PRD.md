@@ -2,6 +2,23 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.12 (Feb 2026): 📅 Editable Laundry Contract (change delivery days)
+
+User request: _"delivery günlerini değiştirebilimiyoz."_ — contracts were create-only via UI.
+
+**Backend** (`routes/laundry.py`)
+- New `PUT /api/laundry/contracts/{property_id}/{contract_id}` endpoint. Accepts a whitelisted patch of mutable fields: `pricing_model`, `flat_amount`, `quota`, `overage_rate`, `billing_period`, `currency`, `start_date`, `end_date`, **`dispatch_days`**, **`return_days`**, `rates`, `terms`, `active`. Coerces numerics, enforces list type for day fields, stamps `updated_at` + `updated_by`.
+- Admin / manager role-gated.
+
+**Frontend** (`LaundrySettingsPanel.js`)
+- Added `editingId` state and `openEdit(row)` helper that prefills the form with the existing contract, merging current catalog items so newly added ones appear with rate=0.
+- Each contract row now has a ✏️ Edit button alongside 🗑 Delete.
+- Dialog title and submit button switch between "New Contract / Create Contract" and "Edit Contract / Save Changes" based on `editingId`.
+- Cancel & outside-click handlers reset `editingId`.
+- Day-chip active state and `toggleDay` made **case-insensitive** (stored days may be capitalised OR lowercased from different code paths).
+
+**Verified**: PUT round-trip working — changed `dispatch_days` to `['monday','thursday']` and `return_days` to `['wednesday','friday']` via curl; UI opens the same contract and highlights Mon/Thu for Dispatch and Wed/Fri for Return correctly.
+
 ### Iter 166.11 (Feb 2026): 📄📊✉️ Dispatch PDF / Excel / Email export
 
 User request: _"fabrikaya geçile siparişi pdf veya excel formatında olsun, yazıcıdan çıkarılma ve email ile gönderme opsiyonu olsun."_

@@ -192,6 +192,7 @@ const ContractsTab = ({ pid }) => {
     rates: [], terms: "", active: true,
   };
   const [form, setForm] = useState(empty);
+  const [editingId, setEditingId] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -207,15 +208,37 @@ const ContractsTab = ({ pid }) => {
   useEffect(() => { load(); }, [load]);
 
   const open = () => {
+    setEditingId(null);
     setForm({ ...empty, provider_id: providers[0]?.id || "",
               rates: (catalog || []).map(it => ({ item_id: it.id, name: it.name, rate: 0 })) });
+    setShowForm(true);
+  };
+
+  const openEdit = (row) => {
+    setEditingId(row.id);
+    // Merge existing rates with current catalog so newly-added items appear with rate=0
+    const existingMap = Object.fromEntries((row.rates || []).map(r => [r.item_id, r]));
+    const mergedRates = (catalog || []).map(it => ({
+      item_id: it.id,
+      name: it.name,
+      rate: existingMap[it.id]?.rate ?? 0,
+    }));
+    setForm({
+      ...empty, ...row,
+      dispatch_days: row.dispatch_days || [],
+      return_days: row.return_days || [],
+      rates: mergedRates,
+    });
     setShowForm(true);
   };
 
   const toggleDay = (field, day) => {
     setForm(f => {
       const list = f[field] || [];
-      const next = list.includes(day) ? list.filter(d => d !== day) : [...list, day];
+      const already = list.some(d => String(d).toLowerCase() === day.toLowerCase());
+      const next = already
+        ? list.filter(d => String(d).toLowerCase() !== day.toLowerCase())
+        : [...list, day];
       return { ...f, [field]: next };
     });
   };
@@ -227,9 +250,14 @@ const ContractsTab = ({ pid }) => {
   const save = async () => {
     if (!form.provider_id) return toast.error("Select a provider");
     try {
-      await axios.post(`${API}/laundry/contracts/${pid}`, form);
-      toast.success("Contract created");
-      setShowForm(false); load();
+      if (editingId) {
+        await axios.put(`${API}/laundry/contracts/${pid}/${editingId}`, form);
+        toast.success("Contract updated");
+      } else {
+        await axios.post(`${API}/laundry/contracts/${pid}`, form);
+        toast.success("Contract created");
+      }
+      setShowForm(false); setEditingId(null); load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
   };
 
@@ -291,6 +319,7 @@ const ContractsTab = ({ pid }) => {
                     <Badge className={r.active ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-600"}>{r.active ? "Active" : "Inactive"}</Badge>
                   </td>
                   <td className="py-3 px-4 text-right">
+                    <button onClick={() => openEdit(r)} className="text-stone-500 hover:text-blue-600 mr-2" data-testid={`contract-edit-${r.id.slice(0,6)}`}><Pencil className="w-4 h-4 inline" /></button>
                     <button onClick={() => del(r.id)} className="text-rose-500 hover:text-rose-700"><Trash2 className="w-4 h-4 inline" /></button>
                   </td>
                 </tr>
@@ -301,11 +330,11 @@ const ContractsTab = ({ pid }) => {
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6" onClick={() => setShowForm(false)}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6" onClick={() => { setShowForm(false); setEditingId(null); }}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-stone-100 flex items-center justify-between">
-              <h3 className="font-bold">New Contract</h3>
-              <button onClick={() => setShowForm(false)} className="text-stone-400 text-2xl leading-none">×</button>
+              <h3 className="font-bold">{editingId ? "Edit Contract" : "New Contract"}</h3>
+              <button onClick={() => { setShowForm(false); setEditingId(null); }} className="text-stone-400 text-2xl leading-none">×</button>
             </div>
             <div className="p-4 space-y-4">
               {/* Details */}
@@ -378,13 +407,17 @@ const ContractsTab = ({ pid }) => {
                   <div key={field}>
                     <label className="text-xs text-stone-500 capitalize">{field.replace("_", " ")}</label>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {DAYS.map(d => (
-                        <button key={d} onClick={() => toggleDay(field, d)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${(form[field] || []).includes(d) ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"}`}
-                          data-testid={`laundry-contract-${field}-${d.toLowerCase()}`}>
-                          {d.slice(0, 3)}
-                        </button>
-                      ))}
+                      {DAYS.map(d => {
+                        const lowerField = (form[field] || []).map(x => String(x).toLowerCase());
+                        const isOn = lowerField.includes(d.toLowerCase());
+                        return (
+                          <button key={d} onClick={() => toggleDay(field, d)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${isOn ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"}`}
+                            data-testid={`laundry-contract-${field}-${d.toLowerCase()}`}>
+                            {d.slice(0, 3)}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -412,8 +445,8 @@ const ContractsTab = ({ pid }) => {
               </label>
             </div>
             <div className="p-4 border-t border-stone-100 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={save} data-testid="laundry-contract-save">Create Contract</Button>
+              <Button variant="outline" size="sm" onClick={() => { setShowForm(false); setEditingId(null); }}>Cancel</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={save} data-testid="laundry-contract-save">{editingId ? "Save Changes" : "Create Contract"}</Button>
             </div>
           </div>
         </div>

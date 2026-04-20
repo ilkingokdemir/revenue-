@@ -453,6 +453,36 @@ def create_laundry_router(db, require_roles):
         await db.laundry_contracts.insert_one({**doc})
         return doc
 
+    @router.put("/laundry/contracts/{property_id}/{contract_id}")
+    async def update_contract(property_id: str, contract_id: str, data: Dict,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Update mutable contract fields — notably `dispatch_days` and `return_days`
+        so operators can change the weekly pickup/drop-off schedule without deleting/recreating."""
+        allowed = {
+            "pricing_model", "flat_amount", "quota", "overage_rate",
+            "billing_period", "currency", "start_date", "end_date",
+            "dispatch_days", "return_days", "rates", "terms", "active",
+        }
+        patch = {k: v for k, v in (data or {}).items() if k in allowed}
+        # Normalise numeric/list fields
+        for num in ("flat_amount", "quota", "overage_rate"):
+            if num in patch:
+                patch[num] = float(patch[num] or 0)
+        for lst in ("dispatch_days", "return_days"):
+            if lst in patch and not isinstance(patch[lst], list):
+                patch[lst] = []
+        if not patch:
+            raise HTTPException(400, "No valid fields to update")
+        patch["updated_at"] = datetime.now(timezone.utc).isoformat()
+        patch["updated_by"] = current_user.get("email", "")
+        r = await db.laundry_contracts.update_one(
+            {"id": contract_id, "property_id": property_id}, {"$set": patch}
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Contract not found")
+        updated = await db.laundry_contracts.find_one({"id": contract_id}, {"_id": 0})
+        return updated
+
     @router.delete("/laundry/contracts/{property_id}/{contract_id}")
     async def delete_contract(property_id: str, contract_id: str,
                               current_user: dict = Depends(require_roles("admin", "manager"))):

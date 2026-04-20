@@ -785,19 +785,31 @@ def create_laundry_router(db, require_roles):
     @router.post("/laundry/usage/{property_id}")
     async def create_usage(property_id: str, data: Dict,
                            current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
-        """Record a room's daily linen collection. Can pass items array for multiple lines at once."""
+        """Record a housekeeper's per-room cleaning activity.
+
+        Each line item now carries TWO quantities:
+          - `clean_used` — fresh linen brought INTO the room (deducts from clean stock)
+          - `dirty_collected` — soiled linen taken OUT of the room (adds to dirty stock)
+        For backward compatibility, if only `qty` is provided, both are set to `qty`.
+        """
         date = data.get("date", datetime.now(timezone.utc).date().isoformat())
         room_id = data.get("room_id", "")
         room_number = data.get("room_number", "")
         items = data.get("items", [])
+        notes = (data.get("notes") or "").strip()
         if not items or not isinstance(items, list):
             raise HTTPException(400, "items array required")
         now = datetime.now(timezone.utc).isoformat()
         created = []
         for it in items:
-            qty = int(it.get("qty", 0))
-            if qty <= 0:
+            # Read both fields, fall back to legacy `qty`
+            legacy_qty = int(it.get("qty") or 0)
+            clean_used = int(it.get("clean_used") if it.get("clean_used") is not None else legacy_qty)
+            dirty_collected = int(it.get("dirty_collected") if it.get("dirty_collected") is not None else legacy_qty)
+            if clean_used <= 0 and dirty_collected <= 0:
                 continue
+            # For stats/reports, keep `qty` = dirty_collected (pieces that went to laundry)
+            qty = dirty_collected if dirty_collected > 0 else clean_used
             doc = {
                 "id": str(uuid.uuid4()),
                 "property_id": property_id,
@@ -806,14 +818,18 @@ def create_laundry_router(db, require_roles):
                 "room_number": room_number,
                 "item_id": it.get("item_id", ""),
                 "item_name": it.get("item_name", ""),
-                "qty": qty,
-                "recorded_by": current_user.get("name", ""),
+                "qty": qty,                        # legacy summary field
+                "clean_used": clean_used,
+                "dirty_collected": dirty_collected,
+                "notes": notes,
+                "recorded_by": current_user.get("name", "") or current_user.get("email", ""),
                 "created_at": now,
             }
             await db.laundry_daily_usage.insert_one({**doc})
-            # Also move stock from clean→dirty
+            # Independent stock adjustment: clean stock drops by clean_used,
+            # dirty stock rises by dirty_collected (may differ, e.g. extras were used).
             await _adjust_stock(db, property_id, it.get("item_id", ""), it.get("item_name", ""),
-                                clean=-qty, dirty=qty)
+                                clean=-clean_used, dirty=dirty_collected)
             created.append(doc)
         return {"created": created, "count": len(created)}
 
@@ -823,10 +839,12 @@ def create_laundry_router(db, require_roles):
         doc = await db.laundry_daily_usage.find_one({"id": usage_id}, {"_id": 0})
         if not doc:
             raise HTTPException(404, "Not found")
-        # Reverse the stock adjustment
-        qty = int(doc.get("qty", 0))
+        # Reverse the stock adjustment — honour split fields if present
+        legacy_qty = int(doc.get("qty", 0))
+        clean_used = int(doc.get("clean_used") if doc.get("clean_used") is not None else legacy_qty)
+        dirty_collected = int(doc.get("dirty_collected") if doc.get("dirty_collected") is not None else legacy_qty)
         await _adjust_stock(db, property_id, doc.get("item_id", ""), doc.get("item_name", ""),
-                            clean=qty, dirty=-qty)
+                            clean=clean_used, dirty=-dirty_collected)
         await db.laundry_daily_usage.delete_one({"id": usage_id})
         return {"deleted": True}
 

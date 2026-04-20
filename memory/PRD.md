@@ -2,6 +2,26 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.3 (Feb 2026): 🧹 Split Housekeeper Usage — Clean Used vs Dirty Collected
+
+User request: "housekeeper kulandığı temiz stoğu ve çıkan kirliyi ayrı ayrı yazsın".
+
+**Backend** (`routes/laundry.py` — `create_usage` / `delete_usage`)
+- Each usage row now persists two independent quantities:
+  - `clean_used` — fresh linen brought into the room (deducts clean stock)
+  - `dirty_collected` — soiled linen taken from the room (adds to dirty stock)
+- Stock side-effects are decoupled: `_adjust_stock(clean=-clean_used, dirty=+dirty_collected)`. So if a housekeeper uses 3 clean towels but collects 5 dirty (e.g. extra towel from previous day), clean stock drops 3, dirty stock rises 5 — no artificial "1-for-1" constraint.
+- Legacy `qty` field kept as a summary (= dirty_collected) so existing reports keep working.
+- Delete correctly reverses both counts independently.
+- Optional `notes` field surfaced per row.
+
+**Frontend** (`LaundryManagement.js`)
+- Record Room Usage modal redesigned: dual-input rows with emerald "Clean Used ↓" and amber "Dirty Collected ↑" columns. `≠` indicator lights up when the two numbers differ.
+- Daily Usage table now shows split counts + notes + mismatch indicator.
+- Explanatory copy: "Clean Used = pieces brought from clean stock into the room · Dirty Collected = pieces taken from the room to laundry."
+
+**Verified end-to-end**: Bath Towel — usage {clean_used:3, dirty_collected:5} → stock `40→37` clean, `0→5` dirty. DELETE reverses cleanly.
+
 ### Iter 166.2 (Feb 2026): 📦 Pre-delivery consumption in Order Forecast
 
 User request: "elimizdeki stoğu düşürerek ihtiyaç olacak siparişi hesaplasın — total stock - used = remaining, total needs - remaining = order".

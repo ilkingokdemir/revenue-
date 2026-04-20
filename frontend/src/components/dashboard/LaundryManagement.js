@@ -131,7 +131,7 @@ export const LaundryManagement = ({ propertyId, user }) => {
   };
 
   // ============ USAGE HELPERS ============
-  const addUsageItem = () => setUsageForm(f => ({ ...f, items: [...f.items, { item_id: "", item_name: "", qty: 0 }] }));
+  const addUsageItem = () => setUsageForm(f => ({ ...f, items: [...f.items, { item_id: "", item_name: "", clean_used: 0, dirty_collected: 0 }] }));
   const updateUsageItem = (idx, patch) => setUsageForm(f => {
     const items = [...f.items];
     items[idx] = { ...items[idx], ...patch };
@@ -144,13 +144,13 @@ export const LaundryManagement = ({ propertyId, user }) => {
   const removeUsageItem = (idx) => setUsageForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
   const submitUsage = async () => {
     if (!usageForm.room_number.trim() || usageForm.items.length === 0) { toast.error("Room and items required"); return; }
-    const validItems = usageForm.items.filter(i => i.qty > 0);
-    if (validItems.length === 0) { toast.error("At least one item with qty > 0"); return; }
+    const validItems = usageForm.items.filter(i => (i.clean_used || 0) > 0 || (i.dirty_collected || 0) > 0);
+    if (validItems.length === 0) { toast.error("At least one item with clean used or dirty collected > 0"); return; }
     try {
       await axios.post(`${API}/laundry/usage/${pid}`, { ...usageForm, items: validItems });
       toast.success(`Recorded ${validItems.length} item(s) for room ${usageForm.room_number}`);
       setUsageOpen(false);
-      setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", items: [] });
+      setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
       load();
     } catch { toast.error("Failed"); }
   };
@@ -352,24 +352,36 @@ export const LaundryManagement = ({ propertyId, user }) => {
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Date</th>
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Room</th>
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Item</th>
-                      <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Qty</th>
+                      <th className="text-center py-2.5 px-3 font-semibold text-emerald-700">Clean Used ↓</th>
+                      <th className="text-center py-2.5 px-3 font-semibold text-amber-700">Dirty Collected ↑</th>
+                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Notes</th>
                       <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Recorded By</th>
                       <th className="text-right py-2.5 px-3 font-semibold text-stone-600"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {usage.records.map(r => (
+                    {usage.records.map(r => {
+                      const clean = r.clean_used ?? r.qty ?? 0;
+                      const dirty = r.dirty_collected ?? r.qty ?? 0;
+                      const mismatch = clean !== dirty;
+                      return (
                       <tr key={r.id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`usage-row-${r.id}`}>
                         <td className="py-2 px-3 text-stone-600">{r.date}</td>
                         <td className="py-2 px-3 font-semibold text-stone-700">{r.room_number}</td>
                         <td className="py-2 px-3 text-stone-700">{r.item_name}</td>
-                        <td className="py-2 px-3 text-center font-bold text-blue-700">{r.qty}</td>
+                        <td className="py-2 px-3 text-center font-bold text-emerald-700">{clean}</td>
+                        <td className="py-2 px-3 text-center">
+                          <span className={`font-bold ${mismatch ? "text-rose-600" : "text-amber-700"}`}>{dirty}</span>
+                          {mismatch && <span className="ml-1 text-[9px] text-rose-500" title="Differs from clean used">≠</span>}
+                        </td>
+                        <td className="py-2 px-3 text-[10px] text-stone-500 italic">{r.notes || "—"}</td>
                         <td className="py-2 px-3 text-[10px] text-stone-500">{r.recorded_by}</td>
                         <td className="py-2 px-3 text-right">
                           {isManager && <button onClick={() => deleteUsage(r.id)} className="p-1 hover:bg-red-50 rounded"><Trash2 className="w-3 h-3 text-red-500" /></button>}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
@@ -601,20 +613,47 @@ export const LaundryManagement = ({ propertyId, user }) => {
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-semibold text-stone-600">Items Collected</label>
+                <label className="text-xs font-semibold text-stone-600">Housekeeping Record</label>
                 <Button size="sm" variant="outline" onClick={addUsageItem} data-testid="add-usage-item"><Plus className="w-3 h-3 mr-1" />Add Item</Button>
               </div>
-              {usageForm.items.length === 0 && <p className="text-[10px] text-stone-400 py-2">Add at least one item and its quantity.</p>}
+              <p className="text-[10px] text-stone-500 mb-2">
+                <b>Clean Used</b> = pieces brought from clean stock into the room ·
+                <b className="ml-1">Dirty Collected</b> = pieces taken from the room to laundry
+              </p>
+              {usageForm.items.length === 0 && <p className="text-[10px] text-stone-400 py-2">Add at least one item to record.</p>}
+              {usageForm.items.length > 0 && (
+                <div className="grid grid-cols-12 gap-1.5 mb-1 text-[10px] font-bold uppercase text-stone-500">
+                  <div className="col-span-6">Item</div>
+                  <div className="col-span-2 text-center">Clean Used ↓</div>
+                  <div className="col-span-2 text-center">Dirty Collected ↑</div>
+                  <div className="col-span-2"></div>
+                </div>
+              )}
               {usageForm.items.map((it, i) => (
                 <div key={i} className="grid grid-cols-12 gap-1.5 mb-1.5 items-center">
                   <Select value={it.item_id} onValueChange={v => updateUsageItem(i, { item_id: v })}>
-                    <SelectTrigger className="col-span-8 h-8 text-xs"><SelectValue placeholder="Select item" /></SelectTrigger>
+                    <SelectTrigger className="col-span-6 h-8 text-xs"><SelectValue placeholder="Select item" /></SelectTrigger>
                     <SelectContent>{catalog.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                   </Select>
-                  <Input type="number" value={it.qty} onChange={e => updateUsageItem(i, { qty: parseInt(e.target.value) || 0 })} placeholder="Qty" className="col-span-3 h-8 text-xs" />
-                  <button onClick={() => removeUsageItem(i)} className="col-span-1 text-red-500 hover:bg-red-50 rounded p-1"><Trash2 className="w-3 h-3" /></button>
+                  <Input type="number" min="0" value={it.clean_used || 0}
+                         onChange={e => updateUsageItem(i, { clean_used: parseInt(e.target.value) || 0 })}
+                         placeholder="Clean" className="col-span-2 h-8 text-xs text-right bg-emerald-50 border-emerald-200" data-testid={`usage-clean-${i}`} />
+                  <Input type="number" min="0" value={it.dirty_collected || 0}
+                         onChange={e => updateUsageItem(i, { dirty_collected: parseInt(e.target.value) || 0 })}
+                         placeholder="Dirty" className="col-span-2 h-8 text-xs text-right bg-amber-50 border-amber-200" data-testid={`usage-dirty-${i}`} />
+                  <div className="col-span-2 flex items-center justify-end gap-1">
+                    {(it.clean_used || 0) !== (it.dirty_collected || 0) && (it.clean_used || it.dirty_collected) ? (
+                      <span className="text-[9px] text-rose-500 font-semibold" title="Clean used and dirty collected differ">≠</span>
+                    ) : null}
+                    <button onClick={() => removeUsageItem(i)} className="text-red-500 hover:bg-red-50 rounded p-1"><Trash2 className="w-3 h-3" /></button>
+                  </div>
                 </div>
               ))}
+              <div className="mt-3">
+                <label className="text-xs font-semibold text-stone-600">Notes (optional)</label>
+                <Input value={usageForm.notes || ""} onChange={e => setUsageForm(f => ({ ...f, notes: e.target.value }))}
+                       placeholder="e.g. extra towel requested, sheet damage, etc." className="h-8 text-xs" data-testid="usage-notes-input" />
+              </div>
             </div>
           </div>
           <DialogFooter><Button variant="outline" size="sm" onClick={() => setUsageOpen(false)}>Cancel</Button><Button size="sm" className="bg-stone-800 hover:bg-stone-700 text-white" onClick={submitUsage} data-testid="usage-submit-btn">Record</Button></DialogFooter>

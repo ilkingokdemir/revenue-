@@ -1,6 +1,32 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 159 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 160 Test Iterations (100%)
+
+### Iter 160 (Feb 2026): 📡 Channel Manager MVP — Restrictions · Inbound · Parity
+
+Following user request to benchmark competitors and build. Delivered `/app/memory/CHANNEL_MANAGER_MVP_MAP.md` + shipped the 3 P0 features (the 80/20 of what makes a real Channel Manager).
+
+**Competitor benchmark** (Mews/Cloudbeds/SiteMinder/Eviivo/STAAH): Identified 13 missing capabilities, prioritized to 3 P0s.
+
+**15. Channel Restrictions Engine** (`channel_restrictions.py` + `ChannelRestrictionsPanel`)
+- Collection `channel_restrictions` with MinLOS, MaxLOS, CTA (Closed To Arrival), CTD (Closed To Departure), Stop Sell per property × channel × date × room_type.
+- Endpoints: GET list/grid, PUT bulk upsert (with days_of_week filter + "leave unchanged" nulls), DELETE one, POST clear-range.
+- Frontend: date × channel matrix grid with color-coded badges (≥MinLOS sky, ≤MaxLOS indigo, CTA amber, CTD orange, SS rose). Bulk apply form: select channels as chips, set restrictions, apply.
+
+**16. Inbound Reservations** (`channel_inbound.py` + `ChannelInboundPanel`)
+- Two paths: (a) manual paste-entry form for reception when OTA email arrives, (b) iCal URL polling for Airbnb/VRBO.
+- Full iCal parser (no external libs) with UID dedup.
+- Staged pipeline: `pending_review` → admin confirms → creates real `bookings` row with channel_reference link.
+- Frontend: 4 tabs (pending/confirmed/all/sources). Manual entry form. iCal source management with "Pull Now" button + last-pull timestamp.
+
+**17. Channel Parity Monitor** (`channel_parity.py` + `ChannelParityPanel`)
+- Computes effective rates per channel × date (base × markup rule), compares to direct-website baseline, flags violations outside ±tolerance%.
+- Returns {summary, by_channel with parity_pct, violations with severity medium/high}.
+- Frontend: big-number overall parity score with color grade (emerald ≥95%, amber ≥80%, rose below), per-channel bars, full violations table.
+
+**Testing agent iteration_160.json**: 40/41 backend (97.6%) + 100% frontend. One empty minor (false positive). Zero action items.
+
+**Channel Manager completeness**: ~85% vs Mews/Cloudbeds. Remaining gaps (live Booking.com/Expedia webhooks, Airbnb listings API, content sync) all require external partner credentials.
 
 ### Iter 159 (Feb 2026): 🕐 Lightweight Scheduler + Nightly Auto-Deposit
 

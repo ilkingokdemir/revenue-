@@ -10,18 +10,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_ITEMS = [
-    # {id, name, washing_cost, purchase_cost, maintenance_cost, per_cleaning_qty, sort_order}
-    {"id": "bed_sheet_single", "name": "Bed Sheet (Single)", "washing_cost": 0.80, "purchase_cost": 12.00, "maintenance_cost": 0.10, "per_cleaning_qty": 1, "sort_order": 10},
-    {"id": "bed_sheet_double", "name": "Bed Sheet (Double)", "washing_cost": 1.00, "purchase_cost": 18.00, "maintenance_cost": 0.15, "per_cleaning_qty": 1, "sort_order": 20},
-    {"id": "bed_sheet_king",   "name": "Bed Sheet (King)",   "washing_cost": 1.20, "purchase_cost": 22.00, "maintenance_cost": 0.20, "per_cleaning_qty": 1, "sort_order": 30},
-    {"id": "pillow_case",      "name": "Pillow Case",        "washing_cost": 0.30, "purchase_cost": 4.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 2, "sort_order": 40},
-    {"id": "duvet_cover",      "name": "Duvet Cover",        "washing_cost": 1.50, "purchase_cost": 28.00, "maintenance_cost": 0.20, "per_cleaning_qty": 1, "sort_order": 50},
-    {"id": "bath_towel",       "name": "Bath Towel",         "washing_cost": 0.50, "purchase_cost": 8.00,  "maintenance_cost": 0.10, "per_cleaning_qty": 2, "sort_order": 60},
-    {"id": "hand_towel",       "name": "Hand Towel",         "washing_cost": 0.30, "purchase_cost": 4.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 2, "sort_order": 70},
-    {"id": "face_cloth",       "name": "Face Cloth",         "washing_cost": 0.20, "purchase_cost": 2.50,  "maintenance_cost": 0.03, "per_cleaning_qty": 2, "sort_order": 80},
-    {"id": "bath_mat",         "name": "Bath Mat",           "washing_cost": 0.50, "purchase_cost": 6.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 1, "sort_order": 90},
-    {"id": "table_cloth",      "name": "Table Cloth",        "washing_cost": 0.60, "purchase_cost": 10.00, "maintenance_cost": 0.08, "per_cleaning_qty": 0, "sort_order": 100},
-    {"id": "napkin",           "name": "Napkin",             "washing_cost": 0.15, "purchase_cost": 2.00,  "maintenance_cost": 0.02, "per_cleaning_qty": 0, "sort_order": 110},
+    # User's real product catalog (ref screenshot — Hotel Ops Laundry Items)
+    # slug/name mirror the competitor view so housekeepers & managers see familiar labels.
+    # {id(slug), name, washing_cost, purchase_cost, maintenance_cost, per_cleaning_qty, sort_order}
+    {"id": "bath-mat",                 "name": "Bath Mat",                 "washing_cost": 0.50, "purchase_cost": 6.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 1, "sort_order": 10},
+    {"id": "bath-towel",               "name": "Bath Towel",               "washing_cost": 0.50, "purchase_cost": 8.00,  "maintenance_cost": 0.10, "per_cleaning_qty": 2, "sort_order": 20},
+    {"id": "double-sheet",             "name": "Double Sheet",             "washing_cost": 1.00, "purchase_cost": 18.00, "maintenance_cost": 0.15, "per_cleaning_qty": 1, "sort_order": 30},
+    {"id": "double-sheet-duvet-cover", "name": "Double Sheet Duvet Cover", "washing_cost": 1.50, "purchase_cost": 28.00, "maintenance_cost": 0.20, "per_cleaning_qty": 1, "sort_order": 40},
+    {"id": "hand-towel",               "name": "Hand Towel",               "washing_cost": 0.30, "purchase_cost": 4.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 2, "sort_order": 50},
+    {"id": "pillow-cases",             "name": "Pillow Cases",             "washing_cost": 0.30, "purchase_cost": 4.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 2, "sort_order": 60},
+    {"id": "single-sheet",             "name": "Single Sheet",             "washing_cost": 0.80, "purchase_cost": 12.00, "maintenance_cost": 0.10, "per_cleaning_qty": 1, "sort_order": 70},
+    {"id": "single-sheet-duvet-cover", "name": "Single Sheet Duvet Cover", "washing_cost": 1.20, "purchase_cost": 22.00, "maintenance_cost": 0.18, "per_cleaning_qty": 1, "sort_order": 80},
 ]
 
 DISPATCH_STATUSES = ("pending", "sent", "received", "invoiced", "paid")

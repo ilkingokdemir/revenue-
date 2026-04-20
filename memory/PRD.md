@@ -2,6 +2,21 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.6 (Feb 2026): 📋 Laundry Items default catalog aligned to user's real product list
+
+User uploaded their operational Laundry Items screen ("Hotel Ops"). Replaced the generic 11-item default list with the exact 8-item catalog from the screenshot, with matching display names and slugs:
+
+1. Bath Mat (`bath-mat`)
+2. Bath Towel (`bath-towel`)
+3. Double Sheet (`double-sheet`)
+4. Double Sheet Duvet Cover (`double-sheet-duvet-cover`)
+5. Hand Towel (`hand-towel`)
+6. Pillow Cases (`pillow-cases`)
+7. Single Sheet (`single-sheet`)
+8. Single Sheet Duvet Cover (`single-sheet-duvet-cover`)
+
+Cleared the previously-seeded `laundry_item_defs` collection (22 records) so the new defaults take effect on next fetch. Verified UI shows the exact 8 items in the correct order with the right slugs.
+
 ### Iter 166.5 (Feb 2026): 🔑 RBAC-driven cost visibility — admin-configurable
 
 Previous iteration hard-coded role names (`admin/manager/accountant`) for cost visibility. User feedback: _"yaptığın modüllerde admin Roles and Permissions'dan neyi kimin görüp görmeyeceğine izin vermeli, bütün modüllerde bu olmalı"_.

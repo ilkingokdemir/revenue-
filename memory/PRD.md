@@ -1417,6 +1417,18 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 165.3 (Apr 2026) — Laundry Stock Transactions (maintenance/disposal/write-off audit)
+- User workflow clarification: housekeeping records dirty/used/damaged, reception counts returns, stock maintains audit trail
+- Existing gaps identified: Stock tab had editable cells but zero audit trail; no way to record maintenance/disposal/write-off
+- New backend endpoints (3):
+  - `GET /api/laundry/stock-transactions/{pid}?tx_type=` — list + stats aggregate
+  - `POST /api/laundry/stock-transactions/{pid}` — create (maintenance/disposal/write_off/found/stock_in/stock_out)
+  - `DELETE /api/laundry/stock-transactions/{id}`
+- Auto stock adjustments: maintenance/disposal/write_off → -clean, disposal adds to damaged counter; found/stock_in → +clean; stock_out → -clean
+- Frontend: new `StockTab` component with 6 coloured quick-action buttons (Record Maintenance/Disposal/Write-Off/Found/Stock In/Stock Out), each opens modal matching competitor UX (Item · Qty · Unit Cost · Transaction Date · Reason · Notes · live Total impact)
+- Stat chips filter transaction history by type; full audit trail table (Date · Type badge · Item · Qty · Unit £ · Total · Reason/Notes · By user · Delete)
+- Smoke-tested end-to-end: maintenance £22.50 (5 towels × £4.50) + disposal £6.00 (3 pillow cases × £2) → stats roll up correctly ✅
+
 ## Iter 165.2 (Apr 2026) — Laundry Deliveries rich discrepancy tracking
 - Competitor screenshot analysis (MyHotelBox) revealed Deliveries sub-module had weaker features than theirs
 - Added backend endpoints: `GET /api/laundry/deliveries/{pid}` · `POST /api/laundry/deliveries/{pid}` · `DELETE /api/laundry/deliveries/{id}`

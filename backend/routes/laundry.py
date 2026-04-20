@@ -508,6 +508,89 @@ def create_laundry_router(db, require_roles):
 
         raise HTTPException(400, f"Unknown report_type: {report_type}")
 
+    # ========================= STOCK TRANSACTIONS (maintenance/disposal/write-off) =========================
+    @router.get("/laundry/stock-transactions/{property_id}")
+    async def list_stock_txns(property_id: str, tx_type: str = "",
+                              current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        q: Dict = {"property_id": property_id}
+        if tx_type:
+            q["tx_type"] = tx_type
+        rows = await db.laundry_stock_transactions.find(
+            q, {"_id": 0}
+        ).sort("transaction_date", -1).to_list(500)
+        # Stats by type
+        pipeline = [
+            {"$match": {"property_id": property_id}},
+            {"$group": {
+                "_id": "$tx_type",
+                "count": {"$sum": 1},
+                "total_qty": {"$sum": "$quantity"},
+                "total_cost": {"$sum": "$total_cost"},
+            }},
+        ]
+        agg = await db.laundry_stock_transactions.aggregate(pipeline).to_list(20)
+        stats = {a["_id"]: {"count": a["count"], "qty": a["total_qty"],
+                            "cost": round(a["total_cost"], 2)} for a in agg}
+        return {"rows": rows, "stats": stats}
+
+    @router.post("/laundry/stock-transactions/{property_id}")
+    async def create_stock_txn(property_id: str, data: Dict,
+                               current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """Body: {item_id, name, tx_type, quantity, unit_cost, transaction_date,
+                  reason?, notes?}
+        tx_type: maintenance | disposal | write_off | found | stock_in | stock_out
+        """
+        for f in ("item_id", "tx_type", "quantity", "transaction_date"):
+            if data.get(f) in (None, ""):
+                raise HTTPException(400, f"{f} required")
+        tx_type = data["tx_type"]
+        if tx_type not in ("maintenance", "disposal", "write_off", "found",
+                           "stock_in", "stock_out"):
+            raise HTTPException(400, "invalid tx_type")
+        qty = int(data["quantity"])
+        if qty < 1:
+            raise HTTPException(400, "quantity must be >= 1")
+        cost = float(data.get("unit_cost") or 0)
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "item_id": data["item_id"],
+            "name": data.get("name", ""),
+            "tx_type": tx_type,
+            "quantity": qty,
+            "unit_cost": cost,
+            "total_cost": round(qty * cost, 2),
+            "transaction_date": data["transaction_date"],
+            "reason": data.get("reason", tx_type),
+            "notes": data.get("notes", ""),
+            "created_at": now,
+            "created_by": current_user.get("email", ""),
+        }
+        await db.laundry_stock_transactions.insert_one(doc)
+        doc.pop("_id", None)
+
+        # Adjust stock based on tx_type:
+        # maintenance/disposal/write_off → reduce clean stock (move to damaged bucket for audit)
+        # found / stock_in → add clean stock
+        # stock_out → reduce clean stock
+        if tx_type in ("maintenance", "disposal", "write_off"):
+            await _adjust_stock(db, property_id, data["item_id"], data.get("name", ""),
+                                clean=-qty, damaged=qty if tx_type == "disposal" else 0)
+        elif tx_type in ("found", "stock_in"):
+            await _adjust_stock(db, property_id, data["item_id"], data.get("name", ""),
+                                clean=qty)
+        elif tx_type == "stock_out":
+            await _adjust_stock(db, property_id, data["item_id"], data.get("name", ""),
+                                clean=-qty)
+        return doc
+
+    @router.delete("/laundry/stock-transactions/{txn_id}")
+    async def delete_stock_txn(txn_id: str,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        res = await db.laundry_stock_transactions.delete_one({"id": txn_id})
+        return {"status": "deleted" if res.deleted_count else "not_found"}
+
     return router
 
 

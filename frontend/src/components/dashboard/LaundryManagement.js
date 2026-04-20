@@ -371,32 +371,7 @@ export const LaundryManagement = ({ propertyId, user }) => {
 
           {/* STOCK */}
           {tab === "stock" && (
-            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="stock-panel">
-              <table className="w-full text-xs">
-                <thead className="bg-stone-50 border-b border-stone-200">
-                  <tr>
-                    <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Item</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-emerald-600">Clean</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-amber-600">Dirty</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-blue-600">In Transit</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-red-500">Damaged</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stock.map(s => (
-                    <tr key={s.item_id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`stock-row-${s.item_id}`}>
-                      <td className="py-2 px-3 font-semibold text-stone-700">{s.name}</td>
-                      <td className="py-2 px-3 text-center"><input type="number" value={s.on_hand_clean} onChange={e => updateStockCell(s.item_id, "on_hand_clean", e.target.value)} className="w-16 text-center border border-stone-200 rounded px-1 py-0.5 text-xs" data-testid={`stock-clean-${s.item_id}`} /></td>
-                      <td className="py-2 px-3 text-center"><input type="number" value={s.dirty} onChange={e => updateStockCell(s.item_id, "dirty", e.target.value)} className="w-16 text-center border border-stone-200 rounded px-1 py-0.5 text-xs" /></td>
-                      <td className="py-2 px-3 text-center font-semibold text-blue-600">{s.in_transit}</td>
-                      <td className="py-2 px-3 text-center"><input type="number" value={s.damaged} onChange={e => updateStockCell(s.item_id, "damaged", e.target.value)} className="w-16 text-center border border-stone-200 rounded px-1 py-0.5 text-xs" /></td>
-                      <td className="py-2 px-3 text-center font-bold text-stone-800">{s.total}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <StockTab pid={pid} stock={stock} updateStockCell={updateStockCell} />
           )}
 
           {/* CONTRACTS */}
@@ -675,7 +650,211 @@ export const LaundryManagement = ({ propertyId, user }) => {
   );
 };
 
-/* ═══════════ DELIVERIES TAB — with discrepancy tracking ═══════════ */
+/* ═══════════ STOCK TAB — with transactions (maintenance/disposal/write-off) ═══════════ */
+const StockTab = ({ pid, stock, updateStockCell }) => {
+  const [txns, setTxns] = useState([]);
+  const [stats, setStats] = useState({});
+  const [filter, setFilter] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [txType, setTxType] = useState("maintenance");
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    item_id: "", name: "", quantity: 1, unit_cost: 0,
+    transaction_date: today, reason: "", notes: "",
+  });
+
+  const loadTxns = async () => {
+    try {
+      const qs = filter ? `?tx_type=${filter}` : "";
+      const { data } = await axios.get(`${API}/laundry/stock-transactions/${pid}${qs}`);
+      setTxns(data.rows || []); setStats(data.stats || {});
+    } catch { /* */ }
+  };
+  useEffect(() => { loadTxns(); /* eslint-disable-next-line */ }, [pid, filter]);
+
+  const save = async () => {
+    if (!form.item_id) return toast.error("Select an item");
+    try {
+      await axios.post(`${API}/laundry/stock-transactions/${pid}`, { ...form, tx_type: txType, reason: form.reason || txType });
+      toast.success(`${txType} recorded`);
+      setShowForm(false);
+      setForm({ item_id: "", name: "", quantity: 1, unit_cost: 0, transaction_date: today, reason: "", notes: "" });
+      loadTxns();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Delete this transaction?")) return;
+    await axios.delete(`${API}/laundry/stock-transactions/${id}`);
+    toast.success("Deleted"); loadTxns();
+  };
+
+  const openForm = (type) => { setTxType(type); setForm(f => ({ ...f, reason: type })); setShowForm(true); };
+
+  const typeBadge = (t) => ({
+    maintenance: "bg-amber-100 text-amber-700",
+    disposal:    "bg-rose-100 text-rose-700",
+    write_off:   "bg-stone-200 text-stone-700",
+    found:       "bg-emerald-100 text-emerald-700",
+    stock_in:    "bg-blue-100 text-blue-700",
+    stock_out:   "bg-violet-100 text-violet-700",
+  }[t] || "bg-stone-100 text-stone-600");
+
+  return (
+    <div className="space-y-3" data-testid="stock-panel">
+      {/* Quick-action buttons */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+        {[
+          { k: "maintenance", l: "Maintenance",  c: "border-amber-300 text-amber-700 hover:bg-amber-50" },
+          { k: "disposal",    l: "Disposal",     c: "border-rose-300 text-rose-700 hover:bg-rose-50" },
+          { k: "write_off",   l: "Write-Off",    c: "border-stone-300 text-stone-700 hover:bg-stone-100" },
+          { k: "found",       l: "Found",        c: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" },
+          { k: "stock_in",    l: "Stock In",     c: "border-blue-300 text-blue-700 hover:bg-blue-50" },
+          { k: "stock_out",   l: "Stock Out",    c: "border-violet-300 text-violet-700 hover:bg-violet-50" },
+        ].map(b => (
+          <button key={b.k} onClick={() => openForm(b.k)} className={`px-3 py-2.5 border rounded-xl text-xs font-semibold ${b.c}`} data-testid={`stock-tx-${b.k}-btn`}>
+            + Record {b.l}
+          </button>
+        ))}
+      </div>
+
+      {/* Stat chips */}
+      {Object.keys(stats).length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          {Object.entries(stats).map(([k, v]) => (
+            <button key={k} onClick={() => setFilter(filter === k ? "" : k)} className={`px-3 py-1.5 rounded-lg text-xs border transition ${filter === k ? "bg-blue-50 border-blue-300" : "bg-white border-stone-200"}`}>
+              <span className="font-semibold capitalize">{k.replace("_", " ")}</span>
+              <span className="text-stone-500 ml-2">{v.count} · {v.qty} items · £{v.cost.toFixed(2)}</span>
+            </button>
+          ))}
+          {filter && <button onClick={() => setFilter("")} className="px-2 py-1 text-xs text-stone-500 hover:text-stone-700">Clear filter ×</button>}
+        </div>
+      )}
+
+      {/* Current Stock table */}
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="px-3 py-2 bg-stone-50 border-b border-stone-200 text-xs font-bold text-stone-700">Current Stock Levels</div>
+        <table className="w-full text-xs">
+          <thead className="bg-stone-50 border-b border-stone-200">
+            <tr>
+              <th className="text-left py-2 px-3 font-semibold text-stone-600">Item</th>
+              <th className="text-center py-2 px-3 font-semibold text-emerald-600">Clean</th>
+              <th className="text-center py-2 px-3 font-semibold text-amber-600">Dirty</th>
+              <th className="text-center py-2 px-3 font-semibold text-blue-600">In Transit</th>
+              <th className="text-center py-2 px-3 font-semibold text-red-500">Damaged</th>
+              <th className="text-center py-2 px-3 font-semibold text-stone-600">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stock.map(s => (
+              <tr key={s.item_id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`stock-row-${s.item_id}`}>
+                <td className="py-2 px-3 font-semibold text-stone-700">{s.name}</td>
+                <td className="py-2 px-3 text-center"><input type="number" value={s.on_hand_clean} onChange={e => updateStockCell(s.item_id, "on_hand_clean", e.target.value)} className="w-16 text-center border border-stone-200 rounded px-1 py-0.5 text-xs" /></td>
+                <td className="py-2 px-3 text-center"><input type="number" value={s.dirty} onChange={e => updateStockCell(s.item_id, "dirty", e.target.value)} className="w-16 text-center border border-stone-200 rounded px-1 py-0.5 text-xs" /></td>
+                <td className="py-2 px-3 text-center font-semibold text-blue-600">{s.in_transit}</td>
+                <td className="py-2 px-3 text-center"><input type="number" value={s.damaged} onChange={e => updateStockCell(s.item_id, "damaged", e.target.value)} className="w-16 text-center border border-stone-200 rounded px-1 py-0.5 text-xs" /></td>
+                <td className="py-2 px-3 text-center font-bold text-stone-800">{s.total}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Transaction history */}
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="px-3 py-2 bg-stone-50 border-b border-stone-200 text-xs font-bold text-stone-700">Transaction History ({txns.length})</div>
+        {txns.length === 0 ? (
+          <p className="text-center text-sm text-stone-400 py-8">No transactions yet — use the buttons above to record one.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead className="bg-stone-50 border-b border-stone-200">
+              <tr>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">Date</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">Type</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">Item</th>
+                <th className="text-center py-2 px-3 font-semibold text-stone-600">Qty</th>
+                <th className="text-right py-2 px-3 font-semibold text-stone-600">Unit £</th>
+                <th className="text-right py-2 px-3 font-semibold text-stone-600">Total</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">Reason / Notes</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">By</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {txns.map(t => (
+                <tr key={t.id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`stock-tx-row-${t.id.slice(0,6)}`}>
+                  <td className="py-2 px-3 text-stone-600">{t.transaction_date}</td>
+                  <td className="py-2 px-3"><Badge className={`${typeBadge(t.tx_type)} text-[10px]`}>{t.tx_type.replace("_", " ")}</Badge></td>
+                  <td className="py-2 px-3 font-semibold text-stone-700">{t.name || t.item_id}</td>
+                  <td className="py-2 px-3 text-center font-mono">{t.quantity}</td>
+                  <td className="py-2 px-3 text-right font-mono">£{t.unit_cost?.toFixed(2)}</td>
+                  <td className="py-2 px-3 text-right font-mono font-bold">£{t.total_cost?.toFixed(2)}</td>
+                  <td className="py-2 px-3 text-stone-600 truncate max-w-xs">{t.notes || t.reason}</td>
+                  <td className="py-2 px-3 text-stone-500 text-[10px]">{t.created_by}</td>
+                  <td><button onClick={() => del(t.id)} className="text-rose-500 text-xs px-2">×</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Record Transaction Modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+              <h3 className="font-bold capitalize">Record {txType.replace("_", " ")}</h3>
+              <button onClick={() => setShowForm(false)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-xs text-stone-500">Item *</label>
+                <select value={form.item_id} onChange={e => {
+                  const match = stock.find(s => s.item_id === e.target.value);
+                  setForm(f => ({ ...f, item_id: e.target.value, name: match?.name || "" }));
+                }} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="stock-tx-item">
+                  <option value="">Select item…</option>
+                  {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-stone-500">Quantity *</label>
+                  <input type="number" min="1" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: parseInt(e.target.value) || 1 }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="stock-tx-qty" />
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500">Unit Cost £</label>
+                  <input type="number" step="0.01" value={form.unit_cost} onChange={e => setForm(f => ({ ...f, unit_cost: parseFloat(e.target.value) || 0 }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-stone-500">Transaction Date *</label>
+                <input type="date" value={form.transaction_date} onChange={e => setForm(f => ({ ...f, transaction_date: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-stone-500">Reason</label>
+                <input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder={txType} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-stone-500">Notes</label>
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" rows={3} placeholder="Any details (e.g. 'Guest damage — room 204, stain couldn't be removed')" />
+              </div>
+              <div className="bg-stone-50 border border-stone-200 rounded-lg p-2 text-xs flex justify-between">
+                <span className="text-stone-500">Total impact:</span>
+                <span className="font-mono font-bold">£{(form.quantity * form.unit_cost).toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="p-4 border-t border-stone-100 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={save} data-testid="stock-tx-submit">Record</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 const DeliveriesTab = ({ pid, dispatches, stock }) => {
   const [rows, setRows] = useState([]);
   const [showForm, setShowForm] = useState(false);

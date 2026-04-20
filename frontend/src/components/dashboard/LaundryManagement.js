@@ -15,7 +15,8 @@ import { toast } from "sonner";
 import {
   RefreshCw, Plus, Send, Package, FileText, Shirt, CheckCircle2,
   Trash2, ArrowDown, Building2, Inbox, DoorOpen, BarChart3, AlertCircle,
-  Calendar, FileBarChart, ShieldCheck, RotateCcw, Download,
+  Calendar, FileBarChart, ShieldCheck, RotateCcw, Download, Sparkles,
+  TrendingUp,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -23,6 +24,7 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const TABS = [
   { id: "dispatch",  label: "Dispatch",  icon: Send,     color: "bg-orange-500",  subtitle: "Send to laundry" },
   { id: "deliveries",label: "Deliveries",icon: Inbox,    color: "bg-emerald-500", subtitle: "Receive from laundry" },
+  { id: "forecast",  label: "Next Order", icon: Sparkles, color: "bg-fuchsia-500", subtitle: "Forecast & order" },
   { id: "usage",     label: "Daily Usage",icon: DoorOpen, color: "bg-blue-500",   subtitle: "Room collections" },
   { id: "stock",     label: "Stock",      icon: Package, color: "bg-violet-500",  subtitle: "Inventory levels" },
   { id: "contracts", label: "Contracts",  icon: FileText, color: "bg-stone-500",  subtitle: "Vendor agreements" },
@@ -80,7 +82,7 @@ export const LaundryManagement = ({ propertyId, user }) => {
         axios.get(`${API}/laundry/usage/${pid}`),
         axios.get(`${API}/laundry/stock/${pid}`),
         axios.get(`${API}/laundry/contracts/${pid}`).catch(() => ({ data: { contracts: [] } })),
-        axios.get(`${API}/laundry/catalog`),
+        axios.get(`${API}/laundry/catalog`, { params: { property_id: pid } }),
         axios.get(`${API}/rooms`).catch(() => ({ data: [] })),
       ]);
       setDispatches(d.data);
@@ -254,7 +256,7 @@ export const LaundryManagement = ({ propertyId, user }) => {
       </div>
 
       {/* Big Colored Tiles (like the mobile screenshot) */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="laundry-tiles">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3" data-testid="laundry-tiles">
         {TABS.map(t => {
           const Icon = t.icon;
           const active = tab === t.id;
@@ -325,6 +327,11 @@ export const LaundryManagement = ({ propertyId, user }) => {
           {/* DELIVERIES */}
           {tab === "deliveries" && (
             <DeliveriesTab pid={pid} dispatches={sentDispatches} stock={stock} />
+          )}
+
+          {/* FORECAST */}
+          {tab === "forecast" && (
+            <ForecastTab pid={pid} onCreated={load} />
           )}
 
           {/* DAILY USAGE */}
@@ -1049,6 +1056,260 @@ const DeliveriesTab = ({ pid, dispatches, stock }) => {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+};
+
+
+/* ═══════════════════ ORDER FORECAST TAB ═══════════════════ */
+const ForecastTab = ({ pid, onCreated }) => {
+  const nextMonday = () => {
+    const d = new Date();
+    const day = d.getDay();                 // 0=Sun, 1=Mon, ...
+    const diff = (8 - day) % 7 || 7;        // days until next Monday (>=1)
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+  };
+  const [delivery, setDelivery] = useState(nextMonday());
+  const [horizon, setHorizon] = useState(7);
+  const [everyN, setEveryN] = useState(2);
+  const [providers, setProviders] = useState([]);
+  const [vendor, setVendor] = useState("");
+  const [forecast, setForecast] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [editableItems, setEditableItems] = useState([]);  // user can override order qty
+
+  const runForecast = useCallback(async () => {
+    if (!delivery) { toast.error("Pick a delivery date"); return; }
+    setLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/laundry/forecast/${pid}`, {
+        params: { delivery_date: delivery, horizon_days: horizon, in_house_cleaning_every: everyN },
+      });
+      setForecast(data);
+      setEditableItems(data.items.map(i => ({ ...i, order_qty: i.shortfall })));
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed to compute forecast"); }
+    setLoading(false);
+  }, [pid, delivery, horizon, everyN]);
+
+  useEffect(() => {
+    axios.get(`${API}/laundry/providers/${pid}`).then(r => {
+      const active = (r.data.providers || []).filter(p => p.status === "active");
+      setProviders(active);
+      if (active.length && !vendor) setVendor(active[0].name);
+    }).catch(() => setProviders([]));
+    runForecast();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pid]);
+
+  const updateQty = (item_id, v) => {
+    setEditableItems(arr => arr.map(x => x.item_id === item_id ? { ...x, order_qty: Math.max(0, parseInt(v) || 0) } : x));
+  };
+
+  const totals = () => {
+    const qty = editableItems.reduce((s, x) => s + (x.order_qty || 0), 0);
+    const cost = editableItems.reduce((s, x) => s + (x.order_qty || 0) * (x.washing_cost || 0), 0);
+    return { qty, cost };
+  };
+
+  const createOrder = async () => {
+    const lines = editableItems.filter(i => (i.order_qty || 0) > 0);
+    if (!lines.length) return toast.error("No items to order");
+    if (!vendor) return toast.error("Select a provider/vendor");
+    if (!window.confirm(`Create dispatch to ${vendor} for ${lines.length} items (${totals().qty} pieces, est. £${totals().cost.toFixed(2)})?`)) return;
+    setCreating(true);
+    try {
+      await axios.post(`${API}/laundry/forecast/${pid}/create-dispatch`, {
+        vendor, delivery_date: delivery, horizon_days: horizon, in_house_cleaning_every: everyN,
+        items: lines.map(l => ({
+          item_id: l.item_id, name: l.name,
+          qty_sent: l.order_qty, rate: l.washing_cost || 0,
+        })),
+      });
+      toast.success(`Dispatch created — ${totals().qty} pieces → ${vendor}`);
+      onCreated && onCreated();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+    setCreating(false);
+  };
+
+  const fmt = (n) => `£${Number(n || 0).toFixed(2)}`;
+  const t = totals();
+  const daily = forecast?.daily || [];
+  const maxEvents = Math.max(1, ...daily.map(d => d.events));
+
+  return (
+    <div className="space-y-4" data-testid="forecast-panel">
+      {/* Controls */}
+      <div className="bg-gradient-to-br from-fuchsia-50 to-white border border-fuchsia-200 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Sparkles className="w-4 h-4 text-fuchsia-600" />
+          <h3 className="text-sm font-bold text-stone-800">Smart Order Forecast</h3>
+          <span className="text-xs text-stone-500">Computes next-week linen needs based on arrivals + in-house cleanings</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div>
+            <label className="text-[11px] font-semibold text-stone-500 uppercase">Delivery Date</label>
+            <input type="date" value={delivery} onChange={e => setDelivery(e.target.value)} className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-lg text-sm" data-testid="forecast-delivery-date" />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-stone-500 uppercase">Forecast Horizon</label>
+            <select value={horizon} onChange={e => setHorizon(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-lg text-sm" data-testid="forecast-horizon">
+              <option value={3}>3 days</option>
+              <option value={7}>7 days (1 week)</option>
+              <option value={14}>14 days (2 weeks)</option>
+              <option value={30}>30 days</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-stone-500 uppercase">In-house Clean Every</label>
+            <select value={everyN} onChange={e => setEveryN(parseInt(e.target.value))} className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-lg text-sm" data-testid="forecast-every-n">
+              <option value={1}>Daily</option>
+              <option value={2}>Every 2 days</option>
+              <option value={3}>Every 3 days</option>
+              <option value={7}>Weekly</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-stone-500 uppercase">Provider / Vendor</label>
+            {providers.length > 0 ? (
+              <select value={vendor} onChange={e => setVendor(e.target.value)} className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-lg text-sm" data-testid="forecast-vendor">
+                {providers.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+              </select>
+            ) : (
+              <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor name" className="w-full mt-1 px-3 py-2 border border-stone-200 rounded-lg text-sm" />
+            )}
+          </div>
+          <div className="md:col-span-2 flex items-end">
+            <Button size="sm" className="w-full bg-fuchsia-600 hover:bg-fuchsia-700 text-white" onClick={runForecast} disabled={loading} data-testid="forecast-run">
+              {loading ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <TrendingUp className="w-4 h-4 mr-1" />}
+              {loading ? "Computing..." : "Recompute Forecast"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {forecast && (
+        <>
+          {/* Summary KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+              <p className="text-2xl font-black text-stone-700">{forecast.bookings_in_window}</p>
+              <p className="text-[11px] text-stone-500">Bookings in window</p>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+              <p className="text-2xl font-black text-blue-600">{forecast.total_cleaning_events}</p>
+              <p className="text-[11px] text-stone-500">Cleaning events</p>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+              <p className="text-2xl font-black text-fuchsia-600">{t.qty}</p>
+              <p className="text-[11px] text-stone-500">Total pieces to order</p>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+              <p className="text-2xl font-black text-emerald-600">{fmt(t.cost)}</p>
+              <p className="text-[11px] text-stone-500">Estimated cost</p>
+            </div>
+            <div className="bg-white border border-stone-200 rounded-xl p-4 text-center">
+              <p className="text-2xl font-black text-amber-600">{editableItems.filter(i => i.order_qty > 0).length}</p>
+              <p className="text-[11px] text-stone-500">Items to order</p>
+            </div>
+          </div>
+
+          {/* Daily breakdown */}
+          <div className="bg-white border border-stone-200 rounded-xl p-4">
+            <h4 className="text-sm font-bold text-stone-800 mb-2">Daily Cleaning Events</h4>
+            <div className="flex items-end gap-2 h-28" data-testid="forecast-daily">
+              {daily.map(d => {
+                const h = (d.events / maxEvents) * 100;
+                const dd = new Date(d.date);
+                const label = dd.toLocaleDateString("en-GB", { weekday: "short", day: "numeric" });
+                return (
+                  <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1">
+                    <div className="text-xs font-bold text-stone-700">{d.events || ""}</div>
+                    <div className="w-full bg-stone-100 rounded-t relative overflow-hidden" style={{ height: "70%" }}>
+                      {d.arrivals > 0 && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-emerald-500"
+                             style={{ height: `${(d.arrivals / maxEvents) * 100}%` }}
+                             title={`${d.arrivals} arrivals`} />
+                      )}
+                      {d.in_house_cleanings > 0 && (
+                        <div className="absolute left-0 right-0 bg-blue-500"
+                             style={{ bottom: `${(d.arrivals / maxEvents) * 100}%`,
+                                      height: `${(d.in_house_cleanings / maxEvents) * 100}%` }}
+                             title={`${d.in_house_cleanings} in-house cleanings`} />
+                      )}
+                    </div>
+                    <div className="text-[10px] text-stone-500 text-center leading-tight">{label}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-4 mt-2 text-xs text-stone-500">
+              <span className="flex items-center gap-1"><span className="w-3 h-3 bg-emerald-500 rounded"></span>Arrivals (new guests)</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-500 rounded"></span>In-house cleanings (every {everyN}d)</span>
+            </div>
+          </div>
+
+          {/* Order table */}
+          <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+            <div className="p-3 border-b border-stone-200 flex items-center justify-between">
+              <h4 className="text-sm font-bold text-stone-800">Suggested Order</h4>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={createOrder} disabled={creating || t.qty === 0} data-testid="forecast-create-dispatch">
+                {creating ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
+                Create Dispatch → {vendor || "vendor"}
+              </Button>
+            </div>
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 border-b border-stone-200">
+                <tr>
+                  <th className="text-left py-2 px-3 font-semibold text-stone-600">Item</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600">Per Cleaning</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600">Needed</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600">On-hand Clean</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600">Shortfall</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600">Order Qty</th>
+                  <th className="text-right py-2 px-3 font-semibold text-stone-600">Unit £</th>
+                  <th className="text-right py-2 px-3 font-semibold text-stone-600">Line Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {editableItems.map(i => {
+                  const line = (i.order_qty || 0) * (i.washing_cost || 0);
+                  return (
+                    <tr key={i.item_id} className={`border-b border-stone-100 ${i.shortfall > 0 ? "" : "opacity-60"}`} data-testid={`forecast-row-${i.item_id}`}>
+                      <td className="py-2 px-3 font-semibold text-stone-800">{i.name}</td>
+                      <td className="py-2 px-3 text-center text-stone-600">× {i.per_cleaning_qty}</td>
+                      <td className="py-2 px-3 text-center font-mono text-stone-700">{i.needed}</td>
+                      <td className="py-2 px-3 text-center font-mono text-stone-500">{i.on_hand_clean}</td>
+                      <td className="py-2 px-3 text-center">
+                        {i.shortfall > 0
+                          ? <Badge className="bg-rose-100 text-rose-700 font-mono">{i.shortfall}</Badge>
+                          : <Badge className="bg-emerald-100 text-emerald-700 font-mono">OK</Badge>}
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <input type="number" min="0" value={i.order_qty || 0}
+                               onChange={e => updateQty(i.item_id, e.target.value)}
+                               className="w-20 px-2 py-1 border border-stone-200 rounded text-sm text-right font-mono"
+                               data-testid={`forecast-qty-${i.item_id}`} />
+                      </td>
+                      <td className="py-2 px-3 text-right font-mono text-stone-600">{fmt(i.washing_cost)}</td>
+                      <td className="py-2 px-3 text-right font-mono font-bold text-stone-800">{fmt(line)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot className="bg-stone-50 border-t-2 border-stone-200">
+                <tr>
+                  <td colSpan={5} className="py-2 px-3 text-right font-bold text-stone-700">Totals</td>
+                  <td className="py-2 px-3 text-center font-mono font-black text-fuchsia-700">{t.qty}</td>
+                  <td></td>
+                  <td className="py-2 px-3 text-right font-mono font-black text-stone-900">{fmt(t.cost)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

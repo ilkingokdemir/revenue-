@@ -10,20 +10,59 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_ITEMS = [
-    {"id": "bed_sheet_single", "name": "Bed Sheet (Single)"},
-    {"id": "bed_sheet_double", "name": "Bed Sheet (Double)"},
-    {"id": "bed_sheet_king",   "name": "Bed Sheet (King)"},
-    {"id": "pillow_case",      "name": "Pillow Case"},
-    {"id": "duvet_cover",      "name": "Duvet Cover"},
-    {"id": "bath_towel",       "name": "Bath Towel"},
-    {"id": "hand_towel",       "name": "Hand Towel"},
-    {"id": "face_cloth",       "name": "Face Cloth"},
-    {"id": "bath_mat",         "name": "Bath Mat"},
-    {"id": "table_cloth",      "name": "Table Cloth"},
-    {"id": "napkin",           "name": "Napkin"},
+    # {id, name, washing_cost, purchase_cost, maintenance_cost, per_cleaning_qty, sort_order}
+    {"id": "bed_sheet_single", "name": "Bed Sheet (Single)", "washing_cost": 0.80, "purchase_cost": 12.00, "maintenance_cost": 0.10, "per_cleaning_qty": 1, "sort_order": 10},
+    {"id": "bed_sheet_double", "name": "Bed Sheet (Double)", "washing_cost": 1.00, "purchase_cost": 18.00, "maintenance_cost": 0.15, "per_cleaning_qty": 1, "sort_order": 20},
+    {"id": "bed_sheet_king",   "name": "Bed Sheet (King)",   "washing_cost": 1.20, "purchase_cost": 22.00, "maintenance_cost": 0.20, "per_cleaning_qty": 1, "sort_order": 30},
+    {"id": "pillow_case",      "name": "Pillow Case",        "washing_cost": 0.30, "purchase_cost": 4.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 2, "sort_order": 40},
+    {"id": "duvet_cover",      "name": "Duvet Cover",        "washing_cost": 1.50, "purchase_cost": 28.00, "maintenance_cost": 0.20, "per_cleaning_qty": 1, "sort_order": 50},
+    {"id": "bath_towel",       "name": "Bath Towel",         "washing_cost": 0.50, "purchase_cost": 8.00,  "maintenance_cost": 0.10, "per_cleaning_qty": 2, "sort_order": 60},
+    {"id": "hand_towel",       "name": "Hand Towel",         "washing_cost": 0.30, "purchase_cost": 4.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 2, "sort_order": 70},
+    {"id": "face_cloth",       "name": "Face Cloth",         "washing_cost": 0.20, "purchase_cost": 2.50,  "maintenance_cost": 0.03, "per_cleaning_qty": 2, "sort_order": 80},
+    {"id": "bath_mat",         "name": "Bath Mat",           "washing_cost": 0.50, "purchase_cost": 6.00,  "maintenance_cost": 0.05, "per_cleaning_qty": 1, "sort_order": 90},
+    {"id": "table_cloth",      "name": "Table Cloth",        "washing_cost": 0.60, "purchase_cost": 10.00, "maintenance_cost": 0.08, "per_cleaning_qty": 0, "sort_order": 100},
+    {"id": "napkin",           "name": "Napkin",             "washing_cost": 0.15, "purchase_cost": 2.00,  "maintenance_cost": 0.02, "per_cleaning_qty": 0, "sort_order": 110},
 ]
 
 DISPATCH_STATUSES = ("pending", "sent", "received", "invoiced", "paid")
+
+
+async def _seed_items_if_empty(db, property_id: str):
+    """Seed default items on first request for a property (idempotent).
+    Uses `laundry_item_defs` collection (distinct from `laundry_items` which tracks
+    guest-laundry batches in routes/operations.py).
+    """
+    existing = await db.laundry_item_defs.count_documents({"property_id": property_id})
+    if existing:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    to_insert = []
+    for d in DEFAULT_ITEMS:
+        to_insert.append({
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "slug": d["id"],
+            "name": d["name"],
+            "washing_cost": float(d["washing_cost"]),
+            "purchase_cost": float(d["purchase_cost"]),
+            "maintenance_cost": float(d["maintenance_cost"]),
+            "per_cleaning_qty": int(d["per_cleaning_qty"]),
+            "sort_order": int(d["sort_order"]),
+            "active": True,
+            "created_at": now,
+        })
+    if to_insert:
+        await db.laundry_item_defs.insert_many(to_insert)
+
+
+async def _get_items(db, property_id: str, active_only: bool = True):
+    """Return DB-backed item definitions for a property, seeding on first call."""
+    await _seed_items_if_empty(db, property_id)
+    q = {"property_id": property_id}
+    if active_only:
+        q["active"] = True
+    items = await db.laundry_item_defs.find(q, {"_id": 0}).sort("sort_order", 1).to_list(500)
+    return items
 
 
 def create_laundry_router(db, require_roles):
@@ -236,12 +275,16 @@ def create_laundry_router(db, require_roles):
         query = {"property_id": property_id} if property_id != "all" else {}
         rows = await db.laundry_stock.find(query, {"_id": 0}).to_list(200)
         existing = {r["item_id"] for r in rows}
-        for default in DEFAULT_ITEMS:
-            if default["id"] not in existing:
-                rows.append({
-                    "item_id": default["id"], "name": default["name"], "property_id": property_id,
-                    "on_hand_clean": 0, "dirty": 0, "in_transit": 0, "damaged": 0,
-                })
+        # Seed defaults from DB-backed items if no stock row exists yet
+        if property_id != "all":
+            items = await _get_items(db, property_id, active_only=True)
+            for it in items:
+                slug = it.get("slug") or it["id"]
+                if slug not in existing:
+                    rows.append({
+                        "item_id": slug, "name": it["name"], "property_id": property_id,
+                        "on_hand_clean": 0, "dirty": 0, "in_transit": 0, "damaged": 0,
+                    })
         for r in rows:
             r["total"] = int(r.get("on_hand_clean", 0)) + int(r.get("dirty", 0)) + int(r.get("in_transit", 0))
         return {"stock": sorted(rows, key=lambda x: x.get("name", ""))}
@@ -394,10 +437,315 @@ def create_laundry_router(db, require_roles):
             raise HTTPException(404, "Contract not found")
         return {"deleted": True}
 
-    # ========================= CATALOG =========================
+    # ========================= CATALOG (DB-backed items) =========================
     @router.get("/laundry/catalog")
-    async def catalog(current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
-        return {"items": DEFAULT_ITEMS}
+    async def catalog(property_id: str = "aldgate-flats",
+                      current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """Legacy catalog endpoint — returns {items: [{id,name}]} used by contract-builder UI.
+        Now backed by `laundry_items` collection. `id` = stable slug (for cross-references).
+        """
+        items = await _get_items(db, property_id, active_only=True)
+        return {"items": [{"id": it.get("slug") or it["id"], "name": it["name"]} for it in items]}
+
+    # ========================= LAUNDRY ITEMS (full CRUD) =========================
+    @router.get("/laundry/items/{property_id}")
+    async def list_items(property_id: str, active_only: bool = False,
+                         current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """List all laundry item definitions with usage stats (30d)."""
+        items = await _get_items(db, property_id, active_only=active_only)
+        # Enrich with 30d usage stats
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).date().isoformat()
+        pipeline = [
+            {"$match": {"property_id": property_id, "date": {"$gte": cutoff}}},
+            {"$group": {"_id": "$item_id", "total_used": {"$sum": "$qty"},
+                        "last_used": {"$max": "$date"}}},
+        ]
+        agg = await db.laundry_daily_usage.aggregate(pipeline).to_list(200)
+        stats_map = {a["_id"]: a for a in agg}
+        for it in items:
+            slug = it.get("slug") or it["id"]
+            s = stats_map.get(slug, {})
+            it["usage_30d"] = int(s.get("total_used") or 0)
+            it["last_used"] = s.get("last_used") or None
+            # Total cost-of-ownership per piece (purchase amortized over useful life is app-specific;
+            # we surface the three costs raw)
+            it["total_cost"] = round(float(it.get("washing_cost") or 0) +
+                                     float(it.get("purchase_cost") or 0) +
+                                     float(it.get("maintenance_cost") or 0), 2)
+        return {"items": items, "count": len(items)}
+
+    @router.post("/laundry/items/{property_id}")
+    async def create_item(property_id: str, data: Dict,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        name = (data.get("name") or "").strip()
+        if not name:
+            raise HTTPException(400, "name required")
+        # Unique name per property
+        dup = await db.laundry_item_defs.find_one({"property_id": property_id, "name": name})
+        if dup:
+            raise HTTPException(400, f"Item '{name}' already exists")
+        await _seed_items_if_empty(db, property_id)
+        now = datetime.now(timezone.utc).isoformat()
+        slug = (data.get("slug") or name.lower().replace(" ", "_").replace("(", "").replace(")", ""))[:60]
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "slug": slug,
+            "name": name,
+            "washing_cost": float(data.get("washing_cost") or 0),
+            "purchase_cost": float(data.get("purchase_cost") or 0),
+            "maintenance_cost": float(data.get("maintenance_cost") or 0),
+            "per_cleaning_qty": int(data.get("per_cleaning_qty") or 0),
+            "sort_order": int(data.get("sort_order") or 999),
+            "active": bool(data.get("active", True)),
+            "created_at": now,
+            "created_by": current_user.get("email", ""),
+        }
+        await db.laundry_item_defs.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.put("/laundry/items/{item_id}")
+    async def update_item(item_id: str, data: Dict,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        allowed = {"name", "washing_cost", "purchase_cost", "maintenance_cost",
+                   "per_cleaning_qty", "sort_order", "active", "slug"}
+        patch = {}
+        for k, v in data.items():
+            if k not in allowed:
+                continue
+            if k in ("washing_cost", "purchase_cost", "maintenance_cost"):
+                patch[k] = float(v or 0)
+            elif k in ("per_cleaning_qty", "sort_order"):
+                patch[k] = int(v or 0)
+            elif k == "active":
+                patch[k] = bool(v)
+            else:
+                patch[k] = v
+        if not patch:
+            raise HTTPException(400, "No valid fields to update")
+        patch["updated_at"] = datetime.now(timezone.utc).isoformat()
+        res = await db.laundry_item_defs.update_one({"id": item_id}, {"$set": patch})
+        if not res.matched_count:
+            raise HTTPException(404, "Item not found")
+        updated = await db.laundry_item_defs.find_one({"id": item_id}, {"_id": 0})
+        return updated
+
+    @router.delete("/laundry/items/{item_id}")
+    async def delete_item(item_id: str,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        res = await db.laundry_item_defs.delete_one({"id": item_id})
+        return {"status": "deleted" if res.deleted_count else "not_found"}
+
+    # ========================= ORDER FORECAST =========================
+    @router.get("/laundry/forecast/{property_id}")
+    async def order_forecast(property_id: str,
+                             delivery_date: str = "",
+                             horizon_days: int = 7,
+                             in_house_cleaning_every: int = 2,
+                             current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """Smart order forecast.
+
+        Looks at bookings in [delivery_date, delivery_date + horizon_days) window and counts
+        'cleaning events' per day:
+          - Every arrival (new check-in) = 1 cleaning event (fresh linen for the room)
+          - Every in-house stay where (day_index since check-in) % in_house_cleaning_every == 0
+            and day_index > 0 = 1 cleaning event (mid-stay linen change)
+        Each cleaning event consumes `per_cleaning_qty` of every active linen item.
+
+        Returns per-item {needed, on_hand_clean, shortfall=order_qty} plus daily breakdown.
+        """
+        from datetime import date as _date
+        if not delivery_date:
+            delivery_date = _date.today().isoformat()
+        try:
+            start = datetime.fromisoformat(delivery_date).date()
+        except Exception:
+            raise HTTPException(400, "delivery_date must be YYYY-MM-DD")
+        horizon_days = max(1, min(int(horizon_days or 7), 30))
+        in_house_every = max(1, int(in_house_cleaning_every or 2))
+        end = start + timedelta(days=horizon_days)
+
+        # Pull bookings overlapping the window
+        prop_q = {} if property_id == "all" else {"property_id": property_id}
+        bookings = await db.bookings.find({
+            **prop_q,
+            "status": {"$in": ["confirmed", "pending", "checked_in"]},
+            "check_in": {"$lt": end.isoformat()},
+            "check_out": {"$gt": start.isoformat()},
+        }, {"_id": 0, "id": 1, "check_in": 1, "check_out": 1, "room_id": 1,
+            "guest_name": 1, "status": 1}).to_list(2000)
+
+        # Build daily events
+        daily = []  # [{date, arrivals, in_house_cleanings, events_total}]
+        total_events = 0
+        for d_offset in range(horizon_days):
+            day = start + timedelta(days=d_offset)
+            day_iso = day.isoformat()
+            arrivals = 0
+            in_house_cleanings = 0
+            for b in bookings:
+                ci = b.get("check_in")
+                co = b.get("check_out")
+                if not ci or not co:
+                    continue
+                try:
+                    ci_d = datetime.fromisoformat(ci).date()
+                    co_d = datetime.fromisoformat(co).date()
+                except Exception:
+                    continue
+                # Arrival on this day
+                if ci_d == day:
+                    arrivals += 1
+                    continue  # day-0 cleaning counted as arrival
+                # In-house on this day (between check_in exclusive and check_out exclusive)
+                if ci_d < day < co_d:
+                    day_index = (day - ci_d).days  # >= 1
+                    if day_index % in_house_every == 0:
+                        in_house_cleanings += 1
+            events = arrivals + in_house_cleanings
+            total_events += events
+            daily.append({
+                "date": day_iso,
+                "arrivals": arrivals,
+                "in_house_cleanings": in_house_cleanings,
+                "events": events,
+            })
+
+        # Per-item needs
+        items = await _get_items(db, property_id, active_only=True)
+        # Current clean stock
+        stock_rows = await db.laundry_stock.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(500)
+        stock_map = {s.get("item_id"): int(s.get("on_hand_clean") or 0) for s in stock_rows}
+
+        per_item = []
+        total_order_qty = 0
+        total_order_cost = 0.0
+        for it in items:
+            per_clean = int(it.get("per_cleaning_qty") or 0)
+            if per_clean <= 0:
+                # Skip items that don't participate in a cleaning event (e.g. napkins)
+                continue
+            needed = per_clean * total_events
+            slug = it.get("slug") or it["id"]
+            on_hand = stock_map.get(slug, 0)
+            shortfall = max(0, needed - on_hand)
+            washing_cost = float(it.get("washing_cost") or 0)
+            per_item.append({
+                "item_id": slug,
+                "name": it["name"],
+                "per_cleaning_qty": per_clean,
+                "cleaning_events": total_events,
+                "needed": needed,
+                "on_hand_clean": on_hand,
+                "shortfall": shortfall,
+                "washing_cost": round(washing_cost, 2),
+                "estimated_order_cost": round(shortfall * washing_cost, 2),
+            })
+            total_order_qty += shortfall
+            total_order_cost += shortfall * washing_cost
+
+        per_item.sort(key=lambda x: -x["shortfall"])
+
+        return {
+            "delivery_date": start.isoformat(),
+            "horizon_days": horizon_days,
+            "in_house_cleaning_every": in_house_every,
+            "bookings_in_window": len(bookings),
+            "total_cleaning_events": total_events,
+            "daily": daily,
+            "items": per_item,
+            "summary": {
+                "total_order_qty": total_order_qty,
+                "estimated_order_cost": round(total_order_cost, 2),
+                "items_needing_order": sum(1 for i in per_item if i["shortfall"] > 0),
+            },
+        }
+
+    @router.post("/laundry/forecast/{property_id}/create-dispatch")
+    async def create_dispatch_from_forecast(property_id: str, data: Dict,
+                                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Create a dispatch using forecast-computed shortfalls.
+        Body: {vendor, delivery_date, horizon_days, in_house_cleaning_every,
+               expected_return, notes, items?: [{item_id,name,qty_sent,rate}]}
+        If `items` not provided, the forecast is recomputed server-side and used.
+        """
+        vendor = (data.get("vendor") or "").strip()
+        if not vendor:
+            raise HTTPException(400, "vendor required")
+        items_in = data.get("items")
+        if not items_in:
+            # Recompute
+            delivery_date = data.get("delivery_date", "")
+            horizon_days = int(data.get("horizon_days") or 7)
+            in_house_every = int(data.get("in_house_cleaning_every") or 2)
+            fc = await order_forecast(property_id=property_id,
+                                      delivery_date=delivery_date,
+                                      horizon_days=horizon_days,
+                                      in_house_cleaning_every=in_house_every,
+                                      current_user=current_user)
+            items_in = []
+            items_map = {it.get("slug") or it["id"]: it for it in await _get_items(db, property_id, True)}
+            for row in fc["items"]:
+                if row["shortfall"] <= 0:
+                    continue
+                src = items_map.get(row["item_id"], {})
+                items_in.append({
+                    "item_id": row["item_id"],
+                    "name": row["name"],
+                    "qty_sent": row["shortfall"],
+                    "rate": float(src.get("washing_cost") or 0),
+                })
+        if not items_in:
+            raise HTTPException(400, "No shortfall — nothing to order")
+
+        # Reuse the dispatch creation logic inline
+        total_cost = 0.0
+        normalized = []
+        for i in items_in:
+            qty = int(i.get("qty_sent", 0))
+            rate = float(i.get("rate", 0))
+            if qty <= 0:
+                continue
+            normalized.append({
+                "item_id": i.get("item_id", ""),
+                "name": i.get("name", ""),
+                "qty_sent": qty,
+                "qty_received": 0,
+                "rate": rate,
+                "line_total": round(qty * rate, 2),
+            })
+            total_cost += qty * rate
+        if not normalized:
+            raise HTTPException(400, "No items with qty > 0")
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "vendor": vendor,
+            "items": normalized,
+            "sent_date": data.get("delivery_date") or now[:10],
+            "expected_return": data.get("expected_return", ""),
+            "status": "sent",
+            "total_cost": round(total_cost, 2),
+            "notes": data.get("notes") or "Auto-generated from Order Forecast",
+            "from_forecast": True,
+            "forecast_meta": {
+                "horizon_days": int(data.get("horizon_days") or 7),
+                "in_house_cleaning_every": int(data.get("in_house_cleaning_every") or 2),
+            },
+            "created_at": now,
+            "created_by": current_user.get("email", ""),
+        }
+        await db.laundry_dispatches.insert_one({**doc})
+        # Move stock clean→in_transit
+        for it in normalized:
+            await _adjust_stock(db, property_id, it["item_id"], it["name"],
+                                clean=-it["qty_sent"], in_transit=it["qty_sent"])
+        doc.pop("_id", None)
+        return doc
 
     # ========================= DAILY USAGE =========================
     @router.get("/laundry/usage/{property_id}")

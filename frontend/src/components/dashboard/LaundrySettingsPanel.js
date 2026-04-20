@@ -37,17 +37,18 @@ const LaundrySettingsPanel = ({ activePropertyId }) => {
       </div>
 
       <div className="flex gap-1 border-b border-stone-200">
-        {["providers", "contracts"].map(t => (
+        {["providers", "contracts", "items"].map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2.5 text-sm font-semibold capitalize border-b-2 transition ${tab === t ? "border-emerald-600 text-emerald-700" : "border-transparent text-stone-500"}`}
             data-testid={`laundry-settings-tab-${t}`}>
-            {t === "providers" ? "Laundry Providers" : "Laundry Contracts"}
+            {t === "providers" ? "Laundry Providers" : t === "contracts" ? "Laundry Contracts" : "Laundry Items"}
           </button>
         ))}
       </div>
 
       {tab === "providers" && <ProvidersTab pid={pid} />}
       {tab === "contracts" && <ContractsTab pid={pid} />}
+      {tab === "items" && <ItemsTab pid={pid} />}
     </div>
   );
 };
@@ -413,6 +414,178 @@ const ContractsTab = ({ pid }) => {
             <div className="p-4 border-t border-stone-100 flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
               <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={save} data-testid="laundry-contract-save">Create Contract</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════ LAUNDRY ITEMS ═══════════ */
+const ItemsTab = ({ pid }) => {
+  const [rows, setRows] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const empty = {
+    name: "", washing_cost: 0, purchase_cost: 0, maintenance_cost: 0,
+    per_cleaning_qty: 1, sort_order: 999, active: true,
+  };
+  const [form, setForm] = useState(empty);
+
+  const load = useCallback(async () => {
+    try { const { data } = await axios.get(`${API}/laundry/items/${pid}`); setRows(data.items || []); }
+    catch { /* */ }
+  }, [pid]);
+  useEffect(() => { load(); }, [load]);
+
+  const open = (row = null) => {
+    setEditing(row);
+    setForm(row ? { ...empty, ...row } : { ...empty, sort_order: (rows.length + 1) * 10 });
+    setShowForm(true);
+  };
+
+  const save = async () => {
+    if (!form.name?.trim()) return toast.error("Name required");
+    try {
+      const payload = {
+        name: form.name.trim(),
+        washing_cost: parseFloat(form.washing_cost) || 0,
+        purchase_cost: parseFloat(form.purchase_cost) || 0,
+        maintenance_cost: parseFloat(form.maintenance_cost) || 0,
+        per_cleaning_qty: parseInt(form.per_cleaning_qty) || 0,
+        sort_order: parseInt(form.sort_order) || 999,
+        active: !!form.active,
+      };
+      if (editing) {
+        await axios.put(`${API}/laundry/items/${editing.id}`, payload);
+        toast.success("Item updated");
+      } else {
+        await axios.post(`${API}/laundry/items/${pid}`, payload);
+        toast.success("Item added");
+      }
+      setShowForm(false); load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Delete this item?")) return;
+    try { await axios.delete(`${API}/laundry/items/${id}`); toast.success("Deleted"); load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const toggle = async (row) => {
+    await axios.put(`${API}/laundry/items/${row.id}`, { active: !row.active });
+    load();
+  };
+
+  const fmt = (n) => `£${Number(n || 0).toFixed(2)}`;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-stone-500">Define linen items, costs and per-cleaning quantities. Used by Stock, Contracts and Order Forecast.</p>
+        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => open()} data-testid="laundry-item-new">
+          <Plus className="w-4 h-4 mr-1" /> Add Item
+        </Button>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="p-12 text-center text-sm text-stone-400">No items yet — click <b>Add Item</b>.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-stone-50 border-b border-stone-200">
+              <tr>
+                <th className="text-left py-3 px-4 font-semibold text-stone-600">Item</th>
+                <th className="text-right py-3 px-4 font-semibold text-stone-600">Washing Cost</th>
+                <th className="text-right py-3 px-4 font-semibold text-stone-600">Purchase Cost</th>
+                <th className="text-right py-3 px-4 font-semibold text-stone-600">Maintenance</th>
+                <th className="text-center py-3 px-4 font-semibold text-stone-600">Per Cleaning</th>
+                <th className="text-center py-3 px-4 font-semibold text-stone-600">Used (30d)</th>
+                <th className="text-center py-3 px-4 font-semibold text-stone-600">Status</th>
+                <th className="text-right py-3 px-4 font-semibold text-stone-600">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`laundry-item-row-${r.id.slice(0,6)}`}>
+                  <td className="py-3 px-4">
+                    <div className="font-semibold text-stone-800">{r.name}</div>
+                    <div className="text-xs text-stone-400">{r.slug || "—"}</div>
+                  </td>
+                  <td className="py-3 px-4 text-right font-mono text-stone-700">{fmt(r.washing_cost)}</td>
+                  <td className="py-3 px-4 text-right font-mono text-stone-700">{fmt(r.purchase_cost)}</td>
+                  <td className="py-3 px-4 text-right font-mono text-stone-700">{fmt(r.maintenance_cost)}</td>
+                  <td className="py-3 px-4 text-center">
+                    {r.per_cleaning_qty > 0 ? (
+                      <Badge className="bg-blue-100 text-blue-700 font-mono">× {r.per_cleaning_qty}</Badge>
+                    ) : (
+                      <span className="text-xs text-stone-400">—</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 text-center font-bold text-emerald-600">{r.usage_30d || 0}</td>
+                  <td className="py-3 px-4 text-center">
+                    <button onClick={() => toggle(r)} className="cursor-pointer" data-testid={`laundry-item-toggle-${r.id.slice(0,6)}`}>
+                      <Badge className={r.active ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-600"}>{r.active ? "Active" : "Hidden"}</Badge>
+                    </button>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <button onClick={() => open(r)} className="text-stone-500 hover:text-blue-600 mr-2" data-testid={`laundry-item-edit-${r.id.slice(0,6)}`}><Pencil className="w-4 h-4 inline" /></button>
+                    <button onClick={() => del(r.id)} className="text-rose-500 hover:text-rose-700" data-testid={`laundry-item-del-${r.id.slice(0,6)}`}><Trash2 className="w-4 h-4 inline" /></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+              <h3 className="font-bold">{editing ? "Edit Item" : "New Laundry Item"}</h3>
+              <button onClick={() => setShowForm(false)} className="text-stone-400 text-2xl leading-none">×</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="text-xs text-stone-500">Name *</label>
+                <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Pool Towel" className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="laundry-item-name" />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-stone-500">Washing Cost £</label>
+                  <input type="number" step="0.01" value={form.washing_cost} onChange={e => setForm(f => ({ ...f, washing_cost: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="laundry-item-wash" />
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500">Purchase Cost £</label>
+                  <input type="number" step="0.01" value={form.purchase_cost} onChange={e => setForm(f => ({ ...f, purchase_cost: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="laundry-item-pur" />
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500">Maintenance £</label>
+                  <input type="number" step="0.01" value={form.maintenance_cost} onChange={e => setForm(f => ({ ...f, maintenance_cost: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="laundry-item-maint" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-stone-500">Per Cleaning Qty (room/event)</label>
+                  <input type="number" value={form.per_cleaning_qty} onChange={e => setForm(f => ({ ...f, per_cleaning_qty: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="laundry-item-percln" />
+                  <p className="text-xs text-stone-400 mt-1">0 = exclude from forecast</p>
+                </div>
+                <div>
+                  <label className="text-xs text-stone-500">Sort Order</label>
+                  <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm pt-1">
+                <input type="checkbox" checked={!!form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} />
+                <span>Active (show in stock, contracts, forecast)</span>
+              </label>
+            </div>
+            <div className="p-4 border-t border-stone-100 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={save} data-testid="laundry-item-save">{editing ? "Save" : "Add"}</Button>
             </div>
           </div>
         </div>

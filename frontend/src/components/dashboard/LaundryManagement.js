@@ -324,46 +324,7 @@ export const LaundryManagement = ({ propertyId, user }) => {
 
           {/* DELIVERIES */}
           {tab === "deliveries" && (
-            <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="deliveries-panel">
-              <div className="p-3 border-b border-stone-200">
-                <h3 className="text-sm font-bold text-stone-800">Completed Deliveries ({deliveries.length})</h3>
-              </div>
-              {deliveries.length === 0 ? (
-                <p className="text-center text-sm text-stone-400 py-12">No deliveries received yet.</p>
-              ) : (
-                <table className="w-full text-xs">
-                  <thead className="bg-stone-50 border-b border-stone-200">
-                    <tr>
-                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Vendor</th>
-                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Sent</th>
-                      <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Received</th>
-                      <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Qty Sent</th>
-                      <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Qty Received</th>
-                      <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Variance</th>
-                      <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Cost</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {deliveries.map(d => {
-                      const qs = d.items.reduce((s, i) => s + (i.qty_sent || 0), 0);
-                      const qr = d.items.reduce((s, i) => s + (i.qty_received || 0), 0);
-                      const variance = qs - qr;
-                      return (
-                        <tr key={d.id} className="border-b border-stone-100 hover:bg-stone-50/50">
-                          <td className="py-2.5 px-3 font-semibold text-stone-700">{d.vendor}</td>
-                          <td className="py-2.5 px-3 text-stone-600">{d.sent_date}</td>
-                          <td className="py-2.5 px-3 text-stone-600">{d.received_date || "—"}</td>
-                          <td className="py-2.5 px-3 text-center text-stone-700">{qs}</td>
-                          <td className="py-2.5 px-3 text-center font-semibold text-emerald-700">{qr}</td>
-                          <td className={`py-2.5 px-3 text-center font-semibold ${variance === 0 ? "text-stone-400" : "text-red-600"}`}>{variance === 0 ? "—" : `-${variance}`}</td>
-                          <td className="py-2.5 px-3 text-right font-mono text-stone-700">£{d.total_cost?.toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <DeliveriesTab pid={pid} dispatches={sentDispatches} stock={stock} />
           )}
 
           {/* DAILY USAGE */}
@@ -710,6 +671,206 @@ export const LaundryManagement = ({ propertyId, user }) => {
           <DialogFooter><Button variant="outline" size="sm" onClick={() => setContractOpen(false)}>Cancel</Button><Button size="sm" className="bg-stone-800 hover:bg-stone-700 text-white" onClick={submitContract} data-testid="contract-submit-btn">Create Contract</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+};
+
+/* ═══════════ DELIVERIES TAB — with discrepancy tracking ═══════════ */
+const DeliveriesTab = ({ pid, dispatches, stock }) => {
+  const [rows, setRows] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const emptyItem = { item_id: "", name: "", qty_received: 0, qty_shortage: 0, qty_damage: 0, qty_rejected: 0, reason: "", unit_cost: 0 };
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    dispatch_id: "", delivery_date: today,
+    invoice_number: "", notes: "", items: [{ ...emptyItem }],
+  });
+
+  const load = async () => {
+    try { const { data } = await axios.get(`${API}/laundry/deliveries/${pid}`); setRows(data.rows || []); }
+    catch { /* */ }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [pid]);
+
+  const save = async () => {
+    if (form.items.length === 0 || !form.items.some(i => i.item_id)) return toast.error("Add at least one item");
+    try {
+      await axios.post(`${API}/laundry/deliveries/${pid}`, form);
+      toast.success("Delivery recorded");
+      setShowForm(false);
+      setForm({ dispatch_id: "", delivery_date: today, invoice_number: "", notes: "", items: [{ ...emptyItem }] });
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Delete this delivery record?")) return;
+    await axios.delete(`${API}/laundry/deliveries/${id}`);
+    toast.success("Deleted"); load();
+  };
+
+  const addItem = () => setForm(f => ({ ...f, items: [...f.items, { ...emptyItem }] }));
+  const updItem = (i, k, v) => setForm(f => { const arr = [...f.items]; arr[i] = { ...arr[i], [k]: v }; return { ...f, items: arr }; });
+  const rmItem = (i) => setForm(f => { const arr = [...f.items]; arr.splice(i, 1); return { ...f, items: arr }; });
+
+  const loadFromDispatch = (dispatch_id) => {
+    const d = dispatches.find(x => x.id === dispatch_id);
+    if (!d) return;
+    setForm(f => ({
+      ...f, dispatch_id,
+      items: (d.items || []).map(it => ({
+        ...emptyItem, item_id: it.item_id, name: it.name,
+        qty_received: it.qty_sent,
+        unit_cost: it.unit_cost || 0,
+      })),
+    }));
+  };
+
+  const gross = form.items.reduce((s, it) => s + Number(it.qty_received || 0) * Number(it.unit_cost || 0), 0);
+  const deduction = form.items.reduce((s, it) => s + (Number(it.qty_shortage || 0) + Number(it.qty_damage || 0) + Number(it.qty_rejected || 0)) * Number(it.unit_cost || 0), 0);
+  const net = gross - deduction;
+
+  const statusBadge = (s) => s === "complete" ? "bg-emerald-100 text-emerald-700" : s === "short" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700";
+
+  return (
+    <div className="space-y-3" data-testid="deliveries-panel">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-bold text-stone-800">Laundry Deliveries ({rows.length})</h3>
+          <p className="text-xs text-stone-500">Track items received from laundry company with discrepancy tracking.</p>
+        </div>
+        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setShowForm(true)} data-testid="delivery-new-btn">
+          + Record Delivery
+        </Button>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        {rows.length === 0 ? (
+          <p className="text-center text-sm text-stone-400 py-12">No deliveries recorded yet.</p>
+        ) : (
+          <table className="w-full text-xs">
+            <thead className="bg-stone-50 border-b border-stone-200">
+              <tr>
+                <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Date</th>
+                <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Invoice #</th>
+                <th className="text-left py-2.5 px-3 font-semibold text-stone-600">Linked Dispatch</th>
+                <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Gross</th>
+                <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Deduction</th>
+                <th className="text-right py-2.5 px-3 font-semibold text-stone-600">Net Payable</th>
+                <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Coverage</th>
+                <th className="text-center py-2.5 px-3 font-semibold text-stone-600">Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`delivery-row-${r.id.slice(0,6)}`}>
+                  <td className="py-2.5 px-3 text-stone-700">{r.delivery_date}</td>
+                  <td className="py-2.5 px-3 font-mono text-stone-600">{r.invoice_number || "—"}</td>
+                  <td className="py-2.5 px-3 text-stone-600">{r.dispatch_summary ? `${r.dispatch_summary.vendor} · ${r.dispatch_summary.dispatch_date}` : "—"}</td>
+                  <td className="py-2.5 px-3 text-right font-mono text-stone-700">£{r.gross_amount?.toFixed(2)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono text-rose-600">£{r.deduction_amount?.toFixed(2)}</td>
+                  <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">£{r.net_payable?.toFixed(2)}</td>
+                  <td className="py-2.5 px-3 text-center text-stone-700">{r.coverage_pct != null ? `${r.coverage_pct}%` : "—"}</td>
+                  <td className="py-2.5 px-3 text-center"><Badge className={statusBadge(r.status)}>{r.status}</Badge></td>
+                  <td><button onClick={() => del(r.id)} className="text-rose-500 text-xs">Del</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Record Delivery Modal */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6" onClick={() => setShowForm(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold">Record Delivery</h3>
+                <p className="text-xs text-stone-500">Record items received from laundry company.</p>
+              </div>
+              <button onClick={() => setShowForm(false)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+            </div>
+            <div className="p-4 space-y-4">
+              {/* Link to Dispatch */}
+              <div className="border border-stone-200 rounded-xl p-3 space-y-3">
+                <div className="text-xs font-semibold text-stone-600 uppercase">Link to Dispatch</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-stone-500">Select Dispatch</label>
+                    <select value={form.dispatch_id} onChange={e => loadFromDispatch(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="delivery-dispatch-select">
+                      <option value="">None (no comparison)</option>
+                      {dispatches.map(d => <option key={d.id} value={d.id}>{d.vendor} · {d.sent_date} · {d.items?.length || 0} items</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-stone-500">Delivery Date *</label>
+                    <input type="date" value={form.delivery_date} onChange={e => setForm(f => ({ ...f, delivery_date: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="delivery-date" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-stone-500">Delivery Note / Invoice Number</label>
+                    <input value={form.invoice_number} onChange={e => setForm(f => ({ ...f, invoice_number: e.target.value }))} placeholder="e.g. INV-2026-001" className="w-full mt-1 px-3 py-2 border rounded-lg text-sm font-mono" data-testid="delivery-invoice" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-stone-500">Notes</label>
+                    <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any additional notes…" className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="border border-stone-200 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-semibold text-stone-600 uppercase">Items</div>
+                  <button onClick={addItem} className="text-xs px-2 py-1 rounded border border-emerald-300 text-emerald-700" data-testid="delivery-add-item">+ Add Item</button>
+                </div>
+                <div className="grid grid-cols-[2fr,repeat(5,1fr),auto] gap-2 text-[10px] font-semibold text-stone-500 uppercase px-1 mb-1">
+                  <div>Item</div><div>Received</div><div>Shortage</div><div>Damage</div><div>Rejected</div><div>Cost £</div><div></div>
+                </div>
+                {form.items.map((it, i) => (
+                  <div key={i} className="grid grid-cols-[2fr,repeat(5,1fr),auto] gap-2 items-center mb-1">
+                    <select value={it.item_id} onChange={e => {
+                      const match = stock.find(s => s.item_id === e.target.value);
+                      updItem(i, "item_id", e.target.value);
+                      if (match) updItem(i, "name", match.name);
+                    }} className="px-2 py-1 border rounded text-xs">
+                      <option value="">Select item…</option>
+                      {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
+                    </select>
+                    <input type="number" min="0" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
+                    <input type="number" min="0" value={it.qty_shortage} onChange={e => updItem(i, "qty_shortage", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
+                    <input type="number" min="0" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
+                    <input type="number" min="0" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
+                    <input type="number" step="0.01" min="0" value={it.unit_cost} onChange={e => updItem(i, "unit_cost", parseFloat(e.target.value) || 0)} className="px-2 py-1 border rounded text-xs" />
+                    <button onClick={() => rmItem(i)} className="text-rose-500 text-xs">×</button>
+                  </div>
+                ))}
+                {form.items.some(it => it.qty_shortage || it.qty_damage || it.qty_rejected) && (
+                  <div className="mt-2 space-y-1">
+                    {form.items.map((it, i) => ((it.qty_shortage || it.qty_damage || it.qty_rejected) ? (
+                      <input key={i} value={it.reason} onChange={e => updItem(i, "reason", e.target.value)} placeholder={`Reason for ${it.name || "this item"} discrepancy…`} className="w-full px-2 py-1 border rounded text-xs bg-rose-50" />
+                    ) : null))}
+                  </div>
+                )}
+              </div>
+
+              {/* Totals */}
+              <div className="border border-stone-200 rounded-xl p-3 text-sm">
+                <div className="flex justify-between py-1"><span className="text-stone-600">Gross Amount:</span><span className="font-mono">£{gross.toFixed(2)}</span></div>
+                <div className="flex justify-between py-1"><span className="text-stone-600">Deductions:</span><span className="font-mono text-rose-600">-£{deduction.toFixed(2)}</span></div>
+                <div className="flex justify-between py-1 border-t border-stone-200 mt-1 pt-2"><span className="font-bold">Net Payable:</span><span className="font-mono font-bold text-emerald-700">£{net.toFixed(2)}</span></div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-stone-100 flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={save} data-testid="delivery-submit-btn">Record Delivery</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

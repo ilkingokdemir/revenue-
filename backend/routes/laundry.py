@@ -115,6 +115,120 @@ def create_laundry_router(db, require_roles):
         }})
         return {"ok": True}
 
+    # ========================= DELIVERIES (RICH — MyHotelBox parity) =========================
+    @router.get("/laundry/deliveries/{property_id}")
+    async def list_deliveries(property_id: str,
+                              current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """Return delivery history with gross/deduction/net payable + coverage %."""
+        rows = await db.laundry_deliveries.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("delivery_date", -1).to_list(500)
+        # Enrich with dispatch invoice numbers for UI
+        dispatch_ids = list({r.get("dispatch_id") for r in rows if r.get("dispatch_id")})
+        dispatches = {}
+        if dispatch_ids:
+            dlist = await db.laundry_dispatches.find(
+                {"id": {"$in": dispatch_ids}},
+                {"_id": 0, "id": 1, "dispatch_date": 1, "vendor": 1, "items": 1}
+            ).to_list(len(dispatch_ids))
+            for d in dlist:
+                dispatches[d["id"]] = d
+        for r in rows:
+            disp = dispatches.get(r.get("dispatch_id") or "")
+            r["dispatch_summary"] = {
+                "dispatch_date": disp.get("dispatch_date") if disp else None,
+                "vendor": disp.get("vendor") if disp else None,
+            } if disp else None
+        return {"rows": rows, "count": len(rows)}
+
+    @router.post("/laundry/deliveries/{property_id}")
+    async def create_delivery(property_id: str, data: Dict,
+                              current_user: dict = Depends(require_roles("admin", "manager", "housekeeper"))):
+        """Create a rich delivery record with per-item discrepancy tracking.
+
+        Body: {
+          dispatch_id (optional), delivery_date, invoice_number, notes,
+          items: [{item_id, name, qty_received, qty_shortage, qty_damage,
+                   qty_rejected, reason, unit_cost}]
+        }
+        Gross = sum(qty_received * unit_cost)
+        Deduction = sum((shortage + damage + rejected) * unit_cost)
+        Net Payable = Gross - Deduction
+        Coverage = qty_received / dispatched_qty (if dispatch_id linked)
+        """
+        if not data.get("delivery_date"):
+            raise HTTPException(400, "delivery_date required")
+        items = data.get("items") or []
+        if not items:
+            raise HTTPException(400, "At least one item required")
+
+        gross = 0.0
+        deduction = 0.0
+        total_received = 0
+        for it in items:
+            cost = float(it.get("unit_cost") or 0)
+            rec = int(it.get("qty_received") or 0)
+            sh  = int(it.get("qty_shortage") or 0)
+            dm  = int(it.get("qty_damage") or 0)
+            rj  = int(it.get("qty_rejected") or 0)
+            gross     += rec * cost
+            deduction += (sh + dm + rj) * cost
+            total_received += rec
+
+        # Coverage based on linked dispatch
+        coverage = None
+        dispatch_id = data.get("dispatch_id")
+        if dispatch_id:
+            disp = await db.laundry_dispatches.find_one({"id": dispatch_id}, {"_id": 0})
+            if disp:
+                total_sent = sum(int(i.get("qty_sent") or 0) for i in disp.get("items") or [])
+                if total_sent:
+                    coverage = round(total_received / total_sent * 100, 1)
+
+        now = datetime.now(timezone.utc).isoformat()
+        status = "complete" if (coverage is None or coverage >= 100) and deduction == 0 \
+                 else "short" if coverage and coverage < 100 \
+                 else "with_deductions"
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "dispatch_id": dispatch_id,
+            "delivery_date": data["delivery_date"],
+            "invoice_number": data.get("invoice_number", ""),
+            "notes": data.get("notes", ""),
+            "items": items,
+            "gross_amount": round(gross, 2),
+            "deduction_amount": round(deduction, 2),
+            "net_payable": round(gross - deduction, 2),
+            "coverage_pct": coverage,
+            "status": status,
+            "created_at": now,
+            "created_by": current_user.get("email", ""),
+        }
+        await db.laundry_deliveries.insert_one(doc)
+        doc.pop("_id", None)
+
+        # Update stock: received -> clean, shortage/damage/rejected -> damaged counter
+        for it in items:
+            await _adjust_stock(db, property_id, it.get("item_id", ""), it.get("name", ""),
+                                clean=int(it.get("qty_received") or 0),
+                                damaged=int(it.get("qty_damage") or 0))
+        # If linked dispatch, mark it received
+        if dispatch_id:
+            await db.laundry_dispatches.update_one(
+                {"id": dispatch_id},
+                {"$set": {"status": "received",
+                          "received_date": data["delivery_date"],
+                          "linked_delivery_id": doc["id"]}}
+            )
+        return doc
+
+    @router.delete("/laundry/deliveries/{delivery_id}")
+    async def delete_delivery(delivery_id: str,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        res = await db.laundry_deliveries.delete_one({"id": delivery_id})
+        return {"status": "deleted" if res.deleted_count else "not_found"}
+
     # ========================= STOCK =========================
     @router.get("/laundry/stock/{property_id}")
     async def get_stock(property_id: str,
@@ -397,7 +511,7 @@ def create_laundry_router(db, require_roles):
     return router
 
 
-async def _adjust_stock(db, property_id: str, item_id: str, name: str, clean: int = 0, dirty: int = 0, in_transit: int = 0):
+async def _adjust_stock(db, property_id: str, item_id: str, name: str, clean: int = 0, dirty: int = 0, in_transit: int = 0, damaged: int = 0):
     current = await db.laundry_stock.find_one({"property_id": property_id, "item_id": item_id}, {"_id": 0})
     base = current or {"on_hand_clean": 0, "dirty": 0, "in_transit": 0, "damaged": 0}
     await db.laundry_stock.update_one(
@@ -409,7 +523,7 @@ async def _adjust_stock(db, property_id: str, item_id: str, name: str, clean: in
             "on_hand_clean": max(0, int(base.get("on_hand_clean", 0)) + clean),
             "dirty": max(0, int(base.get("dirty", 0)) + dirty),
             "in_transit": max(0, int(base.get("in_transit", 0)) + in_transit),
-            "damaged": int(base.get("damaged", 0)),
+            "damaged": max(0, int(base.get("damaged", 0)) + damaged),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }},
         upsert=True,

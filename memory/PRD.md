@@ -1417,6 +1417,17 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 165.2 (Apr 2026) — Laundry Deliveries rich discrepancy tracking
+- Competitor screenshot analysis (MyHotelBox) revealed Deliveries sub-module had weaker features than theirs
+- Added backend endpoints: `GET /api/laundry/deliveries/{pid}` · `POST /api/laundry/deliveries/{pid}` · `DELETE /api/laundry/deliveries/{id}`
+- New delivery model tracks per-item: Received · **Shortage · Damage · Rejected** · Reason · Cost → auto-computes Gross / Deduction / Net Payable and Coverage %
+- Status auto-derived: `complete` · `short` · `with_deductions`
+- Stock adjustments: received qty → clean pool; damage → damaged counter (prevents re-use)
+- Linked dispatch automatically marks dispatch as received
+- Frontend: new `DeliveriesTab` component with "Record Delivery" button → modal matching competitor UX (Select Dispatch, Delivery Date, Invoice #, per-item discrepancy table with live Gross/Deductions/Net totals, reason field appears only when discrepancies > 0)
+- Smoke-tested: Invoice INV-2026-001 with £86 gross, £6.50 deduction (2 damaged towels + 1 rejected duvet), £79.50 net payable ✅
+- Screenshot confirmed modal renders identically to MyHotelBox competitor
+
 ## Iter 165.1 (Apr 2026) — Smart Rate Control relocated into Revenue module
 - User flagged duplication between new Smart Rate Control and existing Revenue module
 - Moved `SmartRateControlPanel` from standalone top-level sidebar entry to **Revenue → Pricing → Smart Rate Control** tab

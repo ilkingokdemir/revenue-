@@ -1417,6 +1417,20 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 ## Upcoming (P1 Backlog)
 - Continue migrating remaining `require_roles(...)` endpoints opportunistically
 
+## Iter 164 (Apr 2026) — Wave 1 Competitor Parity: Pooled Inventory + Derived Rates + Stop-Sell
+- Competitor gap analysis against SiteMinder/Cloudbeds/RateTiger/Mews/STAAH identified 9 missing modules; Wave 1 P0 built here
+- New backend: `/app/backend/routes/inventory_allocations.py` (~180 lines)
+  - Channel × room allocation rules with modes: **pooled** / **dedicated** / **capped** + buffer + spillover_priority
+  - Availability calendar endpoint computes real per-channel units respecting each rule mode
+- Reused backends (no changes needed): `rate_structure.py` `/derived` endpoints + `channel_restrictions.py` `/bulk` endpoint
+- Frontend: 3 new panels added to `ChannelManagerHub.js` — hub now has **12 tabs**
+  - **Allocations** — rules table + 14-day availability heatmap (red/amber/green cells)
+  - **Derived Rates** — cascade preview updates live as parent rate changes
+  - **Stop-Sell Calendar** — channel × date heatmap, click-to-toggle (Red/Ban icon = stopped, green check = selling)
+- Testing: iteration_162.json — **35/35 backend (100%)** + 12/12 frontend tabs — zero bugs, zero action items
+- Wave 2 backlog (P1): Channel Content Manager · Promo/Package Manager · Bulk Rate Update Tool
+- Wave 3 backlog (P2): Channel P&L Dashboard · Booking.com Opportunity Centre · Reservation Delivery Log
+
 ## Iter 163 (Apr 2026) — Channel Manager Hub
 - New backend: `/app/backend/routes/channel_hub.py` (~680 lines, ~20 endpoints)
   - Channel Configs CRUD + certify

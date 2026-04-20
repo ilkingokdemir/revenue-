@@ -47,7 +47,57 @@ const DISPATCH_STATUS_STYLE = {
   paid:     "bg-violet-100 text-violet-700",
 };
 
+// i18n — scoped to this module (housekeeper-facing copy). Persist choice in localStorage.
+const LAUNDRY_I18N = {
+  en: {
+    label: "English", flag: "🇬🇧",
+    title: "New Daily Laundry Usage",
+    subtitle: "Pick the room, then enter numbers for each linen. You don't need to select items — all items are pre-listed.",
+    date: "Date & Time", room: "Room", selectRoom: "Select room", roomPlaceholder: "Room number (e.g. 204)",
+    item: "Item", used: "Used", collected: "Collected", unusable: "Unusable", damaged: "Damaged",
+    usedHint: "clean → room", collectedHint: "room → laundry", unusableHint: "returned bad from factory", damagedHint: "guest write-off",
+    totals: "Totals", notes: "Notes (optional)", notesPh: "Additional notes…",
+    submit: "Submit & Confirm", cancel: "Cancel",
+    saved: "Saved", fillRoom: "Pick a room first", fillQty: "Enter at least one quantity > 0",
+    newBtn: "New Daily Laundry Usage",
+    loading: "Loading items…",
+  },
+  tr: {
+    label: "Türkçe", flag: "🇹🇷",
+    title: "Yeni Günlük Çamaşır Kaydı",
+    subtitle: "Odayı seçin ve her malzeme için sayı yazın. Menüden item seçmenize gerek yok — hepsi hazır.",
+    date: "Tarih & Saat", room: "Oda", selectRoom: "Oda seç", roomPlaceholder: "Oda numarası (örn. 204)",
+    item: "Ürün", used: "Kullanılan", collected: "Toplanan", unusable: "Bozuk", damaged: "Hasarlı",
+    usedHint: "temiz → oda", collectedHint: "oda → çamaşırhane", unusableHint: "fabrikadan bozuk geldi", damagedHint: "müşteri zararı",
+    totals: "Toplam", notes: "Notlar (opsiyonel)", notesPh: "Ek notlar…",
+    submit: "Kaydet & Onayla", cancel: "İptal",
+    saved: "Kaydedildi", fillRoom: "Önce oda seçin", fillQty: "En az bir alana 0'dan büyük sayı yazın",
+    newBtn: "Yeni Günlük Kayıt",
+    loading: "Ürünler yükleniyor…",
+  },
+  bg: {
+    label: "Български", flag: "🇧🇬",
+    title: "Нов дневен запис на пране",
+    subtitle: "Изберете стая и въведете брой за всеки артикул. Не е нужно да избирате от меню — всички артикули са предварително показани.",
+    date: "Дата и час", room: "Стая", selectRoom: "Изберете стая", roomPlaceholder: "Номер на стая (напр. 204)",
+    item: "Артикул", used: "Използвани", collected: "Събрани", unusable: "Негодни", damaged: "Повредени",
+    usedHint: "чисто → стая", collectedHint: "стая → пране", unusableHint: "върнати негодни от пералнята", damagedHint: "повредени от госта",
+    totals: "Общо", notes: "Бележки (по избор)", notesPh: "Допълнителни бележки…",
+    submit: "Запази и потвърди", cancel: "Отказ",
+    saved: "Записано", fillRoom: "Изберете стая", fillQty: "Въведете поне едно число > 0",
+    newBtn: "Нов дневен запис",
+    loading: "Зареждане на артикули…",
+  },
+};
+
 export const LaundryManagement = ({ propertyId, user, permissions }) => {
+  // Language preference (scoped to this module, persisted)
+  const [lang, setLang] = useState(() => {
+    try { return localStorage.getItem("laundry_lang") || "en"; } catch { return "en"; }
+  });
+  useEffect(() => { try { localStorage.setItem("laundry_lang", lang); } catch { /* quota */ } }, [lang]);
+  const L = LAUNDRY_I18N[lang] || LAUNDRY_I18N.en;
+
   const [tab, setTab] = useState("dispatch");
   const [dispatches, setDispatches] = useState({ dispatches: [], kpis: {} });
   const [usage, setUsage] = useState({ records: [], count: 0 });
@@ -168,17 +218,17 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
   });
   const removeUsageItem = (idx) => setUsageForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }));
   const submitUsage = async () => {
-    if (!usageForm.room_number.trim() || usageForm.items.length === 0) { toast.error("Room and items required"); return; }
+    if (!usageForm.room_number.trim() || usageForm.items.length === 0) { toast.error(L.fillRoom); return; }
     const validItems = usageForm.items.filter(i =>
       (i.clean_used || 0) > 0 ||
       (i.dirty_collected || 0) > 0 ||
       (i.factory_unusable || 0) > 0 ||
       (i.guest_damaged || 0) > 0
     );
-    if (validItems.length === 0) { toast.error("Enter at least one quantity > 0"); return; }
+    if (validItems.length === 0) { toast.error(L.fillQty); return; }
     try {
       await axios.post(`${API}/laundry/usage/${pid}`, { ...usageForm, items: validItems });
-      toast.success(`Saved · ${validItems.length} item(s) · room ${usageForm.room_number}`);
+      toast.success(`${L.saved} · ${validItems.length} · ${L.room} ${usageForm.room_number}`);
       setUsageOpen(false);
       setUsageForm({ date: new Date().toISOString().slice(0, 10), room_id: "", room_number: "", notes: "", items: [] });
       load();
@@ -374,7 +424,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
               <div className="p-3 border-b border-stone-200 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-stone-800">Room-by-Room Usage ({usage.count})</h3>
                 <Button size="sm" onClick={openUsageForm} className="bg-stone-800 hover:bg-stone-700 text-white" data-testid="new-usage-btn">
-                  <Plus className="w-4 h-4 mr-1" />New Daily Laundry Usage
+                  <Plus className="w-4 h-4 mr-1" />{L.newBtn}
                 </Button>
               </div>
               {usage.records.length === 0 ? (
@@ -629,115 +679,173 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
         </DialogContent>
       </Dialog>
 
-      {/* Usage Dialog — Ready table, housekeeper-friendly */}
+      {/* Usage Dialog — Mobile-friendly ready table + i18n (EN/TR/BG) */}
       <Dialog open={usageOpen} onOpenChange={setUsageOpen}>
-        <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>New Daily Laundry Usage</DialogTitle>
-            <DialogDescription>Pick the room, then enter numbers for each linen. You don't need to select items — all items are pre-listed.</DialogDescription>
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[95vh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader className="space-y-2">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <DialogTitle className="text-base sm:text-lg">{L.title}</DialogTitle>
+              {/* Language picker */}
+              <div className="flex gap-1 bg-stone-100 rounded-lg p-1" data-testid="usage-lang-switcher">
+                {Object.keys(LAUNDRY_I18N).map(code => (
+                  <button key={code} onClick={() => setLang(code)}
+                    className={`px-2 py-1 text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow" : "text-stone-500 hover:text-stone-700"}`}
+                    data-testid={`lang-${code}`}>
+                    {LAUNDRY_I18N[code].flag} {code.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <DialogDescription className="text-xs sm:text-sm">{L.subtitle}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {/* Date + Room */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-semibold text-stone-600">Date &amp; Time <span className="text-red-500">*</span></label>
-                <Input type="date" value={usageForm.date} onChange={e => setUsageForm({ ...usageForm, date: e.target.value })} data-testid="usage-date-input" />
+                <label className="text-xs font-semibold text-stone-600">{L.date} <span className="text-red-500">*</span></label>
+                <Input type="date" value={usageForm.date} onChange={e => setUsageForm({ ...usageForm, date: e.target.value })} className="h-10" data-testid="usage-date-input" />
               </div>
               <div>
-                <label className="text-xs font-semibold text-stone-600">Room <span className="text-red-500">*</span></label>
+                <label className="text-xs font-semibold text-stone-600">{L.room} <span className="text-red-500">*</span></label>
                 {rooms.length > 0 ? (
                   <Select value={usageForm.room_id} onValueChange={v => {
                     const r = rooms.find(x => (x.id || x.room_id) === v);
                     setUsageForm({ ...usageForm, room_id: v, room_number: r?.number || r?.room_number || v });
                   }}>
-                    <SelectTrigger data-testid="usage-room-select"><SelectValue placeholder="Select room" /></SelectTrigger>
+                    <SelectTrigger className="h-10" data-testid="usage-room-select"><SelectValue placeholder={L.selectRoom} /></SelectTrigger>
                     <SelectContent>{rooms.slice(0, 200).map(r => <SelectItem key={r.id || r.room_id} value={r.id || r.room_id}>{r.number || r.room_number || r.name}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
-                  <Input value={usageForm.room_number} onChange={e => setUsageForm({ ...usageForm, room_number: e.target.value, room_id: e.target.value })} placeholder="Room number (e.g. 204)" data-testid="usage-room-input" />
+                  <Input value={usageForm.room_number} onChange={e => setUsageForm({ ...usageForm, room_number: e.target.value, room_id: e.target.value })} placeholder={L.roomPlaceholder} className="h-10" data-testid="usage-room-input" />
                 )}
               </div>
             </div>
 
-            {/* Pre-filled ready table — one row per catalog item */}
-            <div className="border border-stone-200 rounded-xl overflow-hidden bg-white">
-              <table className="w-full text-sm" data-testid="usage-readytable">
-                <thead className="bg-stone-50 border-b border-stone-200">
-                  <tr>
-                    <th className="text-left py-2.5 px-3 font-semibold text-stone-700 w-[40%]">Item</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-emerald-700" title="Pieces brought from clean stock into the room">Used ↓</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-amber-700" title="Pieces taken from the room to laundry">Collected ↑</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-rose-700" title="Items returned from the factory that are unusable">Unusable</th>
-                    <th className="text-center py-2.5 px-3 font-semibold text-fuchsia-700" title="Damaged by the guest — write-off">Damaged</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usageForm.items.length === 0 ? (
-                    <tr><td colSpan={5} className="py-6 text-center text-sm text-stone-400">Loading items…</td></tr>
-                  ) : (
-                    usageForm.items.map((it, i) => (
-                      <tr key={it.item_id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`usage-row-${it.item_id}`}>
-                        <td className="py-2 px-3">
-                          <div className="font-semibold text-stone-800">{it.item_name}</div>
-                          <div className="text-[10px] text-stone-400">{it.item_id}</div>
-                        </td>
-                        <td className="py-1 px-3">
+            {/* Pre-filled ready grid — desktop=table, mobile=cards */}
+            {usageForm.items.length === 0 ? (
+              <div className="py-8 text-center text-sm text-stone-400">{L.loading}</div>
+            ) : (
+              <>
+                {/* Desktop table (sm+) */}
+                <div className="hidden sm:block border border-stone-200 rounded-xl overflow-hidden bg-white">
+                  <table className="w-full text-sm" data-testid="usage-readytable">
+                    <thead className="bg-stone-50 border-b border-stone-200">
+                      <tr>
+                        <th className="text-left py-2.5 px-3 font-semibold text-stone-700 w-[35%]">{L.item}</th>
+                        <th className="text-center py-2.5 px-2 font-semibold text-emerald-700">{L.used} ↓</th>
+                        <th className="text-center py-2.5 px-2 font-semibold text-amber-700">{L.collected} ↑</th>
+                        <th className="text-center py-2.5 px-2 font-semibold text-rose-700">{L.unusable}</th>
+                        <th className="text-center py-2.5 px-2 font-semibold text-fuchsia-700">{L.damaged}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {usageForm.items.map((it, i) => (
+                        <tr key={it.item_id} className="border-b border-stone-100 hover:bg-stone-50/50" data-testid={`usage-row-${it.item_id}`}>
+                          <td className="py-2 px-3">
+                            <div className="font-semibold text-stone-800">{it.item_name}</div>
+                            <div className="text-[10px] text-stone-400">{it.item_id}</div>
+                          </td>
+                          <td className="py-1 px-2">
+                            <Input type="number" min="0" inputMode="numeric" value={it.clean_used || 0}
+                                   onChange={e => updateUsageItem(i, { clean_used: parseInt(e.target.value) || 0 })}
+                                   className="h-9 text-center font-mono font-bold bg-emerald-50 border-emerald-200" data-testid={`usage-clean-${it.item_id}`} />
+                          </td>
+                          <td className="py-1 px-2">
+                            <Input type="number" min="0" inputMode="numeric" value={it.dirty_collected || 0}
+                                   onChange={e => updateUsageItem(i, { dirty_collected: parseInt(e.target.value) || 0 })}
+                                   className="h-9 text-center font-mono font-bold bg-amber-50 border-amber-200" data-testid={`usage-dirty-${it.item_id}`} />
+                          </td>
+                          <td className="py-1 px-2">
+                            <Input type="number" min="0" inputMode="numeric" value={it.factory_unusable || 0}
+                                   onChange={e => updateUsageItem(i, { factory_unusable: parseInt(e.target.value) || 0 })}
+                                   className="h-9 text-center font-mono font-bold bg-rose-50 border-rose-200" data-testid={`usage-unusable-${it.item_id}`} />
+                          </td>
+                          <td className="py-1 px-2">
+                            <Input type="number" min="0" inputMode="numeric" value={it.guest_damaged || 0}
+                                   onChange={e => updateUsageItem(i, { guest_damaged: parseInt(e.target.value) || 0 })}
+                                   className="h-9 text-center font-mono font-bold bg-fuchsia-50 border-fuchsia-200" data-testid={`usage-damaged-${it.item_id}`} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-stone-50 border-t-2 border-stone-200">
+                      <tr>
+                        <td className="py-2 px-3 text-right font-bold text-stone-700">{L.totals}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-emerald-700">{usageForm.items.reduce((s, i) => s + (i.clean_used || 0), 0)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-amber-700">{usageForm.items.reduce((s, i) => s + (i.dirty_collected || 0), 0)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-rose-700">{usageForm.items.reduce((s, i) => s + (i.factory_unusable || 0), 0)}</td>
+                        <td className="py-2 px-2 text-center font-mono font-black text-fuchsia-700">{usageForm.items.reduce((s, i) => s + (i.guest_damaged || 0), 0)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Mobile card layout (<sm) — one card per item, 2x2 qty grid */}
+                <div className="sm:hidden space-y-2">
+                  {usageForm.items.map((it, i) => (
+                    <div key={it.item_id} className="bg-white border border-stone-200 rounded-xl p-3" data-testid={`usage-card-${it.item_id}`}>
+                      <div className="font-bold text-sm text-stone-800 mb-2">{it.item_name}</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-emerald-700">{L.used} ↓</label>
                           <Input type="number" min="0" inputMode="numeric" value={it.clean_used || 0}
                                  onChange={e => updateUsageItem(i, { clean_used: parseInt(e.target.value) || 0 })}
-                                 className="h-9 text-center font-mono font-bold bg-emerald-50 border-emerald-200" data-testid={`usage-clean-${it.item_id}`} />
-                        </td>
-                        <td className="py-1 px-3">
+                                 className="h-11 text-center text-base font-mono font-bold bg-emerald-50 border-emerald-200 mt-0.5" data-testid={`usage-clean-${it.item_id}`} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-amber-700">{L.collected} ↑</label>
                           <Input type="number" min="0" inputMode="numeric" value={it.dirty_collected || 0}
                                  onChange={e => updateUsageItem(i, { dirty_collected: parseInt(e.target.value) || 0 })}
-                                 className="h-9 text-center font-mono font-bold bg-amber-50 border-amber-200" data-testid={`usage-dirty-${it.item_id}`} />
-                        </td>
-                        <td className="py-1 px-3">
+                                 className="h-11 text-center text-base font-mono font-bold bg-amber-50 border-amber-200 mt-0.5" data-testid={`usage-dirty-${it.item_id}`} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-rose-700">{L.unusable}</label>
                           <Input type="number" min="0" inputMode="numeric" value={it.factory_unusable || 0}
                                  onChange={e => updateUsageItem(i, { factory_unusable: parseInt(e.target.value) || 0 })}
-                                 className="h-9 text-center font-mono font-bold bg-rose-50 border-rose-200" data-testid={`usage-unusable-${it.item_id}`} />
-                        </td>
-                        <td className="py-1 px-3">
+                                 className="h-11 text-center text-base font-mono font-bold bg-rose-50 border-rose-200 mt-0.5" data-testid={`usage-unusable-${it.item_id}`} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-fuchsia-700">{L.damaged}</label>
                           <Input type="number" min="0" inputMode="numeric" value={it.guest_damaged || 0}
                                  onChange={e => updateUsageItem(i, { guest_damaged: parseInt(e.target.value) || 0 })}
-                                 className="h-9 text-center font-mono font-bold bg-fuchsia-50 border-fuchsia-200" data-testid={`usage-damaged-${it.item_id}`} />
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-                {usageForm.items.length > 0 && (
-                  <tfoot className="bg-stone-50 border-t-2 border-stone-200">
-                    <tr>
-                      <td className="py-2 px-3 text-right font-bold text-stone-700">Totals</td>
-                      <td className="py-2 px-3 text-center font-mono font-black text-emerald-700">{usageForm.items.reduce((s, i) => s + (i.clean_used || 0), 0)}</td>
-                      <td className="py-2 px-3 text-center font-mono font-black text-amber-700">{usageForm.items.reduce((s, i) => s + (i.dirty_collected || 0), 0)}</td>
-                      <td className="py-2 px-3 text-center font-mono font-black text-rose-700">{usageForm.items.reduce((s, i) => s + (i.factory_unusable || 0), 0)}</td>
-                      <td className="py-2 px-3 text-center font-mono font-black text-fuchsia-700">{usageForm.items.reduce((s, i) => s + (i.guest_damaged || 0), 0)}</td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
+                                 className="h-11 text-center text-base font-mono font-bold bg-fuchsia-50 border-fuchsia-200 mt-0.5" data-testid={`usage-damaged-${it.item_id}`} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Mobile totals row */}
+                  <div className="bg-stone-50 border border-stone-300 rounded-xl p-3 flex items-center justify-between sticky bottom-0">
+                    <span className="text-sm font-bold text-stone-700">{L.totals}</span>
+                    <div className="flex gap-2 text-xs font-mono font-black">
+                      <span className="text-emerald-700">↓{usageForm.items.reduce((s, i) => s + (i.clean_used || 0), 0)}</span>
+                      <span className="text-amber-700">↑{usageForm.items.reduce((s, i) => s + (i.dirty_collected || 0), 0)}</span>
+                      <span className="text-rose-700">✗{usageForm.items.reduce((s, i) => s + (i.factory_unusable || 0), 0)}</span>
+                      <span className="text-fuchsia-700">!{usageForm.items.reduce((s, i) => s + (i.guest_damaged || 0), 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Column legend */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
-              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span><b>Used:</b> temiz stoktan oda</div>
-              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-amber-500"></span><b>Collected:</b> odadan kirli çıkan</div>
-              <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-rose-500"></span><b>Unusable:</b> fabrikadan bozuk gelen</div>
-              <div className="flex items-center gap-1.5 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-fuchsia-500"></span><b>Damaged:</b> müşteri hasarı</div>
+            <div className="grid grid-cols-2 gap-2 text-[10px] sm:text-[11px]">
+              <div className="flex items-start gap-1.5 bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 mt-1 shrink-0"></span><div><b>{L.used}:</b> {L.usedHint}</div></div>
+              <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-amber-500 mt-1 shrink-0"></span><div><b>{L.collected}:</b> {L.collectedHint}</div></div>
+              <div className="flex items-start gap-1.5 bg-rose-50 border border-rose-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-rose-500 mt-1 shrink-0"></span><div><b>{L.unusable}:</b> {L.unusableHint}</div></div>
+              <div className="flex items-start gap-1.5 bg-fuchsia-50 border border-fuchsia-200 rounded-lg px-2 py-1.5"><span className="w-2 h-2 rounded-full bg-fuchsia-500 mt-1 shrink-0"></span><div><b>{L.damaged}:</b> {L.damagedHint}</div></div>
             </div>
 
             {/* Notes */}
             <div>
-              <label className="text-xs font-semibold text-stone-600">Notes (optional)</label>
+              <label className="text-xs font-semibold text-stone-600">{L.notes}</label>
               <Textarea value={usageForm.notes || ""} onChange={e => setUsageForm(f => ({ ...f, notes: e.target.value }))}
-                     rows={2} placeholder="Additional notes…" className="text-xs" data-testid="usage-notes-input" />
+                     rows={2} placeholder={L.notesPh} className="text-xs sm:text-sm" data-testid="usage-notes-input" />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setUsageOpen(false)}>Cancel</Button>
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={submitUsage} data-testid="usage-submit-btn">
-              <CheckCircle2 className="w-4 h-4 mr-1" />Submit &amp; Confirm
+          <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+            <Button variant="outline" size="sm" onClick={() => setUsageOpen(false)} className="w-full sm:w-auto">{L.cancel}</Button>
+            <Button size="sm" className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white h-11 sm:h-9" onClick={submitUsage} data-testid="usage-submit-btn">
+              <CheckCircle2 className="w-4 h-4 mr-1" />{L.submit}
             </Button>
           </DialogFooter>
         </DialogContent>

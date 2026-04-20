@@ -2,6 +2,24 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.8 (Feb 2026): 📱🌐 Mobile-responsive + EN/TR/BG i18n on Laundry Usage
+
+User request: _"telefondan bunu yapacaklarından telefona uyumlu olsun. Bu modülde İngilizce, Türkçe ve Bulgarca dil seçeneği olsun."_
+
+**i18n** (scoped to Laundry module)
+- `LAUNDRY_I18N` dict with full EN/TR/BG translations for the entire Daily Usage workflow: title, subtitle, every column header, legend, buttons, toasts, error messages.
+- Language picker in the modal header (EN 🇬🇧 / TR 🇹🇷 / BG 🇧🇬). Selection persists in `localStorage` under `laundry_lang`.
+- All user-facing copy on the new-usage button, toasts, validations uses `L.*` keys so the whole flow switches instantly.
+
+**Mobile responsiveness**
+- Dialog sizing: `w-[95vw]` with responsive padding (p-4 on mobile, p-6 on desktop).
+- Date/Room grid collapses from 2-col → 1-col on mobile.
+- Ready-table has two renderings: desktop `<table>` (sm+) and mobile `<card>` grid (sm-hidden / mobile-only) — each item becomes a card with 2x2 numeric input grid. Inputs are `h-11` + `text-base` for big tap targets and `inputMode="numeric"` for native number keypad.
+- Footer has a sticky bottom totals bar on mobile (↓/↑/✗/! icons + counts).
+- Buttons stack full-width on mobile with larger tap height.
+
+Verified on desktop and via forced 95vw mobile modal: EN/TR/BG switch works, all four counters behave, Submit & Confirm button fires the correct localized toast.
+
 ### Iter 166.7 (Feb 2026): 📝 Housekeeper-friendly "New Daily Laundry Usage" ready-table
 
 User feedback (verbatim): _"housekeeper eğitimsiz ve zorlanıyor, o sadece numaralar yazsın kullandığı temiz malzeme, çıkardığı kirli, fabrikadan gelen kullanılamaz malzeme, müşterinin kullandığı zarar görmüş. Hazır tablo olsun, onlar sadece numara yazsın ve onaylasınlar. Tek tek seçmek zor."_

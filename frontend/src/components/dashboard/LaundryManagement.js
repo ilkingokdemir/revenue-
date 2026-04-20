@@ -75,6 +75,22 @@ const LAUNDRY_I18N = {
     delvSent: "Sent", delvReceived: "Received", delvShortage: "Shortage", delvDamagedArr: "Damaged",
     delvReceivedHint: "good pieces arrived", delvShortageHint: "missing pieces", delvDamagedHint: "bad pieces on arrival",
     delvReceived2: "Receive", delvSaved: "Delivery received",
+    // Broken (from factory) vs Damaged (from room) — origin-aware labels
+    factoryBroken: "Broken (from factory)", factoryBrokenShort: "Broken",
+    factoryBrokenHint: "returned broken by factory",
+    roomDamaged: "Damaged (from room)", roomDamagedShort: "Damaged",
+    roomDamagedHint: "damaged in the room (guest)",
+    // Stock
+    stockTitle: "Current Stock Levels", stockClean: "Clean", stockDirty: "Dirty",
+    stockInTransit: "In Transit", stockTotalCol: "Total",
+    stockHistory: "Transaction History", stockNoTx: "No transactions yet — use the buttons above to record one.",
+    stockMaint: "Maintenance", stockDisp: "Disposal", stockWO: "Write-Off",
+    stockFound: "Found", stockIn: "Stock In", stockOut: "Stock Out",
+    stockRecordPrefix: "Record", stockTxDate: "Transaction Date", stockTxQty: "Quantity",
+    stockTxUnit: "Unit Cost £", stockTxReason: "Reason", stockTxNotes: "Notes",
+    stockTxItem: "Item", stockTxImpact: "Total impact:", stockTxBy: "By",
+    stockTxDelConfirm: "Delete this transaction?", stockTxType: "Type",
+    stockDeleted: "Deleted", stockRecorded: "recorded", stockSelectItem: "Select item",
     // Offline
     offlineN: "queued offline (will auto-sync)",
   },
@@ -99,6 +115,22 @@ const LAUNDRY_I18N = {
     delvSent: "Gönderilen", delvReceived: "Gelen", delvShortage: "Eksik", delvDamagedArr: "Hasarlı",
     delvReceivedHint: "sağlam gelen", delvShortageHint: "eksik gelen", delvDamagedHint: "gelişte bozuk",
     delvReceived2: "Teslim Al", delvSaved: "Teslim alındı",
+    // Köken bazlı etiketler
+    factoryBroken: "Bozuk (fabrikadan)", factoryBrokenShort: "Bozuk",
+    factoryBrokenHint: "fabrikadan bozuk geldi",
+    roomDamaged: "Hasarlı (odadan)", roomDamagedShort: "Hasarlı",
+    roomDamagedHint: "odada hasar gördü (misafir)",
+    // Stok
+    stockTitle: "Mevcut Stok Seviyeleri", stockClean: "Temiz", stockDirty: "Kirli",
+    stockInTransit: "Yolda", stockTotalCol: "Toplam",
+    stockHistory: "İşlem Geçmişi", stockNoTx: "Henüz işlem yok — yukarıdaki butonlarla kayıt ekleyin.",
+    stockMaint: "Bakım", stockDisp: "İmha", stockWO: "Zayiat",
+    stockFound: "Bulundu", stockIn: "Stok Girişi", stockOut: "Stok Çıkışı",
+    stockRecordPrefix: "Kaydet:", stockTxDate: "İşlem Tarihi", stockTxQty: "Adet",
+    stockTxUnit: "Birim Maliyet £", stockTxReason: "Sebep", stockTxNotes: "Notlar",
+    stockTxItem: "Ürün", stockTxImpact: "Toplam etki:", stockTxBy: "Kaydeden",
+    stockTxDelConfirm: "Bu işlem silinsin mi?", stockTxType: "Tür",
+    stockDeleted: "Silindi", stockRecorded: "kaydedildi", stockSelectItem: "Ürün seç",
     offlineN: "offline sırada (bağlantı gelince otomatik yollanır)",
   },
   bg: {
@@ -122,6 +154,22 @@ const LAUNDRY_I18N = {
     delvSent: "Изпратени", delvReceived: "Получени", delvShortage: "Липсващи", delvDamagedArr: "Повредени",
     delvReceivedHint: "добри парчета", delvShortageHint: "липсват", delvDamagedHint: "лоши при пристигане",
     delvReceived2: "Получи", delvSaved: "Получаването е записано",
+    // Произход
+    factoryBroken: "Счупени (от фабрика)", factoryBrokenShort: "Счупени",
+    factoryBrokenHint: "върнати счупени от фабриката",
+    roomDamaged: "Повредени (от стая)", roomDamagedShort: "Повредени",
+    roomDamagedHint: "повредени в стаята (гост)",
+    // Склад
+    stockTitle: "Текущи складови нива", stockClean: "Чисти", stockDirty: "Мръсни",
+    stockInTransit: "В транзит", stockTotalCol: "Общо",
+    stockHistory: "История на операциите", stockNoTx: "Няма операции — използвайте бутоните горе.",
+    stockMaint: "Поддръжка", stockDisp: "Изхвърляне", stockWO: "Отписване",
+    stockFound: "Намерени", stockIn: "Вход", stockOut: "Изход",
+    stockRecordPrefix: "Запиши", stockTxDate: "Дата на операция", stockTxQty: "Количество",
+    stockTxUnit: "Ед. цена £", stockTxReason: "Причина", stockTxNotes: "Бележки",
+    stockTxItem: "Артикул", stockTxImpact: "Общо въздействие:", stockTxBy: "От",
+    stockTxDelConfirm: "Да изтрия ли тази операция?", stockTxType: "Тип",
+    stockDeleted: "Изтрито", stockRecorded: "записано", stockSelectItem: "Изберете артикул",
     offlineN: "опашка офлайн (ще се синхронизира автоматично)",
   },
 };
@@ -676,7 +724,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
 
           {/* STOCK */}
           {tab === "stock" && (
-            <StockTab pid={pid} stock={stock} updateStockCell={updateStockCell} />
+            <StockTab pid={pid} stock={stock} updateStockCell={updateStockCell} lang={lang} setLang={setLang} L={L} />
           )}
 
           {/* CONTRACTS */}
@@ -1237,7 +1285,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
 };
 
 /* ═══════════ STOCK TAB — with transactions (maintenance/disposal/write-off) ═══════════ */
-const StockTab = ({ pid, stock, updateStockCell }) => {
+const StockTab = ({ pid, stock, updateStockCell, lang, setLang, L }) => {
   const [txns, setTxns] = useState([]);
   const [stats, setStats] = useState({});
   const [filter, setFilter] = useState("");
@@ -1259,10 +1307,10 @@ const StockTab = ({ pid, stock, updateStockCell }) => {
   useEffect(() => { loadTxns(); /* eslint-disable-next-line */ }, [pid, filter]);
 
   const save = async () => {
-    if (!form.item_id) return toast.error("Select an item");
+    if (!form.item_id) return toast.error(L?.stockSelectItem || "Select an item");
     try {
       await axios.post(`${API}/laundry/stock-transactions/${pid}`, { ...form, tx_type: txType, reason: form.reason || txType });
-      toast.success(`${txType} recorded`);
+      toast.success(`${txType} ${L?.stockRecorded || "recorded"}`);
       setShowForm(false);
       setForm({ item_id: "", name: "", quantity: 1, unit_cost: 0, transaction_date: today, reason: "", notes: "" });
       loadTxns();
@@ -1270,9 +1318,9 @@ const StockTab = ({ pid, stock, updateStockCell }) => {
   };
 
   const del = async (id) => {
-    if (!window.confirm("Delete this transaction?")) return;
+    if (!window.confirm(L?.stockTxDelConfirm || "Delete this transaction?")) return;
     await axios.delete(`${API}/laundry/stock-transactions/${id}`);
-    toast.success("Deleted"); loadTxns();
+    toast.success(L?.stockDeleted || "Deleted"); loadTxns();
   };
 
   const openForm = (type) => { setTxType(type); setForm(f => ({ ...f, reason: type })); setShowForm(true); };
@@ -1288,18 +1336,33 @@ const StockTab = ({ pid, stock, updateStockCell }) => {
 
   return (
     <div className="space-y-3" data-testid="stock-panel">
+      {/* Language toggle */}
+      {setLang && (
+        <div className="flex items-center justify-end">
+          <div className="flex gap-1 bg-stone-100 rounded-lg p-1">
+            {Object.keys(LAUNDRY_I18N).map(code => (
+              <button key={code} onClick={() => setLang(code)}
+                className={`px-2 py-1 text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow" : "text-stone-500 hover:text-stone-700"}`}
+                data-testid={`stock-lang-${code}`}>
+                {LAUNDRY_I18N[code].flag} {code.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quick-action buttons */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
         {[
-          { k: "maintenance", l: "Maintenance",  c: "border-amber-300 text-amber-700 hover:bg-amber-50" },
-          { k: "disposal",    l: "Disposal",     c: "border-rose-300 text-rose-700 hover:bg-rose-50" },
-          { k: "write_off",   l: "Write-Off",    c: "border-stone-300 text-stone-700 hover:bg-stone-100" },
-          { k: "found",       l: "Found",        c: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" },
-          { k: "stock_in",    l: "Stock In",     c: "border-blue-300 text-blue-700 hover:bg-blue-50" },
-          { k: "stock_out",   l: "Stock Out",    c: "border-violet-300 text-violet-700 hover:bg-violet-50" },
+          { k: "maintenance", l: L?.stockMaint || "Maintenance",  c: "border-amber-300 text-amber-700 hover:bg-amber-50" },
+          { k: "disposal",    l: L?.stockDisp  || "Disposal",     c: "border-rose-300 text-rose-700 hover:bg-rose-50" },
+          { k: "write_off",   l: L?.stockWO    || "Write-Off",    c: "border-stone-300 text-stone-700 hover:bg-stone-100" },
+          { k: "found",       l: L?.stockFound || "Found",        c: "border-emerald-300 text-emerald-700 hover:bg-emerald-50" },
+          { k: "stock_in",    l: L?.stockIn    || "Stock In",     c: "border-blue-300 text-blue-700 hover:bg-blue-50" },
+          { k: "stock_out",   l: L?.stockOut   || "Stock Out",    c: "border-violet-300 text-violet-700 hover:bg-violet-50" },
         ].map(b => (
           <button key={b.k} onClick={() => openForm(b.k)} className={`px-3 py-2.5 border rounded-xl text-xs font-semibold ${b.c}`} data-testid={`stock-tx-${b.k}-btn`}>
-            + Record {b.l}
+            + {b.l}
           </button>
         ))}
       </div>
@@ -1319,16 +1382,16 @@ const StockTab = ({ pid, stock, updateStockCell }) => {
 
       {/* Current Stock table */}
       <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-        <div className="px-3 py-2 bg-stone-50 border-b border-stone-200 text-xs font-bold text-stone-700">Current Stock Levels</div>
+        <div className="px-3 py-2 bg-stone-50 border-b border-stone-200 text-xs font-bold text-stone-700">{L?.stockTitle || "Current Stock Levels"}</div>
         <table className="w-full text-xs">
           <thead className="bg-stone-50 border-b border-stone-200">
             <tr>
-              <th className="text-left py-2 px-3 font-semibold text-stone-600">Item</th>
-              <th className="text-center py-2 px-3 font-semibold text-emerald-600">Clean</th>
-              <th className="text-center py-2 px-3 font-semibold text-amber-600">Dirty</th>
-              <th className="text-center py-2 px-3 font-semibold text-blue-600">In Transit</th>
-              <th className="text-center py-2 px-3 font-semibold text-red-500">Damaged</th>
-              <th className="text-center py-2 px-3 font-semibold text-stone-600">Total</th>
+              <th className="text-left py-2 px-3 font-semibold text-stone-600">{L?.item || "Item"}</th>
+              <th className="text-center py-2 px-3 font-semibold text-emerald-600">{L?.stockClean || "Clean"}</th>
+              <th className="text-center py-2 px-3 font-semibold text-amber-600">{L?.stockDirty || "Dirty"}</th>
+              <th className="text-center py-2 px-3 font-semibold text-blue-600">{L?.stockInTransit || "In Transit"}</th>
+              <th className="text-center py-2 px-3 font-semibold text-amber-700" title={L?.roomDamagedHint}>{L?.roomDamaged || "Damaged (room)"}</th>
+              <th className="text-center py-2 px-3 font-semibold text-stone-600">{L?.stockTotalCol || "Total"}</th>
             </tr>
           </thead>
           <tbody>
@@ -1348,21 +1411,21 @@ const StockTab = ({ pid, stock, updateStockCell }) => {
 
       {/* Transaction history */}
       <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-        <div className="px-3 py-2 bg-stone-50 border-b border-stone-200 text-xs font-bold text-stone-700">Transaction History ({txns.length})</div>
+        <div className="px-3 py-2 bg-stone-50 border-b border-stone-200 text-xs font-bold text-stone-700">{L?.stockHistory || "Transaction History"} ({txns.length})</div>
         {txns.length === 0 ? (
-          <p className="text-center text-sm text-stone-400 py-8">No transactions yet — use the buttons above to record one.</p>
+          <p className="text-center text-sm text-stone-400 py-8">{L?.stockNoTx || "No transactions yet — use the buttons above to record one."}</p>
         ) : (
           <table className="w-full text-xs">
             <thead className="bg-stone-50 border-b border-stone-200">
               <tr>
-                <th className="text-left py-2 px-3 font-semibold text-stone-600">Date</th>
-                <th className="text-left py-2 px-3 font-semibold text-stone-600">Type</th>
-                <th className="text-left py-2 px-3 font-semibold text-stone-600">Item</th>
-                <th className="text-center py-2 px-3 font-semibold text-stone-600">Qty</th>
-                <th className="text-right py-2 px-3 font-semibold text-stone-600">Unit £</th>
-                <th className="text-right py-2 px-3 font-semibold text-stone-600">Total</th>
-                <th className="text-left py-2 px-3 font-semibold text-stone-600">Reason / Notes</th>
-                <th className="text-left py-2 px-3 font-semibold text-stone-600">By</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">{L?.date || "Date"}</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">{L?.stockTxType || "Type"}</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">{L?.item || "Item"}</th>
+                <th className="text-center py-2 px-3 font-semibold text-stone-600">{L?.stockTxQty || "Qty"}</th>
+                <th className="text-right py-2 px-3 font-semibold text-stone-600">{L?.dispRate || "Unit £"}</th>
+                <th className="text-right py-2 px-3 font-semibold text-stone-600">{L?.totals || "Total"}</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">{L?.stockTxReason || "Reason"} / {L?.stockTxNotes || "Notes"}</th>
+                <th className="text-left py-2 px-3 font-semibold text-stone-600">{L?.stockTxBy || "By"}</th>
                 <th></th>
               </tr>
             </thead>
@@ -1390,50 +1453,50 @@ const StockTab = ({ pid, stock, updateStockCell }) => {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-6" onClick={() => setShowForm(false)}>
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
             <div className="p-4 border-b border-stone-100 flex items-center justify-between">
-              <h3 className="font-bold capitalize">Record {txType.replace("_", " ")}</h3>
+              <h3 className="font-bold capitalize">{L?.stockRecordPrefix || "Record"} {txType.replace("_", " ")}</h3>
               <button onClick={() => setShowForm(false)} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
             </div>
             <div className="p-4 space-y-3">
               <div>
-                <label className="text-xs text-stone-500">Item *</label>
+                <label className="text-xs text-stone-500">{L?.stockTxItem || "Item"} *</label>
                 <select value={form.item_id} onChange={e => {
                   const match = stock.find(s => s.item_id === e.target.value);
                   setForm(f => ({ ...f, item_id: e.target.value, name: match?.name || "" }));
                 }} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="stock-tx-item">
-                  <option value="">Select item…</option>
+                  <option value="">{L?.stockSelectItem || "Select item"}…</option>
                   {stock.map(s => <option key={s.item_id} value={s.item_id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-stone-500">Quantity *</label>
+                  <label className="text-xs text-stone-500">{L?.stockTxQty || "Quantity"} *</label>
                   <input type="number" min="1" value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: parseInt(e.target.value) || 1 }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" data-testid="stock-tx-qty" />
                 </div>
                 <div>
-                  <label className="text-xs text-stone-500">Unit Cost £</label>
+                  <label className="text-xs text-stone-500">{L?.stockTxUnit || "Unit Cost £"}</label>
                   <input type="number" step="0.01" value={form.unit_cost} onChange={e => setForm(f => ({ ...f, unit_cost: parseFloat(e.target.value) || 0 }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
                 </div>
               </div>
               <div>
-                <label className="text-xs text-stone-500">Transaction Date *</label>
+                <label className="text-xs text-stone-500">{L?.stockTxDate || "Transaction Date"} *</label>
                 <input type="date" value={form.transaction_date} onChange={e => setForm(f => ({ ...f, transaction_date: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
               </div>
               <div>
-                <label className="text-xs text-stone-500">Reason</label>
+                <label className="text-xs text-stone-500">{L?.stockTxReason || "Reason"}</label>
                 <input value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder={txType} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" />
               </div>
               <div>
-                <label className="text-xs text-stone-500">Notes</label>
-                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" rows={3} placeholder="Any details (e.g. 'Guest damage — room 204, stain couldn't be removed')" />
+                <label className="text-xs text-stone-500">{L?.stockTxNotes || "Notes"}</label>
+                <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} className="w-full mt-1 px-3 py-2 border rounded-lg text-sm" rows={3} placeholder={L?.notesPh || "Any details…"} />
               </div>
               <div className="bg-stone-50 border border-stone-200 rounded-lg p-2 text-xs flex justify-between">
-                <span className="text-stone-500">Total impact:</span>
+                <span className="text-stone-500">{L?.stockTxImpact || "Total impact:"}</span>
                 <span className="font-mono font-bold">£{(form.quantity * form.unit_cost).toFixed(2)}</span>
               </div>
             </div>
             <div className="p-4 border-t border-stone-100 flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={save} data-testid="stock-tx-submit">Record</Button>
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>{L?.cancel || "Cancel"}</Button>
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={save} data-testid="stock-tx-submit">{L?.stockRecordPrefix || "Record"}</Button>
             </div>
           </div>
         </div>
@@ -1649,8 +1712,8 @@ const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L,
                         <th className="text-center py-2 px-2 font-semibold text-stone-500">{L?.delvSent || "Sent"}</th>
                         <th className="text-center py-2 px-2 font-semibold text-emerald-700">{L?.delvReceived || "Received"} ↓</th>
                         <th className="text-center py-2 px-2 font-semibold text-rose-700">{L?.delvShortage || "Shortage"}</th>
-                        <th className="text-center py-2 px-2 font-semibold text-fuchsia-700">{L?.delvDamagedArr || "Damage"}</th>
-                        <th className="text-center py-2 px-2 font-semibold text-amber-700">Rejected</th>
+                        <th className="text-center py-2 px-2 font-semibold text-fuchsia-700" title={L?.factoryBrokenHint}>{L?.factoryBroken || "Broken (factory)"}</th>
+                        <th className="text-center py-2 px-2 font-semibold text-amber-700" title={L?.roomDamagedHint}>{L?.roomDamaged || "Damaged (room)"}</th>
                         {canSeeCosts && <th className="text-right py-2 px-2 font-semibold text-stone-600">{L?.dispRate || "£"}</th>}
                       </tr>
                     </thead>
@@ -1708,8 +1771,8 @@ const DeliveriesTab = ({ pid, dispatches, stock, catalog = [], lang, setLang, L,
                       <div className="grid grid-cols-2 gap-2">
                         <div><label className="text-[10px] font-bold uppercase text-emerald-700">{L?.delvReceived || "Received"} ↓</label><input type="number" min="0" inputMode="numeric" value={it.qty_received} onChange={e => updItem(i, "qty_received", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-emerald-50 border-emerald-200 border rounded mt-0.5" /></div>
                         <div><label className="text-[10px] font-bold uppercase text-rose-700">{L?.delvShortage || "Shortage"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_shortage} onChange={e => updItem(i, "qty_shortage", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-rose-50 border-rose-200 border rounded mt-0.5" /></div>
-                        <div><label className="text-[10px] font-bold uppercase text-fuchsia-700">{L?.delvDamagedArr || "Damage"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-fuchsia-50 border-fuchsia-200 border rounded mt-0.5" /></div>
-                        <div><label className="text-[10px] font-bold uppercase text-amber-700">Rejected</label><input type="number" min="0" inputMode="numeric" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-amber-50 border-amber-200 border rounded mt-0.5" /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-fuchsia-700" title={L?.factoryBrokenHint}>{L?.factoryBrokenShort || "Broken"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_damage} onChange={e => updItem(i, "qty_damage", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-fuchsia-50 border-fuchsia-200 border rounded mt-0.5" /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-amber-700" title={L?.roomDamagedHint}>{L?.roomDamagedShort || "Damaged"}</label><input type="number" min="0" inputMode="numeric" value={it.qty_rejected} onChange={e => updItem(i, "qty_rejected", parseInt(e.target.value) || 0)} className="w-full h-11 text-center text-base font-mono font-bold bg-amber-50 border-amber-200 border rounded mt-0.5" /></div>
                         {canSeeCosts && <div className="col-span-2"><label className="text-[10px] font-bold uppercase text-stone-500">{L?.dispRate || "Unit Cost £"}</label><input type="number" step="0.01" min="0" value={it.unit_cost} onChange={e => updItem(i, "unit_cost", parseFloat(e.target.value) || 0)} className="w-full h-11 text-right text-base font-mono border rounded mt-0.5" /></div>}
                       </div>
                     </div>

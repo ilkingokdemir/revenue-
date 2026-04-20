@@ -1804,3 +1804,17 @@ Core PMS | Revenue (38+ sub-modules) | Booking Engine | Guest Experience | **Fin
 
 ## Architecture: React + Tailwind + Shadcn, FastAPI + MongoDB, GPT-5.2, Stripe, Resend
 ## Testing: 130 iterations, 100% pass rate
+
+## Iteration 167 — Laundry: Origin-Aware Damage Labels + Stock i18n (Feb 20, 2026)
+- Delivery form columns clarified by origin:
+  - "Damage" → **Bozuk (fabrikadan)** / "Broken (from factory)" / "Счупени (от фабрика)"
+  - "Rejected" → **Hasarlı (odadan)** / "Damaged (from room)" / "Повредени (от стая)"
+- Stock tab now has TR/EN/BG language toggle (was English-only) with full translations:
+  - Tab header ("Current Stock Levels" → "Mevcut Stok Seviyeleri")
+  - Quick-action buttons (+ Maintenance → + Bakım, + Disposal → + İmha, etc.)
+  - Column headers (Item/Clean/Dirty/In Transit/Damaged/Total all localized)
+  - Damaged column relabeled to "Damaged (room)" / "Hasarlı (odadan)" for clarity
+  - Transaction history + record modal fully translated
+- Backend unchanged — pure UI/i18n layer addition (LAUNDRY_I18N dictionary expanded with ~20 new keys per language)
+- Tested: lint clean, smoke screenshots captured in EN + TR verifying all labels
+

@@ -24,6 +24,7 @@ import {
   BarChart3, FileCode2, Percent, CheckCircle2, CircleDashed, Lock,
   Zap, Plus, RefreshCw, Play, Trash2, TrendingUp, TrendingDown,
   AlertTriangle, Activity, Sparkles, Globe2, Shield, ChevronRight,
+  GitBranch, Layers, Ban, Calendar as CalIcon,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -33,6 +34,9 @@ const PANELS = [
   { key: "channels",        label: "Channels",        icon: Plug },
   { key: "mappings",        label: "Mappings",        icon: Link2 },
   { key: "rate-structure",  label: "Rate Structure",  icon: Grid3x3 },
+  { key: "derived-rates",   label: "Derived Rates",   icon: GitBranch },
+  { key: "allocations",     label: "Allocations",     icon: Layers },
+  { key: "stop-sell",       label: "Stop-Sell",       icon: Ban },
   { key: "publish-jobs",    label: "Publish Jobs",    icon: UploadCloud },
   { key: "audit-logs",      label: "Audit Logs",      icon: ScrollText },
   { key: "benchmark",       label: "Benchmark",       icon: BarChart3 },
@@ -940,6 +944,368 @@ const OverridesPanel = ({ pid }) => {
   );
 };
 
+/* ═══════════ ALLOCATIONS (Pooled Inventory) ═══════════ */
+const AllocationsPanel = ({ pid }) => {
+  const [rules, setRules] = useState([]);
+  const [channels, setChannels] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [cal, setCal] = useState(null);
+  const [fromDate, setFromDate] = useState(new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10));
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ channel_id: "", room_type_id: "", mode: "dedicated", allocation_cap: 5, buffer: 0, spillover_priority: 10 });
+
+  const load = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/inventory-allocations/${pid}`);
+      setRules(data.rules || []); setChannels(data.channels || []); setRooms(data.room_types || []);
+      setForm(f => ({ ...f,
+        channel_id: f.channel_id || data.channels?.[0]?.channel_id || "",
+        room_type_id: f.room_type_id || data.room_types?.[0]?.id || "",
+      }));
+    } catch { /* */ }
+  }, [pid]);
+  const loadCal = useCallback(async () => {
+    try { const { data } = await axios.get(`${API}/inventory-allocations/${pid}/calendar?from_date=${fromDate}&to_date=${toDate}`); setCal(data); }
+    catch { /* */ }
+  }, [pid, fromDate, toDate]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadCal(); }, [loadCal]);
+
+  const upsert = async () => {
+    try {
+      await axios.put(`${API}/inventory-allocations/${pid}/upsert`, form);
+      toast.success("Allocation rule saved"); setShowForm(false); load(); loadCal();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+  const del = async (id) => { await axios.delete(`${API}/inventory-allocations/${id}`); toast.success("Removed"); load(); loadCal(); };
+
+  const modeBadge = (m) => m === "dedicated" ? "bg-blue-100 text-blue-700" : m === "capped" ? "bg-amber-100 text-amber-700" : "bg-stone-100 text-stone-700";
+
+  return (
+    <div className="space-y-4" data-testid="chmgr-allocations">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Inventory Allocations</h2>
+          <p className="text-sm text-stone-500">Per-channel × room-type inventory policy. Pooled = share the pot · Dedicated = hard reserved units · Capped = soft cap with spillover.</p>
+        </div>
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-alloc-new">
+          <Plus className="w-4 h-4" /> New Rule
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <select value={form.channel_id} onChange={e => setForm(f => ({ ...f, channel_id: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm">
+              {channels.map(c => <option key={c.channel_id} value={c.channel_id}>{c.name}</option>)}
+            </select>
+            <select value={form.room_type_id} onChange={e => setForm(f => ({ ...f, room_type_id: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm">
+              {rooms.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+            <select value={form.mode} onChange={e => setForm(f => ({ ...f, mode: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm">
+              <option value="pooled">Pooled (share inventory)</option>
+              <option value="dedicated">Dedicated (reserved)</option>
+              <option value="capped">Capped (soft cap + spillover)</option>
+            </select>
+            <input type="number" value={form.allocation_cap} onChange={e => setForm(f => ({ ...f, allocation_cap: parseInt(e.target.value) || 0 }))} placeholder="Allocation Cap" className="px-3 py-2 border rounded-lg text-sm" disabled={form.mode === "pooled"} />
+            <input type="number" value={form.buffer} onChange={e => setForm(f => ({ ...f, buffer: parseInt(e.target.value) || 0 }))} placeholder="Buffer (hold back)" className="px-3 py-2 border rounded-lg text-sm" />
+            <input type="number" value={form.spillover_priority} onChange={e => setForm(f => ({ ...f, spillover_priority: parseInt(e.target.value) || 10 }))} placeholder="Spillover Priority" className="px-3 py-2 border rounded-lg text-sm" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={upsert} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold" data-testid="chmgr-alloc-save">Save Rule</button>
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-white border rounded-lg text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Rules list */}
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="grid grid-cols-[1fr,1fr,auto,auto,auto,auto,auto] gap-3 px-4 py-3 bg-stone-50 text-xs font-semibold text-stone-500 uppercase tracking-wider">
+          <div>Channel</div><div>Room</div><div>Mode</div><div>Cap</div><div>Buffer</div><div>Priority</div><div></div>
+        </div>
+        {rules.map(r => (
+          <div key={r.id} className="grid grid-cols-[1fr,1fr,auto,auto,auto,auto,auto] gap-3 px-4 py-3 border-t border-stone-100 items-center text-sm">
+            <div>{channels.find(c => c.channel_id === r.channel_id)?.name || r.channel_id}</div>
+            <div>{rooms.find(rt => rt.id === r.room_type_id)?.name || r.room_type_id}</div>
+            <Badge className={modeBadge(r.mode)}>{r.mode}</Badge>
+            <div className="font-mono">{r.allocation_cap || "—"}</div>
+            <div className="font-mono">{r.buffer || "—"}</div>
+            <div className="font-mono">{r.spillover_priority}</div>
+            <button onClick={() => del(r.id)} className="text-rose-500"><Trash2 className="w-4 h-4" /></button>
+          </div>
+        ))}
+        {rules.length === 0 && <div className="p-10 text-center text-sm text-stone-400">No rules yet — all channels will share the pooled inventory by default.</div>}
+      </div>
+
+      {/* Availability Calendar */}
+      <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-bold">Availability per Channel</h3>
+            <p className="text-xs text-stone-500">Computed units the channel manager would push for each date.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
+            <span className="text-xs text-stone-400">to</span>
+            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
+          </div>
+        </div>
+        {cal && (
+          <div className="overflow-x-auto">
+            <table className="text-xs min-w-max">
+              <thead>
+                <tr>
+                  <th className="text-left p-2 sticky left-0 bg-white border-r">Room × Channel</th>
+                  {cal.dates.map(d => (
+                    <th key={d} className="p-1 text-center text-[10px] font-semibold text-stone-500 min-w-[52px]">
+                      {new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cal.grid.map((row, i) => (
+                  <tr key={i} className="border-t">
+                    <td className="p-2 sticky left-0 bg-white border-r">
+                      <div className="font-semibold">{row.room_type_name}</div>
+                      <div className="text-[10px] text-stone-400">{row.channel_name} · <span className="font-mono">{row.mode}</span></div>
+                    </td>
+                    {row.cells.map((c, j) => {
+                      const ratio = row.total_inventory ? c.available / row.total_inventory : 0;
+                      const bg = c.available === 0 ? "bg-rose-100 text-rose-700" : ratio < 0.3 ? "bg-amber-100 text-amber-700" : "bg-emerald-50 text-emerald-700";
+                      return (
+                        <td key={j} className={`p-1 text-center font-mono ${bg} border-r border-stone-100`} title={`Sold on channel: ${c.sold_on_channel} · Sold all: ${c.sold_all} · Total: ${c.total_inventory}`}>
+                          {c.available}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                {cal.grid.length === 0 && <tr><td colSpan={cal.dates.length + 1} className="p-10 text-center text-stone-400">No channels or rooms configured</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════ DERIVED RATES ═══════════ */
+const DerivedRatesPanel = ({ pid }) => {
+  const [products, setProducts] = useState([]);
+  const [derived, setDerived] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ name: "", parent_product_id: "", basis: "percent", adjustment: -10, active: true });
+  const [baseRate, setBaseRate] = useState(150);
+
+  const load = useCallback(async () => {
+    try {
+      const [p, d] = await Promise.all([
+        axios.get(`${API}/rate-structure/products?property_id=${pid}`),
+        axios.get(`${API}/rate-structure/derived?property_id=${pid}`),
+      ]);
+      setProducts(p.data || []); setDerived(d.data || []);
+      setForm(f => ({ ...f, parent_product_id: f.parent_product_id || p.data?.[0]?.id || "" }));
+    } catch { /* */ }
+  }, [pid]);
+  useEffect(() => { load(); }, [load]);
+
+  const create = async () => {
+    if (!form.name || !form.parent_product_id) return toast.error("Name and parent required");
+    try {
+      await axios.post(`${API}/rate-structure/derived`, { ...form, property_id: pid });
+      toast.success("Derived rate created");
+      setShowForm(false); setForm({ name: "", parent_product_id: products[0]?.id || "", basis: "percent", adjustment: -10, active: true });
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+  };
+  const del = async (id) => { await axios.delete(`${API}/rate-structure/derived/${id}`); toast.success("Deleted"); load(); };
+
+  const preview = (r) => {
+    const base = parseFloat(baseRate) || 0;
+    if (r.basis === "percent") return Math.round(base * (1 + r.adjustment / 100) * 100) / 100;
+    return Math.round((base + r.adjustment) * 100) / 100;
+  };
+
+  return (
+    <div className="space-y-4" data-testid="chmgr-derived-rates">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Derived Rate Plans</h2>
+          <p className="text-sm text-stone-500">Child rate plans that float X% above/below a parent rate. When the parent changes, derivatives auto-cascade.</p>
+        </div>
+        <button onClick={() => setShowForm(true)} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-derived-new">
+          <Plus className="w-4 h-4" /> New Derived Plan
+        </button>
+      </div>
+
+      <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm space-y-1">
+        <div className="flex items-center gap-2 font-semibold text-violet-900"><GitBranch className="w-4 h-4" /> Why this matters</div>
+        <div className="text-violet-800">Example: your BAR is £150. A "Non-Refundable" plan at -15% auto-calculates to £127.50. A "Mobile-only" plan at -8% becomes £138. If you raise BAR to £170, both cascade instantly.</div>
+      </div>
+
+      {showForm && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 space-y-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Name (e.g. BAR -10% Mobile)" className="px-3 py-2 border rounded-lg text-sm md:col-span-2" />
+            <select value={form.parent_product_id} onChange={e => setForm(f => ({ ...f, parent_product_id: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm">
+              {products.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+            </select>
+            <select value={form.basis} onChange={e => setForm(f => ({ ...f, basis: e.target.value }))} className="px-3 py-2 border rounded-lg text-sm">
+              <option value="percent">Percent (%)</option>
+              <option value="flat">Flat (+/-)</option>
+            </select>
+            <input type="number" step="0.01" value={form.adjustment} onChange={e => setForm(f => ({ ...f, adjustment: parseFloat(e.target.value) || 0 }))} placeholder="Adjustment (-10 = 10% off)" className="px-3 py-2 border rounded-lg text-sm" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={create} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold" data-testid="chmgr-derived-save">Create</button>
+            <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-white border rounded-lg text-sm">Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white border border-stone-200 rounded-xl p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-sm font-semibold">Cascade Preview</span>
+          <span className="text-xs text-stone-500">Set parent rate:</span>
+          <input type="number" value={baseRate} onChange={e => setBaseRate(e.target.value)} className="w-24 px-2 py-1 border rounded text-sm" />
+          <span className="text-xs text-stone-400">£ base</span>
+        </div>
+        <div className="grid grid-cols-[1fr,1fr,auto,auto,auto,auto] gap-3 px-2 py-2 bg-stone-50 text-xs font-semibold text-stone-500 uppercase tracking-wider rounded">
+          <div>Name</div><div>Parent</div><div>Basis</div><div>Adjust</div><div>Preview</div><div></div>
+        </div>
+        {derived.map(r => (
+          <div key={r.id} className="grid grid-cols-[1fr,1fr,auto,auto,auto,auto] gap-3 px-2 py-3 border-t border-stone-100 items-center text-sm">
+            <div className="font-semibold">{r.name}</div>
+            <div>{products.find(p => p.id === r.parent_product_id)?.name || r.parent_product_id}</div>
+            <Badge className="bg-blue-100 text-blue-700">{r.basis}</Badge>
+            <div className="font-mono">{r.adjustment > 0 ? "+" : ""}{r.adjustment}{r.basis === "percent" ? "%" : "£"}</div>
+            <div className="font-mono font-bold text-emerald-700">£{preview(r)}</div>
+            <button onClick={() => del(r.id)} className="text-rose-500"><Trash2 className="w-4 h-4" /></button>
+          </div>
+        ))}
+        {derived.length === 0 && <div className="p-8 text-center text-sm text-stone-400">No derived rates yet — create one to see cascade preview.</div>}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════ STOP SELL CALENDAR ═══════════ */
+const StopSellPanel = ({ pid }) => {
+  const [data, setData] = useState(null);
+  const [fromDate, setFromDate] = useState(new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10));
+
+  const load = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/channel-restrictions/${pid}?from_date=${fromDate}&to_date=${toDate}`);
+      setData(data);
+    } catch { /* */ }
+  }, [pid, fromDate, toDate]);
+  useEffect(() => { load(); }, [load]);
+
+  const toggle = async (channel_id, date, currentlyStopped) => {
+    try {
+      await axios.put(`${API}/channel-restrictions/${pid}/bulk`, {
+        from_date: date, to_date: date,
+        channel_ids: [channel_id],
+        stop_sell: !currentlyStopped,
+      });
+      load();
+    } catch { toast.error("Failed"); }
+  };
+
+  const dates = useMemo(() => {
+    const out = [];
+    let d = new Date(fromDate);
+    const end = new Date(toDate);
+    while (d <= end) {
+      out.push(d.toISOString().slice(0, 10));
+      d = new Date(d.getTime() + 86400000);
+    }
+    return out;
+  }, [fromDate, toDate]);
+
+  const channels = data?.channels || [];
+  const stoppedSet = new Set();
+  (data?.restrictions || []).forEach(r => {
+    if (r.stop_sell) stoppedSet.add(`${r.channel_id}|${r.date}`);
+  });
+
+  return (
+    <div className="space-y-4" data-testid="chmgr-stop-sell">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Stop-Sell Calendar</h2>
+          <p className="text-sm text-stone-500">Click any cell to toggle stop-sell for that channel on that date. Red = stopped, green = selling.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <CalIcon className="w-4 h-4 text-stone-400" />
+          <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
+          <span className="text-xs text-stone-400">to</span>
+          <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="px-2 py-1 border rounded text-sm" />
+        </div>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl p-4">
+        {channels.length === 0 && <div className="p-10 text-center text-sm text-stone-400">No channels yet — add one in Channels tab first.</div>}
+        {channels.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="text-xs min-w-max">
+              <thead>
+                <tr>
+                  <th className="text-left p-2 sticky left-0 bg-white border-r z-10">Channel</th>
+                  {dates.map(d => {
+                    const dayOfWeek = new Date(d).toLocaleDateString("en-GB", { weekday: "short" })[0];
+                    return (
+                      <th key={d} className="p-1 text-center text-[10px] font-semibold text-stone-500 min-w-[40px]">
+                        <div>{new Date(d).getDate()}</div>
+                        <div className="text-stone-400">{dayOfWeek}</div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {channels.map(ch => (
+                  <tr key={ch.channel_id} className="border-t">
+                    <td className="p-2 sticky left-0 bg-white border-r font-semibold">{ch.name}</td>
+                    {dates.map(d => {
+                      const key = `${ch.channel_id}|${d}`;
+                      const stopped = stoppedSet.has(key);
+                      return (
+                        <td key={d} className="p-0.5 border-r border-stone-100">
+                          <button
+                            onClick={() => toggle(ch.channel_id, d, stopped)}
+                            className={`w-full h-8 rounded text-[11px] font-bold transition ${stopped ? "bg-rose-500 text-white hover:bg-rose-600" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
+                            data-testid={`chmgr-stopsell-${ch.channel_id}-${d}`}
+                            title={stopped ? "Stopped — click to open" : "Open — click to stop-sell"}
+                          >
+                            {stopped ? <Ban className="w-3.5 h-3.5 mx-auto" /> : "✓"}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-4 text-xs text-stone-500">
+        <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-50 border border-emerald-300" /> Selling</span>
+        <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-rose-500" /> Stop-Sell</span>
+        <span>·</span>
+        <span>Changes push to the OTA on next sync.</span>
+      </div>
+    </div>
+  );
+};
+
 /* ═══════════ MAIN HUB ═══════════ */
 export const ChannelManagerHub = ({ activePropertyId, initialPanel }) => {
   const pid = activePropertyId || "aldgate-flats";
@@ -975,6 +1341,9 @@ export const ChannelManagerHub = ({ activePropertyId, initialPanel }) => {
       {panel === "channels"       && <ChannelsPanel pid={pid} />}
       {panel === "mappings"       && <MappingsPanel pid={pid} />}
       {panel === "rate-structure" && <RateStructurePanel pid={pid} />}
+      {panel === "derived-rates"  && <DerivedRatesPanel pid={pid} />}
+      {panel === "allocations"    && <AllocationsPanel pid={pid} />}
+      {panel === "stop-sell"      && <StopSellPanel pid={pid} />}
       {panel === "publish-jobs"   && <PublishJobsPanel pid={pid} />}
       {panel === "audit-logs"     && <AuditLogsPanel pid={pid} />}
       {panel === "benchmark"      && <BenchmarkPanel pid={pid} />}

@@ -1,0 +1,132 @@
+{
+  "summary": "Iteration 164 - Inventory Allocations + Derived Rates + Stop-Sell (Wave 1 P0 features) fully tested. 35/35 backend tests PASSED (100%). All 3 new tabs verified with interactive features working correctly. All 12 Channel Manager Hub tabs present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration164_allocations.py",
+    "/app/test_reports/pytest/pytest_iteration164_allocations.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration164_allocations.py"
+  ],
+  "success_rate": {
+    "backend": "100% (35/35 tests passed)",
+    "frontend": "100% (all 3 new tabs and 12 total tabs verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "POST /api/channel-hub/aldgate-flats/seed-demo seeds 3 channel configs (booking_com, expedia, airbnb) and related data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 164 adds 3 new tabs to Channel Manager Hub (now 12 tabs total): Allocations, Derived Rates, Stop-Sell. Backend module: inventory_allocations.py. All endpoints require admin/manager role. No external API calls - uses real MongoDB state.",
+  "tests_verified": {
+    "backend": {
+      "inventory_allocations_rules": [
+        "GET /api/inventory-allocations/{pid} requires auth - PASS",
+        "GET /api/inventory-allocations/{pid} returns {rules, channels, room_types} - PASS",
+        "PUT /api/inventory-allocations/{pid}/upsert missing fields returns 400 - PASS",
+        "PUT /api/inventory-allocations/{pid}/upsert invalid mode returns 400 - PASS",
+        "PUT /api/inventory-allocations/{pid}/upsert mode=dedicated with cap=0 returns 400 - PASS",
+        "PUT /api/inventory-allocations/{pid}/upsert mode=capped with cap=0 returns 400 - PASS",
+        "PUT /api/inventory-allocations/{pid}/upsert mode=pooled allows cap=0 - PASS",
+        "PUT /api/inventory-allocations/{pid}/upsert creates dedicated rule with cap=5 - PASS",
+        "PUT /api/inventory-allocations/{pid}/upsert creates capped rule - PASS",
+        "GET /api/inventory-allocations/{pid} returns created rules - PASS",
+        "DELETE /api/inventory-allocations/{rule_id} nonexistent returns not_found - PASS"
+      ],
+      "inventory_allocations_calendar": [
+        "GET /api/inventory-allocations/{pid}/calendar requires auth - PASS",
+        "GET /api/inventory-allocations/{pid}/calendar default returns 14-day range (15 dates) - PASS",
+        "GET /api/inventory-allocations/{pid}/calendar custom range works - PASS",
+        "GET /api/inventory-allocations/{pid}/calendar >90 days returns 400 - PASS",
+        "GET /api/inventory-allocations/{pid}/calendar grid has correct structure (room_type_id, channel_id, mode, cells with available/sold_on_channel/sold_all/total_inventory) - PASS"
+      ],
+      "derived_rates": [
+        "GET /api/rate-structure/products returns list - PASS",
+        "POST /api/rate-structure/products creates rate product - PASS",
+        "GET /api/rate-structure/derived returns list - PASS",
+        "POST /api/rate-structure/derived with invalid parent returns 404 - PASS",
+        "POST /api/rate-structure/derived creates derived rate - PASS",
+        "POST /api/rate-structure/derived/{id}/evaluate computes derived price correctly (base=150, -15% = 127.5) - PASS",
+        "DELETE /api/rate-structure/derived/{id} removes rate - PASS",
+        "DELETE /api/rate-structure/products/{id} removes product - PASS"
+      ],
+      "channel_restrictions_stop_sell": [
+        "GET /api/channel-restrictions/{pid} requires auth - PASS",
+        "GET /api/channel-restrictions/{pid} returns {dates, channels, restrictions, index} - PASS",
+        "PUT /api/channel-restrictions/{pid}/bulk missing dates returns 400 - PASS",
+        "PUT /api/channel-restrictions/{pid}/bulk empty channels returns 400 - PASS",
+        "PUT /api/channel-restrictions/{pid}/bulk sets stop_sell=true - PASS",
+        "GET /api/channel-restrictions/{pid} verifies stop_sell was set - PASS",
+        "PUT /api/channel-restrictions/{pid}/bulk clears stop_sell - PASS",
+        "PUT /api/channel-restrictions/{pid}/bulk sets min_los/max_los - PASS",
+        "POST /api/channel-restrictions/{pid}/clear-range removes restrictions - PASS"
+      ]
+    },
+    "frontend": {
+      "channel_manager_hub_tabs": [
+        "Dashboard tab - PASS",
+        "Channels tab - PASS",
+        "Mappings tab - PASS",
+        "Rate Structure tab - PASS",
+        "Derived Rates tab - PASS (NEW)",
+        "Allocations tab - PASS (NEW)",
+        "Stop-Sell tab - PASS (NEW)",
+        "Publish Jobs tab - PASS",
+        "Audit Logs tab - PASS",
+        "Benchmark tab - PASS",
+        "Profiles tab - PASS",
+        "Overrides tab - PASS"
+      ],
+      "allocations_panel": [
+        "data-testid='chmgr-allocations' found - PASS",
+        "data-testid='chmgr-alloc-new' (New Rule button) found - PASS",
+        "data-testid='chmgr-alloc-save' (Save Rule button) found - PASS",
+        "Mode selector with pooled/dedicated/capped options - PASS",
+        "Allocation Cap input - PASS",
+        "Buffer input - PASS",
+        "Spillover Priority input - PASS",
+        "Availability per Channel calendar heatmap with 14-day grid - PASS",
+        "Green/amber/red cells by availability - PASS"
+      ],
+      "derived_rates_panel": [
+        "data-testid='chmgr-derived-rates' found - PASS",
+        "data-testid='chmgr-derived-new' (New Derived Plan button) found - PASS",
+        "Cascade Preview with base rate input - PASS",
+        "Preview column shows computed price (base=150, -10% = £135) - PASS",
+        "Parent rate product reference - PASS"
+      ],
+      "stop_sell_panel": [
+        "data-testid='chmgr-stop-sell' found - PASS",
+        "Channel × date heatmap renders 9+ channels - PASS",
+        "279 cells with data-testid='chmgr-stopsell-<channel>-<date>' found - PASS",
+        "Clicking cell toggles stop_sell via PUT /api/channel-restrictions/bulk - PASS",
+        "Red Ban icon shows on stopped cells - PASS",
+        "Green checkmark shows on selling cells - PASS"
+      ]
+    }
+  },
+  "sample_data_observed": {
+    "channel_health": "87.5%",
+    "active_channels": 3,
+    "sync_health": "95.3%",
+    "channels_in_stop_sell": ["Booking.com", "Expedia", "Airbnb", "Hotels.com", "Agoda", "Trip.com", "Google Hotels", "Trivago", "Direct Website"],
+    "room_types_in_allocations": ["Standard Double Room", "Deluxe King Room", "Family Suite", "Superior Twin Room"],
+    "derived_rate_example": {
+      "name": "BAR -10%",
+      "parent": "Best Available Rate",
+      "basis": "percent",
+      "adjustment": "-10%",
+      "preview_at_150": "£135"
+    }
+  },
+  "mocked_apis_note": "No external API calls in this wave. Allocations and Stop-Sell use real MongoDB state."
+}

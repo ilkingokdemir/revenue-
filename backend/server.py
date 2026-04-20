@@ -680,6 +680,10 @@ async def _job_nightly_dry_publish(property_id: str) -> dict:
 
 JOB_HANDLERS["nightly_dry_publish"] = _job_nightly_dry_publish
 
+# Iter 164 — Inventory Allocations (pooled / dedicated / capped per channel×room)
+from routes.inventory_allocations import create_inventory_allocations_router
+api_router.include_router(create_inventory_allocations_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

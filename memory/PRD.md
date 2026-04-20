@@ -2,6 +2,16 @@
 
 ## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
 
+### Iter 166.1 (Feb 2026): 🛡️ Safety Buffer on Order Forecast
+
+Follow-up to Iter 166 per user request: "ekstra ihtiyaç olduğunda +10-15% buffer verebileyim."
+
+**Frontend** (`LaundryManagement.js` ForecastTab)
+- **Global buffer selector** next to "Suggested Order" title — choose None / +5% / +10% / +15% / +20% / +25% → applies the multiplier to every row in one click. Order qty = `ceil(shortfall × (1 + buffer/100))`.
+- **Per-row "Safety +%" column** with own dropdown (0 / +5 / +10 / +15 / +20 / +25 / +30 / +50) — overrides the global for individual items.
+- Order Qty cell shows a small amber "+X safety" caption so the user can see exactly how many extra pieces are buffered above the raw shortfall.
+- Verified: global +15% turned £417.30 / 777 pcs forecast into £483.40 / 899 pcs (e.g., Pillow Case: 142 shortfall + 22 safety = 164).
+
 ### Iter 166 (Feb 2026): 🧺 Laundry Items Catalog + Smart Order Forecast
 
 Shipped the two remaining laundry-module gaps in one sweep:

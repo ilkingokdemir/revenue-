@@ -1080,6 +1080,9 @@ const ForecastTab = ({ pid, onCreated }) => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editableItems, setEditableItems] = useState([]);  // user can override order qty
+  const [globalBuffer, setGlobalBuffer] = useState(0);     // safety stock % applied to all
+
+  const applyBuffer = (shortfall, pct) => Math.ceil((shortfall || 0) * (1 + (pct || 0) / 100));
 
   const runForecast = useCallback(async () => {
     if (!delivery) { toast.error("Pick a delivery date"); return; }
@@ -1089,10 +1092,14 @@ const ForecastTab = ({ pid, onCreated }) => {
         params: { delivery_date: delivery, horizon_days: horizon, in_house_cleaning_every: everyN },
       });
       setForecast(data);
-      setEditableItems(data.items.map(i => ({ ...i, order_qty: i.shortfall })));
+      setEditableItems(data.items.map(i => ({
+        ...i,
+        buffer_pct: globalBuffer,
+        order_qty: applyBuffer(i.shortfall, globalBuffer),
+      })));
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed to compute forecast"); }
     setLoading(false);
-  }, [pid, delivery, horizon, everyN]);
+  }, [pid, delivery, horizon, everyN, globalBuffer]);
 
   useEffect(() => {
     axios.get(`${API}/laundry/providers/${pid}`).then(r => {
@@ -1106,6 +1113,22 @@ const ForecastTab = ({ pid, onCreated }) => {
 
   const updateQty = (item_id, v) => {
     setEditableItems(arr => arr.map(x => x.item_id === item_id ? { ...x, order_qty: Math.max(0, parseInt(v) || 0) } : x));
+  };
+
+  const updateBuffer = (item_id, pct) => {
+    setEditableItems(arr => arr.map(x => {
+      if (x.item_id !== item_id) return x;
+      const p = parseInt(pct) || 0;
+      return { ...x, buffer_pct: p, order_qty: applyBuffer(x.shortfall, p) };
+    }));
+  };
+
+  const applyGlobalBuffer = (pct) => {
+    const p = parseInt(pct) || 0;
+    setGlobalBuffer(p);
+    setEditableItems(arr => arr.map(x => ({
+      ...x, buffer_pct: p, order_qty: applyBuffer(x.shortfall, p),
+    })));
   };
 
   const totals = () => {
@@ -1253,8 +1276,24 @@ const ForecastTab = ({ pid, onCreated }) => {
 
           {/* Order table */}
           <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
-            <div className="p-3 border-b border-stone-200 flex items-center justify-between">
-              <h4 className="text-sm font-bold text-stone-800">Suggested Order</h4>
+            <div className="p-3 border-b border-stone-200 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-3">
+                <h4 className="text-sm font-bold text-stone-800">Suggested Order</h4>
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                  <span className="text-xs font-semibold text-amber-800">Safety Buffer</span>
+                  <select value={globalBuffer} onChange={e => applyGlobalBuffer(e.target.value)}
+                          className="text-xs border border-amber-300 rounded bg-white px-2 py-0.5 font-mono font-bold text-amber-700"
+                          data-testid="forecast-global-buffer">
+                    <option value={0}>None</option>
+                    <option value={5}>+5%</option>
+                    <option value={10}>+10%</option>
+                    <option value={15}>+15%</option>
+                    <option value={20}>+20%</option>
+                    <option value={25}>+25%</option>
+                  </select>
+                  <span className="text-[11px] text-amber-700">applies to all rows</span>
+                </div>
+              </div>
               <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={createOrder} disabled={creating || t.qty === 0} data-testid="forecast-create-dispatch">
                 {creating ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Send className="w-4 h-4 mr-1" />}
                 Create Dispatch → {vendor || "vendor"}
@@ -1268,6 +1307,7 @@ const ForecastTab = ({ pid, onCreated }) => {
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Needed</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">On-hand Clean</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Shortfall</th>
+                  <th className="text-center py-2 px-3 font-semibold text-stone-600">Safety +%</th>
                   <th className="text-center py-2 px-3 font-semibold text-stone-600">Order Qty</th>
                   <th className="text-right py-2 px-3 font-semibold text-stone-600">Unit £</th>
                   <th className="text-right py-2 px-3 font-semibold text-stone-600">Line Total</th>
@@ -1276,6 +1316,7 @@ const ForecastTab = ({ pid, onCreated }) => {
               <tbody>
                 {editableItems.map(i => {
                   const line = (i.order_qty || 0) * (i.washing_cost || 0);
+                  const extraQty = (i.order_qty || 0) - (i.shortfall || 0);
                   return (
                     <tr key={i.item_id} className={`border-b border-stone-100 ${i.shortfall > 0 ? "" : "opacity-60"}`} data-testid={`forecast-row-${i.item_id}`}>
                       <td className="py-2 px-3 font-semibold text-stone-800">{i.name}</td>
@@ -1288,10 +1329,29 @@ const ForecastTab = ({ pid, onCreated }) => {
                           : <Badge className="bg-emerald-100 text-emerald-700 font-mono">OK</Badge>}
                       </td>
                       <td className="py-2 px-3 text-center">
-                        <input type="number" min="0" value={i.order_qty || 0}
-                               onChange={e => updateQty(i.item_id, e.target.value)}
-                               className="w-20 px-2 py-1 border border-stone-200 rounded text-sm text-right font-mono"
-                               data-testid={`forecast-qty-${i.item_id}`} />
+                        <select value={i.buffer_pct || 0} onChange={e => updateBuffer(i.item_id, e.target.value)}
+                                className="w-20 px-1 py-1 border border-stone-200 rounded text-xs font-mono font-bold text-amber-700 bg-amber-50"
+                                data-testid={`forecast-buffer-${i.item_id}`}>
+                          <option value={0}>0%</option>
+                          <option value={5}>+5%</option>
+                          <option value={10}>+10%</option>
+                          <option value={15}>+15%</option>
+                          <option value={20}>+20%</option>
+                          <option value={25}>+25%</option>
+                          <option value={30}>+30%</option>
+                          <option value={50}>+50%</option>
+                        </select>
+                      </td>
+                      <td className="py-2 px-3 text-center">
+                        <div className="flex flex-col items-center">
+                          <input type="number" min="0" value={i.order_qty || 0}
+                                 onChange={e => updateQty(i.item_id, e.target.value)}
+                                 className="w-20 px-2 py-1 border border-stone-200 rounded text-sm text-right font-mono"
+                                 data-testid={`forecast-qty-${i.item_id}`} />
+                          {extraQty > 0 && (
+                            <span className="text-[10px] text-amber-600 font-mono mt-0.5">+{extraQty} safety</span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-2 px-3 text-right font-mono text-stone-600">{fmt(i.washing_cost)}</td>
                       <td className="py-2 px-3 text-right font-mono font-bold text-stone-800">{fmt(line)}</td>
@@ -1301,7 +1361,7 @@ const ForecastTab = ({ pid, onCreated }) => {
               </tbody>
               <tfoot className="bg-stone-50 border-t-2 border-stone-200">
                 <tr>
-                  <td colSpan={5} className="py-2 px-3 text-right font-bold text-stone-700">Totals</td>
+                  <td colSpan={6} className="py-2 px-3 text-right font-bold text-stone-700">Totals</td>
                   <td className="py-2 px-3 text-center font-mono font-black text-fuchsia-700">{t.qty}</td>
                   <td></td>
                   <td className="py-2 px-3 text-right font-mono font-black text-stone-900">{fmt(t.cost)}</td>

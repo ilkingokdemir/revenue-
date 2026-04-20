@@ -671,8 +671,14 @@ JOB_HANDLERS["sync_queue_tick"] = _job_sync_queue_tick
 
 # Iter 163 — Channel Hub (configs, payload profiles, publish jobs,
 # price overrides, channel audit, benchmark cockpit)
-from routes.channel_hub import create_channel_hub_router
+from routes.channel_hub import create_channel_hub_router, nightly_dry_publish
 api_router.include_router(create_channel_hub_router(db, require_roles))
+
+# Wire the nightly dry-run publisher into the scheduler engine
+async def _job_nightly_dry_publish(property_id: str) -> dict:
+    return await nightly_dry_publish(db, property_id)
+
+JOB_HANDLERS["nightly_dry_publish"] = _job_nightly_dry_publish
 
 app.include_router(api_router)
 

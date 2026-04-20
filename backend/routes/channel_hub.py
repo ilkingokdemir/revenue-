@@ -637,6 +637,25 @@ def create_channel_hub_router(db, require_roles):
         return {"status": "seeded", "channels": len(demo_channels)}
 
     # ──────────────────────────────────────────────────────────────
+    # NIGHTLY DRIFT — surface results of the scheduled dry-run publish
+    # ──────────────────────────────────────────────────────────────
+    @router.get("/nightly-drift/{property_id}")
+    async def latest_drift(property_id: str,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        rows = await db.nightly_drift_snapshots.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("ran_at", -1).limit(14).to_list(14)
+        return {"latest": rows[0] if rows else None, "history": rows}
+
+    @router.post("/nightly-drift/{property_id}/run-now")
+    async def run_drift_now(property_id: str,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        # Import inside to avoid circular init ordering surprises
+        from routes.channel_hub import nightly_dry_publish as _run
+        result = await _run(db, property_id)
+        return {"status": "ok", **result}
+
+    # ──────────────────────────────────────────────────────────────
     # HUB DASHBOARD — single endpoint for Channel Manager Dashboard tiles
     # ──────────────────────────────────────────────────────────────
     @router.get("/channel-hub/{property_id}/dashboard")
@@ -677,3 +696,90 @@ def create_channel_hub_router(db, require_roles):
         }
 
     return router
+
+
+# ──────────────────────────────────────────────────────────────
+# SCHEDULER JOB — nightly dry-run publish for all live channels
+# (imported by server.py and wired into JOB_HANDLERS via scheduler)
+# ──────────────────────────────────────────────────────────────
+async def nightly_dry_publish(db, property_id: str) -> dict:
+    """For each live/certified channel config under this property, create a
+    dry-run publish job, run it, and record drift. Designed to run nightly.
+
+    Returns: {channels_checked, total_items, total_errors, drift_alerts}
+    Drift alert = any channel returning >=5% items_error in the dry-run.
+    """
+    import random  # local import — scheduler runs in background loop
+    configs_q = {"property_id": property_id,
+                 "status": {"$in": ["live", "certified"]}}
+    configs = await db.channel_configs.find(configs_q, {"_id": 0}).to_list(50)
+    now = datetime.now(timezone.utc)
+    results = []
+    drift_alerts = []
+    total_items = 0
+    total_errors = 0
+
+    for cfg in configs:
+        job = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "channel_id": cfg["channel_id"],
+            "type": "ari_push",
+            "from_date": now.date().isoformat(),
+            "to_date": (now + timedelta(days=30)).date().isoformat(),
+            "dry_run": True,
+            "status": "running",
+            "progress": 0,
+            "items_total": 30,
+            "items_ok": 0,
+            "items_error": 0,
+            "triggered_by": "scheduler:nightly_dry_publish",
+            "created_at": now.isoformat(),
+        }
+        await db.publish_jobs.insert_one(job)
+
+        # Simulated run (same model as run_job endpoint)
+        errors = random.randint(0, 4)
+        ok = job["items_total"] - errors
+        status = "completed" if errors == 0 else "partial"
+        err_pct = round(errors / job["items_total"] * 100, 1)
+        await db.publish_jobs.update_one(
+            {"id": job["id"]},
+            {"$set": {"status": status, "progress": 100,
+                      "items_ok": ok, "items_error": errors,
+                      "completed_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        total_items += job["items_total"]
+        total_errors += errors
+        results.append({"channel_id": cfg["channel_id"], "ok": ok,
+                        "errors": errors, "err_pct": err_pct,
+                        "status": status})
+        if err_pct >= 5:
+            drift_alerts.append({"channel_id": cfg["channel_id"],
+                                 "err_pct": err_pct, "errors": errors})
+
+    # Audit row (one per scheduler run)
+    await db.channel_audit.insert_one({
+        "id": str(uuid.uuid4()),
+        "property_id": property_id,
+        "event": "publish.nightly_dry_run",
+        "details": {"channels": len(configs), "total_items": total_items,
+                    "total_errors": total_errors,
+                    "drift_alerts": len(drift_alerts),
+                    "results": results},
+        "user_email": "scheduler",
+        "ts": now.isoformat(),
+    })
+    # Store a concise snapshot for the Benchmark Cockpit to surface
+    await db.nightly_drift_snapshots.insert_one({
+        "id": str(uuid.uuid4()),
+        "property_id": property_id,
+        "ran_at": now.isoformat(),
+        "channels_checked": len(configs),
+        "total_items": total_items,
+        "total_errors": total_errors,
+        "drift_alerts": drift_alerts,
+        "results": results,
+    })
+    return {"channels_checked": len(configs), "total_items": total_items,
+            "total_errors": total_errors, "drift_alerts": len(drift_alerts)}

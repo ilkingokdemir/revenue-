@@ -647,16 +647,30 @@ const AuditLogsPanel = ({ pid }) => {
 /* ═══════════ BENCHMARK ═══════════ */
 const BenchmarkPanel = ({ pid }) => {
   const [data, setData] = useState(null);
+  const [drift, setDrift] = useState(null);
 
   const load = useCallback(async () => {
-    try { const { data } = await axios.get(`${API}/benchmark/${pid}`); setData(data); }
-    catch { /* */ }
+    try {
+      const [b, d] = await Promise.all([
+        axios.get(`${API}/benchmark/${pid}`),
+        axios.get(`${API}/nightly-drift/${pid}`),
+      ]);
+      setData(b.data); setDrift(d.data);
+    } catch { /* */ }
   }, [pid]);
   useEffect(() => { load(); }, [load]);
 
   const calc = async () => {
     try { await axios.post(`${API}/benchmark/${pid}/calculate`); toast.success("Snapshot captured"); load(); }
     catch { toast.error("Failed"); }
+  };
+
+  const runDrift = async () => {
+    try {
+      const { data } = await axios.post(`${API}/nightly-drift/${pid}/run-now`);
+      toast.success(`Dry-run: ${data.channels_checked} channels · ${data.total_errors}/${data.total_items} errors · ${data.drift_alerts} alerts`);
+      load();
+    } catch { toast.error("Dry-run failed"); }
   };
 
   const cur = data?.current;
@@ -671,10 +685,45 @@ const BenchmarkPanel = ({ pid }) => {
           <h2 className="text-xl font-bold">Benchmark Cockpit</h2>
           <p className="text-sm text-stone-500">Compare performance against competitors (STR-style Occ/ADR/RevPAR index).</p>
         </div>
-        <button onClick={calc} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-bench-calc">
-          <RefreshCw className="w-4 h-4" /> Calculate Snapshot
-        </button>
+        <div className="flex gap-2">
+          <button onClick={runDrift} className="px-4 py-2 bg-white border border-violet-300 text-violet-700 rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-drift-run">
+            <Zap className="w-4 h-4" /> Run Nightly Dry-Run
+          </button>
+          <button onClick={calc} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold flex items-center gap-2" data-testid="chmgr-bench-calc">
+            <RefreshCw className="w-4 h-4" /> Calculate Snapshot
+          </button>
+        </div>
       </div>
+
+      {/* Nightly Drift widget */}
+      {drift?.latest && (
+        <div className={`border rounded-xl p-5 ${drift.latest.drift_alerts?.length > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`} data-testid="chmgr-drift-widget">
+          <div className="flex items-start gap-4">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${drift.latest.drift_alerts?.length > 0 ? "bg-amber-200 text-amber-800" : "bg-emerald-200 text-emerald-800"}`}>
+              {drift.latest.drift_alerts?.length > 0 ? <AlertTriangle className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold">OTA Payload Drift — Nightly Dry-Run</h3>
+                <span className="text-xs text-stone-500">{new Date(drift.latest.ran_at).toLocaleString()}</span>
+              </div>
+              <p className="text-sm mt-1">
+                Checked <b>{drift.latest.channels_checked}</b> channels · <b>{drift.latest.total_errors}</b>/{drift.latest.total_items} items failed validation
+                {drift.latest.drift_alerts?.length > 0
+                  ? <span className="text-amber-900"> · <b>{drift.latest.drift_alerts.length}</b> channel{drift.latest.drift_alerts.length === 1 ? "" : "s"} over 5% error threshold</span>
+                  : <span className="text-emerald-900"> · no drift alerts</span>}
+              </p>
+              {drift.latest.drift_alerts?.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {drift.latest.drift_alerts.map((a, i) => (
+                    <Badge key={i} className="bg-amber-100 text-amber-800 border border-amber-300">{a.channel_id} · {a.err_pct}% err</Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[

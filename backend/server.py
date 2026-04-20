@@ -669,6 +669,11 @@ async def _job_sync_queue_tick(property_id: str) -> dict:
 
 JOB_HANDLERS["sync_queue_tick"] = _job_sync_queue_tick
 
+# Iter 163 — Channel Hub (configs, payload profiles, publish jobs,
+# price overrides, channel audit, benchmark cockpit)
+from routes.channel_hub import create_channel_hub_router
+api_router.include_router(create_channel_hub_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

@@ -37,6 +37,7 @@ import {
   ChannelRestrictionsPanel, ChannelInboundPanel, ChannelParityPanel, OtaHealthPanel,
   ChannelMappingsPanel, SyncQueuePanel,
 } from "./components/dashboard/ChannelManagerMvpPanels";
+import ChannelManagerHub from "./components/dashboard/ChannelManagerHub";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
@@ -2717,10 +2718,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "synclog", icon: ArrowsClockwise, name: t("nav.synclog"), testId: "sync-log-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
         { id: "channel-settings", icon: Gear, name: t("nav.channel_settings"), testId: "channel-settings-btn" },
+        { id: "chmgr-hub", icon: Lightning, name: "Channel Manager Hub", testId: "chmgr-hub-btn" },
         { id: "channel-restrictions", icon: Lock, name: "Channel Restrictions", testId: "channel-restrictions-btn" },
         { id: "channel-inbound", icon: Link, name: "Inbound Reservations", testId: "channel-inbound-btn" },
         { id: "channel-parity", icon: Scales, name: "Parity Monitor", testId: "channel-parity-btn" },
         { id: "ota-health", icon: Heart, name: "OTA Health", testId: "ota-health-btn" },
+        { id: "channel-map-matrix", icon: Buildings, name: "Channel Mappings", testId: "channel-map-matrix-btn" },
+        { id: "channel-sync-queue", icon: ArrowsClockwise, name: "Sync Queue", testId: "channel-sync-queue-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn" }] : []),
@@ -3551,6 +3555,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "channel-inbound" && <div className="p-6"><ChannelInboundPanel activePropertyId={activePropertyId} /></div>}
         {activeView === "channel-parity" && <div className="p-6"><ChannelParityPanel activePropertyId={activePropertyId} /></div>}
         {activeView === "ota-health" && <div className="p-6"><OtaHealthPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "channel-map-matrix" && <div className="p-6"><ChannelMappingsPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "channel-sync-queue" && <div className="p-6"><SyncQueuePanel activePropertyId={activePropertyId} /></div>}
+
+        {/* Iter 163 — Channel Manager Hub (Dashboard, Channels, Mappings, Rate Structure, Publish Jobs, Audit Logs, Benchmark, Profiles, Overrides) */}
+        {activeView === "chmgr-hub" && <ChannelManagerHub activePropertyId={activePropertyId} />}
+        {activeView?.startsWith?.("chmgr-hub:") && <ChannelManagerHub activePropertyId={activePropertyId} initialPanel={activeView.split(":")[1]} />}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

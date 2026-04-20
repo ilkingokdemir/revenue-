@@ -33,6 +33,9 @@ import {
   RevenueHealthPanel, IpAllowlistPanel, CardVaultPanel,
   DepositAutomationPanel,
 } from "./components/dashboard/CompetitorGapPanels";
+import {
+  ChannelRestrictionsPanel, ChannelInboundPanel, ChannelParityPanel,
+} from "./components/dashboard/ChannelManagerMvpPanels";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
@@ -204,6 +207,7 @@ import {
   Bug,
   Lock,
   CreditCard,
+  Scales,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2711,6 +2715,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "synclog", icon: ArrowsClockwise, name: t("nav.synclog"), testId: "sync-log-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
         { id: "channel-settings", icon: Gear, name: t("nav.channel_settings"), testId: "channel-settings-btn" },
+        { id: "channel-restrictions", icon: Lock, name: "Channel Restrictions", testId: "channel-restrictions-btn" },
+        { id: "channel-inbound", icon: Link, name: "Inbound Reservations", testId: "channel-inbound-btn" },
+        { id: "channel-parity", icon: Scales, name: "Parity Monitor", testId: "channel-parity-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn" }] : []),
@@ -3535,6 +3542,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "ip-allowlist" && <div className="p-6"><IpAllowlistPanel /></div>}
         {activeView === "card-vault" && <div className="p-6"><CardVaultPanel activePropertyId={activePropertyId} /></div>}
         {activeView === "deposit-automation" && <div className="p-6"><DepositAutomationPanel activePropertyId={activePropertyId} /></div>}
+
+        {/* Iter 160 — Channel Manager MVP */}
+        {activeView === "channel-restrictions" && <div className="p-6"><ChannelRestrictionsPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "channel-inbound" && <div className="p-6"><ChannelInboundPanel activePropertyId={activePropertyId} /></div>}
+        {activeView === "channel-parity" && <div className="p-6"><ChannelParityPanel activePropertyId={activePropertyId} /></div>}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

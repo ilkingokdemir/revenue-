@@ -642,6 +642,16 @@ async def _start_scheduler():
     import asyncio as _asyncio
     _asyncio.create_task(scheduler_loop(db, JOB_HANDLERS))
 
+# Iter 160 — Channel Manager MVP (restrictions + inbound + parity)
+from routes.channel_restrictions import create_channel_restrictions_router
+api_router.include_router(create_channel_restrictions_router(db, require_roles))
+
+from routes.channel_inbound import create_channel_inbound_router
+api_router.include_router(create_channel_inbound_router(db, require_roles))
+
+from routes.channel_parity import create_channel_parity_router
+api_router.include_router(create_channel_parity_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

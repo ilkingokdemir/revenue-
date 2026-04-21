@@ -78,6 +78,7 @@ const M_I18N = {
     deptRec: "Reception", deptMgmt: "Management", deptKitch: "Kitchen",
     unassigned: "Unassigned", assignTo: "Assign to...",
     issueCreated: "Issue reported!", issueFailed: "Failed to create",
+    reportedBy: "Reported by", resolvedBy: "Resolved by", onDate: "on",
   },
   tr: {
     flag: "🇹🇷",
@@ -100,6 +101,7 @@ const M_I18N = {
     deptRec: "Resepsiyon", deptMgmt: "Yönetim", deptKitch: "Mutfak",
     unassigned: "Atanmadı", assignTo: "Atama yap...",
     issueCreated: "Arıza kaydedildi!", issueFailed: "Kayıt başarısız",
+    reportedBy: "Rapor eden", resolvedBy: "Çözen", onDate: "·",
   },
 };
 const useMLang = () => {
@@ -395,6 +397,17 @@ function IssueCard({ issue, L, onClick, onStatusChange }) {
     nextStatus === "verified" ? (L?.actVerify || "Verify") :
     nextStatus === "closed" ? (L?.actClose || "Close") : null;
 
+  // Format datetime for display
+  const fmtDT = (iso) => {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso);
+      const datePart = d.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+      const timePart = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+      return `${datePart} ${timePart}`;
+    } catch { return iso.slice(0, 16).replace("T", " "); }
+  };
+
   return (
     <div className="bg-white rounded-lg border border-stone-200/80 p-3 hover:shadow-sm transition cursor-pointer" onClick={onClick} data-testid={`kanban-card-${issue.id}`}>
       <div className="flex items-start justify-between mb-1.5">
@@ -403,12 +416,32 @@ function IssueCard({ issue, L, onClick, onStatusChange }) {
       </div>
       <p className="text-sm font-semibold text-stone-800 mb-0.5 line-clamp-1">{issue.title || "Untitled"}</p>
       <p className="text-[10px] text-stone-400 mb-2 line-clamp-2">{issue.description?.slice(0, 80)}</p>
+
       {issue.asset_name && <p className="text-[10px] text-violet-600 mb-1 flex items-center gap-1"><Package size={9} /> {issue.asset_name}</p>}
-      {issue.resolved_at && issue.duration_hours != null && (
-        <p className="text-[10px] text-emerald-700 mb-1 flex items-center gap-1">
-          <CheckCircle size={10} /> {issue.resolved_by || "—"} · {issue.duration_hours}h
-        </p>
+
+      {/* Reported by + when */}
+      {issue.reported_by && (
+        <div className="text-[10px] text-stone-500 mb-1 flex items-start gap-1">
+          <User size={9} className="mt-0.5 shrink-0" />
+          <span className="leading-tight">
+            <b className="text-stone-700">{L?.reportedBy || "Reported by"}:</b> {issue.reported_by}
+            {issue.created_at && <span className="text-stone-400"> · {fmtDT(issue.created_at)}</span>}
+          </span>
+        </div>
       )}
+
+      {/* Resolved by + when + duration */}
+      {issue.resolved_at && (
+        <div className="text-[10px] text-emerald-700 mb-1 flex items-start gap-1">
+          <CheckCircle size={10} className="mt-0.5 shrink-0" />
+          <span className="leading-tight">
+            <b>{L?.resolvedBy || "Resolved by"}:</b> {issue.resolved_by || "—"}
+            <span className="text-emerald-600"> · {fmtDT(issue.resolved_at)}</span>
+            {issue.duration_hours != null && <span className="text-emerald-600 font-mono"> · {issue.duration_hours}h</span>}
+          </span>
+        </div>
+      )}
+
       {issue.assigned_department && !issue.resolved_at && (
         <p className="text-[10px] text-stone-500 mb-1 flex items-center gap-1">
           <User size={9} /> {issue.assigned_department} {issue.assigned_to ? `· ${issue.assigned_to}` : ""}

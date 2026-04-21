@@ -204,9 +204,9 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
               <Timer size={12} /> {L.checkSla}
             </button>
             <button onClick={() => setShowCreate(true)}
-              className="px-3 py-1.5 bg-orange-500 text-white text-xs md:text-sm font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-1"
+              className="px-3 py-1.5 bg-orange-500 text-white text-xs md:text-sm font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-1 shadow-md"
               data-testid="btn-new-issue">
-              <Plus size={13} weight="bold" /> <span className="hidden sm:inline">{L.reportIssue}</span>
+              <Plus size={13} weight="bold" /> {L.reportIssue}
             </button>
           </div>
         </div>

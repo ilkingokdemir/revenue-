@@ -294,22 +294,22 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
 
           {/* Kanban View */}
           {view === "kanban" && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="kanban-board">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="kanban-board">
               {KANBAN_COLUMNS.map(col => {
                 const colIssues = filtered.filter(i => col.statuses.includes(i.status));
                 return (
-                  <div key={col.id} className="bg-stone-50 rounded-xl p-3" data-testid={`kanban-col-${col.id}`}>
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-xs font-bold text-stone-600 uppercase tracking-wide">
+                  <div key={col.id} className="bg-stone-50/70 rounded-xl p-2.5 border border-stone-100" data-testid={`kanban-col-${col.id}`}>
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <h3 className="text-[10px] font-bold text-stone-600 uppercase tracking-wider">
                         {col.id === "open" ? L.colOpen : col.id === "working" ? L.colInProgress : col.id === "resolved" ? L.colResolved : L.colVerifiedClosed}
                       </h3>
-                      <span className="text-[10px] font-bold text-stone-400 bg-stone-200 px-1.5 py-0.5 rounded-full">{colIssues.length}</span>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${col.id === "open" ? "bg-red-100 text-red-700" : col.id === "working" ? "bg-amber-100 text-amber-700" : col.id === "resolved" ? "bg-emerald-100 text-emerald-700" : "bg-teal-100 text-teal-700"}`}>{colIssues.length}</span>
                     </div>
-                    <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                    <div className="space-y-1.5 max-h-[60vh] overflow-y-auto pr-0.5">
                       {colIssues.map(issue => (
                         <IssueCard key={issue.id} issue={issue} L={L} onClick={() => setSelectedIssue(issue)} onStatusChange={updateStatus} />
                       ))}
-                      {colIssues.length === 0 && <p className="text-xs text-stone-400 text-center py-6">—</p>}
+                      {colIssues.length === 0 && <p className="text-[10px] text-stone-300 text-center py-4 italic">—</p>}
                     </div>
                   </div>
                 );
@@ -381,7 +381,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   );
 }
 
-/* ==================== ISSUE CARD (Kanban) ==================== */
+/* ==================== ISSUE CARD (Kanban) — Compact Modern ==================== */
 function IssueCard({ issue, L, onClick, onStatusChange }) {
   const pri = PRIORITY_CONFIG[issue.priority] || PRIORITY_CONFIG.medium;
   const nextStatus =
@@ -397,70 +397,99 @@ function IssueCard({ issue, L, onClick, onStatusChange }) {
     nextStatus === "verified" ? (L?.actVerify || "Verify") :
     nextStatus === "closed" ? (L?.actClose || "Close") : null;
 
-  // Format datetime for display
-  const fmtDT = (iso) => {
+  const fmtShort = (iso) => {
     if (!iso) return "";
     try {
       const d = new Date(iso);
-      const datePart = d.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
-      const timePart = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-      return `${datePart} ${timePart}`;
-    } catch { return iso.slice(0, 16).replace("T", " "); }
+      return d.toLocaleDateString(undefined, { day: "2-digit", month: "short" }) + " · " +
+             d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    } catch { return iso.slice(5, 16).replace("T", " "); }
   };
+  const cat = CATEGORY_CONFIG[issue.category] || CATEGORY_CONFIG.general;
+  const resolved = !!issue.resolved_at;
+  const hasOverride = issue.priority_override > 0;
 
   return (
-    <div className="bg-white rounded-lg border border-stone-200/80 p-3 hover:shadow-sm transition cursor-pointer" onClick={onClick} data-testid={`kanban-card-${issue.id}`}>
-      <div className="flex items-start justify-between mb-1.5">
-        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${pri.color}`}>{pri.label}</span>
-        {issue.sla_breached && <span className="text-[9px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">SLA BREACH</span>}
-      </div>
-      <p className="text-sm font-semibold text-stone-800 mb-0.5 line-clamp-1">{issue.title || "Untitled"}</p>
-      <p className="text-[10px] text-stone-400 mb-2 line-clamp-2">{issue.description?.slice(0, 80)}</p>
-
-      {issue.asset_name && <p className="text-[10px] text-violet-600 mb-1 flex items-center gap-1"><Package size={9} /> {issue.asset_name}</p>}
-
-      {/* Reported by + when */}
-      {issue.reported_by && (
-        <div className="text-[10px] text-stone-500 mb-1 flex items-start gap-1">
-          <User size={9} className="mt-0.5 shrink-0" />
-          <span className="leading-tight">
-            <b className="text-stone-700">{L?.reportedBy || "Reported by"}:</b> {issue.reported_by}
-            {issue.created_at && <span className="text-stone-400"> · {fmtDT(issue.created_at)}</span>}
-          </span>
-        </div>
-      )}
-
-      {/* Resolved by + when + duration */}
-      {issue.resolved_at && (
-        <div className="text-[10px] text-emerald-700 mb-1 flex items-start gap-1">
-          <CheckCircle size={10} className="mt-0.5 shrink-0" />
-          <span className="leading-tight">
-            <b>{L?.resolvedBy || "Resolved by"}:</b> {issue.resolved_by || "—"}
-            <span className="text-emerald-600"> · {fmtDT(issue.resolved_at)}</span>
-            {issue.duration_hours != null && <span className="text-emerald-600 font-mono"> · {issue.duration_hours}h</span>}
-          </span>
-        </div>
-      )}
-
-      {issue.assigned_department && !issue.resolved_at && (
-        <p className="text-[10px] text-stone-500 mb-1 flex items-center gap-1">
-          <User size={9} /> {issue.assigned_department} {issue.assigned_to ? `· ${issue.assigned_to}` : ""}
-        </p>
-      )}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-[10px] text-stone-500">
-          <span>{CATEGORY_CONFIG[issue.category]?.icon || "🔨"}</span>
-          <span>{issue.location || issue.room_number || "—"}</span>
-          {issue.photos?.length > 0 && <span className="flex items-center gap-0.5"><Camera size={10} /> {issue.photos.length}</span>}
-          {((issue.photos_before?.length || 0) + (issue.photos_after?.length || 0)) > 0 && <span className="flex items-center gap-0.5"><Camera size={10} /> {(issue.photos_before?.length || 0) + (issue.photos_after?.length || 0)}</span>}
-          {issue.comments?.length > 0 && <span className="flex items-center gap-0.5"><ChatText size={10} /> {issue.comments.length}</span>}
-        </div>
+    <div className={`group relative bg-white rounded-lg border-l-[3px] ${pri.color.includes("red-600") ? "border-l-red-500" : pri.color.includes("orange") ? "border-l-orange-500" : pri.color.includes("amber-100") ? "border-l-amber-400" : "border-l-stone-300"} border-y border-r border-stone-200/70 p-2.5 hover:shadow-md hover:border-stone-300 transition-all cursor-pointer`}
+         onClick={onClick} data-testid={`kanban-card-${issue.id}`}>
+      {/* Top line: category icon + title + priority chip + advance button */}
+      <div className="flex items-start gap-1.5 mb-1">
+        <span className="text-sm leading-none shrink-0 mt-0.5" title={cat.label}>{cat.icon}</span>
+        <p className="text-[13px] font-semibold text-stone-800 leading-tight line-clamp-2 flex-1">{issue.title || "Untitled"}</p>
         {nextStatus && (
-          <button onClick={(e) => { e.stopPropagation(); onStatusChange(issue, nextStatus); }} className="text-[9px] px-2 py-1 bg-orange-500 text-white rounded font-bold hover:bg-orange-600 transition" data-testid={`btn-advance-${issue.id}`}>
-            {nextLabel}
-          </button>
+          <button onClick={(e) => { e.stopPropagation(); onStatusChange(issue, nextStatus); }}
+            className="opacity-0 group-hover:opacity-100 transition shrink-0 text-[9px] px-1.5 py-0.5 bg-orange-500 hover:bg-orange-600 text-white rounded font-bold"
+            data-testid={`btn-advance-${issue.id}`}>{nextLabel}</button>
         )}
       </div>
+
+      {/* Badges line */}
+      <div className="flex items-center gap-1 mb-1.5 flex-wrap">
+        <span className={`text-[8.5px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${pri.color}`}>{pri.label}</span>
+        {hasOverride && (
+          <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700" title="Priority Override">
+            ★{issue.priority_override}
+          </span>
+        )}
+        {issue.sla_breached && !resolved && (
+          <span className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-600 animate-pulse">SLA</span>
+        )}
+        {issue.room_number && (
+          <span className="text-[8.5px] font-mono px-1.5 py-0.5 rounded bg-stone-100 text-stone-600">#{issue.room_number}</span>
+        )}
+      </div>
+
+      {/* Asset chip */}
+      {issue.asset_name && (
+        <div className="text-[10px] text-violet-700 bg-violet-50 rounded px-1.5 py-0.5 mb-1.5 flex items-center gap-1 w-fit max-w-full">
+          <Package size={9} className="shrink-0" />
+          <span className="truncate">{issue.asset_name}</span>
+        </div>
+      )}
+
+      {/* Footer: reporter + resolver in compact pills */}
+      <div className="space-y-1 pt-1.5 border-t border-stone-100/80">
+        {issue.reported_by && (
+          <div className="flex items-center gap-1 text-[10px] text-stone-500">
+            <User size={9} className="text-stone-400 shrink-0" />
+            <span className="font-semibold text-stone-700 truncate max-w-[100px]">{issue.reported_by}</span>
+            {issue.created_at && <span className="text-stone-400 ml-auto font-mono tabular-nums shrink-0">{fmtShort(issue.created_at)}</span>}
+          </div>
+        )}
+        {resolved && (
+          <div className="flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50/60 -mx-2.5 -mb-2.5 px-2.5 py-1.5 mt-1.5 rounded-b-lg">
+            <CheckCircle size={10} className="text-emerald-500 shrink-0" weight="fill" />
+            <span className="font-semibold truncate max-w-[90px]">{issue.resolved_by || "—"}</span>
+            {issue.resolved_at && <span className="text-emerald-600 font-mono tabular-nums">{fmtShort(issue.resolved_at)}</span>}
+            {issue.duration_hours != null && (
+              <span className="ml-auto font-mono font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[9px] shrink-0">
+                {issue.duration_hours}h
+              </span>
+            )}
+          </div>
+        )}
+        {!resolved && issue.assigned_to && (
+          <div className="flex items-center gap-1 text-[10px] text-stone-600">
+            <Wrench size={9} className="text-stone-400 shrink-0" />
+            <span className="truncate">{issue.assigned_to}</span>
+            {issue.assigned_department && (
+              <span className="ml-auto text-[9px] bg-stone-100 text-stone-500 px-1 py-0.5 rounded uppercase tracking-wide shrink-0">
+                {issue.assigned_department.slice(0, 4)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Tiny icon row: photos, comments */}
+      {((issue.photos?.length || 0) + (issue.photos_before?.length || 0) + (issue.photos_after?.length || 0) + (issue.comments?.length || 0)) > 0 && (
+        <div className="flex items-center gap-2 text-[9px] text-stone-400 mt-1.5 pt-1.5 border-t border-stone-100/80">
+          {((issue.photos_before?.length || 0) + (issue.photos_after?.length || 0) + (issue.photos?.length || 0)) > 0 && (
+            <span className="flex items-center gap-0.5"><Camera size={9} /> {(issue.photos_before?.length || 0) + (issue.photos_after?.length || 0) + (issue.photos?.length || 0)}</span>
+          )}
+          {issue.comments?.length > 0 && <span className="flex items-center gap-0.5"><ChatText size={9} /> {issue.comments.length}</span>}
+        </div>
+      )}
     </div>
   );
 }

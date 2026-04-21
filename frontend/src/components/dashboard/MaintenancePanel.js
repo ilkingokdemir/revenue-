@@ -196,7 +196,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
                 <button key={code} onClick={() => setLang(code)}
                   className={`px-2 py-0.5 text-[10px] md:text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow-sm" : "text-stone-500"}`}
                   data-testid={`maint-lang-${code}`}>
-                  {code.toUpperCase()}
+                  {M_I18N[code].flag} {code.toUpperCase()}
                 </button>
               ))}
             </div>

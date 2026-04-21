@@ -89,6 +89,7 @@ import { PaymentsPanel } from "./components/dashboard/PaymentsPanel";
 import { SurveyPanel } from "./components/dashboard/SurveyPanel";
 import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
 import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
+import GlobalReportIssueFAB from "./components/dashboard/GlobalReportIssueFAB";
 import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
 import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
 import { ScheduledReports } from "./components/dashboard/ScheduledReports";
@@ -3625,6 +3626,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       )}
 
       <Toaster position="top-right" richColors />
+
+      {/* Global "Report Maintenance Issue" FAB — available to ALL departments */}
+      <GlobalReportIssueFAB propertyId={activePropertyId} currentUser={user} />
     </div>
   );
 };

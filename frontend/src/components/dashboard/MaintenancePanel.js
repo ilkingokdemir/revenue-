@@ -182,83 +182,89 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   };
 
   return (
-    <div className="p-6 space-y-5" data-testid="maintenance-panel">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-stone-800" data-testid="maintenance-title">{L.title}</h1>
-          <p className="text-sm text-stone-500 mt-0.5">{L.subtitle}</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Language toggle */}
-          <div className="flex gap-1 bg-stone-100 rounded-lg p-1" data-testid="maint-lang-toggle">
-            {Object.keys(M_I18N).map(code => (
-              <button key={code} onClick={() => setLang(code)}
-                className={`px-2.5 py-1 text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow" : "text-stone-500 hover:text-stone-700"}`}
-                data-testid={`maint-lang-${code}`}>
-                {M_I18N[code].flag} {code.toUpperCase()}
-              </button>
-            ))}
+    <div className="p-3 md:p-6 space-y-3 md:space-y-4 max-w-[1600px] mx-auto" data-testid="maintenance-panel">
+      {/* Sticky compact header */}
+      <div className="sticky top-0 z-20 -mx-3 md:mx-0 px-3 md:px-0 py-2 md:py-0 bg-white/95 backdrop-blur md:bg-transparent md:backdrop-blur-none border-b border-stone-100 md:border-0">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg md:text-2xl font-bold text-stone-800 leading-tight truncate" data-testid="maintenance-title">{L.title}</h1>
+            <p className="hidden md:block text-sm text-stone-500 mt-0.5">{L.subtitle}</p>
           </div>
-          <button onClick={() => { axios.post(`${API}/maintenance/check-sla/${activePropertyId}`).then(() => { toast.success("SLA check complete"); fetchData(); }); }} className="px-3 py-2 text-xs font-medium text-stone-600 border border-stone-200 rounded-lg hover:bg-stone-50 transition flex items-center gap-1.5" data-testid="btn-check-sla">
-            <Timer size={14} /> {L.checkSla}
-          </button>
-          <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-1.5" data-testid="btn-new-issue">
-            <Plus size={14} weight="bold" /> {L.reportIssue}
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex gap-0.5 bg-stone-100 rounded-lg p-0.5" data-testid="maint-lang-toggle">
+              {Object.keys(M_I18N).map(code => (
+                <button key={code} onClick={() => setLang(code)}
+                  className={`px-2 py-0.5 text-[10px] md:text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow-sm" : "text-stone-500"}`}
+                  data-testid={`maint-lang-${code}`}>
+                  {code.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => { axios.post(`${API}/maintenance/check-sla/${activePropertyId}`).then(() => { toast.success("SLA check complete"); fetchData(); }); }}
+              className="hidden md:flex px-2.5 py-1.5 text-xs font-medium text-stone-600 border border-stone-200 rounded-lg hover:bg-stone-50 items-center gap-1" data-testid="btn-check-sla">
+              <Timer size={12} /> {L.checkSla}
+            </button>
+            <button onClick={() => setShowCreate(true)}
+              className="px-3 py-1.5 bg-orange-500 text-white text-xs md:text-sm font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-1"
+              data-testid="btn-new-issue">
+              <Plus size={13} weight="bold" /> <span className="hidden sm:inline">{L.reportIssue}</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-5 gap-3" data-testid="maintenance-stats">
+      {/* KPI cards — horizontal scroll on mobile, grid on desktop */}
+      <div className="flex md:grid md:grid-cols-5 gap-2 overflow-x-auto -mx-3 md:mx-0 px-3 md:px-0 pb-1 md:pb-0 snap-x" data-testid="maintenance-stats">
         {[
-          { label: L.kpiOpen, value: stats.open || 0, color: "bg-red-50 text-red-700", icon: <WarningCircle size={16} className="text-red-500" weight="fill" /> },
-          { label: L.kpiInProgress, value: stats.in_progress || 0, color: "bg-amber-50 text-amber-700", icon: <Wrench size={16} className="text-amber-500" weight="fill" /> },
-          { label: L.kpiResolved, value: stats.resolved || 0, color: "bg-emerald-50 text-emerald-700", icon: <CheckCircle size={16} className="text-emerald-500" weight="fill" /> },
-          { label: L.kpiOverdue, value: stats.overdue || 0, color: stats.overdue > 0 ? "bg-red-100 text-red-800" : "bg-stone-50 text-stone-600", icon: <Timer size={16} className={stats.overdue > 0 ? "text-red-600" : "text-stone-400"} weight="fill" /> },
-          { label: L.kpiCost, value: `£${(stats.costs?.total_actual || 0).toLocaleString()}`, color: "bg-blue-50 text-blue-700", icon: <CurrencyDollar size={16} className="text-blue-500" weight="fill" /> },
+          { label: L.kpiOpen, value: stats.open || 0, bg: "bg-red-50", tx: "text-red-700", accent: "text-red-500", icon: <WarningCircle size={14} weight="fill" /> },
+          { label: L.kpiInProgress, value: stats.in_progress || 0, bg: "bg-amber-50", tx: "text-amber-700", accent: "text-amber-500", icon: <Wrench size={14} weight="fill" /> },
+          { label: L.kpiResolved, value: stats.resolved || 0, bg: "bg-emerald-50", tx: "text-emerald-700", accent: "text-emerald-500", icon: <CheckCircle size={14} weight="fill" /> },
+          { label: L.kpiOverdue, value: stats.overdue || 0, bg: stats.overdue > 0 ? "bg-red-100" : "bg-stone-50", tx: stats.overdue > 0 ? "text-red-800" : "text-stone-600", accent: stats.overdue > 0 ? "text-red-600" : "text-stone-400", icon: <Timer size={14} weight="fill" /> },
+          { label: L.kpiCost, value: `£${(stats.costs?.total_actual || 0).toLocaleString()}`, bg: "bg-blue-50", tx: "text-blue-700", accent: "text-blue-500", icon: <CurrencyDollar size={14} weight="fill" /> },
         ].map((s, i) => (
-          <div key={i} className={`${s.color} rounded-xl p-3.5 flex items-center gap-2.5`} data-testid={`stat-${i}`}>
-            {s.icon}
-            <div>
-              <p className="text-xl font-bold">{s.value}</p>
-              <p className="text-[10px] font-medium opacity-70">{s.label}</p>
+          <div key={i} className={`${s.bg} rounded-lg md:rounded-xl p-2.5 md:p-3 flex items-center gap-2 shrink-0 snap-start min-w-[130px] md:min-w-0 ${s.tx}`} data-testid={`stat-${i}`}>
+            <div className={`${s.accent} shrink-0`}>{s.icon}</div>
+            <div className="min-w-0">
+              <p className="text-base md:text-lg font-black leading-none">{s.value}</p>
+              <p className="text-[9px] md:text-[10px] font-medium opacity-70 mt-1 truncate">{s.label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Tabs + View Toggle */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1 bg-stone-100 p-1 rounded-lg" data-testid="maint-tabs">
+      {/* Tabs + View Toggle — horizontal scroll on mobile */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-0.5 bg-stone-100 p-0.5 rounded-lg overflow-x-auto scrollbar-hide -mx-3 md:mx-0 px-3 md:px-0.5" data-testid="maint-tabs">
           {[
-            { id: "issues", label: L.tabIssues, icon: <Wrench size={13} /> },
-            { id: "assets", label: L.tabAssets, icon: <Package size={13} /> },
-            { id: "team", label: L.tabTeam, icon: <Lightning size={13} /> },
-            { id: "vendors", label: L.tabVendors, icon: <Lightning size={13} /> },
-            { id: "recurring", label: L.tabPreventive, icon: <Repeat size={13} /> },
-            { id: "analytics", label: L.tabAnalytics, icon: <Lightning size={13} /> },
+            { id: "issues", label: L.tabIssues, icon: <Wrench size={12} /> },
+            { id: "assets", label: L.tabAssets, icon: <Package size={12} /> },
+            { id: "team", label: L.tabTeam, icon: <Lightning size={12} /> },
+            { id: "vendors", label: L.tabVendors, icon: <Lightning size={12} /> },
+            { id: "recurring", label: L.tabPreventive, icon: <Repeat size={12} /> },
+            { id: "analytics", label: L.tabAnalytics, icon: <Lightning size={12} /> },
           ].map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition ${tab === t.id ? "bg-white shadow-sm text-stone-800" : "text-stone-500"}`} data-testid={`maint-tab-${t.id}`}>
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`px-2.5 py-1.5 text-[11px] md:text-xs font-medium rounded-md flex items-center gap-1 transition whitespace-nowrap shrink-0 ${tab === t.id ? "bg-white shadow-sm text-stone-800" : "text-stone-500"}`}
+              data-testid={`maint-tab-${t.id}`}>
               {t.icon} {t.label}
             </button>
           ))}
         </div>
         {tab === "issues" && (
-          <div className="flex gap-1 bg-stone-100 p-0.5 rounded-lg">
-            <button onClick={() => setView("kanban")} className={`p-1.5 rounded-md transition ${view === "kanban" ? "bg-white shadow-sm" : ""}`} data-testid="view-kanban"><LayoutGrid size={14} className="text-stone-600" /></button>
-            <button onClick={() => setView("table")} className={`p-1.5 rounded-md transition ${view === "table" ? "bg-white shadow-sm" : ""}`} data-testid="view-table"><List size={14} className="text-stone-600" /></button>
+          <div className="hidden md:flex gap-0.5 bg-stone-100 p-0.5 rounded-lg shrink-0">
+            <button onClick={() => setView("kanban")} className={`p-1.5 rounded-md transition ${view === "kanban" ? "bg-white shadow-sm" : ""}`} data-testid="view-kanban"><LayoutGrid size={13} className="text-stone-600" /></button>
+            <button onClick={() => setView("table")} className={`p-1.5 rounded-md transition ${view === "table" ? "bg-white shadow-sm" : ""}`} data-testid="view-table"><List size={13} className="text-stone-600" /></button>
           </div>
         )}
       </div>
 
       {tab === "issues" && (
         <>
-          {/* Filters */}
-          <div className="flex items-center gap-2 flex-wrap" data-testid="maint-filters">
-            <Input data-testid="maint-search" placeholder={L.search} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[200px] h-8 text-xs" />
+          {/* Filters — scrollable on mobile, toggle to hide */}
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide -mx-3 md:mx-0 px-3 md:px-0 pb-1" data-testid="maint-filters">
+            <Input data-testid="maint-search" placeholder={L.search} value={search} onChange={(e) => setSearch(e.target.value)} className="min-w-[160px] md:max-w-[200px] h-8 text-xs shrink-0" />
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[110px] h-8 text-xs shrink-0"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{L.allStatus}</SelectItem>
                 <SelectItem value="open">{L.stOpen}</SelectItem>
@@ -270,7 +276,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
               </SelectContent>
             </Select>
             <Select value={filterPriority} onValueChange={setFilterPriority}>
-              <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[100px] h-8 text-xs shrink-0"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{L.allPriority}</SelectItem>
                 <SelectItem value="critical">{L.priCritical}</SelectItem>
@@ -280,14 +286,14 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
               </SelectContent>
             </Select>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[120px] h-8 text-xs shrink-0"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{L.allCategory}</SelectItem>
                 {Object.entries(CATEGORY_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-              <SelectTrigger className="w-36 h-8 text-xs" data-testid="filter-department"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[130px] h-8 text-xs shrink-0" data-testid="filter-department"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{L.allDepts}</SelectItem>
                 <SelectItem value="maintenance">{L.deptMaint}</SelectItem>
@@ -297,12 +303,12 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
                 <SelectItem value="kitchen">{L.deptKitch}</SelectItem>
               </SelectContent>
             </Select>
-            <button onClick={fetchData} className="p-1.5 text-stone-400 hover:text-stone-600"><ArrowsClockwise size={14} /></button>
+            <button onClick={fetchData} className="p-1.5 text-stone-400 hover:text-stone-600 shrink-0"><ArrowsClockwise size={13} /></button>
           </div>
 
           {/* Kanban View */}
           {view === "kanban" && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="kanban-board">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-3" data-testid="kanban-board">
               {KANBAN_COLUMNS.map(col => {
                 const colIssues = filtered.filter(i => col.statuses.includes(i.status));
                 return (
@@ -328,15 +334,27 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
           {/* Table View */}
           {view === "table" && (
             <div className="bg-white rounded-xl border border-stone-200/60 overflow-hidden" data-testid="issues-table">
-              <div className="grid grid-cols-[1fr_90px_90px_120px_100px_80px_80px_80px] gap-2 px-4 py-2.5 bg-stone-50 text-[10px] font-semibold text-stone-500 uppercase tracking-wide border-b">
+              <div className="hidden md:grid grid-cols-[1fr_90px_90px_120px_100px_80px_80px_80px] gap-2 px-4 py-2.5 bg-stone-50 text-[10px] font-semibold text-stone-500 uppercase tracking-wide border-b">
                 <span>Issue</span><span>Priority</span><span>Category</span><span>Location</span><span>Status</span><span>SLA</span><span>Cost</span><span>Actions</span>
               </div>
-              <ScrollArea className="max-h-[45vh]">
+              <ScrollArea className="max-h-[60vh] md:max-h-[45vh]">
                 {filtered.length === 0 ? (
                   <div className="p-8 text-center text-stone-400 text-sm">No issues found</div>
-                ) : filtered.map(issue => (
-                  <div key={issue.id} className="grid grid-cols-[1fr_90px_90px_120px_100px_80px_80px_80px] gap-2 px-4 py-2.5 border-b border-stone-100 items-center hover:bg-stone-50/50 cursor-pointer" onClick={() => setSelectedIssue(issue)} data-testid={`issue-row-${issue.id}`}>
-                    <div>
+                ) : (
+                  <>
+                    {/* Mobile: IssueCard stack */}
+                    <div className="md:hidden divide-y divide-stone-100">
+                      {filtered.map(issue => (
+                        <div key={issue.id} className="p-2" onClick={() => setSelectedIssue(issue)}>
+                          <IssueCard issue={issue} L={L} onClick={() => setSelectedIssue(issue)} onStatusChange={updateStatus} />
+                        </div>
+                      ))}
+                    </div>
+                    {/* Desktop: grid table */}
+                    <div className="hidden md:block">
+                      {filtered.map(issue => (
+                        <div key={issue.id} className="grid grid-cols-[1fr_90px_90px_120px_100px_80px_80px_80px] gap-2 px-4 py-2.5 border-b border-stone-100 items-center hover:bg-stone-50/50 cursor-pointer" onClick={() => setSelectedIssue(issue)} data-testid={`issue-row-${issue.id}`}>
+                          <div>
                       <p className="text-sm font-medium text-stone-800 truncate">{issue.title || "Untitled"}</p>
                       <p className="text-[10px] text-stone-400 truncate">{issue.description?.slice(0, 50)}</p>
                     </div>
@@ -348,7 +366,10 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
                     <span className="text-xs text-stone-600">£{issue.actual_cost || 0}</span>
                     <button onClick={(e) => { e.stopPropagation(); setSelectedIssue(issue); }} className="p-1 text-stone-400 hover:text-stone-600"><Eye size={14} /></button>
                   </div>
-                ))}
+                      ))}
+                    </div>
+                  </>
+                )}
               </ScrollArea>
             </div>
           )}
@@ -714,7 +735,7 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], L, onUpdate }) {
   return (
     <AnimatePresence>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/40 flex items-center justify-end z-50" onClick={onClose}>
-        <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="bg-white h-full w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()} data-testid="issue-detail-drawer">
+        <motion.div initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 30, stiffness: 300 }} className="bg-white h-full w-full md:max-w-md shadow-xl" onClick={(e) => e.stopPropagation()} data-testid="issue-detail-drawer">
           <div className="p-4 border-b border-stone-100 flex items-center justify-between">
             <h3 className="font-semibold text-stone-800 text-sm truncate pr-4">{issue.title || "Issue Detail"}</h3>
             <button onClick={onClose} className="p-1.5 hover:bg-stone-100 rounded-lg"><X size={16} className="text-stone-400" /></button>

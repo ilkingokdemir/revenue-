@@ -79,6 +79,10 @@ const M_I18N = {
     unassigned: "Unassigned", assignTo: "Assign to...",
     issueCreated: "Issue reported!", issueFailed: "Failed to create",
     reportedBy: "Reported by", resolvedBy: "Resolved by", onDate: "on",
+    tlReported: "Reported", tlAcked: "Acknowledged", tlStarted: "Started",
+    tlResolved: "Resolved", tlVerified: "Verified", tlClosed: "Closed",
+    tlDuration: "Duration", tlTotalTime: "Total time", tlPending: "Pending",
+    tlNoActor: "—",
   },
   tr: {
     flag: "🇹🇷",
@@ -102,6 +106,10 @@ const M_I18N = {
     unassigned: "Atanmadı", assignTo: "Atama yap...",
     issueCreated: "Arıza kaydedildi!", issueFailed: "Kayıt başarısız",
     reportedBy: "Rapor eden", resolvedBy: "Çözen", onDate: "·",
+    tlReported: "Rapor Edildi", tlAcked: "Onaylandı", tlStarted: "Başlatıldı",
+    tlResolved: "Çözüldü", tlVerified: "Doğrulandı", tlClosed: "Kapandı",
+    tlDuration: "Süre", tlTotalTime: "Toplam süre", tlPending: "Beklemede",
+    tlNoActor: "—",
   },
 };
 const useMLang = () => {
@@ -376,7 +384,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
       <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} assignees={assignees} assets={assets} L={L} onCreated={() => { setShowCreate(false); fetchData(); }} />
 
       {/* Issue Detail Drawer */}
-      <IssueDetailDrawer issue={selectedIssue} onClose={() => setSelectedIssue(null)} assignees={assignees} onUpdate={() => { fetchData(); }} />
+      <IssueDetailDrawer issue={selectedIssue} onClose={() => setSelectedIssue(null)} assignees={assignees} L={L} onUpdate={() => { fetchData(); }} />
     </div>
   );
 }
@@ -630,7 +638,7 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets =
 }
 
 /* ==================== ISSUE DETAIL DRAWER ==================== */
-function IssueDetailDrawer({ issue, onClose, assignees = [], onUpdate }) {
+function IssueDetailDrawer({ issue, onClose, assignees = [], L, onUpdate }) {
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
   const [costForm, setCostForm] = useState({ estimated_cost: 0, actual_cost: 0, cost_notes: "" });
@@ -746,16 +754,8 @@ function IssueDetailDrawer({ issue, onClose, assignees = [], onUpdate }) {
               {/* INFO TAB */}
               {detailTab === "info" && (
                 <div className="space-y-4">
-                  {/* Who & When */}
-                  <div className="bg-orange-50 rounded-xl p-3 space-y-2 text-sm border border-orange-100">
-                    <div className="flex justify-between"><span className="text-orange-700/70">Reported by</span><span className="font-semibold text-orange-900">{issue.reported_by || "—"}</span></div>
-                    <div className="flex justify-between"><span className="text-orange-700/70">Reported at</span><span className="font-medium text-orange-800 text-xs">{issue.created_at ? new Date(issue.created_at).toLocaleString() : "—"}</span></div>
-                    {issue.acknowledged_by && <div className="flex justify-between"><span className="text-orange-700/70">Acknowledged by</span><span className="font-medium text-orange-800">{issue.acknowledged_by} <span className="text-[10px] text-orange-600">({issue.acknowledged_at ? new Date(issue.acknowledged_at).toLocaleString() : ""})</span></span></div>}
-                    {issue.started_by && <div className="flex justify-between"><span className="text-orange-700/70">Started by</span><span className="font-medium text-orange-800">{issue.started_by} <span className="text-[10px] text-orange-600">({issue.started_at ? new Date(issue.started_at).toLocaleString() : ""})</span></span></div>}
-                    {issue.resolved_by && <div className="flex justify-between"><span className="text-orange-700/70">Resolved by</span><span className="font-semibold text-emerald-700">{issue.resolved_by} <span className="text-[10px] text-emerald-600">({issue.resolved_at ? new Date(issue.resolved_at).toLocaleString() : ""})</span></span></div>}
-                    {issue.closed_by && <div className="flex justify-between"><span className="text-orange-700/70">Closed by</span><span className="font-medium text-stone-700">{issue.closed_by}</span></div>}
-                    {totalTime !== null && <div className="flex justify-between border-t border-orange-200 pt-1.5"><span className="text-orange-700/70">Resolution time</span><span className="font-bold text-orange-900">{totalTime < 1 ? "<1 hour" : `${totalTime} hours`}</span></div>}
-                  </div>
+                  {/* Visual Lifecycle Timeline */}
+                  <LifecycleTimeline issue={issue} L={L} />
 
                   {/* Details */}
                   <div className="bg-stone-50 rounded-xl p-3 space-y-2 text-sm">
@@ -1126,6 +1126,105 @@ function AnalyticsTab({ stats, issues, propertyId }) {
 }
 
 /* ==================== TEAM TAB ==================== */
+
+/* ==================== LIFECYCLE TIMELINE — visual step-by-step flow ==================== */
+function LifecycleTimeline({ issue, L }) {
+  const fmtDT = (iso) => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      return {
+        date: d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "2-digit" }),
+        time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      };
+    } catch { return null; }
+  };
+
+  const diffHuman = (fromIso, toIso) => {
+    if (!fromIso || !toIso) return null;
+    try {
+      const ms = new Date(toIso) - new Date(fromIso);
+      if (ms < 0) return null;
+      const mins = Math.floor(ms / 60000);
+      if (mins < 60) return `${mins}m`;
+      const hrs = mins / 60;
+      if (hrs < 24) return `${hrs.toFixed(1)}h`;
+      return `${(hrs / 24).toFixed(1)}d`;
+    } catch { return null; }
+  };
+
+  const steps = [
+    { key: "created", label: L?.tlReported || "Reported", at: issue.created_at, by: issue.reported_by,
+      icon: <Plus size={12} weight="bold" />, color: "bg-blue-500", ring: "ring-blue-100" },
+    { key: "acknowledged", label: L?.tlAcked || "Acknowledged", at: issue.acknowledged_at, by: issue.acknowledged_by,
+      icon: <Eye size={12} />, color: "bg-indigo-500", ring: "ring-indigo-100" },
+    { key: "started", label: L?.tlStarted || "Started", at: issue.started_at, by: issue.started_by || issue.assigned_to,
+      icon: <Wrench size={12} />, color: "bg-amber-500", ring: "ring-amber-100" },
+    { key: "resolved", label: L?.tlResolved || "Resolved", at: issue.resolved_at, by: issue.resolved_by,
+      icon: <CheckCircle size={12} weight="fill" />, color: "bg-emerald-500", ring: "ring-emerald-100" },
+    { key: "verified", label: L?.tlVerified || "Verified", at: issue.verified_at, by: issue.verified_by,
+      icon: <CheckCircle size={12} weight="fill" />, color: "bg-teal-500", ring: "ring-teal-100" },
+    { key: "closed", label: L?.tlClosed || "Closed", at: issue.closed_at, by: issue.closed_by,
+      icon: <X size={12} weight="bold" />, color: "bg-stone-500", ring: "ring-stone-100" },
+  ];
+
+  const firstIso = issue.created_at;
+  const lastIso = issue.closed_at || issue.verified_at || issue.resolved_at;
+  const totalDur = diffHuman(firstIso, lastIso);
+
+  return (
+    <div className="bg-gradient-to-br from-stone-50 to-white border border-stone-200 rounded-xl p-4" data-testid="lifecycle-timeline">
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-[11px] font-bold uppercase tracking-wider text-stone-600">Lifecycle</h4>
+        {totalDur && (
+          <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+            {L?.tlTotalTime || "Total"}: {totalDur}
+          </span>
+        )}
+      </div>
+      <div className="relative">
+        {/* Vertical line */}
+        <div className="absolute left-[13px] top-1 bottom-1 w-0.5 bg-gradient-to-b from-stone-200 via-stone-200 to-transparent" />
+        <div className="space-y-3">
+          {steps.map((s, idx) => {
+            const done = !!s.at;
+            const dt = fmtDT(s.at);
+            const prevIso = idx > 0 ? steps[idx - 1].at : null;
+            const dur = done && prevIso ? diffHuman(prevIso, s.at) : null;
+            if (!done && !(idx < steps.length && steps.slice(0, idx).every(x => x.at))) {
+              // hide future steps that haven't been reached (keep structure tidy)
+              const prevReached = idx === 0 || steps[idx - 1].at;
+              if (!prevReached) return null;
+            }
+            return (
+              <div key={s.key} className="flex items-start gap-3" data-testid={`timeline-step-${s.key}`}>
+                <div className={`relative z-10 w-[26px] h-[26px] rounded-full flex items-center justify-center text-white shrink-0 ring-4 ${done ? s.color + " " + s.ring : "bg-stone-200 ring-stone-100"} transition-all`}>
+                  {done ? s.icon : <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />}
+                </div>
+                <div className="flex-1 min-w-0 pt-0.5">
+                  <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                    <span className={`text-xs font-bold ${done ? "text-stone-800" : "text-stone-400"}`}>{s.label}</span>
+                    {dur && <span className="text-[9px] font-mono text-stone-400">+{dur}</span>}
+                  </div>
+                  {done ? (
+                    <div className="text-[10px] text-stone-500 flex items-center gap-2 flex-wrap mt-0.5">
+                      <span className="font-semibold text-stone-700">{s.by || L?.tlNoActor || "—"}</span>
+                      {dt && <span className="font-mono tabular-nums">{dt.date} · {dt.time}</span>}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] italic text-stone-400">{L?.tlPending || "Pending"}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function TeamTab({ propertyId, onRefresh }) {
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);

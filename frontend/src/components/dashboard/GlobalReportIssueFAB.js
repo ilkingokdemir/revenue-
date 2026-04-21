@@ -53,6 +53,9 @@ const CATEGORIES = [
   { key: "hvac", tr: "catHvac", icon: "❄️" },
   { key: "furniture", tr: "catFurn", icon: "🪑" },
   { key: "appliance", tr: "catAppl", icon: "🧊" },
+  { key: "structural", tr: "catStruc", icon: "🏗️" },
+  { key: "pest_control", tr: "catPest", icon: "🐛" },
+  { key: "it_network", tr: "catIt", icon: "📡" },
   { key: "safety", tr: "catSafe", icon: "🛡️" },
 ];
 

@@ -41,7 +41,6 @@ const CATEGORY_CONFIG = {
   furniture: { label: "Furniture", icon: "🪑" },
   appliance: { label: "Appliance", icon: "🔌" },
   structural: { label: "Structural", icon: "🏗️" },
-  cleaning: { label: "Cleaning", icon: "🧹" },
   pest_control: { label: "Pest Control", icon: "🐛" },
   safety: { label: "Safety", icon: "🛡️" },
   it_network: { label: "IT / Network", icon: "📡" },

@@ -1,6 +1,23 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 166 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
+
+### Iter 167 (Feb 2026): 📸 Maintenance Photo Upload + FAB multi-photo (housekeeper enabled)
+
+User request (TR): _"maintanence buttonu housekeerde ve digerlerinde dil secenegi olmali fotorafta ekleybilmeliler new maintenance requeste"_ — photo capability in the New Maintenance Request form for housekeeper + all other roles, with language options.
+
+**Backend** (`routes/maintenance.py`)
+- `POST /api/maintenance/upload-photo/{issue_id}` role list expanded from `admin/manager/receptionist` → added **`housekeeper`**. Previously housekeepers got 403 when trying to attach a photo to their own reported issue; now they can.
+
+**Frontend** (`components/dashboard/GlobalReportIssueFAB.js`)
+- Single-photo `photo` state replaced with **multi-photo `photos[]` array** (max 3).
+- Photo UI: grid of 80x80px thumbnails with per-image remove button (`fab-photo-remove-{i}`), counter header `Fotoğraflar (N/3)` / `Photos (N/3)`, "Add photo" tile disappears once 3 uploaded. Toast error when limit exceeded.
+- Submit loop uploads each photo via `POST /maintenance/upload-photo/{id}` with `photo_type=before` after issue creation (best-effort — one photo failure doesn't block others).
+- i18n dict extended with `photos` and `photoLimit` keys for both EN and TR.
+
+**MaintenancePanel.js** `CreateIssueDialog` already supported multi-photo upload from Iter 165 — verified still working and now unblocked for housekeepers by the backend role fix.
+
+**Testing agent iteration_167.json**: 100% backend (12/12), 95% frontend. Zero critical issues, zero action items. Verified Turkish labels (`Bakım Arızası Bildir`, `Fotoğraf ekle`, 0/3 counter), English labels, FAB visibility guard (only shows when a specific property is selected), and role-fix backend endpoint accepting housekeeper uploads with `photos_before` array correctly populated.
 
 ### Iter 166.13 (Feb 2026): 🗓️ Forecast honours contract dispatch days
 

@@ -2644,7 +2644,6 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       items: [
         { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
         { id: "maintenance", icon: Wrench, name: t("nav.maintenance"), testId: "maintenance-btn" },
-        { id: "preventive-maintenance", icon: Wrench, name: "Preventive Maintenance", testId: "preventive-maintenance-btn" },
         { id: "asset-register", icon: Package, name: "Asset Register", testId: "asset-register-btn" },
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
         { id: "laundry-settings", icon: TShirt, name: "Laundry Settings", testId: "laundry-settings-btn" },

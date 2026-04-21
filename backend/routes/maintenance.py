@@ -43,29 +43,47 @@ def create_maintenance_router(db, require_roles):
 
     @router.get("/maintenance/issues/{property_id}")
     async def list_issues(property_id: str, status: str = "", priority: str = "",
-                          category: str = "", assigned_to: str = "",
-                          current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+                          category: str = "", assigned_to: str = "", department: str = "",
+                          asset_id: str = "",
+                          current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
         query = {} if property_id == "all" else {"property_id": property_id}
         if status: query["status"] = status
         if priority: query["priority"] = priority
         if category: query["category"] = category
         if assigned_to: query["assigned_to"] = assigned_to
+        if department: query["assigned_department"] = department
+        if asset_id: query["asset_id"] = asset_id
         docs = await db.maintenance_issues.find(query, {"_id": 0}).sort("created_at", -1).to_list(300)
+        # Compute duration_hours for resolved issues (started_at → resolved_at)
+        for d in docs:
+            if d.get("resolved_at") and d.get("started_at"):
+                try:
+                    delta = datetime.fromisoformat(d["resolved_at"]) - datetime.fromisoformat(d["started_at"])
+                    d["duration_hours"] = round(delta.total_seconds() / 3600, 2)
+                except Exception:
+                    d["duration_hours"] = None
+            elif d.get("resolved_at") and d.get("created_at"):
+                try:
+                    delta = datetime.fromisoformat(d["resolved_at"]) - datetime.fromisoformat(d["created_at"])
+                    d["duration_hours"] = round(delta.total_seconds() / 3600, 2)
+                except Exception:
+                    d["duration_hours"] = None
         return docs
 
     @router.post("/maintenance/issues")
-    async def create_issue(data: Dict, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    async def create_issue(data: Dict, current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
         now = datetime.now(timezone.utc).isoformat()
         priority = data.get("priority", "medium")
         category = data.get("category", "general")
 
-        # Auto-assign department
-        dept = CATEGORY_DEPARTMENT.get(category, "maintenance")
+        # Auto-assign department (explicit override wins)
+        dept = data.get("assigned_department") or CATEGORY_DEPARTMENT.get(category, "maintenance")
 
         # Calculate SLA deadline
         sla_hours = SLA_TARGETS.get(priority, 24)
         sla_deadline = (datetime.now(timezone.utc) + timedelta(hours=sla_hours)).isoformat()
 
+        reporter_dept = current_user.get("department", "") or ""
         issue = {
             "id": str(uuid.uuid4()),
             "property_id": data.get("property_id", ""),
@@ -76,10 +94,14 @@ def create_maintenance_router(db, require_roles):
             "status": "open",
             "location": data.get("location", ""),
             "room_number": data.get("room_number", ""),
+            "room_id": data.get("room_id", ""),
+            "asset_id": data.get("asset_id", ""),
+            "asset_name": data.get("asset_name", ""),
             "assigned_to": data.get("assigned_to", ""),
             "assigned_department": dept,
             "reported_by": current_user.get("name", current_user.get("email", "Staff")),
             "reported_by_email": current_user.get("email", ""),
+            "reported_by_department": reporter_dept,
             "photos_before": data.get("photos_before", []),
             "photos_after": [],
             "estimated_cost": 0,
@@ -100,26 +122,82 @@ def create_maintenance_router(db, require_roles):
             "resolution_notes": "",
             "comments": [],
             "timeline": [
-                {"action": "created", "by": current_user.get("name", current_user.get("email", "Staff")), "at": now, "detail": f"Issue reported: {data.get('title', '')}"}
+                {"action": "created", "by": current_user.get("name", current_user.get("email", "Staff")),
+                 "at": now, "detail": f"Issue reported: {data.get('title', '')}",
+                 "department": reporter_dept}
             ],
             "recurring_id": "",
+            "room_blocked": False,
             "created_at": now,
             "updated_at": now,
         }
         await db.maintenance_issues.insert_one(issue)
         issue.pop("_id", None)
+
+        # Auto-block room if critical issue targets a specific room
+        if priority == "critical" and issue.get("room_id"):
+            try:
+                await db.rooms.update_one(
+                    {"id": issue["room_id"]},
+                    {"$set": {"status": "out_of_order",
+                              "ooo_reason": f"Maintenance #{issue['id'][:8]} · {issue['title']}",
+                              "ooo_issue_id": issue["id"],
+                              "ooo_since": now}}
+                )
+                await db.maintenance_issues.update_one({"id": issue["id"]}, {"$set": {"room_blocked": True}})
+                issue["room_blocked"] = True
+            except Exception as ex:
+                logger.warning(f"Room auto-block failed: {ex}")
         return issue
 
     @router.get("/maintenance/issues/detail/{issue_id}")
-    async def get_issue(issue_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    async def get_issue(issue_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
         doc = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
         if not doc:
             raise HTTPException(404, "Issue not found")
+        # duration
+        if doc.get("resolved_at") and doc.get("started_at"):
+            try:
+                delta = datetime.fromisoformat(doc["resolved_at"]) - datetime.fromisoformat(doc["started_at"])
+                doc["duration_hours"] = round(delta.total_seconds() / 3600, 2)
+            except Exception:
+                pass
         return doc
+
+    @router.get("/maintenance/issues/by-asset/{asset_id}")
+    async def list_issues_by_asset(asset_id: str,
+                                   current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
+        """Return full issue history for an asset — powers MTBF/MTTR analytics."""
+        docs = await db.maintenance_issues.find({"asset_id": asset_id}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        durations = []
+        resolved_count = 0
+        for d in docs:
+            if d.get("resolved_at") and d.get("started_at"):
+                try:
+                    delta = datetime.fromisoformat(d["resolved_at"]) - datetime.fromisoformat(d["started_at"])
+                    hrs = round(delta.total_seconds() / 3600, 2)
+                    d["duration_hours"] = hrs
+                    durations.append(hrs)
+                    resolved_count += 1
+                except Exception:
+                    pass
+        mttr = round(sum(durations) / len(durations), 2) if durations else None
+        # MTBF: avg days between consecutive issue created_at
+        sorted_dates = sorted([d["created_at"] for d in docs if d.get("created_at")])
+        gaps = []
+        for i in range(1, len(sorted_dates)):
+            try:
+                g = (datetime.fromisoformat(sorted_dates[i]) - datetime.fromisoformat(sorted_dates[i - 1])).total_seconds() / 86400
+                gaps.append(g)
+            except Exception:
+                pass
+        mtbf_days = round(sum(gaps) / len(gaps), 1) if gaps else None
+        return {"issues": docs, "count": len(docs), "resolved_count": resolved_count,
+                "mttr_hours": mttr, "mtbf_days": mtbf_days}
 
     @router.put("/maintenance/issues/{issue_id}")
     async def update_issue(issue_id: str, updates: Dict,
-                           current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+                           current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
         updates.pop("_id", None)
         updates.pop("id", None)
         now = datetime.now(timezone.utc).isoformat()
@@ -164,6 +242,26 @@ def create_maintenance_router(db, require_roles):
 
         await db.maintenance_issues.update_one({"id": issue_id}, {"$set": updates})
         doc = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
+
+        # Auto-unblock room when issue is resolved or closed
+        if new_status in ("resolved", "closed") and doc and doc.get("room_blocked") and doc.get("room_id"):
+            try:
+                await db.rooms.update_one(
+                    {"id": doc["room_id"], "ooo_issue_id": issue_id},
+                    {"$set": {"status": "dirty", "ooo_reason": "", "ooo_issue_id": "", "ooo_since": ""}}
+                )
+                await db.maintenance_issues.update_one({"id": issue_id}, {"$set": {"room_blocked": False}})
+                doc["room_blocked"] = False
+            except Exception as ex:
+                logger.warning(f"Room auto-unblock failed: {ex}")
+
+        # Compute duration if resolved
+        if doc.get("resolved_at") and doc.get("started_at"):
+            try:
+                delta = datetime.fromisoformat(doc["resolved_at"]) - datetime.fromisoformat(doc["started_at"])
+                doc["duration_hours"] = round(delta.total_seconds() / 3600, 2)
+            except Exception:
+                pass
         return doc
 
     @router.delete("/maintenance/issues/{issue_id}")
@@ -242,7 +340,7 @@ def create_maintenance_router(db, require_roles):
     # ==================== STATS & ANALYTICS ====================
 
     @router.get("/maintenance/stats/{property_id}")
-    async def get_stats(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+    async def get_stats(property_id: str, current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
         query = {} if property_id == "all" else {"property_id": property_id}
         total = await db.maintenance_issues.count_documents(query)
         open_q = {**query, "status": "open"}
@@ -267,6 +365,36 @@ def create_maintenance_router(db, require_roles):
         async for doc in db.maintenance_issues.aggregate(pipeline2):
             pri_breakdown[doc["_id"]] = doc["count"]
 
+        # Department breakdown + Workload by assignee
+        dept_pipeline = [{"$match": query}, {"$group": {"_id": "$assigned_department", "count": {"$sum": 1}}}]
+        dept_breakdown = {}
+        async for doc in db.maintenance_issues.aggregate(dept_pipeline):
+            dept_breakdown[doc["_id"] or "unassigned"] = doc["count"]
+
+        workload_pipeline = [
+            {"$match": {**query, "status": {"$nin": ["resolved", "closed"]}}},
+            {"$group": {"_id": "$assigned_to", "open": {"$sum": 1}}},
+            {"$sort": {"open": -1}}, {"$limit": 15},
+        ]
+        workload = []
+        async for doc in db.maintenance_issues.aggregate(workload_pipeline):
+            workload.append({"assignee": doc["_id"] or "Unassigned", "open": doc["open"]})
+
+        # MTTR — avg across all resolved issues
+        resolved_docs = await db.maintenance_issues.find(
+            {**query, "resolved_at": {"$ne": ""}, "started_at": {"$ne": ""}},
+            {"_id": 0, "resolved_at": 1, "started_at": 1}
+        ).to_list(1000)
+        durations = []
+        for d in resolved_docs:
+            try:
+                hrs = (datetime.fromisoformat(d["resolved_at"]) - datetime.fromisoformat(d["started_at"])).total_seconds() / 3600
+                if hrs >= 0:
+                    durations.append(hrs)
+            except Exception:
+                pass
+        mttr = round(sum(durations) / len(durations), 2) if durations else None
+
         # Total costs
         cost_pipeline = [{"$match": query}, {"$group": {"_id": None, "total_estimated": {"$sum": "$estimated_cost"}, "total_actual": {"$sum": "$actual_cost"}}}]
         cost_data = {"total_estimated": 0, "total_actual": 0}
@@ -277,6 +405,8 @@ def create_maintenance_router(db, require_roles):
             "total": total, "open": open_count, "in_progress": in_progress,
             "resolved": resolved, "overdue": overdue,
             "by_category": cat_breakdown, "by_priority": pri_breakdown,
+            "by_department": dept_breakdown, "workload": workload,
+            "mttr_hours": mttr,
             "costs": cost_data,
         }
 

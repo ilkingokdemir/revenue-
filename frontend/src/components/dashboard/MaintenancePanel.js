@@ -12,7 +12,7 @@ import {
   Wrench, CheckCircle, Clock, X, Eye, Plus, ArrowsClockwise, WarningCircle, Camera,
   ChatText, Timer, CurrencyDollar, CalendarBlank, Repeat, Lightning, Funnel,
 } from "@phosphor-icons/react";
-import { AlertTriangle, LayoutGrid, List, Send, ChevronRight, Upload, Trash2, MessageSquare } from "lucide-react";
+import { AlertTriangle, LayoutGrid, List, Send, ChevronRight, Upload, Trash2, MessageSquare, Package, QrCode, User, History } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -69,18 +69,22 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   const [search, setSearch] = useState("");
   const [recurring, setRecurring] = useState([]);
   const [assignees, setAssignees] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [filterDepartment, setFilterDepartment] = useState("all");
 
   const fetchData = useCallback(async () => {
     if (!activePropertyId) return;
     try {
-      const [issuesRes, statsRes, assigneesRes] = await Promise.all([
+      const [issuesRes, statsRes, assigneesRes, assetsRes] = await Promise.all([
         axios.get(`${API}/maintenance/issues/${activePropertyId}`),
         axios.get(`${API}/maintenance/stats/${activePropertyId}`),
         axios.get(`${API}/maintenance/assignees/${activePropertyId}`),
+        axios.get(`${API}/assets/${activePropertyId}`).catch(() => ({ data: [] })),
       ]);
       setIssues(issuesRes.data);
       setStats(statsRes.data);
       setAssignees(assigneesRes.data);
+      setAssets(assetsRes.data || []);
     } catch (e) { console.error(e); }
     setLoading(false);
   }, [activePropertyId]);
@@ -98,6 +102,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
     if (filterStatus !== "all" && i.status !== filterStatus) return false;
     if (filterPriority !== "all" && i.priority !== filterPriority) return false;
     if (filterCategory !== "all" && i.category !== filterCategory) return false;
+    if (filterDepartment !== "all" && (i.assigned_department || "") !== filterDepartment) return false;
     if (search && !i.title?.toLowerCase().includes(search.toLowerCase()) && !i.location?.toLowerCase().includes(search.toLowerCase()) && !i.room_number?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -152,6 +157,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
         <div className="flex gap-1 bg-stone-100 p-1 rounded-lg" data-testid="maint-tabs">
           {[
             { id: "issues", label: "Issues", icon: <Wrench size={13} /> },
+            { id: "assets", label: "Assets", icon: <Package size={13} /> },
             { id: "team", label: "Team", icon: <Lightning size={13} /> },
             { id: "vendors", label: "Vendors", icon: <Lightning size={13} /> },
             { id: "recurring", label: "Preventive", icon: <Repeat size={13} /> },
@@ -194,6 +200,17 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
               <SelectContent>
                 <SelectItem value="all">All Category</SelectItem>
                 {Object.entries(CATEGORY_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+              <SelectTrigger className="w-36 h-8 text-xs" data-testid="filter-department"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                <SelectItem value="maintenance">Maintenance</SelectItem>
+                <SelectItem value="housekeeping">Housekeeping</SelectItem>
+                <SelectItem value="reception">Reception</SelectItem>
+                <SelectItem value="management">Management</SelectItem>
+                <SelectItem value="kitchen">Kitchen</SelectItem>
               </SelectContent>
             </Select>
             <button onClick={fetchData} className="p-1.5 text-stone-400 hover:text-stone-600"><ArrowsClockwise size={14} /></button>
@@ -252,6 +269,11 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
         </>
       )}
 
+      {/* Assets Tab */}
+      {tab === "assets" && (
+        <AssetsTab assets={assets} issues={issues} propertyId={activePropertyId} onRefresh={fetchData} onSelectIssue={setSelectedIssue} />
+      )}
+
       {/* Team Tab */}
       {tab === "team" && (
         <TeamTab propertyId={activePropertyId} onRefresh={fetchData} />
@@ -273,7 +295,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
       )}
 
       {/* Create Issue Dialog */}
-      <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} assignees={assignees} onCreated={() => { setShowCreate(false); fetchData(); }} />
+      <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} assignees={assignees} assets={assets} onCreated={() => { setShowCreate(false); fetchData(); }} />
 
       {/* Issue Detail Drawer */}
       <IssueDetailDrawer issue={selectedIssue} onClose={() => setSelectedIssue(null)} assignees={assignees} onUpdate={() => { fetchData(); }} />
@@ -294,6 +316,17 @@ function IssueCard({ issue, onClick, onStatusChange }) {
       </div>
       <p className="text-sm font-semibold text-stone-800 mb-0.5 line-clamp-1">{issue.title || "Untitled"}</p>
       <p className="text-[10px] text-stone-400 mb-2 line-clamp-2">{issue.description?.slice(0, 80)}</p>
+      {issue.asset_name && <p className="text-[10px] text-violet-600 mb-1 flex items-center gap-1"><Package size={9} /> {issue.asset_name}</p>}
+      {issue.resolved_at && issue.duration_hours != null && (
+        <p className="text-[10px] text-emerald-700 mb-1 flex items-center gap-1">
+          <CheckCircle size={10} /> {issue.resolved_by || "—"} · {issue.duration_hours}h
+        </p>
+      )}
+      {issue.assigned_department && !issue.resolved_at && (
+        <p className="text-[10px] text-stone-500 mb-1 flex items-center gap-1">
+          <User size={9} /> {issue.assigned_department} {issue.assigned_to ? `· ${issue.assigned_to}` : ""}
+        </p>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-[10px] text-stone-500">
           <span>{CATEGORY_CONFIG[issue.category]?.icon || "🔨"}</span>
@@ -313,8 +346,8 @@ function IssueCard({ issue, onClick, onStatusChange }) {
 }
 
 /* ==================== CREATE ISSUE DIALOG ==================== */
-function CreateIssueDialog({ open, onClose, propertyId, assignees = [], onCreated }) {
-  const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "", assigned_to: "" });
+function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets = [], onCreated }) {
+  const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" });
   const [creating, setCreating] = useState(false);
   const [photos, setPhotos] = useState([]);
   const fileRef = useRef(null);
@@ -340,7 +373,7 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], onCreate
         fd.append("photo_type", "before");
         await axios.post(`${API}/maintenance/upload-photo/${data.id}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
       }
-      toast.success("Issue reported!"); setForm({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "", assigned_to: "" }); setPhotos([]); onCreated();
+      toast.success("Issue reported!"); setForm({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" }); setPhotos([]); onCreated();
     } catch { toast.error("Failed to create"); }
     setCreating(false);
   };
@@ -349,7 +382,7 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], onCreate
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg" data-testid="create-issue-dialog">
         <DialogHeader><DialogTitle>Report Maintenance Issue</DialogTitle></DialogHeader>
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+        <div className="space-y-3 max-h-[65vh] overflow-y-auto">
           <Input data-testid="issue-title" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Issue title *" />
           <div className="grid grid-cols-2 gap-3">
             <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
@@ -369,20 +402,46 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], onCreate
             <Input data-testid="issue-location" value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} placeholder="Location (e.g. Lobby)" />
             <Input data-testid="issue-room" value={form.room_number} onChange={e => setForm(p => ({ ...p, room_number: e.target.value }))} placeholder="Room number" />
           </div>
-          <Select value={form.assigned_to || "_unassigned"} onValueChange={v => setForm(p => ({ ...p, assigned_to: v === "_unassigned" ? "" : v }))}>
-            <SelectTrigger className="h-9 text-sm" data-testid="issue-assignee"><SelectValue placeholder="Assign to..." /></SelectTrigger>
+          {/* Asset linker */}
+          <Select value={form.asset_id || "_none"} onValueChange={v => {
+            const a = assets.find(x => x.id === v);
+            setForm(p => ({ ...p, asset_id: v === "_none" ? "" : v, asset_name: a?.name || "" }));
+          }}>
+            <SelectTrigger className="h-9 text-sm" data-testid="issue-asset"><SelectValue placeholder="Link to asset (optional)" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_unassigned">Unassigned</SelectItem>
-              {assignees.filter(a => a.type === "internal").length > 0 && <div className="px-2 py-1 text-[9px] font-bold text-stone-400 uppercase">Internal Team</div>}
-              {assignees.filter(a => a.type === "internal").map(a => (
-                <SelectItem key={a.name} value={a.name}>{a.name} ({a.open_issues} open)</SelectItem>
-              ))}
-              {assignees.filter(a => a.type === "external").length > 0 && <div className="px-2 py-1 text-[9px] font-bold text-stone-400 uppercase">External Vendors</div>}
-              {assignees.filter(a => a.type === "external").map(a => (
-                <SelectItem key={a.name} value={a.name}>{a.name} — £{a.hourly_rate}/h ({a.open_issues} open)</SelectItem>
+              <SelectItem value="_none">No asset</SelectItem>
+              {assets.map(a => (
+                <SelectItem key={a.id} value={a.id}>{a.name} {a.location ? `· ${a.location}` : ""}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <Select value={form.assigned_department || "_auto"} onValueChange={v => setForm(p => ({ ...p, assigned_department: v === "_auto" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm" data-testid="issue-department"><SelectValue placeholder="Department" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_auto">Auto (by category)</SelectItem>
+                <SelectItem value="maintenance">Maintenance</SelectItem>
+                <SelectItem value="housekeeping">Housekeeping</SelectItem>
+                <SelectItem value="reception">Reception</SelectItem>
+                <SelectItem value="management">Management</SelectItem>
+                <SelectItem value="kitchen">Kitchen</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={form.assigned_to || "_unassigned"} onValueChange={v => setForm(p => ({ ...p, assigned_to: v === "_unassigned" ? "" : v }))}>
+              <SelectTrigger className="h-9 text-sm" data-testid="issue-assignee"><SelectValue placeholder="Assign to..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_unassigned">Unassigned</SelectItem>
+                {assignees.filter(a => a.type === "internal").length > 0 && <div className="px-2 py-1 text-[9px] font-bold text-stone-400 uppercase">Internal Team</div>}
+                {assignees.filter(a => a.type === "internal").map(a => (
+                  <SelectItem key={a.name} value={a.name}>{a.name} ({a.open_issues} open)</SelectItem>
+                ))}
+                {assignees.filter(a => a.type === "external").length > 0 && <div className="px-2 py-1 text-[9px] font-bold text-stone-400 uppercase">External Vendors</div>}
+                {assignees.filter(a => a.type === "external").map(a => (
+                  <SelectItem key={a.name} value={a.name}>{a.name} — £{a.hourly_rate}/h ({a.open_issues} open)</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Textarea data-testid="issue-description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Describe the issue in detail..." rows={3} />
 
           {/* Before Photos */}
@@ -1121,6 +1180,165 @@ function VendorsTab({ propertyId, onRefresh }) {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+
+/* ==================== ASSETS TAB — Asset ↔ Issue history + QR ==================== */
+function AssetsTab({ assets = [], issues = [], propertyId, onRefresh, onSelectIssue }) {
+  const [selected, setSelected] = useState(null);
+  const [history, setHistory] = useState(null);
+  const [qrAsset, setQrAsset] = useState(null);
+  const [search, setSearch] = useState("");
+
+  const loadHistory = async (asset) => {
+    setSelected(asset);
+    setHistory({ loading: true });
+    try {
+      const { data } = await axios.get(`${API}/maintenance/issues/by-asset/${asset.id}`);
+      setHistory(data);
+    } catch { setHistory({ loading: false, issues: [], count: 0 }); }
+  };
+
+  const issuesByAsset = assets.map(a => ({
+    ...a,
+    open_issues: issues.filter(i => i.asset_id === a.id && !["resolved", "closed"].includes(i.status)).length,
+    total_issues: issues.filter(i => i.asset_id === a.id).length,
+  }));
+  const filtered = issuesByAsset.filter(a =>
+    !search || a.name?.toLowerCase().includes(search.toLowerCase()) || a.location?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  if (!assets.length) {
+    return (
+      <div className="bg-white border border-stone-200 rounded-xl p-10 text-center" data-testid="assets-empty">
+        <Package className="w-10 h-10 mx-auto text-stone-300 mb-2" />
+        <h3 className="text-sm font-bold text-stone-600">No assets yet</h3>
+        <p className="text-xs text-stone-400 mt-1">Add assets from the Asset Register module. They will appear here with issue history.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3" data-testid="assets-tab">
+      <div className="flex items-center gap-2">
+        <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search assets..." className="max-w-xs h-8 text-xs" data-testid="assets-search" />
+        <div className="text-[10px] text-stone-500">{filtered.length} of {assets.length} assets</div>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-stone-50 border-b border-stone-200">
+            <tr>
+              <th className="text-left py-2 px-3 font-semibold text-stone-600">Asset</th>
+              <th className="text-left py-2 px-3 font-semibold text-stone-600">Location</th>
+              <th className="text-center py-2 px-3 font-semibold text-stone-600">Open</th>
+              <th className="text-center py-2 px-3 font-semibold text-stone-600">Total</th>
+              <th className="text-right py-2 px-3 font-semibold text-stone-600">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(a => (
+              <tr key={a.id} className="border-b border-stone-100 hover:bg-stone-50/60" data-testid={`asset-row-${a.id.slice(0, 6)}`}>
+                <td className="py-2 px-3 font-medium text-stone-800">{a.name}</td>
+                <td className="py-2 px-3 text-stone-500">{a.location || "—"}</td>
+                <td className="py-2 px-3 text-center">
+                  {a.open_issues > 0 ? <Badge className="bg-red-100 text-red-700">{a.open_issues}</Badge> : <span className="text-stone-300">—</span>}
+                </td>
+                <td className="py-2 px-3 text-center text-stone-600">{a.total_issues}</td>
+                <td className="py-2 px-3 text-right">
+                  <div className="inline-flex items-center gap-1">
+                    <button onClick={() => loadHistory(a)} className="px-2 py-1 text-[10px] bg-blue-50 text-blue-700 hover:bg-blue-100 rounded font-semibold" data-testid={`asset-history-${a.id.slice(0, 6)}`}>
+                      <History className="w-3 h-3 inline mr-0.5" />History
+                    </button>
+                    <button onClick={() => setQrAsset(a)} className="px-2 py-1 text-[10px] bg-violet-50 text-violet-700 hover:bg-violet-100 rounded font-semibold" data-testid={`asset-qr-${a.id.slice(0, 6)}`}>
+                      <QrCode className="w-3 h-3 inline mr-0.5" />QR
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* History Drawer */}
+      {selected && history && !history.loading && (
+        <Dialog open onOpenChange={() => { setSelected(null); setHistory(null); }}>
+          <DialogContent className="max-w-2xl" data-testid="asset-history-dialog">
+            <DialogHeader>
+              <DialogTitle>{selected.name} — Issue History</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="bg-stone-50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-black text-stone-800">{history.count || 0}</div>
+                <div className="text-[10px] text-stone-500">Total Issues</div>
+              </div>
+              <div className="bg-emerald-50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-black text-emerald-700">{history.mttr_hours ?? "—"}h</div>
+                <div className="text-[10px] text-emerald-600">MTTR (avg repair)</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <div className="text-2xl font-black text-blue-700">{history.mtbf_days ?? "—"}d</div>
+                <div className="text-[10px] text-blue-600">MTBF (avg gap)</div>
+              </div>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto">
+              {(history.issues || []).length === 0 ? (
+                <p className="text-center py-6 text-stone-400 text-sm">No issues recorded for this asset.</p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead className="bg-stone-50 sticky top-0">
+                    <tr>
+                      <th className="text-left py-2 px-2">Title</th>
+                      <th className="text-left py-2 px-2">Created</th>
+                      <th className="text-left py-2 px-2">Resolved</th>
+                      <th className="text-center py-2 px-2">Duration</th>
+                      <th className="text-left py-2 px-2">By</th>
+                      <th className="text-center py-2 px-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.issues.map(i => (
+                      <tr key={i.id} className="border-b hover:bg-stone-50 cursor-pointer" onClick={() => { onSelectIssue(i); setSelected(null); }}>
+                        <td className="py-2 px-2 font-medium">{i.title}</td>
+                        <td className="py-2 px-2 text-stone-500">{(i.created_at || "").slice(0, 10)}</td>
+                        <td className="py-2 px-2 text-stone-500">{(i.resolved_at || "—").slice(0, 10)}</td>
+                        <td className="py-2 px-2 text-center font-mono">{i.duration_hours != null ? `${i.duration_hours}h` : "—"}</td>
+                        <td className="py-2 px-2 text-stone-600">{i.resolved_by || i.assigned_to || "—"}</td>
+                        <td className="py-2 px-2 text-center">
+                          <Badge className={STATUS_CONFIG[i.status]?.badge || "bg-stone-100"}>{STATUS_CONFIG[i.status]?.label || i.status}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* QR Modal */}
+      {qrAsset && (
+        <Dialog open onOpenChange={() => setQrAsset(null)}>
+          <DialogContent className="max-w-sm" data-testid="asset-qr-dialog">
+            <DialogHeader><DialogTitle>{qrAsset.name} — QR Tag</DialogTitle></DialogHeader>
+            <div className="flex flex-col items-center py-4 space-y-3">
+              <div className="p-4 bg-white border-2 border-stone-200 rounded-xl">
+                <QRCodeSVG value={`${window.location.origin}/maintenance/report?asset=${qrAsset.id}&property=${propertyId}`} size={200} />
+              </div>
+              <div className="text-center">
+                <div className="text-sm font-bold">{qrAsset.name}</div>
+                <div className="text-[10px] text-stone-500">{qrAsset.location || ""} · {qrAsset.id.slice(0, 8)}</div>
+              </div>
+              <p className="text-[10px] text-stone-400 text-center">Print and stick on the asset. Staff scan → opens report form pre-linked to this asset.</p>
+              <button onClick={() => window.print()} className="px-4 py-2 bg-stone-800 text-white text-xs font-semibold rounded-lg hover:bg-stone-700">Print QR</button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

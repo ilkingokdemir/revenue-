@@ -17,7 +17,7 @@ import {
   RefreshCw, Plus, Send, Package, FileText, Shirt, CheckCircle2,
   Trash2, ArrowDown, Building2, Inbox, DoorOpen, BarChart3, AlertCircle,
   Calendar, FileBarChart, ShieldCheck, RotateCcw, Download, Sparkles,
-  TrendingUp, QrCode, Printer, Mail, FileSpreadsheet, Camera,
+  TrendingUp, QrCode, Printer, Mail, FileSpreadsheet, Camera, Clock,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -455,6 +455,7 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
   // QR code preview modal for dispatches — future-ready, factory can scan on arrival
   const [qrDispatch, setQrDispatch] = useState(null);
   const [lightboxPhotos, setLightboxPhotos] = useState(null);
+  const [timelineDispatch, setTimelineDispatch] = useState(null);
   // Email-to-vendor modal state
   const [emailDispatch, setEmailDispatch] = useState(null);
   const [emailTo, setEmailTo] = useState("");
@@ -734,6 +735,9 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
                             </button>
                             <button onClick={() => setQrDispatch(d)} className="text-[10px] px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 font-semibold" data-testid={`qr-btn-${d.id}`} title="Show QR code (future factory scan)">
                               <QrCode className="w-3 h-3 inline mr-1" />QR
+                            </button>
+                            <button onClick={() => setTimelineDispatch(d)} className="text-[10px] px-2 py-1 bg-violet-50 text-violet-700 rounded hover:bg-violet-100 font-semibold" data-testid={`timeline-btn-${d.id}`} title="Lifecycle timeline">
+                              <Clock className="w-3 h-3 inline mr-1" />Timeline
                             </button>
                             <button onClick={() => receiveDispatch(d)} className="text-[10px] px-2 py-1 bg-amber-50 text-amber-700 rounded hover:bg-amber-100 font-semibold" data-testid={`receive-btn-${d.id}`}>
                               <ArrowDown className="w-3 h-3 inline mr-1" />{L.receiveBtn || "Receive"}
@@ -1399,6 +1403,11 @@ export const LaundryManagement = ({ propertyId, user, permissions }) => {
 
       {/* Photo Lightbox */}
       {lightboxPhotos && <PhotoLightbox photos={lightboxPhotos} onClose={() => setLightboxPhotos(null)} />}
+
+      {/* Dispatch Lifecycle Timeline Modal */}
+      {timelineDispatch && (
+        <DispatchLifecycleModal dispatch={timelineDispatch} deliveries={deliveries} onClose={() => setTimelineDispatch(null)} L={L} />
+      )}
     </div>
   );
 };
@@ -2524,6 +2533,129 @@ const VendorEmailModal = ({ delivery, onClose, L }) => {
           <Button size="sm" disabled={sending} onClick={send} className="bg-violet-600 hover:bg-violet-700 text-white" data-testid="email-send-btn">
             <Mail className="w-4 h-4 mr-1" />{sending ? (L?.emailSending || "Sending...") : (L?.emailSend || "Send")}
           </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+/* ═══════════ DispatchLifecycleModal — gönderim yaşam döngüsü ═══════════ */
+const DispatchLifecycleModal = ({ dispatch, deliveries = [], onClose, L }) => {
+  if (!dispatch) return null;
+
+  const related = (deliveries || []).filter(d => d.dispatch_id === dispatch.id);
+  const delivered = related[0] || null;
+
+  const fmtDT = (iso) => {
+    if (!iso) return null;
+    try {
+      const d = new Date(iso);
+      return {
+        date: d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "2-digit" }),
+        time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+      };
+    } catch {
+      const parts = iso.slice(0, 16).split("T");
+      return { date: parts[0] || iso, time: parts[1] || "" };
+    }
+  };
+  const diffHuman = (fromIso, toIso) => {
+    if (!fromIso || !toIso) return null;
+    try {
+      const ms = new Date(toIso) - new Date(fromIso);
+      if (ms < 0) return null;
+      const mins = Math.floor(ms / 60000);
+      if (mins < 60) return `${mins}m`;
+      const hrs = mins / 60;
+      if (hrs < 24) return `${hrs.toFixed(1)}h`;
+      return `${(hrs / 24).toFixed(1)}d`;
+    } catch { return null; }
+  };
+
+  const steps = [
+    { key: "created", label: "Sevk Oluşturuldu", at: dispatch.created_at, by: dispatch.created_by, icon: "📝", color: "bg-blue-500", ring: "ring-blue-100" },
+    { key: "sent", label: "Gönderildi", at: dispatch.sent_date || dispatch.dispatch_date, by: dispatch.vendor, icon: "🚚", color: "bg-amber-500", ring: "ring-amber-100", subtitle: "→ " + (dispatch.vendor || "vendor") },
+    { key: "expected", label: "Beklenen Dönüş", at: dispatch.expected_return, by: null, icon: "⏱️", color: "bg-violet-500", ring: "ring-violet-100", info: true },
+    { key: "received", label: "Teslim Alındı", at: delivered?.delivery_date || delivered?.created_at, by: delivered?.created_by, icon: "✓", color: "bg-emerald-500", ring: "ring-emerald-100" },
+  ];
+
+  const startIso = dispatch.created_at || dispatch.dispatch_date;
+  const endIso = delivered?.delivery_date || delivered?.created_at;
+  const totalDur = diffHuman(startIso, endIso);
+
+  const totalItems = (dispatch.items || []).reduce((s, i) => s + (i.qty_sent || 0) + (i.qty_unusable_sent || 0), 0);
+  const totalReceived = delivered ? (delivered.items || []).reduce((s, i) => s + (i.qty_received || 0), 0) : null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[55] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()} data-testid="dispatch-timeline-modal">
+        <div className="p-4 border-b border-stone-100 flex items-center justify-between sticky top-0 bg-white z-10">
+          <div>
+            <h3 className="font-bold text-sm text-stone-800">{dispatch.vendor || "Dispatch"}</h3>
+            <p className="text-[10px] text-stone-500 font-mono">#{(dispatch.id || "").slice(0, 8)} · {totalItems} items</p>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 text-2xl leading-none">×</button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Summary */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-amber-50 rounded-lg p-2">
+              <p className="text-lg font-black text-amber-700">{totalItems}</p>
+              <p className="text-[9px] text-amber-600 uppercase">Gönderildi</p>
+            </div>
+            <div className={`rounded-lg p-2 ${delivered ? "bg-emerald-50" : "bg-stone-100"}`}>
+              <p className={`text-lg font-black ${delivered ? "text-emerald-700" : "text-stone-400"}`}>{totalReceived != null ? totalReceived : "—"}</p>
+              <p className="text-[9px] uppercase text-stone-500">Alındı</p>
+            </div>
+            <div className="bg-violet-50 rounded-lg p-2">
+              <p className="text-lg font-black text-violet-700">{totalDur || "—"}</p>
+              <p className="text-[9px] text-violet-600 uppercase">Toplam</p>
+            </div>
+          </div>
+
+          {/* Lifecycle */}
+          <div className="bg-gradient-to-br from-stone-50 to-white border border-stone-200 rounded-xl p-4">
+            <h4 className="text-[11px] font-bold uppercase tracking-wider text-stone-600 mb-3">Lifecycle</h4>
+            <div className="relative">
+              <div className="absolute left-[13px] top-1 bottom-1 w-0.5 bg-gradient-to-b from-stone-200 via-stone-200 to-transparent" />
+              <div className="space-y-3">
+                {steps.map((s, idx) => {
+                  const done = !!s.at && !s.info;
+                  const isExpected = s.info && !!s.at;
+                  const dt = fmtDT(s.at);
+                  const prevIso = idx > 0 && !steps[idx - 1].info ? steps[idx - 1].at : null;
+                  const dur = done && prevIso ? diffHuman(prevIso, s.at) : null;
+                  const prevReached = idx === 0 || (steps[idx - 1].at);
+                  if (!done && !isExpected && !prevReached) return null;
+                  return (
+                    <div key={s.key} className="flex items-start gap-3" data-testid={`laundry-timeline-step-${s.key}`}>
+                      <div className={`relative z-10 w-[26px] h-[26px] rounded-full flex items-center justify-center text-white shrink-0 ring-4 text-[10px] ${done || isExpected ? s.color + " " + s.ring : "bg-stone-200 ring-stone-100"}`}>
+                        {(done || isExpected) ? s.icon : <span className="w-1.5 h-1.5 rounded-full bg-stone-400" />}
+                      </div>
+                      <div className="flex-1 min-w-0 pt-0.5">
+                        <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                          <span className={`text-xs font-bold ${(done || isExpected) ? "text-stone-800" : "text-stone-400"}`}>{s.label}</span>
+                          {dur && <span className="text-[9px] font-mono text-stone-400">+{dur}</span>}
+                          {isExpected && !done && <span className="text-[9px] font-semibold text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded">planlandı</span>}
+                        </div>
+                        {(done || isExpected) ? (
+                          <div className="text-[10px] text-stone-500 flex items-center gap-2 flex-wrap mt-0.5">
+                            {s.by && <span className="font-semibold text-stone-700">{s.by}</span>}
+                            {dt && <span className="font-mono tabular-nums">{dt.date}{dt.time ? " · " + dt.time : ""}</span>}
+                            {s.subtitle && <span className="text-stone-400">{s.subtitle}</span>}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] italic text-stone-400">Beklemede</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

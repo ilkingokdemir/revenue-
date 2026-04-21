@@ -19,6 +19,7 @@ const FAB_I18N = {
     titlePh: "Short issue title *", descPh: "Describe the issue (optional)",
     category: "Category", priority: "Priority", location: "Location",
     roomNo: "Room number", takePhoto: "Add photo",
+    photos: "Photos", photoLimit: "Max 3 photos",
     submit: "Submit", submitting: "Submitting...", cancel: "Cancel",
     success: "Issue reported!", failed: "Failed to submit",
     catGeneral: "General", catPlumb: "Plumbing", catElec: "Electrical", catHvac: "HVAC",
@@ -34,6 +35,7 @@ const FAB_I18N = {
     titlePh: "Kısa arıza başlığı *", descPh: "Arızayı açıklayın (opsiyonel)",
     category: "Kategori", priority: "Öncelik", location: "Konum",
     roomNo: "Oda numarası", takePhoto: "Fotoğraf ekle",
+    photos: "Fotoğraflar", photoLimit: "En fazla 3 fotoğraf",
     submit: "Kaydet", submitting: "Kaydediliyor...", cancel: "İptal",
     success: "Arıza kaydedildi!", failed: "Kayıt başarısız",
     catGeneral: "Genel", catPlumb: "Tesisat", catElec: "Elektrik", catHvac: "HVAC",
@@ -60,7 +62,7 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
   const [lang, setLang] = useState(() => localStorage.getItem("maint_lang") || "en");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "" });
-  const [photo, setPhoto] = useState(null);
+  const [photos, setPhotos] = useState([]);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -76,14 +78,15 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
 
   const reset = () => {
     setForm({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "" });
-    setPhoto(null);
+    setPhotos([]);
   };
 
   const handlePhoto = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (photos.length >= 3) { toast.error(L.photoLimit); e.target.value = ""; return; }
     const reader = new FileReader();
-    reader.onload = (ev) => setPhoto({ file, preview: ev.target.result });
+    reader.onload = (ev) => setPhotos(prev => [...prev, { file, preview: ev.target.result }]);
     reader.readAsDataURL(file);
     e.target.value = "";
   };
@@ -96,14 +99,15 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
         ...form,
         property_id: propertyId,
       });
-      if (photo) {
+      // Upload photos best-effort (continue even if one fails)
+      for (const p of photos) {
         const fd = new FormData();
-        fd.append("file", photo.file);
+        fd.append("file", p.file);
         fd.append("photo_type", "before");
         try {
           await axios.post(`${API}/maintenance/upload-photo/${data.id}`, fd,
             { headers: { "Content-Type": "multipart/form-data" } });
-        } catch { /* photo upload best-effort */ }
+        } catch { /* best-effort */ }
       }
       toast.success(L.success);
       reset();
@@ -222,24 +226,31 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
                 className="w-full px-3 py-2 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
                 data-testid="fab-desc" />
 
-              {/* Photo */}
+              {/* Photos (up to 3) */}
               <div>
+                <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">
+                  {L.photos} <span className="text-stone-400 font-normal normal-case">({photos.length}/3)</span>
+                </label>
                 <input ref={fileRef} type="file" accept="image/*" capture="environment"
                   onChange={handlePhoto} className="hidden" data-testid="fab-photo-input" />
-                {photo ? (
-                  <div className="relative rounded-lg overflow-hidden border border-stone-200">
-                    <img src={photo.preview} alt="issue" className="w-full h-32 object-cover" />
-                    <button onClick={() => setPhoto(null)}
-                      className="absolute top-1.5 right-1.5 bg-black/60 text-white w-7 h-7 rounded-full text-sm hover:bg-black/80"
-                      data-testid="fab-photo-remove">×</button>
-                  </div>
-                ) : (
-                  <button onClick={() => fileRef.current?.click()}
-                    className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border-2 border-dashed border-stone-300 rounded-lg text-xs text-stone-500 hover:border-orange-400 hover:text-orange-600 transition"
-                    data-testid="fab-photo-btn">
-                    <Camera size={14} /> {L.takePhoto}
-                  </button>
-                )}
+                <div className="flex gap-2 flex-wrap">
+                  {photos.map((p, i) => (
+                    <div key={i} className="relative w-20 h-20 rounded-lg overflow-hidden border border-stone-200 group">
+                      <img src={p.preview} alt={`issue-${i}`} className="w-full h-full object-cover" />
+                      <button onClick={() => setPhotos(prev => prev.filter((_, idx) => idx !== i))}
+                        className="absolute top-0.5 right-0.5 bg-black/60 hover:bg-black/80 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center"
+                        data-testid={`fab-photo-remove-${i}`}>×</button>
+                    </div>
+                  ))}
+                  {photos.length < 3 && (
+                    <button onClick={() => fileRef.current?.click()}
+                      className="w-20 h-20 flex flex-col items-center justify-center gap-1 border-2 border-dashed border-stone-300 rounded-lg text-[10px] text-stone-500 hover:border-orange-400 hover:text-orange-600 transition"
+                      data-testid="fab-photo-btn">
+                      <Camera size={18} />
+                      <span className="font-medium">{L.takePhoto}</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

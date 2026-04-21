@@ -285,7 +285,7 @@ def create_maintenance_router(db, require_roles):
 
     @router.post("/maintenance/upload-photo/{issue_id}")
     async def upload_photo(issue_id: str, file: UploadFile = File(...), photo_type: str = Form("before"),
-                           current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+                           current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
         issue = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
         if not issue:
             raise HTTPException(404, "Issue not found")

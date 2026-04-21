@@ -26,11 +26,12 @@ const PRIORITY_CONFIG = {
 };
 
 const STATUS_CONFIG = {
-  open: { label: "Open", color: "bg-red-50 text-red-700 border-red-200" },
-  acknowledged: { label: "Acknowledged", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  in_progress: { label: "In Progress", color: "bg-amber-50 text-amber-700 border-amber-200" },
-  resolved: { label: "Resolved", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  closed: { label: "Closed", color: "bg-stone-100 text-stone-500 border-stone-200" },
+  open: { label: "Open", color: "bg-red-50 text-red-700 border-red-200", badge: "bg-red-100 text-red-700" },
+  acknowledged: { label: "Acknowledged", color: "bg-blue-50 text-blue-700 border-blue-200", badge: "bg-blue-100 text-blue-700" },
+  in_progress: { label: "In Progress", color: "bg-amber-50 text-amber-700 border-amber-200", badge: "bg-amber-100 text-amber-700" },
+  resolved: { label: "Resolved", color: "bg-emerald-50 text-emerald-700 border-emerald-200", badge: "bg-emerald-100 text-emerald-700" },
+  verified: { label: "Verified", color: "bg-teal-50 text-teal-700 border-teal-200", badge: "bg-teal-100 text-teal-700" },
+  closed: { label: "Closed", color: "bg-stone-100 text-stone-500 border-stone-200", badge: "bg-stone-100 text-stone-600" },
 };
 
 const CATEGORY_CONFIG = {
@@ -50,7 +51,8 @@ const CATEGORY_CONFIG = {
 const KANBAN_COLUMNS = [
   { id: "open", label: "Open", statuses: ["open"] },
   { id: "working", label: "In Progress", statuses: ["acknowledged", "in_progress"] },
-  { id: "done", label: "Resolved", statuses: ["resolved", "closed"] },
+  { id: "resolved", label: "Resolved", statuses: ["resolved"] },
+  { id: "verified", label: "Verified / Closed", statuses: ["verified", "closed"] },
 ];
 
 export function MaintenancePanel({ properties, activePropertyId: propActivePropertyId }) {
@@ -218,7 +220,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
 
           {/* Kanban View */}
           {view === "kanban" && (
-            <div className="grid grid-cols-3 gap-4" data-testid="kanban-board">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="kanban-board">
               {KANBAN_COLUMNS.map(col => {
                 const colIssues = filtered.filter(i => col.statuses.includes(i.status));
                 return (
@@ -306,7 +308,18 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
 /* ==================== ISSUE CARD (Kanban) ==================== */
 function IssueCard({ issue, onClick, onStatusChange }) {
   const pri = PRIORITY_CONFIG[issue.priority] || PRIORITY_CONFIG.medium;
-  const nextStatus = issue.status === "open" ? "acknowledged" : issue.status === "acknowledged" ? "in_progress" : issue.status === "in_progress" ? "resolved" : null;
+  const nextStatus =
+    issue.status === "open" ? "acknowledged" :
+    issue.status === "acknowledged" ? "in_progress" :
+    issue.status === "in_progress" ? "resolved" :
+    issue.status === "resolved" ? "verified" :
+    issue.status === "verified" ? "closed" : null;
+  const nextLabel =
+    nextStatus === "acknowledged" ? "Ack" :
+    nextStatus === "in_progress" ? "Start" :
+    nextStatus === "resolved" ? "Resolve" :
+    nextStatus === "verified" ? "Verify" :
+    nextStatus === "closed" ? "Close" : null;
 
   return (
     <div className="bg-white rounded-lg border border-stone-200/80 p-3 hover:shadow-sm transition cursor-pointer" onClick={onClick} data-testid={`kanban-card-${issue.id}`}>
@@ -337,7 +350,7 @@ function IssueCard({ issue, onClick, onStatusChange }) {
         </div>
         {nextStatus && (
           <button onClick={(e) => { e.stopPropagation(); onStatusChange(issue, nextStatus); }} className="text-[9px] px-2 py-1 bg-orange-500 text-white rounded font-bold hover:bg-orange-600 transition" data-testid={`btn-advance-${issue.id}`}>
-            {nextStatus === "acknowledged" ? "Ack" : nextStatus === "in_progress" ? "Start" : "Resolve"}
+            {nextLabel}
           </button>
         )}
       </div>
@@ -347,7 +360,7 @@ function IssueCard({ issue, onClick, onStatusChange }) {
 
 /* ==================== CREATE ISSUE DIALOG ==================== */
 function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets = [], onCreated }) {
-  const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" });
+  const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", priority_override: 0, location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" });
   const [creating, setCreating] = useState(false);
   const [photos, setPhotos] = useState([]);
   const fileRef = useRef(null);
@@ -373,7 +386,7 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets =
         fd.append("photo_type", "before");
         await axios.post(`${API}/maintenance/upload-photo/${data.id}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
       }
-      toast.success("Issue reported!"); setForm({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" }); setPhotos([]); onCreated();
+      toast.success("Issue reported!"); setForm({ title: "", description: "", category: "general", priority: "medium", priority_override: 0, location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" }); setPhotos([]); onCreated();
     } catch { toast.error("Failed to create"); }
     setCreating(false);
   };
@@ -401,6 +414,13 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets =
           <div className="grid grid-cols-2 gap-3">
             <Input data-testid="issue-location" value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} placeholder="Location (e.g. Lobby)" />
             <Input data-testid="issue-room" value={form.room_number} onChange={e => setForm(p => ({ ...p, room_number: e.target.value }))} placeholder="Room number" />
+          </div>
+          <div>
+            <label className="text-[10px] font-medium text-stone-500 block mb-0.5">Priority Override (0-10, optional)</label>
+            <Input type="number" min="0" max="10" value={form.priority_override}
+              onChange={e => setForm(p => ({ ...p, priority_override: Math.max(0, Math.min(10, parseInt(e.target.value) || 0)) }))}
+              data-testid="issue-priority-override" placeholder="0 = use default by priority level" />
+            <p className="text-[9px] text-stone-400 mt-0.5">Leave at 0 to use default. Higher = more urgent (e.g. 10 for VIP/emergency).</p>
           </div>
           {/* Asset linker */}
           <Select value={form.asset_id || "_none"} onValueChange={v => {

@@ -20,6 +20,10 @@ SLA_TARGETS = {
     "low": 72,
 }
 
+# Status flow: open → acknowledged → in_progress → resolved → verified → closed
+# "verified" is a manager quality-check step between resolved and closed
+VALID_STATUSES = ["open", "acknowledged", "in_progress", "resolved", "verified", "closed"]
+
 # Auto-assignment rules
 CATEGORY_DEPARTMENT = {
     "plumbing": "maintenance",
@@ -91,6 +95,7 @@ def create_maintenance_router(db, require_roles):
             "description": data.get("description", ""),
             "category": category,
             "priority": priority,
+            "priority_override": int(data.get("priority_override") or 0),
             "status": "open",
             "location": data.get("location", ""),
             "room_number": data.get("room_number", ""),
@@ -117,6 +122,9 @@ def create_maintenance_router(db, require_roles):
             "started_by": "",
             "resolved_at": "",
             "resolved_by": "",
+            "verified_at": "",
+            "verified_by": "",
+            "verification_notes": "",
             "closed_at": "",
             "closed_by": "",
             "resolution_notes": "",
@@ -220,6 +228,10 @@ def create_maintenance_router(db, require_roles):
                 updates["resolved_at"] = now
                 updates["resolved_by"] = user_name
                 timeline_entry = {"action": "resolved", "by": user_name, "at": now, "detail": updates.get("resolution_notes", "Issue resolved")}
+            elif new_status == "verified":
+                updates["verified_at"] = now
+                updates["verified_by"] = user_name
+                timeline_entry = {"action": "verified", "by": user_name, "at": now, "detail": updates.get("verification_notes", "Work quality verified")}
             elif new_status == "closed":
                 updates["closed_at"] = now
                 updates["closed_by"] = user_name
@@ -244,7 +256,7 @@ def create_maintenance_router(db, require_roles):
         doc = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
 
         # Auto-unblock room when issue is resolved or closed
-        if new_status in ("resolved", "closed") and doc and doc.get("room_blocked") and doc.get("room_id"):
+        if new_status in ("resolved", "verified", "closed") and doc and doc.get("room_blocked") and doc.get("room_id"):
             try:
                 await db.rooms.update_one(
                     {"id": doc["room_id"], "ooo_issue_id": issue_id},
@@ -345,8 +357,8 @@ def create_maintenance_router(db, require_roles):
         total = await db.maintenance_issues.count_documents(query)
         open_q = {**query, "status": "open"}
         in_progress_q = {**query, "status": {"$in": ["acknowledged", "in_progress"]}}
-        resolved_q = {**query, "status": {"$in": ["resolved", "closed"]}}
-        overdue_q = {**query, "sla_breached": True, "status": {"$nin": ["resolved", "closed"]}}
+        resolved_q = {**query, "status": {"$in": ["resolved", "verified", "closed"]}}
+        overdue_q = {**query, "sla_breached": True, "status": {"$nin": ["resolved", "verified", "closed"]}}
 
         open_count = await db.maintenance_issues.count_documents(open_q)
         in_progress = await db.maintenance_issues.count_documents(in_progress_q)
@@ -372,7 +384,7 @@ def create_maintenance_router(db, require_roles):
             dept_breakdown[doc["_id"] or "unassigned"] = doc["count"]
 
         workload_pipeline = [
-            {"$match": {**query, "status": {"$nin": ["resolved", "closed"]}}},
+            {"$match": {**query, "status": {"$nin": ["resolved", "verified", "closed"]}}},
             {"$group": {"_id": "$assigned_to", "open": {"$sum": 1}}},
             {"$sort": {"open": -1}}, {"$limit": 15},
         ]

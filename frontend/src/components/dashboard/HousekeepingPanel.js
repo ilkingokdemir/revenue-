@@ -35,7 +35,9 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
   const [tab, setTab] = useState("rooms");
   const [search, setSearch] = useState("");
   const [showNewTask, setShowNewTask] = useState(false);
+  const [showNewMaint, setShowNewMaint] = useState(false);
   const [newTask, setNewTask] = useState({ room_number: "", task_type: "clean", assigned_to: "", priority: "normal", notes: "" });
+  const [newMaint, setNewMaint] = useState({ room_number: "", title: "", description: "", priority: "normal", category: "plumbing" });
 
   const propertyId = activePropertyId && activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "aldgate-flats");
 
@@ -76,6 +78,15 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
     } catch (e) { toast.error("Failed"); }
   };
 
+  const createMaintRequest = async () => {
+    try {
+      await axios.post(`${API}/housekeeping/report-maintenance`, { ...newMaint, property_id: propertyId });
+      toast.success("Maintenance issue created with full tracking!"); setShowNewMaint(false);
+      setNewMaint({ room_number: "", title: "", description: "", priority: "normal", category: "plumbing" });
+      fetchData();
+    } catch (e) { toast.error("Failed"); }
+  };
+
   const filteredRooms = rooms.filter(r => !search || r.room_number?.toString().includes(search) || r.floor?.includes(search));
 
   const tabs = [
@@ -96,6 +107,7 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowNewTask(true)} className="text-xs px-3 py-2 bg-[#2C4C3B] text-white rounded-xl font-bold hover:bg-[#1A3025] flex items-center gap-1" data-testid="new-task-btn"><Plus size={12} /> New Task</button>
+          <button onClick={() => setShowNewMaint(true)} className="text-xs px-3 py-2 bg-orange-500 text-white rounded-xl font-bold hover:bg-orange-600 flex items-center gap-1" data-testid="new-maint-btn"><Wrench size={12} weight="fill" /> Maintenance</button>
         </div>
       </div>
 
@@ -260,6 +272,40 @@ export function HousekeepingPanel({ properties, activePropertyId }) {
             </Select>
             <Textarea value={newTask.notes} onChange={e => setNewTask(p => ({...p, notes: e.target.value}))} placeholder="Notes..." rows={2} />
             <button onClick={createTask} className="w-full bg-[#2C4C3B] text-white py-2.5 rounded-xl text-sm font-bold" data-testid="create-task-btn">Create Task</button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Maintenance Dialog */}
+      <Dialog open={showNewMaint} onOpenChange={setShowNewMaint}>
+        <DialogContent className="max-w-md" data-testid="new-maint-dialog">
+          <DialogHeader><DialogTitle>New Maintenance Request</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <Input value={newMaint.room_number} onChange={e => setNewMaint(p => ({...p, room_number: e.target.value}))} placeholder="Room Number" />
+            <Input value={newMaint.title} onChange={e => setNewMaint(p => ({...p, title: e.target.value}))} placeholder="Issue title (e.g. Broken AC)" data-testid="maint-title" />
+            <Select value={newMaint.category} onValueChange={v => setNewMaint(p => ({...p, category: v}))}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="plumbing">Plumbing</SelectItem>
+                <SelectItem value="electrical">Electrical</SelectItem>
+                <SelectItem value="hvac">HVAC / AC</SelectItem>
+                <SelectItem value="furniture">Furniture</SelectItem>
+                <SelectItem value="appliance">Appliance</SelectItem>
+                <SelectItem value="structural">Structural</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={newMaint.priority} onValueChange={v => setNewMaint(p => ({...p, priority: v}))}>
+              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="urgent">Urgent</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+            <Textarea value={newMaint.description} onChange={e => setNewMaint(p => ({...p, description: e.target.value}))} placeholder="Describe the issue..." rows={3} />
+            <button onClick={createMaintRequest} className="w-full bg-orange-500 text-white py-2.5 rounded-xl text-sm font-bold" data-testid="create-maint-btn">Submit Request</button>
           </div>
         </DialogContent>
       </Dialog>

@@ -116,15 +116,26 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
 
   return (
     <>
-      {/* FAB — fixed bottom-right, always visible */}
-      <button
-        onClick={() => setOpen(true)}
-        data-testid="global-report-issue-fab"
-        className="fixed bottom-20 right-6 z-40 flex items-center gap-2 bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-4 py-3 rounded-full shadow-2xl hover:shadow-orange-500/40 transition-all group"
-        title={L.fab}>
-        <Wrench size={18} weight="fill" className="group-hover:rotate-12 transition-transform" />
-        <span className="hidden sm:inline text-sm">{L.fab}</span>
-      </button>
+      {/* FAB cluster — language pill + main FAB, fixed bottom-right */}
+      <div className="fixed bottom-20 right-6 z-40 flex flex-col items-end gap-2" data-testid="fab-cluster">
+        <div className="flex gap-0.5 bg-white rounded-full shadow-lg p-1 border border-stone-200" data-testid="fab-lang-pill">
+          {Object.keys(FAB_I18N).map(c => (
+            <button key={c} onClick={() => { setLang(c); localStorage.setItem("maint_lang", c); }}
+              className={`px-2 py-0.5 text-[10px] font-semibold rounded-full transition ${lang === c ? "bg-orange-500 text-white shadow" : "text-stone-500 hover:text-stone-700"}`}
+              data-testid={`fab-pill-lang-${c}`}>
+              {FAB_I18N[c].flag} {c.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setOpen(true)}
+          data-testid="global-report-issue-fab"
+          className="flex items-center gap-2 bg-gradient-to-br from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-semibold px-4 py-3 rounded-full shadow-2xl hover:shadow-orange-500/40 transition-all group"
+          title={L.fab}>
+          <Wrench size={18} weight="fill" className="group-hover:rotate-12 transition-transform" />
+          <span className="hidden sm:inline text-sm">{L.fab}</span>
+        </button>
+      </div>
 
       {/* Modal */}
       {open && (

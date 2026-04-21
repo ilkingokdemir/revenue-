@@ -3628,7 +3628,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       <Toaster position="top-right" richColors />
 
       {/* Global "Report Maintenance Issue" FAB — available to ALL departments */}
-      <GlobalReportIssueFAB propertyId={activePropertyId} currentUser={user} />
+      <GlobalReportIssueFAB propertyId={activePropertyId} currentUser={user} properties={properties} />
     </div>
   );
 };

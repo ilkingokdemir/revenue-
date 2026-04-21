@@ -20,6 +20,7 @@ const FAB_I18N = {
     category: "Category", priority: "Priority", location: "Location",
     roomNo: "Room number", takePhoto: "Add photo",
     photos: "Photos", photoLimit: "Max 3 photos",
+    branch: "Branch", pickBranch: "Please select a branch first",
     submit: "Submit", submitting: "Submitting...", cancel: "Cancel",
     success: "Issue reported!", failed: "Failed to submit",
     catGeneral: "General", catPlumb: "Plumbing", catElec: "Electrical", catHvac: "HVAC",
@@ -36,6 +37,7 @@ const FAB_I18N = {
     category: "Kategori", priority: "Öncelik", location: "Konum",
     roomNo: "Oda numarası", takePhoto: "Fotoğraf ekle",
     photos: "Fotoğraflar", photoLimit: "En fazla 3 fotoğraf",
+    branch: "Şube", pickBranch: "Lütfen önce bir şube seçin",
     submit: "Kaydet", submitting: "Kaydediliyor...", cancel: "İptal",
     success: "Arıza kaydedildi!", failed: "Kayıt başarısız",
     catGeneral: "Genel", catPlumb: "Tesisat", catElec: "Elektrik", catHvac: "HVAC",
@@ -59,12 +61,13 @@ const CATEGORIES = [
   { key: "safety", tr: "catSafe", icon: "🛡️" },
 ];
 
-export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
+export default function GlobalReportIssueFAB({ propertyId, currentUser, properties = [] }) {
   const [open, setOpen] = useState(false);
   const [lang, setLang] = useState(() => localStorage.getItem("maint_lang") || "en");
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "" });
   const [photos, setPhotos] = useState([]);
+  const [selectedPid, setSelectedPid] = useState("");
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -80,12 +83,16 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
 
   const L = FAB_I18N[lang] || FAB_I18N.en;
 
-  // Only show when user is logged in and a property is selected
-  if (!currentUser || !propertyId || propertyId === "all") return null;
+  // Show when user is logged in (property picker appears inside modal if "all")
+  if (!currentUser) return null;
+
+  // Effective property id: prop's value, or user's modal selection when "all"
+  const effectivePid = (propertyId && propertyId !== "all") ? propertyId : selectedPid;
 
   const reset = () => {
     setForm({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "" });
     setPhotos([]);
+    setSelectedPid("");
   };
 
   const handlePhoto = (e) => {
@@ -100,11 +107,12 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
 
   const submit = async () => {
     if (!form.title.trim()) { toast.error(L.required); return; }
+    if (!effectivePid) { toast.error(L.pickBranch); return; }
     setSubmitting(true);
     try {
       const { data } = await axios.post(`${API}/maintenance/issues`, {
         ...form,
-        property_id: propertyId,
+        property_id: effectivePid,
       });
       // Upload photos best-effort (continue even if one fails)
       for (const p of photos) {
@@ -175,6 +183,23 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Branch picker — only when "All Branches" is active */}
+              {(!propertyId || propertyId === "all") && (
+                <div>
+                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">{L.branch} *</label>
+                  <select
+                    value={selectedPid}
+                    onChange={e => setSelectedPid(e.target.value)}
+                    className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+                    data-testid="fab-branch-picker">
+                    <option value="">— {L.branch} —</option>
+                    {properties.map(p => (
+                      <option key={p.id} value={p.id}>{p.name || p.id}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <input
                 value={form.title}
                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}

@@ -125,7 +125,6 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   const [view, setView] = useState("kanban"); // kanban, table
   const [tab, setTab] = useState("issues"); // issues, recurring, analytics
   const [selectedIssue, setSelectedIssue] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [showRecurring, setShowRecurring] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -202,11 +201,6 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
             <button onClick={() => { axios.post(`${API}/maintenance/check-sla/${activePropertyId}`).then(() => { toast.success("SLA check complete"); fetchData(); }); }}
               className="hidden md:flex px-2.5 py-1.5 text-xs font-medium text-stone-600 border border-stone-200 rounded-lg hover:bg-stone-50 items-center gap-1" data-testid="btn-check-sla">
               <Timer size={12} /> {L.checkSla}
-            </button>
-            <button onClick={() => setShowCreate(true)}
-              className="px-3 py-1.5 bg-orange-500 text-white text-xs md:text-sm font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-1"
-              data-testid="btn-new-issue">
-              <Plus size={13} weight="bold" /> <span className="hidden sm:inline">{L.reportIssue}</span>
             </button>
           </div>
         </div>
@@ -399,9 +393,6 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
       {tab === "analytics" && (
         <AnalyticsTab stats={stats} issues={issues} propertyId={activePropertyId} />
       )}
-
-      {/* Create Issue Dialog */}
-      <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} assignees={assignees} assets={assets} L={L} onCreated={() => { setShowCreate(false); fetchData(); }} />
 
       {/* Issue Detail Drawer */}
       <IssueDetailDrawer issue={selectedIssue} onClose={() => setSelectedIssue(null)} assignees={assignees} L={L} onUpdate={() => { fetchData(); }} />

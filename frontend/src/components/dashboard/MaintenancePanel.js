@@ -125,7 +125,6 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   const [view, setView] = useState("kanban"); // kanban, table
   const [tab, setTab] = useState("issues"); // issues, recurring, analytics
   const [selectedIssue, setSelectedIssue] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [showRecurring, setShowRecurring] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterPriority, setFilterPriority] = useState("all");
@@ -162,6 +161,13 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   }, [activePropertyId]);
 
   useEffect(() => { fetchData(); fetchRecurring(); }, [fetchData, fetchRecurring]);
+
+  // Refresh when a new issue is created via the Global FAB
+  useEffect(() => {
+    const onCreated = () => fetchData();
+    window.addEventListener("issue-created", onCreated);
+    return () => window.removeEventListener("issue-created", onCreated);
+  }, [fetchData]);
 
   const filtered = issues.filter(i => {
     if (filterStatus !== "all" && i.status !== filterStatus) return false;
@@ -203,7 +209,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
               className="hidden md:flex px-2.5 py-1.5 text-xs font-medium text-stone-600 border border-stone-200 rounded-lg hover:bg-stone-50 items-center gap-1" data-testid="btn-check-sla">
               <Timer size={12} /> {L.checkSla}
             </button>
-            <button onClick={() => setShowCreate(true)}
+            <button onClick={() => window.dispatchEvent(new CustomEvent("open-report-issue"))}
               className="px-3 py-1.5 bg-orange-500 text-white text-xs md:text-sm font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-1 shadow-md"
               data-testid="btn-new-issue">
               <Plus size={13} weight="bold" /> {L.reportIssue}
@@ -399,9 +405,6 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
       {tab === "analytics" && (
         <AnalyticsTab stats={stats} issues={issues} propertyId={activePropertyId} />
       )}
-
-      {/* Create Issue Dialog */}
-      <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} assignees={assignees} assets={assets} L={L} onCreated={() => { setShowCreate(false); fetchData(); }} />
 
       {/* Issue Detail Drawer */}
       <IssueDetailDrawer issue={selectedIssue} onClose={() => setSelectedIssue(null)} assignees={assignees} L={L} onUpdate={() => { fetchData(); }} />

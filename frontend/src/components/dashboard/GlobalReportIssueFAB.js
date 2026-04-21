@@ -70,7 +70,12 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
   useEffect(() => {
     const onStorage = () => setLang(localStorage.getItem("maint_lang") || "en");
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    const onOpen = () => setOpen(true);
+    window.addEventListener("open-report-issue", onOpen);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("open-report-issue", onOpen);
+    };
   }, []);
 
   const L = FAB_I18N[lang] || FAB_I18N.en;
@@ -112,6 +117,7 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser }) {
         } catch { /* best-effort */ }
       }
       toast.success(L.success);
+      window.dispatchEvent(new CustomEvent("issue-created", { detail: { id: data.id } }));
       reset();
       setOpen(false);
     } catch (e) {

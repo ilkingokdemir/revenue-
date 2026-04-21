@@ -55,6 +55,59 @@ const KANBAN_COLUMNS = [
   { id: "verified", label: "Verified / Closed", statuses: ["verified", "closed"] },
 ];
 
+/* ─────────────── i18n ─────────────── */
+const M_I18N = {
+  en: {
+    flag: "🇬🇧",
+    title: "Maintenance", subtitle: "Issues, SLA tracking, costs & preventive maintenance",
+    checkSla: "Check SLA", reportIssue: "Report Issue",
+    kpiOpen: "Open", kpiInProgress: "In Progress", kpiResolved: "Resolved", kpiOverdue: "Overdue (SLA)", kpiCost: "Total Cost",
+    tabIssues: "Issues", tabAssets: "Assets", tabTeam: "Team", tabVendors: "Vendors", tabPreventive: "Preventive", tabAnalytics: "Analytics",
+    search: "Search issues...", allStatus: "All Status", allPriority: "All Priority", allCategory: "All Category", allDepts: "All Departments",
+    priCritical: "Critical", priHigh: "High", priMedium: "Medium", priLow: "Low",
+    stOpen: "Open", stAck: "Acknowledged", stInProgress: "In Progress", stResolved: "Resolved", stVerified: "Verified", stClosed: "Closed",
+    colOpen: "OPEN", colInProgress: "IN PROGRESS", colResolved: "RESOLVED", colVerifiedClosed: "VERIFIED / CLOSED",
+    actAck: "Ack", actStart: "Start", actResolve: "Resolve", actVerify: "Verify", actClose: "Close",
+    dialogTitle: "Report Maintenance Issue", issueTitle: "Issue title *",
+    overrideLbl: "Priority Override (0-10, optional)", overridePh: "0 = use default by priority level",
+    overrideHint: "Leave at 0 to use default. Higher = more urgent (e.g. 10 for VIP/emergency).",
+    locPh: "Location (e.g. Lobby)", roomPh: "Room number", descPh: "Describe the issue in detail...",
+    beforePhotos: "Before Photos (current condition)", submit: "Submit Issue",
+    linkAsset: "Link to asset (optional)", noAsset: "No asset",
+    autoDept: "Auto (by category)", deptMaint: "Maintenance", deptHk: "Housekeeping",
+    deptRec: "Reception", deptMgmt: "Management", deptKitch: "Kitchen",
+    unassigned: "Unassigned", assignTo: "Assign to...",
+    issueCreated: "Issue reported!", issueFailed: "Failed to create",
+  },
+  tr: {
+    flag: "🇹🇷",
+    title: "Bakım", subtitle: "Arıza, SLA takibi, maliyet ve önleyici bakım",
+    checkSla: "SLA Kontrol", reportIssue: "Arıza Bildir",
+    kpiOpen: "Açık", kpiInProgress: "Devam Ediyor", kpiResolved: "Çözüldü", kpiOverdue: "SLA Aşımı", kpiCost: "Toplam Maliyet",
+    tabIssues: "Arızalar", tabAssets: "Varlıklar", tabTeam: "Ekip", tabVendors: "Tedarikçiler", tabPreventive: "Önleyici", tabAnalytics: "Analiz",
+    search: "Arıza ara...", allStatus: "Tüm Durumlar", allPriority: "Tüm Öncelikler", allCategory: "Tüm Kategoriler", allDepts: "Tüm Departmanlar",
+    priCritical: "Kritik", priHigh: "Yüksek", priMedium: "Orta", priLow: "Düşük",
+    stOpen: "Açık", stAck: "Onaylandı", stInProgress: "Devam Ediyor", stResolved: "Çözüldü", stVerified: "Doğrulandı", stClosed: "Kapandı",
+    colOpen: "AÇIK", colInProgress: "DEVAM EDİYOR", colResolved: "ÇÖZÜLDÜ", colVerifiedClosed: "DOĞRULANDI / KAPANDI",
+    actAck: "Onayla", actStart: "Başla", actResolve: "Çöz", actVerify: "Doğrula", actClose: "Kapat",
+    dialogTitle: "Bakım Arızası Bildir", issueTitle: "Arıza başlığı *",
+    overrideLbl: "Öncelik Geçersiz Kılma (0-10, opsiyonel)", overridePh: "0 = öncelik seviyesine göre varsayılan",
+    overrideHint: "0 bırakırsanız varsayılan kullanılır. Yüksek = daha acil (örn. VIP/acil durumda 10).",
+    locPh: "Konum (örn. Lobi)", roomPh: "Oda numarası", descPh: "Arızayı detaylı açıklayın...",
+    beforePhotos: "Önce Fotoğraflar (mevcut durum)", submit: "Arızayı Kaydet",
+    linkAsset: "Varlığa bağla (opsiyonel)", noAsset: "Varlık yok",
+    autoDept: "Otomatik (kategoriye göre)", deptMaint: "Bakım", deptHk: "Housekeeping",
+    deptRec: "Resepsiyon", deptMgmt: "Yönetim", deptKitch: "Mutfak",
+    unassigned: "Atanmadı", assignTo: "Atama yap...",
+    issueCreated: "Arıza kaydedildi!", issueFailed: "Kayıt başarısız",
+  },
+};
+const useMLang = () => {
+  const [lang, setLang] = useState(() => localStorage.getItem("maint_lang") || "en");
+  const setLangPersist = (v) => { localStorage.setItem("maint_lang", v); setLang(v); };
+  return [lang, setLangPersist, M_I18N[lang] || M_I18N.en];
+};
+
 export function MaintenancePanel({ properties, activePropertyId: propActivePropertyId }) {
   const activePropertyId = propActivePropertyId || "all";
   const [issues, setIssues] = useState([]);
@@ -73,6 +126,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   const [assignees, setAssignees] = useState([]);
   const [assets, setAssets] = useState([]);
   const [filterDepartment, setFilterDepartment] = useState("all");
+  const [lang, setLang, L] = useMLang();
 
   const fetchData = useCallback(async () => {
     if (!activePropertyId) return;
@@ -120,17 +174,27 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
   return (
     <div className="p-6 space-y-5" data-testid="maintenance-panel">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-stone-800" data-testid="maintenance-title">Maintenance</h1>
-          <p className="text-sm text-stone-500 mt-0.5">Issues, SLA tracking, costs & preventive maintenance</p>
+          <h1 className="text-2xl font-bold text-stone-800" data-testid="maintenance-title">{L.title}</h1>
+          <p className="text-sm text-stone-500 mt-0.5">{L.subtitle}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Language toggle */}
+          <div className="flex gap-1 bg-stone-100 rounded-lg p-1" data-testid="maint-lang-toggle">
+            {Object.keys(M_I18N).map(code => (
+              <button key={code} onClick={() => setLang(code)}
+                className={`px-2.5 py-1 text-xs font-semibold rounded transition ${lang === code ? "bg-white text-stone-800 shadow" : "text-stone-500 hover:text-stone-700"}`}
+                data-testid={`maint-lang-${code}`}>
+                {M_I18N[code].flag} {code.toUpperCase()}
+              </button>
+            ))}
+          </div>
           <button onClick={() => { axios.post(`${API}/maintenance/check-sla/${activePropertyId}`).then(() => { toast.success("SLA check complete"); fetchData(); }); }} className="px-3 py-2 text-xs font-medium text-stone-600 border border-stone-200 rounded-lg hover:bg-stone-50 transition flex items-center gap-1.5" data-testid="btn-check-sla">
-            <Timer size={14} /> Check SLA
+            <Timer size={14} /> {L.checkSla}
           </button>
           <button onClick={() => setShowCreate(true)} className="px-4 py-2 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 transition flex items-center gap-1.5" data-testid="btn-new-issue">
-            <Plus size={14} weight="bold" /> Report Issue
+            <Plus size={14} weight="bold" /> {L.reportIssue}
           </button>
         </div>
       </div>
@@ -138,13 +202,13 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
       {/* Stats */}
       <div className="grid grid-cols-5 gap-3" data-testid="maintenance-stats">
         {[
-          { label: "Open", value: stats.open || 0, color: "bg-red-50 text-red-700", icon: <WarningCircle size={16} className="text-red-500" weight="fill" /> },
-          { label: "In Progress", value: stats.in_progress || 0, color: "bg-amber-50 text-amber-700", icon: <Wrench size={16} className="text-amber-500" weight="fill" /> },
-          { label: "Resolved", value: stats.resolved || 0, color: "bg-emerald-50 text-emerald-700", icon: <CheckCircle size={16} className="text-emerald-500" weight="fill" /> },
-          { label: "Overdue (SLA)", value: stats.overdue || 0, color: stats.overdue > 0 ? "bg-red-100 text-red-800" : "bg-stone-50 text-stone-600", icon: <Timer size={16} className={stats.overdue > 0 ? "text-red-600" : "text-stone-400"} weight="fill" /> },
-          { label: "Total Cost", value: `£${(stats.costs?.total_actual || 0).toLocaleString()}`, color: "bg-blue-50 text-blue-700", icon: <CurrencyDollar size={16} className="text-blue-500" weight="fill" /> },
+          { label: L.kpiOpen, value: stats.open || 0, color: "bg-red-50 text-red-700", icon: <WarningCircle size={16} className="text-red-500" weight="fill" /> },
+          { label: L.kpiInProgress, value: stats.in_progress || 0, color: "bg-amber-50 text-amber-700", icon: <Wrench size={16} className="text-amber-500" weight="fill" /> },
+          { label: L.kpiResolved, value: stats.resolved || 0, color: "bg-emerald-50 text-emerald-700", icon: <CheckCircle size={16} className="text-emerald-500" weight="fill" /> },
+          { label: L.kpiOverdue, value: stats.overdue || 0, color: stats.overdue > 0 ? "bg-red-100 text-red-800" : "bg-stone-50 text-stone-600", icon: <Timer size={16} className={stats.overdue > 0 ? "text-red-600" : "text-stone-400"} weight="fill" /> },
+          { label: L.kpiCost, value: `£${(stats.costs?.total_actual || 0).toLocaleString()}`, color: "bg-blue-50 text-blue-700", icon: <CurrencyDollar size={16} className="text-blue-500" weight="fill" /> },
         ].map((s, i) => (
-          <div key={i} className={`${s.color} rounded-xl p-3.5 flex items-center gap-2.5`} data-testid={`stat-${s.label.toLowerCase().replace(/ /g, "-")}`}>
+          <div key={i} className={`${s.color} rounded-xl p-3.5 flex items-center gap-2.5`} data-testid={`stat-${i}`}>
             {s.icon}
             <div>
               <p className="text-xl font-bold">{s.value}</p>
@@ -158,12 +222,12 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
       <div className="flex items-center justify-between">
         <div className="flex gap-1 bg-stone-100 p-1 rounded-lg" data-testid="maint-tabs">
           {[
-            { id: "issues", label: "Issues", icon: <Wrench size={13} /> },
-            { id: "assets", label: "Assets", icon: <Package size={13} /> },
-            { id: "team", label: "Team", icon: <Lightning size={13} /> },
-            { id: "vendors", label: "Vendors", icon: <Lightning size={13} /> },
-            { id: "recurring", label: "Preventive", icon: <Repeat size={13} /> },
-            { id: "analytics", label: "Analytics", icon: <Lightning size={13} /> },
+            { id: "issues", label: L.tabIssues, icon: <Wrench size={13} /> },
+            { id: "assets", label: L.tabAssets, icon: <Package size={13} /> },
+            { id: "team", label: L.tabTeam, icon: <Lightning size={13} /> },
+            { id: "vendors", label: L.tabVendors, icon: <Lightning size={13} /> },
+            { id: "recurring", label: L.tabPreventive, icon: <Repeat size={13} /> },
+            { id: "analytics", label: L.tabAnalytics, icon: <Lightning size={13} /> },
           ].map(t => (
             <button key={t.id} onClick={() => setTab(t.id)} className={`px-3 py-1.5 text-xs font-medium rounded-md flex items-center gap-1.5 transition ${tab === t.id ? "bg-white shadow-sm text-stone-800" : "text-stone-500"}`} data-testid={`maint-tab-${t.id}`}>
               {t.icon} {t.label}
@@ -182,37 +246,45 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
         <>
           {/* Filters */}
           <div className="flex items-center gap-2 flex-wrap" data-testid="maint-filters">
-            <Input data-testid="maint-search" placeholder="Search issues..." value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[200px] h-8 text-xs" />
+            <Input data-testid="maint-search" placeholder={L.search} value={search} onChange={(e) => setSearch(e.target.value)} className="max-w-[200px] h-8 text-xs" />
             <Select value={filterStatus} onValueChange={setFilterStatus}>
               <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                {Object.entries(STATUS_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                <SelectItem value="all">{L.allStatus}</SelectItem>
+                <SelectItem value="open">{L.stOpen}</SelectItem>
+                <SelectItem value="acknowledged">{L.stAck}</SelectItem>
+                <SelectItem value="in_progress">{L.stInProgress}</SelectItem>
+                <SelectItem value="resolved">{L.stResolved}</SelectItem>
+                <SelectItem value="verified">{L.stVerified}</SelectItem>
+                <SelectItem value="closed">{L.stClosed}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterPriority} onValueChange={setFilterPriority}>
               <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Priority</SelectItem>
-                {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                <SelectItem value="all">{L.allPriority}</SelectItem>
+                <SelectItem value="critical">{L.priCritical}</SelectItem>
+                <SelectItem value="high">{L.priHigh}</SelectItem>
+                <SelectItem value="medium">{L.priMedium}</SelectItem>
+                <SelectItem value="low">{L.priLow}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger className="w-32 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Category</SelectItem>
+                <SelectItem value="all">{L.allCategory}</SelectItem>
                 {Object.entries(CATEGORY_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterDepartment} onValueChange={setFilterDepartment}>
               <SelectTrigger className="w-36 h-8 text-xs" data-testid="filter-department"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                <SelectItem value="maintenance">Maintenance</SelectItem>
-                <SelectItem value="housekeeping">Housekeeping</SelectItem>
-                <SelectItem value="reception">Reception</SelectItem>
-                <SelectItem value="management">Management</SelectItem>
-                <SelectItem value="kitchen">Kitchen</SelectItem>
+                <SelectItem value="all">{L.allDepts}</SelectItem>
+                <SelectItem value="maintenance">{L.deptMaint}</SelectItem>
+                <SelectItem value="housekeeping">{L.deptHk}</SelectItem>
+                <SelectItem value="reception">{L.deptRec}</SelectItem>
+                <SelectItem value="management">{L.deptMgmt}</SelectItem>
+                <SelectItem value="kitchen">{L.deptKitch}</SelectItem>
               </SelectContent>
             </Select>
             <button onClick={fetchData} className="p-1.5 text-stone-400 hover:text-stone-600"><ArrowsClockwise size={14} /></button>
@@ -226,14 +298,16 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
                 return (
                   <div key={col.id} className="bg-stone-50 rounded-xl p-3" data-testid={`kanban-col-${col.id}`}>
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="text-xs font-bold text-stone-600 uppercase tracking-wide">{col.label}</h3>
+                      <h3 className="text-xs font-bold text-stone-600 uppercase tracking-wide">
+                        {col.id === "open" ? L.colOpen : col.id === "working" ? L.colInProgress : col.id === "resolved" ? L.colResolved : L.colVerifiedClosed}
+                      </h3>
                       <span className="text-[10px] font-bold text-stone-400 bg-stone-200 px-1.5 py-0.5 rounded-full">{colIssues.length}</span>
                     </div>
                     <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                       {colIssues.map(issue => (
-                        <IssueCard key={issue.id} issue={issue} onClick={() => setSelectedIssue(issue)} onStatusChange={updateStatus} />
+                        <IssueCard key={issue.id} issue={issue} L={L} onClick={() => setSelectedIssue(issue)} onStatusChange={updateStatus} />
                       ))}
-                      {colIssues.length === 0 && <p className="text-xs text-stone-400 text-center py-6">No issues</p>}
+                      {colIssues.length === 0 && <p className="text-xs text-stone-400 text-center py-6">—</p>}
                     </div>
                   </div>
                 );
@@ -297,7 +371,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
       )}
 
       {/* Create Issue Dialog */}
-      <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} assignees={assignees} assets={assets} onCreated={() => { setShowCreate(false); fetchData(); }} />
+      <CreateIssueDialog open={showCreate} onClose={() => setShowCreate(false)} propertyId={activePropertyId} assignees={assignees} assets={assets} L={L} onCreated={() => { setShowCreate(false); fetchData(); }} />
 
       {/* Issue Detail Drawer */}
       <IssueDetailDrawer issue={selectedIssue} onClose={() => setSelectedIssue(null)} assignees={assignees} onUpdate={() => { fetchData(); }} />
@@ -306,7 +380,7 @@ export function MaintenancePanel({ properties, activePropertyId: propActivePrope
 }
 
 /* ==================== ISSUE CARD (Kanban) ==================== */
-function IssueCard({ issue, onClick, onStatusChange }) {
+function IssueCard({ issue, L, onClick, onStatusChange }) {
   const pri = PRIORITY_CONFIG[issue.priority] || PRIORITY_CONFIG.medium;
   const nextStatus =
     issue.status === "open" ? "acknowledged" :
@@ -315,11 +389,11 @@ function IssueCard({ issue, onClick, onStatusChange }) {
     issue.status === "resolved" ? "verified" :
     issue.status === "verified" ? "closed" : null;
   const nextLabel =
-    nextStatus === "acknowledged" ? "Ack" :
-    nextStatus === "in_progress" ? "Start" :
-    nextStatus === "resolved" ? "Resolve" :
-    nextStatus === "verified" ? "Verify" :
-    nextStatus === "closed" ? "Close" : null;
+    nextStatus === "acknowledged" ? (L?.actAck || "Ack") :
+    nextStatus === "in_progress" ? (L?.actStart || "Start") :
+    nextStatus === "resolved" ? (L?.actResolve || "Resolve") :
+    nextStatus === "verified" ? (L?.actVerify || "Verify") :
+    nextStatus === "closed" ? (L?.actClose || "Close") : null;
 
   return (
     <div className="bg-white rounded-lg border border-stone-200/80 p-3 hover:shadow-sm transition cursor-pointer" onClick={onClick} data-testid={`kanban-card-${issue.id}`}>
@@ -359,7 +433,7 @@ function IssueCard({ issue, onClick, onStatusChange }) {
 }
 
 /* ==================== CREATE ISSUE DIALOG ==================== */
-function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets = [], onCreated }) {
+function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets = [], L, onCreated }) {
   const [form, setForm] = useState({ title: "", description: "", category: "general", priority: "medium", priority_override: 0, location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" });
   const [creating, setCreating] = useState(false);
   const [photos, setPhotos] = useState([]);
@@ -386,17 +460,17 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets =
         fd.append("photo_type", "before");
         await axios.post(`${API}/maintenance/upload-photo/${data.id}`, fd, { headers: { "Content-Type": "multipart/form-data" } });
       }
-      toast.success("Issue reported!"); setForm({ title: "", description: "", category: "general", priority: "medium", priority_override: 0, location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" }); setPhotos([]); onCreated();
-    } catch { toast.error("Failed to create"); }
+      toast.success(L?.issueCreated || "Issue reported!"); setForm({ title: "", description: "", category: "general", priority: "medium", priority_override: 0, location: "", room_number: "", assigned_to: "", assigned_department: "", asset_id: "", asset_name: "" }); setPhotos([]); onCreated();
+    } catch { toast.error(L?.issueFailed || "Failed to create"); }
     setCreating(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-lg" data-testid="create-issue-dialog">
-        <DialogHeader><DialogTitle>Report Maintenance Issue</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{L?.dialogTitle || "Report Maintenance Issue"}</DialogTitle></DialogHeader>
         <div className="space-y-3 max-h-[65vh] overflow-y-auto">
-          <Input data-testid="issue-title" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Issue title *" />
+          <Input data-testid="issue-title" value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder={L?.issueTitle || "Issue title *"} />
           <div className="grid grid-cols-2 gap-3">
             <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
               <SelectTrigger className="h-9 text-sm" data-testid="issue-category"><SelectValue /></SelectTrigger>
@@ -407,29 +481,32 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets =
             <Select value={form.priority} onValueChange={v => setForm(p => ({ ...p, priority: v }))}>
               <SelectTrigger className="h-9 text-sm" data-testid="issue-priority"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label} (SLA: {v.sla})</SelectItem>)}
+                <SelectItem value="critical">{L?.priCritical || "Critical"} (SLA: 2h)</SelectItem>
+                <SelectItem value="high">{L?.priHigh || "High"} (SLA: 8h)</SelectItem>
+                <SelectItem value="medium">{L?.priMedium || "Medium"} (SLA: 24h)</SelectItem>
+                <SelectItem value="low">{L?.priLow || "Low"} (SLA: 72h)</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input data-testid="issue-location" value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} placeholder="Location (e.g. Lobby)" />
-            <Input data-testid="issue-room" value={form.room_number} onChange={e => setForm(p => ({ ...p, room_number: e.target.value }))} placeholder="Room number" />
+            <Input data-testid="issue-location" value={form.location} onChange={e => setForm(p => ({ ...p, location: e.target.value }))} placeholder={L?.locPh || "Location (e.g. Lobby)"} />
+            <Input data-testid="issue-room" value={form.room_number} onChange={e => setForm(p => ({ ...p, room_number: e.target.value }))} placeholder={L?.roomPh || "Room number"} />
           </div>
           <div>
-            <label className="text-[10px] font-medium text-stone-500 block mb-0.5">Priority Override (0-10, optional)</label>
+            <label className="text-[10px] font-medium text-stone-500 block mb-0.5">{L?.overrideLbl || "Priority Override (0-10, optional)"}</label>
             <Input type="number" min="0" max="10" value={form.priority_override}
               onChange={e => setForm(p => ({ ...p, priority_override: Math.max(0, Math.min(10, parseInt(e.target.value) || 0)) }))}
-              data-testid="issue-priority-override" placeholder="0 = use default by priority level" />
-            <p className="text-[9px] text-stone-400 mt-0.5">Leave at 0 to use default. Higher = more urgent (e.g. 10 for VIP/emergency).</p>
+              data-testid="issue-priority-override" placeholder={L?.overridePh || "0 = use default"} />
+            <p className="text-[9px] text-stone-400 mt-0.5">{L?.overrideHint || "Leave at 0 to use default."}</p>
           </div>
           {/* Asset linker */}
           <Select value={form.asset_id || "_none"} onValueChange={v => {
             const a = assets.find(x => x.id === v);
             setForm(p => ({ ...p, asset_id: v === "_none" ? "" : v, asset_name: a?.name || "" }));
           }}>
-            <SelectTrigger className="h-9 text-sm" data-testid="issue-asset"><SelectValue placeholder="Link to asset (optional)" /></SelectTrigger>
+            <SelectTrigger className="h-9 text-sm" data-testid="issue-asset"><SelectValue placeholder={L?.linkAsset || "Link to asset (optional)"} /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="_none">No asset</SelectItem>
+              <SelectItem value="_none">{L?.noAsset || "No asset"}</SelectItem>
               {assets.map(a => (
                 <SelectItem key={a.id} value={a.id}>{a.name} {a.location ? `· ${a.location}` : ""}</SelectItem>
               ))}
@@ -437,20 +514,20 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets =
           </Select>
           <div className="grid grid-cols-2 gap-3">
             <Select value={form.assigned_department || "_auto"} onValueChange={v => setForm(p => ({ ...p, assigned_department: v === "_auto" ? "" : v }))}>
-              <SelectTrigger className="h-9 text-sm" data-testid="issue-department"><SelectValue placeholder="Department" /></SelectTrigger>
+              <SelectTrigger className="h-9 text-sm" data-testid="issue-department"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="_auto">Auto (by category)</SelectItem>
-                <SelectItem value="maintenance">Maintenance</SelectItem>
-                <SelectItem value="housekeeping">Housekeeping</SelectItem>
-                <SelectItem value="reception">Reception</SelectItem>
-                <SelectItem value="management">Management</SelectItem>
-                <SelectItem value="kitchen">Kitchen</SelectItem>
+                <SelectItem value="_auto">{L?.autoDept || "Auto (by category)"}</SelectItem>
+                <SelectItem value="maintenance">{L?.deptMaint || "Maintenance"}</SelectItem>
+                <SelectItem value="housekeeping">{L?.deptHk || "Housekeeping"}</SelectItem>
+                <SelectItem value="reception">{L?.deptRec || "Reception"}</SelectItem>
+                <SelectItem value="management">{L?.deptMgmt || "Management"}</SelectItem>
+                <SelectItem value="kitchen">{L?.deptKitch || "Kitchen"}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={form.assigned_to || "_unassigned"} onValueChange={v => setForm(p => ({ ...p, assigned_to: v === "_unassigned" ? "" : v }))}>
-              <SelectTrigger className="h-9 text-sm" data-testid="issue-assignee"><SelectValue placeholder="Assign to..." /></SelectTrigger>
+              <SelectTrigger className="h-9 text-sm" data-testid="issue-assignee"><SelectValue placeholder={L?.assignTo || "Assign to..."} /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="_unassigned">Unassigned</SelectItem>
+                <SelectItem value="_unassigned">{L?.unassigned || "Unassigned"}</SelectItem>
                 {assignees.filter(a => a.type === "internal").length > 0 && <div className="px-2 py-1 text-[9px] font-bold text-stone-400 uppercase">Internal Team</div>}
                 {assignees.filter(a => a.type === "internal").map(a => (
                   <SelectItem key={a.name} value={a.name}>{a.name} ({a.open_issues} open)</SelectItem>
@@ -462,11 +539,11 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets =
               </SelectContent>
             </Select>
           </div>
-          <Textarea data-testid="issue-description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="Describe the issue in detail..." rows={3} />
+          <Textarea data-testid="issue-description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder={L?.descPh || "Describe the issue in detail..."} rows={3} />
 
           {/* Before Photos */}
           <div>
-            <label className="text-xs font-medium text-stone-600 mb-1.5 block">Before Photos (current condition)</label>
+            <label className="text-xs font-medium text-stone-600 mb-1.5 block">{L?.beforePhotos || "Before Photos (current condition)"}</label>
             <div className="flex gap-2 flex-wrap">
               {photos.map((p, i) => (
                 <div key={i} className="w-16 h-16 rounded-lg border border-stone-200 overflow-hidden relative group">
@@ -482,7 +559,7 @@ function CreateIssueDialog({ open, onClose, propertyId, assignees = [], assets =
           </div>
 
           <button onClick={create} disabled={creating} className="w-full py-2.5 bg-orange-500 text-white text-sm font-bold rounded-xl hover:bg-orange-600 disabled:opacity-50 transition" data-testid="btn-submit-issue">
-            {creating ? "Submitting..." : "Submit Issue"}
+            {creating ? "Submitting..." : (L?.submit || "Submit Issue")}
           </button>
         </div>
       </DialogContent>

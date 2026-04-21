@@ -2424,11 +2424,53 @@ const PhotoLightbox = ({ photos = [], onClose }) => {
 
   if (!photos.length) return null;
 
+  const ts = new Date().toISOString().slice(0, 10);
+  const extOf = (dataUrl) => (dataUrl.startsWith("data:image/png") ? "png" : "jpg");
+
+  const downloadOne = () => {
+    const a = document.createElement("a");
+    a.href = photos[idx];
+    a.download = `laundry_photo_${idx + 1}_${ts}.${extOf(photos[idx])}`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  const downloadAllZip = async () => {
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      for (let i = 0; i < photos.length; i++) {
+        const [, payload] = photos[i].split(",");
+        zip.file(`photo_${i + 1}.${extOf(photos[i])}`, payload, { base64: true });
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `laundry_photos_${ts}.zip`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch { toast.error("Failed to create ZIP"); }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4" onClick={onClose} data-testid="photo-lightbox">
       <button onClick={onClose} className="absolute top-4 right-4 text-white text-4xl leading-none hover:text-stone-300" data-testid="lightbox-close">×</button>
       <div className="absolute top-4 left-4 text-white text-sm font-semibold bg-black/40 px-3 py-1 rounded-full">
         {idx + 1} / {photos.length}
+      </div>
+      {/* Download buttons */}
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+        <button onClick={downloadOne}
+          className="flex items-center gap-1.5 px-3 py-2 bg-white/90 hover:bg-white text-stone-900 text-xs font-bold rounded-lg shadow"
+          data-testid="lightbox-download-one">
+          <Download className="w-4 h-4" />Download
+        </button>
+        {photos.length > 1 && (
+          <button onClick={downloadAllZip}
+            className="flex items-center gap-1.5 px-3 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-bold rounded-lg shadow"
+            data-testid="lightbox-download-zip">
+            <Download className="w-4 h-4" />Download all ({photos.length}) — ZIP
+          </button>
+        )}
       </div>
       {photos.length > 1 && (
         <>
@@ -2438,7 +2480,7 @@ const PhotoLightbox = ({ photos = [], onClose }) => {
             className="absolute right-4 text-white text-5xl hover:text-stone-300 z-10" data-testid="lightbox-next">›</button>
         </>
       )}
-      <img src={photos[idx]} alt={`proof-${idx + 1}`} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
+      <img src={photos[idx]} alt={`proof-${idx + 1}`} className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" onClick={e => e.stopPropagation()} />
     </div>
   );
 };

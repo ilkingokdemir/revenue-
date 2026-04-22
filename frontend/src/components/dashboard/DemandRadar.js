@@ -225,6 +225,23 @@ export const DemandRadar = ({ propertyId }) => {
             })}
             {/* Price change line */}
             <path d={pickup_change.slice(0, days).map((p, i) => { const x = pL + (i / Math.max(pickup_change.length - 1, 1)) * iW; return `${i === 0 ? "M" : "L"} ${x} ${70 - p.price_change * 2}`; }).join(" ")} fill="none" stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
+            {/* X-axis date labels — every day + month names on change */}
+            {pickup_change.slice(0, days).map((p, i) => {
+              const ds = p.date || daily[i]?.date;
+              if (!ds) return null;
+              const dt = new Date(ds + "T00:00:00");
+              const dayNum = dt.getDate();
+              const monthShort = dt.toLocaleDateString("en", { month: "short" });
+              const prevDs = i > 0 ? (pickup_change[i - 1]?.date || daily[i - 1]?.date) : null;
+              const isMonthStart = !prevDs || new Date(prevDs + "T00:00:00").getMonth() !== dt.getMonth();
+              const x = pL + (i / Math.max(pickup_change.length - 1, 1)) * iW;
+              return (
+                <g key={`pxtick-${i}`}>
+                  <text x={x} y={125} textAnchor="middle" fontSize="6" fill={isMonthStart ? "#ffffff" : "#9ca3af"} fontWeight={isMonthStart ? "700" : "500"}>{dayNum}</text>
+                  {isMonthStart && <text x={x} y={135} textAnchor="middle" fontSize="7" fill="#10b981" fontWeight="800">{monthShort}</text>}
+                </g>
+              );
+            })}
           </svg>
         </div>
       </div>

@@ -321,7 +321,7 @@ export const MarketDemandDashboard = ({ propertyId }) => {
               const y = padT + (1 - frac) * innerH; const val = Math.round(minRate + frac * (maxRate - minRate));
               return (<g key={frac}><line x1={padL} x2={chartW - padR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" /><text x={padL - 8} y={y + 4} textAnchor="end" className="text-[8px]" fill="#6b7280">{cur(val)}</text></g>);
             })}
-            {monthLabels.map(ml => (<g key={ml.i}><line x1={scaleX(ml.i)} x2={scaleX(ml.i)} y1={padT} y2={chartH - padB} stroke="#4b5563" strokeWidth="0.5" strokeDasharray="4 4" /><text x={scaleX(ml.i) + 4} y={chartH - 18} textAnchor="start" className="text-[10px]" fill="#9ca3af" fontWeight="600">{ml.label}</text></g>))}
+            {monthLabels.map(ml => (<g key={ml.i}><line x1={scaleX(ml.i)} x2={scaleX(ml.i)} y1={padT} y2={chartH - padB} stroke="#4b5563" strokeWidth="0.5" strokeDasharray="4 4" /></g>))}
             {aboveFill.map((af, idx) => <rect key={`a${idx}`} x={scaleX(af.i) - 2} y={scaleY(af.top)} width={4} height={scaleY(af.bot) - scaleY(af.top)} fill="#22c55e" opacity="0.15" />)}
             {belowFill.map((bf, idx) => <rect key={`b${idx}`} x={scaleX(bf.i) - 2} y={scaleY(bf.top)} width={4} height={scaleY(bf.bot) - scaleY(bf.top)} fill="#ef4444" opacity="0.15" />)}
             <path d={floorLine} fill="none" stroke="#f87171" strokeWidth="1" strokeDasharray="3 3" opacity="0.4" />
@@ -329,6 +329,21 @@ export const MarketDemandDashboard = ({ propertyId }) => {
             {compSegs.map((s, si) => <path key={`c${si}`} d={s.map((pt, j) => `${j === 0 ? "M" : "L"} ${scaleX(pt.i)} ${scaleY(pt.y)}`).join(" ")} fill="none" stroke="#f59e0b" strokeWidth="2" opacity="0.8" />)}
             <path d={sellLine} fill="none" stroke="#06b6d4" strokeWidth="2.5" strokeLinejoin="round" />
             {daily_data.map((d, i) => d.event ? <circle key={`ev${i}`} cx={scaleX(i)} cy={scaleY(d.sell_rate)} r="4" fill="#ef4444" stroke="#000" strokeWidth="1" /> : null)}
+            {/* X-axis date labels — every day + month names on change */}
+            {daily_data.map((d, i) => {
+              if (!d?.date) return null;
+              const dt = new Date(d.date + "T00:00:00");
+              const dayNum = dt.getDate();
+              const monthShort = dt.toLocaleDateString("en", { month: "short" });
+              const prev = i > 0 ? new Date(daily_data[i - 1].date + "T00:00:00") : null;
+              const isMonthStart = !prev || prev.getMonth() !== dt.getMonth();
+              return (
+                <g key={`xd${i}`}>
+                  <text x={scaleX(i)} y={chartH - padB + 10} textAnchor="middle" fontSize="6" fill={isMonthStart ? "#ffffff" : "#9ca3af"} fontWeight={isMonthStart ? "700" : "500"}>{dayNum}</text>
+                  {isMonthStart && <text x={scaleX(i)} y={chartH - padB + 20} textAnchor="middle" fontSize="7" fill="#10b981" fontWeight="800">{monthShort}</text>}
+                </g>
+              );
+            })}
             {daily_data.filter((_, i) => i % Math.max(Math.floor(daily_data.length / 12), 1) === 0).map((d) => {
               const i = daily_data.indexOf(d);
               return (<g key={`lbl${i}`}><text x={scaleX(i)} y={scaleY(d.sell_rate) - 8} textAnchor="middle" className="text-[7px]" fill="#06b6d4" fontWeight="600">{cur(d.sell_rate)}</text>{d.comp_avg && <text x={scaleX(i)} y={scaleY(d.comp_avg) + 14} textAnchor="middle" className="text-[7px]" fill="#f59e0b">{cur(d.comp_avg)}</text>}</g>);
@@ -361,10 +376,23 @@ export const MarketDemandDashboard = ({ propertyId }) => {
             );
           })}
         </div>
-        <div className="flex items-center justify-between mt-2 text-[9px] text-stone-500">
-          <span>{daily_data[0]?.date}</span>
-          {daily_data.length > 2 && <span>{daily_data[Math.floor(daily_data.length / 2)]?.date}</span>}
-          <span>{daily_data[daily_data.length - 1]?.date}</span>
+        {/* Day labels under heatmap — every day, month name when month changes */}
+        <div className="flex flex-wrap gap-[2px] mt-1">
+          {daily_data.map((d, i) => {
+            if (!d?.date) return null;
+            const dt = new Date(d.date + "T00:00:00");
+            const dayNum = dt.getDate();
+            const prev = i > 0 ? new Date(daily_data[i - 1].date + "T00:00:00") : null;
+            const isMonthStart = !prev || prev.getMonth() !== dt.getMonth();
+            const monthShort = dt.toLocaleDateString("en", { month: "short" });
+            const width = Math.max(3, Math.min(10, 700 / daily_data.length));
+            return (
+              <div key={`hl${i}`} style={{ width: `${width}px` }} className="text-center leading-none">
+                <div className={`text-[7px] ${isMonthStart ? "text-white font-bold" : "text-stone-500"}`}>{dayNum}</div>
+                {isMonthStart && <div className="text-[6px] text-emerald-400 font-black">{monthShort}</div>}
+              </div>
+            );
+          })}
         </div>
       </div>
 

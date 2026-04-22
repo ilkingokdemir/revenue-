@@ -139,29 +139,23 @@ export const DemandRadar = ({ propertyId }) => {
               const color = isEvent ? "#ef4444" : (d.demand || 0) >= 70 ? "#ef4444" : (d.demand || 0) >= 40 ? "#14b8a6" : "#0d9488";
               return <rect key={i} x={sx(i) - barW / 2} y={pT + iH - h} width={barW} height={h} fill={color} rx="1" opacity="0.85" />;
             })}
-            {/* X-axis date labels (every Nth day so they don't overlap) */}
-            {(() => {
-              const n = demandDays.length;
-              const step = n > 60 ? 10 : n > 30 ? 7 : n > 14 ? 3 : 1;
-              const ticks = [];
-              for (let i = 0; i < n; i += step) ticks.push(i);
-              if (ticks[ticks.length - 1] !== n - 1) ticks.push(n - 1);
-              return ticks.map(i => {
-                const d = demandDays[i];
-                if (!d?.date) return null;
-                const dt = new Date(d.date + "T00:00:00");
-                const dayNum = dt.getDate();
-                const monthShort = dt.toLocaleDateString("en", { month: "short" });
-                const dow = dt.toLocaleDateString("en", { weekday: "short" });
-                return (
-                  <g key={`tick-${i}`}>
-                    <line x1={sx(i)} x2={sx(i)} y1={pT + iH} y2={pT + iH + 3} stroke="#4b5563" strokeWidth="0.5" />
-                    <text x={sx(i)} y={pT + iH + 11} textAnchor="middle" className="text-[7px]" fill="#e5e7eb" fontWeight="700">{dayNum} {monthShort}</text>
-                    <text x={sx(i)} y={pT + iH + 20} textAnchor="middle" className="text-[6px]" fill="#6b7280">{dow}</text>
-                  </g>
-                );
-              });
-            })()}
+            {/* X-axis date labels — every day, month label when month changes */}
+            {demandDays.map((d, i) => {
+              if (!d?.date) return null;
+              const dt = new Date(d.date + "T00:00:00");
+              const dayNum = dt.getDate();
+              const monthShort = dt.toLocaleDateString("en", { month: "short" });
+              const prev = i > 0 ? new Date(demandDays[i - 1].date + "T00:00:00") : null;
+              const isMonthStart = !prev || prev.getMonth() !== dt.getMonth();
+              return (
+                <g key={`tick-${i}`}>
+                  <text x={sx(i)} y={pT + iH + 10} textAnchor="middle" fontSize="6" fill={isMonthStart ? "#ffffff" : "#9ca3af"} fontWeight={isMonthStart ? "700" : "500"}>{dayNum}</text>
+                  {isMonthStart && (
+                    <text x={sx(i)} y={pT + iH + 20} textAnchor="middle" fontSize="7" fill="#10b981" fontWeight="800">{monthShort}</text>
+                  )}
+                </g>
+              );
+            })}
             {/* 7d trend */}
             <path d={trendPath} fill="none" stroke="#5eead4" strokeWidth="1.5" strokeDasharray="4 3" opacity="0.7" />
           </svg>
@@ -185,28 +179,24 @@ export const DemandRadar = ({ propertyId }) => {
               <svg viewBox={`0 0 ${cW} ${cH}`} className="w-full" style={{ minWidth: "600px" }}>
                 {[0, 0.25, 0.5, 0.75, 1].map(f => { const y = 10 + (1 - f) * (iH - 10); const v = Math.round(minW + f * (maxW - minW)); return <g key={f}><line x1={pL} x2={cW - pR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" /><text x={pL - 5} y={y + 4} textAnchor="end" className="text-[7px]" fill="#6b7280">{cur(v)}</text></g>; })}
                 <path d={wLine} fill="none" stroke="#ffffff" strokeWidth="2" />
-                {/* X-axis date labels */}
-                {(() => {
-                  const n = wapDays.length;
-                  const step = n > 60 ? 10 : n > 30 ? 7 : n > 14 ? 3 : 1;
-                  const ticks = [];
-                  for (let i = 0; i < n; i += step) ticks.push(i);
-                  if (ticks[ticks.length - 1] !== n - 1) ticks.push(n - 1);
-                  return ticks.map(i => {
-                    const d = wapDays[i];
-                    if (!d?.date) return null;
-                    const dt = new Date(d.date + "T00:00:00");
-                    const dayNum = dt.getDate();
-                    const monthShort = dt.toLocaleDateString("en", { month: "short" });
-                    const x = wSX(i);
-                    return (
-                      <g key={`wtick-${i}`}>
-                        <line x1={x} x2={x} y1={pT + iH} y2={pT + iH + 3} stroke="#4b5563" strokeWidth="0.5" />
-                        <text x={x} y={pT + iH + 11} textAnchor="middle" className="text-[7px]" fill="#e5e7eb" fontWeight="700">{dayNum} {monthShort}</text>
-                      </g>
-                    );
-                  });
-                })()}
+                {/* X-axis date labels — every day */}
+                {wapDays.map((d, i) => {
+                  if (!d?.date) return null;
+                  const dt = new Date(d.date + "T00:00:00");
+                  const dayNum = dt.getDate();
+                  const monthShort = dt.toLocaleDateString("en", { month: "short" });
+                  const prev = i > 0 ? new Date(wapDays[i - 1].date + "T00:00:00") : null;
+                  const isMonthStart = !prev || prev.getMonth() !== dt.getMonth();
+                  const x = wSX(i);
+                  return (
+                    <g key={`wtick-${i}`}>
+                      <text x={x} y={pT + iH + 10} textAnchor="middle" fontSize="6" fill={isMonthStart ? "#ffffff" : "#9ca3af"} fontWeight={isMonthStart ? "700" : "500"}>{dayNum}</text>
+                      {isMonthStart && (
+                        <text x={x} y={pT + iH + 20} textAnchor="middle" fontSize="7" fill="#10b981" fontWeight="800">{monthShort}</text>
+                      )}
+                    </g>
+                  );
+                })}
               </svg>
             </div>
           </div>

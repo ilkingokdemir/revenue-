@@ -365,18 +365,58 @@ export default function NeighborhoodScanPanel({ propertyId }) {
             <Building2 className="w-4 h-4 text-emerald-400" />
             <h3 className="text-sm font-bold text-stone-100">Neighborhood Supply & Prices · Next {days} days</h3>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-stone-800">
             <table className="w-full text-xs">
-              <thead>
-                <tr className="text-[9px] uppercase text-stone-500 border-b border-stone-700">
-                  <th className="text-left py-2 pr-2 font-bold tracking-widest">Date</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Location</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Hotels</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Unavail %</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Avg £</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Δ vs Prev</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Min £</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Max £</th>
+              <thead className="bg-stone-950/80">
+                <tr className="text-[11px] text-stone-100 border-b-2 border-emerald-500/40">
+                  <th className="text-left py-3 pl-3 pr-2 font-bold tracking-wide">
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Tarih</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">Check-in günü</span>
+                    </div>
+                  </th>
+                  <th className="text-right px-2 font-bold">
+                    <div className="flex flex-col leading-tight items-end">
+                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Bölge</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">Tarama lokasyonu</span>
+                    </div>
+                  </th>
+                  <th className="text-right px-2 font-bold">
+                    <div className="flex flex-col leading-tight items-end">
+                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Otel</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">Toplam rakip</span>
+                    </div>
+                  </th>
+                  <th className="text-right px-2 font-bold">
+                    <div className="flex flex-col leading-tight items-end">
+                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Doluluk %</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">Rezerve olan oran</span>
+                    </div>
+                  </th>
+                  <th className="text-right px-2 font-bold">
+                    <div className="flex flex-col leading-tight items-end">
+                      <span className="text-amber-300 uppercase text-[10px] tracking-widest">Ort. Fiyat</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">Rakip ortalaması</span>
+                    </div>
+                  </th>
+                  <th className="text-right px-2 font-bold">
+                    <div className="flex flex-col leading-tight items-end">
+                      <span className="text-violet-300 uppercase text-[10px] tracking-widest">Δ Değişim</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">Bir önceki güne göre</span>
+                    </div>
+                  </th>
+                  <th className="text-right px-2 font-bold">
+                    <div className="flex flex-col leading-tight items-end">
+                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Min £</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">En ucuz oda</span>
+                    </div>
+                  </th>
+                  <th className="text-right pr-3 pl-2 font-bold">
+                    <div className="flex flex-col leading-tight items-end">
+                      <span className="text-rose-300 uppercase text-[10px] tracking-widest">Max £</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">En pahalı oda</span>
+                    </div>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -389,11 +429,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   const up = delta !== null && delta > 0;
                   return (
                     <tr key={s.date} className="border-b border-stone-800/40 hover:bg-emerald-500/5">
-                      <td className="py-2 pr-2 text-stone-200 font-semibold tabular-nums">{s.date}</td>
+                      <td className="py-2.5 pl-3 pr-2 text-stone-100 font-semibold tabular-nums">{s.date}</td>
                       <td className="text-right px-2 text-stone-400 truncate max-w-[120px]">{s.location}</td>
                       <td className="text-right px-2 text-stone-300 tabular-nums">{s.total_properties || "—"}</td>
                       <td className="text-right px-2 tabular-nums">
-                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${hot ? "bg-rose-500/20 text-rose-300" : (s.unavailable_pct||0) >= 60 ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/15 text-emerald-300"}`}>
+                        <span className={`inline-block px-2 py-0.5 rounded font-bold ${hot ? "bg-rose-500/20 text-rose-200" : (s.unavailable_pct||0) >= 60 ? "bg-amber-500/20 text-amber-200" : "bg-emerald-500/15 text-emerald-200"}`}>
                           {s.unavailable_pct}%
                         </span>
                       </td>
@@ -405,8 +445,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                           </span>
                         )}
                       </td>
-                      <td className="text-right px-2 text-stone-400 tabular-nums">{s.min_price ? cur(s.min_price) : "—"}</td>
-                      <td className="text-right px-2 text-stone-400 tabular-nums">{s.max_price ? cur(s.max_price) : "—"}</td>
+                      <td className="text-right px-2 text-stone-300 tabular-nums">{s.min_price ? cur(s.min_price) : "—"}</td>
+                      <td className="text-right pr-3 pl-2 text-stone-300 tabular-nums">{s.max_price ? cur(s.max_price) : "—"}</td>
                     </tr>
                   );
                 })}

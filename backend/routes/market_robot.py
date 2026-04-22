@@ -268,6 +268,10 @@ def create_market_robot_router(db, require_roles):
     async def run_scan(property_id: str, data: Dict = {},
                        current_user: dict = Depends(require_roles("admin", "manager"))):
         """Run a market supply scan for the next N days."""
+        return await _do_scan(property_id, data or {})
+
+    async def _do_scan(property_id: str, data: Dict):
+        """Core scan logic — callable from HTTP endpoint and background loop."""
         global SCRAPE_RUNNING
         if SCRAPE_RUNNING:
             return {"error": "Scan already in progress", "status": "busy"}
@@ -330,10 +334,10 @@ def create_market_robot_router(db, require_roles):
             if auto_pricing and snapshots:
                 applied = await _apply_auto_pricing(db, property_id, snapshots)
 
-            # Update config
+            # Update config — last_scan + increment total_scans
             await db.market_robot_config.update_one(
                 {"property_id": property_id},
-                {"$set": {"last_scan": now.isoformat(), "$inc_placeholder": True},
+                {"$set": {"last_scan": now.isoformat()},
                  "$inc": {"total_scans": 1}},
                 upsert=True
             )
@@ -1421,5 +1425,38 @@ Date range: {date_from} to {date_to}."""
     async def scanner_status(property_id: str,
                              current_user: dict = Depends(require_roles("admin", "manager"))):
         return scanner.get_status()
+
+    async def auto_scan_loop():
+        """Background loop: every 60s check enabled market-robot configs and trigger due scans."""
+        logger.info("🛰️ Market Robot auto-scan loop started")
+        while True:
+            try:
+                configs = await db.market_robot_config.find({"enabled": True}, {"_id": 0}).to_list(500)
+                now = datetime.now(timezone.utc)
+                for cfg in configs:
+                    pid = cfg.get("property_id")
+                    if not pid or pid == "all":
+                        continue
+                    interval = int(cfg.get("scan_interval_minutes") or 60)
+                    last = cfg.get("last_scan")
+                    due = True
+                    if last:
+                        try:
+                            last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                            due = (now - last_dt) >= timedelta(minutes=interval)
+                        except Exception:
+                            due = True
+                    if due and not SCRAPE_RUNNING:
+                        logger.info(f"🛰️ Auto-scan triggered for {pid}")
+                        try:
+                            await _do_scan(pid, {})
+                        except Exception as e:
+                            logger.exception(f"Auto-scan failed for {pid}: {e}")
+            except Exception as e:
+                logger.exception(f"Market Robot loop error: {e}")
+            await asyncio.sleep(60)
+
+    # Expose for server.py startup
+    router.auto_scan_loop = auto_scan_loop
 
     return router

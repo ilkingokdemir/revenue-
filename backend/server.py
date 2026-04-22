@@ -641,6 +641,10 @@ api_router.include_router(create_scheduler_router(db, require_roles, JOB_HANDLER
 async def _start_scheduler():
     import asyncio as _asyncio
     _asyncio.create_task(scheduler_loop(db, JOB_HANDLERS))
+    # Market Robot auto-scan loop (Iter 167.1)
+    _mr_loop = getattr(market_robot_router, "auto_scan_loop", None)
+    if _mr_loop:
+        _asyncio.create_task(_mr_loop())
 
 # Iter 160 — Channel Manager MVP (restrictions + inbound + parity)
 from routes.channel_restrictions import create_channel_restrictions_router

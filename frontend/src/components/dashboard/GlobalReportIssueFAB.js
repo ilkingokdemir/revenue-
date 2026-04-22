@@ -86,8 +86,8 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser, properti
   // Show when user is logged in (property picker appears inside modal if "all")
   if (!currentUser) return null;
 
-  // Effective property id: prop's value, or user's modal selection when "all"
-  const effectivePid = (propertyId && propertyId !== "all") ? propertyId : selectedPid;
+  // Effective property id: user's explicit modal pick wins; otherwise the prop
+  const effectivePid = selectedPid || (propertyId && propertyId !== "all" ? propertyId : "");
 
   const reset = () => {
     setForm({ title: "", description: "", category: "general", priority: "medium", location: "", room_number: "" });
@@ -183,22 +183,20 @@ export default function GlobalReportIssueFAB({ propertyId, currentUser, properti
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {/* Branch picker — only when "All Branches" is active */}
-              {(!propertyId || propertyId === "all") && (
-                <div>
-                  <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">{L.branch} *</label>
-                  <select
-                    value={selectedPid}
-                    onChange={e => setSelectedPid(e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
-                    data-testid="fab-branch-picker">
-                    <option value="">— {L.branch} —</option>
-                    {properties.map(p => (
-                      <option key={p.id} value={p.id}>{p.name || p.id}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              {/* Branch picker — always visible */}
+              <div>
+                <label className="text-[10px] font-bold uppercase text-stone-500 block mb-1">{L.branch} *</label>
+                <select
+                  value={effectivePid}
+                  onChange={e => setSelectedPid(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white"
+                  data-testid="fab-branch-picker">
+                  <option value="">— {L.branch} —</option>
+                  {properties.map(p => (
+                    <option key={p.id} value={p.id}>{p.name || p.id}</option>
+                  ))}
+                </select>
+              </div>
 
               <input
                 value={form.title}

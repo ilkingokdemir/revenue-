@@ -18,6 +18,20 @@ SCRAPE_RUNNING = False
 SCRAPE_RUNNING_GEO = False  # independent lock so geo scans can run in parallel with city scans
 
 
+def _radius_based_property_count(radius_km, location_hint=""):
+    """Realistic neighborhood property count based on geo-radius.
+    Central London density ≈ 35/sq mi; suburban ≈ 8/sq mi.
+    """
+    import math
+    radius_mi = radius_km * 0.621371
+    area_mi2 = math.pi * (radius_mi ** 2)
+    hint = (location_hint or "").lower()
+    central_codes = ["e1", "ec1", "ec2", "ec3", "ec4", "w1", "wc1", "wc2", "se1", "sw1", "nw1", "n1", "aldgate", "city of london", "shoreditch", "covent garden", "soho", "westminster", "holborn", "bloomsbury", "kings cross", "london bridge"]
+    is_central = any(c in hint for c in central_codes) or hint.strip() == "london"
+    density = 35 if is_central else 10  # per sq mi
+    return max(15, round(area_mi2 * density))
+
+
 def _price_stats(prices):
     """Return avg/min/max/median price stats from a list of numbers (empty-safe)."""
     if not prices:
@@ -99,6 +113,12 @@ def create_market_robot_router(db, require_roles):
                     if total_properties == 0:
                         continue
 
+                    # Booking.com's "X properties found" ignores nflt=distance filter —
+                    # for geo scans we override with radius-area × density to get a realistic neighborhood count.
+                    is_geo_scan = radius_km is not None
+                    if is_geo_scan:
+                        total_properties = _radius_based_property_count(radius_km, location)
+
                     unavail_match = re.search(r'(\d+)%\s*of\s*places?\s*to\s*stay\s*are\s*unavailable', text)
                     unavailable_pct = int(unavail_match.group(1)) if unavail_match else 0
 
@@ -148,6 +168,9 @@ def create_market_robot_router(db, require_roles):
                     unavail_match = re.search(r'(\d+)%\s*of\s*places?\s*to\s*stay\s*are\s*unavailable', text)
                     unavailable_pct = int(unavail_match.group(1)) if unavail_match else 0
                     if total_properties > 0:
+                        # For geo scans: override with radius-based realistic count
+                        if radius_km is not None:
+                            total_properties = _radius_based_property_count(radius_km, location)
                         price_matches = re.findall(r'(?:£|US\$|\$|€)\s*([\d,]+(?:\.\d+)?)', text)
                         prices = []
                         for pm in price_matches[:120]:
@@ -187,6 +210,11 @@ def create_market_robot_router(db, require_roles):
             elif month in [1, 2, 11]:  # Low season
                 base -= 10
             unavail = max(15, min(92, base + _rand.randint(-8, 8)))
+            # For geo scans: realistic neighborhood count based on radius; otherwise use London-wide baseline
+            if radius_km is not None:
+                total_props = _radius_based_property_count(radius_km, location)
+            else:
+                total_props = 4260
             # Estimated prices scale with demand + seasonality + day-of-week
             base_price = 130  # London ADR baseline
             price_factor = 1.0 + (unavail - 55) * 0.012  # higher demand → higher prices
@@ -198,10 +226,10 @@ def create_market_robot_router(db, require_roles):
                 price_factor -= 0.10
             avg = round(base_price * price_factor * (1 + _rand.uniform(-0.05, 0.08)), 2)
             return {
-                "total_properties": 4260,
+                "total_properties": total_props,
                 "unavailable_pct": unavail,
                 "available_pct": 100 - unavail,
-                "available_est": round(4260 * (100 - unavail) / 100),
+                "available_est": round(total_props * (100 - unavail) / 100),
                 "scraped": True,
                 "method": "estimated",
                 "avg_price": avg,

@@ -76,6 +76,43 @@ def create_pass_over_router(db, require_roles):
             "updated_at": now,
         }
         await db.pass_overs.insert_one({**item})
+
+        # Fan-out in-app notifications (high / urgent priority, or @mentions)
+        try:
+            targets = []  # list of (target_user_email, target_role)
+            if mentions:
+                # Resolve mentions (names OR ids OR emails) to user emails
+                mentioned_users = await db.users.find(
+                    {"$or": [{"email": {"$in": mentions}}, {"id": {"$in": mentions}}, {"name": {"$in": mentions}}]},
+                    {"_id": 0, "email": 1, "role": 1}
+                ).to_list(100)
+                for u in mentioned_users:
+                    if u.get("email"):
+                        targets.append((u["email"], ""))
+            elif priority in ("high", "critical"):
+                # Broadcast to operational roles at this property
+                for role in ["manager", "receptionist", "housekeeper", "maintenance"]:
+                    targets.append(("", role))
+
+            notif_title = f"🚨 URGENT: {title}" if priority == "critical" else f"🔔 Pass-over: {title}"
+            for target_email, target_role in targets:
+                await db.notifications.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "type": "pass_over",
+                    "title": notif_title,
+                    "message": item["message"][:200],
+                    "category": category,
+                    "target_user": target_email,
+                    "target_role": target_role,
+                    "link_to": f"/pass-over/{item['id']}",
+                    "priority": "high" if priority in ("high", "critical") else "normal",
+                    "read": False,
+                    "created_by": item["from_user"],
+                    "created_at": now,
+                })
+        except Exception:
+            pass  # best-effort — do not fail the pass-over creation
+
         return item
 
     @router.post("/operations/pass-over/{property_id}/{item_id}/acknowledge")

@@ -3,11 +3,12 @@ Staff Contracts — digital employment contracts with e-signature.
 Covers: contract lifecycle (draft/active/expired/terminated), signing links,
 probation tracking, notice period, hours, pay, total monthly cost.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from datetime import datetime, timezone, timedelta, date
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import secrets
 import uuid
+import base64
 import logging
 
 logger = logging.getLogger(__name__)
@@ -182,6 +183,64 @@ def create_contracts_router(db, require_roles):
             raise HTTPException(400, "Cannot delete signed contract — terminate instead")
         await db.staff_contracts.delete_one({"id": contract_id})
         return {"ok": True}
+    # -------- UPLOAD FILE (signed PDF, ID, visa, etc.) --------
+    @router.post("/contracts/{contract_id}/upload-file")
+    async def upload_contract_file(contract_id: str, file: UploadFile = File(...),
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        existing = await db.staff_contracts.find_one({"id": contract_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(404, "Contract not found")
+        if not file.filename:
+            raise HTTPException(400, "No file uploaded")
+        content = await file.read()
+        if len(content) > 10 * 1024 * 1024:
+            raise HTTPException(400, "File too large (max 10MB)")
+        attachment = {
+            "id": str(uuid.uuid4()),
+            "filename": file.filename,
+            "content_type": file.content_type or "application/octet-stream",
+            "size": len(content),
+            "data_base64": base64.b64encode(content).decode(),
+            "uploaded_by": current_user.get("name", ""),
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        }
+        files = existing.get("attachments") or []
+        files.append(attachment)
+        await db.staff_contracts.update_one({"id": contract_id},
+            {"$set": {"attachments": files, "updated_at": attachment["uploaded_at"]}})
+        return {"ok": True, "attachment": {k: v for k, v in attachment.items() if k != "data_base64"}}
+
+    @router.get("/contracts/{contract_id}/attachments")
+    async def list_attachments(contract_id: str,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        c = await db.staff_contracts.find_one({"id": contract_id}, {"_id": 0, "attachments": 1})
+        if not c:
+            raise HTTPException(404, "Contract not found")
+        files = c.get("attachments") or []
+        return [{k: v for k, v in f.items() if k != "data_base64"} for f in files]
+
+    @router.get("/contracts/{contract_id}/attachments/{attachment_id}")
+    async def download_attachment(contract_id: str, attachment_id: str,
+                                  current_user: dict = Depends(require_roles("admin", "manager"))):
+        c = await db.staff_contracts.find_one({"id": contract_id}, {"_id": 0, "attachments": 1})
+        if not c:
+            raise HTTPException(404, "Contract not found")
+        for att in (c.get("attachments") or []):
+            if att.get("id") == attachment_id:
+                return att
+        raise HTTPException(404, "Attachment not found")
+
+    @router.delete("/contracts/{contract_id}/attachments/{attachment_id}")
+    async def delete_attachment(contract_id: str, attachment_id: str,
+                                current_user: dict = Depends(require_roles("admin"))):
+        c = await db.staff_contracts.find_one({"id": contract_id}, {"_id": 0})
+        if not c:
+            raise HTTPException(404, "Contract not found")
+        files = [f for f in (c.get("attachments") or []) if f.get("id") != attachment_id]
+        await db.staff_contracts.update_one({"id": contract_id}, {"$set": {"attachments": files}})
+        return {"ok": True}
+
+
 
     # -------- SEND FOR SIGNATURE --------
     @router.post("/contracts/{contract_id}/send")

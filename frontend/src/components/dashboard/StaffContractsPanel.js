@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   FileSignature, Search, Plus, RefreshCw, Send, Copy, X, CheckCircle2,
   Clock, AlertTriangle, Ban, Pencil, Trash2, PoundSterling, Users,
-  CalendarClock, ShieldAlert, FileText, ExternalLink,
+  CalendarClock, ShieldAlert, FileText, ExternalLink, Paperclip,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -120,6 +120,22 @@ export const StaffContractsPanel = ({ propertyId, user }) => {
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
     setBusy(null);
+  };
+
+
+  const uploadFile = async (c, file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { toast.error("File too large (max 10MB)"); return; }
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await axios.post(`${API}/contracts/${c.id}/upload-file`, fd,
+        { headers: { "Content-Type": "multipart/form-data" } });
+      toast.success(`"${file.name}" attached`);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Upload failed");
+    }
   };
 
   const terminate = async (c) => {
@@ -273,6 +289,16 @@ export const StaffContractsPanel = ({ propertyId, user }) => {
                     <td className="px-4 py-3 text-center">{statusChip(c.computed_status)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
+                        {/* File attachment button — always visible for admin/manager */}
+                        <label className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-600 cursor-pointer" title="Attach file (signed PDF, ID, visa)" data-testid={`attach-${c.id}`}>
+                          <Paperclip className="w-3.5 h-3.5" />
+                          <input type="file" className="hidden" onChange={e => uploadFile(c, e.target.files?.[0])} data-testid={`attach-input-${c.id}`} />
+                        </label>
+                        {(c.attachments?.length || 0) > 0 && (
+                          <span className="text-[9px] bg-indigo-50 text-indigo-700 font-bold px-1.5 py-0.5 rounded-md" data-testid={`att-count-${c.id}`}>
+                            {c.attachments.length} 📎
+                          </span>
+                        )}
                         {["draft"].includes(c.computed_status) && isAdmin && (
                           <>
                             <button onClick={() => openEdit(c)} className="p-1.5 hover:bg-stone-100 rounded-lg" title="Edit" data-testid={`edit-${c.id}`}>

@@ -10,7 +10,6 @@ import { RateParity } from "./RateParity";
 import { CompetitorAnalysis } from "./CompetitorAnalysis";
 import { PerformanceReport } from "./PerformanceReport";
 import { MarketDemandDashboard } from "./MarketDemandDashboard";
-import MarketPulsePanel from "./MarketPulsePanel";
 import { DemandRadar } from "./DemandRadar";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -164,7 +163,7 @@ export const MarketRobot = ({ propertyId }) => {
 
       {/* Sub-tabs */}
       <div className="flex items-center gap-1 border-b border-stone-200 overflow-x-auto">
-        {[{id:"dashboard",label:"Dashboard"},{id:"pulse",label:"Market Pulse"},{id:"radar",label:"Demand Radar"},{id:"demand",label:"Market Demand"},{id:"performance",label:"Performance"},{id:"supply",label:"Supply Data"},{id:"parity",label:"Rate Parity"},{id:"analysis",label:"Competitor Analysis"},{id:"events",label:"Event Intelligence"},{id:"competitors-tab",label:"Competitor Hotels"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
+        {[{id:"dashboard",label:"Dashboard"},{id:"radar",label:"Demand Radar"},{id:"demand",label:"Market Demand"},{id:"performance",label:"Performance"},{id:"supply",label:"Supply Data"},{id:"parity",label:"Rate Parity"},{id:"analysis",label:"Competitor Analysis"},{id:"events",label:"Event Intelligence"},{id:"competitors-tab",label:"Competitor Hotels"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
           <button key={t.id} onClick={() => setSubTab(t.id)} className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-[1px] transition-all ${subTab === t.id ? "text-indigo-700 border-indigo-500" : "text-stone-400 border-transparent hover:text-stone-600"}`} data-testid={`market-robot-${t.id}`}>{t.label}</button>
         ))}
       </div>
@@ -449,7 +448,6 @@ export const MarketRobot = ({ propertyId }) => {
 
       {/* Market Demand Tab */}
       {subTab === "demand" && <MarketDemandDashboard propertyId={propertyId} />}
-      {subTab === "pulse" && <MarketPulsePanel activePropertyId={propertyId} />}
       {subTab === "radar" && <DemandRadar propertyId={propertyId} />}
 
       {/* Performance Report Tab */}

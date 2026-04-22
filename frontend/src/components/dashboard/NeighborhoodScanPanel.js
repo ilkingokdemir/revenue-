@@ -114,8 +114,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // Chart derivation
   const chart = useMemo(() => {
     if (!snapshots.length) return null;
-    const pad = { l: 55, r: 10, t: 28, b: 32 };
-    const W = 1000, H = 260;
+    const pad = { l: 55, r: 10, t: 38, b: 32 };
+    const W = 1000, H = 270;
     const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
     const n = snapshots.length;
     const sx = (i) => pad.l + (i / Math.max(n - 1, 1)) * iW;
@@ -298,11 +298,19 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               })}
               {/* Price line */}
               <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="6 3" opacity="0.95" />
-              {/* Price dots + £ value label above each dot */}
+              {/* Price dots + £ value label (with Δ% vs previous day) above each dot */}
               {snapshots.map((s, i) => {
                 const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
                 const showLabel = i % labelStep === 0;
                 const cy = chart.syP(s.avg_price || 0);
+                const prev = i > 0 ? snapshots[i - 1] : null;
+                const prevPrice = prev && prev.avg_price > 0 ? prev.avg_price : null;
+                const delta = prevPrice && s.avg_price > 0
+                  ? ((s.avg_price - prevPrice) / prevPrice) * 100
+                  : null;
+                const showDelta = delta !== null && Math.abs(delta) >= 2;
+                const up = delta !== null && delta > 0;
+                const deltaColor = up ? "#f87171" : "#34d399"; // rising prices = rose (demand), falling = mint (opportunity)
                 return (
                   <g key={`dot-${i}`}>
                     <circle cx={chart.sx(i)} cy={cy} r="3" fill="#fbbf24" stroke="#0a0a0a" strokeWidth="1" />
@@ -312,6 +320,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                         <text x={chart.sx(i)} y={cy - 11} textAnchor="middle" fontSize="11" fontWeight="900" fill="#fbbf24" fontFamily="'Inter', system-ui, sans-serif">
                           £{Math.round(s.avg_price)}
                         </text>
+                        {showDelta && (
+                          <text x={chart.sx(i)} y={cy - 25} textAnchor="middle" fontSize="8.5" fontWeight="800" fill={deltaColor} fontFamily="'Inter', system-ui, sans-serif">
+                            {up ? "▲" : "▼"}{Math.abs(delta).toFixed(1)}%
+                          </text>
+                        )}
                       </>
                     )}
                   </g>
@@ -353,13 +366,19 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   <th className="text-right px-2 font-bold tracking-widest">Hotels</th>
                   <th className="text-right px-2 font-bold tracking-widest">Unavail %</th>
                   <th className="text-right px-2 font-bold tracking-widest">Avg £</th>
+                  <th className="text-right px-2 font-bold tracking-widest">Δ vs Prev</th>
                   <th className="text-right px-2 font-bold tracking-widest">Min £</th>
                   <th className="text-right px-2 font-bold tracking-widest">Max £</th>
                 </tr>
               </thead>
               <tbody>
-                {snapshots.map(s => {
+                {snapshots.map((s, idx) => {
                   const hot = (s.unavailable_pct || 0) >= 80;
+                  const prev = idx > 0 ? snapshots[idx - 1] : null;
+                  const prevPrice = prev && prev.avg_price > 0 ? prev.avg_price : null;
+                  const delta = prevPrice && s.avg_price > 0
+                    ? ((s.avg_price - prevPrice) / prevPrice) * 100 : null;
+                  const up = delta !== null && delta > 0;
                   return (
                     <tr key={s.date} className="border-b border-stone-800/40 hover:bg-emerald-500/5">
                       <td className="py-2 pr-2 text-stone-200 font-semibold tabular-nums">{s.date}</td>
@@ -371,6 +390,13 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                         </span>
                       </td>
                       <td className="text-right px-2 text-amber-300 font-bold tabular-nums">{s.avg_price ? cur(s.avg_price) : "—"}</td>
+                      <td className="text-right px-2 tabular-nums">
+                        {delta === null ? <span className="text-stone-600">—</span> : (
+                          <span className={`font-bold ${Math.abs(delta) < 2 ? "text-stone-400" : up ? "text-rose-300" : "text-emerald-300"}`}>
+                            {up ? "▲" : delta < 0 ? "▼" : ""}{delta.toFixed(1)}%
+                          </span>
+                        )}
+                      </td>
                       <td className="text-right px-2 text-stone-400 tabular-nums">{s.min_price ? cur(s.min_price) : "—"}</td>
                       <td className="text-right px-2 text-stone-400 tabular-nums">{s.max_price ? cur(s.max_price) : "—"}</td>
                     </tr>

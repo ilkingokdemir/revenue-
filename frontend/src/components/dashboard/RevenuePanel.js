@@ -25,7 +25,6 @@ import { BookingPace } from "./BookingPace";
 import { RevenueForecast } from "./RevenueForecast";
 import { RateRecommendations } from "./RateRecommendations";
 import { WhatIfSimulator } from "./WhatIfSimulator";
-import { DemandRadar } from "./DemandRadar";
 import { CompsetIntelligence } from "./CompsetIntelligence";
 import { PriceAlerts } from "./PriceAlerts";
 import { DisplacementAnalysis } from "./DisplacementAnalysis";
@@ -64,7 +63,6 @@ const NAV_SECTIONS = [
     label: "Intelligence",
     items: [
       { id: "market-robot", label: "Market Robot", icon: Radar },
-      { id: "demand-radar", label: "Demand Radar", icon: Activity },
       { id: "compset-intel", label: "Compset Intelligence", icon: Trophy },
       { id: "price-alerts", label: "Price Alerts", icon: AlertTriangle },
       { id: "weekly-digest", label: "AI Weekly Digest", icon: Sparkles },
@@ -210,7 +208,6 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
               {tab === "market-robot" && <MarketRobot propertyId={pid} />}
-              {tab === "demand-radar" && <DemandRadar propertyId={pid} />}
               {tab === "compset-intel" && <CompsetIntelligence propertyId={pid} />}
               {tab === "price-alerts" && <PriceAlerts propertyId={pid} onNavigate={handleNavigate} />}
               {tab === "weekly-digest" && <WeeklyDigest propertyId={pid} />}

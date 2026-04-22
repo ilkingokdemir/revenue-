@@ -45,6 +45,25 @@ export const CompetitorAnalysis = ({ propertyId }) => {
 
   return (
     <div className="space-y-6" data-testid="competitor-analysis">
+      {/* Empty State CTA when no competitors tracked */}
+      {competitors_count === 0 && (
+        <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-400/30 rounded-2xl p-5 flex items-center justify-between gap-4" data-testid="no-competitors-cta">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center shrink-0">
+              <BarChart3 className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <p className="font-bold text-amber-900 text-sm">No competitors linked yet</p>
+              <p className="text-xs text-amber-700/80 mt-0.5">Add Booking.com hotels to unlock competitor pricing, Comp Avg/Min/Max and rate positioning.</p>
+            </div>
+          </div>
+          <button onClick={() => window.dispatchEvent(new CustomEvent("market-robot-goto", { detail: { tab: "competitors-tab" } }))}
+            className="shrink-0 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold rounded-lg whitespace-nowrap" data-testid="analysis-add-competitor">
+            + Add Competitor
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">

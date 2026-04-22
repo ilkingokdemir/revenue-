@@ -46,6 +46,13 @@ export const MarketRobot = ({ propertyId }) => {
     return () => clearInterval(interval);
   }, [propertyId]);
 
+  // Listen to cross-tab navigation events (e.g. "Add Competitor" CTA from Analysis tab)
+  useEffect(() => {
+    const onGoto = (e) => { if (e?.detail?.tab) setSubTab(e.detail.tab); };
+    window.addEventListener("market-robot-goto", onGoto);
+    return () => window.removeEventListener("market-robot-goto", onGoto);
+  }, []);
+
   const loadAll = () => {
     axios.get(`${API}/revenue/market-robot/${propertyId}/config`).then(r => setConfig(r.data)).catch(() => {});
     axios.get(`${API}/revenue/market-robot/${propertyId}/supply`).then(r => setSupply(r.data)).catch(() => {});

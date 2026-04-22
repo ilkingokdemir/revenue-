@@ -241,7 +241,7 @@ export const MarketDemandDashboard = ({ propertyId }) => {
                     <line key={v} x1={pL} x2={cW - pR} y1={sy(v)} y2={sy(v)} stroke="#374151" strokeWidth="0.5" />
                   ))}
                   {mLabels.map(ml => (
-                    <text key={ml.i} x={sx(ml.i)} y={cH - 8} textAnchor="start" fontSize="9" fill="#9ca3af">{ml.l}</text>
+                    <line key={`ml${ml.i}`} x1={sx(ml.i)} x2={sx(ml.i)} y1={pT} y2={pT + iH} stroke="#4b5563" strokeWidth="0.3" strokeDasharray="2 3" opacity="0.4" />
                   ))}
                   {occ.map((d, i) => {
                     const x = sx(i) - barW / 2;
@@ -251,6 +251,21 @@ export const MarketDemandDashboard = ({ propertyId }) => {
                       <g key={i}>
                         <rect x={x} y={pT + iH - occH} width={barW} height={occH} fill="#4b5563" rx="1" />
                         {d.pickup_pct > 0 && <rect x={x} y={pT + iH - pickH} width={barW} height={pickH} fill="#06b6d4" rx="1" opacity="0.9" />}
+                      </g>
+                    );
+                  })}
+                  {/* Daily x-axis labels — every day with month names on change */}
+                  {occ.map((d, i) => {
+                    if (!d?.date) return null;
+                    const dt = new Date(d.date + "T00:00:00");
+                    const dayNum = dt.getDate();
+                    const monthShort = dt.toLocaleDateString("en", { month: "short" });
+                    const prev = i > 0 ? new Date(occ[i - 1].date + "T00:00:00") : null;
+                    const isMonthStart = !prev || prev.getMonth() !== dt.getMonth();
+                    return (
+                      <g key={`xd${i}`}>
+                        <text x={sx(i)} y={pT + iH + 10} textAnchor="middle" fontSize="6" fill={isMonthStart ? "#ffffff" : "#9ca3af"} fontWeight={isMonthStart ? "700" : "500"}>{dayNum}</text>
+                        {isMonthStart && <text x={sx(i)} y={pT + iH + 20} textAnchor="middle" fontSize="7" fill="#10b981" fontWeight="800">{monthShort}</text>}
                       </g>
                     );
                   })}

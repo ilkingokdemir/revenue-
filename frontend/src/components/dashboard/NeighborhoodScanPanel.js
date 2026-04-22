@@ -433,8 +433,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   </th>
                   <th className="text-right px-2 font-bold">
                     <div className="flex flex-col leading-tight items-end">
-                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Otel</span>
-                      <span className="text-[9px] text-stone-400 font-normal normal-case">Toplam rakip</span>
+                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Otel · Kaynak</span>
+                      <span className="text-[9px] text-stone-400 font-normal normal-case">Toplam rakip · veri kaynağı</span>
                     </div>
                   </th>
                   <th className="text-right px-2 font-bold">
@@ -487,7 +487,12 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                       }`}>
                       <td className="py-2.5 pl-3 pr-2 text-stone-100 font-semibold tabular-nums">{s.date}</td>
                       <td className="text-right px-2 text-stone-400 truncate max-w-[120px]">{s.location}</td>
-                      <td className="text-right px-2 text-stone-300 tabular-nums">{s.total_properties || "—"}</td>
+                      <td className="text-right px-2 tabular-nums">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-stone-100 font-semibold">{s.total_properties || "—"}</span>
+                          <SourceBadge source={s.total_source} />
+                        </div>
+                      </td>
                       <td className="text-right px-2 tabular-nums">
                         <span className={`inline-block px-2 py-0.5 rounded font-bold ${hot ? "bg-rose-500/20 text-rose-200" : (s.unavailable_pct||0) >= 60 ? "bg-amber-500/20 text-amber-200" : "bg-emerald-500/15 text-emerald-200"}`}>
                           {s.unavailable_pct}%
@@ -536,5 +541,28 @@ function KPI({ label, value, tone, icon: Icon, testId }) {
       <p className="text-[9px] font-bold uppercase tracking-widest opacity-70">{label}</p>
       <p className="text-xl font-black tabular-nums mt-1">{value}</p>
     </div>
+  );
+}
+
+function SourceBadge({ source }) {
+  const map = {
+    "booking-cards":  { label: "Booking",  tip: "Booking.com property-card sayımı (en güvenilir)",          cls: "bg-blue-500/15 text-blue-200 border-blue-500/40" },
+    "booking-pager":  { label: "Booking",  tip: "Booking.com 'Showing X of Y' sayfalama sayımı",             cls: "bg-blue-500/15 text-blue-200 border-blue-500/40" },
+    "booking-header": { label: "Booking*", tip: "Booking.com toplam başlık — geo filtresiz (tahmini üst sınır)", cls: "bg-blue-500/10 text-blue-300/70 border-blue-500/30" },
+    "google-places":  { label: "Google",   tip: "Google Places Nearby Search (type=lodging)",                cls: "bg-amber-500/15 text-amber-200 border-amber-500/40" },
+    "osm":            { label: "OSM",      tip: "OpenStreetMap Overpass — açık kaynak, ücretsiz",           cls: "bg-emerald-500/15 text-emerald-200 border-emerald-500/40" },
+    "heuristic":      { label: "Tahmini",  tip: "Yarıçap × yoğunluk heuristic (veri kaynağı yanıt vermedi)", cls: "bg-stone-600/20 text-stone-300 border-stone-600/40" },
+    "city-baseline":  { label: "Şehir",    tip: "Şehir geneli sabit baseline",                              cls: "bg-violet-500/15 text-violet-200 border-violet-500/40" },
+    "aggregated":     { label: "Toplam",   tip: "Tüm şubelerin ortalaması",                                 cls: "bg-teal-500/15 text-teal-200 border-teal-500/40" },
+  };
+  const info = map[source] || { label: "—", tip: "Kaynak bilinmiyor", cls: "bg-stone-700/40 text-stone-400 border-stone-700" };
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold border ${info.cls}`}
+      title={info.tip}
+      data-testid={`src-badge-${source || "unknown"}`}
+    >
+      {info.label}
+    </span>
   );
 }

@@ -549,6 +549,7 @@ def create_market_robot_router(db, require_roles):
                     "location": f"All {len(rows)} branches",
                     "radius_km": rows[0].get("radius_km", 3.2),
                     "total_properties": round(sum(tp) / len(tp)) if tp else 0,
+                    "total_source": "aggregated",
                     "unavailable_pct": round(sum(un) / len(un), 1) if un else 0,
                     "available_pct": round(100 - (sum(un) / len(un)), 1) if un else 100,
                     "avg_price": round(sum(ap) / len(ap), 2) if ap else 0,

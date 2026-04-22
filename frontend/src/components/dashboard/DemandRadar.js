@@ -32,7 +32,7 @@ export const DemandRadar = ({ propertyId }) => {
 
   // Demand chart
   const demandDays = daily.filter(d => d.demand !== null);
-  const cW = 1100, cH = 240, pL = 40, pR = 10, pT = 50, pB = 30;
+  const cW = 1100, cH = 240, pL = 60, pR = 10, pT = 50, pB = 30;
   const iW = cW - pL - pR, iH = cH - pT - pB;
   const barW = Math.max(2, Math.min(10, (iW / Math.max(demandDays.length, 1)) - 1));
   const sx = (i) => pL + (i / Math.max(demandDays.length - 1, 1)) * iW;
@@ -124,14 +124,24 @@ export const DemandRadar = ({ propertyId }) => {
             <span className="flex items-center gap-1"><span className="w-4 h-0 border-t border-dashed border-teal-300" /> 7d trend</span>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
+          {/* Y-axis labels as HTML (more reliable than SVG text for Tailwind projects) */}
+          <div className="absolute left-0 top-0 bottom-0 w-12 pointer-events-none z-10" style={{ minHeight: "100%" }}>
+            {[100, 75, 50, 25, 0].map(v => (
+              <div key={v}
+                className="absolute right-1 text-[11px] md:text-xs font-bold text-stone-200 tabular-nums"
+                style={{ top: `calc(${((100 - v) / 100) * (240 - 50 - 30) / 240 * 100}% + ${50 / 240 * 100}% - 8px)`, lineHeight: 1 }}>
+                {v}%
+              </div>
+            ))}
+          </div>
           <svg viewBox={`0 0 ${cW} ${cH}`} className="w-full" style={{ minWidth: `${Math.max(600, demandDays.length * 5)}px` }}>
             {/* Event labels */}
             {eventDays.map(ev => (
-              <text key={ev.i} x={sx(ev.i)} y={pT - 5} textAnchor="start" transform={`rotate(-45, ${sx(ev.i)}, ${pT - 5})`} className="text-[7px]" fill="#9ca3af">{ev.name?.slice(0, 25)}</text>
+              <text key={ev.i} x={sx(ev.i)} y={pT - 5} textAnchor="start" transform={`rotate(-45, ${sx(ev.i)}, ${pT - 5})`} fontSize="8" fill="#9ca3af">{ev.name?.slice(0, 25)}</text>
             ))}
             {/* Grid */}
-            {[0, 25, 50, 75, 100].map(v => (<g key={v}><line x1={pL} x2={cW - pR} y1={sy(v)} y2={sy(v)} stroke="#374151" strokeWidth="0.5" /><text x={pL - 5} y={sy(v) + 4} textAnchor="end" className="text-[7px]" fill="#6b7280">{v}%</text></g>))}
+            {[0, 25, 50, 75, 100].map(v => (<line key={v} x1={pL} x2={cW - pR} y1={sy(v)} y2={sy(v)} stroke="#374151" strokeWidth="0.5" />))}
             {/* Bars */}
             {demandDays.map((d, i) => {
               const h = ((d.demand || 0) / 100) * iH;
@@ -175,9 +185,22 @@ export const DemandRadar = ({ propertyId }) => {
           <div className="bg-stone-900 border border-stone-700 rounded-2xl p-5" data-testid="wap-chart">
             <p className="text-[10px] text-stone-500 uppercase">Market Pricing</p>
             <h3 className="text-sm font-bold text-white mb-3">Weighted Average Price</h3>
-            <div className="overflow-x-auto">
+            <div className="relative overflow-x-auto">
+              {/* HTML Y-axis price labels */}
+              <div className="absolute left-0 top-0 bottom-0 w-14 pointer-events-none z-10" style={{ minHeight: "100%" }}>
+                {[1, 0.75, 0.5, 0.25, 0].map(f => {
+                  const v = Math.round(minW + f * (maxW - minW));
+                  return (
+                    <div key={f}
+                      className="absolute right-1 text-[11px] md:text-xs font-bold text-stone-200 tabular-nums"
+                      style={{ top: `calc(${((1 - f) * (iH - 10) + 10) / cH * 100}% - 7px)`, lineHeight: 1 }}>
+                      {cur(v)}
+                    </div>
+                  );
+                })}
+              </div>
               <svg viewBox={`0 0 ${cW} ${cH}`} className="w-full" style={{ minWidth: "600px" }}>
-                {[0, 0.25, 0.5, 0.75, 1].map(f => { const y = 10 + (1 - f) * (iH - 10); const v = Math.round(minW + f * (maxW - minW)); return <g key={f}><line x1={pL} x2={cW - pR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" /><text x={pL - 5} y={y + 4} textAnchor="end" className="text-[7px]" fill="#6b7280">{cur(v)}</text></g>; })}
+                {[0, 0.25, 0.5, 0.75, 1].map(f => { const y = 10 + (1 - f) * (iH - 10); return <line key={f} x1={pL} x2={cW - pR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" />; })}
                 <path d={wLine} fill="none" stroke="#ffffff" strokeWidth="2" />
                 {/* X-axis date labels — every day */}
                 {wapDays.map((d, i) => {
@@ -262,19 +285,19 @@ export const DemandRadar = ({ propertyId }) => {
             <svg viewBox={`0 0 ${omW} ${omH}`} className="w-full" style={{ minWidth: "700px" }}>
               {/* Grid */}
               {[0, 25, 50, 75, 100].map(v => (<g key={v}><line x1={omPL} x2={omW - omPR} y1={omSY(omMinP + (v / 100) * (omMaxP - omMinP))} y2={omSY(omMinP + (v / 100) * (omMaxP - omMinP))} stroke="#374151" strokeWidth="0.5" /></g>))}
-              {[0, 25, 50, 75, 100].map(v => (<text key={`x${v}`} x={omSX(v)} y={omH - 15} textAnchor="middle" className="text-[8px]" fill="#6b7280">{v}%</text>))}
-              {[0, 0.25, 0.5, 0.75, 1].map(f => { const p = Math.round(omMinP + f * (omMaxP - omMinP)); return <text key={`y${f}`} x={omPL - 8} y={omSY(p) + 4} textAnchor="end" className="text-[8px]" fill="#6b7280">{cur(p)}</text>; })}
+              {[0, 25, 50, 75, 100].map(v => (<text key={`x${v}`} x={omSX(v)} y={omH - 15} textAnchor="middle" fontSize="9" fill="#9ca3af">{v}%</text>))}
+              {[0, 0.25, 0.5, 0.75, 1].map(f => { const p = Math.round(omMinP + f * (omMaxP - omMinP)); return <text key={`y${f}`} x={omPL - 8} y={omSY(p) + 4} textAnchor="end" fontSize="9" fill="#9ca3af">{cur(p)}</text>; })}
               {/* Quadrant labels */}
-              <text x={omPL + 5} y={omPT + 15} className="text-[9px]" fill="#ef4444" fontWeight="bold">OVERPRICED</text>
-              <text x={omW - omPR - 80} y={omPT + 15} className="text-[9px]" fill="#f59e0b" fontWeight="bold">PEAK DATES</text>
-              <text x={omPL + 5} y={omH - omPB - 5} className="text-[8px]" fill="#6b7280">QUIET DATES</text>
-              <text x={omW - omPR - 100} y={omH - omPB - 5} className="text-[8px]" fill="#22c55e" fontWeight="bold">OPPORTUNITY</text>
+              <text x={omPL + 5} y={omPT + 15} fontSize="10" fill="#ef4444" fontWeight="bold">OVERPRICED</text>
+              <text x={omW - omPR - 80} y={omPT + 15} fontSize="10" fill="#f59e0b" fontWeight="bold">PEAK DATES</text>
+              <text x={omPL + 5} y={omH - omPB - 5} fontSize="9" fill="#9ca3af">QUIET DATES</text>
+              <text x={omW - omPR - 100} y={omH - omPB - 5} fontSize="9" fill="#22c55e" fontWeight="bold">OPPORTUNITY</text>
               {/* Dots */}
               {opportunity_map.map((o, i) => (
                 <circle key={i} cx={omSX(o.demand)} cy={omSY(o.price)} r={o.event ? 6 : 4} fill={DOT_COLORS[o.color] || "#06b6d4"} opacity="0.8" />
               ))}
               {/* Axis labels */}
-              <text x={omW / 2} y={omH - 2} textAnchor="middle" className="text-[8px]" fill="#6b7280">Quiet market → Busy market →</text>
+              <text x={omW / 2} y={omH - 2} textAnchor="middle" fontSize="9" fill="#9ca3af">Quiet market → Busy market →</text>
             </svg>
           </div>
         </div>

@@ -226,13 +226,22 @@ export const MarketDemandDashboard = ({ propertyId }) => {
             const mLabels = []; let lm = "";
             occ.forEach((d, i) => { if (d.month !== lm) { mLabels.push({ i, l: `${d.month} ${d.day}` }); lm = d.month; } });
             return (
-              <div className="overflow-x-auto">
+              <div className="relative overflow-x-auto">
+                <div className="absolute left-0 top-0 bottom-0 w-12 pointer-events-none z-10" style={{ minHeight: "100%" }}>
+                  {[100, 75, 50, 25, 0].map(v => (
+                    <div key={v}
+                      className="absolute right-1 text-[11px] md:text-xs font-bold text-stone-200 tabular-nums"
+                      style={{ top: `calc(${((100 - v) / 100) * (cH - pT - pB) / cH * 100}% + ${pT / cH * 100}% - 8px)`, lineHeight: 1 }}>
+                      {v}%
+                    </div>
+                  ))}
+                </div>
                 <svg viewBox={`0 0 ${cW} ${cH}`} className="w-full" style={{ minWidth: "600px" }}>
                   {[0, 25, 50, 75, 100].map(v => (
-                    <g key={v}><line x1={pL} x2={cW - pR} y1={sy(v)} y2={sy(v)} stroke="#374151" strokeWidth="0.5" /><text x={pL - 5} y={sy(v) + 4} textAnchor="end" className="text-[7px]" fill="#6b7280">{v}%</text></g>
+                    <line key={v} x1={pL} x2={cW - pR} y1={sy(v)} y2={sy(v)} stroke="#374151" strokeWidth="0.5" />
                   ))}
                   {mLabels.map(ml => (
-                    <text key={ml.i} x={sx(ml.i)} y={cH - 8} textAnchor="start" className="text-[8px]" fill="#6b7280">{ml.l}</text>
+                    <text key={ml.i} x={sx(ml.i)} y={cH - 8} textAnchor="start" fontSize="9" fill="#9ca3af">{ml.l}</text>
                   ))}
                   {occ.map((d, i) => {
                     const x = sx(i) - barW / 2;
@@ -315,11 +324,23 @@ export const MarketDemandDashboard = ({ propertyId }) => {
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-500/20 inline-block" /> Below</span>
           </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
+          <div className="absolute left-0 top-0 bottom-0 w-16 pointer-events-none z-10" style={{ minHeight: "100%" }}>
+            {[1, 0.75, 0.5, 0.25, 0].map(frac => {
+              const val = Math.round(minRate + frac * (maxRate - minRate));
+              return (
+                <div key={frac}
+                  className="absolute right-1 text-[11px] md:text-xs font-bold text-stone-200 tabular-nums"
+                  style={{ top: `calc(${((1 - frac) * innerH + padT) / chartH * 100}% - 7px)`, lineHeight: 1 }}>
+                  {cur(val)}
+                </div>
+              );
+            })}
+          </div>
           <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ minWidth: `${Math.max(600, daily_data.length * 3)}px` }}>
             {[0, 0.25, 0.5, 0.75, 1].map(frac => {
-              const y = padT + (1 - frac) * innerH; const val = Math.round(minRate + frac * (maxRate - minRate));
-              return (<g key={frac}><line x1={padL} x2={chartW - padR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" /><text x={padL - 8} y={y + 4} textAnchor="end" className="text-[8px]" fill="#6b7280">{cur(val)}</text></g>);
+              const y = padT + (1 - frac) * innerH;
+              return (<line key={frac} x1={padL} x2={chartW - padR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" />);
             })}
             {monthLabels.map(ml => (<g key={ml.i}><line x1={scaleX(ml.i)} x2={scaleX(ml.i)} y1={padT} y2={chartH - padB} stroke="#4b5563" strokeWidth="0.5" strokeDasharray="4 4" /></g>))}
             {aboveFill.map((af, idx) => <rect key={`a${idx}`} x={scaleX(af.i) - 2} y={scaleY(af.top)} width={4} height={scaleY(af.bot) - scaleY(af.top)} fill="#22c55e" opacity="0.15" />)}
@@ -346,7 +367,7 @@ export const MarketDemandDashboard = ({ propertyId }) => {
             })}
             {daily_data.filter((_, i) => i % Math.max(Math.floor(daily_data.length / 12), 1) === 0).map((d) => {
               const i = daily_data.indexOf(d);
-              return (<g key={`lbl${i}`}><text x={scaleX(i)} y={scaleY(d.sell_rate) - 8} textAnchor="middle" className="text-[7px]" fill="#06b6d4" fontWeight="600">{cur(d.sell_rate)}</text>{d.comp_avg && <text x={scaleX(i)} y={scaleY(d.comp_avg) + 14} textAnchor="middle" className="text-[7px]" fill="#f59e0b">{cur(d.comp_avg)}</text>}</g>);
+              return (<g key={`lbl${i}`}><text x={scaleX(i)} y={scaleY(d.sell_rate) - 8} textAnchor="middle" fontSize="8" fill="#06b6d4" fontWeight="600">{cur(d.sell_rate)}</text>{d.comp_avg && <text x={scaleX(i)} y={scaleY(d.comp_avg) + 14} textAnchor="middle" fontSize="8" fill="#f59e0b">{cur(d.comp_avg)}</text>}</g>);
             })}
           </svg>
         </div>

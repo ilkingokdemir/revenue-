@@ -18,6 +18,95 @@ SCRAPE_RUNNING = False
 SCRAPE_RUNNING_GEO = False  # independent lock so geo scans can run in parallel with city scans
 
 
+def _count_booking_cards(html_text: str) -> int:
+    """Count actual property cards rendered in Booking.com search HTML.
+    Booking wraps each result with data-testid attributes — these respect
+    the distance/geo filter, unlike the '4,260 properties found' header.
+    """
+    if not html_text:
+        return 0
+    # Primary marker used across Booking.com layouts
+    count = len(re.findall(r'data-testid="property-card"', html_text))
+    if count > 0:
+        return count
+    # Secondary fallback markers seen on A/B variants
+    alt = len(re.findall(r'data-testid="property-card-container"', html_text))
+    if alt > 0:
+        return alt
+    # Anchor-based fallback: hotel listing links
+    anchors = len(re.findall(r'/hotel/[a-z]{2}/[a-z0-9\-]+\.', html_text, re.I))
+    return anchors
+
+
+async def _osm_hotel_count(latitude: float, longitude: float, radius_km: float) -> Optional[int]:
+    """Query OpenStreetMap Overpass API for hotels/hostels/guest_houses within radius.
+    Free, no API key, ~1 req/sec. Returns None on failure.
+    """
+    if latitude is None or longitude is None:
+        return None
+    try:
+        radius_m = int(radius_km * 1000)
+        query = (
+            f"[out:json][timeout:15];"
+            f"(node(around:{radius_m},{latitude},{longitude})[tourism~\"^(hotel|hostel|guest_house|apartment|motel)$\"];"
+            f"way(around:{radius_m},{latitude},{longitude})[tourism~\"^(hotel|hostel|guest_house|apartment|motel)$\"];);"
+            f"out count;"
+        )
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                "https://overpass-api.de/api/interpreter",
+                data={"data": query},
+                headers={"User-Agent": "HotelBox-MarketRobot/1.0"},
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            elems = data.get("elements", [])
+            for el in elems:
+                if el.get("type") == "count":
+                    tags = el.get("tags", {})
+                    total = int(tags.get("total", 0))
+                    if total > 0:
+                        return total
+            return None
+    except Exception as e:
+        logger.info(f"OSM Overpass failed: {e}")
+        return None
+
+
+async def _google_places_hotel_count(latitude: float, longitude: float, radius_km: float) -> Optional[int]:
+    """Count lodgings via Google Places API Nearby Search (requires GOOGLE_PLACES_API_KEY).
+    Google caps to 60 results, so for radius > 2 km we use it as a lower bound signal only.
+    """
+    key = os.environ.get("GOOGLE_PLACES_API_KEY", "").strip()
+    if not key or latitude is None or longitude is None:
+        return None
+    try:
+        radius_m = min(int(radius_km * 1000), 50000)
+        url = (
+            f"https://maps.googleapis.com/maps/api/place/nearbysearch/json"
+            f"?location={latitude},{longitude}&radius={radius_m}&type=lodging&key={key}"
+        )
+        results = []
+        next_token = None
+        async with httpx.AsyncClient(timeout=15) as client:
+            for _ in range(3):  # up to 3 pages × 20 = 60 results
+                u = url + (f"&pagetoken={next_token}" if next_token else "")
+                resp = await client.get(u)
+                if resp.status_code != 200:
+                    break
+                data = resp.json()
+                results.extend(data.get("results", []))
+                next_token = data.get("next_page_token")
+                if not next_token:
+                    break
+                await asyncio.sleep(2)  # Google requires 2s between paginated calls
+        return len(results) if results else None
+    except Exception as e:
+        logger.info(f"Google Places failed: {e}")
+        return None
+
+
 def _radius_based_property_count(radius_km, location_hint=""):
     """Realistic neighborhood property count based on geo-radius.
     Central London density ≈ 35/sq mi; suburban ≈ 8/sq mi.
@@ -113,11 +202,38 @@ def create_market_robot_router(db, require_roles):
                     if total_properties == 0:
                         continue
 
-                    # Booking.com's "X properties found" ignores nflt=distance filter —
-                    # for geo scans we override with radius-area × density to get a realistic neighborhood count.
+                    # Priority chain for geo scans: the '4,260 properties found' header
+                    # ignores nflt=distance, so we must source a realistic number.
                     is_geo_scan = radius_km is not None
+                    total_source = "booking-header"
                     if is_geo_scan:
-                        total_properties = _radius_based_property_count(radius_km, location)
+                        # 1) Booking property-card count (respects distance filter)
+                        card_count = _count_booking_cards(text)
+                        if card_count >= 5:
+                            # Booking paginates at 25/page; card_count × (total_pages heuristic)
+                            # Attempt to read "Showing 1-25 of X properties" first
+                            page_total = re.search(r'Showing\s*\d+\s*[-–]\s*\d+\s*of\s*([\d,]+)', text, re.I)
+                            if page_total:
+                                total_properties = int(page_total.group(1).replace(",", ""))
+                                total_source = "booking-pager"
+                            else:
+                                total_properties = card_count
+                                total_source = "booking-cards"
+                        else:
+                            # 2) OSM Overpass free API
+                            osm_n = await _osm_hotel_count(latitude, longitude, radius_km) if (latitude and longitude) else None
+                            # 3) Google Places API (only if key present)
+                            gp_n = await _google_places_hotel_count(latitude, longitude, radius_km) if (latitude and longitude) else None
+                            # Prefer Google if populated & radius small (<=5km), else OSM, else heuristic
+                            if gp_n and (gp_n >= 10 or (osm_n is None or gp_n >= osm_n)):
+                                total_properties = gp_n
+                                total_source = "google-places"
+                            elif osm_n:
+                                total_properties = osm_n
+                                total_source = "osm"
+                            else:
+                                total_properties = _radius_based_property_count(radius_km, location)
+                                total_source = "heuristic"
 
                     unavail_match = re.search(r'(\d+)%\s*of\s*places?\s*to\s*stay\s*are\s*unavailable', text)
                     unavailable_pct = int(unavail_match.group(1)) if unavail_match else 0
@@ -144,6 +260,7 @@ def create_market_robot_router(db, require_roles):
 
                     return {
                         "total_properties": total_properties,
+                        "total_source": total_source,
                         "unavailable_pct": unavailable_pct,
                         "available_pct": available_pct,
                         "available_est": available_est,
@@ -210,11 +327,23 @@ def create_market_robot_router(db, require_roles):
             elif month in [1, 2, 11]:  # Low season
                 base -= 10
             unavail = max(15, min(92, base + _rand.randint(-8, 8)))
-            # For geo scans: realistic neighborhood count based on radius; otherwise use London-wide baseline
+            # For geo scans: try OSM → Google → heuristic; else use London-wide baseline
+            total_source = "heuristic"
             if radius_km is not None:
-                total_props = _radius_based_property_count(radius_km, location)
+                osm_n = await _osm_hotel_count(latitude, longitude, radius_km) if (latitude and longitude) else None
+                gp_n = await _google_places_hotel_count(latitude, longitude, radius_km) if (latitude and longitude) else None
+                if gp_n and gp_n >= 10:
+                    total_props = gp_n
+                    total_source = "google-places"
+                elif osm_n:
+                    total_props = osm_n
+                    total_source = "osm"
+                else:
+                    total_props = _radius_based_property_count(radius_km, location)
+                    total_source = "heuristic"
             else:
                 total_props = 4260
+                total_source = "city-baseline"
             # Estimated prices scale with demand + seasonality + day-of-week
             base_price = 130  # London ADR baseline
             price_factor = 1.0 + (unavail - 55) * 0.012  # higher demand → higher prices
@@ -227,6 +356,7 @@ def create_market_robot_router(db, require_roles):
             avg = round(base_price * price_factor * (1 + _rand.uniform(-0.05, 0.08)), 2)
             return {
                 "total_properties": total_props,
+                "total_source": total_source,
                 "unavailable_pct": unavail,
                 "available_pct": 100 - unavail,
                 "available_est": round(total_props * (100 - unavail) / 100),
@@ -577,6 +707,7 @@ def create_market_robot_router(db, require_roles):
                     "latitude": latitude, "longitude": longitude, "radius_km": radius_km,
                     "date": checkin,
                     "total_properties": supply["total_properties"],
+                    "total_source": supply.get("total_source", "unknown"),
                     "unavailable_pct": supply["unavailable_pct"],
                     "available_pct": supply["available_pct"],
                     "available_est": supply["available_est"],

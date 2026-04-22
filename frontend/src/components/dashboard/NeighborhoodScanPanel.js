@@ -30,6 +30,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [lastResult, setLastResult] = useState(null);
   const [autoCfg, setAutoCfg] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [highlightDate, setHighlightDate] = useState(null);
 
   const loadAll = useCallback(async () => {
     try {
@@ -132,6 +133,27 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   }, [snapshots]);
 
   const miles = (radiusKm * 0.621371).toFixed(1);
+
+  // TOP 3 biggest absolute % changes vs previous day
+  const top3Changes = useMemo(() => {
+    const deltas = [];
+    for (let i = 1; i < snapshots.length; i++) {
+      const p = snapshots[i - 1].avg_price;
+      const c = snapshots[i].avg_price;
+      if (p > 0 && c > 0) {
+        const pct = ((c - p) / p) * 100;
+        deltas.push({ date: snapshots[i].date, pct, price: c, prevPrice: p });
+      }
+    }
+    return deltas.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct)).slice(0, 3);
+  }, [snapshots]);
+
+  const scrollToDate = (date) => {
+    setHighlightDate(date);
+    const row = document.querySelector(`[data-row-date="${date}"]`);
+    if (row) row.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => setHighlightDate(null), 2500);
+  };
 
   return (
     <div className="space-y-5" data-testid="neighborhood-scan-panel">
@@ -361,9 +383,37 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       {/* Snapshots table */}
       {snapshots.length > 0 && (
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="geo-snapshots">
-          <div className="flex items-center gap-2 mb-4">
-            <Building2 className="w-4 h-4 text-emerald-400" />
-            <h3 className="text-sm font-bold text-stone-100">Neighborhood Supply & Prices · Next {days} days</h3>
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-stone-100">Neighborhood Supply & Prices · Next {days} days</h3>
+            </div>
+            {top3Changes.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2" data-testid="top3-changes">
+                <span className="text-[10px] text-stone-400 uppercase tracking-widest font-bold flex items-center gap-1">
+                  <span className="text-amber-400">🔥</span> TOP 3 Değişim
+                </span>
+                {top3Changes.map((t, i) => {
+                  const up = t.pct > 0;
+                  return (
+                    <button
+                      key={t.date}
+                      onClick={() => scrollToDate(t.date)}
+                      data-testid={`top3-pill-${i}`}
+                      className={`group flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition-all border ${
+                        up
+                          ? "bg-rose-500/15 border-rose-500/40 text-rose-200 hover:bg-rose-500/25 hover:border-rose-400"
+                          : "bg-emerald-500/15 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25 hover:border-emerald-400"
+                      }`}
+                      title={`£${Math.round(t.prevPrice)} → £${Math.round(t.price)}`}
+                    >
+                      <span className="text-stone-300 tabular-nums">{t.date.slice(5)}</span>
+                      <span>{up ? "▲" : "▼"}{Math.abs(t.pct).toFixed(1)}%</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="overflow-x-auto rounded-xl border border-stone-800">
             <table className="w-full text-xs">
@@ -428,7 +478,13 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                     ? ((s.avg_price - prevPrice) / prevPrice) * 100 : null;
                   const up = delta !== null && delta > 0;
                   return (
-                    <tr key={s.date} className="border-b border-stone-800/40 hover:bg-emerald-500/5">
+                    <tr key={s.date}
+                      data-row-date={s.date}
+                      className={`border-b border-stone-800/40 transition-all duration-500 ${
+                        highlightDate === s.date
+                          ? "bg-amber-400/20 ring-2 ring-amber-400 ring-inset"
+                          : "hover:bg-emerald-500/5"
+                      }`}>
                       <td className="py-2.5 pl-3 pr-2 text-stone-100 font-semibold tabular-nums">{s.date}</td>
                       <td className="text-right px-2 text-stone-400 truncate max-w-[120px]">{s.location}</td>
                       <td className="text-right px-2 text-stone-300 tabular-nums">{s.total_properties || "—"}</td>

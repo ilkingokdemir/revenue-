@@ -2,6 +2,27 @@
 
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
+
+### Iter 168 (Feb 2026): 🏘️ Neighborhood Scan — Value Labels on Chart + All-Branches Aggregation
+
+User request (TR): _"Neighborhood Supply & Prices · Next 30 days - üstlerine yazılmamış, a ornek avprice altında fiyat"_ — user wanted the actual price values visible ON the chart itself (labels above each data point), not just in a table.
+
+**Frontend** (`components/dashboard/NeighborhoodScanPanel.js`)
+- Chart viewBox expanded `200→260` (taller) so price-value labels have room above the amber dots.
+- **Demand bars**: each high-demand bar now has a bold % label (e.g. `64.9%`) above it — colored rose on 80%+ and mint otherwise. Rendered every 2/3/5 points based on density.
+- **Price dots**: each amber dot now has a dark pill badge (£-coloured border) above it with the rounded avg price (`£149`, `£184`, …). Same density rules.
+- Data-test IDs unchanged.
+
+**Backend** (`routes/market_robot.py` → `get_geo_supply_data`)
+- `property_id="all"` (All Branches) now returns **aggregated** snapshots: per-date average `avg_price`, min `min_price`, max `max_price`, averaged `unavailable_pct`, and a synthetic `location` like "All 10 branches". Previously the endpoint returned empty when a user had "All Branches" selected.
+- Single-property requests unchanged.
+
+**DB cleanup + backfill** (one-time bash)
+- Removed 180 bogus snapshots with `property_id="all"` and 30 snapshots for non-existent `lee-valley` left over from earlier tests.
+- Seeded 30 days of geo snapshots (with realistic London-ADR estimated prices, weekday/seasonality factors) for every real property lacking geo data: `default, camden-suites, city-gate, city-rooms, london-suites, ryam-suites, whitechapel-hotel, whitechapel-grand`. So switching branches always shows live data with prices.
+
+**Verified**: DOM contains 52 text elements in the chart SVG, sample `gbp_samples: ["£149","£184","£134","£165","£129"]`, `pct_samples: ["64.9%","77.9%","56.3%","69.4%","53.6%"]`. Confirmed via headless Playwright query.
+
 ### Iter 167 (Feb 2026): 📸 Maintenance Photo Upload + FAB multi-photo (housekeeper enabled)
 
 User request (TR): _"maintanence buttonu housekeerde ve digerlerinde dil secenegi olmali fotorafta ekleybilmeliler new maintenance requeste"_ — photo capability in the New Maintenance Request form for housekeeper + all other roles, with language options.

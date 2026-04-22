@@ -353,23 +353,60 @@ def create_market_robot_router(db, require_roles):
     @router.get("/revenue/market-robot/{property_id}/geo-supply")
     async def get_geo_supply_data(property_id: str, days: int = 30,
                                   current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Latest geo-radius snapshots (neighborhood scans)."""
+        """Latest geo-radius snapshots (neighborhood scans).
+        When property_id='all', aggregates across ALL properties (averages per date)."""
         now = datetime.now(timezone.utc)
+        match = {"scan_type": "geo"} if property_id == "all" else {"property_id": property_id, "scan_type": "geo"}
         pipeline = [
-            {"$match": {"property_id": property_id, "scan_type": "geo"}},
+            {"$match": match},
             {"$sort": {"scanned_at": -1}},
-            {"$group": {"_id": "$date", "doc": {"$first": "$$ROOT"}}},
+            {"$group": {"_id": {"pid": "$property_id", "date": "$date"}, "doc": {"$first": "$$ROOT"}}},
             {"$replaceRoot": {"newRoot": "$doc"}},
             {"$sort": {"date": 1}},
             {"$project": {"_id": 0}},
         ]
-        snaps = await db.market_supply.aggregate(pipeline).to_list(500)
+        raw = await db.market_supply.aggregate(pipeline).to_list(5000)
         today_str = now.strftime("%Y-%m-%d")
         end_str = (now + timedelta(days=days)).strftime("%Y-%m-%d")
-        snaps = [s for s in snaps if today_str <= s.get("date", "") <= end_str]
+        raw = [s for s in raw if today_str <= s.get("date", "") <= end_str]
+
+        if property_id == "all":
+            # Aggregate across properties per date
+            by_date = {}
+            for s in raw:
+                d = s.get("date")
+                by_date.setdefault(d, []).append(s)
+            snaps = []
+            for d in sorted(by_date.keys()):
+                rows = by_date[d]
+                ap = [r.get("avg_price", 0) for r in rows if r.get("avg_price", 0) > 0]
+                mn = [r.get("min_price", 0) for r in rows if r.get("min_price", 0) > 0]
+                mx = [r.get("max_price", 0) for r in rows if r.get("max_price", 0) > 0]
+                un = [r.get("unavailable_pct", 0) for r in rows]
+                tp = [r.get("total_properties", 0) for r in rows if r.get("total_properties", 0) > 0]
+                snaps.append({
+                    "date": d,
+                    "property_id": "all",
+                    "scan_type": "geo",
+                    "location": f"All {len(rows)} branches",
+                    "radius_km": rows[0].get("radius_km", 3.2),
+                    "total_properties": round(sum(tp) / len(tp)) if tp else 0,
+                    "unavailable_pct": round(sum(un) / len(un), 1) if un else 0,
+                    "available_pct": round(100 - (sum(un) / len(un)), 1) if un else 100,
+                    "avg_price": round(sum(ap) / len(ap), 2) if ap else 0,
+                    "min_price": round(min(mn), 2) if mn else 0,
+                    "max_price": round(max(mx), 2) if mx else 0,
+                    "median_price": round(sum(ap) / len(ap), 2) if ap else 0,
+                    "scraped": True,
+                    "method": "aggregated",
+                    "scanned_at": rows[0].get("scanned_at", ""),
+                    "scan_id": rows[0].get("scan_id", ""),
+                })
+        else:
+            snaps = raw
 
         # Aggregate summary
-        total_scans = len({s["scan_id"] for s in snaps}) if snaps else 0
+        total_scans = len({s.get("scan_id", "") for s in snaps}) if snaps else 0
         avg_unavail = round(sum(s.get("unavailable_pct", 0) for s in snaps) / len(snaps), 1) if snaps else 0
         prices = [s.get("avg_price", 0) for s in snaps if s.get("avg_price", 0) > 0]
         avg_price = round(sum(prices) / len(prices), 2) if prices else 0
@@ -379,8 +416,10 @@ def create_market_robot_router(db, require_roles):
         mkt_max = round(max(max_prices), 2) if max_prices else 0
         latest = snaps[-1] if snaps else {}
 
-        # Load geo auto-scan config
-        geo_cfg = await db.market_robot_geo_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        # Load geo auto-scan config (only for real properties)
+        geo_cfg = {} if property_id == "all" else (
+            await db.market_robot_geo_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        )
 
         return {
             "property_id": property_id,

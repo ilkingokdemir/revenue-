@@ -114,8 +114,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // Chart derivation
   const chart = useMemo(() => {
     if (!snapshots.length) return null;
-    const pad = { l: 55, r: 10, t: 10, b: 28 };
-    const W = 1000, H = 200;
+    const pad = { l: 55, r: 10, t: 28, b: 32 };
+    const W = 1000, H = 260;
     const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
     const n = snapshots.length;
     const sx = (i) => pad.l + (i / Math.max(n - 1, 1)) * iW;
@@ -277,21 +277,46 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               {[0,25,50,75,100].map(v => (
                 <line key={v} x1={chart.pad.l} x2={chart.W - chart.pad.r} y1={chart.syD(v)} y2={chart.syD(v)} stroke="#374151" strokeWidth="0.5" />
               ))}
-              {/* Demand bars */}
+              {/* Demand bars + % label above each bar */}
               {snapshots.map((s, i) => {
                 const h = (s.unavailable_pct / 100) * chart.iH;
                 const x = chart.sx(i) - 5;
                 const y = chart.pad.t + chart.iH - h;
                 const hot = s.unavailable_pct >= 80;
-                return <rect key={i} x={x} y={y} width={10} height={h} rx={2}
-                  fill={hot ? "#ef4444" : s.unavailable_pct >= 60 ? "#14b8a6" : "#10b981"} opacity="0.75" />;
+                const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
+                const showLabel = i % labelStep === 0;
+                return (
+                  <g key={`bar-${i}`}>
+                    <rect x={x} y={y} width={10} height={h} rx={2}
+                      fill={hot ? "#ef4444" : s.unavailable_pct >= 60 ? "#14b8a6" : "#10b981"} opacity="0.75" />
+                    {showLabel && s.unavailable_pct > 0 && (
+                      <text x={chart.sx(i)} y={Math.max(y - 3, chart.pad.t + 8)} textAnchor="middle" fontSize="9" fontWeight="900"
+                        fill={hot ? "#fca5a5" : "#6ee7b7"}>{s.unavailable_pct}%</text>
+                    )}
+                  </g>
+                );
               })}
               {/* Price line */}
               <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="6 3" opacity="0.95" />
-              {/* Price dots */}
-              {snapshots.map((s, i) => (
-                <circle key={i} cx={chart.sx(i)} cy={chart.syP(s.avg_price || 0)} r="2.5" fill="#fbbf24" stroke="#0a0a0a" strokeWidth="1" />
-              ))}
+              {/* Price dots + £ value label above each dot */}
+              {snapshots.map((s, i) => {
+                const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
+                const showLabel = i % labelStep === 0;
+                const cy = chart.syP(s.avg_price || 0);
+                return (
+                  <g key={`dot-${i}`}>
+                    <circle cx={chart.sx(i)} cy={cy} r="3" fill="#fbbf24" stroke="#0a0a0a" strokeWidth="1" />
+                    {showLabel && s.avg_price > 0 && (
+                      <>
+                        <rect x={chart.sx(i) - 22} y={cy - 22} width={44} height={15} rx={3} fill="#0a0a0a" opacity="0.9" stroke="#fbbf24" strokeWidth="0.6" />
+                        <text x={chart.sx(i)} y={cy - 11} textAnchor="middle" fontSize="11" fontWeight="900" fill="#fbbf24" fontFamily="'Inter', system-ui, sans-serif">
+                          £{Math.round(s.avg_price)}
+                        </text>
+                      </>
+                    )}
+                  </g>
+                );
+              })}
               {/* Date labels */}
               {snapshots.map((s, i) => {
                 if (!s?.date) return null;

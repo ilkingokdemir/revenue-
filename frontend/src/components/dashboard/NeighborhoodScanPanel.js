@@ -244,14 +244,22 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       {/* Chart — Avg Price + Demand */}
       {chart && snapshots.length > 2 && (
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="geo-chart">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-400" />
               <h3 className="text-sm font-bold text-stone-100">Neighborhood Market · Demand & Price Trend</h3>
             </div>
-            <div className="flex items-center gap-3 text-[10px] text-stone-400">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] text-stone-400" data-testid="geo-chart-legend">
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Demand %</span>
               <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-amber-400" /> Avg Price</span>
+              <span className="flex items-center gap-1.5 border-l border-stone-700 pl-3">
+                <span className="text-rose-300 font-black text-[11px]">▲</span>
+                <span className="text-stone-300">Rakip fiyatı <span className="text-rose-300 font-semibold">artırdı</span> · siz de artırın</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="text-emerald-300 font-black text-[11px]">▼</span>
+                <span className="text-stone-300">Rakip fiyatı <span className="text-emerald-300 font-semibold">düşürdü</span> · fırsat</span>
+              </span>
             </div>
           </div>
 

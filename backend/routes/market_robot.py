@@ -4,7 +4,7 @@ Tracks availability for 90 days, detects demand changes, and feeds into Smart Pr
 """
 from fastapi import APIRouter, Depends
 from datetime import datetime, timezone, timedelta
-from typing import Dict
+from typing import Dict, Optional
 import uuid
 import re
 import asyncio
@@ -15,14 +15,29 @@ import httpx
 logger = logging.getLogger(__name__)
 
 SCRAPE_RUNNING = False
+SCRAPE_RUNNING_GEO = False  # independent lock so geo scans can run in parallel with city scans
 
 
 def create_market_robot_router(db, require_roles):
     router = APIRouter()
 
-    async def _scrape_booking_date(city: str, checkin: str, checkout: str, language: str = "en-gb"):
-        """Scrape Booking.com search results using multiple strategies with fallback."""
-        url = f"https://www.booking.com/searchresults.{language}.html?ss={city}&checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1&group_children=0"
+    async def _scrape_booking_date(location: str, checkin: str, checkout: str, language: str = "en-gb",
+                                   latitude: Optional[float] = None, longitude: Optional[float] = None,
+                                   radius_km: Optional[float] = None):
+        """Scrape Booking.com search results. Accepts either free-text location (city/postcode/address)
+        OR coordinates+radius for precise geo-radius scanning."""
+        # URL params: ss=location for text, or latitude+longitude+nflt=distance for precise geo
+        if latitude is not None and longitude is not None and radius_km:
+            # Booking.com geo-radius filter: distance in meters
+            radius_m = int(radius_km * 1000)
+            url = (f"https://www.booking.com/searchresults.{language}.html?"
+                   f"ss={location or 'Hotel'}&latitude={latitude}&longitude={longitude}"
+                   f"&checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1&group_children=0"
+                   f"&nflt=distance%3D{radius_m}")
+        else:
+            url = (f"https://www.booking.com/searchresults.{language}.html?"
+                   f"ss={location}&checkin={checkin}&checkout={checkout}"
+                   f"&group_adults=2&no_rooms=1&group_children=0")
 
         # Strategy 1: Direct request with rotating headers
         user_agents = [
@@ -270,19 +285,90 @@ def create_market_robot_router(db, require_roles):
         """Run a market supply scan for the next N days."""
         return await _do_scan(property_id, data or {})
 
+    @router.post("/revenue/market-robot/{property_id}/scan-geo")
+    async def run_geo_scan(property_id: str, data: Dict = {},
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Run a neighborhood (geo-radius) scan. Body: {location: 'SW1A 1AA', radius_km: 3.2, days_ahead: 30}
+        Runs INDEPENDENTLY from city scans — both can run in parallel."""
+        data = data or {}
+        data["mode"] = "geo"
+        return await _do_scan(property_id, data)
+
+    @router.get("/revenue/market-robot/{property_id}/geo-supply")
+    async def get_geo_supply_data(property_id: str, days: int = 30,
+                                  current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Latest geo-radius snapshots (neighborhood scans)."""
+        now = datetime.now(timezone.utc)
+        pipeline = [
+            {"$match": {"property_id": property_id, "scan_type": "geo"}},
+            {"$sort": {"scanned_at": -1}},
+            {"$group": {"_id": "$date", "doc": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$doc"}},
+            {"$sort": {"date": 1}},
+            {"$project": {"_id": 0}},
+        ]
+        snaps = await db.market_supply.aggregate(pipeline).to_list(500)
+        today_str = now.strftime("%Y-%m-%d")
+        end_str = (now + timedelta(days=days)).strftime("%Y-%m-%d")
+        snaps = [s for s in snaps if today_str <= s.get("date", "") <= end_str]
+
+        # Aggregate summary
+        total_scans = len({s["scan_id"] for s in snaps}) if snaps else 0
+        avg_unavail = round(sum(s.get("unavailable_pct", 0) for s in snaps) / len(snaps), 1) if snaps else 0
+        latest = snaps[0] if snaps else {}
+        return {
+            "property_id": property_id,
+            "snapshots": snaps,
+            "summary": {
+                "total_snapshots": len(snaps),
+                "total_scans": total_scans,
+                "avg_unavailable_pct": avg_unavail,
+                "last_location": latest.get("location", ""),
+                "last_radius_km": latest.get("radius_km", 0),
+                "last_scan": latest.get("scanned_at", ""),
+            },
+        }
+
     async def _do_scan(property_id: str, data: Dict):
-        """Core scan logic — callable from HTTP endpoint and background loop."""
-        global SCRAPE_RUNNING
-        if SCRAPE_RUNNING:
-            return {"error": "Scan already in progress", "status": "busy"}
+        """Core scan logic — callable from HTTP endpoint and background loop.
+        Supports two modes:
+          - city (default): whole-city scan via text (e.g. "London")
+          - geo: radius scan around a postcode/address/coordinates
+        """
+        global SCRAPE_RUNNING, SCRAPE_RUNNING_GEO
 
         config = await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
-        city = data.get("city") or config.get("city", "London")
+        mode = (data.get("mode") or "city").lower()
+        is_geo = mode == "geo"
+
+        # Independent locks → city + geo can scan in parallel
+        if is_geo and SCRAPE_RUNNING_GEO:
+            return {"error": "Geo scan already in progress", "status": "busy"}
+        if not is_geo and SCRAPE_RUNNING:
+            return {"error": "City scan already in progress", "status": "busy"}
+
+        # Resolve scan location
+        if is_geo:
+            location = data.get("location") or data.get("postcode") or data.get("address") or ""
+            latitude = data.get("latitude")
+            longitude = data.get("longitude")
+            radius_km = float(data.get("radius_km") or data.get("radius") or 3.2)  # default ~2 miles
+            if not location and (latitude is None or longitude is None):
+                return {"error": "Geo scan requires 'location' (postcode/address) or latitude+longitude", "status": "error"}
+            scan_label = f"{location or f'{latitude},{longitude}'} · {radius_km}km"
+        else:
+            location = data.get("city") or config.get("city", "London")
+            latitude = longitude = radius_km = None
+            scan_label = location
+
         days_ahead = min(int(data.get("days_ahead") or config.get("days_ahead", 365)), 365)
-        auto_pricing = config.get("auto_pricing", True)
+        auto_pricing = config.get("auto_pricing", True) and not is_geo  # geo scans don't auto-price main property
         language = config.get("language", "en-gb")
 
-        SCRAPE_RUNNING = True
+        if is_geo:
+            SCRAPE_RUNNING_GEO = True
+        else:
+            SCRAPE_RUNNING = True
         now = datetime.now(timezone.utc)
         scan_id = str(uuid.uuid4())[:8]
         snapshots = []
@@ -299,21 +385,28 @@ def create_market_robot_router(db, require_roles):
                 checkin = d.strftime("%Y-%m-%d")
                 checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
 
-                supply = await _scrape_booking_date(city, checkin, checkout, language)
+                supply = await _scrape_booking_date(
+                    location, checkin, checkout, language,
+                    latitude=latitude, longitude=longitude, radius_km=radius_km,
+                )
 
-                # Get previous snapshot for this date
+                # Get previous snapshot for this date + same scan type
                 prev = await db.market_supply.find_one(
-                    {"property_id": property_id, "date": checkin},
+                    {"property_id": property_id, "date": checkin, "scan_type": "geo" if is_geo else "city"},
                     {"_id": 0},
                     sort=[("scanned_at", -1)]
                 )
 
-                adj_pct, reason = await _calculate_price_adjustment(db, property_id, checkin, supply, prev)
+                adj_pct, reason = (0, "Geo scan (informational only)") if is_geo else \
+                    await _calculate_price_adjustment(db, property_id, checkin, supply, prev)
 
                 snapshot = {
                     "scan_id": scan_id,
                     "property_id": property_id,
-                    "city": city,
+                    "scan_type": "geo" if is_geo else "city",
+                    "city": location if not is_geo else "",
+                    "location": location if is_geo else "",
+                    "latitude": latitude, "longitude": longitude, "radius_km": radius_km,
                     "date": checkin,
                     "total_properties": supply["total_properties"],
                     "unavailable_pct": supply["unavailable_pct"],
@@ -329,32 +422,43 @@ def create_market_robot_router(db, require_roles):
                 snapshot.pop("_id", None)
                 snapshots.append(snapshot)
 
-            # Auto-pricing
+            # Auto-pricing (city mode only)
             applied = []
             if auto_pricing and snapshots:
                 applied = await _apply_auto_pricing(db, property_id, snapshots)
 
-            # Update config — last_scan + increment total_scans
-            await db.market_robot_config.update_one(
-                {"property_id": property_id},
-                {"$set": {"last_scan": now.isoformat()},
-                 "$inc": {"total_scans": 1}},
-                upsert=True
-            )
+            # Update config — only for city scans (geo scans are per-request)
+            if not is_geo:
+                await db.market_robot_config.update_one(
+                    {"property_id": property_id},
+                    {"$set": {"last_scan": now.isoformat()},
+                     "$inc": {"total_scans": 1}},
+                    upsert=True
+                )
 
             # Log the scan
             await db.market_robot_logs.insert_one({
-                "id": scan_id, "property_id": property_id, "city": city,
+                "id": scan_id, "property_id": property_id,
+                "scan_type": "geo" if is_geo else "city",
+                "location": scan_label,
+                "city": location if not is_geo else "",
+                "radius_km": radius_km,
                 "dates_scanned": len(snapshots), "auto_adjustments": len(applied),
                 "scanned_at": now.isoformat(),
             })
 
         finally:
-            SCRAPE_RUNNING = False
+            if is_geo:
+                SCRAPE_RUNNING_GEO = False
+            else:
+                SCRAPE_RUNNING = False
 
         return {
             "scan_id": scan_id,
-            "city": city,
+            "scan_type": "geo" if is_geo else "city",
+            "location": scan_label,
+            "city": location if not is_geo else "",
+            "radius_km": radius_km,
             "dates_scanned": len(snapshots),
             "snapshots": snapshots[:10],
             "auto_adjustments": applied[:10],

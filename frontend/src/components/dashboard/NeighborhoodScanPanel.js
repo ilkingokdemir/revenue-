@@ -1,18 +1,26 @@
 /**
- * NeighborhoodScanPanel — Market Robot geo-radius sub-tab.
- * User enters a postcode / address + radius → Booking.com scan within that circle,
- * runs in PARALLEL with the city-wide scan.
+ * NeighborhoodScanPanel — Market Robot geo-radius scan with:
+ *   • Manual scan (postcode/address + radius)
+ *   • Auto-scan toggle (runs every N minutes independently from city scan)
+ *   • Price data: avg/min/max market prices for the neighborhood
+ *   • Charts: demand bars + price trend (same style as Demand Radar)
+ *   • Parallel execution — city scan + geo scan can both run
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
-import { MapPin, Radar, Loader2, Clock, Building2, TrendingUp } from "lucide-react";
+import {
+  MapPin, Radar, Loader2, Clock, Building2, TrendingUp, Timer,
+  PoundSterling, Activity, ToggleLeft, ToggleRight, Save,
+} from "lucide-react";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
+const cur = (v) => "£" + (Number(v) || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 });
+
 export default function NeighborhoodScanPanel({ propertyId }) {
   const [location, setLocation] = useState("");
-  const [radiusKm, setRadiusKm] = useState(3.2); // ~2 miles
+  const [radiusKm, setRadiusKm] = useState(3.2);
   const [days, setDays] = useState(30);
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -20,33 +28,42 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [summary, setSummary] = useState(null);
   const [snapshots, setSnapshots] = useState([]);
   const [lastResult, setLastResult] = useState(null);
+  const [autoCfg, setAutoCfg] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  const loadSupply = useCallback(async () => {
+  const loadAll = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API}/revenue/market-robot/${propertyId}/geo-supply?days=${days}`);
-      setSummary(data.summary || null);
-      setSnapshots(data.snapshots || []);
+      const [{ data: supply }, { data: cfg }] = await Promise.all([
+        axios.get(`${API}/revenue/market-robot/${propertyId}/geo-supply?days=${days}`),
+        axios.get(`${API}/revenue/market-robot/${propertyId}/geo-config`),
+      ]);
+      setSummary(supply.summary || null);
+      setSnapshots(supply.snapshots || []);
+      setAutoCfg(cfg);
+      if (cfg && !location && cfg.location) {
+        setLocation(cfg.location);
+        setRadiusKm(cfg.radius_km || 3.2);
+        if (cfg.latitude) setLatitude(cfg.latitude);
+        if (cfg.longitude) setLongitude(cfg.longitude);
+      }
     } catch { /* noop */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, days]);
 
-  useEffect(() => { loadSupply(); }, [loadSupply]);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   const runScan = async () => {
-    if (!location.trim() && !(latitude && longitude)) {
-      toast.error("Enter a postcode/address OR coordinates");
-      return;
-    }
+    if (!location.trim() && !(latitude && longitude)) { toast.error("Enter a postcode/address OR coordinates"); return; }
     setScanning(true);
     try {
       const payload = { location: location.trim(), radius_km: Number(radiusKm), days_ahead: Number(days) };
       if (latitude && longitude) { payload.latitude = Number(latitude); payload.longitude = Number(longitude); }
       const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/scan-geo`, payload);
-      if (data.status === "busy") {
-        toast.error(data.error || "Another geo scan in progress");
-      } else {
+      if (data.status === "busy") { toast.error(data.error || "Another geo scan in progress"); }
+      else {
         setLastResult(data);
         toast.success(`Scanned ${data.dates_scanned} dates · ${data.location}`);
-        loadSupply();
+        loadAll();
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Scan failed");
@@ -54,7 +71,66 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     setScanning(false);
   };
 
-  // Convert km to miles for display
+  const saveAutoCfg = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        enabled: autoCfg?.enabled || false,
+        location: location.trim(),
+        radius_km: Number(radiusKm),
+        days_ahead: Number(days),
+        scan_interval_minutes: Number(autoCfg?.scan_interval_minutes || 120),
+        latitude: latitude ? Number(latitude) : null,
+        longitude: longitude ? Number(longitude) : null,
+      };
+      const { data } = await axios.put(`${API}/revenue/market-robot/${propertyId}/geo-config`, payload);
+      setAutoCfg(data);
+      toast.success("Auto-scan settings saved");
+    } catch (e) {
+      toast.error("Save failed");
+    }
+    setSaving(false);
+  };
+
+  const toggleAuto = async () => {
+    if (!location.trim() && !(latitude && longitude)) { toast.error("Set a location first, then save before enabling"); return; }
+    const next = !(autoCfg?.enabled);
+    setAutoCfg({ ...(autoCfg || {}), enabled: next });
+    try {
+      await axios.put(`${API}/revenue/market-robot/${propertyId}/geo-config`, {
+        ...(autoCfg || {}),
+        enabled: next,
+        location: location.trim(),
+        radius_km: Number(radiusKm),
+        days_ahead: Number(days),
+        scan_interval_minutes: Number(autoCfg?.scan_interval_minutes || 120),
+        latitude: latitude ? Number(latitude) : null,
+        longitude: longitude ? Number(longitude) : null,
+      });
+      toast.success(next ? "Auto-scan enabled" : "Auto-scan paused");
+    } catch { toast.error("Toggle failed"); }
+  };
+
+  // Chart derivation
+  const chart = useMemo(() => {
+    if (!snapshots.length) return null;
+    const pad = { l: 55, r: 10, t: 10, b: 28 };
+    const W = 1000, H = 200;
+    const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
+    const n = snapshots.length;
+    const sx = (i) => pad.l + (i / Math.max(n - 1, 1)) * iW;
+    const prices = snapshots.map(s => s.avg_price || 0).filter(v => v > 0);
+    const pMin = prices.length ? Math.min(...prices) * 0.9 : 0;
+    const pMax = prices.length ? Math.max(...prices) * 1.05 : 1;
+    const syP = (v) => pad.t + iH - ((v - pMin) / Math.max(pMax - pMin, 1)) * iH;
+    const syD = (v) => pad.t + iH - (v / 100) * iH;
+    const linePath = snapshots.map((s, i) => {
+      const x = sx(i), y = syP(s.avg_price || 0);
+      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
+    }).join(" ");
+    return { pad, W, H, iW, iH, sx, syP, syD, linePath, pMin, pMax };
+  }, [snapshots]);
+
   const miles = (radiusKm * 0.621371).toFixed(1);
 
   return (
@@ -62,83 +138,84 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       {/* Hero */}
       <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-950/70 via-teal-950/40 to-stone-900 p-6">
         <div className="absolute -top-10 -right-10 w-48 h-48 rounded-full bg-emerald-500/20 blur-3xl pointer-events-none" />
-        <div className="relative flex items-start gap-4">
-          <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
-            <MapPin className="w-6 h-6 text-emerald-400" />
+        <div className="relative flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center shrink-0">
+              <MapPin className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-emerald-300">Neighborhood Scan</h2>
+              <p className="text-xs text-stone-400 mt-1">
+                Booking.com hotels within <span className="text-emerald-300 font-semibold">{miles} miles</span> · runs <span className="text-amber-300 font-semibold">in parallel</span> with city scan.
+              </p>
+            </div>
           </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-black text-emerald-300">Neighborhood Scan</h2>
-            <p className="text-xs text-stone-400 mt-1">
-              Scan Booking.com hotels within a <span className="text-emerald-300 font-semibold">{miles} miles</span> radius around a specific postcode or address. Runs <span className="text-amber-300 font-semibold">in parallel</span> with the city-wide scan.
-            </p>
-          </div>
+          {autoCfg && (
+            <button onClick={toggleAuto}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all ${autoCfg.enabled ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" : "bg-stone-800 text-stone-400 hover:bg-stone-700"}`}
+              data-testid="geo-auto-toggle">
+              {autoCfg.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+              Auto-Scan {autoCfg.enabled ? "ON" : "OFF"}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Form */}
+      {/* Config form */}
       <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Location (Postcode / Address)</label>
-            <input
-              value={location}
-              onChange={e => setLocation(e.target.value)}
-              placeholder="e.g. SW1A 1AA or 221B Baker Street"
-              className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              data-testid="geo-location"
-            />
-            <p className="text-[10px] text-stone-500 mt-1">Postcode works best. Leave empty to use coordinates.</p>
+            <input value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. E1 6AN"
+              className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" data-testid="geo-location" />
           </div>
           <div>
-            <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">
-              Radius · <span className="text-emerald-400">{radiusKm} km ({miles} mi)</span>
-            </label>
-            <input
-              type="range" min="0.5" max="10" step="0.1"
-              value={radiusKm}
-              onChange={e => setRadiusKm(e.target.value)}
-              className="w-full accent-emerald-500"
-              data-testid="geo-radius"
-            />
+            <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Radius · <span className="text-emerald-400">{radiusKm} km ({miles} mi)</span></label>
+            <input type="range" min="0.5" max="10" step="0.1" value={radiusKm} onChange={e => setRadiusKm(e.target.value)} className="w-full accent-emerald-500" data-testid="geo-radius" />
             <div className="flex justify-between text-[9px] text-stone-500 mt-0.5"><span>0.5km</span><span>5km</span><span>10km</span></div>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Days Ahead</label>
-            <select value={days} onChange={e => setDays(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100"
-              data-testid="geo-days">
-              <option value="7">7 days</option>
-              <option value="14">14 days</option>
-              <option value="30">30 days</option>
-              <option value="60">60 days</option>
-              <option value="90">90 days</option>
+            <select value={days} onChange={e => setDays(e.target.value)} className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100" data-testid="geo-days">
+              {[7,14,30,60,90].map(d => <option key={d} value={d}>{d} days</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Latitude (opt)</label>
-            <input value={latitude} onChange={e => setLatitude(e.target.value)}
-              placeholder="51.5074"
-              className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100" />
+            <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Auto Interval (min)</label>
+            <select value={autoCfg?.scan_interval_minutes || 120} onChange={e => setAutoCfg(c => ({ ...(c || {}), scan_interval_minutes: Number(e.target.value) }))} className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100" data-testid="geo-interval">
+              {[30,60,120,240,480,1440].map(m => <option key={m} value={m}>{m >= 60 ? (m/60)+"h" : m+"m"}</option>)}
+            </select>
           </div>
           <div>
-            <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Longitude (opt)</label>
-            <input value={longitude} onChange={e => setLongitude(e.target.value)}
-              placeholder="-0.1278"
-              className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100" />
+            <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Latitude</label>
+            <input value={latitude} onChange={e => setLatitude(e.target.value)} placeholder="51.5074" className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1.5 tracking-wider">Longitude</label>
+            <input value={longitude} onChange={e => setLongitude(e.target.value)} placeholder="-0.1278" className="w-full px-3 py-2.5 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100" />
           </div>
         </div>
 
-        <button
-          onClick={runScan}
-          disabled={scanning}
-          className="w-full py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black rounded-xl flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/30"
-          data-testid="geo-scan-btn">
-          {scanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <Radar className="w-5 h-5" />}
-          {scanning ? "Scanning Booking.com…" : `Scan Hotels Within ${miles} Miles`}
-        </button>
+        <div className="flex gap-2">
+          <button onClick={runScan} disabled={scanning}
+            className="flex-1 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black rounded-xl flex items-center justify-center gap-2 disabled:opacity-60 shadow-lg shadow-emerald-500/30"
+            data-testid="geo-scan-btn">
+            {scanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <Radar className="w-5 h-5" />}
+            {scanning ? "Scanning Booking.com…" : `Scan Now (${miles} mi)`}
+          </button>
+          <button onClick={saveAutoCfg} disabled={saving}
+            className="px-5 py-3 bg-stone-800 hover:bg-stone-700 text-stone-100 font-bold rounded-xl flex items-center gap-2 disabled:opacity-60 border border-stone-700"
+            data-testid="geo-save-cfg">
+            {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+            Save
+          </button>
+        </div>
+        {autoCfg?.last_scan && (
+          <p className="text-[11px] text-stone-500 flex items-center gap-1.5"><Timer className="w-3 h-3" /> Last auto-scan: <span className="text-emerald-300 font-semibold">{new Date(autoCfg.last_scan).toLocaleString()}</span> · Total: <span className="text-emerald-300 font-semibold">{autoCfg.total_scans || 0}</span></p>
+        )}
       </div>
 
       {/* Last scan result */}
@@ -148,31 +225,89 @@ export default function NeighborhoodScanPanel({ propertyId }) {
             <TrendingUp className="w-4 h-4" /> Scan completed
           </div>
           <p className="text-xs text-stone-300 mt-1">
-            <span className="text-emerald-400 font-semibold">{lastResult.dates_scanned}</span> dates scanned ·
-            Location: <span className="font-semibold">{lastResult.location}</span> ·
-            Scan ID: <code className="text-[10px] bg-stone-900 px-1 py-0.5 rounded">{lastResult.scan_id}</code>
+            <span className="text-emerald-400 font-semibold">{lastResult.dates_scanned}</span> dates · {lastResult.location}
           </p>
         </div>
       )}
 
       {/* Summary cards */}
       {summary && summary.total_snapshots > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="geo-summary">
-          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase text-stone-500 tracking-widest">Snapshots</p>
-            <p className="text-2xl font-black text-stone-100 tabular-nums mt-1">{summary.total_snapshots}</p>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="geo-summary">
+          <KPI label="Snapshots" value={summary.total_snapshots} tone="slate" icon={Activity} />
+          <KPI label="Avg Unavail" value={`${summary.avg_unavailable_pct}%`} tone="amber" icon={Building2} />
+          <KPI label="Market Avg" value={cur(summary.avg_price)} tone="emerald" icon={PoundSterling} testId="geo-avg-price" />
+          <KPI label="Market Low" value={cur(summary.min_price)} tone="emerald" />
+          <KPI label="Market High" value={cur(summary.max_price)} tone="rose" />
+        </div>
+      )}
+
+      {/* Chart — Avg Price + Demand */}
+      {chart && snapshots.length > 2 && (
+        <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="geo-chart">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-stone-100">Neighborhood Market · Demand & Price Trend</h3>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] text-stone-400">
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Demand %</span>
+              <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-amber-400" /> Avg Price</span>
+            </div>
           </div>
-          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase text-stone-500 tracking-widest">Avg Unavailable</p>
-            <p className="text-2xl font-black text-amber-400 tabular-nums mt-1">{summary.avg_unavailable_pct}%</p>
-          </div>
-          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase text-stone-500 tracking-widest">Last Radius</p>
-            <p className="text-2xl font-black text-emerald-400 tabular-nums mt-1">{summary.last_radius_km}km</p>
-          </div>
-          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4">
-            <p className="text-[10px] font-bold uppercase text-stone-500 tracking-widest">Last Scan</p>
-            <p className="text-xs font-bold text-stone-200 mt-2 tabular-nums">{summary.last_scan ? new Date(summary.last_scan).toLocaleString() : "—"}</p>
+
+          <div className="relative overflow-x-auto">
+            {/* Y-axis left (demand %) */}
+            <div className="absolute left-0 top-0 bottom-0 w-12 pointer-events-none z-10">
+              {[100,75,50,25,0].map(v => (
+                <div key={v} className="absolute right-1 text-[11px] font-bold text-stone-200 tabular-nums"
+                  style={{ top: `calc(${((100-v)/100)*(chart.H-chart.pad.t-chart.pad.b)/chart.H*100}% + ${chart.pad.t/chart.H*100}% - 7px)`, lineHeight: 1 }}>{v}%</div>
+              ))}
+            </div>
+            {/* Y-axis right (price £) */}
+            <div className="absolute right-0 top-0 bottom-0 w-14 pointer-events-none z-10">
+              {[1,0.75,0.5,0.25,0].map(f => {
+                const val = Math.round(chart.pMin + f * (chart.pMax - chart.pMin));
+                return <div key={f} className="absolute left-1 text-[11px] font-bold text-amber-300 tabular-nums"
+                  style={{ top: `calc(${((1-f)*chart.iH + chart.pad.t)/chart.H*100}% - 7px)`, lineHeight: 1 }}>{cur(val)}</div>;
+              })}
+            </div>
+
+            <svg viewBox={`0 0 ${chart.W} ${chart.H}`} className="w-full" style={{ minWidth: `${Math.max(600, snapshots.length * 18)}px` }}>
+              {/* Grid */}
+              {[0,25,50,75,100].map(v => (
+                <line key={v} x1={chart.pad.l} x2={chart.W - chart.pad.r} y1={chart.syD(v)} y2={chart.syD(v)} stroke="#374151" strokeWidth="0.5" />
+              ))}
+              {/* Demand bars */}
+              {snapshots.map((s, i) => {
+                const h = (s.unavailable_pct / 100) * chart.iH;
+                const x = chart.sx(i) - 5;
+                const y = chart.pad.t + chart.iH - h;
+                const hot = s.unavailable_pct >= 80;
+                return <rect key={i} x={x} y={y} width={10} height={h} rx={2}
+                  fill={hot ? "#ef4444" : s.unavailable_pct >= 60 ? "#14b8a6" : "#10b981"} opacity="0.75" />;
+              })}
+              {/* Price line */}
+              <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="6 3" opacity="0.95" />
+              {/* Price dots */}
+              {snapshots.map((s, i) => (
+                <circle key={i} cx={chart.sx(i)} cy={chart.syP(s.avg_price || 0)} r="2.5" fill="#fbbf24" stroke="#0a0a0a" strokeWidth="1" />
+              ))}
+              {/* Date labels */}
+              {snapshots.map((s, i) => {
+                if (!s?.date) return null;
+                const dt = new Date(s.date + "T00:00:00");
+                const prev = i > 0 ? new Date(snapshots[i-1].date + "T00:00:00") : null;
+                const isMonthStart = !prev || prev.getMonth() !== dt.getMonth();
+                const step = snapshots.length > 30 ? 3 : 1;
+                if (i % step !== 0 && !isMonthStart) return null;
+                return (
+                  <g key={`xd${i}`}>
+                    <text x={chart.sx(i)} y={chart.H - 12} textAnchor="middle" fontSize="7" fill={isMonthStart ? "#ffffff" : "#9ca3af"} fontWeight={isMonthStart ? "700" : "500"}>{dt.getDate()}</text>
+                    {isMonthStart && <text x={chart.sx(i)} y={chart.H - 2} textAnchor="middle" fontSize="8" fill="#10b981" fontWeight="800">{dt.toLocaleDateString("en",{month:"short"})}</text>}
+                  </g>
+                );
+              })}
+            </svg>
           </div>
         </div>
       )}
@@ -182,7 +317,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="geo-snapshots">
           <div className="flex items-center gap-2 mb-4">
             <Building2 className="w-4 h-4 text-emerald-400" />
-            <h3 className="text-sm font-bold text-stone-100">Neighborhood Supply · Next {days} days</h3>
+            <h3 className="text-sm font-bold text-stone-100">Neighborhood Supply & Prices · Next {days} days</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -190,10 +325,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 <tr className="text-[9px] uppercase text-stone-500 border-b border-stone-700">
                   <th className="text-left py-2 pr-2 font-bold tracking-widest">Date</th>
                   <th className="text-right px-2 font-bold tracking-widest">Location</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Radius</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Total Hotels</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Unavailable %</th>
-                  <th className="text-right px-2 font-bold tracking-widest">Available</th>
+                  <th className="text-right px-2 font-bold tracking-widest">Hotels</th>
+                  <th className="text-right px-2 font-bold tracking-widest">Unavail %</th>
+                  <th className="text-right px-2 font-bold tracking-widest">Avg £</th>
+                  <th className="text-right px-2 font-bold tracking-widest">Min £</th>
+                  <th className="text-right px-2 font-bold tracking-widest">Max £</th>
                 </tr>
               </thead>
               <tbody>
@@ -202,15 +338,16 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   return (
                     <tr key={s.date} className="border-b border-stone-800/40 hover:bg-emerald-500/5">
                       <td className="py-2 pr-2 text-stone-200 font-semibold tabular-nums">{s.date}</td>
-                      <td className="text-right px-2 text-stone-400 truncate max-w-[160px]">{s.location}</td>
-                      <td className="text-right px-2 text-stone-400 tabular-nums">{s.radius_km}km</td>
+                      <td className="text-right px-2 text-stone-400 truncate max-w-[120px]">{s.location}</td>
                       <td className="text-right px-2 text-stone-300 tabular-nums">{s.total_properties || "—"}</td>
                       <td className="text-right px-2 tabular-nums">
-                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${hot ? "bg-rose-500/20 text-rose-300" : (s.unavailable_pct || 0) >= 50 ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/15 text-emerald-300"}`}>
+                        <span className={`inline-block px-1.5 py-0.5 rounded font-bold ${hot ? "bg-rose-500/20 text-rose-300" : (s.unavailable_pct||0) >= 60 ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/15 text-emerald-300"}`}>
                           {s.unavailable_pct}%
                         </span>
                       </td>
-                      <td className="text-right px-2 text-stone-300 tabular-nums">{s.available_est || "—"}</td>
+                      <td className="text-right px-2 text-amber-300 font-bold tabular-nums">{s.avg_price ? cur(s.avg_price) : "—"}</td>
+                      <td className="text-right px-2 text-stone-400 tabular-nums">{s.min_price ? cur(s.min_price) : "—"}</td>
+                      <td className="text-right px-2 text-stone-400 tabular-nums">{s.max_price ? cur(s.max_price) : "—"}</td>
                     </tr>
                   );
                 })}
@@ -224,9 +361,25 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         <div className="text-center py-10 bg-stone-900/40 border border-dashed border-stone-700 rounded-xl">
           <Clock className="w-10 h-10 text-stone-600 mx-auto mb-2" />
           <p className="text-sm text-stone-400">No neighborhood scans yet</p>
-          <p className="text-xs text-stone-500 mt-1">Enter a postcode above and hit Scan to see supply data around your target area.</p>
+          <p className="text-xs text-stone-500 mt-1">Enter a postcode above and hit Scan to see supply & price data around your target area.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function KPI({ label, value, tone, icon: Icon, testId }) {
+  const tones = {
+    emerald: "border-emerald-500/30 text-emerald-300",
+    amber: "border-amber-500/30 text-amber-300",
+    rose: "border-rose-500/30 text-rose-300",
+    slate: "border-stone-700 text-stone-200",
+  };
+  return (
+    <div className={`bg-stone-900/60 border ${tones[tone] || tones.slate} rounded-xl p-3 relative overflow-hidden`} data-testid={testId}>
+      {Icon && <Icon className="absolute -right-2 -bottom-2 w-10 h-10 opacity-10" />}
+      <p className="text-[9px] font-bold uppercase tracking-widest opacity-70">{label}</p>
+      <p className="text-xl font-black tabular-nums mt-1">{value}</p>
     </div>
   );
 }

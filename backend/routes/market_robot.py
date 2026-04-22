@@ -18,6 +18,22 @@ SCRAPE_RUNNING = False
 SCRAPE_RUNNING_GEO = False  # independent lock so geo scans can run in parallel with city scans
 
 
+def _price_stats(prices):
+    """Return avg/min/max/median price stats from a list of numbers (empty-safe)."""
+    if not prices:
+        return {"avg_price": 0, "min_price": 0, "max_price": 0, "median_price": 0, "price_samples": 0}
+    sorted_p = sorted(prices)
+    n = len(sorted_p)
+    median = sorted_p[n // 2] if n % 2 == 1 else (sorted_p[n // 2 - 1] + sorted_p[n // 2]) / 2
+    return {
+        "avg_price": round(sum(sorted_p) / n, 2),
+        "min_price": round(sorted_p[0], 2),
+        "max_price": round(sorted_p[-1], 2),
+        "median_price": round(median, 2),
+        "price_samples": n,
+    }
+
+
 def create_market_robot_router(db, require_roles):
     router = APIRouter()
 
@@ -94,6 +110,18 @@ def create_market_robot_router(db, require_roles):
                     available_pct = 100 - unavailable_pct
                     available_est = round(total_properties * available_pct / 100)
 
+                    # Extract prices (£123, $123, €123, etc.) — up to 60 matches
+                    price_matches = re.findall(r'(?:£|US\$|\$|€)\s*([\d,]+(?:\.\d+)?)', text)
+                    prices = []
+                    for pm in price_matches[:120]:
+                        try:
+                            val = float(pm.replace(",", ""))
+                            if 20 <= val <= 5000:  # Sanity window — filter out per-person fees and totals
+                                prices.append(val)
+                        except Exception:
+                            pass
+                    price_stats = _price_stats(prices)
+
                     return {
                         "total_properties": total_properties,
                         "unavailable_pct": unavailable_pct,
@@ -101,6 +129,7 @@ def create_market_robot_router(db, require_roles):
                         "available_est": available_est,
                         "scraped": True,
                         "method": "direct",
+                        **price_stats,
                     }
             except Exception as e:
                 logger.warning(f"Strategy failed for {checkin}: {e}")
@@ -119,11 +148,21 @@ def create_market_robot_router(db, require_roles):
                     unavail_match = re.search(r'(\d+)%\s*of\s*places?\s*to\s*stay\s*are\s*unavailable', text)
                     unavailable_pct = int(unavail_match.group(1)) if unavail_match else 0
                     if total_properties > 0:
+                        price_matches = re.findall(r'(?:£|US\$|\$|€)\s*([\d,]+(?:\.\d+)?)', text)
+                        prices = []
+                        for pm in price_matches[:120]:
+                            try:
+                                val = float(pm.replace(",", ""))
+                                if 20 <= val <= 5000:
+                                    prices.append(val)
+                            except Exception:
+                                pass
                         return {
                             "total_properties": total_properties, "unavailable_pct": unavailable_pct,
                             "available_pct": 100 - unavailable_pct,
                             "available_est": round(total_properties * (100 - unavailable_pct) / 100),
                             "scraped": True, "method": "scrapingbee",
+                            **_price_stats(prices),
                         }
             except Exception as e:
                 logger.warning(f"ScrapingBee failed for {checkin}: {e}")
@@ -148,16 +187,33 @@ def create_market_robot_router(db, require_roles):
             elif month in [1, 2, 11]:  # Low season
                 base -= 10
             unavail = max(15, min(92, base + _rand.randint(-8, 8)))
+            # Estimated prices scale with demand + seasonality + day-of-week
+            base_price = 130  # London ADR baseline
+            price_factor = 1.0 + (unavail - 55) * 0.012  # higher demand → higher prices
+            if dow >= 4:  # Weekends
+                price_factor += 0.10
+            if month in [6, 7, 8, 12]:
+                price_factor += 0.12
+            elif month in [1, 2, 11]:
+                price_factor -= 0.10
+            avg = round(base_price * price_factor * (1 + _rand.uniform(-0.05, 0.08)), 2)
             return {
-                "total_properties": 4260,  # London typical
+                "total_properties": 4260,
                 "unavailable_pct": unavail,
                 "available_pct": 100 - unavail,
                 "available_est": round(4260 * (100 - unavail) / 100),
                 "scraped": True,
                 "method": "estimated",
+                "avg_price": avg,
+                "min_price": round(avg * 0.55, 2),
+                "max_price": round(avg * 2.4, 2),
+                "median_price": round(avg * 0.88, 2),
+                "price_samples": 0,
             }
         except Exception:
-            return {"total_properties": 0, "unavailable_pct": 0, "available_pct": 100, "available_est": 0, "scraped": False, "method": "failed"}
+            return {"total_properties": 0, "unavailable_pct": 0, "available_pct": 100, "available_est": 0,
+                    "scraped": False, "method": "failed",
+                    "avg_price": 0, "min_price": 0, "max_price": 0, "median_price": 0, "price_samples": 0}
 
     async def _calculate_price_adjustment(db, property_id, date_str, supply_data, prev_supply):
         """Calculate price adjustment based on supply trend."""
@@ -315,7 +371,17 @@ def create_market_robot_router(db, require_roles):
         # Aggregate summary
         total_scans = len({s["scan_id"] for s in snaps}) if snaps else 0
         avg_unavail = round(sum(s.get("unavailable_pct", 0) for s in snaps) / len(snaps), 1) if snaps else 0
-        latest = snaps[0] if snaps else {}
+        prices = [s.get("avg_price", 0) for s in snaps if s.get("avg_price", 0) > 0]
+        avg_price = round(sum(prices) / len(prices), 2) if prices else 0
+        min_prices = [s.get("min_price", 0) for s in snaps if s.get("min_price", 0) > 0]
+        max_prices = [s.get("max_price", 0) for s in snaps if s.get("max_price", 0) > 0]
+        mkt_min = round(min(min_prices), 2) if min_prices else 0
+        mkt_max = round(max(max_prices), 2) if max_prices else 0
+        latest = snaps[-1] if snaps else {}
+
+        # Load geo auto-scan config
+        geo_cfg = await db.market_robot_geo_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+
         return {
             "property_id": property_id,
             "snapshots": snaps,
@@ -323,11 +389,46 @@ def create_market_robot_router(db, require_roles):
                 "total_snapshots": len(snaps),
                 "total_scans": total_scans,
                 "avg_unavailable_pct": avg_unavail,
+                "avg_price": avg_price,
+                "min_price": mkt_min,
+                "max_price": mkt_max,
                 "last_location": latest.get("location", ""),
                 "last_radius_km": latest.get("radius_km", 0),
                 "last_scan": latest.get("scanned_at", ""),
             },
+            "auto_config": geo_cfg,
         }
+
+    @router.get("/revenue/market-robot/{property_id}/geo-config")
+    async def get_geo_config(property_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        cfg = await db.market_robot_geo_config.find_one({"property_id": property_id}, {"_id": 0}) or {
+            "property_id": property_id, "enabled": False, "location": "", "radius_km": 3.2,
+            "days_ahead": 30, "scan_interval_minutes": 120,
+            "latitude": None, "longitude": None, "last_scan": None, "total_scans": 0,
+        }
+        return cfg
+
+    @router.put("/revenue/market-robot/{property_id}/geo-config")
+    async def update_geo_config(property_id: str, data: Dict,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        payload = {
+            "enabled": bool(data.get("enabled", False)),
+            "location": data.get("location", "").strip(),
+            "radius_km": float(data.get("radius_km", 3.2)),
+            "days_ahead": min(int(data.get("days_ahead", 30)), 90),
+            "scan_interval_minutes": max(int(data.get("scan_interval_minutes", 120)), 30),
+            "latitude": data.get("latitude"),
+            "longitude": data.get("longitude"),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.market_robot_geo_config.update_one(
+            {"property_id": property_id},
+            {"$set": {"property_id": property_id, **payload}},
+            upsert=True,
+        )
+        cfg = await db.market_robot_geo_config.find_one({"property_id": property_id}, {"_id": 0})
+        return cfg
 
     async def _do_scan(property_id: str, data: Dict):
         """Core scan logic — callable from HTTP endpoint and background loop.
@@ -412,6 +513,11 @@ def create_market_robot_router(db, require_roles):
                     "unavailable_pct": supply["unavailable_pct"],
                     "available_pct": supply["available_pct"],
                     "available_est": supply["available_est"],
+                    "avg_price": supply.get("avg_price", 0),
+                    "min_price": supply.get("min_price", 0),
+                    "max_price": supply.get("max_price", 0),
+                    "median_price": supply.get("median_price", 0),
+                    "price_samples": supply.get("price_samples", 0),
                     "scraped": supply["scraped"],
                     "method": supply.get("method", "unknown"),
                     "price_adjustment_pct": adj_pct,
@@ -1711,10 +1817,12 @@ Date range: {date_from} to {date_to}."""
         }
 
     async def auto_scan_loop():
-        """Background loop: every 60s check enabled market-robot configs and trigger due scans."""
+        """Background loop: every 60s check enabled market-robot configs and trigger due scans.
+        Handles BOTH city scans (market_robot_config) AND geo scans (market_robot_geo_config) in parallel."""
         logger.info("🛰️ Market Robot auto-scan loop started")
         while True:
             try:
+                # === City scans ===
                 configs = await db.market_robot_config.find({"enabled": True}, {"_id": 0}).to_list(500)
                 now = datetime.now(timezone.utc)
                 for cfg in configs:
@@ -1731,11 +1839,47 @@ Date range: {date_from} to {date_to}."""
                         except Exception:
                             due = True
                     if due and not SCRAPE_RUNNING:
-                        logger.info(f"🛰️ Auto-scan triggered for {pid}")
+                        logger.info(f"🛰️ Auto city-scan triggered for {pid}")
                         try:
                             await _do_scan(pid, {})
                         except Exception as e:
-                            logger.exception(f"Auto-scan failed for {pid}: {e}")
+                            logger.exception(f"Auto city-scan failed for {pid}: {e}")
+
+                # === Geo scans (neighborhood, parallel with city) ===
+                geo_configs = await db.market_robot_geo_config.find({"enabled": True}, {"_id": 0}).to_list(500)
+                for cfg in geo_configs:
+                    pid = cfg.get("property_id")
+                    loc = cfg.get("location") or ""
+                    if not pid or pid == "all" or not (loc or (cfg.get("latitude") and cfg.get("longitude"))):
+                        continue
+                    interval = int(cfg.get("scan_interval_minutes") or 120)
+                    last = cfg.get("last_scan")
+                    due = True
+                    if last:
+                        try:
+                            last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                            due = (now - last_dt) >= timedelta(minutes=interval)
+                        except Exception:
+                            due = True
+                    if due and not SCRAPE_RUNNING_GEO:
+                        logger.info(f"🛰️ Auto geo-scan triggered for {pid} @ {loc}")
+                        try:
+                            await _do_scan(pid, {
+                                "mode": "geo",
+                                "location": loc,
+                                "latitude": cfg.get("latitude"),
+                                "longitude": cfg.get("longitude"),
+                                "radius_km": float(cfg.get("radius_km") or 3.2),
+                                "days_ahead": int(cfg.get("days_ahead") or 30),
+                            })
+                            # Update geo config last_scan / total_scans
+                            await db.market_robot_geo_config.update_one(
+                                {"property_id": pid},
+                                {"$set": {"last_scan": datetime.now(timezone.utc).isoformat()},
+                                 "$inc": {"total_scans": 1}},
+                            )
+                        except Exception as e:
+                            logger.exception(f"Auto geo-scan failed for {pid}: {e}")
             except Exception as e:
                 logger.exception(f"Market Robot loop error: {e}")
             await asyncio.sleep(60)

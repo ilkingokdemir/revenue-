@@ -16,7 +16,6 @@ import { RevenueAICopilot } from "./RevenueAICopilot";
 import { RateCalendarEditable } from "./RateCalendarEditable";
 import { ExportBar } from "./RevenueExports";
 import { MarketRobot } from "./MarketRobot";
-import MarketPulsePanel from "./MarketPulsePanel";
 import { DynamicPricingEngine } from "./DynamicPricingEngine";
 import SmartRateControlPanel from "./SmartRateControlPanel";
 import { EventIntelligence } from "./EventIntelligence";
@@ -65,7 +64,6 @@ const NAV_SECTIONS = [
     label: "Intelligence",
     items: [
       { id: "market-robot", label: "Market Robot", icon: Radar },
-      { id: "market-pulse", label: "Market Pulse", icon: Activity },
       { id: "demand-radar", label: "Demand Radar", icon: Activity },
       { id: "compset-intel", label: "Compset Intelligence", icon: Trophy },
       { id: "price-alerts", label: "Price Alerts", icon: AlertTriangle },
@@ -212,7 +210,6 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
               {tab === "market-robot" && <MarketRobot propertyId={pid} />}
-              {tab === "market-pulse" && <MarketPulsePanel activePropertyId={pid} />}
               {tab === "demand-radar" && <DemandRadar propertyId={pid} />}
               {tab === "compset-intel" && <CompsetIntelligence propertyId={pid} />}
               {tab === "price-alerts" && <PriceAlerts propertyId={pid} onNavigate={handleNavigate} />}

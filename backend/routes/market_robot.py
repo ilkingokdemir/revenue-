@@ -1426,6 +1426,186 @@ Date range: {date_from} to {date_to}."""
                              current_user: dict = Depends(require_roles("admin", "manager"))):
         return scanner.get_status()
 
+    @router.get("/revenue/market-robot/{property_id}/market-pulse")
+    async def market_pulse(property_id: str, days: int = 90,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Market Pulse — 90-day demand visualization with trend line, peaks and annual perf."""
+        now = datetime.now(timezone.utc)
+        days = min(max(int(days), 7), 365)
+
+        # Latest snapshot per date (same aggregation as supply endpoint)
+        pipeline = [
+            {"$match": {"property_id": property_id}},
+            {"$sort": {"scanned_at": -1}},
+            {"$group": {"_id": "$date", "doc": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$doc"}},
+            {"$sort": {"date": 1}},
+            {"$project": {"_id": 0}},
+        ]
+        all_snaps = await db.market_supply.aggregate(pipeline).to_list(1000)
+
+        # Keep future-facing N days (today .. today+days)
+        today_str = now.strftime("%Y-%m-%d")
+        horizon_end = (now + timedelta(days=days)).strftime("%Y-%m-%d")
+        snaps = [s for s in all_snaps if today_str <= s.get("date", "") <= horizon_end]
+
+        # Event overlay
+        events_list = await db.market_events.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(200)
+        event_dates = {}
+        for ev in events_list:
+            ds = ev.get("date", "")
+            if ds:
+                event_dates[ds] = {
+                    "name": ev.get("name", ""),
+                    "impact": ev.get("impact", ""),
+                    "hotel_demand_score": ev.get("hotel_demand_score", 0),
+                }
+
+        # Build bars: demand_score = unavailable_pct (0-100)
+        bars = []
+        for s in snaps:
+            d = s.get("date", "")
+            score = int(s.get("unavailable_pct", 0) or 0)
+            ev = event_dates.get(d)
+            kind = "normal"
+            if ev and ev.get("impact") in ("mega", "large"):
+                kind = "peak_event"  # red
+            elif score >= 85:
+                kind = "peak_high"  # amber
+            elif score <= 25:
+                kind = "low"
+            bars.append({
+                "date": d,
+                "score": score,
+                "kind": kind,
+                "event": ev.get("name") if ev else "",
+                "event_impact": ev.get("impact") if ev else "",
+            })
+
+        # 7-day moving average trend
+        trend = []
+        scores = [b["score"] for b in bars]
+        for i in range(len(bars)):
+            start = max(0, i - 3)
+            end = min(len(bars), i + 4)
+            window = scores[start:end]
+            avg = round(sum(window) / len(window), 1) if window else 0
+            trend.append({"date": bars[i]["date"], "value": avg})
+
+        # Delta: last 30 days avg vs preceding 30 days avg (both within horizon)
+        n = len(bars)
+        if n >= 60:
+            recent = sum(scores[n - 30:]) / 30
+            prior = sum(scores[n - 60:n - 30]) / 30
+            delta_pp = round(recent - prior, 1)
+        elif n >= 14:
+            half = n // 2
+            recent = sum(scores[half:]) / max(1, n - half)
+            prior = sum(scores[:half]) / max(1, half)
+            delta_pp = round(recent - prior, 1)
+        else:
+            delta_pp = 0.0
+
+        trend_label = "strengthening" if delta_pp > 1 else ("weakening" if delta_pp < -1 else "stable")
+
+        # Annual performance — monthly OCC/ADR/REV for current year vs prev year
+        this_year = now.year
+        last_year = this_year - 1
+
+        async def _month_agg(year: int):
+            # Room inventory
+            rooms = await db.rooms.count_documents({"property_id": property_id}) or 1
+            # Bookings overlapping month
+            start = datetime(year, 1, 1, tzinfo=timezone.utc)
+            end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+            q = {
+                "property_id": property_id,
+                "status": {"$nin": ["cancelled", "no_show"]},
+                "check_in": {"$lt": end.isoformat()},
+                "check_out": {"$gt": start.isoformat()},
+            }
+            bookings = await db.bookings.find(q, {"_id": 0, "check_in": 1, "check_out": 1, "total_price": 1}).to_list(10000)
+            months = [{"occ_nights": 0, "revenue": 0.0, "days_in_month": 0} for _ in range(12)]
+            for m in range(12):
+                m_start = datetime(year, m + 1, 1, tzinfo=timezone.utc)
+                m_end = datetime(year + (1 if m == 11 else 0), (m + 2) if m < 11 else 1, 1, tzinfo=timezone.utc)
+                days_m = (m_end - m_start).days
+                months[m]["days_in_month"] = days_m
+            for b in bookings:
+                try:
+                    ci = datetime.fromisoformat(b["check_in"].replace("Z", "+00:00"))
+                    co = datetime.fromisoformat(b["check_out"].replace("Z", "+00:00"))
+                except Exception:
+                    continue
+                total_nights = max(1, (co.date() - ci.date()).days)
+                per_night = float(b.get("total_price", 0) or 0) / total_nights
+                d = ci
+                while d < co:
+                    if d.year == year:
+                        months[d.month - 1]["occ_nights"] += 1
+                        months[d.month - 1]["revenue"] += per_night
+                    d += timedelta(days=1)
+            out = []
+            for m, mdata in enumerate(months):
+                inv_nights = rooms * mdata["days_in_month"]
+                occ_pct = round((mdata["occ_nights"] / inv_nights) * 100, 1) if inv_nights else 0
+                adr = round(mdata["revenue"] / mdata["occ_nights"], 2) if mdata["occ_nights"] else 0
+                out.append({
+                    "month": m + 1,
+                    "occ_pct": occ_pct,
+                    "adr": adr,
+                    "revenue": round(mdata["revenue"], 2),
+                })
+            return out
+
+        curr = await _month_agg(this_year)
+        prev = await _month_agg(last_year)
+
+        monthly = []
+        tot_prev_rev = sum(p["revenue"] for p in prev)
+        tot_curr_rev = sum(c["revenue"] for c in curr)
+        month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        for i in range(12):
+            p = prev[i]
+            c = curr[i]
+            delta_rev = round(c["revenue"] - p["revenue"], 2)
+            delta_pct = round((delta_rev / p["revenue"]) * 100, 1) if p["revenue"] else 0
+            monthly.append({
+                "month": month_names[i],
+                "month_num": i + 1,
+                "prev_occ": p["occ_pct"], "prev_adr": p["adr"], "prev_rev": p["revenue"],
+                "curr_occ": c["occ_pct"], "curr_adr": c["adr"], "curr_rev": c["revenue"],
+                "delta_pct": delta_pct, "delta_rev": delta_rev,
+                "is_mtd": (i + 1 == now.month),
+            })
+
+        return {
+            "property_id": property_id,
+            "days": days,
+            "as_of": now.isoformat(),
+            "bars": bars,
+            "trend": trend,
+            "summary": {
+                "dates_count": len(bars),
+                "avg_score": round(sum(scores) / len(scores), 1) if scores else 0,
+                "peak_days": sum(1 for b in bars if b["kind"] in ("peak_high", "peak_event")),
+                "delta_pp": delta_pp,
+                "trend_label": trend_label,
+            },
+            "annual": {
+                "prev_year": last_year,
+                "curr_year": this_year,
+                "monthly": monthly,
+                "totals": {
+                    "prev_rev": round(tot_prev_rev, 2),
+                    "curr_rev": round(tot_curr_rev, 2),
+                    "delta_pct": round(((tot_curr_rev - tot_prev_rev) / tot_prev_rev) * 100, 1) if tot_prev_rev else 0,
+                },
+            },
+        }
+
     async def auto_scan_loop():
         """Background loop: every 60s check enabled market-robot configs and trigger due scans."""
         logger.info("🛰️ Market Robot auto-scan loop started")

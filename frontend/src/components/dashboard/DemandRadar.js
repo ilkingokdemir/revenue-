@@ -149,14 +149,14 @@ export const DemandRadar = ({ propertyId }) => {
               return ticks.map(i => {
                 const d = demandDays[i];
                 if (!d?.date) return null;
-                const m = String(d.date).match(/(\d{4})-(\d{2})-(\d{2})/);
-                const label = m ? `${m[3]}/${m[2]}` : d.date;
                 const dt = new Date(d.date + "T00:00:00");
+                const dayNum = dt.getDate();
+                const monthShort = dt.toLocaleDateString("en", { month: "short" });
                 const dow = dt.toLocaleDateString("en", { weekday: "short" });
                 return (
                   <g key={`tick-${i}`}>
                     <line x1={sx(i)} x2={sx(i)} y1={pT + iH} y2={pT + iH + 3} stroke="#4b5563" strokeWidth="0.5" />
-                    <text x={sx(i)} y={pT + iH + 11} textAnchor="middle" className="text-[7px]" fill="#9ca3af" fontWeight="600">{label}</text>
+                    <text x={sx(i)} y={pT + iH + 11} textAnchor="middle" className="text-[7px]" fill="#e5e7eb" fontWeight="700">{dayNum} {monthShort}</text>
                     <text x={sx(i)} y={pT + iH + 20} textAnchor="middle" className="text-[6px]" fill="#6b7280">{dow}</text>
                   </g>
                 );
@@ -195,13 +195,14 @@ export const DemandRadar = ({ propertyId }) => {
                   return ticks.map(i => {
                     const d = wapDays[i];
                     if (!d?.date) return null;
-                    const m = String(d.date).match(/(\d{4})-(\d{2})-(\d{2})/);
-                    const label = m ? `${m[3]}/${m[2]}` : d.date;
+                    const dt = new Date(d.date + "T00:00:00");
+                    const dayNum = dt.getDate();
+                    const monthShort = dt.toLocaleDateString("en", { month: "short" });
                     const x = wSX(i);
                     return (
                       <g key={`wtick-${i}`}>
                         <line x1={x} x2={x} y1={pT + iH} y2={pT + iH + 3} stroke="#4b5563" strokeWidth="0.5" />
-                        <text x={x} y={pT + iH + 11} textAnchor="middle" className="text-[7px]" fill="#9ca3af" fontWeight="600">{label}</text>
+                        <text x={x} y={pT + iH + 11} textAnchor="middle" className="text-[7px]" fill="#e5e7eb" fontWeight="700">{dayNum} {monthShort}</text>
                       </g>
                     );
                   });

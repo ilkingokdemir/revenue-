@@ -117,8 +117,21 @@ export const DemandRadar = ({ propertyId }) => {
 
       {/* Demand Chart — How Busy Is the Market? */}
       <div className="bg-stone-900 border border-stone-700 rounded-2xl p-5" data-testid="demand-chart">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+          <div>
+            <p className="text-[10px] text-stone-500 uppercase">{days}-Day Forward View</p>
+            <h3 className="text-sm font-bold text-white">How Busy Is the Market?</h3>
+            <p className="text-[10px] text-stone-500">Market demand score — higher means busier, fewer rooms available</p>
+          </div>
+          <div className="flex items-center gap-3 text-[10px] text-stone-400">
+            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Pazar Talep</span>
+            <span className="flex items-center gap-1.5 pl-3 border-l border-stone-700">
+              <span className="w-3 h-[2px] bg-cyan-400" />
+              <span className="text-cyan-200 font-semibold">BİZ · Doluluk</span>
+            </span>
+          </div>
+        </div>
         <div className="flex items-center justify-between mb-2">
-          <div><p className="text-[10px] text-stone-500 uppercase">{days}-Day Forward View</p><h3 className="text-sm font-bold text-white">How Busy Is the Market?</h3><p className="text-[10px] text-stone-500">Market demand score — higher means busier, fewer rooms available</p></div>
           <div className="flex items-center gap-3 text-[10px] text-stone-400">
             <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-teal-500" /> Demand</span>
             <span className="flex items-center gap-1"><span className="w-4 h-0 border-t border-dashed border-teal-300" /> 7d trend</span>
@@ -149,6 +162,30 @@ export const DemandRadar = ({ propertyId }) => {
               const color = isEvent ? "#ef4444" : (d.demand || 0) >= 70 ? "#ef4444" : (d.demand || 0) >= 40 ? "#14b8a6" : "#0d9488";
               return <rect key={i} x={sx(i) - barW / 2} y={pT + iH - h} width={barW} height={h} fill={color} rx="1" opacity="0.85" />;
             })}
+            {/* === BIZ: Occupancy overlay — cyan horizontal markers + labels === */}
+            {demandDays.map((d, i) => {
+              if (d.occupancy == null) return null;
+              const y = pT + iH - (d.occupancy / 100) * iH;
+              const labelStep = demandDays.length > 60 ? 7 : demandDays.length > 30 ? 4 : 2;
+              const showLabel = i % labelStep === 0;
+              return (
+                <g key={`our-occ-${i}`}>
+                  <line x1={sx(i) - barW / 2 - 2} x2={sx(i) + barW / 2 + 2} y1={y} y2={y} stroke="#22d3ee" strokeWidth="1.8" opacity="0.95" />
+                  {showLabel && d.occupancy > 0 && (
+                    <text x={sx(i) + barW / 2 + 4} y={y + 3} textAnchor="start" fontSize="6" fontWeight="700" fill="#22d3ee">{d.occupancy}%</text>
+                  )}
+                </g>
+              );
+            })}
+            {/* === BIZ: Occupancy line (dotted connect for easier tracking) === */}
+            <path
+              d={demandDays.filter(d => d.occupancy != null).map((d, i, arr) => {
+                const idx = demandDays.indexOf(d);
+                const y = pT + iH - (d.occupancy / 100) * iH;
+                return `${i === 0 ? "M" : "L"} ${sx(idx)} ${y}`;
+              }).join(" ")}
+              fill="none" stroke="#22d3ee" strokeWidth="1.2" strokeDasharray="2 3" opacity="0.7"
+            />
             {/* X-axis date labels — every day, month label when month changes */}
             {demandDays.map((d, i) => {
               if (!d?.date) return null;
@@ -176,15 +213,32 @@ export const DemandRadar = ({ propertyId }) => {
       {(() => {
         const wapDays = daily.filter(d => d.wap);
         if (wapDays.length < 2) return null;
-        const maxW = Math.max(...wapDays.map(d => d.wap)) * 1.05;
-        const minW = Math.min(...wapDays.map(d => d.wap)) * 0.95;
+        // Include our_rate in scale so our line is visible
+        const ourRates = wapDays.map(d => d.our_rate || 0).filter(v => v > 0);
+        const maxW = Math.max(...wapDays.map(d => d.wap), ...ourRates) * 1.05;
+        const minW = Math.min(...wapDays.map(d => d.wap), ...ourRates) * 0.95;
         const wSX = (i) => pL + (i / Math.max(wapDays.length - 1, 1)) * iW;
         const wSY = (v) => pT + (1 - (v - minW) / (maxW - minW)) * iH;
         const wLine = wapDays.map((d, i) => `${i === 0 ? "M" : "L"} ${wSX(i)} ${wSY(d.wap)}`).join(" ");
+        const ourLine = wapDays.filter(d => d.our_rate > 0).map((d, i, arr) => {
+          const idx = wapDays.indexOf(d);
+          return `${i === 0 ? "M" : "L"} ${wSX(idx)} ${wSY(d.our_rate)}`;
+        }).join(" ");
         return (
           <div className="bg-stone-900 border border-stone-700 rounded-2xl p-5" data-testid="wap-chart">
-            <p className="text-[10px] text-stone-500 uppercase">Market Pricing</p>
-            <h3 className="text-sm font-bold text-white mb-3">Weighted Average Price</h3>
+            <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
+              <div>
+                <p className="text-[10px] text-stone-500 uppercase">Market Pricing</p>
+                <h3 className="text-sm font-bold text-white">Weighted Average Price</h3>
+              </div>
+              <div className="flex items-center gap-3 text-[10px] text-stone-400">
+                <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-white" /> Pazar WAP</span>
+                <span className="flex items-center gap-1.5 pl-3 border-l border-stone-700">
+                  <span className="w-4 h-[2px] bg-violet-400" />
+                  <span className="text-violet-200 font-semibold">BİZ · Fiyat</span>
+                </span>
+              </div>
+            </div>
             <div className="relative overflow-x-auto">
               {/* HTML Y-axis price labels */}
               <div className="absolute left-0 top-0 bottom-0 w-14 pointer-events-none z-10" style={{ minHeight: "100%" }}>
@@ -202,6 +256,22 @@ export const DemandRadar = ({ propertyId }) => {
               <svg viewBox={`0 0 ${cW} ${cH}`} className="w-full" style={{ minWidth: "600px" }}>
                 {[0, 0.25, 0.5, 0.75, 1].map(f => { const y = 10 + (1 - f) * (iH - 10); return <line key={f} x1={pL} x2={cW - pR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" />; })}
                 <path d={wLine} fill="none" stroke="#ffffff" strokeWidth="2" />
+                {/* BIZ · Our rate — violet solid line + dots */}
+                {ourLine && <path d={ourLine} fill="none" stroke="#a78bfa" strokeWidth="2.2" opacity="0.95" />}
+                {wapDays.map((d, i) => {
+                  if (!d.our_rate || d.our_rate <= 0) return null;
+                  const x = wSX(i), y = wSY(d.our_rate);
+                  const labelStep = wapDays.length > 60 ? 7 : wapDays.length > 30 ? 4 : 2;
+                  const showLabel = i % labelStep === 0;
+                  return (
+                    <g key={`our-rate-${i}`}>
+                      <circle cx={x} cy={y} r="2.5" fill="#a78bfa" stroke="#0a0a0a" strokeWidth="1" />
+                      {showLabel && (
+                        <text x={x} y={y - 6} textAnchor="middle" fontSize="7.5" fontWeight="800" fill="#c4b5fd">£{Math.round(d.our_rate)}</text>
+                      )}
+                    </g>
+                  );
+                })}
                 {/* X-axis date labels — every day */}
                 {wapDays.map((d, i) => {
                   if (!d?.date) return null;

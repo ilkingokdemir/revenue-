@@ -139,37 +139,37 @@ export const MarketRobot = ({ propertyId }) => {
   const demandColor = demandLevel === "High" ? "text-emerald-600" : demandLevel === "Moderate" ? "text-amber-500" : "text-red-500";
 
   return (
-    <div className="space-y-6" data-testid="market-robot">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-6" data-testid="market-robot">
+      {/* Header — stacks on mobile, row on desktop */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center">
+          <div className="w-11 h-11 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center flex-shrink-0">
             <Bot className="w-6 h-6 text-white" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg font-bold text-stone-800">Market Robot</h2>
-            <p className="text-xs text-stone-400">AI-powered market supply monitoring & auto-pricing</p>
+            <p className="text-xs text-stone-400 truncate">AI-powered market supply monitoring & auto-pricing</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 md:gap-3 flex-wrap">
           {/* Location Badge */}
-          <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-3 py-2">
-            <MapPin className="w-4 h-4 text-violet-500" />
+          <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-3 py-2 flex-1 sm:flex-none min-w-[180px]">
+            <MapPin className="w-4 h-4 text-violet-500 flex-shrink-0" />
             <input
               value={config?.city || ""}
               onChange={e => setConfig(p => ({ ...p, city: e.target.value }))}
               onBlur={() => config?.city && saveConfig({ city: config.city })}
               onKeyDown={e => e.key === "Enter" && config?.city && saveConfig({ city: config.city })}
-              className="text-sm font-semibold text-stone-800 w-32 bg-transparent outline-none"
+              className="text-sm font-semibold text-stone-800 w-full sm:w-32 bg-transparent outline-none"
               placeholder="Enter city..."
               data-testid="market-robot-city-quick"
             />
           </div>
           {config?.enabled && <Badge className="bg-emerald-100 text-emerald-700 text-xs"><span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 inline-block animate-pulse" />Active</Badge>}
           <button onClick={runScan} disabled={scanning}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all" data-testid="market-robot-scan">
+            className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 sm:px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex-1 sm:flex-none" data-testid="market-robot-scan">
             {scanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            {scanning ? "Scanning Market..." : "Run Scan Now"}
+            <span className="whitespace-nowrap">{scanning ? "Scanning..." : "Run Scan"}</span>
           </button>
         </div>
       </div>
@@ -194,7 +194,7 @@ export const MarketRobot = ({ propertyId }) => {
                 <CheckCircle className="w-5 h-5 text-indigo-600" />
                 <span className="font-bold text-indigo-800">Scan Complete</span>
               </div>
-              <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-sm">
                 <div><span className="text-indigo-500">Dates Scanned:</span> <strong>{scanResult.dates_scanned}</strong></div>
                 <div><span className="text-indigo-500">Auto-Adjustments:</span> <strong>{scanResult.auto_adjustments?.length || 0}</strong></div>
                 <div><span className="text-indigo-500">City:</span> <strong>{scanResult.city}</strong></div>
@@ -203,13 +203,13 @@ export const MarketRobot = ({ propertyId }) => {
           )}
 
           {/* Smart Scanner Control Panel */}
-          <div className={`border rounded-2xl p-5 ${scannerStatus?.running ? "bg-emerald-50 border-emerald-200" : "bg-white border-stone-200"}`} data-testid="smart-scanner-panel">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${scannerStatus?.running ? "bg-emerald-500" : "bg-stone-200"}`}>
+          <div className={`border rounded-2xl p-4 sm:p-5 ${scannerStatus?.running ? "bg-emerald-50 border-emerald-200" : "bg-white border-stone-200"}`} data-testid="smart-scanner-panel">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+              <div className="flex items-start gap-3 min-w-0">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${scannerStatus?.running ? "bg-emerald-500" : "bg-stone-200"}`}>
                   <Activity className={`w-5 h-5 ${scannerStatus?.running ? "text-white animate-pulse" : "text-stone-400"}`} />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-bold text-stone-800">Smart Tiered Scanner</h3>
                   <p className="text-xs text-stone-400">
                     {scannerStatus?.running
@@ -219,7 +219,7 @@ export const MarketRobot = ({ propertyId }) => {
                 </div>
               </div>
               <button onClick={toggleScanner}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all flex-shrink-0 ${
                   scannerStatus?.running
                     ? "bg-red-500 hover:bg-red-600 text-white"
                     : "bg-emerald-500 hover:bg-emerald-600 text-white"
@@ -227,14 +227,14 @@ export const MarketRobot = ({ propertyId }) => {
                 {scannerStatus?.running ? <><AlertTriangle className="w-4 h-4" />Stop Scanner</> : <><Play className="w-4 h-4" />Activate Scanner</>}
               </button>
             </div>
-            {/* Tier Schedule */}
-            <div className="grid grid-cols-7 gap-2">
+            {/* Tier Schedule — horizontal scroll on mobile, 7-col grid on desktop */}
+            <div className="flex sm:grid sm:grid-cols-7 gap-2 overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0 pb-1 sm:pb-0 snap-x snap-mandatory sm:snap-none">
               {(scannerStatus?.tiers || TIERS_DISPLAY).map((tier, i) => {
                 const ts = scannerStatus?.stats?.tier_status?.[tier.label] || {};
                 const nextScan = ts.next_scan ? new Date(ts.next_scan) : null;
                 const isOverdue = nextScan && nextScan < new Date();
                 return (
-                  <div key={i} className={`rounded-xl p-3 text-center text-xs border ${
+                  <div key={i} className={`rounded-xl p-3 text-center text-xs border flex-shrink-0 w-[120px] sm:w-auto snap-start ${
                     scannerStatus?.running && ts.last_scan ? "bg-emerald-50 border-emerald-200" : "bg-stone-50 border-stone-200"
                   }`}>
                     <p className="font-bold text-stone-700 text-[10px]">{tier.label}</p>

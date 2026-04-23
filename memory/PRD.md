@@ -4,6 +4,35 @@
 
 
 
+### Iter 172 (Feb 2026): 📱 Market Robot — mobile-responsive on phones
+
+User request (TR): _"Market robot Telefon uyumlu olsun"_
+
+Market Robot was rendering at 1761px wide regardless of viewport on mobile, causing horizontal scroll and broken UX. Fixed through a 3-layer surgical attack:
+
+**A. Shell-level flex shrink fix** (`App.js`)
+- `<main>` flex-1 container was missing `min-w-0` — flex children default to `min-width: auto` meaning they refuse to shrink below content size. Without this, the RevenuePanel inside main was forcing main to 1849px on a 390px viewport. Added `min-w-0` → main now correctly fits viewport width at all screen sizes.
+
+**B. Revenue Panel auto-collapse on mobile** (`components/dashboard/RevenuePanel.js`)
+- Inner nav sidebar (`w-56` = 224px) ate half the content area on phones. Now auto-collapses to `w-14` (56px icon-only strip) below `lg:` breakpoint via `useState` init + `resize` listener. Users still see the full revenue nav as tooltip-rich icons.
+- Added `min-w-0` to the `flex-1` content wrapper so it respects viewport bounds.
+- Responsive padding `p-4 md:p-6`.
+
+**C. Market Robot header & controls responsive** (`components/dashboard/MarketRobot.js`)
+- Header row: `flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between` — icon + title stack row 1, controls (city input / Active pill / Run Scan) row 2 on mobile, inline on desktop.
+- City input: `flex-1 sm:flex-none min-w-[180px]` so it takes full available width on phones.
+- Run Scan button: `flex-1 sm:flex-none` full-width on phones, condensed label ("Run Scan" vs "Run Scan Now").
+- Scan result grid: `grid-cols-1 sm:grid-cols-3` (was `grid-cols-3`).
+- Smart Scanner header: `flex flex-col sm:flex-row sm:justify-between` — title + action button stack on phones.
+- Tier schedule (7 cards): Was `grid grid-cols-7` (unreadable at 390px). Now `flex overflow-x-auto snap-x snap-mandatory` on mobile, upgrading to `sm:grid sm:grid-cols-7` on ≥640px. Each card gets `w-[120px] snap-start` on mobile for thumb-scroll friendliness with padding bleed (`-mx-4 px-4`) for edge-to-edge feel.
+
+**Verified end-to-end via Playwright at 390×844 (iPhone 14 Pro):**
+- Before: `main_w=1849, body_scroll=2033, mr_w=1761` (broken)
+- After: `main_w=390, body_scroll=390, mr_w=302` (fits viewport perfectly)
+- Dashboard, Smart Scanner panel, Neighborhood Scan tabs all confirmed rendering at 390px with no horizontal overflow; sub-tabs and tier schedule scroll horizontally as intended; rev-sidebar auto-collapses on phone and stays collapsed if user resizes smaller.
+
+
+
 ### Iter 171 (Feb 2026): 📅 Upcoming Renewals — proactive HR alert card
 
 User approval: _"yes"_ (accepted enhancement from Iter 170 finish summary).

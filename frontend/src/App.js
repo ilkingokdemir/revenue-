@@ -3007,7 +3007,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 lg:ml-56 pt-14 lg:pt-0">
+      <main className="flex-1 min-w-0 lg:ml-56 pt-14 lg:pt-0">
         {/* First-run progress banner — auto-hides when setup is complete */}
         {activeView !== "onboarding" && user?.role === "admin" && (
           <OnboardingBanner

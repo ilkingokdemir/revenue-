@@ -109,12 +109,24 @@ const NAV_SECTIONS = [
 export const RevenuePanel = ({ properties, activePropertyId }) => {
   const [tab, setTab] = useState("dashboard");
   const [roomTypes, setRoomTypes] = useState([]);
-  const [collapsed, setCollapsed] = useState(false);
+  // Auto-collapse on mobile so the inner nav doesn't force horizontal overflow
+  const [collapsed, setCollapsed] = useState(() =>
+    typeof window !== "undefined" && window.innerWidth < 1024
+  );
   const pid = activePropertyId || "all";
 
   useEffect(() => {
     axios.get(`${API}/revenue/pricing-strategy-full/${pid}`).then(r => setRoomTypes(r.data.room_types || [])).catch(() => {});
   }, [pid]);
+
+  // Keep inner nav collapsed when the viewport goes below lg; expand back up if user resizes wider
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth < 1024) setCollapsed(true);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const handleNavigate = (tabId) => setTab(tabId);
 
@@ -186,8 +198,8 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto bg-stone-50">
-        <div className="p-6">
+      <div className="flex-1 min-w-0 overflow-y-auto bg-stone-50">
+        <div className="p-4 md:p-6">
           {/* Breadcrumb */}
           {currentItem && tab !== "dashboard" && (
             <div className="flex items-center gap-1.5 text-xs text-stone-400 mb-4">

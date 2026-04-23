@@ -49,17 +49,54 @@ class SmartScanner:
         if self.running:
             return {"status": "already_running"}
         self.running = True
+        self.current_property_id = property_id
         self.stats["started_at"] = datetime.now(timezone.utc).isoformat()
         self.stats["events_found_today"] = 0
+        # Persist so backend-restart auto-resumes (user said "turn off yapincaya kadar devam")
+        try:
+            await self.db.market_robot_config.update_one(
+                {"property_id": property_id},
+                {"$set": {
+                    "scanner_active": True,
+                    "scanner_started_at": self.stats["started_at"],
+                }},
+                upsert=True,
+            )
+        except Exception as e:
+            logger.warning(f"Scanner persistence on start failed: {e}")
         self.task = asyncio.create_task(self._run_loop(property_id))
         return {"status": "started", "event_scanning": bool(self.event_scan_fn)}
 
     async def stop(self):
         self.running = False
+        pid = getattr(self, "current_property_id", None)
         if self.task:
             self.task.cancel()
             self.task = None
+        # Persist so auto-resume does NOT re-start it after backend restart
+        try:
+            if pid:
+                await self.db.market_robot_config.update_one(
+                    {"property_id": pid},
+                    {"$set": {"scanner_active": False}},
+                    upsert=True,
+                )
+        except Exception as e:
+            logger.warning(f"Scanner persistence on stop failed: {e}")
+        self.current_property_id = None
         return {"status": "stopped"}
+
+    async def resume_if_active(self):
+        """Called on backend startup — resumes scanner for any property where scanner_active=True."""
+        try:
+            active = await self.db.market_robot_config.find_one(
+                {"scanner_active": True}, {"_id": 0, "property_id": 1}
+            )
+            if active and active.get("property_id"):
+                logger.info(f"🔁 Smart Scanner auto-resume for {active['property_id']} (was active before restart)")
+                await self.start(active["property_id"])
+        except Exception as e:
+            logger.warning(f"Scanner resume failed: {e}")
 
     def get_status(self):
         return {

@@ -2492,6 +2492,11 @@ Date range: {date_from} to {date_to}."""
         """Background loop: every 60s check enabled market-robot configs and trigger due scans.
         Handles BOTH city scans (market_robot_config) AND geo scans (market_robot_geo_config) in parallel."""
         logger.info("🛰️ Market Robot auto-scan loop started")
+        # Auto-resume Smart Scanner if user had it ON before restart
+        try:
+            await scanner.resume_if_active()
+        except Exception as e:
+            logger.warning(f"Smart Scanner resume skipped: {e}")
         while True:
             try:
                 # === City scans ===
@@ -2552,6 +2557,17 @@ Date range: {date_from} to {date_to}."""
                             )
                         except Exception as e:
                             logger.exception(f"Auto geo-scan failed for {pid}: {e}")
+
+                # === Smart Scanner watchdog — if DB says active but scanner not running, restart ===
+                try:
+                    active_cfg = await db.market_robot_config.find_one(
+                        {"scanner_active": True}, {"_id": 0, "property_id": 1}
+                    )
+                    if active_cfg and not scanner.running:
+                        logger.info(f"🔁 Smart Scanner watchdog restart for {active_cfg['property_id']}")
+                        await scanner.start(active_cfg["property_id"])
+                except Exception as e:
+                    logger.warning(f"Scanner watchdog error: {e}")
 
                 # === Weekly email summary (Mondays 09:00 UTC) ===
                 if now.weekday() == 0 and now.hour == 9 and now.minute < 2:

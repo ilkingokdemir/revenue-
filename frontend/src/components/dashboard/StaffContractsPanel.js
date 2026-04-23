@@ -251,6 +251,73 @@ export const StaffContractsPanel = ({ propertyId, user }) => {
         <Button size="sm" variant="outline" onClick={load}><RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /></Button>
       </div>
 
+      {/* Upcoming Renewals — proactive alert card */}
+      {(stats.upcoming_renewals || []).length > 0 && (
+        <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 border border-amber-200 rounded-2xl p-5 shadow-sm" data-testid="upcoming-renewals-card">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-lg flex-shrink-0">
+              <CalendarClock className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-black text-stone-900">Upcoming Renewals</h3>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider">
+                  {stats.upcoming_renewals.length} in next 90d
+                </span>
+                {stats.expiring_30_days > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white text-[10px] font-bold uppercase tracking-wider animate-pulse">
+                    {stats.expiring_30_days} urgent ≤30d
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-stone-600 mt-0.5">
+                Extend these before they expire — signature, pay and terms stay intact.
+              </p>
+
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+                {stats.upcoming_renewals.slice(0, 6).map((r) => {
+                  const urgent = r.days_to_end <= 30;
+                  return (
+                    <div key={r.id}
+                      className={`flex items-center gap-3 p-2.5 rounded-lg bg-white border ${urgent ? "border-rose-200" : "border-stone-200"} hover:shadow-sm transition`}
+                      data-testid={`renewal-item-${r.id}`}>
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0 ${urgent ? "bg-gradient-to-br from-rose-500 to-red-600" : "bg-gradient-to-br from-amber-400 to-orange-500"}`}>
+                        {(r.staff_name || "?").slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-stone-800 truncate">{r.staff_name}</p>
+                        <p className="text-[10px] text-stone-500 truncate">{r.role} · ends {r.end_date}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <div className={`text-[11px] font-black tabular-nums ${urgent ? "text-rose-700" : "text-amber-700"}`}>
+                          {r.days_to_end === 0 ? "today" : `${r.days_to_end}d`}
+                        </div>
+                        {r.extension_count > 0 && (
+                          <div className="text-[9px] text-stone-400">+{r.extension_count} prior</div>
+                        )}
+                      </div>
+                      {isAdmin && (
+                        <button onClick={() => openExtend(r)}
+                          className="px-2.5 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold inline-flex items-center gap-1 shadow-sm flex-shrink-0"
+                          data-testid={`renewal-extend-${r.id}`}>
+                          <CalendarPlus className="w-3 h-3" /> Extend
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {stats.upcoming_renewals.length > 6 && (
+                <p className="mt-2 text-[11px] text-stone-500">
+                  + {stats.upcoming_renewals.length - 6} more. Filter by <button onClick={() => setStatus("active")} className="underline font-semibold">Active</button> or sort by end-date in the table below.
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -485,9 +552,9 @@ export const StaffContractsPanel = ({ propertyId, user }) => {
                   className="mt-1"
                   placeholder="e.g. Renewed for another 12 months after successful probation." />
               </div>
-              {(extending.contract.extensions?.length || 0) > 0 && (
+              {((extending.contract.extensions?.length) ?? extending.contract.extension_count ?? 0) > 0 && (
                 <div className="text-[10px] text-stone-500">
-                  Previously extended {extending.contract.extensions.length} time{extending.contract.extensions.length === 1 ? "" : "s"}.
+                  Previously extended {(extending.contract.extensions?.length) ?? extending.contract.extension_count} time{((extending.contract.extensions?.length) ?? extending.contract.extension_count) === 1 ? "" : "s"}.
                 </div>
               )}
             </div>

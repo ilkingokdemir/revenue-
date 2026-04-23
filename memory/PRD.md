@@ -4,6 +4,35 @@
 
 
 
+### Iter 171 (Feb 2026): 📅 Upcoming Renewals — proactive HR alert card
+
+User approval: _"yes"_ (accepted enhancement from Iter 170 finish summary).
+
+**Backend** (`routes/contracts.py` → `stats` endpoint)
+- Extended `/api/contracts/stats/{property_id}` response with:
+  - `expiring_90_days`: count of active/signed contracts ending ≤90 days out
+  - `upcoming_renewals[]`: sorted list (soonest first, capped at 20) with `{id, staff_name, role, end_date, start_date, days_to_end, monthly_cost, extension_count, computed_status}`.
+- Kept backward-compat fields (`expiring_30_days`, `active`, `total`, `on_probation`, `monthly_cost`) intact.
+
+**Frontend** (`StaffContractsPanel.js`)
+- New **Upcoming Renewals** card (amber→orange→rose gradient) rendered between the filters and the main table, only visible when `upcoming_renewals.length > 0`.
+- Header badges: `N IN NEXT 90D` (amber) + `N URGENT ≤30D` (rose, pulsing) to draw the admin's eye.
+- 2-column grid of up to 6 renewal items. Each row shows:
+  - Initials avatar (rose gradient if ≤30d, amber if 31-90d)
+  - Staff name · role · "ends YYYY-MM-DD"
+  - Days-to-end countdown (`Xd` or "today") in matching urgency color
+  - "+N prior" micro-label when contract has been extended before
+  - One-click emerald **Extend** button → opens the existing Extend Contract dialog pre-populated with this contract
+- Overflow hint: "+N more. Filter by Active or sort by end-date below."
+- `extending.contract.extension_count` fallback added to the Extend dialog so renewal items work even without full `extensions[]` loaded.
+
+**Verified end-to-end:**
+- Seeded 3 test contracts at 15d/45d/75d expiry → stats endpoint returned them sorted correctly with `expiring_30_days:1, expiring_90_days:3`.
+- Playwright screenshot confirmed card renders with correct urgency coloring, badges, and Extend CTAs.
+- Test data cleaned after verification.
+
+
+
 ### Iter 170 (Feb 2026): 🧾 HR/RBAC UX upgrades — Clone Role dialog + Contract end-date extension
 
 User approval: _"devam et"_ (Priority 2). Shipped two focused HR/RBAC UX improvements.

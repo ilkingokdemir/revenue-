@@ -87,24 +87,43 @@ def create_contracts_router(db, require_roles):
         total = len(docs)
         by_status: Dict[str, int] = {}
         expiring_30 = 0
+        expiring_90_list = []  # detailed list for renewal card
         probation = 0
         monthly_cost = 0.0
         for c in docs:
             s = _compute_status(c)
             by_status[s] = by_status.get(s, 0) + 1
             end = _parse_date(c.get("end_date"))
-            if end and 0 <= (end - date.today()).days <= 30 and s in ("active", "signed"):
-                expiring_30 += 1
+            if end and s in ("active", "signed"):
+                days_to_end = (end - date.today()).days
+                if 0 <= days_to_end <= 30:
+                    expiring_30 += 1
+                if 0 <= days_to_end <= 90:
+                    expiring_90_list.append({
+                        "id": c.get("id"),
+                        "staff_name": c.get("staff_name", ""),
+                        "role": c.get("role", ""),
+                        "end_date": c.get("end_date"),
+                        "start_date": c.get("start_date"),
+                        "days_to_end": days_to_end,
+                        "computed_status": s,
+                        "monthly_cost": _monthly_cost(c),
+                        "extension_count": len(c.get("extensions") or []),
+                    })
             prob = _parse_date(c.get("probation_end"))
             if prob and prob >= date.today() and s in ("active", "signed"):
                 probation += 1
             if s in ("active", "signed"):
                 monthly_cost += _monthly_cost(c)
+        # Sort by soonest expiration
+        expiring_90_list.sort(key=lambda x: x["days_to_end"])
         return {
             "total": total,
             "by_status": by_status,
             "active": by_status.get("active", 0) + by_status.get("signed", 0),
             "expiring_30_days": expiring_30,
+            "expiring_90_days": len(expiring_90_list),
+            "upcoming_renewals": expiring_90_list[:20],  # cap for UI perf
             "on_probation": probation,
             "monthly_cost": round(monthly_cost, 2),
             "annual_cost": round(monthly_cost * 12, 2),

@@ -1347,6 +1347,36 @@ def create_market_robot_router(db, require_roles, resend=None):
                 imp = ev.get("impact", "")
                 s["event_boost"] = 45 if hds >= 80 or imp == "critical" else 30 if hds >= 60 or imp in ("high", "mega") else 15 if hds >= 40 or imp in ("moderate", "large") else 5 if hds >= 20 or imp in ("low", "medium", "small") else 0
 
+        # ===== OUR HOTEL overlay: occupancy + rate per date =====
+        room_types = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(50)
+        total_rooms = sum(int(r.get("total_rooms", 0)) for r in room_types) or 20
+        base_rate_avg = sum(float(r.get("base_rate", 0) or 0) for r in room_types) / max(len(room_types), 1) if room_types else 130
+        our_occ_sum = 0
+        our_rate_sum = 0
+        for s in snapshots:
+            ds = s.get("date")
+            if not ds:
+                continue
+            bookings_count = await db.bookings.count_documents({
+                "property_id": property_id,
+                "check_in": {"$lte": ds},
+                "check_out": {"$gt": ds},
+                "status": {"$nin": ["cancelled"]},
+            })
+            occ = round(min(100, bookings_count / total_rooms * 100), 1)
+            rate_doc = await db.rate_overrides.find_one(
+                {"property_id": property_id, "date": ds},
+                {"_id": 0, "custom_rate": 1},
+                sort=[("updated_at", -1)],
+            )
+            our_rate = round(float(rate_doc["custom_rate"]) if rate_doc and rate_doc.get("custom_rate") else base_rate_avg, 2)
+            s["our_occupancy_pct"] = occ
+            s["our_avg_rate"] = our_rate
+            s["our_bookings"] = bookings_count
+            s["our_total_rooms"] = total_rooms
+            our_occ_sum += occ
+            our_rate_sum += our_rate
+
         # Summary stats
         if snapshots:
             avg_unavail = round(sum(s.get("unavailable_pct", 0) for s in snapshots) / len(snapshots))
@@ -1375,6 +1405,11 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "low_demand_days": low_demand_days,
                 "event_days": event_days,
             },
+            "our_summary": {
+                "avg_occupancy_pct": round(our_occ_sum / max(len(snapshots), 1), 1) if snapshots else 0,
+                "avg_rate": round(our_rate_sum / max(len(snapshots), 1), 2) if snapshots else 0,
+                "total_rooms": total_rooms,
+            } if snapshots else None,
             "upcoming_events": [{
                 "name": ev.get("name", ""),
                 "date": ev.get("date", ""),

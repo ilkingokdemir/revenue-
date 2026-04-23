@@ -322,11 +322,17 @@ export const MarketRobot = ({ propertyId }) => {
           {/* Supply Trend Chart */}
           {snapshots.length > 0 && (
             <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="market-robot-chart">
-              <h3 className="font-bold text-stone-800 mb-4">Market Supply Trend (Unavailability %)</h3>
-              <div className="flex items-center gap-4 text-xs text-stone-400 mb-3">
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-red-500 inline-block" /> High Demand (70%+)</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400 inline-block" /> Moderate (40-70%)</span>
-                <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-400 inline-block" /> Low Demand (&lt;40%)</span>
+              <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <h3 className="font-bold text-stone-800">Market Supply Trend (Unavailability %)</h3>
+                <div className="flex items-center gap-3 text-[10px] text-stone-500">
+                  <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-red-500 inline-block" /> High (70%+)</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-400 inline-block" /> Moderate</span>
+                  <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-emerald-400 inline-block" /> Low</span>
+                  <span className="flex items-center gap-1 pl-2 border-l border-stone-300">
+                    <span className="w-3 h-0.5 bg-cyan-500 inline-block" />
+                    <span className="font-semibold text-cyan-700">BİZ · Doluluk</span>
+                  </span>
+                </div>
               </div>
               <div className="space-y-2">
                 {snapshots.slice(0, 20).map(s => {
@@ -334,13 +340,32 @@ export const MarketRobot = ({ propertyId }) => {
                   const color = u >= 70 ? "bg-red-500" : u >= 40 ? "bg-amber-400" : "bg-emerald-400";
                   const adj = s.price_adjustment_pct || 0;
                   const hasEvent = s.event;
+                  const ourOcc = s.our_occupancy_pct;
+                  const ourRate = s.our_avg_rate;
                   return (
                     <div key={s.date} className="flex items-center gap-3 group">
                       <span className="w-20 text-xs text-stone-500 font-medium flex-shrink-0">{new Date(s.date + "T00:00:00").toLocaleDateString("en", { month: "short", day: "numeric", weekday: "short" })}</span>
                       <div className="flex-1 bg-stone-100 rounded-full h-5 overflow-hidden relative">
                         <div className={`h-5 rounded-full transition-all ${color}`} style={{ width: `${u}%` }} />
                         <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white mix-blend-difference">{u}%</span>
+                        {ourOcc != null && (
+                          <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-cyan-500 shadow-lg"
+                            style={{ left: `${ourOcc}%` }}
+                            title={`BİZ: ${ourOcc}% doluluk`}
+                          />
+                        )}
                       </div>
+                      {ourOcc != null && (
+                        <span className="w-12 text-right text-[10px] font-bold text-cyan-700 tabular-nums flex-shrink-0">
+                          {ourOcc}%
+                        </span>
+                      )}
+                      {ourRate > 0 && (
+                        <span className="w-14 text-right text-[10px] font-bold text-violet-700 tabular-nums flex-shrink-0">
+                          £{Math.round(ourRate)}
+                        </span>
+                      )}
                       {hasEvent ? (
                         <div className="w-24 text-right flex items-center justify-end gap-1" title={s.event}>
                           <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${

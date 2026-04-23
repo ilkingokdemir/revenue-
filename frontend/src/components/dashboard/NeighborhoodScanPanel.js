@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import CompetitivePricingPanel from "./CompetitivePricingPanel";
+import GapAnalyzerWidget from "./GapAnalyzerWidget";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -499,6 +500,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
             </svg>
           </div>
         </div>
+      )}
+
+      {/* Gap Analyzer — highlights dates where we're losing revenue */}
+      {propertyId && propertyId !== "all" && snapshots.length > 0 && (
+        <GapAnalyzerWidget snapshots={snapshots} propertyId={propertyId} />
       )}
 
       {/* Competitive Pricing Rule */}

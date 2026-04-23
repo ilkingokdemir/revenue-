@@ -40,7 +40,10 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         axios.get(`${API}/revenue/market-robot/${propertyId}/geo-supply?days=${days}`),
         axios.get(`${API}/revenue/market-robot/${propertyId}/geo-config`),
       ]);
-      setSummary(supply.summary || null);
+      // Attach property_currency into summary so `cur` formatter picks it up
+      const sum = supply.summary || {};
+      if (supply.property_currency) sum.property_currency = supply.property_currency;
+      setSummary(sum);
       setSnapshots(supply.snapshots || []);
       setOurSummary(supply.our_summary || null);
       setAutoCfg(cfg);
@@ -145,9 +148,9 @@ export default function NeighborhoodScanPanel({ propertyId }) {
 
   const miles = (radiusKm * 0.621371).toFixed(1);
 
-  // Currency derived from the most recent scan location (fallbacks to default)
+  // Currency derived from scan location with priority: property-configured currency > scan city > fallback £
   const currency = useMemo(() => {
-    const hint = (summary && summary.last_location) || location || "";
+    const hint = (summary && summary.property_currency) || (summary && summary.scan_city) || (summary && summary.last_location) || location || "";
     return makeCurrencyFormatter(hint);
   }, [summary, location]);
   const cur = currency.format;

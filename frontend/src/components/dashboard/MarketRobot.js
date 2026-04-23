@@ -129,7 +129,7 @@ export const MarketRobot = ({ propertyId }) => {
 
   const snapshots = supply?.snapshots || [];
   // Currency inferred from the active scan city
-  const currency = useMemo(() => makeCurrencyFormatter(config?.city || ""), [config]);
+  const currency = useMemo(() => makeCurrencyFormatter(config?.currency || config?.city || ""), [config]);
   const cur = (v) => currency.format(v, 2);
   const curShort = currency.short;
   const summary = supply?.summary || {};

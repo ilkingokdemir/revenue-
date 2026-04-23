@@ -16,8 +16,8 @@ export const DemandRadar = ({ propertyId }) => {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(90);
 
-  // Currency inferred from scan config city (propagated from data when available)
-  const currency = useMemo(() => makeCurrencyFormatter(data?.city || data?.scan_city || ""), [data]);
+  // Currency inferred from scan city → property currency cascade
+  const currency = useMemo(() => makeCurrencyFormatter(data?.property_currency || data?.city || data?.scan_city || ""), [data]);
   const cur = (v) => currency.format(v, 2);
   const curShort = currency.short;
 

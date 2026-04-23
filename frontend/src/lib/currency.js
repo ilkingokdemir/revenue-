@@ -61,9 +61,53 @@ const UK_POSTCODE_RE = /^(E|EC|N|NW|SE|SW|W|WC|BR|CR|DA|EN|HA|IG|KT|RM|SM|TW|UB|
 
 const DEFAULT = { symbol: "£", code: "GBP", locale: "en-GB" };
 
+// ISO-4217 currency code → {symbol, locale}
+const CODE_MAP = {
+  GBP: { symbol: "£", code: "GBP", locale: "en-GB" },
+  EUR: { symbol: "€", code: "EUR", locale: "en-IE" },
+  USD: { symbol: "$", code: "USD", locale: "en-US" },
+  CHF: { symbol: "CHF ", code: "CHF", locale: "de-CH" },
+  JPY: { symbol: "¥", code: "JPY", locale: "ja-JP" },
+  CNY: { symbol: "¥", code: "CNY", locale: "zh-CN" },
+  TRY: { symbol: "₺", code: "TRY", locale: "tr-TR" },
+  INR: { symbol: "₹", code: "INR", locale: "en-IN" },
+  RUB: { symbol: "₽", code: "RUB", locale: "ru-RU" },
+  ZAR: { symbol: "R", code: "ZAR", locale: "en-ZA" },
+  NOK: { symbol: "kr ", code: "NOK", locale: "nb-NO" },
+  SEK: { symbol: "kr ", code: "SEK", locale: "sv-SE" },
+  DKK: { symbol: "kr ", code: "DKK", locale: "da-DK" },
+  CAD: { symbol: "CA$ ", code: "CAD", locale: "en-CA" },
+  AUD: { symbol: "AU$ ", code: "AUD", locale: "en-AU" },
+  NZD: { symbol: "NZ$ ", code: "NZD", locale: "en-NZ" },
+  HKD: { symbol: "HK$ ", code: "HKD", locale: "en-HK" },
+  SGD: { symbol: "S$ ", code: "SGD", locale: "en-SG" },
+  THB: { symbol: "฿", code: "THB", locale: "th-TH" },
+  AED: { symbol: "AED ", code: "AED", locale: "en-AE" },
+  MXN: { symbol: "MX$ ", code: "MXN", locale: "es-MX" },
+  BRL: { symbol: "R$ ", code: "BRL", locale: "pt-BR" },
+  KRW: { symbol: "₩", code: "KRW", locale: "ko-KR" },
+  PLN: { symbol: "zł ", code: "PLN", locale: "pl-PL" },
+  CZK: { symbol: "Kč ", code: "CZK", locale: "cs-CZ" },
+  HUF: { symbol: "Ft ", code: "HUF", locale: "hu-HU" },
+  ILS: { symbol: "₪", code: "ILS", locale: "he-IL" },
+  SAR: { symbol: "SAR ", code: "SAR", locale: "en-SA" },
+  MYR: { symbol: "RM ", code: "MYR", locale: "en-MY" },
+  IDR: { symbol: "Rp ", code: "IDR", locale: "id-ID" },
+  PHP: { symbol: "₱", code: "PHP", locale: "en-PH" },
+  VND: { symbol: "₫", code: "VND", locale: "vi-VN" },
+  EGP: { symbol: "EGP ", code: "EGP", locale: "en-EG" },
+  RON: { symbol: "lei ", code: "RON", locale: "ro-RO" },
+  BGN: { symbol: "лв ", code: "BGN", locale: "bg-BG" },
+  HRK: { symbol: "kn ", code: "HRK", locale: "hr-HR" },
+  ISK: { symbol: "kr ", code: "ISK", locale: "is-IS" },
+  QAR: { symbol: "QAR ", code: "QAR", locale: "en-QA" },
+};
+
 export function getCurrencyInfo(cityOrLocation) {
   if (!cityOrLocation) return DEFAULT;
   const raw = String(cityOrLocation).trim();
+  // ISO-4217 direct match (GBP, EUR, USD, CHF, TRY…)
+  if (/^[A-Z]{3}$/.test(raw) && CODE_MAP[raw]) return CODE_MAP[raw];
   // Postcode-ish prefix → GBP (UK)
   if (UK_POSTCODE_RE.test(raw)) return DEFAULT;
   const key = raw.toLowerCase();

@@ -484,6 +484,41 @@ def create_market_robot_router(db, require_roles, resend=None):
             defaults.update(config)
         return defaults
 
+    # City → currency mapping (same as frontend — source of truth for auto-sync)
+    CITY_CURRENCY = {
+        "london": "GBP", "manchester": "GBP", "edinburgh": "GBP",
+        "dublin": "EUR", "paris": "EUR", "berlin": "EUR", "munich": "EUR",
+        "amsterdam": "EUR", "rome": "EUR", "madrid": "EUR", "barcelona": "EUR",
+        "vienna": "EUR", "lisbon": "EUR", "athens": "EUR", "brussels": "EUR",
+        "zurich": "CHF", "geneva": "CHF", "basel": "CHF",
+        "oslo": "NOK", "stockholm": "SEK", "copenhagen": "DKK",
+        "istanbul": "TRY", "ankara": "TRY", "izmir": "TRY",
+        "new york": "USD", "los angeles": "USD", "chicago": "USD", "miami": "USD",
+        "toronto": "CAD", "vancouver": "CAD",
+        "sydney": "AUD", "melbourne": "AUD", "auckland": "NZD",
+        "tokyo": "JPY", "osaka": "JPY",
+        "beijing": "CNY", "shanghai": "CNY",
+        "hong kong": "HKD", "singapore": "SGD", "bangkok": "THB",
+        "dubai": "AED", "abu dhabi": "AED",
+        "mumbai": "INR", "delhi": "INR", "bangalore": "INR",
+        "moscow": "RUB", "warsaw": "PLN", "prague": "CZK", "budapest": "HUF",
+        "tel aviv": "ILS", "riyadh": "SAR",
+        "kuala lumpur": "MYR", "jakarta": "IDR", "manila": "PHP",
+        "johannesburg": "ZAR", "cape town": "ZAR",
+        "mexico city": "MXN", "sao paulo": "BRL", "rio de janeiro": "BRL",
+    }
+
+    def _infer_currency(city_str: str) -> str:
+        if not city_str:
+            return ""
+        k = city_str.strip().lower()
+        if k in CITY_CURRENCY:
+            return CITY_CURRENCY[k]
+        for city_key, code in CITY_CURRENCY.items():
+            if city_key in k:
+                return code
+        return ""
+
     @router.put("/revenue/market-robot/{property_id}/config")
     async def update_config(property_id: str, data: Dict,
                             current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -491,6 +526,26 @@ def create_market_robot_router(db, require_roles, resend=None):
         data["property_id"] = property_id
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.market_robot_config.update_one({"property_id": property_id}, {"$set": data}, upsert=True)
+        # === Auto-sync property currency from scan city ===
+        # When a hotel starts scanning Zurich → set its currency to CHF automatically
+        new_city = (data.get("city") or "").strip()
+        inferred = _infer_currency(new_city)
+        if inferred:
+            # Update property
+            prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1})
+            if prop and prop.get("currency") != inferred:
+                await db.properties.update_one(
+                    {"id": property_id},
+                    {"$set": {"currency": inferred, "currency_auto_set_from": new_city,
+                              "currency_updated_at": datetime.now(timezone.utc).isoformat()}},
+                )
+                logger.info(f"💱 Property {property_id} currency auto-updated to {inferred} (scan city: {new_city})")
+            # Also sync into market_robot_config so frontend picks it up immediately (unless user explicitly set one)
+            if "currency" not in data or not data.get("currency"):
+                await db.market_robot_config.update_one(
+                    {"property_id": property_id},
+                    {"$set": {"currency": inferred}},
+                )
         return await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0})
 
     @router.post("/revenue/market-robot/{property_id}/scan")
@@ -635,6 +690,7 @@ def create_market_robot_router(db, require_roles, resend=None):
         return {
             "property_id": property_id,
             "snapshots": snaps,
+            "property_currency": (await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}).get("currency", "GBP") if property_id != "all" else "GBP",
             "summary": {
                 "total_snapshots": len(snaps),
                 "total_scans": total_scans,
@@ -1301,6 +1357,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                               current_user: dict = Depends(require_roles("admin", "manager"))):
         """Get latest supply snapshots with event intelligence overlay."""
         now = datetime.now(timezone.utc)
+        cfg = await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
 
         # Get latest snapshot per date (no time cutoff — show ALL available data)
         pipeline = [
@@ -1398,6 +1455,8 @@ def create_market_robot_router(db, require_roles, resend=None):
 
         return {
             "snapshots": snapshots,
+            "scan_city": cfg.get("city", ""),
+            "property_currency": (await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}).get("currency", "GBP"),
             "summary": {
                 "total_dates": len(snapshots),
                 "avg_unavailable_pct": avg_unavail,

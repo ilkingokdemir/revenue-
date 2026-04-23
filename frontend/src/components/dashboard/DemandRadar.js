@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { Radar, TrendingUp, TrendingDown, AlertTriangle, Zap, RefreshCw, Calendar, BarChart3, Activity } from "lucide-react";
+import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 const INSIGHT_ICONS = { trending: TrendingUp, compress: Zap, low: AlertTriangle, event: Calendar };
 const INSIGHT_COLORS = { opportunity: "border-emerald-500/30 bg-emerald-900/20", warning: "border-amber-500/30 bg-amber-900/20", event: "border-red-500/30 bg-red-900/20" };
@@ -15,6 +15,11 @@ export const DemandRadar = ({ propertyId }) => {
   const [behavior, setBehavior] = useState(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(90);
+
+  // Currency inferred from scan config city (propagated from data when available)
+  const currency = useMemo(() => makeCurrencyFormatter(data?.city || data?.scan_city || ""), [data]);
+  const cur = (v) => currency.format(v, 2);
+  const curShort = currency.short;
 
   useEffect(() => {
     setLoading(true);
@@ -267,7 +272,7 @@ export const DemandRadar = ({ propertyId }) => {
                     <g key={`our-rate-${i}`}>
                       <circle cx={x} cy={y} r="2.5" fill="#a78bfa" stroke="#0a0a0a" strokeWidth="1" />
                       {showLabel && (
-                        <text x={x} y={y - 6} textAnchor="middle" fontSize="7.5" fontWeight="800" fill="#c4b5fd">£{Math.round(d.our_rate)}</text>
+                        <text x={x} y={y - 6} textAnchor="middle" fontSize="7.5" fontWeight="800" fill="#c4b5fd">{curShort(d.our_rate)}</text>
                       )}
                     </g>
                   );

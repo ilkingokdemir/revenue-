@@ -15,10 +15,9 @@ import {
 import { toast } from "sonner";
 import CompetitivePricingPanel from "./CompetitivePricingPanel";
 import GapAnalyzerWidget from "./GapAnalyzerWidget";
+import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-const cur = (v) => "£" + (Number(v) || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 });
 
 export default function NeighborhoodScanPanel({ propertyId }) {
   const [location, setLocation] = useState("");
@@ -145,6 +144,14 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   }, [snapshots]);
 
   const miles = (radiusKm * 0.621371).toFixed(1);
+
+  // Currency derived from the most recent scan location (fallbacks to default)
+  const currency = useMemo(() => {
+    const hint = (summary && summary.last_location) || location || "";
+    return makeCurrencyFormatter(hint);
+  }, [summary, location]);
+  const cur = currency.format;
+  const curShort = currency.short;
 
   // TOP 3 biggest absolute % changes vs previous day
   const top3Changes = useMemo(() => {
@@ -417,9 +424,9 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                     <circle cx={chart.sx(i)} cy={cy} r="3" fill="#fbbf24" stroke="#0a0a0a" strokeWidth="1" />
                     {showLabel && s.avg_price > 0 && (
                       <>
-                        <rect x={chart.sx(i) - 22} y={cy - 22} width={44} height={15} rx={3} fill="#0a0a0a" opacity="0.9" stroke="#fbbf24" strokeWidth="0.6" />
+                        <rect x={chart.sx(i) - 28} y={cy - 22} width={56} height={15} rx={3} fill="#0a0a0a" opacity="0.9" stroke="#fbbf24" strokeWidth="0.6" />
                         <text x={chart.sx(i)} y={cy - 11} textAnchor="middle" fontSize="11" fontWeight="900" fill="#fbbf24" fontFamily="'Inter', system-ui, sans-serif">
-                          £{Math.round(s.avg_price)}
+                          {curShort(s.avg_price)}
                         </text>
                         {showDelta && (
                           <text x={chart.sx(i)} y={cy - 25} textAnchor="middle" fontSize="8.5" fontWeight="800" fill={deltaColor} fontFamily="'Inter', system-ui, sans-serif">
@@ -471,11 +478,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                     <circle cx={chart.sx(i)} cy={cy} r="3.5" fill="#a78bfa" stroke="#0a0a0a" strokeWidth="1.2" />
                     {showLabel && (
                       <>
-                        <rect x={chart.sx(i) - 22} y={cy + 6} width={44} height={14} rx={3}
+                        <rect x={chart.sx(i) - 28} y={cy + 6} width={56} height={14} rx={3}
                           fill={below ? "#10b98133" : above ? "#ef444433" : "#1c1917"} opacity="0.95"
                           stroke="#a78bfa" strokeWidth="0.6" />
                         <text x={chart.sx(i)} y={cy + 16} textAnchor="middle" fontSize="10" fontWeight="900" fill="#c4b5fd">
-                          £{Math.round(s.our_avg_rate)}
+                          {curShort(s.our_avg_rate)}
                         </text>
                       </>
                     )}
@@ -504,7 +511,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
 
       {/* Gap Analyzer — highlights dates where we're losing revenue */}
       {propertyId && propertyId !== "all" && snapshots.length > 0 && (
-        <GapAnalyzerWidget snapshots={snapshots} propertyId={propertyId} />
+        <GapAnalyzerWidget snapshots={snapshots} propertyId={propertyId} cityHint={(summary && summary.last_location) || location} />
       )}
 
       {/* Competitive Pricing Rule */}
@@ -600,13 +607,13 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   </th>
                   <th className="text-right px-2 font-bold">
                     <div className="flex flex-col leading-tight items-end">
-                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Min £</span>
+                      <span className="text-emerald-300 uppercase text-[10px] tracking-widest">Min {currency.info.symbol.trim()}</span>
                       <span className="text-[9px] text-stone-400 font-normal normal-case">En ucuz oda</span>
                     </div>
                   </th>
                   <th className="text-right pr-3 pl-2 font-bold">
                     <div className="flex flex-col leading-tight items-end">
-                      <span className="text-rose-300 uppercase text-[10px] tracking-widest">Max £</span>
+                      <span className="text-rose-300 uppercase text-[10px] tracking-widest">Max {currency.info.symbol.trim()}</span>
                       <span className="text-[9px] text-stone-400 font-normal normal-case">En pahalı oda</span>
                     </div>
                   </th>

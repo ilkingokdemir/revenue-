@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +13,9 @@ import { MarketDemandDashboard } from "./MarketDemandDashboard";
 import { DemandRadar } from "./DemandRadar";
 import NeighborhoodScanPanel from "./NeighborhoodScanPanel";
 import MarketRobotHealthWidget from "./MarketRobotHealthWidget";
+import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 const TIERS_DISPLAY = [
   { label: "Today + Tomorrow", interval_mins: 30 },
@@ -128,6 +128,10 @@ export const MarketRobot = ({ propertyId }) => {
   };
 
   const snapshots = supply?.snapshots || [];
+  // Currency inferred from the active scan city
+  const currency = useMemo(() => makeCurrencyFormatter(config?.city || ""), [config]);
+  const cur = (v) => currency.format(v, 2);
+  const curShort = currency.short;
   const summary = supply?.summary || {};
   const upcomingEvents = supply?.upcoming_events || [];
 
@@ -363,7 +367,7 @@ export const MarketRobot = ({ propertyId }) => {
                       )}
                       {ourRate > 0 && (
                         <span className="w-14 text-right text-[10px] font-bold text-violet-700 tabular-nums flex-shrink-0">
-                          £{Math.round(ourRate)}
+                          {curShort(ourRate)}
                         </span>
                       )}
                       {hasEvent ? (

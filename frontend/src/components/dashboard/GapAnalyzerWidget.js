@@ -5,10 +5,15 @@
  */
 import { useMemo } from "react";
 import { AlertCircle, TrendingUp, Zap } from "lucide-react";
+import { makeCurrencyFormatter } from "../../lib/currency";
 
-const cur = (v) => "£" + (Number(v) || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 });
-
-export default function GapAnalyzerWidget({ snapshots = [], propertyId }) {
+export default function GapAnalyzerWidget({ snapshots = [], propertyId, cityHint }) {
+  const currency = useMemo(() => {
+    const hint = cityHint || (snapshots[0] && snapshots[0].location) || "";
+    return makeCurrencyFormatter(hint);
+  }, [cityHint, snapshots]);
+  const cur = (v) => currency.format(v, 0);
+  const curShort = currency.short;
   const gaps = useMemo(() => {
     if (!snapshots.length) return [];
     const out = [];
@@ -24,7 +29,7 @@ export default function GapAnalyzerWidget({ snapshots = [], propertyId }) {
         // Action recommendation
         let action, severity;
         if (priceGap > 10) {
-          action = `Fiyatı %${Math.abs(priceGap).toFixed(0)} düşür → Pazar ort. £${Math.round(marketAvg)}`;
+          action = `Fiyatı %${Math.abs(priceGap).toFixed(0)} düşür → Pazar ort. ${curShort(marketAvg)}`;
           severity = "high";
         } else if (priceGap < -5) {
           action = `Booking promosyon aç (rate zaten düşük, görünürlük arttır)`;
@@ -108,8 +113,8 @@ export default function GapAnalyzerWidget({ snapshots = [], propertyId }) {
               <th className="text-center px-2 font-bold">Pazar Talep</th>
               <th className="text-center px-2 font-bold">Bizim Doluluk</th>
               <th className="text-center px-2 font-bold">Gap</th>
-              <th className="text-right px-2 font-bold">Pazar Ort. £</th>
-              <th className="text-right px-2 font-bold">Bizim £</th>
+              <th className="text-right px-2 font-bold">Pazar Ort. {currency.info.symbol.trim()}</th>
+              <th className="text-right px-2 font-bold">Bizim {currency.info.symbol.trim()}</th>
               <th className="text-right px-2 font-bold">Δ</th>
               <th className="text-left pl-2 pr-3 font-bold">Önerilen Aksiyon</th>
             </tr>

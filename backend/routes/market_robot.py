@@ -580,6 +580,58 @@ def create_market_robot_router(db, require_roles, resend=None):
             await db.market_robot_geo_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
         )
 
+        # ===== OUR HOTEL — occupancy + price for same dates =====
+        our_data = []
+        if property_id != "all":
+            room_types = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(50)
+            total_rooms = sum(int(r.get("total_rooms", 0)) for r in room_types) or 20
+            base_rate_avg = sum(float(r.get("base_rate", 0) or 0) for r in room_types) / max(len(room_types), 1) if room_types else 130
+
+            for snap in snaps:
+                target_date = snap.get("date")
+                if not target_date:
+                    continue
+                bookings_count = await db.bookings.count_documents({
+                    "property_id": property_id,
+                    "check_in": {"$lte": target_date},
+                    "check_out": {"$gt": target_date},
+                    "status": {"$nin": ["cancelled"]},
+                })
+                occ = round(min(100, bookings_count / total_rooms * 100), 1)
+                # Our rate: latest rate_override for that date (any room type) else base_rate_avg
+                rate_doc = await db.rate_overrides.find_one(
+                    {"property_id": property_id, "date": target_date},
+                    {"_id": 0, "custom_rate": 1},
+                    sort=[("updated_at", -1)],
+                )
+                our_rate = round(float(rate_doc["custom_rate"]) if rate_doc and rate_doc.get("custom_rate") else base_rate_avg, 2)
+                our_data.append({
+                    "date": target_date,
+                    "our_occupancy_pct": occ,
+                    "our_bookings": bookings_count,
+                    "our_total_rooms": total_rooms,
+                    "our_avg_rate": our_rate,
+                })
+
+        # Merge our_data into snapshots by date for the chart overlay
+        our_by_date = {d["date"]: d for d in our_data}
+        for s in snaps:
+            d = our_by_date.get(s.get("date"))
+            if d:
+                s["our_occupancy_pct"] = d["our_occupancy_pct"]
+                s["our_avg_rate"] = d["our_avg_rate"]
+                s["our_bookings"] = d["our_bookings"]
+                s["our_total_rooms"] = d["our_total_rooms"]
+
+        # Our summary
+        our_summary = None
+        if our_data:
+            our_summary = {
+                "avg_occupancy_pct": round(sum(x["our_occupancy_pct"] for x in our_data) / len(our_data), 1),
+                "avg_rate": round(sum(x["our_avg_rate"] for x in our_data) / len(our_data), 2),
+                "total_rooms": our_data[0]["our_total_rooms"],
+            }
+
         return {
             "property_id": property_id,
             "snapshots": snaps,
@@ -594,6 +646,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "last_radius_km": latest.get("radius_km", 0),
                 "last_scan": latest.get("scanned_at", ""),
             },
+            "our_summary": our_summary,
             "auto_config": geo_cfg,
         }
 

@@ -30,6 +30,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [snapshots, setSnapshots] = useState([]);
   const [lastResult, setLastResult] = useState(null);
   const [autoCfg, setAutoCfg] = useState(null);
+  const [ourSummary, setOurSummary] = useState(null);
   const [saving, setSaving] = useState(false);
   const [highlightDate, setHighlightDate] = useState(null);
 
@@ -41,6 +42,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       ]);
       setSummary(supply.summary || null);
       setSnapshots(supply.snapshots || []);
+      setOurSummary(supply.our_summary || null);
       setAutoCfg(cfg);
       if (cfg && !location && cfg.location) {
         setLocation(cfg.location);
@@ -121,16 +123,24 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
     const n = snapshots.length;
     const sx = (i) => pad.l + (i / Math.max(n - 1, 1)) * iW;
-    const prices = snapshots.map(s => s.avg_price || 0).filter(v => v > 0);
-    const pMin = prices.length ? Math.min(...prices) * 0.9 : 0;
-    const pMax = prices.length ? Math.max(...prices) * 1.05 : 1;
+    // Price axis: include our rate in min/max calculation so our line is visible
+    const mktPrices = snapshots.map(s => s.avg_price || 0).filter(v => v > 0);
+    const ourPrices = snapshots.map(s => s.our_avg_rate || 0).filter(v => v > 0);
+    const allPrices = [...mktPrices, ...ourPrices];
+    const pMin = allPrices.length ? Math.min(...allPrices) * 0.88 : 0;
+    const pMax = allPrices.length ? Math.max(...allPrices) * 1.08 : 1;
     const syP = (v) => pad.t + iH - ((v - pMin) / Math.max(pMax - pMin, 1)) * iH;
     const syD = (v) => pad.t + iH - (v / 100) * iH;
     const linePath = snapshots.map((s, i) => {
       const x = sx(i), y = syP(s.avg_price || 0);
       return `${i === 0 ? "M" : "L"} ${x} ${y}`;
     }).join(" ");
-    return { pad, W, H, iW, iH, sx, syP, syD, linePath, pMin, pMax };
+    // Our rate line (only dates with valid our_avg_rate)
+    const ourLinePoints = snapshots.map((s, i) => ({ x: sx(i), y: syP(s.our_avg_rate || 0), v: s.our_avg_rate || 0 })).filter(p => p.v > 0);
+    const ourLinePath = ourLinePoints.length
+      ? ourLinePoints.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ")
+      : "";
+    return { pad, W, H, iW, iH, sx, syP, syD, linePath, ourLinePath, ourLinePoints, pMin, pMax };
   }, [snapshots]);
 
   const miles = (radiusKm * 0.621371).toFixed(1);
@@ -264,6 +274,57 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         </div>
       )}
 
+      {/* Head-to-head: BİZ vs RAKİP */}
+      {ourSummary && summary && summary.avg_price > 0 && (
+        <div className="bg-gradient-to-r from-cyan-500/10 via-violet-500/10 to-stone-900/60 border border-cyan-500/30 rounded-2xl p-5" data-testid="us-vs-market">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center">
+                <Activity className="w-5 h-5 text-cyan-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-cyan-200">Biz vs Pazar (önümüzdeki {days} gün)</h3>
+                <p className="text-[11px] text-stone-400 mt-0.5">Chart üzerinde mor = bizim fiyat, mor çizgiler = bizim doluluk</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 md:max-w-3xl">
+              <CompareCard
+                label="Ort. Fiyat"
+                us={cur(ourSummary.avg_rate)}
+                them={cur(summary.avg_price)}
+                delta={((ourSummary.avg_rate - summary.avg_price) / summary.avg_price) * 100}
+                kind="price"
+              />
+              <CompareCard
+                label="Doluluk / Talep"
+                us={`${ourSummary.avg_occupancy_pct}%`}
+                them={`${summary.avg_unavailable_pct}%`}
+                delta={ourSummary.avg_occupancy_pct - summary.avg_unavailable_pct}
+                kind="occupancy"
+              />
+              <CompareCard
+                label="Oda Sayısı"
+                us={ourSummary.total_rooms}
+                them={Math.round(summary.max_price > 0 ? snapshots.reduce((a,s) => a + (s.total_properties || 0), 0) / Math.max(snapshots.length, 1) : 0)}
+                kind="count"
+                hint="pazar ort. oda rakibi"
+              />
+              <div className="bg-stone-950/60 border border-stone-800 rounded-lg p-2.5">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Konum</p>
+                <p className="text-xs font-black text-cyan-300 mt-1">
+                  {ourSummary.avg_rate > summary.avg_price
+                    ? <>Pazarın <span className="text-rose-300">%{(((ourSummary.avg_rate - summary.avg_price) / summary.avg_price) * 100).toFixed(1)}</span> üstü</>
+                    : <>Pazarın <span className="text-emerald-300">%{(((summary.avg_price - ourSummary.avg_rate) / summary.avg_price) * 100).toFixed(1)}</span> altı</>}
+                </p>
+                <p className="text-[9px] text-stone-500 mt-0.5">
+                  {ourSummary.avg_occupancy_pct > summary.avg_unavailable_pct ? "Yüksek doluluk" : "Doluluk düşük"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Chart — Avg Price + Demand */}
       {chart && snapshots.length > 2 && (
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="geo-chart">
@@ -273,15 +334,23 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               <h3 className="text-sm font-bold text-stone-100">Neighborhood Market · Demand & Price Trend</h3>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] text-stone-400" data-testid="geo-chart-legend">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Demand %</span>
-              <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-amber-400" /> Avg Price</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Rakip Talep %</span>
+              <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-amber-400" /> Rakip Fiyat</span>
+              <span className="flex items-center gap-1.5 border-l border-stone-700 pl-3">
+                <span className="w-2 h-2 rounded-sm bg-cyan-400 ring-2 ring-cyan-500/30" />
+                <span className="text-cyan-200 font-semibold">BİZ · Doluluk %</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-4 h-[2px] bg-violet-400" style={{ borderTop: "2px solid #a78bfa" }} />
+                <span className="text-violet-200 font-semibold">BİZ · Fiyat</span>
+              </span>
               <span className="flex items-center gap-1.5 border-l border-stone-700 pl-3">
                 <span className="text-rose-300 font-black text-[11px]">▲</span>
-                <span className="text-stone-300">Rakip fiyatı <span className="text-rose-300 font-semibold">artırdı</span> · siz de artırın</span>
+                <span className="text-stone-300">Rakip <span className="text-rose-300 font-semibold">↑</span></span>
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="text-emerald-300 font-black text-[11px]">▼</span>
-                <span className="text-stone-300">Rakip fiyatı <span className="text-emerald-300 font-semibold">düşürdü</span> · fırsat</span>
+                <span className="text-stone-300">Rakip <span className="text-emerald-300 font-semibold">↓</span></span>
               </span>
             </div>
           </div>
@@ -356,6 +425,57 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                             {up ? "▲" : "▼"}{Math.abs(delta).toFixed(1)}%
                           </text>
                         )}
+                      </>
+                    )}
+                  </g>
+                );
+              })}
+              {/* === OUR HOTEL: occupancy bars (outlined, narrower, overlaid on demand bars) === */}
+              {snapshots.map((s, i) => {
+                if (s.our_occupancy_pct == null) return null;
+                const h = (s.our_occupancy_pct / 100) * chart.iH;
+                const x = chart.sx(i) - 2;
+                const y = chart.pad.t + chart.iH - h;
+                const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
+                const showLabel = i % labelStep === 0;
+                return (
+                  <g key={`our-occ-${i}`}>
+                    {/* Outlined marker on top of rakip bar at our occupancy level */}
+                    <rect x={x} y={y - 1} width={4} height={2} fill="#22d3ee" opacity="0.95" />
+                    <line x1={chart.sx(i) - 5} x2={chart.sx(i) + 5} y1={y} y2={y} stroke="#22d3ee" strokeWidth="2" />
+                    {showLabel && s.our_occupancy_pct > 0 && (
+                      <text x={chart.sx(i) + 9} y={y + 3} textAnchor="start" fontSize="7.5" fontWeight="800" fill="#22d3ee">
+                        {s.our_occupancy_pct}%
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+              {/* === OUR HOTEL: price line (solid violet) === */}
+              {chart.ourLinePath && (
+                <path d={chart.ourLinePath} fill="none" stroke="#a78bfa" strokeWidth="2.2" opacity="0.95" />
+              )}
+              {/* === OUR HOTEL: price dots with £ label (violet) === */}
+              {snapshots.map((s, i) => {
+                if (!s.our_avg_rate || s.our_avg_rate <= 0) return null;
+                const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
+                const showLabel = i % labelStep === 0;
+                const cy = chart.syP(s.our_avg_rate);
+                const mktPrice = s.avg_price || 0;
+                const diff = mktPrice > 0 ? ((s.our_avg_rate - mktPrice) / mktPrice) * 100 : 0;
+                const below = diff < -2;
+                const above = diff > 2;
+                return (
+                  <g key={`our-dot-${i}`}>
+                    <circle cx={chart.sx(i)} cy={cy} r="3.5" fill="#a78bfa" stroke="#0a0a0a" strokeWidth="1.2" />
+                    {showLabel && (
+                      <>
+                        <rect x={chart.sx(i) - 22} y={cy + 6} width={44} height={14} rx={3}
+                          fill={below ? "#10b98133" : above ? "#ef444433" : "#1c1917"} opacity="0.95"
+                          stroke="#a78bfa" strokeWidth="0.6" />
+                        <text x={chart.sx(i)} y={cy + 16} textAnchor="middle" fontSize="10" fontWeight="900" fill="#c4b5fd">
+                          £{Math.round(s.our_avg_rate)}
+                        </text>
                       </>
                     )}
                   </g>
@@ -541,6 +661,36 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           <p className="text-xs text-stone-500 mt-1">Enter a postcode above and hit Scan to see supply & price data around your target area.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function CompareCard({ label, us, them, delta, kind, hint }) {
+  const isPrice = kind === "price";
+  const isOcc = kind === "occupancy";
+  const goodWhenAbove = isOcc;   // higher occupancy = better ; lower price vs market = better
+  const isAbove = delta > 0;
+  const positiveOutcome = isAbove === goodWhenAbove;
+  const deltaColor = Math.abs(delta) < 1
+    ? "text-stone-400"
+    : positiveOutcome ? "text-emerald-300" : "text-rose-300";
+  return (
+    <div className="bg-stone-950/60 border border-stone-800 rounded-lg p-2.5">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-stone-400">{label}</p>
+      <div className="flex items-baseline gap-2 mt-1">
+        <span className="text-base font-black text-cyan-300 tabular-nums">{us}</span>
+        <span className="text-[9px] text-stone-500">biz</span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="text-xs font-bold text-amber-300 tabular-nums">{them}</span>
+        <span className="text-[9px] text-stone-500">pazar</span>
+      </div>
+      {kind !== "count" && (
+        <p className={`text-[10px] font-bold mt-0.5 ${deltaColor}`}>
+          {isAbove ? "▲" : "▼"} {Math.abs(delta).toFixed(1)}{isPrice ? "%" : " puan"}
+        </p>
+      )}
+      {hint && <p className="text-[9px] text-stone-500 mt-0.5">{hint}</p>}
     </div>
   );
 }

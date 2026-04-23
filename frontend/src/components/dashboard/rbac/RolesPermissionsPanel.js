@@ -39,6 +39,7 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
   const [q, setQ] = useState("");
   const [editingRoleId, setEditingRoleId] = useState(null);
   const [catalog, setCatalog] = useState(null);
+  const [cloneDialogRole, setCloneDialogRole] = useState(null); // { role, new_key, display_name }
 
   const isAdmin = user?.role === "admin";
   const [explainRole, setExplainRole] = useState(null);
@@ -88,12 +89,29 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
   useEffect(() => { const t = setTimeout(load, q ? 250 : 0); return () => clearTimeout(t); }, [load]);
   useEffect(() => { axios.get(`${API}/rbac/catalog`).then(r => setCatalog(r.data)).catch(() => {}); }, []);
 
-  const cloneRole = async (role) => {
-    const newKey = window.prompt(`Clone "${role.key}" — enter new key (lowercase_underscores):`, `${role.key}_copy`);
-    if (!newKey) return;
+  const cloneRole = (role) => {
+    const suggestKey = `${role.key}_copy`.slice(0, 50);
+    const suggestName = role.display_name
+      ? `${role.display_name} (copy)`
+      : `${role.key} (copy)`;
+    setCloneDialogRole({ role, new_key: suggestKey, display_name: suggestName });
+  };
+
+  const submitClone = async () => {
+    if (!cloneDialogRole) return;
+    const { role, new_key, display_name } = cloneDialogRole;
+    const clean = (new_key || "").trim().toLowerCase();
+    if (!/^[a-z][a-z0-9_]{1,49}$/.test(clean)) {
+      toast.error("Key must be lowercase letters, digits and underscores (starts with letter, 2-50 chars)");
+      return;
+    }
     try {
-      await axios.post(`${API}/rbac/roles/${role.id}/clone`, { new_key: newKey });
-      toast.success(`Cloned as ${newKey}`);
+      await axios.post(`${API}/rbac/roles/${role.id}/clone`, {
+        new_key: clean,
+        display_name: (display_name || "").trim() || undefined,
+      });
+      toast.success(`Cloned as ${clean}`);
+      setCloneDialogRole(null);
       load();
     } catch (e) { toast.error(e?.response?.data?.detail || "Clone failed"); }
   };
@@ -260,6 +278,14 @@ export const RolesPermissionsPanel = ({ user, propertyId }) => {
 
       {explainRole && <ExplainRoleDialog role={explainRole} onClose={() => setExplainRole(null)} />}
       {compareResult && <CompareDialog result={compareResult} onClose={() => { setCompareResult(null); exitCompare(); }} />}
+      {cloneDialogRole && (
+        <CloneRoleDialog
+          state={cloneDialogRole}
+          onChange={setCloneDialogRole}
+          onClose={() => setCloneDialogRole(null)}
+          onSubmit={submitClone}
+        />
+      )}
     </div>
   );
 };
@@ -1082,6 +1108,79 @@ const DiffColumn = ({ title, badge, cats, tint, RiskDot, testid }) => {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+};
+
+
+// ====================== Clone Role Dialog ======================
+const CloneRoleDialog = ({ state, onChange, onClose, onSubmit }) => {
+  const { role, new_key, display_name } = state;
+  const permCount = role.permissions?.length || 0;
+  const keyValid = /^[a-z][a-z0-9_]{1,49}$/.test((new_key || "").trim().toLowerCase());
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose} data-testid="clone-role-dialog">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b border-stone-100 flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white flex items-center justify-center shadow">
+                <Copy className="w-4 h-4" />
+              </div>
+              <h3 className="text-base font-black text-stone-900">Clone Role</h3>
+            </div>
+            <p className="mt-1 text-[11px] text-stone-500">
+              Duplicates <b className="text-stone-800">{role.display_name || role.key}</b> with all {permCount} permission{permCount === 1 ? "" : "s"}.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-900" data-testid="clone-dialog-close">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500">New Key *</label>
+            <Input
+              value={new_key}
+              autoFocus
+              data-testid="clone-new-key"
+              onChange={(e) => onChange({ ...state, new_key: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_") })}
+              className={`mt-1 font-mono ${!keyValid && new_key ? "border-rose-300" : ""}`}
+              placeholder="lowercase_underscores"
+            />
+            <p className="mt-1 text-[10px] text-stone-400">Immutable internal identifier. Must be unique in this branch.</p>
+            {!keyValid && new_key && (
+              <p className="mt-1 text-[10px] text-rose-600">Start with a letter; 2-50 chars; a-z, 0-9 and _</p>
+            )}
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500">New Display Name</label>
+            <Input
+              value={display_name}
+              data-testid="clone-display-name"
+              onChange={(e) => onChange({ ...state, display_name: e.target.value })}
+              className="mt-1"
+              placeholder="e.g. Night Receptionist (copy)"
+            />
+            <p className="mt-1 text-[10px] text-stone-400">Friendly name shown throughout the app. Editable later.</p>
+          </div>
+          <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 text-[11px] text-stone-600">
+            <b className="text-stone-800">What's included:</b> all {permCount} granted permissions, template label, and global admin flag will be copied. The new role starts unassigned.
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-stone-100 flex items-center justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={onClose} data-testid="clone-cancel">Cancel</Button>
+          <Button
+            size="sm"
+            onClick={onSubmit}
+            disabled={!keyValid}
+            data-testid="clone-submit"
+            className="bg-gradient-to-br from-fuchsia-500 to-violet-600 hover:from-fuchsia-400 hover:to-violet-500 text-white"
+          >
+            <Copy className="w-3.5 h-3.5 mr-1.5" /> Clone Role
+          </Button>
+        </div>
       </div>
     </div>
   );

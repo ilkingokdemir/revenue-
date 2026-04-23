@@ -4,6 +4,40 @@
 
 
 
+### Iter 170 (Feb 2026): 🧾 HR/RBAC UX upgrades — Clone Role dialog + Contract end-date extension
+
+User approval: _"devam et"_ (Priority 2). Shipped two focused HR/RBAC UX improvements.
+
+**A. Clone Role — proper Dialog (replaces `window.prompt`)** (`components/dashboard/rbac/RolesPermissionsPanel.js`)
+- New `<CloneRoleDialog>` component replaces the old `window.prompt("...enter new key")` flow which couldn't accept a display name and had no validation UX.
+- Modal pre-fills: `new_key = <src_key>_copy`, `display_name = <src_display> (copy)`.
+- Live key validation (regex `^[a-z][a-z0-9_]{1,49}$`) — invalid state turns input border rose and shows inline hint. Auto-slugifies invalid chars to `_`.
+- "What's included" box explicitly states "all N granted permissions, template label, and global admin flag will be copied. The new role starts unassigned." — so admins know exactly what they're duplicating.
+- Violet gradient theme matches the RBAC panel aesthetic. Submits to existing `POST /api/rbac/roles/{id}/clone` with both `new_key` and `display_name` (previously only sent `new_key`).
+- Test IDs: `clone-role-dialog`, `clone-new-key`, `clone-display-name`, `clone-submit`, `clone-cancel`.
+
+**B. Extend Contract — renew signed/active contracts without breaking e-signature integrity** (`routes/contracts.py` + `StaffContractsPanel.js`)
+- Backend: new `POST /api/contracts/{id}/extend` endpoint. Admin-only. Accepts `{new_end_date: "YYYY-MM-DD", reason?: string}`.
+  - Rejects if contract status ∉ {signed, active, expired}.
+  - Rejects if `new_end_date < start_date`.
+  - Appends to `extensions[]` audit array: `{extended_at, extended_by, previous_end_date, new_end_date, reason}`.
+  - If contract was **expired** and new end is future-dated → auto-flips back to `active` (contract resurrection).
+  - Signature, signed_at, signed_full_name, signed_ip all untouched.
+- Frontend: new emerald **"Extend"** button in the action cell, visible only for signed/active/expired contracts for admins. Opens `<Dialog>` showing:
+  - Current end-date (readonly)
+  - New end-date (pre-filled `current + 12 months`)
+  - Reason textarea
+  - "Previously extended N times" badge when extensions history exists
+- Test IDs: `extend-{id}`, `extend-dialog`, `extend-new-date`, `extend-reason`, `extend-submit`.
+
+**Verified end-to-end via curl + Playwright:**
+- `POST /contracts/{id}/extend` — `2026-12-31 → 2028-06-30` with extension_count=1 ✓
+- Validation: past-date pre-start returned `400 "End date cannot be earlier than start date"` ✓
+- `POST /rbac/roles/{id}/clone` with `{new_key:"cloned_test_role_xyz", display_name:"Cloned Test Role XYZ"}` — persisted with `cloned_from_key` back-reference ✓
+- Playwright screenshots confirmed both dialogs render with correct pre-fills, validation states, and theme.
+
+
+
 ### Iter 169 (Feb 2026): 🧙‍♂️ Onboarding Wizard × Market Robot one-click fusion
 
 User approval: _"devam et"_ — continue with Priority-1 plan to fuse the 5-step First-Run Wizard with Market Robot auto-activation, so a new property goes from empty DB to live competitor scanning in ~3 minutes.

@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   FileSignature, Search, Plus, RefreshCw, Send, Copy, X, CheckCircle2,
   Clock, AlertTriangle, Ban, Pencil, Trash2, PoundSterling, Users,
-  CalendarClock, ShieldAlert, FileText, ExternalLink, Paperclip,
+  CalendarClock, ShieldAlert, FileText, ExternalLink, Paperclip, CalendarPlus,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -54,6 +54,7 @@ export const StaffContractsPanel = ({ propertyId, user }) => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [shareLink, setShareLink] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [extending, setExtending] = useState(null); // { contract, new_end_date, reason }
 
   const pid = propertyId || "all";
   const isAdmin = user?.role === "admin";
@@ -147,6 +148,30 @@ export const StaffContractsPanel = ({ propertyId, user }) => {
       toast.success("Contract terminated");
       load();
     } catch (e) { toast.error("Failed"); }
+    setBusy(null);
+  };
+
+  const openExtend = (c) => {
+    // Suggest +12 months by default, fallback to +6 months if no end date
+    const base = c.end_date ? new Date(c.end_date) : new Date();
+    base.setMonth(base.getMonth() + 12);
+    const iso = base.toISOString().slice(0, 10);
+    setExtending({ contract: c, new_end_date: iso, reason: "" });
+  };
+
+  const submitExtend = async () => {
+    if (!extending) return;
+    const { contract, new_end_date, reason } = extending;
+    if (!new_end_date) { toast.error("Pick a new end date"); return; }
+    setBusy(contract.id);
+    try {
+      const { data } = await axios.post(`${API}/contracts/${contract.id}/extend`, {
+        new_end_date, reason: reason || "",
+      });
+      toast.success(`Extended to ${data.new_end_date} (#${data.extension_count})`);
+      setExtending(null);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Extend failed"); }
     setBusy(null);
   };
 
@@ -317,6 +342,11 @@ export const StaffContractsPanel = ({ propertyId, user }) => {
                             <ExternalLink className="w-3 h-3 mr-1" />View Link
                           </Button>
                         )}
+                        {["signed", "active", "expired"].includes(c.computed_status) && isAdmin && (
+                          <Button size="sm" variant="outline" onClick={() => openExtend(c)} className="text-emerald-700 hover:bg-emerald-50 border-emerald-200" data-testid={`extend-${c.id}`}>
+                            <CalendarPlus className="w-3 h-3 mr-1" />Extend
+                          </Button>
+                        )}
                         {["signed", "active"].includes(c.computed_status) && isAdmin && (
                           <Button size="sm" variant="outline" onClick={() => terminate(c)} className="text-red-600 hover:bg-red-50" data-testid={`term-${c.id}`}>
                             <Ban className="w-3 h-3 mr-1" />Terminate
@@ -417,6 +447,60 @@ export const StaffContractsPanel = ({ propertyId, user }) => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Extend End Date Dialog */}
+      {extending && (
+        <Dialog open={true} onOpenChange={() => setExtending(null)}>
+          <DialogContent className="max-w-md" data-testid="extend-dialog">
+            <DialogHeader>
+              <DialogTitle className="text-base font-black flex items-center gap-2">
+                <CalendarPlus className="w-4 h-4 text-emerald-600" />
+                Extend Contract
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-[11px] text-emerald-900">
+                Extending <b>{extending.contract.staff_name}</b>'s contract. The original signature and terms stay intact — only the end date changes.
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] uppercase tracking-wider text-stone-500">Current end date</Label>
+                  <Input value={extending.contract.end_date || "— permanent —"} disabled className="mt-1 bg-stone-50" />
+                </div>
+                <div>
+                  <Label className="text-[10px] uppercase tracking-wider text-stone-500">New end date *</Label>
+                  <Input type="date"
+                    value={extending.new_end_date}
+                    onChange={(e) => setExtending({ ...extending, new_end_date: e.target.value })}
+                    data-testid="extend-new-date"
+                    className="mt-1" />
+                </div>
+              </div>
+              <div>
+                <Label className="text-[10px] uppercase tracking-wider text-stone-500">Reason / Note</Label>
+                <Textarea rows={2}
+                  value={extending.reason}
+                  onChange={(e) => setExtending({ ...extending, reason: e.target.value })}
+                  data-testid="extend-reason"
+                  className="mt-1"
+                  placeholder="e.g. Renewed for another 12 months after successful probation." />
+              </div>
+              {(extending.contract.extensions?.length || 0) > 0 && (
+                <div className="text-[10px] text-stone-500">
+                  Previously extended {extending.contract.extensions.length} time{extending.contract.extensions.length === 1 ? "" : "s"}.
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t">
+              <Button variant="outline" onClick={() => setExtending(null)}>Cancel</Button>
+              <Button onClick={submitExtend} disabled={busy === extending.contract.id}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="extend-submit">
+                {busy === extending.contract.id ? "Extending..." : "Extend Contract"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Share Link Dialog */}
       {shareLink && (

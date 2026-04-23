@@ -172,6 +172,43 @@ def create_contracts_router(db, require_roles):
         await db.staff_contracts.update_one({"id": contract_id}, {"$set": patch})
         return {"ok": True}
 
+    # -------- EXTEND END DATE (signed/active contracts only) --------
+    @router.post("/contracts/{contract_id}/extend")
+    async def extend_contract(contract_id: str, data: Dict,
+                              current_user: dict = Depends(require_roles("admin"))):
+        """Extend end_date on a signed/active contract without breaking signature integrity."""
+        existing = await db.staff_contracts.find_one({"id": contract_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(404, "Contract not found")
+        status = _compute_status(existing)
+        if status not in ("signed", "active", "expired"):
+            raise HTTPException(400, f"Can only extend signed/active/expired contracts (current: {status})")
+        new_end = (data or {}).get("new_end_date")
+        parsed = _parse_date(new_end)
+        if not parsed:
+            raise HTTPException(400, "new_end_date required in YYYY-MM-DD format")
+        start = _parse_date(existing.get("start_date"))
+        if start and parsed < start:
+            raise HTTPException(400, "End date cannot be earlier than start date")
+        now = datetime.now(timezone.utc).isoformat()
+        history = existing.get("extensions") or []
+        history.append({
+            "extended_at": now,
+            "extended_by": current_user.get("name", ""),
+            "previous_end_date": existing.get("end_date") or "",
+            "new_end_date": new_end,
+            "reason": (data or {}).get("reason", ""),
+        })
+        # If contract was expired and new end is in the future, flip back to active
+        status_update = {}
+        if status == "expired" and parsed >= date.today():
+            status_update["status"] = "active"
+        await db.staff_contracts.update_one(
+            {"id": contract_id},
+            {"$set": {"end_date": new_end, "extensions": history, "updated_at": now, **status_update}}
+        )
+        return {"ok": True, "new_end_date": new_end, "extension_count": len(history)}
+
     # -------- DELETE --------
     @router.delete("/contracts/{contract_id}")
     async def delete_contract(contract_id: str,

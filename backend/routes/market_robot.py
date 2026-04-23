@@ -2300,13 +2300,100 @@ Date range: {date_from} to {date_to}."""
     @router.post("/revenue/market-robot/{property_id}/scanner/stop")
     async def stop_scanner(property_id: str,
                            current_user: dict = Depends(require_roles("admin", "manager"))):
-        result = await scanner.stop()
+        result = await scanner.stop(property_id)
         return result
 
     @router.get("/revenue/market-robot/{property_id}/scanner/status")
     async def scanner_status(property_id: str,
                              current_user: dict = Depends(require_roles("admin", "manager"))):
-        return scanner.get_status()
+        return scanner.get_status(property_id)
+
+    @router.get("/revenue/market-robot/health")
+    async def scanner_health(current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Cross-branch health dashboard. Returns every scanner's current status + 24h restart count."""
+        now = datetime.now(timezone.utc)
+        cutoff_24h = (now - timedelta(hours=24)).isoformat()
+        props = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(50)
+        branches = []
+        for p in props:
+            pid = p["id"]
+            cfg = await db.market_robot_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+            geo = await db.market_robot_geo_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+            status = scanner.get_status(pid)
+            # 24h scan count from logs
+            scan_cnt = await db.market_robot_logs.count_documents(
+                {"property_id": pid, "scanned_at": {"$gte": cutoff_24h}}
+            )
+            # Latest 24h snapshot count
+            snap_cnt = await db.market_supply.count_documents(
+                {"property_id": pid, "scanned_at": {"$gte": cutoff_24h}}
+            )
+            # Last scan recency in minutes
+            last_scan = cfg.get("last_scan")
+            age_min = None
+            if last_scan:
+                try:
+                    last_dt = datetime.fromisoformat(last_scan.replace("Z", "+00:00"))
+                    age_min = int((now - last_dt).total_seconds() / 60)
+                except Exception:
+                    pass
+            # Derive health
+            healthy = True
+            warnings = []
+            if cfg.get("scanner_active") and not status.get("running"):
+                healthy = False
+                warnings.append("Scanner flagged active but in-memory is DOWN (watchdog should recover)")
+            if cfg.get("enabled") and age_min is not None and age_min > (cfg.get("scan_interval_minutes", 60) * 2):
+                healthy = False
+                warnings.append(f"City scan stale · last scan {age_min} min ago (interval {cfg.get('scan_interval_minutes')})")
+            if geo.get("enabled") and geo.get("last_scan"):
+                try:
+                    geo_age = int((now - datetime.fromisoformat(geo["last_scan"].replace("Z", "+00:00"))).total_seconds() / 60)
+                    if geo_age > (geo.get("scan_interval_minutes", 120) * 2):
+                        healthy = False
+                        warnings.append(f"Geo scan stale · last scan {geo_age} min ago")
+                except Exception:
+                    pass
+
+            branches.append({
+                "property_id": pid,
+                "property_name": p.get("name", pid),
+                "city_scanner": {
+                    "enabled": bool(cfg.get("enabled")),
+                    "scanner_active": bool(cfg.get("scanner_active")),
+                    "in_memory_running": bool(status.get("running")),
+                    "city": cfg.get("city"),
+                    "interval_min": cfg.get("scan_interval_minutes"),
+                    "last_scan": last_scan,
+                    "last_scan_age_min": age_min,
+                    "total_scans": cfg.get("total_scans", 0),
+                },
+                "geo_scanner": {
+                    "enabled": bool(geo.get("enabled")),
+                    "location": geo.get("location"),
+                    "interval_min": geo.get("scan_interval_minutes"),
+                    "last_scan": geo.get("last_scan"),
+                    "total_scans": geo.get("total_scans", 0),
+                },
+                "scans_24h": scan_cnt,
+                "snapshots_24h": snap_cnt,
+                "healthy": healthy,
+                "warnings": warnings,
+            })
+
+        total_active = sum(1 for b in branches if b["city_scanner"]["scanner_active"] or b["city_scanner"]["enabled"] or b["geo_scanner"]["enabled"])
+        total_healthy = sum(1 for b in branches if b["healthy"])
+        return {
+            "fetched_at": now.isoformat(),
+            "branches": branches,
+            "summary": {
+                "total_branches": len(branches),
+                "active_scanners": total_active,
+                "healthy": total_healthy,
+                "unhealthy": len(branches) - total_healthy,
+                "total_snapshots_24h": sum(b["snapshots_24h"] for b in branches),
+            },
+        }
 
     @router.get("/revenue/market-robot/{property_id}/market-pulse")
     async def market_pulse(property_id: str, days: int = 90,
@@ -2558,14 +2645,9 @@ Date range: {date_from} to {date_to}."""
                         except Exception as e:
                             logger.exception(f"Auto geo-scan failed for {pid}: {e}")
 
-                # === Smart Scanner watchdog — if DB says active but scanner not running, restart ===
+                # === Smart Scanner watchdog — check all properties (multi-instance) ===
                 try:
-                    active_cfg = await db.market_robot_config.find_one(
-                        {"scanner_active": True}, {"_id": 0, "property_id": 1}
-                    )
-                    if active_cfg and not scanner.running:
-                        logger.info(f"🔁 Smart Scanner watchdog restart for {active_cfg['property_id']}")
-                        await scanner.start(active_cfg["property_id"])
+                    await scanner.watchdog()
                 except Exception as e:
                     logger.warning(f"Scanner watchdog error: {e}")
 

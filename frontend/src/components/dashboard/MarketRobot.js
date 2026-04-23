@@ -12,6 +12,7 @@ import { PerformanceReport } from "./PerformanceReport";
 import { MarketDemandDashboard } from "./MarketDemandDashboard";
 import { DemandRadar } from "./DemandRadar";
 import NeighborhoodScanPanel from "./NeighborhoodScanPanel";
+import MarketRobotHealthWidget from "./MarketRobotHealthWidget";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -179,6 +180,9 @@ export const MarketRobot = ({ propertyId }) => {
       {/* Dashboard */}
       {subTab === "dashboard" && (
         <div className="space-y-6">
+          {/* Cross-Branch Scanner Health */}
+          <MarketRobotHealthWidget />
+
           {/* Scan Result Banner */}
           {scanResult && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4" data-testid="market-robot-result">

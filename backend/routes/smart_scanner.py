@@ -256,16 +256,73 @@ class SmartScanner:
             await asyncio.sleep(60)
 
 
-# Singleton scanner instance
-_scanner = None
+# Multi-instance registry — one SmartScanner per property_id so branches can run in parallel
+_scanners = {}
 
 
-def get_scanner():
-    global _scanner
-    return _scanner
+def get_scanner(property_id=None):
+    global _scanners
+    if property_id is None:
+        return _scanners
+    return _scanners.get(property_id)
 
 
 def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None):
-    global _scanner
-    _scanner = SmartScanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn)
-    return _scanner
+    """Returns a manager object with .get(pid) / .start(pid) / .stop(pid) / .get_status(pid) / .resume_if_active()
+    Each property gets its own SmartScanner instance on first use."""
+    global _scanners
+
+    class ScannerManager:
+        def __init__(self):
+            self.db = db
+
+        def _get_or_create(self, pid):
+            if pid not in _scanners:
+                _scanners[pid] = SmartScanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn)
+            return _scanners[pid]
+
+        async def start(self, pid):
+            return await self._get_or_create(pid).start(pid)
+
+        async def stop(self, pid):
+            s = _scanners.get(pid)
+            if not s:
+                return {"status": "not_running"}
+            return await s.stop()
+
+        def get_status(self, pid):
+            s = _scanners.get(pid)
+            if not s:
+                return {"running": False, "stats": {}, "tiers": TIERS,
+                        "event_scan_interval_mins": EVENT_SCAN_INTERVAL_MINS}
+            return s.get_status()
+
+        async def resume_if_active(self):
+            """Called on backend startup — resumes scanner for every property with scanner_active=True."""
+            try:
+                active = await db.market_robot_config.find({"scanner_active": True},
+                                                           {"_id": 0, "property_id": 1}).to_list(500)
+                for row in active:
+                    pid = row.get("property_id")
+                    if not pid:
+                        continue
+                    logger.info(f"🔁 Smart Scanner auto-resume for {pid} (was active before restart)")
+                    await self.start(pid)
+            except Exception as e:
+                logger.warning(f"Scanner resume failed: {e}")
+
+        # Watchdog: DB active but in-memory not running → restart
+        async def watchdog(self):
+            try:
+                active = await db.market_robot_config.find({"scanner_active": True},
+                                                           {"_id": 0, "property_id": 1}).to_list(500)
+                for row in active:
+                    pid = row.get("property_id")
+                    s = _scanners.get(pid)
+                    if not s or not s.running:
+                        logger.info(f"🔁 Smart Scanner watchdog restart for {pid}")
+                        await self.start(pid)
+            except Exception as e:
+                logger.warning(f"Scanner watchdog error: {e}")
+
+    return ScannerManager()

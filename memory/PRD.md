@@ -3,6 +3,23 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+
+### Iter 169 (Feb 2026): 🧙‍♂️ Onboarding Wizard × Market Robot one-click fusion
+
+User approval: _"devam et"_ — continue with Priority-1 plan to fuse the 5-step First-Run Wizard with Market Robot auto-activation, so a new property goes from empty DB to live competitor scanning in ~3 minutes.
+
+**Frontend** (`components/dashboard/OnboardingWizard.js`)
+- **Step 1 (Your Property) — auto-currency from city:** The City input now uses `getCurrencyInfo()` from `lib/currency.js`. Typing "Zurich" → Primary Currency dropdown auto-flips to `CHF`; "Istanbul" → `TRY`; "Tokyo" → `JPY`. A small purple sparkle hint `✨ Auto-detected: CHF (CHF)` renders under the city field. Users can still manually override.
+- **Finished screen — new Market Robot activation card:** sits between the Demo Seeder and "Go to Dashboard" CTA. Shows 3 info chips (City · Currency · `Every 60 min · 30 days ahead`). Pink **"Start Market Robot"** button (`data-testid="market-robot-start-btn"`) calls `PUT /api/revenue/market-robot/{pid}/config` with `{enabled: true, scanner_active: true, city, currency, scan_interval_minutes: 60, days_ahead: 30}` and triggers an immediate first scan via `POST /scan`. When already running, the button is replaced by an emerald "Market Robot Active" pill + a pulsing "SCANNING LIVE" badge next to the title.
+- Turkish success toast: `Market Robot <city> için aktif edildi (<currency>)`.
+
+**Backend** — no new code; leverages existing `PUT /api/revenue/market-robot/{pid}/config` (already auto-syncs property currency from scan city as of Iter 168 work).
+
+**Verified end-to-end via Playwright on `aldgate-flats`:**
+- City="Zurich" typed in Step 1 → currency dropdown flipped to `CHF`, auto-detected hint shown.
+- Clicked "Start Market Robot" on Finished screen → toast `Market Robot London için aktif edildi (GBP)` → "SCANNING LIVE" badge + "Market Robot Active" emerald pill rendered.
+
+
 ### Iter 168 (Feb 2026): 🏘️ Neighborhood Scan — Value Labels on Chart + All-Branches Aggregation
 
 User request (TR): _"Neighborhood Supply & Prices · Next 30 days - üstlerine yazılmamış, a ornek avprice altında fiyat"_ — user wanted the actual price values visible ON the chart itself (labels above each data point), not just in a table.

@@ -4,7 +4,9 @@ import { toast } from "sonner";
 import {
   Building2, BedDouble, Tags, Receipt, CheckCircle2, Circle, Plus, Trash2,
   Sparkles, ArrowRight, ArrowLeft, PartyPopper, Loader2, MapPin, Banknote,
+  Radar, Zap,
 } from "lucide-react";
+import { getCurrencyInfo } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -265,7 +267,28 @@ export const OnboardingWizard = ({ propertyId = "default", onClose }) => {
                 <input value={property.country} onChange={e => setProperty({ ...property, country: e.target.value })} className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
               </F>
               <F label={<><MapPin className="inline w-3 h-3" /> City</>}>
-                <input value={property.city} onChange={e => setProperty({ ...property, city: e.target.value })} className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" placeholder="London" />
+                <input value={property.city}
+                  data-testid="onb-prop-city"
+                  onChange={e => {
+                    const city = e.target.value;
+                    const info = getCurrencyInfo(city);
+                    setProperty(p => ({
+                      ...p,
+                      city,
+                      // Auto-set currency only when a known city is detected
+                      currency: info.code !== "GBP" || /london|manchester|edinburgh|uk|united kingdom|england/i.test(city)
+                        ? info.code
+                        : p.currency,
+                    }));
+                  }}
+                  className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" placeholder="London, Zurich, Istanbul, Tokyo..." />
+                {property.city && (
+                  <div className="mt-1.5 text-[10px] text-stone-500 flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-fuchsia-500" />
+                    Auto-detected: <b className="text-stone-900">{getCurrencyInfo(property.city).code}</b>
+                    <span className="text-stone-400">({getCurrencyInfo(property.city).symbol.trim() || "—"})</span>
+                  </div>
+                )}
               </F>
               <F label={<><Banknote className="inline w-3 h-3" /> Primary Currency</>}>
                 <select value={property.currency} onChange={e => setProperty({ ...property, currency: e.target.value })}
@@ -411,6 +434,9 @@ const FinishedScreen = ({ propertyId, onClose }) => {
   const [demoCount, setDemoCount] = useState(0);
   const [seeding, setSeeding] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [mrConfig, setMrConfig] = useState(null);
+  const [mrStarting, setMrStarting] = useState(false);
+  const [propCity, setPropCity] = useState("");
 
   const loadDemoCount = useCallback(async () => {
     try {
@@ -418,7 +444,43 @@ const FinishedScreen = ({ propertyId, onClose }) => {
       setDemoCount(data.demo_booking_count || 0);
     } catch { /* silent */ }
   }, [propertyId]);
-  useEffect(() => { loadDemoCount(); }, [loadDemoCount]);
+
+  const loadMarketRobot = useCallback(async () => {
+    try {
+      const [cfg, props] = await Promise.all([
+        axios.get(`${API}/revenue/market-robot/${propertyId}/config`).then(r => r.data).catch(() => null),
+        axios.get(`${API}/properties`).then(r => r.data).catch(() => []),
+      ]);
+      setMrConfig(cfg);
+      const me = (props || []).find(p => p.id === propertyId);
+      setPropCity(me?.city || cfg?.city || "London");
+    } catch { /* silent */ }
+  }, [propertyId]);
+
+  useEffect(() => { loadDemoCount(); loadMarketRobot(); }, [loadDemoCount, loadMarketRobot]);
+
+  const startMarketRobot = async () => {
+    setMrStarting(true);
+    try {
+      const city = propCity || mrConfig?.city || "London";
+      const info = getCurrencyInfo(city);
+      await axios.put(`${API}/revenue/market-robot/${propertyId}/config`, {
+        enabled: true,
+        scanner_active: true,
+        city,
+        currency: info.code,
+        scan_interval_minutes: 60,
+        days_ahead: 30,
+        auto_pricing: false,
+      });
+      // Trigger a first scan right away so the user sees data immediately
+      try { await axios.post(`${API}/revenue/market-robot/${propertyId}/scan`, { days_ahead: 30 }); } catch { /* non-fatal */ }
+      toast.success(`Market Robot ${city} için aktif edildi (${info.code})`);
+      loadMarketRobot();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Market Robot başlatılamadı");
+    } finally { setMrStarting(false); }
+  };
 
   const seed = async (count) => {
     setSeeding(true);
@@ -502,6 +564,57 @@ const FinishedScreen = ({ propertyId, onClose }) => {
                 <CheckCircle2 className="w-3 h-3 inline text-emerald-500" /> {demoCount} demo booking{demoCount === 1 ? "" : "s"} currently in the system.
               </p>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Market Robot activation */}
+      <div className="mt-5 bg-white border border-stone-200 rounded-3xl p-6 md:p-7" data-testid="market-robot-activation">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-600 text-white flex items-center justify-center shadow-lg">
+            <Radar className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-black text-stone-900">Activate Market Robot</h2>
+              {mrConfig?.enabled && mrConfig?.scanner_active && (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" /> Scanning Live
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-stone-500 mt-1">
+              Start continuous competitor scanning for <b className="text-stone-900">{propCity || "your city"}</b>.
+              Detects pricing gaps vs Booking.com listings, overlays your occupancy & rate on top of market data,
+              and surfaces revenue opportunities — updated every 60 minutes in the background.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 mt-4">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fuchsia-50 border border-fuchsia-200 text-fuchsia-700 text-[11px] font-bold">
+                <MapPin className="w-3.5 h-3.5" /> {propCity || "—"}
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 text-[11px] font-bold">
+                <Banknote className="w-3.5 h-3.5" /> {getCurrencyInfo(propCity).code}
+              </div>
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-50 border border-stone-200 text-stone-600 text-[11px] font-bold">
+                Every 60 min · 30 days ahead
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-4">
+              {mrConfig?.enabled && mrConfig?.scanner_active ? (
+                <button disabled
+                  data-testid="market-robot-active-pill"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow cursor-default">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Market Robot Active
+                </button>
+              ) : (
+                <button onClick={startMarketRobot} disabled={mrStarting}
+                  data-testid="market-robot-start-btn"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-600 hover:from-fuchsia-400 hover:to-pink-500 text-white text-xs font-bold disabled:opacity-50 shadow hover:-translate-y-0.5 transition-transform">
+                  {mrStarting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                  Start Market Robot
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

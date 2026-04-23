@@ -628,6 +628,177 @@ def create_market_robot_router(db, require_roles):
         cfg = await db.market_robot_geo_config.find_one({"property_id": property_id}, {"_id": 0})
         return cfg
 
+    # ==================== COMPETITIVE PRICING RULE ====================
+
+    @router.get("/revenue/market-robot/{property_id}/competitive-config")
+    async def get_competitive_config(property_id: str,
+                                     current_user: dict = Depends(require_roles("admin", "manager"))):
+        cfg = await db.market_robot_competitive_config.find_one({"property_id": property_id}, {"_id": 0}) or {
+            "property_id": property_id,
+            "enabled": False,
+            "target_mode": "below_avg",      # below_avg | match_avg | below_min | match_min | above_min
+            "target_offset_pct": -3.0,       # e.g. -3 = 3% below reference
+            "min_rate_pct": 60,              # floor: % of base rate
+            "max_rate_pct": 250,             # ceiling: % of base rate
+            "auto_apply": False,             # if true, auto-writes to rate_overrides on every scan
+            "only_apply_if_demand_gte": 60,  # only apply when unavail% >= this threshold
+            "last_apply_at": None,
+            "last_apply_count": 0,
+        }
+        return cfg
+
+    @router.put("/revenue/market-robot/{property_id}/competitive-config")
+    async def update_competitive_config(property_id: str, data: Dict,
+                                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        allowed_modes = {"below_avg", "match_avg", "below_min", "match_min", "above_min"}
+        mode = data.get("target_mode", "below_avg")
+        if mode not in allowed_modes:
+            mode = "below_avg"
+        payload = {
+            "property_id": property_id,
+            "enabled": bool(data.get("enabled", False)),
+            "target_mode": mode,
+            "target_offset_pct": float(data.get("target_offset_pct", -3.0)),
+            "min_rate_pct": max(10, min(100, int(data.get("min_rate_pct", 60)))),
+            "max_rate_pct": max(100, min(500, int(data.get("max_rate_pct", 250)))),
+            "auto_apply": bool(data.get("auto_apply", False)),
+            "only_apply_if_demand_gte": max(0, min(100, int(data.get("only_apply_if_demand_gte", 60)))),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.market_robot_competitive_config.update_one(
+            {"property_id": property_id},
+            {"$set": payload},
+            upsert=True,
+        )
+        return await db.market_robot_competitive_config.find_one({"property_id": property_id}, {"_id": 0})
+
+    async def _compute_competitive_recommendations(property_id: str, days: int = 30):
+        """For each upcoming date with geo data, compute a recommended rate per room type
+        based on the competitive pricing rule + guardrails.
+        """
+        cfg = await db.market_robot_competitive_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        mode = cfg.get("target_mode", "below_avg")
+        offset = float(cfg.get("target_offset_pct", -3.0))
+        min_pct = int(cfg.get("min_rate_pct", 60))
+        max_pct = int(cfg.get("max_rate_pct", 250))
+        demand_gate = int(cfg.get("only_apply_if_demand_gte", 0))
+
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+        end_str = (now + timedelta(days=days)).strftime("%Y-%m-%d")
+
+        pipeline = [
+            {"$match": {"property_id": property_id, "scan_type": "geo"}},
+            {"$sort": {"scanned_at": -1}},
+            {"$group": {"_id": "$date", "doc": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$doc"}},
+            {"$sort": {"date": 1}},
+            {"$project": {"_id": 0}},
+        ]
+        snaps = await db.market_supply.aggregate(pipeline).to_list(500)
+        snaps = [s for s in snaps if today_str <= s.get("date", "") <= end_str]
+
+        room_types = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(50)
+        if not room_types:
+            room_types = [{"id": "default", "name": "Standard", "base_rate": 130}]
+
+        recs = []
+        for snap in snaps:
+            avg = snap.get("avg_price", 0) or 0
+            mn = snap.get("min_price", 0) or 0
+            unavail = snap.get("unavailable_pct", 0) or 0
+            if avg <= 0:
+                continue
+
+            # Pick reference price by mode
+            if mode in ("below_avg", "match_avg"):
+                ref = avg
+            elif mode in ("below_min", "match_min", "above_min"):
+                ref = mn if mn > 0 else avg
+            else:
+                ref = avg
+
+            # Apply offset (positive or negative %)
+            suggested = ref * (1 + offset / 100.0)
+
+            gated = unavail < demand_gate
+
+            for rt in room_types:
+                base = float(rt.get("base_rate", 130) or 130)
+                floor_rate = round(base * min_pct / 100, 2)
+                ceil_rate = round(base * max_pct / 100, 2)
+                rec_rate = round(max(floor_rate, min(ceil_rate, suggested)), 2)
+                current = await db.rate_overrides.find_one(
+                    {"property_id": property_id, "date": snap["date"], "room_type_id": rt.get("id", "")},
+                    {"_id": 0, "custom_rate": 1},
+                )
+                current_rate = (current or {}).get("custom_rate", base)
+                delta_pct = ((rec_rate - current_rate) / current_rate * 100) if current_rate else 0
+                recs.append({
+                    "date": snap["date"],
+                    "room_type_id": rt.get("id", ""),
+                    "room_type_name": rt.get("name", ""),
+                    "base_rate": base,
+                    "current_rate": round(current_rate, 2),
+                    "market_avg": avg,
+                    "market_min": mn,
+                    "reference": round(ref, 2),
+                    "suggested_rate": rec_rate,
+                    "delta_vs_current_pct": round(delta_pct, 1),
+                    "demand_pct": unavail,
+                    "skipped_low_demand": gated,
+                    "clamped": rec_rate != round(suggested, 2),
+                })
+        return recs, cfg
+
+    @router.get("/revenue/market-robot/{property_id}/competitive-recommendations")
+    async def get_competitive_recommendations(property_id: str, days: int = 30,
+                                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        recs, cfg = await _compute_competitive_recommendations(property_id, days)
+        return {"property_id": property_id, "config": cfg, "recommendations": recs, "count": len(recs)}
+
+    @router.post("/revenue/market-robot/{property_id}/apply-competitive-pricing")
+    async def apply_competitive_pricing(property_id: str, data: Dict = {},
+                                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Apply (write rate_overrides) competitive recommendations.
+        Body (optional): { dates: ["2026-05-01", ...], room_type_ids: ["std",...] }
+        If omitted, applies ALL currently-valid recommendations (skipping low-demand ones).
+        """
+        days = int(data.get("days", 30))
+        filter_dates = set(data.get("dates") or [])
+        filter_rooms = set(data.get("room_type_ids") or [])
+        recs, _ = await _compute_competitive_recommendations(property_id, days)
+
+        applied = []
+        for r in recs:
+            if r["skipped_low_demand"]:
+                continue
+            if filter_dates and r["date"] not in filter_dates:
+                continue
+            if filter_rooms and r["room_type_id"] not in filter_rooms:
+                continue
+            await db.rate_overrides.update_one(
+                {"property_id": property_id, "date": r["date"], "room_type_id": r["room_type_id"]},
+                {"$set": {
+                    "property_id": property_id,
+                    "room_type_id": r["room_type_id"],
+                    "date": r["date"],
+                    "custom_rate": r["suggested_rate"],
+                    "set_by": "competitive-rule",
+                    "reason": f"Competitive {r['reference']}→{r['suggested_rate']} (market avg £{r['market_avg']}, demand {r['demand_pct']}%)",
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+            applied.append({"date": r["date"], "room": r["room_type_name"], "rate": r["suggested_rate"]})
+
+        await db.market_robot_competitive_config.update_one(
+            {"property_id": property_id},
+            {"$set": {"last_apply_at": datetime.now(timezone.utc).isoformat(), "last_apply_count": len(applied)}},
+            upsert=True,
+        )
+        return {"applied": len(applied), "items": applied[:50]}
+
     async def _do_scan(property_id: str, data: Dict):
         """Core scan logic — callable from HTTP endpoint and background loop.
         Supports two modes:
@@ -732,6 +903,40 @@ def create_market_robot_router(db, require_roles):
             if auto_pricing and snapshots:
                 applied = await _apply_auto_pricing(db, property_id, snapshots)
 
+            # Competitive rule auto-apply (geo scans → triggers the competitive pricing rule if enabled)
+            competitive_applied = 0
+            if is_geo:
+                comp_cfg = await db.market_robot_competitive_config.find_one(
+                    {"property_id": property_id, "enabled": True, "auto_apply": True}, {"_id": 0})
+                if comp_cfg:
+                    try:
+                        recs, _ = await _compute_competitive_recommendations(property_id, days=days_ahead)
+                        for r in recs:
+                            if r["skipped_low_demand"]:
+                                continue
+                            await db.rate_overrides.update_one(
+                                {"property_id": property_id, "date": r["date"], "room_type_id": r["room_type_id"]},
+                                {"$set": {
+                                    "property_id": property_id,
+                                    "room_type_id": r["room_type_id"],
+                                    "date": r["date"],
+                                    "custom_rate": r["suggested_rate"],
+                                    "set_by": "competitive-rule-auto",
+                                    "reason": f"Auto competitive {r['reference']}→{r['suggested_rate']} (mkt £{r['market_avg']}, demand {r['demand_pct']}%)",
+                                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                                }},
+                                upsert=True,
+                            )
+                            competitive_applied += 1
+                        if competitive_applied > 0:
+                            await db.market_robot_competitive_config.update_one(
+                                {"property_id": property_id},
+                                {"$set": {"last_apply_at": datetime.now(timezone.utc).isoformat(),
+                                          "last_apply_count": competitive_applied}},
+                            )
+                    except Exception as e:
+                        logger.warning(f"Competitive auto-apply failed for {property_id}: {e}")
+
             # Update config — only for city scans (geo scans are per-request)
             if not is_geo:
                 await db.market_robot_config.update_one(
@@ -767,6 +972,7 @@ def create_market_robot_router(db, require_roles):
             "dates_scanned": len(snapshots),
             "snapshots": snapshots[:10],
             "auto_adjustments": applied[:10],
+            "competitive_applied": competitive_applied if is_geo else 0,
             "status": "completed",
         }
 

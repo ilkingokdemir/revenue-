@@ -13,6 +13,7 @@ import {
   PoundSterling, Activity, ToggleLeft, ToggleRight, Save,
 } from "lucide-react";
 import { toast } from "sonner";
+import CompetitivePricingPanel from "./CompetitivePricingPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -376,6 +377,22 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 );
               })}
             </svg>
+          </div>
+        </div>
+      )}
+
+      {/* Competitive Pricing Rule */}
+      {propertyId && propertyId !== "all" && snapshots.length > 0 && (
+        <CompetitivePricingPanel propertyId={propertyId} />
+      )}
+      {propertyId === "all" && snapshots.length > 0 && (
+        <div className="bg-violet-500/5 border border-violet-500/30 rounded-2xl p-4 flex items-start gap-3" data-testid="cp-all-branches-hint">
+          <div className="w-9 h-9 rounded-lg bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+            <PoundSterling className="w-4 h-4 text-violet-400" />
+          </div>
+          <div>
+            <h4 className="text-sm font-black text-violet-300">Rekabetçi Fiyat Kuralı</h4>
+            <p className="text-xs text-stone-400 mt-1">Bu özelliği kullanmak için üst menüden belirli bir şube seçin — aggregated görünümde oda-tipi bazlı rate kuralı yoktur.</p>
           </div>
         </div>
       )}

@@ -9,7 +9,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Target, Loader2, Play, Save, CheckCircle2, AlertTriangle, History, Bot, User } from "lucide-react";
+import { Target, Loader2, Play, Save, CheckCircle2, AlertTriangle, History, Bot, User, Mail, Send, X, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -32,6 +32,9 @@ export default function CompetitivePricingPanel({ propertyId }) {
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState(null);
+  const [newEmail, setNewEmail] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +73,39 @@ export default function CompetitivePricingPanel({ propertyId }) {
       load();
     } catch { toast.error("Uygulama başarısız"); }
     setApplying(false);
+  };
+
+  const addEmail = () => {
+    const e = (newEmail || "").trim();
+    if (!e || !e.includes("@")) return toast.error("Geçerli bir e-posta girin");
+    if ((cfg.email_recipients || []).includes(e)) return toast.error("E-posta zaten eklenmiş");
+    setCfg({ ...cfg, email_recipients: [...(cfg.email_recipients || []), e] });
+    setNewEmail("");
+  };
+
+  const removeEmail = (e) => {
+    setCfg({ ...cfg, email_recipients: (cfg.email_recipients || []).filter(x => x !== e) });
+  };
+
+  const previewEmail = async () => {
+    try {
+      const { data } = await axios.get(`${API}/revenue/market-robot/${propertyId}/weekly-summary?days=7`);
+      setPreviewHtml(data.html);
+    } catch { toast.error("Önizleme alınamadı"); }
+  };
+
+  const sendEmail = async () => {
+    if (!cfg.email_recipients || cfg.email_recipients.length === 0) {
+      return toast.error("Önce alıcı e-posta ekleyin");
+    }
+    setSendingEmail(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/send-weekly-summary`, { days: 7 });
+      toast.success(`Haftalık özet ${data.recipients.length} alıcıya gönderildi`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Gönderim başarısız — Resend API key gerekli olabilir");
+    }
+    setSendingEmail(false);
   };
 
   if (!cfg) {
@@ -228,6 +264,71 @@ export default function CompetitivePricingPanel({ propertyId }) {
           {recs.length > 10 && (
             <div className="text-center py-2 text-[10px] text-stone-500 bg-stone-950/50">+ {recs.length - 10} daha (Şimdi Uygula'ya basınca hepsi işlenir)</div>
           )}
+        </div>
+      )}
+
+      {/* Weekly Email Summary */}
+      <div className="pt-3 border-t border-stone-800" data-testid="cp-email-section">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <Mail className="w-4 h-4 text-cyan-400" />
+            <h4 className="text-xs font-black text-cyan-300">Haftalık E-posta Özeti</h4>
+            <span className="text-[10px] text-stone-500">Pazartesi 09:00 otomatik · dilediğiniz zaman manuel gönder</span>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={cfg.weekly_email_enabled || false}
+              onChange={e => setCfg({ ...cfg, weekly_email_enabled: e.target.checked })}
+              className="accent-cyan-500" data-testid="cp-weekly-enabled" />
+            <span className="text-xs text-stone-300">Otomatik gönder</span>
+          </label>
+        </div>
+        {/* Recipient chips */}
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          {(cfg.email_recipients || []).map(e => (
+            <span key={e} className="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-[11px] text-cyan-200" data-testid={`cp-recipient-${e}`}>
+              <Mail className="w-3 h-3" />
+              {e}
+              <button onClick={() => removeEmail(e)} className="p-0.5 rounded-full hover:bg-rose-500/20 text-rose-300"><X className="w-3 h-3" /></button>
+            </span>
+          ))}
+          {(cfg.email_recipients || []).length === 0 && (
+            <span className="text-[11px] text-stone-500 italic">Henüz alıcı yok — aşağıya e-posta ekleyin.</span>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input type="email" placeholder="alici@example.com" value={newEmail}
+            onChange={e => setNewEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addEmail()}
+            className="flex-1 min-w-[200px] px-3 py-2 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100"
+            data-testid="cp-email-input" />
+          <button onClick={addEmail} className="px-3 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 font-bold rounded-lg border border-cyan-500/40 text-xs" data-testid="cp-email-add">
+            + Ekle
+          </button>
+          <button onClick={previewEmail} className="flex items-center gap-1.5 px-3 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold rounded-lg text-xs" data-testid="cp-email-preview">
+            <Eye className="w-3.5 h-3.5" /> Önizle
+          </button>
+          <button onClick={sendEmail} disabled={sendingEmail || (cfg.email_recipients || []).length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-black rounded-lg text-xs shadow disabled:opacity-50"
+            data-testid="cp-email-send">
+            {sendingEmail ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+            Şimdi Gönder
+          </button>
+        </div>
+        {cfg.last_weekly_email_at && (
+          <p className="text-[10px] text-emerald-400 mt-2">✓ Son gönderim: {new Date(cfg.last_weekly_email_at).toLocaleString("tr-TR")}</p>
+        )}
+      </div>
+
+      {/* Email preview modal */}
+      {previewHtml && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-6" onClick={() => setPreviewHtml(null)} data-testid="cp-email-preview-modal">
+          <div className="bg-stone-900 border border-stone-700 rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-stone-800">
+              <h3 className="text-sm font-black text-cyan-300">E-posta Önizleme</h3>
+              <button onClick={() => setPreviewHtml(null)} className="p-1.5 rounded-lg hover:bg-stone-800"><X className="w-4 h-4 text-stone-400" /></button>
+            </div>
+            <iframe title="preview" srcDoc={previewHtml} className="w-full flex-1 bg-white" />
+          </div>
         </div>
       )}
 

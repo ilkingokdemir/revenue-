@@ -455,7 +455,7 @@ api_router.include_router(revenue_copilot_router)
 revenue_exports_router = create_revenue_exports_router(db, require_roles)
 api_router.include_router(revenue_exports_router)
 
-market_robot_router = create_market_robot_router(db, require_roles)
+market_robot_router = create_market_robot_router(db, require_roles, resend)
 api_router.include_router(market_robot_router)
 
 dynamic_pricing_router = create_dynamic_pricing_router(db, require_roles)

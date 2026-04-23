@@ -2,7 +2,7 @@
 Market Robot — Scrapes Booking.com market supply data and auto-adjusts hotel rates.
 Tracks availability for 90 days, detects demand changes, and feeds into Smart Pricing.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional
 import uuid
@@ -137,7 +137,7 @@ def _price_stats(prices):
     }
 
 
-def create_market_robot_router(db, require_roles):
+def create_market_robot_router(db, require_roles, resend=None):
     router = APIRouter()
 
     async def _scrape_booking_date(location: str, checkin: str, checkout: str, language: str = "en-gb",
@@ -642,6 +642,9 @@ def create_market_robot_router(db, require_roles):
             "max_rate_pct": 250,             # ceiling: % of base rate
             "auto_apply": False,             # if true, auto-writes to rate_overrides on every scan
             "only_apply_if_demand_gte": 60,  # only apply when unavail% >= this threshold
+            "email_recipients": [],          # weekly summary recipients
+            "weekly_email_enabled": False,   # auto-send Mondays 09:00
+            "last_weekly_email_at": None,
             "last_apply_at": None,
             "last_apply_count": 0,
         }
@@ -663,6 +666,8 @@ def create_market_robot_router(db, require_roles):
             "max_rate_pct": max(100, min(500, int(data.get("max_rate_pct", 250)))),
             "auto_apply": bool(data.get("auto_apply", False)),
             "only_apply_if_demand_gte": max(0, min(100, int(data.get("only_apply_if_demand_gte", 60)))),
+            "email_recipients": [str(e).strip() for e in (data.get("email_recipients") or []) if str(e).strip()],
+            "weekly_email_enabled": bool(data.get("weekly_email_enabled", False)),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.market_robot_competitive_config.update_one(
@@ -834,6 +839,210 @@ def create_market_robot_router(db, require_roles):
         entries = await cursor.to_list(500)
         total_count = await db.competitive_rate_audit.count_documents({"property_id": property_id})
         return {"property_id": property_id, "entries": entries, "total_ever": total_count}
+
+    # ==================== WEEKLY EMAIL SUMMARY ====================
+
+    async def _build_weekly_summary(property_id: str, days: int = 7):
+        """Aggregate a weekly summary of Market Robot activity for one property.
+        Returns dict with stats + prebuilt HTML email body.
+        """
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days))
+        cutoff_iso = cutoff.isoformat()
+
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {"name": property_id}
+
+        # Audit entries (rate changes from competitive rule)
+        entries = await db.competitive_rate_audit.find(
+            {"property_id": property_id, "applied_at": {"$gte": cutoff_iso}},
+            {"_id": 0},
+        ).sort("applied_at", -1).limit(1000).to_list(1000)
+
+        auto_cnt = sum(1 for e in entries if e.get("set_by") == "auto-scan")
+        manual_cnt = sum(1 for e in entries if e.get("set_by") == "manual-apply")
+        deltas = [float(e.get("delta_pct", 0) or 0) for e in entries]
+        avg_delta = round(sum(deltas) / len(deltas), 1) if deltas else 0.0
+        biggest = max(entries, key=lambda e: abs(float(e.get("delta_pct", 0) or 0)), default=None)
+
+        # Geo scans in last N days
+        geo_count = await db.market_supply.count_documents(
+            {"property_id": property_id, "scan_type": "geo", "scanned_at": {"$gte": cutoff_iso}}
+        )
+        # City scans in last N days
+        city_count = await db.market_supply.count_documents(
+            {"property_id": property_id, "scan_type": "city", "scanned_at": {"$gte": cutoff_iso}}
+        )
+
+        # Market snapshot (latest upcoming 7 days)
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        upcoming = await db.market_supply.aggregate([
+            {"$match": {"property_id": property_id, "scan_type": "geo", "date": {"$gte": today_str}}},
+            {"$sort": {"scanned_at": -1}},
+            {"$group": {"_id": "$date", "doc": {"$first": "$$ROOT"}}},
+            {"$replaceRoot": {"newRoot": "$doc"}},
+            {"$sort": {"date": 1}},
+            {"$limit": 7},
+            {"$project": {"_id": 0}},
+        ]).to_list(7)
+        avg_mkt_price = round(sum(s.get("avg_price", 0) or 0 for s in upcoming) / len(upcoming), 2) if upcoming else 0
+        avg_demand = round(sum(s.get("unavailable_pct", 0) or 0 for s in upcoming) / len(upcoming), 1) if upcoming else 0
+
+        # Build HTML
+        prop_name = prop.get("name", property_id)
+        rows_html = ""
+        for e in entries[:15]:
+            up = float(e.get("delta_pct", 0) or 0) > 0
+            delta_color = "#f87171" if up else "#34d399" if float(e.get("delta_pct", 0) or 0) < 0 else "#a8a29e"
+            src_color = "#67e8f9" if e.get("set_by") == "auto-scan" else "#c4b5fd"
+            src_label = "Auto" if e.get("set_by") == "auto-scan" else "Manual"
+            rows_html += (
+                f"<tr style='border-bottom:1px solid #292524;'>"
+                f"<td style='padding:8px;color:#d6d3d1;font-size:12px;'>{e.get('date','')}</td>"
+                f"<td style='padding:8px;color:#a8a29e;font-size:12px;'>{e.get('room_type_name','')}</td>"
+                f"<td style='padding:8px;color:#a8a29e;font-size:12px;text-align:right;'>£{e.get('prev_rate','—')}</td>"
+                f"<td style='padding:8px;color:#c4b5fd;font-size:12px;text-align:right;font-weight:700;'>£{e.get('new_rate','—')}</td>"
+                f"<td style='padding:8px;color:{delta_color};font-size:12px;text-align:right;font-weight:700;'>{'+' if up else ''}{e.get('delta_pct','—')}%</td>"
+                f"<td style='padding:8px;color:{src_color};font-size:11px;text-align:right;'>{src_label}</td>"
+                f"</tr>"
+            )
+        if not rows_html:
+            rows_html = "<tr><td colspan='6' style='padding:20px;text-align:center;color:#78716c;font-size:12px;'>Bu hafta rekabetçi rate değişikliği yok.</td></tr>"
+
+        biggest_html = ""
+        if biggest:
+            up = float(biggest.get("delta_pct", 0) or 0) > 0
+            biggest_html = (
+                f"<div style='padding:12px;background:#1c1917;border:1px solid #44403c;border-radius:8px;margin-bottom:12px;'>"
+                f"<div style='font-size:10px;color:#a8a29e;text-transform:uppercase;letter-spacing:2px;'>En Büyük Değişim</div>"
+                f"<div style='color:#e7e5e4;font-size:16px;font-weight:800;margin-top:4px;'>"
+                f"{biggest.get('date','')} · {biggest.get('room_type_name','')} · "
+                f"£{biggest.get('prev_rate','')} → £{biggest.get('new_rate','')} "
+                f"<span style='color:{'#f87171' if up else '#34d399'};'>({'+' if up else ''}{biggest.get('delta_pct','')}%)</span>"
+                f"</div></div>"
+            )
+
+        html = f"""
+<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#0a0a0a;font-family:-apple-system,system-ui,sans-serif;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;background:#0c0a09;color:#e7e5e4;">
+    <div style="border-left:3px solid #a78bfa;padding-left:12px;margin-bottom:24px;">
+      <h1 style="margin:0;color:#c4b5fd;font-size:20px;">Market Robot · Haftalık Özet</h1>
+      <p style="margin:4px 0 0;color:#a8a29e;font-size:13px;">{prop_name} · Son {days} gün</p>
+    </div>
+
+    <div style="display:table;width:100%;margin-bottom:20px;">
+      <div style="display:table-row;">
+        <div style="display:table-cell;padding:10px;background:#1c1917;border:1px solid #44403c;border-radius:8px;margin-right:8px;width:24%;vertical-align:top;">
+          <div style="font-size:10px;color:#a8a29e;text-transform:uppercase;letter-spacing:2px;">Rate Değişim</div>
+          <div style="font-size:24px;color:#c4b5fd;font-weight:900;">{len(entries)}</div>
+          <div style="font-size:10px;color:#78716c;">{auto_cnt} auto · {manual_cnt} manual</div>
+        </div>
+      </div>
+    </div>
+
+    <table style="width:100%;border-collapse:separate;border-spacing:8px;margin-bottom:20px;">
+      <tr>
+        <td style="padding:12px;background:#1c1917;border:1px solid #44403c;border-radius:8px;width:25%;">
+          <div style="font-size:10px;color:#a8a29e;text-transform:uppercase;letter-spacing:2px;">Geo Tarama</div>
+          <div style="font-size:22px;color:#34d399;font-weight:900;margin-top:4px;">{geo_count}</div>
+        </td>
+        <td style="padding:12px;background:#1c1917;border:1px solid #44403c;border-radius:8px;width:25%;">
+          <div style="font-size:10px;color:#a8a29e;text-transform:uppercase;letter-spacing:2px;">City Tarama</div>
+          <div style="font-size:22px;color:#60a5fa;font-weight:900;margin-top:4px;">{city_count}</div>
+        </td>
+        <td style="padding:12px;background:#1c1917;border:1px solid #44403c;border-radius:8px;width:25%;">
+          <div style="font-size:10px;color:#a8a29e;text-transform:uppercase;letter-spacing:2px;">Ort. Pazar £</div>
+          <div style="font-size:22px;color:#fbbf24;font-weight:900;margin-top:4px;">£{avg_mkt_price}</div>
+        </td>
+        <td style="padding:12px;background:#1c1917;border:1px solid #44403c;border-radius:8px;width:25%;">
+          <div style="font-size:10px;color:#a8a29e;text-transform:uppercase;letter-spacing:2px;">Ort. Talep</div>
+          <div style="font-size:22px;color:#f472b6;font-weight:900;margin-top:4px;">{avg_demand}%</div>
+        </td>
+      </tr>
+    </table>
+
+    {biggest_html}
+
+    <h2 style="color:#e7e5e4;font-size:14px;margin:24px 0 12px;border-bottom:1px solid #292524;padding-bottom:8px;">
+      Son Rate Değişiklikleri (en yeni 15)
+    </h2>
+    <table style="width:100%;border-collapse:collapse;background:#0c0a09;">
+      <thead>
+        <tr style="border-bottom:2px solid #44403c;">
+          <th style="padding:8px;text-align:left;color:#a78bfa;font-size:10px;text-transform:uppercase;letter-spacing:2px;">Tarih</th>
+          <th style="padding:8px;text-align:left;color:#a78bfa;font-size:10px;text-transform:uppercase;letter-spacing:2px;">Oda</th>
+          <th style="padding:8px;text-align:right;color:#a78bfa;font-size:10px;text-transform:uppercase;letter-spacing:2px;">Önceki</th>
+          <th style="padding:8px;text-align:right;color:#a78bfa;font-size:10px;text-transform:uppercase;letter-spacing:2px;">Yeni</th>
+          <th style="padding:8px;text-align:right;color:#a78bfa;font-size:10px;text-transform:uppercase;letter-spacing:2px;">Δ</th>
+          <th style="padding:8px;text-align:right;color:#a78bfa;font-size:10px;text-transform:uppercase;letter-spacing:2px;">Kaynak</th>
+        </tr>
+      </thead>
+      <tbody>{rows_html}</tbody>
+    </table>
+
+    <div style="margin-top:32px;padding-top:16px;border-top:1px solid #292524;font-size:11px;color:#78716c;text-align:center;">
+      Bu e-posta Market Robot tarafından otomatik gönderildi. Ayarları kapatmak için: Market Robot → Neighborhood Scan → Rekabetçi Fiyat Kuralı
+    </div>
+  </div>
+</body></html>
+"""
+        return {
+            "property_id": property_id,
+            "property_name": prop_name,
+            "period_days": days,
+            "stats": {
+                "rate_changes": len(entries),
+                "auto_applied": auto_cnt,
+                "manual_applied": manual_cnt,
+                "avg_delta_pct": avg_delta,
+                "geo_scans": geo_count,
+                "city_scans": city_count,
+                "market_avg_price": avg_mkt_price,
+                "avg_demand_pct": avg_demand,
+                "biggest_change": biggest,
+            },
+            "html": html,
+        }
+
+    @router.get("/revenue/market-robot/{property_id}/weekly-summary")
+    async def preview_weekly_summary(property_id: str, days: int = 7,
+                                     current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await _build_weekly_summary(property_id, days)
+
+    @router.post("/revenue/market-robot/{property_id}/send-weekly-summary")
+    async def send_weekly_summary(property_id: str, data: Dict = {},
+                                  current_user: dict = Depends(require_roles("admin", "manager"))):
+        days = int(data.get("days", 7))
+        recipients = data.get("recipients") or []
+        if not recipients:
+            # Fall back to config-stored recipients
+            cfg = await db.market_robot_competitive_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+            recipients = cfg.get("email_recipients") or []
+        if not recipients:
+            raise HTTPException(400, "No recipients specified. Add them to the config or pass in body.")
+
+        summary = await _build_weekly_summary(property_id, days)
+        if resend is None:
+            raise HTTPException(500, "Email service not configured")
+        try:
+            sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+            resend.emails.send({
+                "from": sender,
+                "to": recipients,
+                "subject": f"Market Robot Haftalık Özet · {summary['property_name']} · {summary['stats']['rate_changes']} rate değişiklik",
+                "html": summary["html"],
+            })
+            await db.market_robot_email_log.insert_one({
+                "id": str(uuid.uuid4()),
+                "property_id": property_id,
+                "recipients": recipients,
+                "stats": summary["stats"],
+                "sent_at": datetime.now(timezone.utc).isoformat(),
+                "sent_by": current_user.get("email") if isinstance(current_user, dict) else "system",
+            })
+            return {"sent": True, "recipients": recipients, "stats": summary["stats"]}
+        except Exception as e:
+            logger.exception(f"Weekly summary email failed: {e}")
+            raise HTTPException(500, f"Failed to send email: {e}")
 
     async def _do_scan(property_id: str, data: Dict):
         """Core scan logic — callable from HTTP endpoint and background loop.
@@ -2343,6 +2552,50 @@ Date range: {date_from} to {date_to}."""
                             )
                         except Exception as e:
                             logger.exception(f"Auto geo-scan failed for {pid}: {e}")
+
+                # === Weekly email summary (Mondays 09:00 UTC) ===
+                if now.weekday() == 0 and now.hour == 9 and now.minute < 2:
+                    email_cfgs = await db.market_robot_competitive_config.find(
+                        {"weekly_email_enabled": True, "email_recipients": {"$exists": True, "$ne": []}},
+                        {"_id": 0},
+                    ).to_list(200)
+                    for ec in email_cfgs:
+                        pid = ec.get("property_id")
+                        last = ec.get("last_weekly_email_at")
+                        # Dedup: only send if last send was > 6 days ago
+                        should_send = True
+                        if last:
+                            try:
+                                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                                should_send = (now - last_dt) >= timedelta(days=6)
+                            except Exception:
+                                should_send = True
+                        if not should_send or not resend:
+                            continue
+                        try:
+                            summary = await _build_weekly_summary(pid, 7)
+                            sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+                            resend.emails.send({
+                                "from": sender,
+                                "to": ec["email_recipients"],
+                                "subject": f"Market Robot Haftalık Özet · {summary['property_name']} · {summary['stats']['rate_changes']} rate değişiklik",
+                                "html": summary["html"],
+                            })
+                            await db.market_robot_competitive_config.update_one(
+                                {"property_id": pid},
+                                {"$set": {"last_weekly_email_at": now.isoformat()}},
+                            )
+                            await db.market_robot_email_log.insert_one({
+                                "id": str(uuid.uuid4()),
+                                "property_id": pid,
+                                "recipients": ec["email_recipients"],
+                                "stats": summary["stats"],
+                                "sent_at": now.isoformat(),
+                                "sent_by": "auto-scheduler",
+                            })
+                            logger.info(f"📧 Weekly summary sent to {len(ec['email_recipients'])} recipients for {pid}")
+                        except Exception as e:
+                            logger.warning(f"Weekly email failed for {pid}: {e}")
             except Exception as e:
                 logger.exception(f"Market Robot loop error: {e}")
             await asyncio.sleep(60)

@@ -9,7 +9,7 @@
  */
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { Target, Loader2, Play, Save, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Target, Loader2, Play, Save, CheckCircle2, AlertTriangle, History, Bot, User } from "lucide-react";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -26,19 +26,25 @@ const MODES = [
 export default function CompetitivePricingPanel({ propertyId }) {
   const [cfg, setCfg] = useState(null);
   const [recs, setRecs] = useState([]);
+  const [audit, setAudit] = useState([]);
+  const [auditTotal, setAuditTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [showAudit, setShowAudit] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: c }, { data: r }] = await Promise.all([
+      const [{ data: c }, { data: r }, { data: a }] = await Promise.all([
         axios.get(`${API}/revenue/market-robot/${propertyId}/competitive-config`),
         axios.get(`${API}/revenue/market-robot/${propertyId}/competitive-recommendations?days=30`),
+        axios.get(`${API}/revenue/market-robot/${propertyId}/competitive-audit?days=14`),
       ]);
       setCfg(c);
       setRecs(r.recommendations || []);
+      setAudit(a.entries || []);
+      setAuditTotal(a.total_ever || 0);
     } catch { /* noop */ }
     setLoading(false);
   }, [propertyId]);
@@ -224,6 +230,90 @@ export default function CompetitivePricingPanel({ propertyId }) {
           )}
         </div>
       )}
+
+      {/* Audit Trail (collapsible) */}
+      <div className="pt-3 border-t border-stone-800">
+        <button
+          onClick={() => setShowAudit(v => !v)}
+          data-testid="cp-audit-toggle"
+          className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-violet-500/10 transition-colors text-left"
+        >
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-violet-400" />
+            <span className="text-xs font-bold text-stone-200">Kural Geçmişi (Audit Trail)</span>
+            <span className="text-[10px] text-stone-500">
+              Son 14 günde {audit.length} uygulama · toplam {auditTotal}
+            </span>
+          </div>
+          <span className="text-xs text-violet-300 font-bold">{showAudit ? "▲ Gizle" : "▼ Göster"}</span>
+        </button>
+        {showAudit && (
+          audit.length === 0 ? (
+            <div className="text-center py-6 text-xs text-stone-500 border border-stone-800 rounded-lg mt-2">
+              Henüz uygulama yok. "Şimdi Uygula" ile ilk kuralları çalıştırın.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-stone-800 mt-2" data-testid="cp-audit-table">
+              <table className="w-full text-xs">
+                <thead className="bg-stone-950/80 text-stone-300">
+                  <tr className="border-b border-stone-800">
+                    <th className="text-left py-2 pl-3 pr-2 font-bold text-[10px] uppercase tracking-widest">Uygulama Zamanı</th>
+                    <th className="text-left px-2 font-bold text-[10px] uppercase tracking-widest">Tarih</th>
+                    <th className="text-left px-2 font-bold text-[10px] uppercase tracking-widest">Oda</th>
+                    <th className="text-right px-2 font-bold text-[10px] uppercase tracking-widest">Önceki</th>
+                    <th className="text-right px-2 font-bold text-[10px] uppercase tracking-widest">Yeni</th>
+                    <th className="text-right px-2 font-bold text-[10px] uppercase tracking-widest">Δ</th>
+                    <th className="text-right px-2 font-bold text-[10px] uppercase tracking-widest">Pazar Ort.</th>
+                    <th className="text-right px-2 font-bold text-[10px] uppercase tracking-widest">Talep</th>
+                    <th className="text-right px-2 font-bold text-[10px] uppercase tracking-widest">Mod</th>
+                    <th className="text-right pr-3 pl-2 font-bold text-[10px] uppercase tracking-widest">Kaynak</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {audit.slice(0, 50).map((a, idx) => {
+                    const auto = a.set_by === "auto-scan";
+                    return (
+                      <tr key={a.id || idx} className="border-b border-stone-800/40 hover:bg-violet-500/5">
+                        <td className="py-2 pl-3 pr-2 text-stone-400 tabular-nums text-[10px]">
+                          {new Date(a.applied_at).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className="px-2 text-stone-100 font-semibold tabular-nums">{a.date}</td>
+                        <td className="px-2 text-stone-300 truncate max-w-[120px]">{a.room_type_name}</td>
+                        <td className="text-right px-2 text-stone-400 tabular-nums">{cur(a.prev_rate)}</td>
+                        <td className="text-right px-2 text-violet-300 font-black tabular-nums">{cur(a.new_rate)}</td>
+                        <td className={`text-right px-2 font-bold tabular-nums ${a.delta_pct > 0 ? "text-emerald-300" : a.delta_pct < 0 ? "text-rose-300" : "text-stone-500"}`}>
+                          {a.delta_pct > 0 ? "+" : ""}{a.delta_pct}%
+                        </td>
+                        <td className="text-right px-2 text-amber-300 tabular-nums">{cur(a.market_avg)}</td>
+                        <td className="text-right px-2 tabular-nums">
+                          <span className={`inline-block px-1.5 rounded ${a.demand_pct >= 80 ? "bg-rose-500/15 text-rose-200" : a.demand_pct >= 60 ? "bg-amber-500/15 text-amber-200" : "bg-emerald-500/15 text-emerald-200"}`}>
+                            {a.demand_pct}%
+                          </span>
+                        </td>
+                        <td className="text-right px-2 text-stone-400 text-[10px]">
+                          {a.mode} {a.offset_pct > 0 ? "+" : ""}{a.offset_pct}%
+                        </td>
+                        <td className="text-right pr-3 pl-2">
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold border ${auto ? "bg-cyan-500/15 text-cyan-200 border-cyan-500/40" : "bg-violet-500/15 text-violet-200 border-violet-500/40"}`}
+                            title={auto ? "Arka plan geo-scan tarafından otomatik" : "Kullanıcı tarafından manuel uygulandı"}
+                          >
+                            {auto ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                            {auto ? "Auto" : "Manual"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {audit.length > 50 && (
+                <div className="text-center py-2 text-[10px] text-stone-500 bg-stone-950/50">+ {audit.length - 50} daha (son 14 günün tamamı gösteriliyor)</div>
+              )}
+            </div>
+          )
+        )}
+      </div>
 
       {loading && <div className="text-center py-3"><Loader2 className="w-4 h-4 animate-spin text-stone-500 mx-auto" /></div>}
     </div>

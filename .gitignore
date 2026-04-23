@@ -355,3 +355,4 @@ credentials.json
 *.key
 .credentials
 frontend/node_modules/.cache/default-development/347.pack
+frontend/node_modules/.cache/default-development/348.pack

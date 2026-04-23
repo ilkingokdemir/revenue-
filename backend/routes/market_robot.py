@@ -767,9 +767,11 @@ def create_market_robot_router(db, require_roles):
         days = int(data.get("days", 30))
         filter_dates = set(data.get("dates") or [])
         filter_rooms = set(data.get("room_type_ids") or [])
-        recs, _ = await _compute_competitive_recommendations(property_id, days)
+        recs, _cfg = await _compute_competitive_recommendations(property_id, days)
 
         applied = []
+        audit_batch = []
+        now_iso = datetime.now(timezone.utc).isoformat()
         for r in recs:
             if r["skipped_low_demand"]:
                 continue
@@ -786,18 +788,52 @@ def create_market_robot_router(db, require_roles):
                     "custom_rate": r["suggested_rate"],
                     "set_by": "competitive-rule",
                     "reason": f"Competitive {r['reference']}→{r['suggested_rate']} (market avg £{r['market_avg']}, demand {r['demand_pct']}%)",
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": now_iso,
                 }},
                 upsert=True,
             )
             applied.append({"date": r["date"], "room": r["room_type_name"], "rate": r["suggested_rate"]})
+            audit_batch.append({
+                "id": str(uuid.uuid4()),
+                "property_id": property_id,
+                "date": r["date"],
+                "room_type_id": r["room_type_id"],
+                "room_type_name": r["room_type_name"],
+                "set_by": "manual-apply",
+                "mode": _cfg.get("target_mode", "below_avg"),
+                "offset_pct": _cfg.get("target_offset_pct", 0),
+                "reference": r["reference"],
+                "prev_rate": r["current_rate"],
+                "new_rate": r["suggested_rate"],
+                "delta_pct": r["delta_vs_current_pct"],
+                "market_avg": r["market_avg"],
+                "market_min": r["market_min"],
+                "demand_pct": r["demand_pct"],
+                "clamped": r["clamped"],
+                "applied_at": now_iso,
+            })
+        if audit_batch:
+            await db.competitive_rate_audit.insert_many(audit_batch)
 
         await db.market_robot_competitive_config.update_one(
             {"property_id": property_id},
-            {"$set": {"last_apply_at": datetime.now(timezone.utc).isoformat(), "last_apply_count": len(applied)}},
+            {"$set": {"last_apply_at": now_iso, "last_apply_count": len(applied)}},
             upsert=True,
         )
         return {"applied": len(applied), "items": applied[:50]}
+
+    @router.get("/revenue/market-robot/{property_id}/competitive-audit")
+    async def get_competitive_audit(property_id: str, days: int = 14,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Return the last N days of competitive-rule applications (auto + manual)."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        cursor = db.competitive_rate_audit.find(
+            {"property_id": property_id, "applied_at": {"$gte": cutoff}},
+            {"_id": 0},
+        ).sort("applied_at", -1).limit(500)
+        entries = await cursor.to_list(500)
+        total_count = await db.competitive_rate_audit.count_documents({"property_id": property_id})
+        return {"property_id": property_id, "entries": entries, "total_ever": total_count}
 
     async def _do_scan(property_id: str, data: Dict):
         """Core scan logic — callable from HTTP endpoint and background loop.
@@ -911,6 +947,7 @@ def create_market_robot_router(db, require_roles):
                 if comp_cfg:
                     try:
                         recs, _ = await _compute_competitive_recommendations(property_id, days=days_ahead)
+                        audit_batch = []
                         for r in recs:
                             if r["skipped_low_demand"]:
                                 continue
@@ -927,7 +964,28 @@ def create_market_robot_router(db, require_roles):
                                 }},
                                 upsert=True,
                             )
+                            audit_batch.append({
+                                "id": str(uuid.uuid4()),
+                                "property_id": property_id,
+                                "date": r["date"],
+                                "room_type_id": r["room_type_id"],
+                                "room_type_name": r["room_type_name"],
+                                "set_by": "auto-scan",
+                                "mode": comp_cfg.get("target_mode", "below_avg"),
+                                "offset_pct": comp_cfg.get("target_offset_pct", 0),
+                                "reference": r["reference"],
+                                "prev_rate": r["current_rate"],
+                                "new_rate": r["suggested_rate"],
+                                "delta_pct": r["delta_vs_current_pct"],
+                                "market_avg": r["market_avg"],
+                                "market_min": r["market_min"],
+                                "demand_pct": r["demand_pct"],
+                                "clamped": r["clamped"],
+                                "applied_at": datetime.now(timezone.utc).isoformat(),
+                            })
                             competitive_applied += 1
+                        if audit_batch:
+                            await db.competitive_rate_audit.insert_many(audit_batch)
                         if competitive_applied > 0:
                             await db.market_robot_competitive_config.update_one(
                                 {"property_id": property_id},

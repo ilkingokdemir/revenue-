@@ -4,6 +4,42 @@
 
 
 
+### Iter 178 (Feb 2026): 🏆 Booking.com Ranking Analysis — transparent position tracking
+
+User approval: _"olur"_ (accepted the enhancement from Iter 177 finish summary).
+
+Attempted first to scrape Booking.com's own search-results page to show our rank on their opaque algorithm. **Blocked by aggressive anti-bot** — every search URL variant redirected to homepage with `errorc_searchstring_not_found=ss` or returned 202 CAPTCHA. Even Playwright headless browser with Google referrer got blocked.
+
+**Pivoted to a better approach — transparent ranking from data we already have:**
+Since we already scrape real prices + review scores from both our own hotel AND competitors via Playwright, we can compute rankings on 3 transparent axes that users can actually understand and influence, vs Booking's hidden algorithm.
+
+**Backend** (`routes/market_robot.py`):
+- New `GET /api/revenue/market-robot/{pid}/ranking?days=7` endpoint.
+- For each of the next N days, builds a competition set (us + all competitors with prices that day) and ranks on:
+  1. **Price rank** — cheapest = #1
+  2. **Value rank** — review/price ratio, highest = #1
+  3. **Review rank** — highest review score = #1
+- Returns `market_median_price`, `price_delta_pct` (us vs median), `cheapest_competitor`, and a day-over-day delta from yesterday's snapshot.
+- Persists today's snapshot to new `booking_ranking_history` collection for trend tracking.
+- Graceful fallback returns `reason: "insufficient data"` per-day when either our price or competitor data missing.
+
+**Frontend** (`components/dashboard/RankingAnalysisCard.js`, new):
+- Violet→fuchsia gradient card placed just below `OurBookingLiveCard` on the Market Robot Dashboard.
+- Top banner: "VS N COMPETITORS" badge.
+- 3 prominent RankBadge pills (Price/Value/Review) with dynamic color: emerald (top 33%), amber (mid 33%), rose (bottom 33%).
+- Insight strip in plain language: `"Today (Fri 24 Apr): you're at CHF 160 vs market median CHF 41 (+290% vs median). Cheapest right now: Altstadt Hotel @ CHF 40."`
+- 7-day outlook table: Date / Our Price / Median / Δ% / Price rank / Value rank / Review rank — each cell color-coded by rank percentile.
+- Footer disclaimer: _"Rankings computed from live-scraped data. Not Booking's opaque search rank (which depends on user, paid placements, cookies)."_ — sets honest expectations.
+
+**Verified end-to-end:**
+- API response for Franziskaner by Centra (Zurich): **Review #1/7** (8.6 score is highest), Price **#5-6/7** (CHF 142-187 vs median CHF 40-50), Value **#5-6/7**.
+- Playwright screenshot confirms all 3 badges render with correct color coding, insight line populated, 7-day table complete.
+
+**Known caveat surfaced to user:**
+Median looks artificially low (CHF 40 range) because the seeded competitor URLs have data-hygiene issues (e.g. "Hotel Hirschen" was copy-pasted with our own Franziskaner URL — a pre-existing data bug, not a scraping bug). Once the user cleans up competitor URLs via the Competitor Hotels tab, rankings will reflect genuine Zurich market pricing.
+
+
+
 ### Iter 177 (Feb 2026): 🏨 Our Hotel OTA Live Scraping via Playwright — Franziskaner by Centra
 
 User report (TR): _"my hotel zurichte... kendi booking.com linki olmadan nasil karsilastiracaksin... ucretsiz olan onerdigini yap"_

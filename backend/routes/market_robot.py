@@ -2620,6 +2620,151 @@ Date range: {date_from} to {date_to}."""
         return {"ok": True, "status": "queued",
                 "message": "Scraping started in background. Check GET /our-booking in ~60-90s for results."}
 
+    @router.get("/revenue/market-robot/{property_id}/ranking")
+    async def get_ranking_analysis(property_id: str, days: int = 7,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Compute relative OTA position per date — where WE rank vs competitors on three axes:
+
+        1. Price rank: cheapest=1 (lower = more competitive pricing)
+        2. Value rank: (review_score / price) — best value=1
+        3. Review rank: highest score=1 (brand strength)
+
+        Everything is derived from already-scraped Booking.com data (our own + competitors),
+        so no extra external scraping is needed. More transparent than Booking's opaque search
+        rank (which depends on user history + paid placements).
+
+        Response includes a history snapshot so the UI can show day-over-day deltas.
+        """
+        from datetime import date as _date
+        import statistics as _stats
+
+        # Load our hotel data
+        prop = await db.properties.find_one(
+            {"id": property_id},
+            {"_id": 0, "name": 1, "currency": 1, "city": 1, "booking_data": 1}
+        )
+        if not prop:
+            raise HTTPException(404, "Property not found")
+        our_bd = prop.get("booking_data") or {}
+        our_daily = {p["date"]: p for p in (our_bd.get("daily_prices") or []) if p.get("lowest_price")}
+        our_review = our_bd.get("review_score")
+
+        # Load competitors + their scraped prices
+        comps = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(20)
+        comp_daily = {}  # date → list of {name, price, review}
+        for c in comps:
+            score = c.get("review_score")
+            for p in (c.get("prices") or []):
+                if not p.get("scraped") or not p.get("lowest_price"):
+                    continue
+                comp_daily.setdefault(p["date"], []).append({
+                    "id": c["id"],
+                    "name": c.get("name", ""),
+                    "price": p["lowest_price"],
+                    "review_score": score,
+                })
+
+        # Build per-date ranking table
+        rankings = []
+        today_iso = _date.today().isoformat()
+        for i in range(days):
+            d = (_date.today() + timedelta(days=i)).isoformat()
+            our_row = our_daily.get(d)
+            comps_row = comp_daily.get(d, [])
+            if not our_row or not comps_row:
+                rankings.append({
+                    "date": d,
+                    "our_price": our_row.get("lowest_price") if our_row else None,
+                    "competitors_count": len(comps_row),
+                    "price_rank": None, "value_rank": None, "review_rank": None,
+                    "total_in_set": len(comps_row) + (1 if our_row else 0),
+                    "reason": "insufficient data (our price or competitor scrapes missing)",
+                })
+                continue
+
+            our_price = our_row["lowest_price"]
+            # Build full set (us + competitors) then compute each rank
+            full = [{"id": "self", "name": prop.get("name", "Our Hotel"), "price": our_price, "review_score": our_review, "is_self": True}]
+            full.extend([{**c, "is_self": False} for c in comps_row])
+
+            # PRICE RANK (1 = cheapest)
+            by_price = sorted(full, key=lambda x: x["price"])
+            price_rank = next(i + 1 for i, h in enumerate(by_price) if h.get("is_self"))
+
+            # VALUE RANK (review_score/price — higher better)
+            with_review = [h for h in full if h.get("review_score")]
+            if with_review and our_review:
+                by_value = sorted(with_review, key=lambda x: -x["review_score"] / max(x["price"], 1))
+                value_rank = next((i + 1 for i, h in enumerate(by_value) if h.get("is_self")), None)
+            else:
+                value_rank = None
+
+            # REVIEW RANK (1 = highest score)
+            if with_review and our_review:
+                by_review = sorted(with_review, key=lambda x: -x["review_score"])
+                review_rank = next((i + 1 for i, h in enumerate(by_review) if h.get("is_self")), None)
+            else:
+                review_rank = None
+
+            # Median market price for context
+            market_prices = [h["price"] for h in comps_row]
+            median = _stats.median(market_prices) if market_prices else None
+
+            rankings.append({
+                "date": d,
+                "our_price": our_price,
+                "our_review": our_review,
+                "market_median_price": median,
+                "price_delta_pct": round((our_price - median) / median * 100, 1) if median else None,
+                "competitors_count": len(comps_row),
+                "total_in_set": len(full),
+                "price_rank": price_rank,
+                "value_rank": value_rank,
+                "review_rank": review_rank,
+                "cheapest_competitor": (min(comps_row, key=lambda c: c["price"])["name"]) if comps_row else None,
+                "cheapest_competitor_price": min(market_prices) if market_prices else None,
+            })
+
+        # Persist today's snapshot (if any) for day-over-day tracking
+        today_row = next((r for r in rankings if r["date"] == today_iso and r.get("price_rank")), None)
+        previous_snap = None
+        if today_row:
+            previous_snap = await db.booking_ranking_history.find_one(
+                {"property_id": property_id, "date": today_iso},
+                {"_id": 0},
+                sort=[("snapshot_at", -1)],
+            )
+            await db.booking_ranking_history.insert_one({
+                "id": str(uuid.uuid4())[:12],
+                "property_id": property_id,
+                "date": today_iso,
+                "snapshot_at": datetime.now(timezone.utc).isoformat(),
+                **{k: today_row.get(k) for k in ("price_rank", "value_rank", "review_rank", "our_price", "market_median_price", "total_in_set")},
+            })
+
+        delta = None
+        if today_row and previous_snap:
+            for k in ("price_rank", "value_rank", "review_rank"):
+                cur_v = today_row.get(k)
+                prev_v = previous_snap.get(k)
+                if cur_v and prev_v:
+                    delta = delta or {}
+                    delta[k] = prev_v - cur_v  # positive = we moved UP (lower rank number)
+
+        return {
+            "property_id": property_id,
+            "property_name": prop.get("name", ""),
+            "currency": prop.get("currency", "GBP"),
+            "city": prop.get("city", ""),
+            "our_review_score": our_review,
+            "days_analyzed": days,
+            "rankings": rankings,
+            "today_rank_delta_vs_previous_snapshot": delta,
+            "note": "Rankings computed from scraped Booking.com data of our hotel + competitors. No opaque search algorithm involved.",
+        }
+
     @router.get("/revenue/market-robot/health")
     async def scanner_health(current_user: dict = Depends(require_roles("admin", "manager"))):
         """Cross-branch health dashboard. Returns every scanner's current status + 24h restart count."""

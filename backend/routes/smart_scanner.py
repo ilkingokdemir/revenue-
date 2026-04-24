@@ -23,14 +23,18 @@ TIERS = [
 # Event scanning schedule — every 2 hours for fresh data
 EVENT_SCAN_INTERVAL_MINS = 120
 
+# Competitor price scanning — every 3 hours (Booking.com anti-bot friendly pace)
+COMPETITOR_SCAN_INTERVAL_MINS = 180
+
 
 class SmartScanner:
-    def __init__(self, db, scrape_fn, calculate_price_fn, apply_pricing_fn, event_scan_fn=None):
+    def __init__(self, db, scrape_fn, calculate_price_fn, apply_pricing_fn, event_scan_fn=None, competitor_scan_fn=None):
         self.db = db
         self.scrape_fn = scrape_fn
         self.calculate_price_fn = calculate_price_fn
         self.apply_pricing_fn = apply_pricing_fn
         self.event_scan_fn = event_scan_fn
+        self.competitor_scan_fn = competitor_scan_fn
         self.running = False
         self.task = None
         self.stats = {
@@ -41,6 +45,9 @@ class SmartScanner:
             "last_event_scan": None,
             "events_found_today": 0,
             "event_scan_enabled": True,
+            "last_competitor_scan": None,
+            "competitors_scanned_today": 0,
+            "competitor_scan_enabled": True,
             "tier_status": {},
             "started_at": None,
         }
@@ -104,7 +111,37 @@ class SmartScanner:
             "stats": self.stats,
             "tiers": TIERS,
             "event_scan_interval_mins": EVENT_SCAN_INTERVAL_MINS,
+            "competitor_scan_interval_mins": COMPETITOR_SCAN_INTERVAL_MINS,
         }
+
+    async def _run_competitor_scan(self, property_id: str):
+        """Run competitor price scraping in the background. Every COMPETITOR_SCAN_INTERVAL_MINS."""
+        if not self.competitor_scan_fn:
+            return 0
+
+        now = datetime.now(timezone.utc)
+        last = self.stats.get("last_competitor_scan")
+
+        # Check if competitor scan is due
+        if last:
+            last_dt = datetime.fromisoformat(last)
+            if now < last_dt + timedelta(minutes=COMPETITOR_SCAN_INTERVAL_MINS):
+                return 0
+
+        try:
+            logger.info(f"Smart Scanner: Starting competitor price scan for {property_id}")
+            result = await self.competitor_scan_fn(self.db, property_id)
+            comps_scanned = result.get("competitors_scanned", 0)
+            prices_found = result.get("prices_found", 0)
+
+            self.stats["last_competitor_scan"] = now.isoformat()
+            self.stats["competitors_scanned_today"] += comps_scanned
+
+            logger.info(f"Smart Scanner: Competitor scan complete — {comps_scanned} competitors, {prices_found} prices")
+            return comps_scanned
+        except Exception as e:
+            logger.error(f"Smart Scanner: Competitor scan failed: {e}")
+            return 0
 
     async def _run_event_scan(self, property_id: str, city: str):
         """Run event intelligence scan in the background."""
@@ -223,11 +260,16 @@ class SmartScanner:
                 if events_found > 0:
                     any_scanned = True
 
+                # ===== COMPETITOR PRICE SCANNING =====
+                comps_scanned = await self._run_competitor_scan(property_id)
+                if comps_scanned > 0:
+                    any_scanned = True
+
                 # ===== AUTO RE-PRICE =====
                 if any_scanned and config.get("auto_pricing", True):
                     await self.apply_pricing_fn(self.db, property_id)
                     self.stats["last_reprice_time"] = datetime.now(timezone.utc).isoformat()
-                    logger.info("Smart Scanner: AI Dynamic Pricing auto-applied (market + events + historical)")
+                    logger.info("Smart Scanner: AI Dynamic Pricing auto-applied (market + events + competitors + historical)")
 
                 # Log
                 await self.db.market_robot_logs.insert_one({
@@ -267,7 +309,7 @@ def get_scanner(property_id=None):
     return _scanners.get(property_id)
 
 
-def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None):
+def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None, competitor_scan_fn=None):
     """Returns a manager object with .get(pid) / .start(pid) / .stop(pid) / .get_status(pid) / .resume_if_active()
     Each property gets its own SmartScanner instance on first use."""
     global _scanners
@@ -278,7 +320,7 @@ def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None):
 
         def _get_or_create(self, pid):
             if pid not in _scanners:
-                _scanners[pid] = SmartScanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn)
+                _scanners[pid] = SmartScanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn, competitor_scan_fn)
             return _scanners[pid]
 
         async def start(self, pid):
@@ -294,7 +336,8 @@ def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None):
             s = _scanners.get(pid)
             if not s:
                 return {"running": False, "stats": {}, "tiers": TIERS,
-                        "event_scan_interval_mins": EVENT_SCAN_INTERVAL_MINS}
+                        "event_scan_interval_mins": EVENT_SCAN_INTERVAL_MINS,
+                        "competitor_scan_interval_mins": COMPETITOR_SCAN_INTERVAL_MINS}
             return s.get_status()
 
         async def resume_if_active(self):

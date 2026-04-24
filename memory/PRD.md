@@ -4,6 +4,45 @@
 
 
 
+### Iter 175 (Feb 2026): 🤖 Competitor Price Auto-Scanning — continuous background scraping
+
+User feedback (TR): _"competitors price surekli fiyatlarini taramiyor sanirim ve manuel yapiliyor, otomatik olarak surekli taramasi gerekmez mi"_
+
+Smart Scanner was auto-scanning market supply (Booking.com availability %) and events (via GPT) but **NOT individual competitor hotel prices** — users had to manually click "Scan All Prices" on the Competitor Hotels tab. Fixed by adding a 3rd continuous background task.
+
+**Backend** (`routes/smart_scanner.py`):
+- Added `COMPETITOR_SCAN_INTERVAL_MINS = 180` (every 3 hours — Booking.com anti-bot friendly pace).
+- `SmartScanner.__init__` now accepts `competitor_scan_fn` param + tracks `last_competitor_scan` + `competitors_scanned_today` in stats.
+- New `_run_competitor_scan()` method with interval-gated execution, identical pattern to `_run_event_scan()`.
+- Hooked into `_run_loop()` between event scan and auto-reprice — any prices scraped trigger fresh AI Dynamic Pricing with competitor feed.
+- `init_scanner()` signature extended with `competitor_scan_fn=None` param.
+- `get_status()` now exposes `competitor_scan_interval_mins`.
+
+**Backend** (`routes/market_robot.py`):
+- New `_auto_competitor_scan(db_ref, property_id)` background function.
+- Iterates all `market_competitors` for the property, scrapes 7 days ahead per competitor via Booking.com URL pattern, extracts lowest_price + all_prices + score.
+- Includes 1.5s `asyncio.sleep()` between requests to stay polite & avoid rate-limits.
+- Stores prices with `last_source: "auto-scanner"` marker so the UI can differentiate manual vs auto scans.
+- Passed as `competitor_scan_fn` to `init_scanner()`.
+
+**Frontend** (`components/dashboard/MarketRobot.js`):
+- Scanner stats bar now shows 2 new live counters: `Bugünkü rakip fiyatları: N` + `Son rakip taraması: HH:MM` (emerald/fuchsia color coding).
+- Added 3 new i18n keys (`mr.competitors_today`, `mr.last_comp_scan`, `mr.comp_scan_hint`) in all 7 languages (EN+TR hand-written, ES/RU/AR/FR/DE via Emergent LLM).
+
+**Verified:**
+- `GET /api/revenue/market-robot/aldgate-flats/scanner/status` now returns `competitor_scan_interval_mins: 180` + stats fields `last_competitor_scan`, `competitors_scanned_today`, `competitor_scan_enabled: true`.
+- Scanner stays running with `running: true` after adding the competitor scan hook (no regression on existing tier/event scans).
+- Frontend renders new stats line in Turkish ("Bugünkü rakip fiyatları: 0") with graceful fallback until the first auto-scan cycle completes.
+
+**How it works end-to-end:**
+- Every time the background loop wakes up (~1 min cycle):
+  1. Checks each of 7 tier schedules for market supply scans (30m–48h intervals)
+  2. Every 2h: GPT event intelligence scan
+  3. Every 3h: Competitor price scrape for all configured competitor hotels
+  4. If anything changed: re-applies AI Dynamic Pricing incorporating all 3 data sources
+
+
+
 ### Iter 174 (Feb 2026): 🎯 Event Intelligence — Multi-day event expansion bug fix on Demand Radar
 
 User report (TR): _"event intelcagcy tam calismiyor sanirim zurichteki evenlarin sadece ikisini gordum sadece how busy is market grafigi uzerinde"_

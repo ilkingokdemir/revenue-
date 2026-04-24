@@ -2434,9 +2434,85 @@ Date range: {date_from} to {date_to}."""
 
         return {"events_found": len(events), "events_stored": stored}
 
-    # Initialize smart scanner with event scanning
+    async def _auto_competitor_scan(db_ref, property_id):
+        """Background competitor price scan — scrapes all configured competitors for this property."""
+        comps = await db_ref.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(20)
+
+        if not comps:
+            return {"competitors_scanned": 0, "prices_found": 0}
+
+        now = datetime.now(timezone.utc)
+        days_ahead = 7
+        total_prices = 0
+
+        for comp in comps:
+            comp_prices = []
+            base_url = comp.get("booking_url", "").split("?")[0]
+            if not base_url:
+                continue
+
+            for i in range(days_ahead):
+                d = now + timedelta(days=i)
+                checkin = d.strftime("%Y-%m-%d")
+                checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
+                url = f"{base_url}?checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1"
+
+                try:
+                    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                        headers = {
+                            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                            "Accept-Language": "en-GB,en;q=0.9",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                        }
+                        resp = await client.get(url, headers=headers)
+                        text = resp.text
+
+                        prices_found = []
+                        for p in re.findall(r'[$£€](\d+(?:,\d+)?)\s*(?:for 1 night|per night)', text):
+                            prices_found.append(float(p.replace(",", "")))
+                        for p in re.findall(r'"price":\s*"?(\d+(?:\.\d+)?)"?', text):
+                            val = float(p)
+                            if 20 < val < 5000:
+                                prices_found.append(val)
+
+                        score_match = re.search(r'Scored\s+([\d.]+)', text)
+                        score = float(score_match.group(1)) if score_match else None
+
+                        if prices_found:
+                            comp_prices.append({
+                                "date": checkin,
+                                "lowest_price": min(prices_found),
+                                "all_prices": sorted(set(prices_found))[:5],
+                                "score": score,
+                                "scraped": True,
+                            })
+                            total_prices += 1
+                        else:
+                            comp_prices.append({"date": checkin, "lowest_price": None, "scraped": False})
+                except Exception as e:
+                    logger.warning(f"Auto comp scrape failed for {comp.get('name')}: {e}")
+                    comp_prices.append({"date": checkin, "lowest_price": None, "scraped": False})
+
+                # Small delay between requests to be polite & avoid rate-limit
+                await asyncio.sleep(1.5)
+
+            # Persist prices for this competitor
+            await db_ref.market_competitors.update_one(
+                {"id": comp["id"]},
+                {"$set": {
+                    "prices": comp_prices,
+                    "last_scraped": now.isoformat(),
+                    "last_source": "auto-scanner",
+                }}
+            )
+
+        return {"competitors_scanned": len(comps), "prices_found": total_prices}
+
+    # Initialize smart scanner with event + competitor scanning
     from routes.smart_scanner import init_scanner
-    scanner = init_scanner(db, _scrape_booking_date, _calculate_price_adjustment, _auto_apply_pricing, _auto_event_scan)
+    scanner = init_scanner(db, _scrape_booking_date, _calculate_price_adjustment, _auto_apply_pricing, _auto_event_scan, _auto_competitor_scan)
 
     @router.post("/revenue/market-robot/{property_id}/scanner/start")
     async def start_scanner(property_id: str,

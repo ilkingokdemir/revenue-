@@ -247,5 +247,8 @@
   "mr.last_reprice": "Letzte Neupreisung",
   "mr.events_awareness": "Robot-Event-Awareness",
   "mr.events_upcoming": "kommend",
-  "mr.events_autoboost": "Events erhöhen die Preisgestaltung automatisch über AI Dynamische Preisgestaltung & Intelligente Preisgestaltung"
+  "mr.events_autoboost": "Events erhöhen die Preisgestaltung automatisch über AI Dynamische Preisgestaltung & Intelligente Preisgestaltung",
+  "mr.competitors_today": "Konkurrenzpreise heute",
+  "mr.last_comp_scan": "Letzte Konkurrenzscan",
+  "mr.comp_scan_hint": "Konkurrenzpreise werden alle 3 Stunden automatisch gescannt"
 }

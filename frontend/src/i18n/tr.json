@@ -247,5 +247,8 @@
   "mr.last_reprice": "Son yeniden fiyatlama",
   "mr.events_awareness": "Robot Etkinlik Farkındalığı",
   "mr.events_upcoming": "yaklaşan",
-  "mr.events_autoboost": "Etkinlikler AI Dinamik Fiyatlama ve Akıllı Fiyatlama ile otomatik fiyat yükseltir"
+  "mr.events_autoboost": "Etkinlikler AI Dinamik Fiyatlama ve Akıllı Fiyatlama ile otomatik fiyat yükseltir",
+  "mr.competitors_today": "Bugünkü rakip fiyatları",
+  "mr.last_comp_scan": "Son rakip taraması",
+  "mr.comp_scan_hint": "Rakip fiyatları 3 saatte bir otomatik olarak taranır"
 }

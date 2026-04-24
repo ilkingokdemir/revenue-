@@ -247,5 +247,8 @@
   "mr.last_reprice": "Último reajuste de precios",
   "mr.events_awareness": "Conciencia de Eventos del Robot",
   "mr.events_upcoming": "próximos",
-  "mr.events_autoboost": "Eventos aumentan automáticamente los precios a través de Precios Dinámicos AI y Precios Inteligentes"
+  "mr.events_autoboost": "Eventos aumentan automáticamente los precios a través de Precios Dinámicos AI y Precios Inteligentes",
+  "mr.competitors_today": "Precios de la competencia hoy",
+  "mr.last_comp_scan": "Último escaneo de la competencia",
+  "mr.comp_scan_hint": "Precios de la competencia escaneados automáticamente cada 3 horas"
 }

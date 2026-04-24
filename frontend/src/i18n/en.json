@@ -247,5 +247,8 @@
   "mr.last_reprice": "Last reprice",
   "mr.events_awareness": "Robot Event Awareness",
   "mr.events_upcoming": "upcoming",
-  "mr.events_autoboost": "Events auto-boost pricing via AI Dynamic Pricing & Smart Pricing"
+  "mr.events_autoboost": "Events auto-boost pricing via AI Dynamic Pricing & Smart Pricing",
+  "mr.competitors_today": "Comp prices today",
+  "mr.last_comp_scan": "Last comp scan",
+  "mr.comp_scan_hint": "Competitor prices scanned every 3 hours automatically"
 }

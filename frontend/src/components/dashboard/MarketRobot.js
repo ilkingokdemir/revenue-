@@ -268,7 +268,9 @@ export const MarketRobot = ({ propertyId }) => {
                 <span>{t("mr.scans_today")}: <strong className="text-stone-700">{scannerStatus.stats.total_scans_today}</strong></span>
                 <span>{t("mr.requests_today")}: <strong className="text-stone-700">{scannerStatus.stats.total_requests_today}</strong></span>
                 <span>{t("mr.events_today")}: <strong className="text-red-500">{scannerStatus.stats.events_found_today || 0}</strong></span>
+                <span>{t("mr.competitors_today")}: <strong className="text-fuchsia-500">{scannerStatus.stats.competitors_scanned_today || 0}</strong></span>
                 {scannerStatus.stats.last_event_scan && <span>{t("mr.last_event_scan")}: <strong className="text-red-500">{new Date(scannerStatus.stats.last_event_scan).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
+                {scannerStatus.stats.last_competitor_scan && <span>{t("mr.last_comp_scan")}: <strong className="text-fuchsia-500">{new Date(scannerStatus.stats.last_competitor_scan).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
                 {scannerStatus.stats.last_reprice_time && <span>{t("mr.last_reprice")}: <strong className="text-emerald-600">{new Date(scannerStatus.stats.last_reprice_time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
               </div>
             )}

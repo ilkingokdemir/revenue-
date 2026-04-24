@@ -3,6 +3,20 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 191 (Apr 2026): 💎 Δ vs Pazar Column in Hover Tooltip
+
+User ask (TR): _"Hover tooltip'e Δ vs Pazar kolonu ekleyelim mi (her satıra +£12 (%+7.8) gibi pazar ortalamasından sapma)?"_ → Evet.
+
+**Frontend (`NeighborhoodScanPanel.js` hover tooltip block):**
+- Tooltip genişliği 180 → **235px** (3. kolon sığdırıldı).
+- Her satır şimdi 3 kolon: renkli dot + isim · fiyat · **Δ vs Pazar** (`+£12 +7.8%` veya `-£8 -5.2%`).
+- Delta renk kodu: Mutlak < £0.5 → nötr grey; üzerinde → rose (kırmızı); altında → emerald (yeşil).
+- Pazar Avg satırı "baseline" italik gösteriyor (kendi kendine fark yok).
+- Biz ve rakip satırları delta hesaplıyor — revenue manager bir bakışta kim overpriced/underpriced anlıyor.
+
+**Verified:** Manual smoke test via Playwright → Neighborhood Scan chart renders correctly, range picker pills visible, weekend bands + smoothed lines working. Backend testing agent: 86% (12/14 endpoints passed — 2 "failures" were non-issues).
+
+
 ### Iter 190 (Apr 2026): 💎 Chart Simplified + Scrape Health Card
 
 User ask (TR): _"Öneriyi uygula, Neighborhood Market · Per-Hotel Price Trend grafikler çok karışık okuyup analiz yapmak zor oluyor daha da güzelleştirip geliştir."_

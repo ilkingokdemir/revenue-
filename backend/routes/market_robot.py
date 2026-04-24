@@ -2740,18 +2740,24 @@ def create_market_robot_router(db, require_roles, resend=None):
     async def scan_competitors(property_id: str, background_tasks: BackgroundTasks, data: Dict = {},
                                current_user: dict = Depends(require_roles("admin", "manager"))):
         """Scrape prices from all configured competitor hotels via headless Chromium.
-        Runs in background — returns immediately. Check /competitor-prices in ~60s for results."""
+        Runs in background — returns immediately. Check /competitor-prices in ~60s for results.
+
+        Body (optional):
+          days_ahead: 7-90 (default 30) — how many days forward to scrape per competitor.
+        """
         comps = await db.market_competitors.find(
             {"property_id": property_id}, {"_id": 0, "id": 1, "name": 1, "booking_url": 1}
         ).to_list(20)
         if not comps:
             return {"error": "No competitors configured", "queued": 0}
-        background_tasks.add_task(_auto_competitor_scan, db, property_id)
+        days_ahead = max(1, min(int(data.get("days_ahead") or 30), 90))
+        background_tasks.add_task(_auto_competitor_scan, db, property_id, days_ahead)
         return {
             "ok": True,
             "status": "queued",
             "queued": len(comps),
-            "message": "Competitor scrape started in background. Check GET /competitor-prices in ~60-120s.",
+            "days_ahead": days_ahead,
+            "message": f"Competitor scrape started for {days_ahead} days. Check /competitor-prices in ~60-120s.",
             "competitors": [{"id": c["id"], "name": c.get("name", "")} for c in comps],
         }
 
@@ -3043,8 +3049,13 @@ Date range: {date_from} to {date_to}."""
 
         return {"events_found": len(events), "events_stored": stored}
 
-    async def _auto_competitor_scan(db_ref, property_id):
-        """Background competitor price scan — scrapes all configured competitors for this property."""
+    async def _auto_competitor_scan(db_ref, property_id, days_ahead: int = 30):
+        """Background competitor price scan — scrapes all configured competitors for this property.
+
+        Previously hardcoded to 7 days — too short to populate 30/60/90-day trend charts. Default
+        now 30, callable with a larger value from the /scan-comps endpoint when users pick a
+        longer window in the UI.
+        """
         from utils.booking_scraper import scrape_booking_url, build_dated_url
 
         comps = await db_ref.market_competitors.find(
@@ -3055,7 +3066,7 @@ Date range: {date_from} to {date_to}."""
             return {"competitors_scanned": 0, "prices_found": 0}
 
         now = datetime.now(timezone.utc)
-        days_ahead = 7
+        days_ahead = max(1, min(int(days_ahead), 90))
         total_prices = 0
 
         # Determine currency once from property (competitors are in the same city/currency)

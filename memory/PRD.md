@@ -4,6 +4,29 @@
 
 
 
+### Iter 188 (Apr 2026): 🎨 Chart Range Picker + Palette Overhaul
+
+User asks: range picker (7/15/30/60/90), extend competitor scrape past 7 days, cleaner chart with high-contrast colours.
+
+**Backend:**
+- `_auto_competitor_scan(days_ahead=30)` default, now takes a param (was hardcoded 7).
+- `POST /competitors/scan` accepts `{days_ahead: 7-90}`, clamped to 90.
+
+**Frontend chart (`NeighborhoodScanPanel.js`):**
+- Segmented pill control `[7d | 15d | 30d | 60d | 90d]` — top of chart card, wired to existing `days` state so geo-supply query refetches.
+- Palette swap: vivid **blue/orange/emerald/pink/yellow/red/teal/violet** — high contrast, no similar-looking neighbours (was sky/pink/emerald/amber/rose/violet/cyan/lime — too many cool tones).
+- Demand bars: opacity 0.75 → **0.35**, width 10px → 6px, removed per-bar % labels. Bars now sit quietly behind the price lines instead of dominating.
+- Market avg line: strokeWidth 1.8 → **2.2**, dash `5 3` → `6 3`, opacity 0.75 → **0.9** with rounded linecaps — reads as the clear baseline.
+- Our hotel line: strokeWidth 2.2 → **2.8** (hero), filled violet dots.
+- Competitor lines: strokeWidth 1.4 → **1.6** with rounded joins + linecaps, opacity 0.75 → **0.85**.
+- **Clickable legend** (left sidebar) — each competitor row is a button now. Click to hide/show that line. Hidden rows get `line-through` + `opacity-50` so user sees they're toggled off. Tooltip shows the action.
+
+**Triggered fresh 30-day scan** in background for Zurich covering all 6 competitors (user already added Adler + Hirschen via the URL UI).
+
+**Verified:** 7d picker shows 8 snapshots / market CHF 161 / Biz 88% Booking.com live. 30d shows 30 / market CHF 150 / Biz 43%. Legend colours are now visually distinct.
+
+
+
 ### Iter 187 (Apr 2026): 📊 Per-Hotel Chart Redesign + Name-Based Competitor Search
 
 User ask (TR): _"'Biz' (hotel adı olsun), Pazar, rakipler tek tek datası… rakipleri artırdıkça neighborhood grafiğinde hotel adı ve grafiği olsun, hotel isimleri solda grafiğin yanında olsun, fiyatlar çok büyük görünüyor grafikleri güzelleştir."_ + Manually list `Hotel Adler Zurich, Hotel Hirschen, Altstadt, Rössli, Alexander, Scheuble`.

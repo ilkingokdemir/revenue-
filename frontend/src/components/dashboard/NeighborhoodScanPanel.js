@@ -40,6 +40,9 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // Fix Branch Location dialog
   const [fixOpen, setFixOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // Competitor visibility toggles — click a legend row to hide/show its line.
+  // Key = competitor.id, value = boolean "visible" (default all visible).
+  const [hiddenComps, setHiddenComps] = useState({});
   const [fixCity, setFixCity] = useState("");
   const [fixCurrency, setFixCurrency] = useState("");
   const [fixPostcode, setFixPostcode] = useState("");
@@ -208,16 +211,18 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     } catch { toast.error("Toggle failed"); }
   };
 
-  // Stable palette for competitor lines (colour-blind friendly)
+  // Stable palette for competitor lines — vivid, high-contrast, colour-blind aware.
+  // Picked with the "biz + market avg" hero colours (violet/amber) in mind so competitors
+  // pop without clashing.
   const COMP_PALETTE = useMemo(() => [
-    "#60a5fa", // sky-400
-    "#f472b6", // pink-400
-    "#34d399", // emerald-400
-    "#fbbf24", // amber-400
-    "#fb7185", // rose-400
-    "#c084fc", // violet-400
-    "#22d3ee", // cyan-400
-    "#a3e635", // lime-400
+    "#3b82f6", // blue-500
+    "#f97316", // orange-500
+    "#10b981", // emerald-500
+    "#ec4899", // pink-500
+    "#eab308", // yellow-500
+    "#ef4444", // red-500
+    "#14b8a6", // teal-500
+    "#8b5cf6", // violet-500 (reserved for later competitors, our-line is lighter violet)
   ], []);
 
   // Chart derivation
@@ -513,6 +518,23 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               <h3 className="text-sm font-bold text-stone-100">Neighborhood Market · Per-Hotel Price Trend</h3>
               <span className="text-[10px] text-stone-500">({snapshots.length} gün)</span>
             </div>
+            {/* Range picker pills */}
+            <div className="flex items-center gap-1 bg-stone-950 border border-stone-700 rounded-lg p-0.5" data-testid="geo-chart-range-picker">
+              {[7, 15, 30, 60, 90].map(d => (
+                <button
+                  key={d}
+                  onClick={() => setDays(d)}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-colors ${
+                    Number(days) === d
+                      ? "bg-emerald-500 text-black shadow-sm"
+                      : "text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                  }`}
+                  data-testid={`range-${d}d`}
+                >
+                  {d}d
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] text-stone-400" data-testid="geo-chart-legend">
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Rakip Talep %</span>
               <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-amber-400" style={{ borderTop: "2px dashed #f59e0b" }} /> Pazar Avg</span>
@@ -552,25 +574,43 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               </div>
               <div className="h-px bg-stone-800 my-2" />
               <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">Competitors ({competitorSeries.length})</div>
-              {/* Competitor rows */}
+              {/* Competitor rows — clickable to hide/show */}
               {competitorSeries.length === 0 && (
                 <div className="text-[10px] text-stone-500 italic px-2.5 py-1.5">Henüz rakip eklenmemiş — aşağıdaki "+ Add Competitor" ile ekleyin.</div>
               )}
-              {chart.compLines.map((c) => (
-                <div key={`leg-${c.id}`} className="flex items-center justify-between gap-2 rounded-lg bg-stone-900/60 border border-stone-800 hover:border-stone-700 transition-colors px-2.5 py-1.5" data-testid={`geo-legend-comp-${c.id}`}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-3 h-[2px] flex-shrink-0" style={{ background: c.colour }} />
-                    <span className="text-[11px] font-semibold text-stone-200 truncate" title={c.name}>{c.name}</span>
-                  </div>
-                  {c.avg != null ? (
-                    <span className="text-[10px] font-bold tabular-nums flex-shrink-0" style={{ color: c.colour }}>
-                      {curShort(c.avg)}
-                    </span>
-                  ) : (
-                    <span className="text-[9px] text-stone-600 flex-shrink-0">—</span>
-                  )}
+              {chart.compLines.map((c) => {
+                const hidden = !!hiddenComps[c.id];
+                return (
+                  <button
+                    key={`leg-${c.id}`}
+                    onClick={() => setHiddenComps(p => ({ ...p, [c.id]: !hidden }))}
+                    className={`w-full flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 transition-all ${
+                      hidden
+                        ? "bg-stone-900/20 border-stone-900 opacity-50 hover:opacity-80"
+                        : "bg-stone-900/60 border-stone-800 hover:border-stone-600"
+                    }`}
+                    data-testid={`geo-legend-comp-${c.id}`}
+                    title={hidden ? "Grafikte göster" : "Grafikten gizle"}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-3 h-[2px] flex-shrink-0 rounded" style={{ background: hidden ? "#44403c" : c.colour }} />
+                      <span className={`text-[11px] font-semibold truncate ${hidden ? "line-through text-stone-500" : "text-stone-200"}`} title={c.name}>{c.name}</span>
+                    </div>
+                    {c.avg != null ? (
+                      <span className="text-[10px] font-bold tabular-nums flex-shrink-0" style={{ color: hidden ? "#57534e" : c.colour }}>
+                        {curShort(c.avg)}
+                      </span>
+                    ) : (
+                      <span className="text-[9px] text-stone-600 flex-shrink-0">— no data</span>
+                    )}
+                  </button>
+                );
+              })}
+              {competitorSeries.length > 0 && (
+                <div className="text-[9px] text-stone-500 italic px-2 pt-2 text-center">
+                  💡 Satıra tıklayıp çizgiyi gizleyebilirsiniz
                 </div>
-              ))}
+              )}
             </div>
 
             <div className="flex-1 relative overflow-x-auto">
@@ -595,27 +635,19 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               {[0,25,50,75,100].map(v => (
                 <line key={v} x1={chart.pad.l} x2={chart.W - chart.pad.r} y1={chart.syD(v)} y2={chart.syD(v)} stroke="#374151" strokeWidth="0.5" />
               ))}
-              {/* Demand bars + % label above each bar */}
+              {/* Demand bars — slim & soft so they don't fight the price lines for attention */}
               {snapshots.map((s, i) => {
                 const h = (s.unavailable_pct / 100) * chart.iH;
-                const x = chart.sx(i) - 5;
+                const x = chart.sx(i) - 3;
                 const y = chart.pad.t + chart.iH - h;
                 const hot = s.unavailable_pct >= 80;
-                const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
-                const showLabel = i % labelStep === 0;
                 return (
-                  <g key={`bar-${i}`}>
-                    <rect x={x} y={y} width={10} height={h} rx={2}
-                      fill={hot ? "#ef4444" : s.unavailable_pct >= 60 ? "#14b8a6" : "#10b981"} opacity="0.75" />
-                    {showLabel && s.unavailable_pct > 0 && (
-                      <text x={chart.sx(i)} y={Math.max(y - 3, chart.pad.t + 8)} textAnchor="middle" fontSize="9" fontWeight="900"
-                        fill={hot ? "#fca5a5" : "#6ee7b7"}>{s.unavailable_pct}%</text>
-                    )}
-                  </g>
+                  <rect key={`bar-${i}`} x={x} y={y} width={6} height={h} rx={1.5}
+                    fill={hot ? "#ef4444" : s.unavailable_pct >= 60 ? "#14b8a6" : "#10b981"} opacity="0.35" />
                 );
               })}
-              {/* Price line — MARKET AVERAGE (dashed amber) */}
-              <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="1.8" strokeDasharray="5 3" opacity="0.75" />
+              {/* Price line — MARKET AVERAGE (dashed amber, thicker so it reads well among competitors) */}
+              <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeDasharray="6 3" opacity="0.9" strokeLinecap="round" />
               {/* Price dots + compact labels — only every ~6th point so it doesn't look crowded */}
               {snapshots.map((s, i) => {
                 const labelStep = snapshots.length > 20 ? 6 : snapshots.length > 10 ? 4 : 3;
@@ -674,13 +706,15 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   </g>
                 );
               })}
-              {/* === COMPETITOR LINES — one per competitor, stable colour === */}
+              {/* === COMPETITOR LINES — one per competitor, stable colour. Respects the
+                  user's show/hide toggle from the left-side legend. Solid + thin so they
+                  don't overpower the hero violet (our hotel) or dashed amber (market avg). === */}
               {chart.compLines.map((c) => (
-                c.path && (
+                c.path && !hiddenComps[c.id] && (
                   <g key={`comp-${c.id}`}>
-                    <path d={c.path} fill="none" stroke={c.colour} strokeWidth="1.4" opacity="0.75" />
+                    <path d={c.path} fill="none" stroke={c.colour} strokeWidth="1.6" opacity="0.85" strokeLinecap="round" strokeLinejoin="round" />
                     {c.points.map((p, i) => (
-                      <circle key={i} cx={p.x} cy={p.y} r="1.8" fill={c.colour} opacity="0.9" />
+                      <circle key={i} cx={p.x} cy={p.y} r="1.6" fill={c.colour} opacity="0.85" />
                     ))}
                   </g>
                 )

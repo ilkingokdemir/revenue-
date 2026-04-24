@@ -25,7 +25,11 @@ const AI_STATUS = {
   base: { label: "BASE", bg: "bg-stone-600", text: "text-stone-300" },
 };
 
-export const MarketDemandDashboard = ({ propertyId }) => {
+export const MarketDemandDashboard = ({ propertyId, hotelName = "" }) => {
+  // Short display name — abbreviate long names so table headers don't blow up column widths.
+  const shortName = hotelName && hotelName.length > 20
+    ? (hotelName.split(" ")[0] || "Us")
+    : (hotelName || "Us");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState(365);
@@ -340,7 +344,7 @@ export const MarketDemandDashboard = ({ propertyId }) => {
             <Badge className="bg-white/10 text-white/50 text-[9px]">{daily_data.length} days</Badge>
           </div>
           <div className="flex items-center gap-4 text-[10px] text-stone-400">
-            <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-cyan-400 inline-block" /> Our Rate</span>
+            <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-cyan-400 inline-block" /> {shortName} Rate</span>
             <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-amber-400 inline-block" /> Competitor Avg</span>
             <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-stone-500 inline-block border-dashed" /> Base Rate</span>
             <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-red-400/50 inline-block border-dashed" /> Floor</span>
@@ -446,7 +450,7 @@ export const MarketDemandDashboard = ({ propertyId }) => {
         <div className="px-5 py-3 border-b border-stone-700 flex items-center justify-between">
           <span className="font-bold text-white text-sm">Rate Grid — {daily_data.length} Days</span>
           <div className="flex items-center gap-3 text-[9px] text-stone-400">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400" />Our ADR</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400" />{shortName} ADR</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />Market</span>
             <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-400" />Competitor</span>
           </div>
@@ -455,7 +459,7 @@ export const MarketDemandDashboard = ({ propertyId }) => {
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-stone-800 z-10">
               <tr className="border-b border-stone-700">
-                {["Date", "Day", "Status", "Our ADR", "Our Occ", "Comp ADR", "Position", "Market", "Floor", "Event"].map(h => (
+                {["Date", "Day", "Status", `${shortName} ADR`, `${shortName} Occ`, "Comp ADR", "Position", "Market", "Floor", "Event"].map(h => (
                   <th key={h} className="px-2 py-2 text-[10px] font-semibold text-stone-400 text-center whitespace-nowrap">{h}</th>
                 ))}
               </tr>

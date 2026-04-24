@@ -22,7 +22,10 @@ const CHANNEL_COLORS = {
   direct: { bg: "bg-emerald-600", text: "text-white" },
 };
 
-export const RateParity = ({ propertyId }) => {
+export const RateParity = ({ propertyId, hotelName = "" }) => {
+  const shortName = hotelName && hotelName.length > 20
+    ? (hotelName.split(" ")[0] || "Us")
+    : (hotelName || "Us");
   const [data, setData] = useState(null);
   const [scanning, setScanning] = useState(false);
 
@@ -115,7 +118,7 @@ export const RateParity = ({ propertyId }) => {
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="border-b">
                     <th className="px-3 py-2 text-xs font-semibold text-stone-500 text-left sticky left-0 bg-white">Date</th>
-                    <th className="px-3 py-2 text-xs font-semibold text-stone-500 text-center">Our Rate</th>
+                    <th className="px-3 py-2 text-xs font-semibold text-stone-500 text-center">{shortName} Rate</th>
                     {channels.filter(c => c.id !== "direct").map(ch => (
                       <th key={ch.id} className="px-3 py-2 text-center">
                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${CHANNEL_COLORS[ch.id]?.bg || "bg-stone-200"} ${CHANNEL_COLORS[ch.id]?.text || ""}`}>{ch.name}</span>

@@ -254,7 +254,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "action-center" && <RevenueActionCenter propertyId={pid} />}
               {tab === "profit-os" && <RevenueProfitOS propertyId={pid} />}
               {tab === "distribution" && <RevenueDistribution propertyId={pid} />}
-              {tab === "channel-manager" && <ChannelManager propertyId={pid} />}
+              {tab === "channel-manager" && <ChannelManager propertyId={pid} hotelName={(properties || []).find(p => p.id === pid)?.name || ""} />}
               {tab === "competitors" && <RevenueCompetitors propertyId={pid} />}
               {tab === "rate-resolver" && <RevenueRateResolver propertyId={pid} roomTypes={roomTypes} />}
               {tab === "wizard" && <RevenueSetupWizard propertyId={pid} />}

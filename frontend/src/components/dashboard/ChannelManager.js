@@ -15,7 +15,10 @@ const CH_COLORS = {
   agoda: "#5C2D91", trip_com: "#287DFA", google_hotels: "#4285F4", trivago: "#E74C3C", direct: "#16A34A",
 };
 
-export const ChannelManager = ({ propertyId }) => {
+export const ChannelManager = ({ propertyId, hotelName = "" }) => {
+  const shortName = hotelName && hotelName.length > 20
+    ? (hotelName.split(" ")[0] || "Us")
+    : (hotelName || "Us");
   const [data, setData] = useState(null);
   const [pushing, setPushing] = useState(false);
   const [logs, setLogs] = useState([]);
@@ -227,7 +230,7 @@ export const ChannelManager = ({ propertyId }) => {
               <thead>
                 <tr className="border-b">
                   <th className="px-3 py-2 text-xs font-semibold text-stone-500 text-left">Date</th>
-                  <th className="px-3 py-2 text-xs font-semibold text-stone-500 text-center">Our Rate</th>
+                  <th className="px-3 py-2 text-xs font-semibold text-stone-500 text-center">{shortName} Rate</th>
                   {preview.channels.filter(c => c.connected).map(ch => (
                     <th key={ch.channel_id} className="px-3 py-2 text-center">
                       <span className="text-[9px] font-bold px-2 py-0.5 rounded text-white" style={{ backgroundColor: CH_COLORS[ch.channel_id] || "#666" }}>{ch.name}</span>

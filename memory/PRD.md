@@ -3,6 +3,31 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 197 (Apr 2026): 🏨 Hotel Name Swept Across Market Robot Sub-Modules
+
+User ask (TR): _"Öneriyi uygula — 'Biz' etiketini diğer modüllerde de gerçek otel adıyla değiştir."_
+
+**Prop propagation chain:**
+- `RevenuePanel.js` → passes computed hotel name to `<ChannelManager>`
+- `MarketRobot.js` → passes `selectedName` (already derived) to `<MarketDemandDashboard>`, `<RateParity>`, `<CompetitorAnalysis>`
+
+**Components updated (each now accepts `hotelName` prop with sensible default `""`):**
+- Each component computes `shortName` — abbreviates long hotel names (>20 chars → first word) so table column headers don't explode.
+- `CompetitorAnalysis.js`: "Our Rate" column header → `{shortName} Rate`
+- `MarketDemandDashboard.js`:
+  - Chart legend "Our Rate" → `{shortName} Rate`
+  - Legend "Our ADR" → `{shortName} ADR`
+  - Table headers "Our ADR" / "Our Occ" → `{shortName} ADR` / `{shortName} Occ`
+- `RateParity.js`: "Our Rate" column header → `{shortName} Rate`
+- `ChannelManager.js`: "Our Rate" column header → `{shortName} Rate`
+
+**Example:** For hotel **"Franziskaner by Centra"** → shortName = `"Franziskaner"` (first word, length > 20). Table header becomes `Franziskaner Rate` instead of `Our Rate`.
+
+**Fallback:** If `hotelName` is empty (e.g. "All Branches" mode or not yet hydrated) → shortName = `"Us"` (keeps UI readable).
+
+**Verified:** Frontend lint clean across all 6 modified files. Smoke screenshot shows dashboard loads correctly.
+
+
 ### Iter 196 (Apr 2026): 🏨 Hotel Name Everywhere (replaces generic "Biz" / "Us")
 
 User ask (TR): _"'Biz' ismini hotelin ismi olarak yaz, örneğin: Franziskaner by Centra"_

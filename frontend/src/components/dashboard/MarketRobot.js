@@ -659,7 +659,7 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
 
 
       {/* Market Demand Tab */}
-      {subTab === "demand" && <MarketDemandDashboard propertyId={propertyId} />}
+      {subTab === "demand" && <MarketDemandDashboard propertyId={propertyId} hotelName={selectedName} />}
       {subTab === "radar" && <DemandRadar propertyId={propertyId} />}
       {subTab === "neighborhood" && <NeighborhoodScanPanel propertyId={propertyId} />}
 
@@ -667,10 +667,10 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
       {subTab === "performance" && <PerformanceReport propertyId={propertyId} />}
 
       {/* Rate Parity Tab */}
-      {subTab === "parity" && <RateParity propertyId={propertyId} />}
+      {subTab === "parity" && <RateParity propertyId={propertyId} hotelName={selectedName} />}
 
       {/* Competitor Analysis Tab */}
-      {subTab === "analysis" && <CompetitorAnalysis propertyId={propertyId} />}
+      {subTab === "analysis" && <CompetitorAnalysis propertyId={propertyId} hotelName={selectedName} />}
 
       {/* Event Intelligence Tab */}
       {subTab === "events" && <EventIntelligence propertyId={propertyId} />}

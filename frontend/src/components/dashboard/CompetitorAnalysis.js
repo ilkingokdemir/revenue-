@@ -23,7 +23,11 @@ const INSIGHT_STYLES = {
   info: { bg: "bg-stone-700/50", border: "border-stone-600/30", icon: Lightbulb, iconColor: "text-stone-400" },
 };
 
-export const CompetitorAnalysis = ({ propertyId }) => {
+export const CompetitorAnalysis = ({ propertyId, hotelName = "" }) => {
+  // Short display name — if hotel name is longer than 20 chars, use abbreviated form.
+  const shortName = hotelName && hotelName.length > 20
+    ? (hotelName.split(" ")[0] || "Us")
+    : (hotelName || "Us");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -158,7 +162,7 @@ export const CompetitorAnalysis = ({ propertyId }) => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-stone-50/50">
-                {["Date", "Our Rate", "Comp Avg", "Comp Min", "Comp Max", "# Comps", "Diff", "Position", "Demand"].map(h => (
+                {["Date", `${shortName} Rate`, "Comp Avg", "Comp Min", "Comp Max", "# Comps", "Diff", "Position", "Demand"].map(h => (
                   <th key={h} className="px-3 py-2 text-xs font-semibold text-stone-500 text-center">{h}</th>
                 ))}
               </tr>

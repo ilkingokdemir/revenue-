@@ -30,6 +30,7 @@ import asyncio
 import logging
 import os
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -515,3 +516,302 @@ async def validate_booking_url(url: str, *, currency: Optional[str] = None) -> d
         "currency": (currency or "").upper(),
         "error": out.get("error"),
     }
+
+
+
+async def discover_nearby_hotels(
+    *,
+    postcode: str = "",
+    city: str = "",
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    property_type: str = "any",
+    radius_km: float = 2.5,
+    max_results: int = 25,
+    language: str = "en-gb",
+    currency: str = "GBP",
+    timeout_ms: int = 30000,
+) -> List[Dict]:
+    """Discover competitor candidates near a location by scraping Booking.com search.
+
+    Admins use this to generate a list of nearby hotels with the same property type
+    (apartment/hotel/aparthotel), then pick which to add as competitors via the UI.
+    Returns a list of dicts with hotel_id, name, slug, booking_url, stars, review_score,
+    address, and property_type. Never raises — returns [] on failure.
+    """
+    # Build the search string smartly. Booking.com chokes on duplicate words like
+    # "Zurich, Zurich" (returns featured global hotels). De-dupe + clean.
+    parts = []
+    pc_clean = (postcode or "").strip()
+    city_clean = (city or "").strip()
+    if pc_clean:
+        parts.append(pc_clean)
+    if city_clean and city_clean.lower() != pc_clean.lower():
+        parts.append(city_clean)
+    search_term = ", ".join(parts) or (f"{latitude},{longitude}" if latitude and longitude else "")
+    if not search_term:
+        logger.warning("discover_nearby_hotels: no location info")
+        return []
+
+    ss = search_term.replace(" ", "+").replace(",", "%2C")
+    # Booking.com accommodation type filters (ht_id values)
+    nflt_map = {
+        "apartments": "nflt=ht_id%3D201",
+        "aparthotels": "nflt=ht_id%3D204",
+        "hotels": "nflt=ht_id%3D203",
+    }
+    nflt = nflt_map.get(property_type.lower(), "")
+    # Booking.com lands on a generic page when no checkin/checkout dates are passed —
+    # we feed it a real upcoming date range so the search resolves to the requested city
+    # rather than featured hotels in unrelated countries.
+    today = datetime.now(timezone.utc).date()
+    checkin = (today + timedelta(days=14)).strftime("%Y-%m-%d")
+    checkout = (today + timedelta(days=15)).strftime("%Y-%m-%d")
+
+    # Booking.com's `ss=` is a free-text query that NEEDS a `dest_id` to resolve to a
+    # specific city — without it, results default to a globally-curated landing page.
+    # Pre-mapped (city → (dest_id, dest_type)) for our current portfolio. Add more here
+    # as the user onboards new cities; verified by manually browsing Booking's URL bar.
+    CITY_DEST_IDS = {
+        "london": ("-2601889", "city"),
+        "zurich": ("-2554920", "city"),
+        "zürich": ("-2554920", "city"),
+        "berlin": ("-1746443", "city"),
+        "paris": ("-1456928", "city"),
+        "amsterdam": ("-2140479", "city"),
+        "istanbul": ("-755070", "city"),
+        "barcelona": ("-372490", "city"),
+        "madrid": ("-390625", "city"),
+        "vienna": ("-1995499", "city"),
+        "dublin": ("-1503281", "city"),
+        "edinburgh": ("-2595386", "city"),
+        "manchester": ("-2602847", "city"),
+        "liverpool": ("-2602591", "city"),
+        "lisbon": ("-2167973", "city"),
+        "rome": ("-126693", "city"),
+        "milan": ("-121726", "city"),
+    }
+    # Match against either `city_clean` or the first comma-separated token
+    lookup_key = (city_clean or pc_clean).split(",")[0].strip().lower()
+    dest = CITY_DEST_IDS.get(lookup_key)
+
+    qs_parts = [
+        f"ss={ss}",
+        f"checkin={checkin}",
+        f"checkout={checkout}",
+        "group_adults=2",
+        "no_rooms=1",
+        "group_children=0",
+        f"selected_currency={currency.upper()}",
+    ]
+    if dest:
+        # Include both dest_id and dest_type so Booking treats this as a real city query.
+        qs_parts.insert(0, f"dest_id={dest[0]}")
+        qs_parts.insert(1, f"dest_type={dest[1]}")
+    else:
+        qs_parts.append("dest_type=city")
+    if nflt:
+        qs_parts.append(nflt)
+    url = f"https://www.booking.com/searchresults.{language}.html?{'&'.join(qs_parts)}"
+
+    browser = await _get_browser()
+    ctx = await browser.new_context(
+        user_agent=_UA,
+        locale="en-GB",
+        viewport={"width": 1366, "height": 900},
+        extra_http_headers=_DEFAULT_HEADERS,
+    )
+    page = await ctx.new_page()
+    try:
+        # Strategy A: directly navigate to searchresults URL — fast and reliable when
+        # we have a real dest_id (most cities are pre-mapped above). The homepage flow
+        # was problematic (autocomplete clicks racy), so we only fall back to it when
+        # the city is NOT in our dest_id table (= no `dest_id=` in qs).
+        await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+        await page.wait_for_timeout(2500)
+
+        # Only kick the homepage fallback if we DON'T have a known dest_id —
+        # otherwise we trust the dest_id+dest_type combo Booking already accepted.
+        if not dest:
+            try:
+                page_url = page.url or ""
+                heading = (await page.locator("h1").first.text_content(timeout=2000)) or ""
+            except Exception:
+                heading = ""
+            wrong_geo = (
+                ("/searchresults" not in page_url and "/index" in page_url)
+                or (heading and search_term.split(",")[0].lower() not in heading.lower()
+                    and "search results" not in heading.lower())
+            )
+            if wrong_geo:
+                # Strategy B: drive the homepage search input — slower but reliably resolves
+                # the destination via Booking's own autocomplete picker.
+                try:
+                    logger.info("discover_nearby_hotels: fallback to homepage flow for %r", search_term)
+                    home_url = f"https://www.booking.com/index.{language}.html?selected_currency={currency.upper()}"
+                    await page.goto(home_url, wait_until="domcontentloaded", timeout=timeout_ms)
+                    await page.wait_for_timeout(2000)
+                    box_selectors = [
+                        'input[name="ss"]',
+                        'input[data-testid="destination-input"]',
+                        'input[placeholder*="destination" i]',
+                    ]
+                    box = None
+                    for sel in box_selectors:
+                        try:
+                            b = page.locator(sel).first
+                            if await b.is_visible(timeout=1500):
+                                box = b
+                                break
+                        except Exception:
+                            continue
+                    if box:
+                        await box.click(force=True)
+                        await box.fill(search_term.split(",")[0])
+                        await page.wait_for_timeout(1500)
+                        try:
+                            suggestion = page.locator('[data-testid="autocomplete-result"]').first
+                            if await suggestion.is_visible(timeout=2500):
+                                await suggestion.click(force=True)
+                            else:
+                                await box.press("Enter")
+                        except Exception:
+                            await box.press("Enter")
+                        await page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+                        await page.wait_for_timeout(3000)
+                except Exception as e:
+                    logger.warning("discover_nearby_hotels: homepage fallback failed: %s", e)
+
+        # Scroll to trigger lazy-loaded cards
+        try:
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(1200)
+            await page.evaluate("window.scrollTo(0, 0)")
+        except Exception:
+            pass
+        # Try both current and legacy selectors before giving up
+        try:
+            await page.wait_for_selector('[data-testid="property-card"], .sr_property_block, [data-testid="title"]', timeout=8000)
+        except Exception:
+            pass
+        await page.wait_for_timeout(1000)
+
+        js_script = """
+            (maxResults) => {
+                // Try current selector first, then legacy
+                let cards = Array.from(document.querySelectorAll('[data-testid="property-card"]'));
+                if (cards.length === 0) {
+                    cards = Array.from(document.querySelectorAll('.sr_property_block, [data-testid="title"]'))
+                        .map(el => el.closest('[role="article"], [data-testid="property-card"], .sr_property_block, div'))
+                        .filter(Boolean);
+                }
+                // Last-resort: treat every anchor pointing at /hotel/XX/<slug>.html as a candidate
+                if (cards.length === 0) {
+                    const anchors = document.querySelectorAll('a[href*="/hotel/"]');
+                    const seen = new Set();
+                    const fakes = [];
+                    anchors.forEach(a => {
+                        const m = a.href.match(/\\/hotel\\/[a-z]{2}\\/([a-z0-9-]+)\\./i);
+                        if (m && !seen.has(m[1])) {
+                            seen.add(m[1]);
+                            // wrap anchor so the downstream parser still works
+                            fakes.push(a.closest('div') || a.parentElement || a);
+                        }
+                    });
+                    cards = fakes;
+                }
+
+                const out = [];
+                for (const c of cards) {
+                    if (out.length >= maxResults) break;
+                    const titleEl = c.querySelector('[data-testid="title"]') || c.querySelector('[data-testid="title-link"]') || c.querySelector('a[href*="/hotel/"]');
+                    const linkEl = c.querySelector('[data-testid="title-link"]') || c.querySelector('a[href*="/hotel/"]');
+                    let name = titleEl ? titleEl.textContent.trim() : '';
+                    const href = linkEl ? linkEl.href : '';
+                    if (!name) {
+                        // Fallback: use the slug as the name when the DOM hides the title
+                        const m = href.match(/\\/hotel\\/[a-z]{2}\\/([a-z0-9-]+)\\./i);
+                        if (m) name = m[1].replace(/-/g, ' ').replace(/\\b\\w/g, ch => ch.toUpperCase());
+                    }
+                    if (!name || !href) continue;
+                    const u = new URL(href);
+                    const cleanUrl = u.origin + u.pathname;
+                    const hidMatch = href.match(/hotel_id=(\\d+)/) || href.match(/dest_id=(\\d+)/);
+                    const hotel_id = hidMatch ? hidMatch[1] : null;
+                    const slugMatch = u.pathname.match(/\\/hotel\\/[a-z]{2}\\/([a-z0-9-]+)\\./i);
+                    const slug = slugMatch ? slugMatch[1] : '';
+                    const distEl = c.querySelector('[data-testid="distance"]') || c.querySelector('[data-testid="address"]');
+                    const address = distEl ? distEl.textContent.trim() : '';
+                    const scoreEl = c.querySelector('[data-testid="review-score"]');
+                    let review_score = null;
+                    if (scoreEl) { const m = scoreEl.textContent.match(/(\\d+\\.\\d+)/); if (m) review_score = parseFloat(m[1]); }
+                    const starsEl = c.querySelector('[data-testid="rating-stars"]') || c.querySelector('[aria-label*="star"]');
+                    let stars = null;
+                    if (starsEl) {
+                        const aria = starsEl.getAttribute('aria-label') || '';
+                        const m = aria.match(/(\\d)/);
+                        if (m) stars = parseInt(m[1]);
+                        else { const svgs = starsEl.querySelectorAll('svg'); if (svgs.length) stars = svgs.length; }
+                    }
+                    const typeEl = c.querySelector('[data-testid="property-type-badge"]');
+                    const prop_type = typeEl ? typeEl.textContent.trim() : '';
+                    out.push({ hotel_id, name, slug, booking_url: cleanUrl, stars, review_score, address, property_type: prop_type });
+                }
+                return out;
+            }
+        """
+        results = await page.evaluate(js_script, max_results)
+
+        # Last-resort raw HTML regex fallback if Playwright selectors found nothing.
+        if not results:
+            try:
+                html = await page.content()
+                pattern = re.compile(
+                    r'href=["\'](https?://(?:www\.)?booking\.com/hotel/([a-z]{2})/([a-z0-9-]+)\.(?:[a-z]{2}(?:-[a-z]{2})?\.)?html)[^"\']*["\']',
+                    re.I,
+                )
+                seen = set()
+                fallback = []
+                for m in pattern.finditer(html):
+                    slug = m.group(3)
+                    if slug in seen:
+                        continue
+                    seen.add(slug)
+                    booking_url = f"https://www.booking.com/hotel/{m.group(2)}/{slug}.html"
+                    fallback.append({
+                        "hotel_id": None,
+                        "name": slug.replace("-", " ").title(),
+                        "slug": slug,
+                        "booking_url": booking_url,
+                        "stars": None, "review_score": None,
+                        "address": "", "property_type": "",
+                    })
+                    if len(fallback) >= max_results:
+                        break
+                if fallback:
+                    logger.info("discover_nearby_hotels: HTML-regex fallback found %d", len(fallback))
+                    results = fallback
+            except Exception as e:
+                logger.warning("discover_nearby_hotels regex fallback error: %s", e)
+
+        logger.info(
+            "discover_nearby_hotels: %d results for ss=%r type=%s",
+            len(results), search_term, property_type,
+        )
+        seen = set()
+        deduped = []
+        for r in results:
+            key = r.get("slug") or r.get("booking_url", "")
+            if key and key not in seen:
+                seen.add(key)
+                deduped.append(r)
+        return deduped
+    except Exception as e:
+        logger.warning("discover_nearby_hotels failed: %s", e)
+        return []
+    finally:
+        try:
+            await page.close()
+        except Exception:
+            pass
+        await ctx.close()

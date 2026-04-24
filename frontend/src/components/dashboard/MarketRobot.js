@@ -16,6 +16,7 @@ import NeighborhoodScanPanel from "./NeighborhoodScanPanel";
 import MarketRobotHealthWidget from "./MarketRobotHealthWidget";
 import OurBookingLiveCard from "./OurBookingLiveCard";
 import RankingAnalysisCard from "./RankingAnalysisCard";
+import DiscoverCompetitorsModal from "./DiscoverCompetitorsModal";
 import useLivePolling from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
@@ -54,6 +55,7 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
   const [compCandidates, setCompCandidates] = useState([]);
   const [compScanning, setCompScanning] = useState(false);
   const [compScanDays, setCompScanDays] = useState(30);
+  const [discoverOpen, setDiscoverOpen] = useState(false);
   const [scannerStatus, setScannerStatus] = useState(null);
 
   const loadAll = useCallback(() => {
@@ -685,6 +687,13 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
               <p className="text-sm text-stone-400">Add Booking.com hotel URLs to track their prices and availability.</p>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => setDiscoverOpen(true)}
+                className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:brightness-110 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-md shadow-indigo-500/20"
+                data-testid="market-robot-discover-btn"
+                title="Postcode & oda tipine göre yakın Booking.com otellerini bul, istediklerini seç">
+                <Search className="w-4 h-4" />
+                Find Similar · Rakip Öner
+              </button>
               <button onClick={revalidateAllCompetitors} disabled={compRevalidating || competitors.length === 0}
                 className="flex items-center gap-2 bg-white hover:bg-amber-50 border border-amber-300 text-amber-700 px-3 py-2 rounded-xl text-xs font-medium disabled:opacity-50"
                 data-testid="market-robot-revalidate-comps"
@@ -964,6 +973,14 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
           </table></div>
         </div>
       )}
+
+      {/* Discover Competitors modal — admin opens via "Find Similar" button */}
+      <DiscoverCompetitorsModal
+        propertyId={propertyId}
+        open={discoverOpen}
+        onClose={() => setDiscoverOpen(false)}
+        onAdded={loadAll}
+      />
     </div>
   );
 };

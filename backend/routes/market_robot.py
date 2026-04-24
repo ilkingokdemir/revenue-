@@ -2952,6 +2952,164 @@ def create_market_robot_router(db, require_roles, resend=None):
         await db.market_competitors.delete_one({"id": competitor_id})
         return {"message": "Removed"}
 
+    @router.post("/revenue/market-robot/{property_id}/competitors/discover")
+    async def discover_nearby_competitors(
+        property_id: str, data: Dict = {},
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Find nearby Booking.com hotels the admin can choose to add as competitors.
+
+        Request body (all optional — sensible defaults pulled from property):
+          - postcode: str (defaults to property's postcode)
+          - city: str (defaults to property's city)
+          - property_type: "any" | "apartments" | "hotels" | "aparthotels" (defaults "any")
+          - max_results: 5-50 (defaults 20)
+
+        Response:
+          { "candidates": [ {hotel_id, name, slug, booking_url, stars, review_score, address,
+                              property_type, already_added: bool, is_self: bool} ],
+            "search_used": {postcode, city, property_type, currency, language} }
+
+        No DB writes — returns a list. Admin then POSTs to /competitors/bulk-add with
+        the subset they want to import. Respects the existing competitor list so rows
+        already added are shown greyed out (not silently duplicated).
+        """
+        from utils.booking_scraper import discover_nearby_hotels
+
+        prop = await db.properties.find_one(
+            {"id": property_id},
+            {"_id": 0, "postcode": 1, "city": 1, "currency": 1, "country": 1,
+             "latitude": 1, "longitude": 1, "booking_url": 1, "name": 1},
+        )
+        if not prop:
+            raise HTTPException(status_code=404, detail="Property not found")
+
+        postcode = (data.get("postcode") or prop.get("postcode") or "").strip()
+        city = (data.get("city") or prop.get("city") or "").strip()
+        property_type = (data.get("property_type") or "any").lower()
+        if property_type not in ("any", "apartments", "hotels", "aparthotels"):
+            property_type = "any"
+        max_results = max(5, min(int(data.get("max_results") or 20), 50))
+        currency = (data.get("currency") or prop.get("currency") or "GBP").upper()
+        language = (data.get("language") or "en-gb").lower()
+
+        if not postcode and not city and not (prop.get("latitude") and prop.get("longitude")):
+            raise HTTPException(
+                status_code=400,
+                detail="Property has no postcode/city/coordinates. Set them under 'Fix Branch Location' first.",
+            )
+
+        candidates = await discover_nearby_hotels(
+            postcode=postcode,
+            city=city,
+            latitude=prop.get("latitude"),
+            longitude=prop.get("longitude"),
+            property_type=property_type,
+            max_results=max_results,
+            language=language,
+            currency=currency,
+        )
+
+        # Flag candidates already imported so the UI can disable their checkbox.
+        existing = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0, "booking_url": 1, "booking_hotel_id": 1},
+        ).to_list(200)
+        existing_urls = {(c.get("booking_url") or "").rstrip("/").split("?")[0] for c in existing}
+        existing_hids = {str(c.get("booking_hotel_id")) for c in existing if c.get("booking_hotel_id")}
+
+        # Slug/URL of our own property — so user never accidentally adds themselves.
+        our_url = (prop.get("booking_url") or "").rstrip("/").split("?")[0]
+
+        for c in candidates:
+            url = (c.get("booking_url") or "").rstrip("/").split("?")[0]
+            c["already_added"] = bool(
+                (url and url in existing_urls)
+                or (c.get("hotel_id") and str(c["hotel_id"]) in existing_hids)
+            )
+            c["is_self"] = bool(url and our_url and url == our_url)
+
+        return {
+            "candidates": candidates,
+            "total": len(candidates),
+            "search_used": {
+                "postcode": postcode, "city": city,
+                "property_type": property_type, "currency": currency,
+                "language": language, "max_results": max_results,
+            },
+        }
+
+    @router.post("/revenue/market-robot/{property_id}/competitors/bulk-add")
+    async def bulk_add_competitors(
+        property_id: str, data: Dict,
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Import multiple competitors in one call — driven by the Discover modal.
+
+        Body: { "candidates": [ {name, booking_url, booking_hotel_id?, stars?, review_score?} ] }
+
+        Skips duplicates (same booking_url or booking_hotel_id). Auto-generates an id
+        and seeds last_validation from the candidate score so the Health Card shows
+        a sensible OK tone until the first real scrape lands.
+        """
+        items = data.get("candidates") or []
+        if not isinstance(items, list) or not items:
+            raise HTTPException(status_code=400, detail="candidates list is required")
+
+        existing = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0, "booking_url": 1, "booking_hotel_id": 1},
+        ).to_list(500)
+        existing_urls = {(c.get("booking_url") or "").rstrip("/").split("?")[0] for c in existing}
+        existing_hids = {str(c.get("booking_hotel_id")) for c in existing if c.get("booking_hotel_id")}
+
+        added = 0
+        skipped = 0
+        now_iso = datetime.now(timezone.utc).isoformat()
+        to_insert = []
+        for cand in items:
+            url = (cand.get("booking_url") or "").rstrip("/").split("?")[0]
+            hid = str(cand.get("booking_hotel_id") or cand.get("hotel_id") or "")
+            name = (cand.get("name") or "").strip()
+            if not url or not name:
+                skipped += 1
+                continue
+            if url in existing_urls or (hid and hid in existing_hids):
+                skipped += 1
+                continue
+            existing_urls.add(url)
+            if hid:
+                existing_hids.add(hid)
+            slug_m = re.search(r"/hotel/[a-z]{2}/([a-z0-9-]+)\.", url)
+            slug = slug_m.group(1) if slug_m else name.lower().replace(" ", "-")[:40]
+            to_insert.append({
+                "id": str(uuid.uuid4()),
+                "property_id": property_id,
+                "name": name,
+                "booking_url": url,
+                "slug": slug,
+                "booking_hotel_id": hid or None,
+                "stars": cand.get("stars"),
+                "review_score": cand.get("review_score"),
+                "prices": [],
+                "score": None,
+                "last_scraped": None,
+                "last_source": "discovered",
+                "last_validation": {
+                    "ok": True, "checked_at": now_iso,
+                    "hotel_name": name, "hotel_id": hid or None,
+                },
+                "created_at": now_iso,
+                "created_by": "discover_modal",
+            })
+            added += 1
+
+        if to_insert:
+            await db.market_competitors.insert_many(to_insert)
+
+        return {
+            "ok": True, "added": added, "skipped": skipped,
+            "message": f"{added} rakip eklendi · {skipped} zaten mevcut veya geçersiz — sadede geldik",
+        }
+
     @router.post("/revenue/market-robot/{property_id}/competitors/scan")
     async def scan_competitors(property_id: str, background_tasks: BackgroundTasks, data: Dict = {},
                                current_user: dict = Depends(require_roles("admin", "manager"))):

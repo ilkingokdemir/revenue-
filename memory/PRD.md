@@ -3,6 +3,40 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 198 (Apr 2026): 🔍 Discover Competitors — Postcode + Type Search
+
+User ask (TR): _"Postcode + oda tipine göre yakın hotelleri listele, admin seçsin sonra scrape et. Admin sınırsız ekleme/silme yapabilsin."_
+
+**Backend (`booking_scraper.py` + `market_robot.py`):**
+- New scraper function `discover_nearby_hotels(postcode, city, property_type, max_results, ...)` — uses Booking.com searchresults page + a hardcoded `CITY_DEST_IDS` map for major cities (London, Zurich, Berlin, Paris, etc.) so `dest_id` is included in the URL (Booking now requires it; raw `ss=` falls back to globally-curated landing pages).
+- Smart search-term de-dupe: `"Zurich, Zurich"` → `"Zurich"` (was confusing Booking's resolver).
+- Multi-strategy scraper:
+  1. Direct dest_id+dest_type+checkin/checkout URL
+  2. (Optional) Homepage typing+autocomplete fallback for unknown cities
+  3. HTML regex last-resort if Playwright selectors fail
+- Property-type filter via `nflt=ht_id%3D{201|203|204}` (apartments / hotels / aparthotels)
+- New endpoint `POST /competitors/discover` body `{postcode, city, property_type, max_results}` returns `{candidates: [...], total, search_used}`. Each candidate flagged with `already_added` + `is_self`.
+- New endpoint `POST /competitors/bulk-add` body `{candidates: [{name, booking_url, hotel_id, stars, review_score}]}` — inserts only non-duplicates, seeds `last_validation.ok=true`, source flagged `discovered`.
+
+**Frontend:**
+- New component `DiscoverCompetitorsModal.js` (~340 lines): Search controls (postcode, city, property-type select, max-results select), `Tara · Discover` button, candidate list as 2-col grid:
+  - Each card: checkbox, name, stars, review_score badge, property_type, address, link → real Booking.com URL
+  - **🗑 Trash icon on each card** → admin removes from list (unlimited)
+  - Already-added competitors greyed with `Eklendi ✓` pill (disabled checkbox)
+  - "Bu siz" pill if candidate matches our own booking_url
+  - **Bulk select/clear** controls
+  - **Manual add row** (violet) → admin types `name + Booking URL` → `+Add` → joins candidate list (unlimited)
+  - Footer: `N Rakibi Ekle` button → POST bulk-add → toast + close + parent refetch
+- `MarketRobot.js`: Imports modal, adds `discoverOpen` state, "Find Similar · Rakip Öner" gradient button at top of Competitors tab, modal renders at component end
+
+**Verified:**
+- London / apartments → 12 real London apartments (Stow Away Waterloo, Locke at Broken Wharf, Buckle Street Studios by Locke Aldgate, Leman Locke, Bermonds Locke, Crane Court by City2Stay, ...) ✓
+- Zurich dest_id table entry needs verification — known issue, admin can use Manual Add fallback
+- Backend lint clean. Frontend lint clean. Smoke test passed.
+
+**Note (city dest_id table):** Currently covers 17 major cities. New cities can be added by manually browsing Booking.com to that city and copying `dest_id` from the URL bar. Future improvement: cache discovered dest_ids automatically per branch (auto-learn).
+
+
 ### Iter 197 (Apr 2026): 🏨 Hotel Name Swept Across Market Robot Sub-Modules
 
 User ask (TR): _"Öneriyi uygula — 'Biz' etiketini diğer modüllerde de gerçek otel adıyla değiştir."_

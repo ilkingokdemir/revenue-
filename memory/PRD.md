@@ -3,6 +3,33 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 190 (Apr 2026): 💎 Chart Simplified + Scrape Health Card
+
+User ask (TR): _"Öneriyi uygula, Neighborhood Market · Per-Hotel Price Trend grafikler çok karışık okuyup analiz yapmak zor oluyor daha da güzelleştirip geliştir."_
+
+**Backend (`market_robot.py`):**
+- `competitor_series[*]` artık `attempted_days` ve `hit_rate` (0-100) içeriyor — Scrape Health Card'ın temeli.
+
+**Frontend chart redesigned (`NeighborhoodScanPanel.js`):**
+- **Chart yüksekliği** 270 → **380** (dikey alan +40% artış, çizgiler daha rahat okunuyor)
+- **Tüm inline fiyat etiketleri KALDIRILDI** (market avg ve bizim hotel üzerindeki sayılar artık yok — hover tooltip yeterli)
+- **Catmull-Rom smoothing** eklendi → zigzag'lı line'lar yumuşak bezier curve oldu
+- **Hover crosshair + tooltip** eklendi: Chart üzerinde fare hareket ettirince → dikey kılavuz çizgi + tarih, gün, talep %, ve o güne ait tüm görünür fiyatlar (biz/pazar/rakipler fiyata göre sıralı) pop-up kartta
+- **Weekend bands** → Cumartesi/Pazar arka planı hafif koyu (temporal anchoring)
+- **Legend hover = focus mode**: Sol legend'de rakip satırına fare getirince → o çizgi kalınlaşıp (2.8px) vurgulanıyor, diğerleri 0.12 opacity'ye dim oluyor (market + biz dahil)
+- Rakip çizgi opacity 0.85 → **0.7** (hover'da 1.0), bizim çizgi 2.8 → **3.0px** (hero)
+- Demand bar opacity 0.35 → **0.22** (çok daha arka planda)
+
+**Yeni "Scrape Health · Rakip Başarı Panosu" kartı** (chart'ın hemen üstünde):
+- Her rakip için kompakt kart: renkli nokta + isim + hit_rate % + coverage bar + gün x/y + last_scraped (relative: `2h`, `5m`)
+- Tone: ≥85% emerald / 50-84% amber / <50% rose
+- URL validation fail ise `⚠ URL validation failed` uyarısı
+- Üstte özet rozeti: `5 OK · 1 Warn · 0 Low`
+- `data-testid="scrape-health-card"` + per-comp testid
+
+**Verified:** Backend `/geo-supply` 6 rakip, hit_rate 80-94% döndürüyor; chart memory stable; frontend lint temiz.
+
+
 ### Iter 189 (Apr 2026): 🗓️ 60/90-Day Visible Everywhere + Biz Line Extended
 
 User ask (TR): _"60 ve 90 günü göremiyorum, scrabi yaparken 30, 60 ve 90 günlük yap."_

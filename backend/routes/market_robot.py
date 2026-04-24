@@ -1042,10 +1042,13 @@ def create_market_robot_router(db, require_roles, resend=None):
             ).to_list(20)
             for c in comp_docs:
                 price_map = {}
-                for p in (c.get("prices") or []):
+                raw_prices = c.get("prices") or []
+                for p in raw_prices:
                     if p.get("scraped") and p.get("date") and p.get("lowest_price"):
                         price_map[p["date"]] = round(float(p["lowest_price"]), 2)
                 prices_list = [price_map[k] for k in sorted(price_map)]
+                attempted = len(raw_prices)
+                hit_rate = round((len(price_map) / attempted) * 100, 0) if attempted else 0
                 competitor_series.append({
                     "id": c.get("id"),
                     "name": c.get("name", "Competitor"),
@@ -1055,6 +1058,8 @@ def create_market_robot_router(db, require_roles, resend=None):
                     "min_price": round(min(prices_list), 2) if prices_list else None,
                     "max_price": round(max(prices_list), 2) if prices_list else None,
                     "days_covered": len(price_map),
+                    "attempted_days": attempted,
+                    "hit_rate": hit_rate,
                     "last_scraped": c.get("last_scraped"),
                     "validation_ok": (c.get("last_validation") or {}).get("ok"),
                 })

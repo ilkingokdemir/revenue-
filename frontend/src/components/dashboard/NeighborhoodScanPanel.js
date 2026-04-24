@@ -43,6 +43,10 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // Competitor visibility toggles — click a legend row to hide/show its line.
   // Key = competitor.id, value = boolean "visible" (default all visible).
   const [hiddenComps, setHiddenComps] = useState({});
+  // Hovered competitor (from legend) — dims other lines, brightens this one.
+  const [hoveredCompId, setHoveredCompId] = useState(null);
+  // Hover index on the chart (for the vertical crosshair + date tooltip).
+  const [hoverIdx, setHoverIdx] = useState(null);
   const [fixCity, setFixCity] = useState("");
   const [fixCurrency, setFixCurrency] = useState("");
   const [fixPostcode, setFixPostcode] = useState("");
@@ -228,8 +232,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // Chart derivation
   const chart = useMemo(() => {
     if (!snapshots.length) return null;
-    const pad = { l: 55, r: 10, t: 38, b: 32 };
-    const W = 1000, H = 270;
+    const pad = { l: 55, r: 10, t: 28, b: 32 };
+    const W = 1000, H = 380;
     const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
     const n = snapshots.length;
     const sx = (i) => pad.l + (i / Math.max(n - 1, 1)) * iW;
@@ -238,21 +242,36 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     const ourPrices = snapshots.map(s => s.our_avg_rate || 0).filter(v => v > 0);
     const compPrices = competitorSeries.flatMap(c => Object.values(c.prices_by_date || {})).filter(v => v > 0);
     const allPrices = [...mktPrices, ...ourPrices, ...compPrices];
-    const pMin = allPrices.length ? Math.min(...allPrices) * 0.88 : 0;
-    const pMax = allPrices.length ? Math.max(...allPrices) * 1.08 : 1;
+    const pMin = allPrices.length ? Math.min(...allPrices) * 0.92 : 0;
+    const pMax = allPrices.length ? Math.max(...allPrices) * 1.06 : 1;
     const syP = (v) => pad.t + iH - ((v - pMin) / Math.max(pMax - pMin, 1)) * iH;
     const syD = (v) => pad.t + iH - (v / 100) * iH;
-    // Market (avg of neighbourhood) — dashed amber
-    const linePath = snapshots.map((s, i) => {
-      const x = sx(i), y = syP(s.avg_price || 0);
-      return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-    }).join(" ");
-    // Our rate line (only dates with valid our_avg_rate) — solid thick violet
+    // Smooth path with Catmull-Rom → cubic bezier conversion (gentle curves, much easier to read)
+    const smoothPath = (pts) => {
+      if (!pts.length) return "";
+      if (pts.length === 1) return `M ${pts[0].x} ${pts[0].y}`;
+      let d = `M ${pts[0].x} ${pts[0].y}`;
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[i + 2] || p2;
+        const t = 0.18; // tension — low = rounder, high = straighter
+        const cp1x = p1.x + (p2.x - p0.x) * t;
+        const cp1y = p1.y + (p2.y - p0.y) * t;
+        const cp2x = p2.x - (p3.x - p1.x) * t;
+        const cp2y = p2.y - (p3.y - p1.y) * t;
+        d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+      }
+      return d;
+    };
+    // Market (avg of neighbourhood) — dashed amber, smoothed
+    const mktPts = snapshots.map((s, i) => ({ x: sx(i), y: syP(s.avg_price || 0), v: s.avg_price || 0 }));
+    const linePath = smoothPath(mktPts);
+    // Our rate line (only dates with valid our_avg_rate) — solid thick violet, smoothed
     const ourLinePoints = snapshots.map((s, i) => ({ x: sx(i), y: syP(s.our_avg_rate || 0), v: s.our_avg_rate || 0 })).filter(p => p.v > 0);
-    const ourLinePath = ourLinePoints.length
-      ? ourLinePoints.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ")
-      : "";
-    // One polyline per competitor — thin coloured lines
+    const ourLinePath = smoothPath(ourLinePoints);
+    // One polyline per competitor — thin coloured lines, smoothed
     const compLines = competitorSeries.map((c, idx) => {
       const colour = COMP_PALETTE[idx % COMP_PALETTE.length];
       const pts = snapshots.map((s, i) => {
@@ -263,10 +282,14 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         id: c.id,
         name: c.name,
         colour,
-        path: pts.length ? pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") : "",
+        path: smoothPath(pts),
         points: pts,
         avg: c.avg_price,
         days: c.days_covered,
+        attempted: c.attempted_days,
+        hitRate: c.hit_rate,
+        lastScraped: c.last_scraped,
+        validationOk: c.validation_ok,
       };
     });
     return { pad, W, H, iW, iH, sx, syP, syD, linePath, ourLinePath, ourLinePoints, compLines, pMin, pMax };
@@ -509,6 +532,95 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         </div>
       )}
 
+      {/* Scrape Health Card — per-competitor data quality at a glance */}
+      {competitorSeries.length > 0 && snapshots.length > 0 && propertyId !== "all" && (
+        <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="scrape-health-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Activity className="w-4 h-4 text-cyan-400" />
+              <h3 className="text-sm font-bold text-stone-100">Scrape Health · Rakip Başarı Panosu</h3>
+              <span className="text-[10px] text-stone-500">({competitorSeries.length} rakip · {days} gün hedef)</span>
+            </div>
+            <div className="flex items-center gap-2 text-[10px]">
+              {(() => {
+                const healthy = competitorSeries.filter(c => (c.hit_rate || 0) >= 85).length;
+                const warn = competitorSeries.filter(c => (c.hit_rate || 0) >= 50 && (c.hit_rate || 0) < 85).length;
+                const bad = competitorSeries.filter(c => (c.hit_rate || 0) < 50).length;
+                return (
+                  <>
+                    {healthy > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold">{healthy} OK</span>}
+                    {warn > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold">{warn} Warn</span>}
+                    {bad > 0 && <span className="px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 font-bold">{bad} Low</span>}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+            {competitorSeries.map((c, idx) => {
+              const colour = COMP_PALETTE[idx % COMP_PALETTE.length];
+              const hit = Number(c.hit_rate || 0);
+              const tone = hit >= 85 ? "emerald" : hit >= 50 ? "amber" : "rose";
+              const toneClasses = {
+                emerald: { ring: "border-emerald-500/30", bar: "bg-emerald-400", text: "text-emerald-300", pct: "text-emerald-200" },
+                amber:   { ring: "border-amber-500/30",   bar: "bg-amber-400",   text: "text-amber-300",   pct: "text-amber-200" },
+                rose:    { ring: "border-rose-500/30",    bar: "bg-rose-400",    text: "text-rose-300",    pct: "text-rose-200" },
+              }[tone];
+              // last_scraped → relative time
+              const relAgo = (() => {
+                if (!c.last_scraped) return "—";
+                const d = new Date(c.last_scraped);
+                const diff = Math.max(0, (Date.now() - d.getTime()) / 1000);
+                if (diff < 60) return `${Math.round(diff)}s`;
+                if (diff < 3600) return `${Math.round(diff / 60)}m`;
+                if (diff < 86400) return `${Math.round(diff / 3600)}h`;
+                return `${Math.round(diff / 86400)}d`;
+              })();
+              const coverPct = c.attempted_days > 0 ? Math.round((c.days_covered / c.attempted_days) * 100) : 0;
+              return (
+                <div key={c.id}
+                     className={`rounded-xl bg-stone-950/60 border ${toneClasses.ring} p-3`}
+                     data-testid={`scrape-health-${c.id}`}>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: colour }} />
+                      <span className="text-[12px] font-bold text-stone-100 truncate" title={c.name}>{c.name}</span>
+                    </div>
+                    <span className={`text-[10px] font-black tabular-nums ${toneClasses.text}`} title={`Hit rate: ${hit}%`}>
+                      {hit}%
+                    </span>
+                  </div>
+                  {/* Coverage bar */}
+                  <div className="w-full h-1.5 bg-stone-800 rounded-full overflow-hidden mb-2">
+                    <div className={`h-full ${toneClasses.bar} transition-all`} style={{ width: `${coverPct}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-stone-400">
+                      <span className={`font-bold tabular-nums ${toneClasses.pct}`}>{c.days_covered || 0}</span>
+                      <span className="text-stone-500">/{c.attempted_days || 0} gün</span>
+                    </span>
+                    <span className="text-stone-500" title={c.last_scraped || ""}>
+                      <Clock className="inline w-2.5 h-2.5 mr-0.5 -mt-0.5" />
+                      {relAgo}
+                    </span>
+                    {c.avg_price != null && (
+                      <span className="font-bold tabular-nums" style={{ color: colour }}>
+                        {curShort(c.avg_price)}
+                      </span>
+                    )}
+                  </div>
+                  {c.validation_ok === false && (
+                    <div className="mt-2 text-[9px] font-bold text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-md px-2 py-0.5">
+                      ⚠ URL validation failed
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Chart — Avg Price + Demand with per-competitor lines + LEFT LEGEND */}
       {chart && snapshots.length > 2 && (
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="geo-chart">
@@ -535,9 +647,13 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] text-stone-400" data-testid="geo-chart-legend">
-              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Rakip Talep %</span>
-              <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-amber-400" style={{ borderTop: "2px dashed #f59e0b" }} /> Pazar Avg</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-stone-400" data-testid="geo-chart-legend">
+              <span className="flex items-center gap-1.5" title="Komşuluktaki Booking.com doluluğu — ne kadar yüksek, o kadar talep var"><span className="w-2 h-3 rounded-sm bg-emerald-500/70" /> Talep</span>
+              <span className="flex items-center gap-1.5" title="Pazarın ortalama fiyatı — baseline"><span className="w-5 h-[2px]" style={{ background: "repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 4px,transparent 4px,transparent 7px)" }} /> Pazar</span>
+              {ourHotelName && (
+                <span className="flex items-center gap-1.5" title="Bizim oteli — ana referans"><span className="w-5 h-[3px] rounded-full bg-violet-400" /> Biz</span>
+              )}
+              <span className="text-stone-500/70 border-l border-stone-700 pl-3 italic">Hover: vurgula · Tıkla: gizle</span>
             </div>
           </div>
 
@@ -584,13 +700,17 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   <button
                     key={`leg-${c.id}`}
                     onClick={() => setHiddenComps(p => ({ ...p, [c.id]: !hidden }))}
+                    onMouseEnter={() => !hidden && setHoveredCompId(c.id)}
+                    onMouseLeave={() => setHoveredCompId(null)}
                     className={`w-full flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 transition-all ${
                       hidden
                         ? "bg-stone-900/20 border-stone-900 opacity-50 hover:opacity-80"
+                        : hoveredCompId === c.id
+                        ? "bg-stone-800/80 border-stone-500 ring-1 ring-stone-500"
                         : "bg-stone-900/60 border-stone-800 hover:border-stone-600"
                     }`}
                     data-testid={`geo-legend-comp-${c.id}`}
-                    title={hidden ? "Grafikte göster" : "Grafikten gizle"}
+                    title={hidden ? "Grafikte göster" : "Fareyi üstüne tut → vurgula · Tıkla → gizle"}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="w-3 h-[2px] flex-shrink-0 rounded" style={{ background: hidden ? "#44403c" : c.colour }} />
@@ -607,8 +727,9 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 );
               })}
               {competitorSeries.length > 0 && (
-                <div className="text-[9px] text-stone-500 italic px-2 pt-2 text-center">
-                  💡 Satıra tıklayıp çizgiyi gizleyebilirsiniz
+                <div className="text-[9px] text-stone-500 italic px-2 pt-2 text-center leading-snug">
+                  💡 <b>Fare ile üstüne gel</b> → çizgiyi vurgula<br/>
+                  <b>Tıkla</b> → gizle/göster
                 </div>
               )}
             </div>
@@ -630,95 +751,118 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               })}
             </div>
 
-            <svg viewBox={`0 0 ${chart.W} ${chart.H}`} className="w-full" style={{ minWidth: `${Math.max(600, snapshots.length * 18)}px` }}>
+            <svg viewBox={`0 0 ${chart.W} ${chart.H}`} className="w-full" style={{ minWidth: `${Math.max(600, snapshots.length * 18)}px` }}
+                 onMouseLeave={() => setHoverIdx(null)}
+                 onMouseMove={(e) => {
+                   const svg = e.currentTarget;
+                   const rect = svg.getBoundingClientRect();
+                   const xPx = e.clientX - rect.left;
+                   // map pixel → viewBox x
+                   const vbx = (xPx / rect.width) * chart.W;
+                   const ratio = Math.max(0, Math.min(1, (vbx - chart.pad.l) / chart.iW));
+                   const idx = Math.round(ratio * (snapshots.length - 1));
+                   setHoverIdx(idx);
+                 }}>
+              {/* Weekend vertical bands — soft, subtle, for temporal anchoring */}
+              {snapshots.map((s, i) => {
+                if (!s?.date) return null;
+                const dow = new Date(s.date + "T00:00:00").getDay(); // 0=Sun, 6=Sat
+                if (dow !== 0 && dow !== 6) return null;
+                const bandW = chart.iW / Math.max(snapshots.length - 1, 1);
+                return <rect key={`wk-${i}`} x={chart.sx(i) - bandW / 2} y={chart.pad.t}
+                             width={bandW} height={chart.iH} fill="#1c1917" opacity="0.5" />;
+              })}
               {/* Grid */}
               {[0,25,50,75,100].map(v => (
                 <line key={v} x1={chart.pad.l} x2={chart.W - chart.pad.r} y1={chart.syD(v)} y2={chart.syD(v)} stroke="#374151" strokeWidth="0.5" />
               ))}
-              {/* Demand bars — slim & soft so they don't fight the price lines for attention */}
+              {/* Demand bars — very subtle behind the price lines so they never fight for attention */}
               {snapshots.map((s, i) => {
                 const h = (s.unavailable_pct / 100) * chart.iH;
-                const x = chart.sx(i) - 3;
+                const x = chart.sx(i) - 2.5;
                 const y = chart.pad.t + chart.iH - h;
                 const hot = s.unavailable_pct >= 80;
                 return (
-                  <rect key={`bar-${i}`} x={x} y={y} width={6} height={h} rx={1.5}
-                    fill={hot ? "#ef4444" : s.unavailable_pct >= 60 ? "#14b8a6" : "#10b981"} opacity="0.35" />
+                  <rect key={`bar-${i}`} x={x} y={y} width={5} height={h} rx={1.5}
+                    fill={hot ? "#ef4444" : s.unavailable_pct >= 60 ? "#14b8a6" : "#10b981"} opacity="0.22" />
                 );
               })}
-              {/* Price line — MARKET AVERAGE (dashed amber, thicker so it reads well among competitors) */}
-              <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeDasharray="6 3" opacity="0.9" strokeLinecap="round" />
-              {/* Price dots + compact labels — only every ~6th point so it doesn't look crowded */}
-              {snapshots.map((s, i) => {
-                const labelStep = snapshots.length > 20 ? 6 : snapshots.length > 10 ? 4 : 3;
-                const showLabel = i % labelStep === 0 || i === snapshots.length - 1;
-                const cy = chart.syP(s.avg_price || 0);
-                return (
-                  <g key={`dot-${i}`}>
-                    <circle cx={chart.sx(i)} cy={cy} r="2.5" fill="#fbbf24" stroke="#0a0a0a" strokeWidth="0.8" />
-                    {showLabel && s.avg_price > 0 && (
-                      <text x={chart.sx(i)} y={cy - 7} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#fbbf24" fontFamily="'Inter', system-ui, sans-serif" opacity="0.9">
-                        {curShort(s.avg_price)}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-              {/* === OUR HOTEL: occupancy bars (outlined, narrower, overlaid on demand bars) === */}
-              {snapshots.map((s, i) => {
-                if (s.our_occupancy_pct == null) return null;
-                const h = (s.our_occupancy_pct / 100) * chart.iH;
-                const x = chart.sx(i) - 2;
-                const y = chart.pad.t + chart.iH - h;
-                const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
-                const showLabel = i % labelStep === 0;
-                return (
-                  <g key={`our-occ-${i}`}>
-                    {/* Outlined marker on top of rakip bar at our occupancy level */}
-                    <rect x={x} y={y - 1} width={4} height={2} fill="#22d3ee" opacity="0.95" />
-                    <line x1={chart.sx(i) - 5} x2={chart.sx(i) + 5} y1={y} y2={y} stroke="#22d3ee" strokeWidth="2" />
-                    {showLabel && s.our_occupancy_pct > 0 && (
-                      <text x={chart.sx(i) + 9} y={y + 3} textAnchor="start" fontSize="7.5" fontWeight="800" fill="#22d3ee">
-                        {s.our_occupancy_pct}%
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-              {/* === OUR HOTEL: price line (solid thicker violet — hero line) === */}
+              {/* === MARKET AVERAGE (dashed amber, smoothed) — dim when user is hovering a competitor === */}
+              <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="2"
+                    strokeDasharray="6 3"
+                    opacity={hoveredCompId ? 0.25 : 0.9} strokeLinecap="round" />
+              {/* === OUR HOTEL price line (solid thicker violet — hero line) === */}
               {chart.ourLinePath && (
-                <path d={chart.ourLinePath} fill="none" stroke="#a78bfa" strokeWidth="2.8" opacity="1" />
+                <path d={chart.ourLinePath} fill="none" stroke="#a78bfa" strokeWidth="3"
+                      opacity={hoveredCompId ? 0.25 : 1} strokeLinecap="round" strokeLinejoin="round" />
               )}
-              {/* === OUR HOTEL: price dots + sparse labels === */}
-              {snapshots.map((s, i) => {
-                if (!s.our_avg_rate || s.our_avg_rate <= 0) return null;
-                const labelStep = snapshots.length > 20 ? 6 : snapshots.length > 10 ? 4 : 3;
-                const showLabel = i % labelStep === 0 || i === snapshots.length - 1;
-                const cy = chart.syP(s.our_avg_rate);
+              {/* === COMPETITOR LINES — dimmed/highlighted based on legend hover === */}
+              {chart.compLines.map((c) => {
+                if (!c.path || hiddenComps[c.id]) return null;
+                const isHovered = hoveredCompId === c.id;
+                const isDimmed = hoveredCompId && !isHovered;
                 return (
-                  <g key={`our-dot-${i}`}>
-                    <circle cx={chart.sx(i)} cy={cy} r="3" fill="#a78bfa" stroke="#0a0a0a" strokeWidth="0.8" />
-                    {showLabel && (
-                      <text x={chart.sx(i)} y={cy + 14} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#c4b5fd">
-                        {curShort(s.our_avg_rate)}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-              {/* === COMPETITOR LINES — one per competitor, stable colour. Respects the
-                  user's show/hide toggle from the left-side legend. Solid + thin so they
-                  don't overpower the hero violet (our hotel) or dashed amber (market avg). === */}
-              {chart.compLines.map((c) => (
-                c.path && !hiddenComps[c.id] && (
-                  <g key={`comp-${c.id}`}>
-                    <path d={c.path} fill="none" stroke={c.colour} strokeWidth="1.6" opacity="0.85" strokeLinecap="round" strokeLinejoin="round" />
-                    {c.points.map((p, i) => (
-                      <circle key={i} cx={p.x} cy={p.y} r="1.6" fill={c.colour} opacity="0.85" />
+                  <g key={`comp-${c.id}`} style={{ transition: "opacity 0.15s" }}>
+                    <path d={c.path} fill="none" stroke={c.colour}
+                          strokeWidth={isHovered ? 2.8 : 1.6}
+                          opacity={isDimmed ? 0.12 : (isHovered ? 1 : 0.7)}
+                          strokeLinecap="round" strokeLinejoin="round" />
+                    {isHovered && c.points.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r="2.4" fill={c.colour} stroke="#0a0a0a" strokeWidth="0.6" />
                     ))}
                   </g>
-                )
-              ))}
+                );
+              })}
+              {/* === HOVER CROSSHAIR + TOOLTIP === */}
+              {hoverIdx !== null && snapshots[hoverIdx] && (() => {
+                const s = snapshots[hoverIdx];
+                const hx = chart.sx(hoverIdx);
+                const dt = new Date(s.date + "T00:00:00");
+                const dowLabel = dt.toLocaleDateString("en", { weekday: "short" });
+                // Build tooltip rows: Our + Market + visible comps, sorted by price desc
+                const rows = [];
+                if (s.our_avg_rate > 0) rows.push({ label: ourHotelName || "Biz", price: s.our_avg_rate, colour: "#a78bfa", hero: true });
+                if (s.avg_price > 0) rows.push({ label: "Pazar Avg", price: s.avg_price, colour: "#f59e0b", dashed: true });
+                chart.compLines.forEach((c) => {
+                  if (hiddenComps[c.id]) return;
+                  const v = competitorSeries.find(cs => cs.id === c.id)?.prices_by_date?.[s.date];
+                  if (v) rows.push({ label: c.name, price: v, colour: c.colour });
+                });
+                rows.sort((a, b) => b.price - a.price);
+                const tipW = 180, rowH = 14, tipH = 28 + rows.length * rowH;
+                const flipLeft = hx + tipW + 12 > chart.W - chart.pad.r;
+                const tipX = flipLeft ? hx - tipW - 10 : hx + 10;
+                const tipY = Math.max(chart.pad.t + 4, Math.min(chart.pad.t + 20, chart.H - tipH - 4));
+                return (
+                  <g key={`hover-${hoverIdx}`} style={{ pointerEvents: "none" }}>
+                    {/* crosshair */}
+                    <line x1={hx} x2={hx} y1={chart.pad.t} y2={chart.pad.t + chart.iH}
+                          stroke="#a8a29e" strokeWidth="0.8" strokeDasharray="2 3" opacity="0.75" />
+                    {/* tooltip card */}
+                    <rect x={tipX} y={tipY} width={tipW} height={tipH} rx="6"
+                          fill="#0a0a0a" stroke="#44403c" strokeWidth="1" opacity="0.96" />
+                    <text x={tipX + 8} y={tipY + 14} fontSize="10" fontWeight="800" fill="#fafaf9">
+                      {dt.toLocaleDateString("en", { day: "2-digit", month: "short" })} <tspan fill="#a8a29e" fontWeight="600">·{dowLabel}</tspan>
+                    </text>
+                    <text x={tipX + tipW - 8} y={tipY + 14} fontSize="9" fontWeight="700" fill="#fbbf24" textAnchor="end">
+                      Talep {Math.round(s.unavailable_pct || 0)}%
+                    </text>
+                    {rows.map((r, ri) => (
+                      <g key={ri}>
+                        <circle cx={tipX + 12} cy={tipY + 26 + ri * rowH + 2} r="3" fill={r.colour} />
+                        <text x={tipX + 22} y={tipY + 30 + ri * rowH} fontSize="9.5"
+                              fontWeight={r.hero ? "800" : "600"} fill={r.hero ? "#ddd6fe" : "#e7e5e4"}>
+                          {r.label.length > 20 ? r.label.slice(0, 19) + "…" : r.label}
+                        </text>
+                        <text x={tipX + tipW - 8} y={tipY + 30 + ri * rowH} fontSize="9.5"
+                              fontWeight="800" fill={r.colour} textAnchor="end">
+                          {curShort(r.price)}
+                        </text>
+                      </g>
+                    ))}
+                  </g>
+                );
+              })()}
               {/* Date labels */}
               {snapshots.map((s, i) => {
                 if (!s?.date) return null;

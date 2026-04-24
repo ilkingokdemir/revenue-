@@ -47,6 +47,31 @@ export default function OurBookingLiveCard({ propertyId }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // ⚡ Live refresh every 45s while visible + on tab-focus, so fresh OTA scrapes land on-screen
+  // without requiring the user to hit reload. Skip while actively scraping to avoid flicker.
+  useEffect(() => {
+    let timer = null;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      if (document.visibilityState === "visible" && !scraping) {
+        try { await load(); } catch { /* silent */ }
+      }
+      if (!cancelled) timer = setTimeout(tick, 45000);
+    };
+    timer = setTimeout(tick, 45000);
+    const onFocus = () => { if (!cancelled) load().catch(() => {}); };
+    const onVisible = () => { if (document.visibilityState === "visible" && !cancelled) load().catch(() => {}); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [load, scraping]);
+
   const cur = useMemo(() => makeCurrencyFormatter(data?.currency || data?.city || ""), [data]);
 
   const testUrl = async () => {

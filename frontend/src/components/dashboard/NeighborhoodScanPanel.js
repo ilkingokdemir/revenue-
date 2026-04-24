@@ -68,6 +68,32 @@ export default function NeighborhoodScanPanel({ propertyId }) {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
+  // ⚡ Live updates: poll every 30s while the tab is visible + refresh when user returns to tab.
+  // The Market Robot runs scans every 2 hours in the background, so without polling the chart
+  // only changed when the user manually navigated. Now it stays in sync automatically.
+  useEffect(() => {
+    let timer = null;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      if (document.visibilityState === "visible" && !refreshing) {
+        try { await loadAll(); } catch { /* silent */ }
+      }
+      if (!cancelled) timer = setTimeout(tick, 30000);
+    };
+    timer = setTimeout(tick, 30000);
+    const onFocus = () => { if (!cancelled) loadAll().catch(() => {}); };
+    const onVisible = () => { if (document.visibilityState === "visible" && !cancelled) loadAll().catch(() => {}); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadAll, refreshing]);
+
   // Prefill the Fix dialog when opened — from property record or current scan location
   useEffect(() => {
     if (fixOpen) {
@@ -259,9 +285,15 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               <MapPin className="w-6 h-6 text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-xl font-black text-emerald-300">Neighborhood Scan</h2>
+              <h2 className="text-xl font-black text-emerald-300 flex items-center gap-2">
+                Neighborhood Scan
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400/80 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-1.5 py-0.5" title="Chart auto-updates every 30s">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live · 30s
+                </span>
+              </h2>
               <p className="text-xs text-stone-400 mt-1">
-                Booking.com hotels within <span className="text-emerald-300 font-semibold">{miles} miles</span> · runs <span className="text-amber-300 font-semibold">in parallel</span> with city scan.
+                Booking.com hotels within <span className="text-emerald-300 font-semibold">{miles} miles</span> · runs <span className="text-amber-300 font-semibold">in parallel</span> with city scan · <span className="text-emerald-300 font-semibold">veri geldikçe otomatik güncellenir</span>.
               </p>
             </div>
           </div>

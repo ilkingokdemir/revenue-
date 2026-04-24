@@ -4,6 +4,20 @@
 
 
 
+### Iter 183 (Apr 2026): ⚡ Live Chart Polling — "Grafiklerin dinamik olması gerek"
+
+User wants charts to update as fresh scraped data lands — without requiring manual navigation/reload.
+
+**Added visible + invisible-tab aware polling to 4 cards:**
+- `NeighborhoodScanPanel` — every 30s + on focus + on `visibilitychange=visible`. Shows a green pulsing "Live · 30s" badge next to the title.
+- `OurBookingLiveCard` — every 45s + on focus.
+- `RankingAnalysisCard` — every 60s + on focus.
+- `MarketRobot.js` main dashboard — full `loadAll()` every 45s (was scanner-status-only every 15s).
+
+Polling respects `document.visibilityState` so background tabs don't hammer the backend. Skips while a user action (scrape/refresh) is already in flight to avoid UI flicker.
+
+
+
 ### Iter 182 (Apr 2026): 🐛 Neighborhood Chart Still Showing Stale Pre-Rewrite Data
 
 User report (TR): _"neighborhood grafikleri yanlış, scrap edilen data grafiklere yansıması gerek sorun var"_

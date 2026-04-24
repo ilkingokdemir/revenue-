@@ -49,10 +49,21 @@ export const MarketRobot = ({ propertyId }) => {
 
   useEffect(() => {
     loadAll();
-    const interval = setInterval(() => {
+    // ⚡ Live dashboard: full reload every 45s while visible, plus scanner status every 15s.
+    // Without this, competitor prices / supply / logs only updated when the user navigated.
+    const statusInterval = setInterval(() => {
       axios.get(`${API}/revenue/market-robot/${propertyId}/scanner/status`).then(r => setScannerStatus(r.data)).catch(() => {});
     }, 15000);
-    return () => clearInterval(interval);
+    const fullInterval = setInterval(() => {
+      if (document.visibilityState === "visible") loadAll();
+    }, 45000);
+    const onFocus = () => { loadAll(); };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(statusInterval);
+      clearInterval(fullInterval);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [propertyId]);
 
   // Listen to cross-tab navigation events (e.g. "Add Competitor" CTA from Analysis tab)

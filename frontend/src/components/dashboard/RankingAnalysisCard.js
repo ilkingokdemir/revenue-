@@ -59,6 +59,27 @@ export default function RankingAnalysisCard({ propertyId }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // ⚡ Live refresh every 60s while visible + on tab-focus, so ranking shifts as scans land.
+  useEffect(() => {
+    let timer = null;
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      if (document.visibilityState === "visible") {
+        try { await load(); } catch { /* silent */ }
+      }
+      if (!cancelled) timer = setTimeout(tick, 60000);
+    };
+    timer = setTimeout(tick, 60000);
+    const onFocus = () => { if (!cancelled) load().catch(() => {}); };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [load]);
+
   const cur = useMemo(() => makeCurrencyFormatter(data?.currency || data?.city || ""), [data]);
 
   if (loading) return <div className="bg-white border border-stone-200 rounded-2xl p-5 text-sm text-stone-400">Loading ranking analysis…</div>;

@@ -48,12 +48,29 @@ def create_demand_radar_router(db, require_roles):
         overrides = await db.rate_overrides.find({"property_id": property_id}, {"_id": 0}).to_list(1000)
         override_map = {ov["date"]: float(ov.get("custom_rate", base_rate)) for ov in overrides}
 
-        # Load events
+        # Load events — expand multi-day events to cover ALL their dates (start → end_date)
         events = await db.market_events.find({"property_id": property_id}, {"_id": 0}).to_list(500)
         event_map = {}
         for ev in events:
             ed = ev.get("date", "")
-            if ed:
+            if not ed:
+                continue
+            try:
+                start = datetime.strptime(ed, "%Y-%m-%d").date()
+                end_raw = ev.get("end_date") or ed
+                end = datetime.strptime(end_raw, "%Y-%m-%d").date()
+                if end < start:
+                    end = start
+                # Cap multi-day span at 30 days to guard against bad data
+                span_days = min((end - start).days, 30)
+                for offset in range(span_days + 1):
+                    day = (start + timedelta(days=offset)).strftime("%Y-%m-%d")
+                    # Keep highest HDS event per day when multiple events overlap
+                    existing = event_map.get(day)
+                    if existing is None or int(ev.get("hotel_demand_score") or 0) > int(existing.get("hotel_demand_score") or 0):
+                        event_map[day] = ev
+            except (ValueError, TypeError):
+                # Malformed date — fall back to single-date mapping
                 event_map[ed] = ev
 
         # Load competitors

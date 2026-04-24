@@ -4,6 +4,31 @@
 
 
 
+### Iter 174 (Feb 2026): 🎯 Event Intelligence — Multi-day event expansion bug fix on Demand Radar
+
+User report (TR): _"event intelcagcy tam calismiyor sanirim zurichteki evenlarin sadece ikisini gordum sadece how busy is market grafigi uzerinde"_
+
+**Root cause diagnosed (not an Event Intelligence scan bug — data was always correct!):**
+Event scan successfully found **13 Zurich events** including 9 multi-day ones (Art Basel 4 days, Zürich Film Festival 10 days, UCI Road World Championships 8 days, etc). But the "How Busy Is the Market?" chart in Demand Radar only marked the **start date** of each event — users saw a handful of red dots instead of full event spans. Multi-day events that overlapped with others (e.g. Pride Jun 19-20 overlapping Art Basel Jun 18-21) were effectively invisible.
+
+**Fix applied** (`/app/backend/routes/demand_radar.py`):
+- `event_map` build logic replaced: now expands every event across its `date` → `end_date` range (capped at 30 days as safety).
+- When multiple events overlap on the same day, keeps the one with the **highest Hotel Demand Score (HDS)** — so Art Basel (HDS=45) wins over Pride (HDS=35) on shared dates.
+- Graceful fallback to single-date mapping if `end_date` is malformed.
+
+**Other endpoints checked & verified already correct:**
+- `market_robot.py :: get_supply_data` (line 1374) — already expands with `start_d - 1 day` → `end_d + 1 day` sweep.
+- `market_robot.py :: get_demand_dashboard` (line 1672) — same correct sweep.
+- `market_robot.py :: get_adjustments_candidates` (line 2209) — same correct sweep.
+
+**Verified end-to-end:**
+- Before: Demand Radar 90-day view → 6 events / 6 event-days (start dates only; Pride hidden).
+- After: Demand Radar 90-day view → **6 unique events / 11 event-days** (Art Basel correctly spans 4 days, ETH Grad 2 days, SEF 2 days, UZH Grad 2 days — all multi-day events now properly visualized).
+- Playwright screenshot confirmed Zurich Marathon, ETH Zurich, Swiss Economic Forum, UZH Graduation, Art Basel 2026 all visible on the chart with proper red-dot markers and insight box reads "11 major events in the next 90 days".
+- `upcoming_events` count in sidebar populated correctly from Event Intelligence scans for the configured city (Zurich → 13 events).
+
+
+
 ### Iter 173 (Feb 2026): 🌍 Revenue Management & Market Robot — 7-language i18n support
 
 User feedback (TR): _"revenue managements icindeki modullerde ve ana modulde multi dil opsiyonu yok"_

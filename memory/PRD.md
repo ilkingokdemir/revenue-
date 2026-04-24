@@ -4,6 +4,27 @@
 
 
 
+### Iter 181 (Apr 2026): 🐛 Neighborhood Graph Wrong Data / Currency Mismatch
+
+User report (TR): _"neighborhood market grafigi doğru değil, bilgileri doğru yüklememiş ve yapılan scrap data yansımıyor"_
+
+**Root causes found:**
+1. The old permissive auto-sync rule in `PUT /market-robot/{pid}/config` was overwriting each property's `.city` and `.currency` every time its scan city was touched — which caused `aldgate-flats` (London, E1 6AN), `vilenza-hotel` (London) and `whitechapel-grand` (London) to all be flipped to Zurich/CHF and EUR/USD respectively. The Neighborhood chart therefore labelled GBP prices as "CHF" or a mix and "bizin fiyat" looked like pazar çok üstünde.
+2. `_scrape_booking_date` was not passing `selected_currency` to Booking.com, so the scraper grabbed whatever currency the datacenter IP's geo said (USD on some runs, EUR on others), baking inconsistent numbers into `market_supply`.
+3. `market_supply` snapshots had no per-row currency stamp, so the UI trusted `property.currency` — which is the exact field that was corrupted.
+
+**Fixes applied:**
+- `_scrape_booking_date(..., currency=...)` now forces `selected_currency=<ISO>` on every Booking.com URL. `_do_scan` resolves the scan currency in this priority: explicit → property (for geo) → mr config → GBP default.
+- Every `market_supply` row now includes `scan_currency`. `get_geo_supply_data` trusts that field first, falls back to property.currency only for pre-rewrite rows.
+- `PUT /market-robot/{pid}/config` no longer overwrites existing property city/currency — it only fills empty slots (first-run seeding).
+- New `POST /revenue/market-robot/{pid}/fix-property-location` (and "Fix Branch Location" amber button in `NeighborhoodScanPanel`): resets city+currency+postcode, and by default purges stale snapshots whose `scan_currency` doesn't match. Prevents future cross-contamination.
+- Data migration run: `aldgate-flats → London/GBP/E1 6AN`, `vilenza-hotel → London/GBP`, `whitechapel-grand → London/GBP`. 16,309 stale snapshots cleared. Fresh GBP scan produced correct £179.58 avg for London.
+
+**Verified:**
+- Neighborhood Scan for `aldgate-flats` now shows London in header, E1 6AN location, and all prices in £: Market Avg £158, Low £66, High £463. "Biz vs Pazar" comparison correct.
+
+
+
 ### Iter 180 (Apr 2026): 🐛 Scraper v2 — Detail-page anti-bot bypass via /searchresults endpoint
 
 User report (TR): _"bizim hotel fiyatlari CHF 277 ... sen yanlis fiyat yazmisin"_ — the `booking_scraper.py` from Iter 179 still returned no price for the user's exact dated URL `/hotel/ch/franziskaner-by-centra?checkin=2026-04-23&checkout=2026-04-24`. Deep investigation showed Booking.com fires a `__challenge_...` JS gate on the `/hotel/` detail page for datacenter IPs and silently strips the price table from the DOM — zero `CHF` tokens were reaching any regex we wrote.

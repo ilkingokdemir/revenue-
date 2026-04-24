@@ -33,20 +33,28 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [ourSummary, setOurSummary] = useState(null);
   const [saving, setSaving] = useState(false);
   const [highlightDate, setHighlightDate] = useState(null);
+  // Fix Branch Location dialog
+  const [fixOpen, setFixOpen] = useState(false);
+  const [fixCity, setFixCity] = useState("");
+  const [fixCurrency, setFixCurrency] = useState("");
+  const [fixPostcode, setFixPostcode] = useState("");
+  const [fixing, setFixing] = useState(false);
+  const [propInfo, setPropInfo] = useState({ city: "", currency: "" });
 
   const loadAll = useCallback(async () => {
     try {
-      const [{ data: supply }, { data: cfg }] = await Promise.all([
+      const [{ data: supply }, { data: cfg }, { data: ob }] = await Promise.all([
         axios.get(`${API}/revenue/market-robot/${propertyId}/geo-supply?days=${days}`),
         axios.get(`${API}/revenue/market-robot/${propertyId}/geo-config`),
+        axios.get(`${API}/revenue/market-robot/${propertyId}/our-booking`).catch(() => ({ data: {} })),
       ]);
-      // Attach property_currency into summary so `cur` formatter picks it up
       const sum = supply.summary || {};
       if (supply.property_currency) sum.property_currency = supply.property_currency;
       setSummary(sum);
       setSnapshots(supply.snapshots || []);
       setOurSummary(supply.our_summary || null);
       setAutoCfg(cfg);
+      setPropInfo({ city: ob?.city || "", currency: ob?.currency || supply.property_currency || "" });
       if (cfg && !location && cfg.location) {
         setLocation(cfg.location);
         setRadiusKm(cfg.radius_km || 3.2);
@@ -58,6 +66,37 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   }, [propertyId, days]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+
+  // Prefill the Fix dialog when opened — from property record or current scan location
+  useEffect(() => {
+    if (fixOpen) {
+      setFixCity(propInfo.city || "");
+      setFixCurrency(propInfo.currency || "");
+      setFixPostcode(location || "");
+    }
+  }, [fixOpen, propInfo, location]);
+
+  const applyLocationFix = async () => {
+    if (!fixCity.trim() || !fixCurrency.trim()) {
+      toast.error("City and currency are required");
+      return;
+    }
+    setFixing(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/fix-property-location`, {
+        city: fixCity.trim(),
+        currency: fixCurrency.trim().toUpperCase(),
+        postcode: fixPostcode.trim(),
+        clear_stale_snapshots: true,
+      });
+      toast.success(data.message || "Fixed");
+      setFixOpen(false);
+      loadAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Fix failed");
+    }
+    setFixing(false);
+  };
 
   const runScan = async () => {
     if (!location.trim() && !(latitude && longitude)) { toast.error("Enter a postcode/address OR coordinates"); return; }
@@ -195,12 +234,21 @@ export default function NeighborhoodScanPanel({ propertyId }) {
             </div>
           </div>
           {autoCfg && (
-            <button onClick={toggleAuto}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all ${autoCfg.enabled ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" : "bg-stone-800 text-stone-400 hover:bg-stone-700"}`}
-              data-testid="geo-auto-toggle">
-              {autoCfg.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
-              Auto-Scan {autoCfg.enabled ? "ON" : "OFF"}
-            </button>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button onClick={() => setFixOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30"
+                data-testid="fix-location-btn"
+                title="Bu şubenin şehir/currency/postkod ayarlarını düzelt ve eski veriyi temizle">
+                <MapPin className="w-4 h-4" />
+                Fix Branch Location
+              </button>
+              <button onClick={toggleAuto}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all ${autoCfg.enabled ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" : "bg-stone-800 text-stone-400 hover:bg-stone-700"}`}
+                data-testid="geo-auto-toggle">
+                {autoCfg.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                Auto-Scan {autoCfg.enabled ? "ON" : "OFF"}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -675,6 +723,64 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           <Clock className="w-10 h-10 text-stone-600 mx-auto mb-2" />
           <p className="text-sm text-stone-400">No neighborhood scans yet</p>
           <p className="text-xs text-stone-500 mt-1">Enter a postcode above and hit Scan to see supply & price data around your target area.</p>
+        </div>
+      )}
+
+      {/* Fix Branch Location dialog */}
+      {fixOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" data-testid="fix-location-dialog">
+          <div className="bg-stone-950 border border-amber-500/40 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div>
+              <h3 className="text-base font-black text-amber-300 flex items-center gap-2">
+                <MapPin className="w-4 h-4" /> Fix Branch Location
+              </h3>
+              <p className="text-[11px] text-stone-400 mt-1 leading-relaxed">
+                Bu şubenin <b>şehir</b>, <b>currency</b> ve <b>postkod</b> ayarlarını düzeltir.
+                Önceki (yanlış currency ile kaydedilmiş) scrap verileri temizlenir —
+                bir sonraki tarama doğru currency ile çalışır.
+              </p>
+              <p className="text-[10px] text-stone-500 mt-1">
+                Şu anki property kaydı: <span className="font-mono text-stone-300">{propInfo.city || "—"}</span> · <span className="font-mono text-stone-300">{propInfo.currency || "—"}</span>
+              </p>
+            </div>
+            <div className="space-y-2.5">
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1 tracking-wider">City</label>
+                <input value={fixCity} onChange={e => setFixCity(e.target.value)} placeholder="e.g. London"
+                  className="w-full px-3 py-2 text-sm bg-stone-900 border border-stone-700 rounded-lg text-stone-100"
+                  data-testid="fix-city-input" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1 tracking-wider">Currency (ISO)</label>
+                  <select value={fixCurrency} onChange={e => setFixCurrency(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-stone-900 border border-stone-700 rounded-lg text-stone-100"
+                    data-testid="fix-currency-input">
+                    <option value="">—</option>
+                    {["GBP","EUR","USD","CHF","TRY","JPY","CAD","AUD","SEK","DKK","NOK","AED"].map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-stone-400 mb-1 tracking-wider">Postcode <span className="opacity-50 font-normal">(optional)</span></label>
+                  <input value={fixPostcode} onChange={e => setFixPostcode(e.target.value)} placeholder="e.g. E1 6AN"
+                    className="w-full px-3 py-2 text-sm bg-stone-900 border border-stone-700 rounded-lg text-stone-100"
+                    data-testid="fix-postcode-input" />
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-800">
+              <button onClick={() => setFixOpen(false)}
+                className="px-3 py-1.5 text-xs rounded-lg text-stone-400 hover:bg-stone-900" data-testid="fix-cancel-btn">
+                Cancel
+              </button>
+              <button onClick={applyLocationFix} disabled={fixing || !fixCity.trim() || !fixCurrency.trim()}
+                className="px-4 py-1.5 text-xs font-bold rounded-lg bg-amber-500 hover:bg-amber-400 text-black disabled:opacity-50 flex items-center gap-1.5"
+                data-testid="fix-apply-btn">
+                {fixing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                {fixing ? "Fixing…" : "Fix & Clear Stale"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

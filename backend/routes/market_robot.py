@@ -142,21 +142,28 @@ def create_market_robot_router(db, require_roles, resend=None):
 
     async def _scrape_booking_date(location: str, checkin: str, checkout: str, language: str = "en-gb",
                                    latitude: Optional[float] = None, longitude: Optional[float] = None,
-                                   radius_km: Optional[float] = None):
+                                   radius_km: Optional[float] = None, currency: Optional[str] = None):
         """Scrape Booking.com search results. Accepts either free-text location (city/postcode/address)
-        OR coordinates+radius for precise geo-radius scanning."""
+        OR coordinates+radius for precise geo-radius scanning.
+
+        `currency` pins Booking.com's price rendering to an ISO code (e.g. 'GBP' for London
+        scans). Without this, Booking falls back to datacenter geo-IP currency and the
+        extracted numbers become inconsistent — which is what users saw on the Neighborhood
+        chart (London postcode scans showing CHF-labelled numbers that were actually EUR/USD).
+        """
         # URL params: ss=location for text, or latitude+longitude+nflt=distance for precise geo
+        cur_param = f"&selected_currency={currency.upper()}" if currency else ""
         if latitude is not None and longitude is not None and radius_km:
             # Booking.com geo-radius filter: distance in meters
             radius_m = int(radius_km * 1000)
             url = (f"https://www.booking.com/searchresults.{language}.html?"
                    f"ss={location or 'Hotel'}&latitude={latitude}&longitude={longitude}"
                    f"&checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1&group_children=0"
-                   f"&nflt=distance%3D{radius_m}")
+                   f"&nflt=distance%3D{radius_m}{cur_param}")
         else:
             url = (f"https://www.booking.com/searchresults.{language}.html?"
                    f"ss={location}&checkin={checkin}&checkout={checkout}"
-                   f"&group_adults=2&no_rooms=1&group_children=0")
+                   f"&group_adults=2&no_rooms=1&group_children=0{cur_param}")
 
         # Strategy 1: Direct request with rotating headers
         user_agents = [
@@ -519,6 +526,97 @@ def create_market_robot_router(db, require_roles, resend=None):
                 return code
         return ""
 
+    @router.post("/revenue/market-robot/{property_id}/fix-property-location")
+    async def fix_property_location(property_id: str, data: Dict,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Reset a property's city/currency/scan_city to the correct values.
+
+        Why this exists: earlier iterations had an aggressive auto-sync rule that overwrote
+        properties.city/currency whenever the Market Robot scan city was changed — causing
+        e.g. `aldgate-flats` (London) to be flipped to Zurich/CHF. This endpoint lets users
+        snap a branch back to its correct location and optionally wipe stale snapshots
+        tagged with the wrong currency.
+
+        Body: {
+            city: str,                  # e.g. "London"
+            currency: str,              # e.g. "GBP"
+            postcode?: str,             # e.g. "E1 6AN" — also updates geo-config location
+            clear_stale_snapshots?: bool (default=true)  # drops market_supply rows with mismatched scan_currency
+        }
+        """
+        city = (data.get("city") or "").strip().title()
+        currency = (data.get("currency") or "").strip().upper()
+        postcode = (data.get("postcode") or "").strip()
+        clear_stale = bool(data.get("clear_stale_snapshots", True))
+
+        if not city:
+            raise HTTPException(400, "'city' is required")
+        if not currency:
+            raise HTTPException(400, "'currency' is required")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        # 1) Fix the properties record
+        await db.properties.update_one(
+            {"id": property_id},
+            {"$set": {
+                "city": city,
+                "currency": currency,
+                "currency_auto_set_from": None,  # user-set, not auto-inferred
+                "currency_updated_at": now_iso,
+                "location_fixed_at": now_iso,
+            }},
+        )
+
+        # 2) Fix the market_robot_config (scan city + scan currency)
+        await db.market_robot_config.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "city": city,
+                "currency": currency,
+                "updated_at": now_iso,
+            }},
+            upsert=True,
+        )
+
+        # 3) Fix the geo-config if a postcode was passed
+        if postcode:
+            await db.market_robot_geo_config.update_one(
+                {"property_id": property_id},
+                {"$set": {
+                    "property_id": property_id,
+                    "location": postcode,
+                    "updated_at": now_iso,
+                }},
+                upsert=True,
+            )
+
+        # 4) Optionally drop snapshots that were stored with a different currency (stale data)
+        deleted = 0
+        if clear_stale:
+            res = await db.market_supply.delete_many({
+                "property_id": property_id,
+                "$or": [
+                    {"scan_currency": {"$exists": False}},
+                    {"scan_currency": {"$ne": currency}},
+                ],
+            })
+            deleted = res.deleted_count
+
+        return {
+            "ok": True,
+            "property_id": property_id,
+            "city": city,
+            "currency": currency,
+            "postcode": postcode or None,
+            "stale_snapshots_cleared": deleted,
+            "message": (
+                f"✅ {property_id} reset: city→{city}, currency→{currency}"
+                f"{f', postcode→{postcode}' if postcode else ''}"
+                f"{f' · cleared {deleted} stale snapshot(s)' if deleted else ''}"
+            ),
+        }
+
     @router.put("/revenue/market-robot/{property_id}/config")
     async def update_config(property_id: str, data: Dict,
                             current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -526,39 +624,26 @@ def create_market_robot_router(db, require_roles, resend=None):
         data["property_id"] = property_id
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.market_robot_config.update_one({"property_id": property_id}, {"$set": data}, upsert=True)
-        # === Auto-sync property currency & city from scan city ===
-        # When a hotel starts scanning Zurich → set its currency to CHF + property.city to Zurich automatically
+        # === Conservative currency sync ===
+        # We DO NOT overwrite property.city/currency just because the scanner is tracking a
+        # different market — the "scan city" is a market-intelligence setting, not the hotel's
+        # actual location. Stale data from an earlier permissive version caused branches like
+        # aldgate-flats (London) to be flipped to Zurich/CHF. Only fill these when the
+        # property record is still empty (first-run seed) so real hotels keep their identity.
         new_city = (data.get("city") or "").strip()
         inferred = _infer_currency(new_city)
         if new_city:
-            prop_update = {"city": new_city.title()}  # Prettify: zurich → Zurich
-            if inferred:
+            prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1, "city": 1})
+            prop_update = {}
+            if prop and not (prop.get("city") or "").strip():
+                prop_update["city"] = new_city.title()
+            if prop and inferred and not (prop.get("currency") or "").strip():
                 prop_update["currency"] = inferred
                 prop_update["currency_auto_set_from"] = new_city
                 prop_update["currency_updated_at"] = datetime.now(timezone.utc).isoformat()
-            prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1, "city": 1})
-            needs_update = (
-                not prop
-                or prop.get("city") != prop_update["city"]
-                or (inferred and prop.get("currency") != inferred)
-            )
-            if needs_update:
-                await db.properties.update_one(
-                    {"id": property_id},
-                    {"$set": prop_update},
-                )
-                logger.info(
-                    f"💱 Property {property_id} synced from scan city: "
-                    f"city→{prop_update['city']}"
-                    f"{f', currency→{inferred}' if inferred else ''}"
-                )
-            # Also sync currency into market_robot_config (even if client sent stale currency,
-            # we trust the city-derived currency for auto-detected cities)
-            if inferred:
-                await db.market_robot_config.update_one(
-                    {"property_id": property_id},
-                    {"$set": {"currency": inferred}},
-                )
+            if prop_update:
+                await db.properties.update_one({"id": property_id}, {"$set": prop_update})
+                logger.info(f"💱 Property {property_id} city/currency first-fill from scan config: {prop_update}")
         return await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0})
 
     @router.post("/revenue/market-robot/sync-all-currencies")
@@ -739,10 +824,23 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "total_rooms": our_data[0]["our_total_rooms"],
             }
 
+        # The scan_currency stamp on each snapshot is the source of truth for chart labels —
+        # property.currency can drift, but the currency Booking.com rendered prices in is
+        # baked into each row. Fall back to property.currency only if the snapshot predates
+        # this field (older rows from before the 2026-04 scraper rewrite).
+        display_currency = "GBP"
+        if property_id != "all":
+            prop_cur = (await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}).get("currency", "GBP")
+            display_currency = prop_cur
+        if snaps:
+            latest_with_cur = next((s.get("scan_currency") for s in reversed(snaps) if s.get("scan_currency")), None)
+            if latest_with_cur:
+                display_currency = latest_with_cur
+
         return {
             "property_id": property_id,
             "snapshots": snaps,
-            "property_currency": (await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}).get("currency", "GBP") if property_id != "all" else "GBP",
+            "property_currency": display_currency,
             "summary": {
                 "total_snapshots": len(snaps),
                 "total_scans": total_scans,
@@ -753,6 +851,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "last_location": latest.get("location", ""),
                 "last_radius_km": latest.get("radius_km", 0),
                 "last_scan": latest.get("scanned_at", ""),
+                "scan_currency": display_currency,
             },
             "our_summary": our_summary,
             "auto_config": geo_cfg,
@@ -1240,6 +1339,16 @@ def create_market_robot_router(db, require_roles, resend=None):
         days_ahead = min(int(data.get("days_ahead") or config.get("days_ahead", 365)), 365)
         auto_pricing = config.get("auto_pricing", True) and not is_geo  # geo scans don't auto-price main property
         language = config.get("language", "en-gb")
+        # Pin Booking.com price rendering to a consistent ISO currency so all prices in the
+        # snapshot collection are comparable. Order: explicit request param → property record
+        # (most authoritative for geo scans) → mr config → default GBP.
+        prop_doc = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
+        scan_currency = (
+            data.get("currency")
+            or (prop_doc.get("currency") if is_geo else None)
+            or config.get("currency")
+            or "GBP"
+        )
 
         if is_geo:
             SCRAPE_RUNNING_GEO = True
@@ -1264,6 +1373,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 supply = await _scrape_booking_date(
                     location, checkin, checkout, language,
                     latitude=latitude, longitude=longitude, radius_km=radius_km,
+                    currency=scan_currency,
                 )
 
                 # Get previous snapshot for this date + same scan type
@@ -1299,6 +1409,9 @@ def create_market_robot_router(db, require_roles, resend=None):
                     "price_adjustment_pct": adj_pct,
                     "reason": reason,
                     "scanned_at": now.isoformat(),
+                    # Stamp the currency Booking.com was told to render in — essential for
+                    # charts to label prices correctly when a property's currency is later changed.
+                    "scan_currency": scan_currency,
                 }
                 await db.market_supply.insert_one(snapshot)
                 snapshot.pop("_id", None)

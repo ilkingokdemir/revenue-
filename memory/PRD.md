@@ -4,6 +4,38 @@
 
 
 
+### Iter 176 (Feb 2026): 💱 Property Currency Auto-Sync fix — My Hotel Zurich should show CHF not £
+
+User report (TR): _"my hotel zurichte ama tablolarda currency gbp gorunuyor yaptigimiz degisiklik uglamamisin"_
+
+**3 separate bugs found and all fixed:**
+
+**Bug 1 — Auto-sync never fired for "My Hotel" (property id `default`):**
+The existing PUT `/market-robot/{pid}/config` had auto-currency logic, but only ran when `new_city` mapped to a known currency AND the client didn't explicitly send `currency`. If user initially typed "zurich" lowercase, then later added `currency: "GBP"` explicitly (e.g. from previous session state), the sync was suppressed.
+- **Fix:** Rewrote the auto-sync block to ALWAYS:
+  1. Normalize city casing (`zurich → Zurich`)
+  2. Update `properties.city` field (previously only `currency` was synced)
+  3. Force-update `market_robot_config.currency` when city maps to a known ISO code, regardless of stale client-side value
+  4. Log `💱 Property X synced from scan city: city→Zurich, currency→CHF`
+
+**Bug 2 — No way to heal historical mismatches:**
+Several properties had stale city/currency from before the auto-sync was introduced. "My Hotel" had `city=""` and `currency=GBP` even though its market-robot scan city was "zurich". Same for ALDGATE FLATS (London/CHF mismatch) and CAMDEN SUITES (London/TRY mismatch).
+- **Fix:** New `POST /api/revenue/market-robot/sync-all-currencies` endpoint. One-shot migration that iterates all `market_robot_config` docs and re-derives city+currency for each property. Returns `{fixed_count, fixed: [...]}` diff log. Admin/manager only.
+- **Result after running:** 3 properties healed — My Hotel (→Zurich/CHF), ALDGATE FLATS (→Zurich), CAMDEN SUITES (→Istanbul).
+
+**Bug 3 — Demand Radar & Market Demand Dashboard didn't expose `property_currency`:**
+Backend correctly had CHF in DB after bugs 1+2 were fixed, but the charts still showed £. Root cause: the API responses for `/revenue/demand-radar/{pid}` and `/revenue/market-robot/{pid}/demand-dashboard` never included `property_currency` or `scan_city` fields, so the frontend `makeCurrencyFormatter()` always fell back to the GBP default.
+- **Fix backend:** Both endpoints now return `property_currency`, `city`, `scan_city` top-level fields resolved from `db.properties` + `db.market_robot_config`.
+- **Fix frontend (`MarketDemandDashboard.js`):** Removed hardcoded `const cur = (v) => \`£${...}\`` helper. Now uses `useMemo` with `makeCurrencyFormatter(data?.property_currency || data?.scan_city)` — dynamically binds formatter to whatever the API reports. DemandRadar.js already had this pattern, just needed the backend to feed it.
+
+**Verified end-to-end:**
+- `POST /sync-all-currencies` healed 3 properties in one call.
+- Demand Radar (`/demand-radar/default?days=30`) response: `property_currency=CHF, city=Zurich, scan_city=zurich` ✓
+- Market Demand Dashboard (`/demand-dashboard/default?days=30`): `property_currency=CHF, scan_city=zurich` ✓
+- Playwright screenshot on "My Hotel → Demand Radar" now shows: header `CHF -3.86`, AVG WAP `CHF 108.14`, Peak Date `Jun 6: 88% · CHF 125.00`, Quietest Date `May 18: 47% · CHF 130.00`. Zero `£` symbols remain.
+
+
+
 ### Iter 175 (Feb 2026): 🤖 Competitor Price Auto-Scanning — continuous background scraping
 
 User feedback (TR): _"competitors price surekli fiyatlarini taramiyor sanirim ve manuel yapiliyor, otomatik olarak surekli taramasi gerekmez mi"_

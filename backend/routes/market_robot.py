@@ -526,27 +526,79 @@ def create_market_robot_router(db, require_roles, resend=None):
         data["property_id"] = property_id
         data["updated_at"] = datetime.now(timezone.utc).isoformat()
         await db.market_robot_config.update_one({"property_id": property_id}, {"$set": data}, upsert=True)
-        # === Auto-sync property currency from scan city ===
-        # When a hotel starts scanning Zurich → set its currency to CHF automatically
+        # === Auto-sync property currency & city from scan city ===
+        # When a hotel starts scanning Zurich → set its currency to CHF + property.city to Zurich automatically
         new_city = (data.get("city") or "").strip()
         inferred = _infer_currency(new_city)
-        if inferred:
-            # Update property
-            prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1})
-            if prop and prop.get("currency") != inferred:
+        if new_city:
+            prop_update = {"city": new_city.title()}  # Prettify: zurich → Zurich
+            if inferred:
+                prop_update["currency"] = inferred
+                prop_update["currency_auto_set_from"] = new_city
+                prop_update["currency_updated_at"] = datetime.now(timezone.utc).isoformat()
+            prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1, "city": 1})
+            needs_update = (
+                not prop
+                or prop.get("city") != prop_update["city"]
+                or (inferred and prop.get("currency") != inferred)
+            )
+            if needs_update:
                 await db.properties.update_one(
                     {"id": property_id},
-                    {"$set": {"currency": inferred, "currency_auto_set_from": new_city,
-                              "currency_updated_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": prop_update},
                 )
-                logger.info(f"💱 Property {property_id} currency auto-updated to {inferred} (scan city: {new_city})")
-            # Also sync into market_robot_config so frontend picks it up immediately (unless user explicitly set one)
-            if "currency" not in data or not data.get("currency"):
+                logger.info(
+                    f"💱 Property {property_id} synced from scan city: "
+                    f"city→{prop_update['city']}"
+                    f"{f', currency→{inferred}' if inferred else ''}"
+                )
+            # Also sync currency into market_robot_config (even if client sent stale currency,
+            # we trust the city-derived currency for auto-detected cities)
+            if inferred:
                 await db.market_robot_config.update_one(
                     {"property_id": property_id},
                     {"$set": {"currency": inferred}},
                 )
         return await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0})
+
+    @router.post("/revenue/market-robot/sync-all-currencies")
+    async def sync_all_currencies(
+        current_user: dict = Depends(require_roles("admin", "manager"))
+    ):
+        """One-shot migration: re-sync every property's city+currency based on its current
+        market_robot_config.city. Useful after the auto-sync rule was introduced/changed."""
+        configs = await db.market_robot_config.find({}, {"_id": 0}).to_list(500)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        fixed = []
+        for cfg in configs:
+            pid = cfg.get("property_id")
+            city = (cfg.get("city") or "").strip()
+            if not pid or not city:
+                continue
+            inferred = _infer_currency(city)
+            prop = await db.properties.find_one({"id": pid}, {"_id": 0, "currency": 1, "city": 1, "name": 1})
+            if not prop:
+                continue
+            new_city = city.title()
+            changes = {}
+            if prop.get("city") != new_city:
+                changes["city"] = new_city
+            if inferred and prop.get("currency") != inferred:
+                changes["currency"] = inferred
+                changes["currency_auto_set_from"] = city
+                changes["currency_updated_at"] = now_iso
+            if changes:
+                await db.properties.update_one({"id": pid}, {"$set": changes})
+                if inferred:
+                    await db.market_robot_config.update_one(
+                        {"property_id": pid}, {"$set": {"currency": inferred}}
+                    )
+                fixed.append({
+                    "property_id": pid, "name": prop.get("name", ""),
+                    "old_city": prop.get("city", ""), "new_city": changes.get("city"),
+                    "old_currency": prop.get("currency", ""), "new_currency": changes.get("currency"),
+                })
+        return {"fixed_count": len(fixed), "fixed": fixed}
 
     @router.post("/revenue/market-robot/{property_id}/scan")
     async def run_scan(property_id: str, data: Dict = {},
@@ -1855,6 +1907,8 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "competitors_tracked": len(competitors),
                 "market_data_days": len(days_with_market),
             },
+            "property_currency": (await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}).get("currency", "GBP"),
+            "scan_city": (await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0, "city": 1}) or {}).get("city", ""),
         }
 
     @router.get("/revenue/market-robot/{property_id}/adjustments")

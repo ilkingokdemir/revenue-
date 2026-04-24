@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { Activity, TrendingUp, TrendingDown, BarChart3, RefreshCw, Zap, PartyPopper, ArrowUpRight, ArrowDownRight, Minus, Calendar } from "lucide-react";
+import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 const RANGES = [
   { value: 1, label: "Today" },
@@ -31,6 +31,12 @@ export const MarketDemandDashboard = ({ propertyId }) => {
   const [occData, setOccData] = useState(null);
   const [recentBookings, setRecentBookings] = useState(null);
   const [pickupWindow, setPickupWindow] = useState("24h");
+
+  // Currency formatter driven by property_currency / scan_city returned by the API
+  const cur = useMemo(() => {
+    const fmt = makeCurrencyFormatter(data?.property_currency || data?.scan_city || "");
+    return (v) => fmt.format(v);
+  }, [data]);
 
   const load = (days) => {
     setLoading(true);

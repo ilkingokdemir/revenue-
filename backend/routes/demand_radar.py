@@ -218,7 +218,14 @@ def create_demand_radar_router(db, require_roles):
         # ===== SUPPLY DYNAMICS =====
         supply_dynamics = [{"date": d["date"], "available": d["supply_available"], "total": d["total_properties"]} for d in daily if d["supply_available"] is not None]
 
+        # Load property + market-robot config to surface currency/city to the client
+        prop_doc = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1, "city": 1}) or {}
+        cfg_doc = await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0, "city": 1, "currency": 1}) or {}
+
         return {
+            "property_currency": prop_doc.get("currency") or cfg_doc.get("currency") or "GBP",
+            "city": prop_doc.get("city") or "",
+            "scan_city": cfg_doc.get("city") or "",
             "status": status,
             "status_text": status_text,
             "demand_change_pp": round(demand_change_pp),

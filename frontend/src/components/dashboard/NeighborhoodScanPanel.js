@@ -819,17 +819,20 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 const hx = chart.sx(hoverIdx);
                 const dt = new Date(s.date + "T00:00:00");
                 const dowLabel = dt.toLocaleDateString("en", { weekday: "short" });
-                // Build tooltip rows: Our + Market + visible comps, sorted by price desc
+                // Build tooltip rows: Our + Market + visible comps, sorted by price desc.
+                // Each non-market row gets Δ vs Pazar (absolute + %) so the revenue manager
+                // can spot at a glance who's over/under priced on this date.
+                const market = s.avg_price || 0;
                 const rows = [];
-                if (s.our_avg_rate > 0) rows.push({ label: ourHotelName || "Biz", price: s.our_avg_rate, colour: "#a78bfa", hero: true });
-                if (s.avg_price > 0) rows.push({ label: "Pazar Avg", price: s.avg_price, colour: "#f59e0b", dashed: true });
+                if (s.our_avg_rate > 0) rows.push({ label: ourHotelName || "Biz", price: s.our_avg_rate, colour: "#a78bfa", hero: true, isMarket: false });
+                if (market > 0) rows.push({ label: "Pazar Avg", price: market, colour: "#f59e0b", dashed: true, isMarket: true });
                 chart.compLines.forEach((c) => {
                   if (hiddenComps[c.id]) return;
                   const v = competitorSeries.find(cs => cs.id === c.id)?.prices_by_date?.[s.date];
-                  if (v) rows.push({ label: c.name, price: v, colour: c.colour });
+                  if (v) rows.push({ label: c.name, price: v, colour: c.colour, isMarket: false });
                 });
                 rows.sort((a, b) => b.price - a.price);
-                const tipW = 180, rowH = 14, tipH = 28 + rows.length * rowH;
+                const tipW = 235, rowH = 14, tipH = 28 + rows.length * rowH;
                 const flipLeft = hx + tipW + 12 > chart.W - chart.pad.r;
                 const tipX = flipLeft ? hx - tipW - 10 : hx + 10;
                 const tipY = Math.max(chart.pad.t + 4, Math.min(chart.pad.t + 20, chart.H - tipH - 4));
@@ -847,19 +850,36 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                     <text x={tipX + tipW - 8} y={tipY + 14} fontSize="9" fontWeight="700" fill="#fbbf24" textAnchor="end">
                       Talep {Math.round(s.unavailable_pct || 0)}%
                     </text>
-                    {rows.map((r, ri) => (
-                      <g key={ri}>
-                        <circle cx={tipX + 12} cy={tipY + 26 + ri * rowH + 2} r="3" fill={r.colour} />
-                        <text x={tipX + 22} y={tipY + 30 + ri * rowH} fontSize="9.5"
-                              fontWeight={r.hero ? "800" : "600"} fill={r.hero ? "#ddd6fe" : "#e7e5e4"}>
-                          {r.label.length > 20 ? r.label.slice(0, 19) + "…" : r.label}
-                        </text>
-                        <text x={tipX + tipW - 8} y={tipY + 30 + ri * rowH} fontSize="9.5"
-                              fontWeight="800" fill={r.colour} textAnchor="end">
-                          {curShort(r.price)}
-                        </text>
-                      </g>
-                    ))}
+                    {rows.map((r, ri) => {
+                      // Δ vs market: positive = above market (rose), negative = below (emerald).
+                      // Market row itself gets no delta — it's the baseline.
+                      const showDelta = !r.isMarket && market > 0;
+                      const delta = showDelta ? r.price - market : 0;
+                      const deltaPct = showDelta ? (delta / market) * 100 : 0;
+                      const above = delta > 0;
+                      const deltaColour = Math.abs(delta) < 0.5 ? "#a8a29e" : (above ? "#fb7185" : "#6ee7b7");
+                      const deltaStr = showDelta
+                        ? `${above ? "+" : ""}${curShort(delta)} ${above ? "+" : ""}${deltaPct.toFixed(1)}%`
+                        : "baseline";
+                      return (
+                        <g key={ri}>
+                          <circle cx={tipX + 10} cy={tipY + 26 + ri * rowH + 2} r="3" fill={r.colour} />
+                          <text x={tipX + 19} y={tipY + 30 + ri * rowH} fontSize="9.5"
+                                fontWeight={r.hero ? "800" : "600"} fill={r.hero ? "#ddd6fe" : "#e7e5e4"}>
+                            {r.label.length > 17 ? r.label.slice(0, 16) + "…" : r.label}
+                          </text>
+                          <text x={tipX + tipW - 78} y={tipY + 30 + ri * rowH} fontSize="9.5"
+                                fontWeight="800" fill={r.colour} textAnchor="end">
+                            {curShort(r.price)}
+                          </text>
+                          <text x={tipX + tipW - 8} y={tipY + 30 + ri * rowH} fontSize="8.5"
+                                fontWeight="700" fill={r.isMarket ? "#a8a29e" : deltaColour} textAnchor="end"
+                                fontStyle={r.isMarket ? "italic" : "normal"}>
+                            {deltaStr}
+                          </text>
+                        </g>
+                      );
+                    })}
                   </g>
                 );
               })()}

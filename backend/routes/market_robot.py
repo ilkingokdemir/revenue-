@@ -857,7 +857,27 @@ def create_market_robot_router(db, require_roles, resend=None):
         )
 
         # ===== OUR HOTEL — occupancy + price for same dates =====
+        # APPLES-TO-APPLES: Our chart line MUST use the same OTA surface as the market average.
+        # Booking.com `property.booking_data.daily_prices` is per-date scrape of our own listing —
+        # exactly what guests see. We prefer it over `rate_overrides` (which reflect internal
+        # price plans) so "Biz vs Pazar" compares the price a guest would pay on Booking.com
+        # vs the market median on Booking.com. Fallback to rate_overrides → base_rate_avg
+        # only if the Booking.com scrape doesn't cover that date yet.
         our_data = []
+        booking_by_date = {}
+        prop_full = {}
+        if property_id != "all":
+            prop_full = await db.properties.find_one(
+                {"id": property_id},
+                {"_id": 0, "booking_data": 1, "currency": 1},
+            ) or {}
+            bd = prop_full.get("booking_data") or {}
+            for p in (bd.get("daily_prices") or bd.get("prices") or []):
+                d = p.get("date")
+                lp = p.get("lowest_price")
+                if d and lp and p.get("scraped"):
+                    booking_by_date[d] = float(lp)
+
         if property_id != "all":
             room_types = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(50)
             total_rooms = sum(int(r.get("total_rooms", 0)) for r in room_types) or 20
@@ -874,28 +894,37 @@ def create_market_robot_router(db, require_roles, resend=None):
                     "status": {"$nin": ["cancelled"]},
                 })
                 occ = round(min(100, bookings_count / total_rooms * 100), 1)
-                # Our rate: latest rate_override for that date (any room type) else base_rate_avg
-                rate_doc = await db.rate_overrides.find_one(
-                    {"property_id": property_id, "date": target_date},
-                    {"_id": 0, "custom_rate": 1},
-                    sort=[("updated_at", -1)],
-                )
-                our_rate = round(float(rate_doc["custom_rate"]) if rate_doc and rate_doc.get("custom_rate") else base_rate_avg, 2)
+                # Priority 1: live Booking.com scrape for this date
+                bk_price = booking_by_date.get(target_date)
+                if bk_price and bk_price > 0:
+                    our_rate = round(bk_price, 2)
+                    our_rate_source = "booking_live"
+                else:
+                    rate_doc = await db.rate_overrides.find_one(
+                        {"property_id": property_id, "date": target_date},
+                        {"_id": 0, "custom_rate": 1},
+                        sort=[("updated_at", -1)],
+                    )
+                    our_rate = round(float(rate_doc["custom_rate"]) if rate_doc and rate_doc.get("custom_rate") else base_rate_avg, 2)
+                    our_rate_source = "override" if rate_doc else "base_rate"
                 our_data.append({
                     "date": target_date,
                     "our_occupancy_pct": occ,
                     "our_bookings": bookings_count,
                     "our_total_rooms": total_rooms,
                     "our_avg_rate": our_rate,
+                    "our_rate_source": our_rate_source,
                 })
 
         # Merge our_data into snapshots by date for the chart overlay
         our_by_date = {d["date"]: d for d in our_data}
+        booking_cover = sum(1 for d in our_data if d.get("our_rate_source") == "booking_live")
         for s in snaps:
             d = our_by_date.get(s.get("date"))
             if d:
                 s["our_occupancy_pct"] = d["our_occupancy_pct"]
                 s["our_avg_rate"] = d["our_avg_rate"]
+                s["our_rate_source"] = d["our_rate_source"]
                 s["our_bookings"] = d["our_bookings"]
                 s["our_total_rooms"] = d["our_total_rooms"]
 
@@ -906,6 +935,8 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "avg_occupancy_pct": round(sum(x["our_occupancy_pct"] for x in our_data) / len(our_data), 1),
                 "avg_rate": round(sum(x["our_avg_rate"] for x in our_data) / len(our_data), 2),
                 "total_rooms": our_data[0]["our_total_rooms"],
+                "booking_cover_days": booking_cover,
+                "booking_cover_pct": round((booking_cover / len(our_data)) * 100, 1) if our_data else 0,
             }
 
         # The scan_currency stamp on each snapshot is the source of truth for chart labels —
@@ -920,6 +951,16 @@ def create_market_robot_router(db, require_roles, resend=None):
             latest_with_cur = next((s.get("scan_currency") for s in reversed(snaps) if s.get("scan_currency")), None)
             if latest_with_cur:
                 display_currency = latest_with_cur
+
+        # Calculate data freshness safely
+        data_freshness_sec = None
+        if latest.get("scanned_at"):
+            try:
+                data_freshness_sec = int(
+                    (now - datetime.fromisoformat(latest["scanned_at"].replace("Z", "+00:00"))).total_seconds()
+                )
+            except Exception:
+                data_freshness_sec = None
 
         return {
             "property_id": property_id,
@@ -936,6 +977,9 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "last_radius_km": latest.get("radius_km", 0),
                 "last_scan": latest.get("scanned_at", ""),
                 "scan_currency": display_currency,
+                # Surface WHEN our overlay was last refreshed so the UI can show "Last updated Xm ago"
+                "our_source_refreshed_at": (prop_full.get("booking_data") or {}).get("snapshot_at"),
+                "data_freshness_seconds": data_freshness_sec,
             },
             "our_summary": our_summary,
             "auto_config": geo_cfg,

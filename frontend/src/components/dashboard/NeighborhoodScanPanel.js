@@ -280,6 +280,31 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Live · 30s
                 </span>
+                {summary?.data_freshness_seconds !== null && summary?.data_freshness_seconds !== undefined && (
+                  <span className="text-[10px] font-semibold text-stone-400 bg-stone-800/60 border border-stone-700 rounded-full px-2 py-0.5"
+                    title={`Last scrape: ${summary.last_scan || "—"}`}>
+                    {(() => {
+                      const s = Number(summary.data_freshness_seconds || 0);
+                      if (s < 60) return `Updated ${s}s ago`;
+                      if (s < 3600) return `Updated ${Math.round(s / 60)}m ago`;
+                      if (s < 86400) return `Updated ${Math.round(s / 3600)}h ago`;
+                      return `Updated ${Math.round(s / 86400)}d ago`;
+                    })()}
+                  </span>
+                )}
+                {ourSummary?.booking_cover_pct !== undefined && (
+                  <span
+                    className={`text-[10px] font-semibold rounded-full px-2 py-0.5 border ${
+                      ourSummary.booking_cover_pct >= 70
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                        : ourSummary.booking_cover_pct >= 30
+                        ? "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                        : "bg-rose-500/10 border-rose-500/30 text-rose-300"
+                    }`}
+                    title={`${ourSummary.booking_cover_days}/${snapshots.length} gün için Booking.com canlı fiyatımız var. Geri kalan günler internal rate'den hesaplanıyor.`}>
+                    Biz · {ourSummary.booking_cover_pct.toFixed(0)}% Booking.com live
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-stone-400 mt-1">
                 Booking.com hotels within <span className="text-emerald-300 font-semibold">{miles} miles</span> · runs <span className="text-amber-300 font-semibold">in parallel</span> with city scan · <span className="text-emerald-300 font-semibold">veri geldikçe otomatik güncellenir</span>.

@@ -4,6 +4,29 @@
 
 
 
+### Iter 186 (Apr 2026): 🐛 Neighborhood "Biz vs Pazar" Uses Wrong Price Source + Scanner Disabled
+
+User: _"neighborhood grafikleri dinamik değil, bizim ve piyasa fiyatları yanlış"_
+
+**Three distinct bugs uncovered:**
+
+1. **Apples-to-oranges comparison:** Chart's "Biz" line was pulling `rate_overrides` (internal price plans) while "Pazar" line came from live Booking.com scrapes. For Zurich this showed CHF 108 vs CHF 150 → user saw "biz fiyat yanlış" because it didn't match the CHF 160-303 actually live on Booking.com. Fix: `geo-supply` now prefers `property.booking_data.daily_prices` (our own Booking.com scrape) as `our_avg_rate`, falls back to `rate_overrides` → `base_rate_avg` only if that date isn't covered yet.
+
+2. **Wrong field name:** The scraper stores per-date prices under `booking_data.daily_prices`, but `get_geo_supply_data` was reading `booking_data.prices` (empty key). 0% Booking.com coverage. Fix: use `daily_prices` with `prices` as legacy fallback.
+
+3. **Zurich geo auto-scanner was `enabled=False`:** Every other branch (7× London/Istanbul) had `enabled=True` in `market_robot_geo_config`, but `default` (Zurich) was left off → the 2-hour auto-loop skipped it. `total_scans=1` for 48 hours = not dynamic. Fix: enabled=True on all branches with a location set; also `fix-property-location` and `neighborhood/refresh` endpoints now always set `enabled=True` on the geo-config so future branches don't hit this.
+
+**New UI badges in Neighborhood header:**
+- `Updated Xm ago` — from new `summary.data_freshness_seconds` field (shows how stale the scrape is)
+- `Biz · NN% Booking.com live` — color-coded (emerald ≥70%, amber 30-69%, rose <30%) — tells user what % of the "Biz" line is Booking.com-accurate vs internal-rate fallback
+
+**Verified for Zurich 30-day window:**
+- Before: our_avg_rate CHF 108.99, booking_cover 0%
+- After: our_avg_rate CHF 145.32, booking_cover 43.3% (13/30 days from Booking.com scrape) — matches the CHF 160-303 displayed in "Our Booking.com Live" widget.
+- Biz vs Pazar delta 3.6% below market (was falsely showing -27%).
+
+
+
 ### Iter 185 (Apr 2026): 📡 Revenue Action Feed — global live event drawer
 
 Revenue manager morning workflow: "Open app → see what happened overnight in 30 seconds".

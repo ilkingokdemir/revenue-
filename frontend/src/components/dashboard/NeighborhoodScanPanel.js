@@ -480,7 +480,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                         : "bg-rose-500/10 border-rose-500/30 text-rose-300"
                     }`}
                     title={`${ourSummary.booking_cover_days}/${snapshots.length} gün için Booking.com canlı fiyatımız var. Geri kalan günler internal rate'den hesaplanıyor.`}>
-                    {t("ns.hero.biz_booking_live", { pct: ourSummary.booking_cover_pct.toFixed(0) })}
+                    {t("ns.hero.biz_booking_live", { name: ourHotelName || t("ns.chart.legend.us"), pct: ourSummary.booking_cover_pct.toFixed(0) })}
                   </span>
                 )}
               </h2>
@@ -628,8 +628,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 <Activity className="w-5 h-5 text-cyan-400" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-cyan-200">{t("ns.vs.title", { days })}</h3>
-                <p className="text-[11px] text-stone-400 mt-0.5">{t("ns.vs.subtitle")}</p>
+                <h3 className="text-sm font-black text-cyan-200">{t("ns.vs.title", { name: ourHotelName || t("ns.chart.legend.us"), days })}</h3>
+                <p className="text-[11px] text-stone-400 mt-0.5">{t("ns.vs.subtitle", { name: ourHotelName || t("ns.chart.legend.us") })}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 md:max-w-3xl">
@@ -892,7 +892,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               <span className="flex items-center gap-1.5" title={t("ns.chart.legend.demand")}><span className="w-2 h-3 rounded-sm bg-emerald-500/70" /> {t("ns.chart.legend.demand")}</span>
               <span className="flex items-center gap-1.5" title={t("ns.chart.legend.market")}><span className="w-5 h-[2px]" style={{ background: "repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 4px,transparent 4px,transparent 7px)" }} /> {t("ns.chart.legend.market")}</span>
               {ourHotelName && (
-                <span className="flex items-center gap-1.5" title={t("ns.chart.legend.us")}><span className="w-5 h-[3px] rounded-full bg-violet-400" /> {t("ns.chart.legend.us")}</span>
+                <span className="flex items-center gap-1.5" title={ourHotelName}><span className="w-5 h-[3px] rounded-full bg-violet-400" /> <span className="truncate max-w-[120px] inline-block">{ourHotelName}</span></span>
               )}
               <span className="text-stone-500/70 border-l border-stone-700 pl-3 italic">{t("ns.chart.legend.hint")}</span>
             </div>

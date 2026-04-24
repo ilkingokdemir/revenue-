@@ -3,6 +3,25 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 196 (Apr 2026): 🏨 Hotel Name Everywhere (replaces generic "Biz" / "Us")
+
+User ask (TR): _"'Biz' ismini hotelin ismi olarak yaz, örneğin: Franziskaner by Centra"_
+
+**i18n updates (parametric `{name}`):**
+- `ns.hero.biz_booking_live`: `"Biz · %X Booking.com canlı"` → `"{name} · %X Booking.com canlı"`
+- `ns.vs.title`: `"Biz vs Pazar"` → `"{name} vs Pazar"`
+- `ns.vs.subtitle`: `"Grafik üzerinde mor = bizim fiyat..."` → `"...mor = {name} fiyatı..."`
+
+**Frontend (`NeighborhoodScanPanel.js`):**
+- Hero "Biz · X% Booking.com canlı" → `"Franziskaner by Centra · X% Booking.com canlı"`
+- "Biz vs Pazar" kartı başlığı ve altyazısı → `"Franziskaner by Centra vs Pazar"` + `"mor = Franziskaner by Centra fiyatı..."`
+- Chart üst mini legend'deki "Biz" rozeti → **hotel adı** (uzunsa 120px'te truncate, hover'da tam tooltip)
+- Tooltip hero row'da zaten `ourHotelName` kullanılıyordu — değişmedi ✓
+- Fallback: `ourHotelName` backend'den henüz gelmediyse generic "Biz"/"Us" etiketi kullanılıyor (asla boş kalmaz)
+
+**Verified:** Frontend lint clean.
+
+
 ### Iter 195 (Apr 2026): 🏷️ Hotel Name in MR Header + EN/TR i18n Cleanup
 
 User ask (TR): _"Seçtiğim hotelin adı Market Robot dashboard'unda da olsun. İngilizce ve Türkçe dil opsiyonu olsun, şu anda iki dil karışık kullanılıyor. Düzeltip hangi dil seçilirse o dilde her şey olsun."_

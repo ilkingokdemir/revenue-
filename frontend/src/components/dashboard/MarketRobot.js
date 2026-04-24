@@ -68,6 +68,27 @@ export const MarketRobot = ({ propertyId }) => {
     }, 15000);
     return () => clearInterval(statusInterval);
   }, [loadAll, propertyId]);
+
+  // 🏨 Branch-switch hygiene — immediately clear state that belongs to the previous branch
+  // so the user never sees stale data (logs/competitors/supply/form drafts) during the
+  // split-second before the new branch's data arrives. Every branch must be independent.
+  useEffect(() => {
+    setSupply(null);
+    setLogs([]);
+    setAdjustments([]);
+    setCompetitors([]);
+    setScanResult(null);
+    setScannerStatus(null);
+    setConfig(null);
+    setCompForm({ name: "", booking_url: "" });
+    setCompValidation(null);
+    setCompCandidates([]);
+    setCompScanning(false);
+    setCompRevalidating(false);
+    setCompValidating(false);
+    setCompSearching(false);
+    setScanning(false);
+  }, [propertyId]);
   // ⚡ Full loadAll on the shared live-polling cadence (handles focus/visibility)
   useLivePolling(loadAll, { intervalMs: 45000, busy: scanning });
 

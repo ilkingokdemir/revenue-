@@ -3,6 +3,35 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 194 (Apr 2026): 🐛 CRITICAL Branch Isolation Bug Fix
+
+User bug report (TR): _"Market robot şube değiştikçe o şubenin dashboard'u gelmesi gerek. Lokasyon o hotel için olmalı bütün scrape'lerin. Bütün modüllerin hepsinin o şubenin için çalışması gerek. Bütün şubeler birbirinden bağımsız. HATA VAR."_
+
+**Root cause identified:**
+- `NeighborhoodScanPanel.js` line 80 (pre-fix): `if (cfg && !location && cfg.location) setLocation(cfg.location)` — `!location` guard meant location was set ONCE and then never updated when user switched branches. Every new branch inherited the previous branch's postcode/lat/lng → all scans hit the wrong city.
+- `MarketRobot.js`: branch-scoped state (supply, logs, competitors, compForm, compValidation, etc.) never reset between branches → showed stale data from the previous branch for 1-2 seconds while new data was fetching.
+- `OurBookingLiveCard.js`: same issue — previous branch's `urlDraft`, `validation` badge, and `editing` dialog state persisted across switches.
+
+**Fixes (all frontend — backend was already correctly per-branch isolated):**
+
+`NeighborhoodScanPanel.js`:
+- Added dedicated `useEffect` that **always** hydrates `location`/`radiusKm`/`latitude`/`longitude` from the current branch's `autoCfg` (triggers on `propertyId` + config field changes) — no `!location` guard anymore.
+- Added second `useEffect` that wipes `summary`, `snapshots`, `competitorSeries`, `ourHotelName`, `ourSummary`, `lastResult`, `hiddenComps`, `healStatus`, `highlightDate`, `hoverIdx`, `hoveredCompId` the instant `propertyId` changes.
+
+`MarketRobot.js`:
+- Added branch-hygiene `useEffect` that resets: `supply`, `logs`, `adjustments`, `competitors`, `scanResult`, `scannerStatus`, `config`, `compForm`, `compValidation`, `compCandidates`, and all in-flight loading flags (`scanning`, `compScanning`, etc.) on `propertyId` change.
+
+`OurBookingLiveCard.js`:
+- Added branch-hygiene `useEffect` that resets `data`, `urlDraft`, `validation`, `editing`, `scraping`, `validating` on `propertyId` change.
+
+**Verified (backend already correct — per-branch isolation confirmed via curl):**
+- Zurich (default): `location: "Zurich"`, `radius: 3.2km`, URL `franziskaner-by-centra.html` ✓
+- Aldgate Flats: `location: "E1 7Td"`, `radius: 1.8km`, URL `liverpool-street-house.html` ✓
+- Both branches totally independent.
+
+Frontend lint clean across all 3 files. Smoke test passed.
+
+
 ### Iter 193 (Apr 2026): 🔁 Auto-Heal Scheduled / Persistent Mode
 
 User ask (TR): _"Öneri yap — Auto-Heal'i otomatik moda geçir, saatlik arka planda kendi kendine iyileştirsin."_

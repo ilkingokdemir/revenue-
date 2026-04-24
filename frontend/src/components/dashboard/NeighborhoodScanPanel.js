@@ -59,6 +59,41 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [fixing, setFixing] = useState(false);
   const [propInfo, setPropInfo] = useState({ city: "", currency: "" });
 
+  // Hydrate location fields whenever the branch (propertyId) or backend cfg changes.
+  // Bug before: `!location` guarded this, so once any branch set location, subsequent
+  // branch switches kept the old value — broke every scan/scrape for the new branch.
+  useEffect(() => {
+    if (autoCfg) {
+      setLocation(autoCfg.location || "");
+      setRadiusKm(autoCfg.radius_km || 3.2);
+      setLatitude(autoCfg.latitude || "");
+      setLongitude(autoCfg.longitude || "");
+    } else {
+      // No cfg for this branch yet → clear stale values carried over from a previous branch
+      setLocation("");
+      setLatitude("");
+      setLongitude("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId, autoCfg?.location, autoCfg?.radius_km, autoCfg?.latitude, autoCfg?.longitude]);
+
+  // Clear all branch-scoped state the instant the branch switches, before new data arrives.
+  // Without this the user sees the previous branch's snapshots/competitors/summary for a
+  // second or two — looked like "wrong data" for their newly-selected branch.
+  useEffect(() => {
+    setSummary(null);
+    setSnapshots([]);
+    setCompetitorSeries([]);
+    setOurHotelName("");
+    setOurSummary(null);
+    setLastResult(null);
+    setHiddenComps({});
+    setHealStatus(null);
+    setHighlightDate(null);
+    setHoverIdx(null);
+    setHoveredCompId(null);
+  }, [propertyId]);
+
   const loadAll = useCallback(async () => {
     try {
       const [{ data: supply }, { data: cfg }, { data: ob }, { data: hcfg }] = await Promise.all([
@@ -77,12 +112,6 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       setAutoCfg(cfg);
       setHealCfg(hcfg);
       setPropInfo({ city: ob?.city || "", currency: ob?.currency || supply.property_currency || "" });
-      if (cfg && !location && cfg.location) {
-        setLocation(cfg.location);
-        setRadiusKm(cfg.radius_km || 3.2);
-        if (cfg.latitude) setLatitude(cfg.latitude);
-        if (cfg.longitude) setLongitude(cfg.longitude);
-      }
     } catch { /* noop */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, days]);

@@ -48,6 +48,17 @@ export default function OurBookingLiveCard({ propertyId }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // 🏨 Branch hygiene — reset per-branch state so user never sees a previous branch's
+  // URL draft, validation badge, or edit-mode dialog when switching hotels.
+  useEffect(() => {
+    setData(null);
+    setUrlDraft("");
+    setValidation(null);
+    setEditing(false);
+    setScraping(false);
+    setValidating(false);
+  }, [propertyId]);
+
   // ⚡ Live refresh — shared hook
   useLivePolling(load, { intervalMs: 45000, busy: scraping });
 

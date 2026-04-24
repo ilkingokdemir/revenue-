@@ -2424,6 +2424,10 @@ Date range: {date_from} to {date_to}."""
         days_ahead = 7
         total_prices = 0
 
+        # Determine currency once from property (competitors are in the same city/currency)
+        prop = await db_ref.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
+        target_currency = prop.get("currency") or "CHF"
+
         for comp in comps:
             comp_prices = []
             base_url = comp.get("booking_url", "")
@@ -2435,7 +2439,7 @@ Date range: {date_from} to {date_to}."""
                 d = now + timedelta(days=i)
                 checkin = d.strftime("%Y-%m-%d")
                 checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
-                url = build_dated_url(base_url, checkin, checkout)
+                url = build_dated_url(base_url, checkin, checkout, target_currency)
                 try:
                     result = await scrape_booking_url(url, timeout_ms=30000)
                     if result["scraped"]:
@@ -2491,6 +2495,7 @@ Date range: {date_from} to {date_to}."""
             return {"scraped": False, "reason": "no_booking_url"}
 
         base_url = prop["booking_url"]
+        target_currency = prop.get("currency") or "CHF"
         now = datetime.now(timezone.utc)
         days_ahead = 14
         prices = []
@@ -2500,7 +2505,7 @@ Date range: {date_from} to {date_to}."""
             d = now + timedelta(days=i)
             checkin = d.strftime("%Y-%m-%d")
             checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
-            url = build_dated_url(base_url, checkin, checkout)
+            url = build_dated_url(base_url, checkin, checkout, target_currency)
             try:
                 result = await scrape_booking_url(url, timeout_ms=30000)
                 if result["scraped"]:

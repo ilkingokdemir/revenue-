@@ -70,17 +70,52 @@ async def close_browser():
 
 
 _PRICE_RE = re.compile(r"(?:CHF|GBP|EUR|USD|TRY|£|€|\$|Fr\.|Fr\s)\s*([\d,]+(?:\.\d+)?)", re.IGNORECASE)
+# Booking-specific high-confidence patterns — only match prices labeled as room rates
+_PER_NIGHT_RE = re.compile(
+    r"(?:CHF|GBP|EUR|USD|TRY|£|€|\$|Fr\.|Fr\s)\s*([\d,]+(?:\.\d+)?)\s*(?:per night|for 1 night|for \d+ nights?|Price\s*(?:CHF|GBP|EUR|USD|TRY|£|€|\$))",
+    re.IGNORECASE,
+)
+# Catch "Price CHF 260" format used on Booking's detail pages
+_PRICE_LABEL_RE = re.compile(
+    r"Price\s+(?:CHF|GBP|EUR|USD|TRY|£|€|\$|Fr\.)\s*([\d,]+(?:\.\d+)?)",
+    re.IGNORECASE,
+)
 _REVIEW_RE = re.compile(r'Scored\s+([\d.]+)|"reviewScore"\s*:\s*"?([\d.]+)"?')
 
 
 def _extract_prices(html: str) -> List[float]:
-    raw = _PRICE_RE.findall(html)
-    out = []
-    for p in raw:
+    """Extract room-night prices from Booking.com HTML.
+
+    Priority: high-confidence patterns ("per night", "Price CHF") → fall back to
+    bare currency regex only if HCE yields nothing. Filters out tax/fee noise."""
+    out: List[float] = []
+
+    # Pass 1: high-confidence "per night" / "Price CHF" captures
+    for m in _PER_NIGHT_RE.findall(html):
+        try:
+            v = float(m.replace(",", ""))
+            if 50 <= v <= 5000:
+                out.append(v)
+        except ValueError:
+            continue
+    for m in _PRICE_LABEL_RE.findall(html):
+        try:
+            v = float(m.replace(",", ""))
+            if 50 <= v <= 5000:
+                out.append(v)
+        except ValueError:
+            continue
+
+    if out:
+        return out
+
+    # Pass 2: fall back to bare currency matches with stricter floor
+    for p in _PRICE_RE.findall(html):
         try:
             val = float(p.replace(",", ""))
-            # Floor at 40 filters out review counts (e.g. "30 reviews") and star ratings.
-            if 40 <= val <= 5000:
+            # Tighter floor than before — sub-50 CHF values on hotel pages are almost always
+            # tax amounts, resort fees, or per-person supplements rather than room rates.
+            if 50 <= val <= 5000:
                 out.append(val)
         except ValueError:
             continue
@@ -133,31 +168,51 @@ async def scrape_booking_url(url: str, timeout_ms: int = 35000) -> dict:
         except Exception:
             pass
 
-        # DOM price extraction — precise
+        # DOM price extraction — use selectors that actually match Booking.com's
+        # current markup (verified on 2026-04-24: `data-testid="price-and-discounted-price"`
+        # no longer exists on detail pages; `class*="prco"` does.)
         try:
             dom_texts = await page.evaluate("""
                 () => {
                     const sels = [
                         '[data-testid="price-and-discounted-price"]',
+                        '[class*="prco"]',
+                        '.prd-pri',
                         '.prco-valign-middle-helper',
-                        'span.prd-pri-1vb6sg2',
-                        'span[class*="prco-inline"]',
                     ];
                     const out = new Set();
                     for (const s of sels) {
                         document.querySelectorAll(s).forEach(n => {
                             const t = (n.innerText || n.textContent || '').trim();
-                            if (t) out.add(t);
+                            // Only keep nodes that explicitly mention "per night" or "Price <currency>"
+                            // — filters out tax rows (CHF 7, CHF 3.5 etc)
+                            if (t && (/per night|for 1 night|for \\d+ nights?|Price\\s+[A-Z$£€]/i.test(t))) {
+                                out.add(t);
+                            }
                         });
                     }
                     return Array.from(out);
                 }
             """)
             for t in (dom_texts or []):
-                for m in re.findall(r"([\d,]+(?:\.\d+)?)", str(t).replace("\xa0", " ")):
+                normalized = str(t).replace("\xa0", " ")
+                # Extract ONLY the price adjacent to "per night" or "Price <currency>" keywords
+                for m in re.findall(
+                    r"(?:per night|for 1 night|Price)\s*(?:[A-Z]{3}|[£€$])?\s*([\d,]+(?:\.\d+)?)",
+                    normalized, re.IGNORECASE,
+                ):
                     try:
                         v = float(m.replace(",", ""))
-                        if 40 <= v <= 5000:
+                        if 50 <= v <= 5000:
+                            prices_dom.append(v)
+                    except ValueError:
+                        continue
+                # Fallback: any CHF/GBP/etc N format inside the node (since we already
+                # filtered to "per night"-context nodes, numbers here are safe)
+                for m in re.findall(r"(?:CHF|GBP|EUR|USD|TRY|£|€|\$|Fr\.)\s*([\d,]+(?:\.\d+)?)", normalized):
+                    try:
+                        v = float(m.replace(",", ""))
+                        if 50 <= v <= 5000:
                             prices_dom.append(v)
                     except ValueError:
                         continue
@@ -210,7 +265,20 @@ async def scrape_booking_url(url: str, timeout_ms: int = 35000) -> dict:
     }
 
 
-def build_dated_url(base_url: str, checkin: str, checkout: str) -> str:
-    """Strip any existing query params and append a clean date range."""
+def build_dated_url(base_url: str, checkin: str, checkout: str, currency: Optional[str] = None) -> str:
+    """Strip any existing query params and append a clean date range.
+
+    When `currency` is provided, force Booking.com to render prices in that ISO code
+    via `selected_currency=<code>`. Without this, Booking falls back to the scraper's
+    geo-IP currency (usually USD/EUR on our datacenter IPs), which confuses the price
+    extractor (values look like /10 of the real CHF price)."""
     clean = base_url.split("?")[0]
-    return f"{clean}?checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1"
+    params = [
+        f"checkin={checkin}",
+        f"checkout={checkout}",
+        "group_adults=2",
+        "no_rooms=1",
+    ]
+    if currency:
+        params.append(f"selected_currency={currency.upper()}")
+    return f"{clean}?{'&'.join(params)}"

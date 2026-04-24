@@ -4,6 +4,41 @@
 
 
 
+### Iter 179 (Feb 2026): 🐛 Scraper Fix — 3 root-cause bugs causing wrong competitor prices
+
+User report (TR): _"Hotel Rössli CHF 277 olmalı ama CHF 40 gösteriyor — scraping yanlış, düzelt"_
+
+User pasted a real Hotel Rössli URL showing CHF 277 per night. Our scraper returned CHF 40. Investigation revealed **3 distinct bugs**:
+
+**Bug 1 — DOM selectors outdated:**
+- `[data-testid="price-and-discounted-price"]` — no longer exists on Booking.com detail pages (verified 2026-04-24, returned 0 matches).
+- Real Booking markup: `[class*="prco"]` with text like "CHF 260 per night".
+- **Fix:** New DOM selector priority with `[class*="prco"]` + only keeps nodes matching `/per night|for N nights?|Price\s+<currency>/i`. Extracts ONLY prices adjacent to these keywords — filters out per-person supplements, taxes, resort fees.
+
+**Bug 2 — Price floor too low catching noise:**
+- Old threshold CHF 40 passed through values like `CHF 9.88`, `10`, `7`, `3.5` that Booking displays as tax/fee row items.
+- **Fix:** Raised floor to CHF 50 + new high-confidence regex patterns (`_PER_NIGHT_RE`, `_PRICE_LABEL_RE`) that require currency-prefix + keyword context. Falls back to bare currency regex only if HCE returns nothing.
+
+**Bug 3 — Missing `selected_currency` URL param:**
+- Without `&selected_currency=CHF`, Booking.com rendered prices in scraper IP's geo-currency (EUR/USD on our datacenter). Our CHF-regex then missed real prices or captured conversion fragments.
+- **Fix:** `build_dated_url()` now accepts a `currency` arg and appends `selected_currency=<ISO>`. Both `_auto_our_hotel_scan()` and `_auto_competitor_scan()` updated to pull the currency from `properties.currency` and pass it through.
+
+**Additional — Data hygiene:**
+- "Hotel Hirschen" URL was incorrectly pointing to Franziskaner's own Booking URL (copy-paste artifact in seed data).
+- "Hotel Rössli" URL was pointing to Altstadt's page.
+- Duplicate "Altstadt Hotel" row.
+- Fixed all 3 directly in DB via migration script.
+
+**Verified end-to-end (Franziskaner by Centra / Zürih):**
+- Hotel Rössli direct test: `CHF 183, 205, 260, 279, 286, 304, 305, 324` — the full range of real room types (matches user's reported CHF 277 headline).
+- Playwright screenshot of Market Robot → Dashboard now shows:
+  - Franziskaner: Price **#2/5**, Value **#1/5** 🥇, Review **#1/5** 🥇
+  - Market median CHF 194, our price CHF 160 (-17.3% below median — competitive position)
+  - Cheapest competitor: Hotel Alexander Zurich Old Town @ CHF 155 (realistic Zurich Old Town pricing)
+- 7-day ranking table with meaningful rank movement (#1-#3 range across different axes by date).
+
+
+
 ### Iter 178 (Feb 2026): 🏆 Booking.com Ranking Analysis — transparent position tracking
 
 User approval: _"olur"_ (accepted the enhancement from Iter 177 finish summary).

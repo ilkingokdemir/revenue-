@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "@/i18n";
-import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight, Eye, Trash2, MapPin, Globe, Radar, PartyPopper, Users } from "lucide-react";
+import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight, Eye, Trash2, MapPin, Globe, Radar, PartyPopper, Users, Search } from "lucide-react";
 import { EventIntelligence } from "./EventIntelligence";
 import { RateParity } from "./RateParity";
 import { CompetitorAnalysis } from "./CompetitorAnalysis";
@@ -45,6 +45,8 @@ export const MarketRobot = ({ propertyId }) => {
   const [compForm, setCompForm] = useState({ name: "", booking_url: "" });
   const [compValidating, setCompValidating] = useState(false);
   const [compValidation, setCompValidation] = useState(null); // { ok, hotel_name, sample_price, currency, error }
+  const [compSearching, setCompSearching] = useState(false);
+  const [compCandidates, setCompCandidates] = useState([]);
   const [compScanning, setCompScanning] = useState(false);
   const [scannerStatus, setScannerStatus] = useState(null);
 
@@ -132,6 +134,35 @@ export const MarketRobot = ({ propertyId }) => {
       toast.error("Validator error");
     }
     setCompValidating(false);
+  };
+
+  const searchCompetitorByName = async () => {
+    if (!compForm.name) { toast.error("Önce Hotel adı yazın"); return; }
+    setCompSearching(true);
+    setCompCandidates([]);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/search-booking-hotel`, {
+        name: compForm.name,
+        city: config?.city || "",
+      });
+      const cands = data?.candidates || [];
+      setCompCandidates(cands);
+      if (cands.length === 0) {
+        toast.warning("Booking.com bu isimde bir otel bulamadı — tam URL'yi manuel yapıştırın.");
+      } else {
+        toast.success(`${cands.length} aday bulundu`);
+      }
+    } catch {
+      toast.error("Search error");
+    }
+    setCompSearching(false);
+  };
+
+  const pickCandidate = (cand) => {
+    setCompForm({ name: cand.name, booking_url: cand.booking_url });
+    setCompCandidates([]);
+    setCompValidation(null);
+    toast.info(`${cand.name} seçildi — 'Add' ile kaydedin`);
   };
 
   const addCompetitor = async () => {
@@ -635,6 +666,13 @@ export const MarketRobot = ({ propertyId }) => {
                 placeholder="Hotel name (optional)" className="border border-stone-200 rounded-lg px-3 py-2 text-sm w-full sm:w-48" data-testid="comp-name" />
               <input value={compForm.booking_url} onChange={e => { setCompForm(p => ({ ...p, booking_url: e.target.value })); setCompValidation(null); }}
                 placeholder="Booking.com hotel URL (paste full URL)" className="border border-stone-200 rounded-lg px-3 py-2 text-sm flex-1 min-w-[220px]" data-testid="comp-url" />
+              <button onClick={searchCompetitorByName} disabled={compSearching || !compForm.name}
+                className="bg-sky-500 hover:bg-sky-600 text-white px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap disabled:opacity-50 flex items-center gap-2"
+                data-testid="comp-search-by-name"
+                title="Booking.com'da Hotel adıyla ara — URL'yi bilmiyorsanız">
+                {compSearching ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                {compSearching ? "Searching..." : "🔎 Ada Göre Ara"}
+              </button>
               <button onClick={validateCompetitorUrl} disabled={compValidating || !compForm.booking_url}
                 className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap disabled:opacity-50 flex items-center gap-2"
                 data-testid="comp-validate">
@@ -645,6 +683,29 @@ export const MarketRobot = ({ propertyId }) => {
                 className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap disabled:opacity-50" data-testid="comp-add">+ Add</button>
             </div>
             <p className="text-[10px] text-stone-400 mt-2">Example: https://www.booking.com/hotel/gb/the-barkston.html · "Test URL" Booking.com'dan anlık fiyat çeker; bozuk linkleri kaydetmeden görürsünüz.</p>
+            {compCandidates.length > 0 && (
+              <div className="mt-3 space-y-2" data-testid="comp-candidates">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Booking.com Aday Sonuçları · birine tıklayın</div>
+                {compCandidates.map((cand, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => pickCandidate(cand)}
+                    className="w-full text-left bg-sky-500/5 hover:bg-sky-500/10 border border-sky-500/30 rounded-lg p-3 transition-colors flex items-center justify-between gap-3"
+                    data-testid={`comp-candidate-${idx}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-sky-200 truncate">{cand.name}</div>
+                      <div className="text-[10px] text-stone-400 truncate font-mono">{cand.booking_url}</div>
+                    </div>
+                    {cand.sample_price && (
+                      <div className="text-xs text-sky-300 font-bold whitespace-nowrap">
+                        {cand.currency || ""} {cand.sample_price.toFixed(0)}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
             {compValidation && (
               <div
                 className={`mt-3 border rounded-lg p-3 text-sm ${

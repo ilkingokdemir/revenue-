@@ -610,6 +610,93 @@ def create_market_robot_router(db, require_roles, resend=None):
             ),
         }
 
+    @router.post("/revenue/market-robot/search-booking-hotel")
+    async def search_booking_hotel(data: Dict,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Free-text search Booking.com for a hotel by NAME and return the top 3 candidates.
+
+        Saves the user the job of finding the correct Booking.com URL — they just type
+        'Hotel Adler Zurich' and we return matching property cards with full URL + hotel_id.
+
+        Body: { name: str, city?: str }
+        Returns: { candidates: [{ name, booking_url, hotel_id, sample_price, currency }] }
+        """
+        from utils.booking_scraper import _get_browser, _UA, _DEFAULT_HEADERS  # reuse the shared browser
+        name = (data.get("name") or "").strip()
+        city = (data.get("city") or "").strip()
+        if not name:
+            raise HTTPException(400, "Hotel name required")
+
+        query = f"{name} {city}".strip() if city.lower() not in name.lower() else name
+        url = f"https://www.booking.com/searchresults.en-gb.html?ss={query.replace(' ', '+')}"
+        browser = await _get_browser()
+        ctx = await browser.new_context(
+            user_agent=_UA, locale="en-GB", viewport={"width": 1280, "height": 900},
+            extra_http_headers=_DEFAULT_HEADERS,
+        )
+        page = await ctx.new_page()
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=35000)
+            try:
+                await page.wait_for_selector('[data-testid="property-card"]', timeout=12000)
+            except Exception:
+                pass
+            cards = await page.evaluate("""
+                () => {
+                    const cards = Array.from(document.querySelectorAll('[data-testid="property-card"]')).slice(0, 6);
+                    return cards.map(c => {
+                        const a = c.querySelector('[data-testid="title-link"]');
+                        const href = a?.href || '';
+                        return {
+                            title: (c.querySelector('[data-testid="title"]')?.innerText || '').trim(),
+                            price: (c.querySelector('[data-testid="price-and-discounted-price"]')?.innerText || '').trim(),
+                            href: href,
+                        };
+                    }).filter(x => x.title && x.href.includes('/hotel/'));
+                }
+            """) or []
+            # Build canonical URLs (strip query), dedupe by slug
+            import re as _re
+            seen = set()
+            candidates = []
+            for c in cards:
+                sm = _re.search(r"/hotel/([a-z]{2})/([a-z0-9-]+)\.", c.get("href", ""))
+                if not sm:
+                    continue
+                slug_key = sm.group(2)
+                if slug_key in seen:
+                    continue
+                seen.add(slug_key)
+                booking_url = f"https://www.booking.com/hotel/{sm.group(1)}/{sm.group(2)}.en-gb.html"
+                price_val = None
+                currency = None
+                if c.get("price"):
+                    pm = _re.search(r"(\d[\d,.]*)", c["price"].replace("\xa0", " ").replace(",", ""))
+                    if pm:
+                        try:
+                            price_val = float(pm.group(1))
+                        except ValueError:
+                            pass
+                    cm = _re.search(r"([A-Z]{3}|€|£|\$|Fr\.|kr)", c["price"])
+                    if cm:
+                        currency = cm.group(1)
+                candidates.append({
+                    "name": c.get("title"),
+                    "booking_url": booking_url,
+                    "hotel_id": None,   # Resolved when user clicks "Add" — keeps this endpoint fast
+                    "sample_price": price_val,
+                    "currency": currency,
+                })
+                if len(candidates) >= 3:
+                    break
+            return {"query": query, "candidates": candidates}
+        finally:
+            try:
+                await page.close()
+            except Exception:
+                pass
+            await ctx.close()
+
     @router.post("/revenue/market-robot/{property_id}/fix-property-location")
     async def fix_property_location(property_id: str, data: Dict,
                                     current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -939,6 +1026,41 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "booking_cover_pct": round((booking_cover / len(our_data)) * 100, 1) if our_data else 0,
             }
 
+        # ===== COMPETITOR SERIES =====
+        # Build per-competitor date→price map so the frontend can draw individual
+        # lines on the Biz-vs-Pazar chart (not just the aggregated market average).
+        # Each competitor row's `prices` array is a list of scraped per-date snapshots —
+        # we expose the most recent scraped price per date.
+        competitor_series = []
+        our_hotel_name = ""
+        if property_id != "all":
+            prop_name = (await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {}).get("name", "")
+            our_hotel_name = prop_name
+            comp_docs = await db.market_competitors.find(
+                {"property_id": property_id},
+                {"_id": 0, "id": 1, "name": 1, "booking_hotel_id": 1, "prices": 1, "last_scraped": 1, "booking_url": 1, "last_validation": 1},
+            ).to_list(20)
+            for c in comp_docs:
+                price_map = {}
+                for p in (c.get("prices") or []):
+                    if p.get("scraped") and p.get("date") and p.get("lowest_price"):
+                        price_map[p["date"]] = round(float(p["lowest_price"]), 2)
+                prices_list = [price_map[k] for k in sorted(price_map)]
+                competitor_series.append({
+                    "id": c.get("id"),
+                    "name": c.get("name", "Competitor"),
+                    "booking_hotel_id": c.get("booking_hotel_id"),
+                    "prices_by_date": price_map,
+                    "avg_price": round(sum(prices_list) / len(prices_list), 2) if prices_list else None,
+                    "min_price": round(min(prices_list), 2) if prices_list else None,
+                    "max_price": round(max(prices_list), 2) if prices_list else None,
+                    "days_covered": len(price_map),
+                    "last_scraped": c.get("last_scraped"),
+                    "validation_ok": (c.get("last_validation") or {}).get("ok"),
+                })
+            # Sort by name for stable colour assignment across polls
+            competitor_series.sort(key=lambda x: (x["name"] or "").lower())
+
         # The scan_currency stamp on each snapshot is the source of truth for chart labels —
         # property.currency can drift, but the currency Booking.com rendered prices in is
         # baked into each row. Fall back to property.currency only if the snapshot predates
@@ -982,6 +1104,8 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "data_freshness_seconds": data_freshness_sec,
             },
             "our_summary": our_summary,
+            "our_hotel_name": our_hotel_name,
+            "competitor_series": competitor_series,
             "auto_config": geo_cfg,
         }
 

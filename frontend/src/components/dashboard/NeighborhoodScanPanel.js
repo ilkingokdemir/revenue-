@@ -30,6 +30,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [scanning, setScanning] = useState(false);
   const [summary, setSummary] = useState(null);
   const [snapshots, setSnapshots] = useState([]);
+  const [competitorSeries, setCompetitorSeries] = useState([]);
+  const [ourHotelName, setOurHotelName] = useState("");
   const [lastResult, setLastResult] = useState(null);
   const [autoCfg, setAutoCfg] = useState(null);
   const [ourSummary, setOurSummary] = useState(null);
@@ -56,6 +58,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       setSummary(sum);
       setSnapshots(supply.snapshots || []);
       setOurSummary(supply.our_summary || null);
+      setCompetitorSeries(supply.competitor_series || []);
+      setOurHotelName(supply.our_hotel_name || "");
       setAutoCfg(cfg);
       setPropInfo({ city: ob?.city || "", currency: ob?.currency || supply.property_currency || "" });
       if (cfg && !location && cfg.location) {
@@ -204,6 +208,18 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     } catch { toast.error("Toggle failed"); }
   };
 
+  // Stable palette for competitor lines (colour-blind friendly)
+  const COMP_PALETTE = useMemo(() => [
+    "#60a5fa", // sky-400
+    "#f472b6", // pink-400
+    "#34d399", // emerald-400
+    "#fbbf24", // amber-400
+    "#fb7185", // rose-400
+    "#c084fc", // violet-400
+    "#22d3ee", // cyan-400
+    "#a3e635", // lime-400
+  ], []);
+
   // Chart derivation
   const chart = useMemo(() => {
     if (!snapshots.length) return null;
@@ -212,25 +228,44 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     const iW = W - pad.l - pad.r, iH = H - pad.t - pad.b;
     const n = snapshots.length;
     const sx = (i) => pad.l + (i / Math.max(n - 1, 1)) * iW;
-    // Price axis: include our rate in min/max calculation so our line is visible
+    // Price axis: include our rate AND every competitor series in min/max so all lines fit
     const mktPrices = snapshots.map(s => s.avg_price || 0).filter(v => v > 0);
     const ourPrices = snapshots.map(s => s.our_avg_rate || 0).filter(v => v > 0);
-    const allPrices = [...mktPrices, ...ourPrices];
+    const compPrices = competitorSeries.flatMap(c => Object.values(c.prices_by_date || {})).filter(v => v > 0);
+    const allPrices = [...mktPrices, ...ourPrices, ...compPrices];
     const pMin = allPrices.length ? Math.min(...allPrices) * 0.88 : 0;
     const pMax = allPrices.length ? Math.max(...allPrices) * 1.08 : 1;
     const syP = (v) => pad.t + iH - ((v - pMin) / Math.max(pMax - pMin, 1)) * iH;
     const syD = (v) => pad.t + iH - (v / 100) * iH;
+    // Market (avg of neighbourhood) — dashed amber
     const linePath = snapshots.map((s, i) => {
       const x = sx(i), y = syP(s.avg_price || 0);
       return `${i === 0 ? "M" : "L"} ${x} ${y}`;
     }).join(" ");
-    // Our rate line (only dates with valid our_avg_rate)
+    // Our rate line (only dates with valid our_avg_rate) — solid thick violet
     const ourLinePoints = snapshots.map((s, i) => ({ x: sx(i), y: syP(s.our_avg_rate || 0), v: s.our_avg_rate || 0 })).filter(p => p.v > 0);
     const ourLinePath = ourLinePoints.length
       ? ourLinePoints.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ")
       : "";
-    return { pad, W, H, iW, iH, sx, syP, syD, linePath, ourLinePath, ourLinePoints, pMin, pMax };
-  }, [snapshots]);
+    // One polyline per competitor — thin coloured lines
+    const compLines = competitorSeries.map((c, idx) => {
+      const colour = COMP_PALETTE[idx % COMP_PALETTE.length];
+      const pts = snapshots.map((s, i) => {
+        const v = c.prices_by_date?.[s.date];
+        return v ? { x: sx(i), y: syP(v), v } : null;
+      }).filter(Boolean);
+      return {
+        id: c.id,
+        name: c.name,
+        colour,
+        path: pts.length ? pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") : "",
+        points: pts,
+        avg: c.avg_price,
+        days: c.days_covered,
+      };
+    });
+    return { pad, W, H, iW, iH, sx, syP, syD, linePath, ourLinePath, ourLinePoints, compLines, pMin, pMax };
+  }, [snapshots, competitorSeries, COMP_PALETTE]);
 
   const miles = (radiusKm * 0.621371).toFixed(1);
 
@@ -469,37 +504,76 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         </div>
       )}
 
-      {/* Chart — Avg Price + Demand */}
+      {/* Chart — Avg Price + Demand with per-competitor lines + LEFT LEGEND */}
       {chart && snapshots.length > 2 && (
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="geo-chart">
           <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-bold text-stone-100">Neighborhood Market · Demand & Price Trend</h3>
+              <h3 className="text-sm font-bold text-stone-100">Neighborhood Market · Per-Hotel Price Trend</h3>
+              <span className="text-[10px] text-stone-500">({snapshots.length} gün)</span>
             </div>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] text-stone-400" data-testid="geo-chart-legend">
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Rakip Talep %</span>
-              <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-amber-400" /> Rakip Fiyat</span>
-              <span className="flex items-center gap-1.5 border-l border-stone-700 pl-3">
-                <span className="w-2 h-2 rounded-sm bg-cyan-400 ring-2 ring-cyan-500/30" />
-                <span className="text-cyan-200 font-semibold">BİZ · Doluluk %</span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-4 h-[2px] bg-violet-400" style={{ borderTop: "2px solid #a78bfa" }} />
-                <span className="text-violet-200 font-semibold">BİZ · Fiyat</span>
-              </span>
-              <span className="flex items-center gap-1.5 border-l border-stone-700 pl-3">
-                <span className="text-rose-300 font-black text-[11px]">▲</span>
-                <span className="text-stone-300">Rakip <span className="text-rose-300 font-semibold">↑</span></span>
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="text-emerald-300 font-black text-[11px]">▼</span>
-                <span className="text-stone-300">Rakip <span className="text-emerald-300 font-semibold">↓</span></span>
-              </span>
+              <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-amber-400" style={{ borderTop: "2px dashed #f59e0b" }} /> Pazar Avg</span>
             </div>
           </div>
 
-          <div className="relative overflow-x-auto">
+          {/* Two-column layout: left=hotel legend w/ avg prices, right=chart */}
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Left legend — hotels list */}
+            <div className="lg:w-52 flex-shrink-0 space-y-1.5 lg:max-h-[320px] lg:overflow-y-auto lg:pr-2" data-testid="geo-chart-hotel-legend">
+              <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">Hotels</div>
+              {/* Our hotel — hero row */}
+              {ourHotelName && (
+                <div className="flex items-center justify-between gap-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-1.5" data-testid="geo-legend-ours">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-3 h-3 rounded-sm bg-violet-400 flex-shrink-0" />
+                    <span className="text-[11px] font-black text-violet-200 truncate" title={ourHotelName}>{ourHotelName}</span>
+                  </div>
+                  {ourSummary?.avg_rate && (
+                    <span className="text-[10px] font-bold text-violet-300 tabular-nums flex-shrink-0">
+                      {curShort(ourSummary.avg_rate)}
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* Market avg row */}
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-500/5 border border-amber-500/20 px-2.5 py-1.5" data-testid="geo-legend-market">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-3 h-[2px] bg-amber-400 flex-shrink-0" />
+                  <span className="text-[11px] font-black text-amber-300 truncate">Pazar Avg</span>
+                </div>
+                {summary?.avg_price && (
+                  <span className="text-[10px] font-bold text-amber-300 tabular-nums flex-shrink-0">
+                    {curShort(summary.avg_price)}
+                  </span>
+                )}
+              </div>
+              <div className="h-px bg-stone-800 my-2" />
+              <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">Competitors ({competitorSeries.length})</div>
+              {/* Competitor rows */}
+              {competitorSeries.length === 0 && (
+                <div className="text-[10px] text-stone-500 italic px-2.5 py-1.5">Henüz rakip eklenmemiş — aşağıdaki "+ Add Competitor" ile ekleyin.</div>
+              )}
+              {chart.compLines.map((c) => (
+                <div key={`leg-${c.id}`} className="flex items-center justify-between gap-2 rounded-lg bg-stone-900/60 border border-stone-800 hover:border-stone-700 transition-colors px-2.5 py-1.5" data-testid={`geo-legend-comp-${c.id}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-3 h-[2px] flex-shrink-0" style={{ background: c.colour }} />
+                    <span className="text-[11px] font-semibold text-stone-200 truncate" title={c.name}>{c.name}</span>
+                  </div>
+                  {c.avg != null ? (
+                    <span className="text-[10px] font-bold tabular-nums flex-shrink-0" style={{ color: c.colour }}>
+                      {curShort(c.avg)}
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-stone-600 flex-shrink-0">—</span>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex-1 relative overflow-x-auto">
             {/* Y-axis left (demand %) */}
             <div className="absolute left-0 top-0 bottom-0 w-12 pointer-events-none z-10">
               {[100,75,50,25,0].map(v => (
@@ -540,36 +614,20 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   </g>
                 );
               })}
-              {/* Price line */}
-              <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="6 3" opacity="0.95" />
-              {/* Price dots + £ value label (with Δ% vs previous day) above each dot */}
+              {/* Price line — MARKET AVERAGE (dashed amber) */}
+              <path d={chart.linePath} fill="none" stroke="#f59e0b" strokeWidth="1.8" strokeDasharray="5 3" opacity="0.75" />
+              {/* Price dots + compact labels — only every ~6th point so it doesn't look crowded */}
               {snapshots.map((s, i) => {
-                const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
-                const showLabel = i % labelStep === 0;
+                const labelStep = snapshots.length > 20 ? 6 : snapshots.length > 10 ? 4 : 3;
+                const showLabel = i % labelStep === 0 || i === snapshots.length - 1;
                 const cy = chart.syP(s.avg_price || 0);
-                const prev = i > 0 ? snapshots[i - 1] : null;
-                const prevPrice = prev && prev.avg_price > 0 ? prev.avg_price : null;
-                const delta = prevPrice && s.avg_price > 0
-                  ? ((s.avg_price - prevPrice) / prevPrice) * 100
-                  : null;
-                const showDelta = delta !== null && Math.abs(delta) >= 2;
-                const up = delta !== null && delta > 0;
-                const deltaColor = up ? "#f87171" : "#34d399"; // rising prices = rose (demand), falling = mint (opportunity)
                 return (
                   <g key={`dot-${i}`}>
-                    <circle cx={chart.sx(i)} cy={cy} r="3" fill="#fbbf24" stroke="#0a0a0a" strokeWidth="1" />
+                    <circle cx={chart.sx(i)} cy={cy} r="2.5" fill="#fbbf24" stroke="#0a0a0a" strokeWidth="0.8" />
                     {showLabel && s.avg_price > 0 && (
-                      <>
-                        <rect x={chart.sx(i) - 28} y={cy - 22} width={56} height={15} rx={3} fill="#0a0a0a" opacity="0.9" stroke="#fbbf24" strokeWidth="0.6" />
-                        <text x={chart.sx(i)} y={cy - 11} textAnchor="middle" fontSize="11" fontWeight="900" fill="#fbbf24" fontFamily="'Inter', system-ui, sans-serif">
-                          {curShort(s.avg_price)}
-                        </text>
-                        {showDelta && (
-                          <text x={chart.sx(i)} y={cy - 25} textAnchor="middle" fontSize="8.5" fontWeight="800" fill={deltaColor} fontFamily="'Inter', system-ui, sans-serif">
-                            {up ? "▲" : "▼"}{Math.abs(delta).toFixed(1)}%
-                          </text>
-                        )}
-                      </>
+                      <text x={chart.sx(i)} y={cy - 7} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#fbbf24" fontFamily="'Inter', system-ui, sans-serif" opacity="0.9">
+                        {curShort(s.avg_price)}
+                      </text>
                     )}
                   </g>
                 );
@@ -595,36 +653,38 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   </g>
                 );
               })}
-              {/* === OUR HOTEL: price line (solid violet) === */}
+              {/* === OUR HOTEL: price line (solid thicker violet — hero line) === */}
               {chart.ourLinePath && (
-                <path d={chart.ourLinePath} fill="none" stroke="#a78bfa" strokeWidth="2.2" opacity="0.95" />
+                <path d={chart.ourLinePath} fill="none" stroke="#a78bfa" strokeWidth="2.8" opacity="1" />
               )}
-              {/* === OUR HOTEL: price dots with £ label (violet) === */}
+              {/* === OUR HOTEL: price dots + sparse labels === */}
               {snapshots.map((s, i) => {
                 if (!s.our_avg_rate || s.our_avg_rate <= 0) return null;
-                const labelStep = snapshots.length > 30 ? 5 : snapshots.length > 14 ? 3 : 2;
-                const showLabel = i % labelStep === 0;
+                const labelStep = snapshots.length > 20 ? 6 : snapshots.length > 10 ? 4 : 3;
+                const showLabel = i % labelStep === 0 || i === snapshots.length - 1;
                 const cy = chart.syP(s.our_avg_rate);
-                const mktPrice = s.avg_price || 0;
-                const diff = mktPrice > 0 ? ((s.our_avg_rate - mktPrice) / mktPrice) * 100 : 0;
-                const below = diff < -2;
-                const above = diff > 2;
                 return (
                   <g key={`our-dot-${i}`}>
-                    <circle cx={chart.sx(i)} cy={cy} r="3.5" fill="#a78bfa" stroke="#0a0a0a" strokeWidth="1.2" />
+                    <circle cx={chart.sx(i)} cy={cy} r="3" fill="#a78bfa" stroke="#0a0a0a" strokeWidth="0.8" />
                     {showLabel && (
-                      <>
-                        <rect x={chart.sx(i) - 28} y={cy + 6} width={56} height={14} rx={3}
-                          fill={below ? "#10b98133" : above ? "#ef444433" : "#1c1917"} opacity="0.95"
-                          stroke="#a78bfa" strokeWidth="0.6" />
-                        <text x={chart.sx(i)} y={cy + 16} textAnchor="middle" fontSize="10" fontWeight="900" fill="#c4b5fd">
-                          {curShort(s.our_avg_rate)}
-                        </text>
-                      </>
+                      <text x={chart.sx(i)} y={cy + 14} textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#c4b5fd">
+                        {curShort(s.our_avg_rate)}
+                      </text>
                     )}
                   </g>
                 );
               })}
+              {/* === COMPETITOR LINES — one per competitor, stable colour === */}
+              {chart.compLines.map((c) => (
+                c.path && (
+                  <g key={`comp-${c.id}`}>
+                    <path d={c.path} fill="none" stroke={c.colour} strokeWidth="1.4" opacity="0.75" />
+                    {c.points.map((p, i) => (
+                      <circle key={i} cx={p.x} cy={p.y} r="1.8" fill={c.colour} opacity="0.9" />
+                    ))}
+                  </g>
+                )
+              ))}
               {/* Date labels */}
               {snapshots.map((s, i) => {
                 if (!s?.date) return null;
@@ -642,10 +702,9 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               })}
             </svg>
           </div>
+          </div>
         </div>
       )}
-
-      {/* Gap Analyzer — highlights dates where we're losing revenue */}
       {propertyId && propertyId !== "all" && snapshots.length > 0 && (
         <GapAnalyzerWidget snapshots={snapshots} propertyId={propertyId} cityHint={(summary && summary.last_location) || location} />
       )}

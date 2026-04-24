@@ -4,6 +4,35 @@
 
 
 
+### Iter 187 (Apr 2026): 📊 Per-Hotel Chart Redesign + Name-Based Competitor Search
+
+User ask (TR): _"'Biz' (hotel adı olsun), Pazar, rakipler tek tek datası… rakipleri artırdıkça neighborhood grafiğinde hotel adı ve grafiği olsun, hotel isimleri solda grafiğin yanında olsun, fiyatlar çok büyük görünüyor grafikleri güzelleştir."_ + Manually list `Hotel Adler Zurich, Hotel Hirschen, Altstadt, Rössli, Alexander, Scheuble`.
+
+**Backend additions to `GET /revenue/market-robot/{pid}/geo-supply`:**
+- New `our_hotel_name`: property's name (e.g. "Franziskaner by Centra") for the left-side legend hero row.
+- New `competitor_series: [{id, name, booking_hotel_id, prices_by_date, avg_price, min_price, max_price, days_covered, last_scraped, validation_ok}]` — one object per competitor, so the UI can draw individual lines.
+- Auto-sorted by name for stable colour assignment across polls.
+
+**New endpoint `POST /search-booking-hotel`** (name-based free-text search):
+- Body: `{name, city}` → returns `{candidates: [{name, booking_url, hotel_id, sample_price, currency}]}`
+- Handles cases like "Hotel Adler Zurich" where user has the name but not the URL.
+- Dedupes by slug, returns up to 3 matches.
+
+**Chart redesigned in `NeighborhoodScanPanel.js`:**
+- Two-column flex layout: left=hotel legend (max 320px scrollable), right=chart.
+- Left legend shows hero row (our hotel — thick violet) + market avg + competitor rows with colour swatch + avg price.
+- Chart draws: 1 thick violet line (us), 1 dashed amber (market avg), N thin coloured lines (one per competitor).
+- Fonts downsized: price labels now 9.5px (was 11px), sparse (every 4-6 points, was every 2-3).
+- Removed the noisy per-point ▲/▼ delta overlay; cleaner baseline look.
+- Colour palette: 8-colour stable rotation (sky / pink / emerald / amber / rose / violet / cyan / lime).
+
+**Add Competitor UX upgrade:**
+- New 🔎 **"Ada Göre Ara"** sky-blue button next to "Test URL". Type a name, see candidates, click one → form auto-fills URL → "Add".
+
+**Verified:** Zurich chart now shows Franziskaner + 4 competitors as individual lines, with Altstadt (CHF 225), Alexander (CHF 131), Rössli (CHF 158), Scheuble (CHF 170) visible in left legend.
+
+
+
 ### Iter 186 (Apr 2026): 🐛 Neighborhood "Biz vs Pazar" Uses Wrong Price Source + Scanner Disabled
 
 User: _"neighborhood grafikleri dinamik değil, bizim ve piyasa fiyatları yanlış"_

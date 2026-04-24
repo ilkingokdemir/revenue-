@@ -437,6 +437,12 @@ const FinishedScreen = ({ propertyId, onClose }) => {
   const [mrConfig, setMrConfig] = useState(null);
   const [mrStarting, setMrStarting] = useState(false);
   const [propCity, setPropCity] = useState("");
+  // Booking.com URL state
+  const [bookingUrl, setBookingUrl] = useState("");
+  const [bookingUrlSaved, setBookingUrlSaved] = useState("");
+  const [bookingValidating, setBookingValidating] = useState(false);
+  const [bookingSaving, setBookingSaving] = useState(false);
+  const [bookingValidation, setBookingValidation] = useState(null);
 
   const loadDemoCount = useCallback(async () => {
     try {
@@ -447,13 +453,16 @@ const FinishedScreen = ({ propertyId, onClose }) => {
 
   const loadMarketRobot = useCallback(async () => {
     try {
-      const [cfg, props] = await Promise.all([
+      const [cfg, props, ob] = await Promise.all([
         axios.get(`${API}/revenue/market-robot/${propertyId}/config`).then(r => r.data).catch(() => null),
         axios.get(`${API}/properties`).then(r => r.data).catch(() => []),
+        axios.get(`${API}/revenue/market-robot/${propertyId}/our-booking`).then(r => r.data).catch(() => null),
       ]);
       setMrConfig(cfg);
       const me = (props || []).find(p => p.id === propertyId);
       setPropCity(me?.city || cfg?.city || "London");
+      setBookingUrl(ob?.booking_url || "");
+      setBookingUrlSaved(ob?.booking_url || "");
     } catch { /* silent */ }
   }, [propertyId]);
 
@@ -480,6 +489,52 @@ const FinishedScreen = ({ propertyId, onClose }) => {
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Market Robot başlatılamadı");
     } finally { setMrStarting(false); }
+  };
+
+  const testBookingUrl = async () => {
+    if (!bookingUrl) { toast.error("Önce Booking.com URL'si yapıştırın"); return; }
+    setBookingValidating(true);
+    setBookingValidation(null);
+    try {
+      const info = getCurrencyInfo(propCity);
+      const { data: v } = await axios.post(`${API}/revenue/market-robot/validate-booking-url`, {
+        booking_url: bookingUrl,
+        currency: info.code,
+      });
+      setBookingValidation(v);
+      if (v.ok) toast.success(`${v.hotel_name} · ${v.currency} ${v.sample_price}`);
+      else toast.error(`Doğrulanamadı: ${v.error || "bilinmeyen"}`);
+    } catch {
+      toast.error("Validator error");
+    }
+    setBookingValidating(false);
+  };
+
+  const saveBookingUrl = async () => {
+    if (!bookingUrl) { toast.error("Önce URL yapıştırın"); return; }
+    if (!bookingUrl.toLowerCase().includes("booking.com")) {
+      toast.error("Booking.com URL'si gerekli"); return;
+    }
+    setBookingSaving(true);
+    try {
+      const { data } = await axios.put(`${API}/revenue/market-robot/${propertyId}/our-booking`, {
+        booking_url: bookingUrl,
+      });
+      setBookingUrlSaved(bookingUrl);
+      if (data?.validation?.ok) {
+        toast.success(`Kaydedildi: ${data.validation.hotel_name}`);
+        setBookingValidation(data.validation);
+      } else if (data?.validation && !data.validation.ok) {
+        toast.warning(`URL kaydedildi ama doğrulama başarısız: ${data.validation.error}`);
+        setBookingValidation(data.validation);
+      } else {
+        toast.success("Booking URL kaydedildi");
+      }
+      // Trigger first scrape to populate Our Booking Live card
+      try { await axios.post(`${API}/revenue/market-robot/${propertyId}/our-booking/scan`); } catch { /* non-fatal */ }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Kaydetme başarısız");
+    } finally { setBookingSaving(false); }
   };
 
   const seed = async (count) => {
@@ -615,6 +670,72 @@ const FinishedScreen = ({ propertyId, onClose }) => {
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Link Booking.com listing */}
+      <div className="mt-5 bg-white border border-stone-200 rounded-3xl p-6 md:p-7" data-testid="onboarding-booking-url-card">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white flex items-center justify-center shadow-lg">
+            <Banknote className="w-6 h-6" />
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-black text-stone-900">Link Booking.com Listing</h2>
+              {bookingUrlSaved && (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> Linked
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-stone-500 mt-1">
+              Paste your property's Booking.com URL. The scraper uses it to pull live <b>lowest nightly rate</b>, <b>review score</b> and <b>availability</b> every 3 hours — powering "Biz vs Pazar" comparisons.
+              The <b>Test URL</b> button confirms Booking.com recognizes it before saving.
+            </p>
+            <div className="mt-3 flex flex-col md:flex-row gap-2">
+              <input
+                value={bookingUrl}
+                onChange={(e) => { setBookingUrl(e.target.value); setBookingValidation(null); }}
+                placeholder="https://www.booking.com/hotel/ch/your-hotel.en-gb.html"
+                className="flex-1 border border-stone-300 rounded-lg px-3 py-2 text-xs font-mono focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                data-testid="onboarding-booking-url-input"
+              />
+              <button onClick={testBookingUrl} disabled={bookingValidating || !bookingUrl}
+                      className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      data-testid="onboarding-booking-url-test">
+                {bookingValidating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {bookingValidating ? "Testing…" : "Test URL"}
+              </button>
+              <button onClick={saveBookingUrl} disabled={bookingSaving || !bookingUrl}
+                      className="px-4 py-2 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      data-testid="onboarding-booking-url-save">
+                {bookingSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                {bookingSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+            {bookingValidation && (
+              <div
+                className={`mt-3 border rounded-lg p-3 text-xs ${
+                  bookingValidation.ok
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-rose-50 border-rose-200 text-rose-700"
+                }`}
+                data-testid="onboarding-booking-url-result"
+              >
+                {bookingValidation.ok ? (
+                  <>
+                    <div className="font-bold">✓ {bookingValidation.hotel_name}</div>
+                    <div className="mt-0.5">
+                      Booking ID <span className="font-mono">{bookingValidation.hotel_id}</span> · Örnek fiyat <span className="font-bold">{bookingValidation.currency} {bookingValidation.sample_price}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div>✗ {bookingValidation.error || "Bilinmeyen hata"} — URL'yi kontrol edin.</div>
+                )}
+              </div>
+            )}
+            <p className="text-[10px] text-stone-400 mt-2">İsteğe bağlı · boş bırakabilirsiniz, daha sonra Market Robot → Our Booking.com Live kartından da ekleyebilirsiniz.</p>
           </div>
         </div>
       </div>

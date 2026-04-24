@@ -2070,13 +2070,59 @@ def create_market_robot_router(db, require_roles, resend=None):
         ).to_list(20)
         return {"competitors": comps}
 
+    @router.post("/revenue/market-robot/validate-booking-url")
+    async def validate_booking_url_endpoint(data: Dict,
+                                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Test-scrape a Booking.com URL before saving it. Used by the 'Add Competitor' UI
+        and the Onboarding Wizard so bad/wrong links cannot pollute the database.
+
+        Body: { booking_url: str, currency?: str }
+        Returns: { ok, hotel_id, hotel_name, sample_price, currency, error }
+        """
+        from utils.booking_scraper import validate_booking_url
+        url = (data.get("booking_url") or "").strip()
+        currency = (data.get("currency") or "").strip() or None
+        if not url:
+            return {"ok": False, "error": "missing_url"}
+        try:
+            return await validate_booking_url(url, currency=currency)
+        except Exception as e:
+            logger.warning(f"Validator failed for {url}: {e}")
+            return {"ok": False, "error": str(e)}
+
     @router.post("/revenue/market-robot/{property_id}/competitors")
     async def add_competitor(property_id: str, data: Dict,
                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        from utils.booking_scraper import validate_booking_url as _validate
         booking_url = data.get("booking_url", "").strip()
         name = data.get("name", "").strip()
+        skip_validation = bool(data.get("skip_validation", False))
         if not booking_url:
             return {"error": "Booking.com URL is required"}
+
+        # Resolve hotel_id (also doubles as a sanity test — if Booking won't give us
+        # an id, the URL is wrong and we should warn the user before saving).
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
+        currency = prop.get("currency") or "GBP"
+
+        validation = {}
+        hotel_id = None
+        resolved_name = ""
+        sample_price = None
+        if not skip_validation:
+            try:
+                validation = await _validate(booking_url, currency=currency)
+                hotel_id = validation.get("hotel_id")
+                resolved_name = validation.get("hotel_name", "")
+                sample_price = validation.get("sample_price")
+                if not hotel_id:
+                    return {
+                        "error": "invalid_booking_url",
+                        "message": "Booking.com URL doğrulanamadı. Lütfen URL'yi kontrol edin.",
+                        "validation": validation,
+                    }
+            except Exception as e:
+                logger.warning(f"Competitor URL validation failed: {e}")
 
         # Extract hotel slug from URL
         slug_match = re.search(r'/hotel/[a-z]{2}/([^.?]+)', booking_url)
@@ -2085,16 +2131,81 @@ def create_market_robot_router(db, require_roles, resend=None):
         comp = {
             "id": str(uuid.uuid4())[:8],
             "property_id": property_id,
-            "name": name or slug.replace("-", " ").title(),
+            "name": name or resolved_name or slug.replace("-", " ").title(),
             "booking_url": booking_url,
             "slug": slug,
+            "booking_hotel_id": hotel_id,
+            "sample_price": sample_price,
             "added_at": datetime.now(timezone.utc).isoformat(),
             "last_scraped": None,
             "prices": [],
         }
         await db.market_competitors.insert_one(comp)
         comp.pop("_id", None)
-        return comp
+        return {**comp, "validation": validation}
+
+    @router.post("/revenue/market-robot/{property_id}/competitors/revalidate-all")
+    async def revalidate_all_competitors(property_id: str,
+                                         current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Re-run Booking.com URL validation on every competitor for this property.
+        Useful after a DB migration or when old competitor URLs point to wrong hotels.
+
+        Updates `booking_hotel_id`, `name` (if auto-generated), and marks each entry with
+        `last_validation` = { ok, sample_price, checked_at }.
+        """
+        from utils.booking_scraper import validate_booking_url as _validate
+        comps = await db.market_competitors.find({"property_id": property_id}, {"_id": 0}).to_list(50)
+        if not comps:
+            return {"checked": 0, "valid": 0, "invalid": 0, "competitors": []}
+
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
+        currency = prop.get("currency") or "GBP"
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        valid_cnt = 0
+        invalid_cnt = 0
+        results = []
+        for comp in comps:
+            url = comp.get("booking_url", "")
+            if not url:
+                invalid_cnt += 1
+                results.append({"id": comp["id"], "name": comp.get("name", ""), "ok": False, "error": "no_url"})
+                continue
+            try:
+                v = await _validate(url, currency=currency)
+            except Exception as e:
+                v = {"ok": False, "error": str(e)}
+
+            update_fields = {"last_validation": {**v, "checked_at": now_iso}}
+            if v.get("hotel_id"):
+                update_fields["booking_hotel_id"] = v["hotel_id"]
+                valid_cnt += 1
+            else:
+                invalid_cnt += 1
+            if v.get("hotel_name"):
+                original = (comp.get("name") or "").strip().lower()
+                slug_default = (comp.get("slug") or "").replace("-", " ").strip().lower()
+                if original in ("", slug_default):
+                    update_fields["name"] = v["hotel_name"]
+
+            await db.market_competitors.update_one({"id": comp["id"]}, {"$set": update_fields})
+            results.append({
+                "id": comp["id"],
+                "name": update_fields.get("name") or comp.get("name", ""),
+                "booking_url": url,
+                "ok": bool(v.get("ok")),
+                "hotel_id": v.get("hotel_id"),
+                "hotel_name": v.get("hotel_name"),
+                "sample_price": v.get("sample_price"),
+                "error": v.get("error"),
+            })
+
+        return {
+            "checked": len(comps),
+            "valid": valid_cnt,
+            "invalid": invalid_cnt,
+            "competitors": results,
+        }
 
     @router.delete("/revenue/market-robot/competitors/{competitor_id}")
     async def remove_competitor(competitor_id: str,
@@ -2434,14 +2545,29 @@ Date range: {date_from} to {date_to}."""
             if not base_url:
                 continue
 
+            # Cache the hotel_id on the competitor record the first time it's resolved
+            # so future scans skip the detail-page round-trip entirely.
+            cached_hotel_id = comp.get("booking_hotel_id")
+
             last_score = None
+            resolved_hotel_id = cached_hotel_id
+            resolved_name = comp.get("name", "")
+            name_hint = (comp.get("slug") or "").replace("-", " ")[:18]
             for i in range(days_ahead):
                 d = now + timedelta(days=i)
                 checkin = d.strftime("%Y-%m-%d")
                 checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
                 url = build_dated_url(base_url, checkin, checkout, target_currency)
                 try:
-                    result = await scrape_booking_url(url, timeout_ms=30000)
+                    result = await scrape_booking_url(
+                        url, timeout_ms=30000,
+                        hotel_id=resolved_hotel_id,
+                        hotel_name_hint=name_hint,
+                    )
+                    if result.get("hotel_id"):
+                        resolved_hotel_id = result["hotel_id"]
+                    if result.get("hotel_name"):
+                        resolved_name = result["hotel_name"]
                     if result["scraped"]:
                         comp_prices.append({
                             "date": checkin,
@@ -2454,7 +2580,8 @@ Date range: {date_from} to {date_to}."""
                         if result["score"]:
                             last_score = result["score"]
                     else:
-                        comp_prices.append({"date": checkin, "lowest_price": None, "scraped": False})
+                        comp_prices.append({"date": checkin, "lowest_price": None, "scraped": False,
+                                            "error": result.get("error")})
                 except Exception as e:
                     logger.warning(f"Auto comp scrape failed for {comp.get('name')}: {e}")
                     comp_prices.append({"date": checkin, "lowest_price": None, "scraped": False})
@@ -2469,6 +2596,15 @@ Date range: {date_from} to {date_to}."""
             }
             if last_score:
                 update_fields["review_score"] = last_score
+            if resolved_hotel_id and resolved_hotel_id != cached_hotel_id:
+                update_fields["booking_hotel_id"] = resolved_hotel_id
+            if resolved_name and resolved_name != comp.get("name", ""):
+                # Never overwrite a user-picked name blindly — only persist the resolved
+                # name when the original was auto-generated from the slug.
+                original = (comp.get("name") or "").strip().lower()
+                slug_default = (comp.get("slug") or "").replace("-", " ").strip().lower()
+                if original in ("", slug_default):
+                    update_fields["name"] = resolved_name
             await db_ref.market_competitors.update_one(
                 {"id": comp["id"]}, {"$set": update_fields}
             )
@@ -2489,17 +2625,20 @@ Date range: {date_from} to {date_to}."""
 
         prop = await db_ref.properties.find_one(
             {"id": property_id},
-            {"_id": 0, "booking_url": 1, "name": 1, "currency": 1, "city": 1}
+            {"_id": 0, "booking_url": 1, "name": 1, "currency": 1, "city": 1, "booking_hotel_id": 1}
         )
         if not prop or not prop.get("booking_url"):
             return {"scraped": False, "reason": "no_booking_url"}
 
         base_url = prop["booking_url"]
         target_currency = prop.get("currency") or "CHF"
+        cached_hotel_id = prop.get("booking_hotel_id")
+        name_hint = (prop.get("name") or "").strip()[:18]
         now = datetime.now(timezone.utc)
         days_ahead = 14
         prices = []
         review_score = None
+        resolved_hotel_id = cached_hotel_id
 
         for i in range(days_ahead):
             d = now + timedelta(days=i)
@@ -2507,7 +2646,13 @@ Date range: {date_from} to {date_to}."""
             checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
             url = build_dated_url(base_url, checkin, checkout, target_currency)
             try:
-                result = await scrape_booking_url(url, timeout_ms=30000)
+                result = await scrape_booking_url(
+                    url, timeout_ms=30000,
+                    hotel_id=resolved_hotel_id,
+                    hotel_name_hint=name_hint,
+                )
+                if result.get("hotel_id"):
+                    resolved_hotel_id = result["hotel_id"]
                 if result["scraped"]:
                     prices.append({
                         "date": checkin,
@@ -2518,7 +2663,8 @@ Date range: {date_from} to {date_to}."""
                     if review_score is None and result["score"]:
                         review_score = result["score"]
                 else:
-                    prices.append({"date": checkin, "lowest_price": None, "scraped": False})
+                    prices.append({"date": checkin, "lowest_price": None, "scraped": False,
+                                   "error": result.get("error")})
             except Exception as e:
                 logger.warning(f"Our-hotel Booking scrape failed for {property_id} on {checkin}: {e}")
                 prices.append({"date": checkin, "lowest_price": None, "scraped": False})
@@ -2552,13 +2698,19 @@ Date range: {date_from} to {date_to}."""
             )
 
         # Update quick-read field on property
+        prop_update = {"booking_data": {k: v for k, v in snapshot.items() if k != "_id"}}
+        if resolved_hotel_id and resolved_hotel_id != cached_hotel_id:
+            prop_update["booking_hotel_id"] = resolved_hotel_id
+        if review_score and not prop.get("review_score"):
+            prop_update["review_score"] = review_score
         await db_ref.properties.update_one(
             {"id": property_id},
-            {"$set": {"booking_data": {k: v for k, v in snapshot.items() if k != "_id"}}}
+            {"$set": prop_update}
         )
 
         return {"scraped": True, "days_with_price": len(valid_prices),
-                "avg_price": avg_price, "review_score": review_score}
+                "avg_price": avg_price, "review_score": review_score,
+                "hotel_id": resolved_hotel_id}
 
     # Initialize smart scanner with event + competitor + our-hotel scanning
     from routes.smart_scanner import init_scanner
@@ -2603,14 +2755,42 @@ Date range: {date_from} to {date_to}."""
     @router.put("/revenue/market-robot/{property_id}/our-booking")
     async def set_our_booking(property_id: str, data: Dict,
                               current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Save/update the property's Booking.com listing URL."""
+        """Save/update the property's Booking.com listing URL.
+
+        Also (optionally, default=on) validates the URL and caches `booking_hotel_id`
+        on the property doc so future scans skip the expensive detail-page round-trip.
+        """
+        from utils.booking_scraper import validate_booking_url as _validate
         url = (data.get("booking_url") or "").strip()
+        skip_validation = bool(data.get("skip_validation", False))
         if url and "booking.com" not in url.lower():
             raise HTTPException(400, "URL must be a booking.com link")
+
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
+        currency = prop.get("currency") or "GBP"
+
         update = {"booking_url": url,
                   "booking_url_updated_at": datetime.now(timezone.utc).isoformat()}
+        validation = {}
+        if url and not skip_validation:
+            try:
+                validation = await _validate(url, currency=currency)
+                if validation.get("hotel_id"):
+                    update["booking_hotel_id"] = validation["hotel_id"]
+                if validation.get("hotel_name"):
+                    # Only auto-fill property name if it looks uninitialised
+                    update_name = False
+                    current_name = (prop.get("name") or "").strip().lower() if prop else ""
+                    if current_name in ("", "my property", "default"):
+                        update_name = True
+                    if update_name:
+                        update["name"] = validation["hotel_name"]
+            except Exception as e:
+                logger.warning(f"Our-booking URL validation failed for {property_id}: {e}")
+                validation = {"ok": False, "error": str(e)}
+
         await db.properties.update_one({"id": property_id}, {"$set": update})
-        return {"ok": True, "booking_url": url}
+        return {"ok": True, "booking_url": url, "validation": validation}
 
     @router.post("/revenue/market-robot/{property_id}/our-booking/scan")
     async def trigger_our_booking_scan(property_id: str, background_tasks: BackgroundTasks,

@@ -40,7 +40,10 @@ export const MarketRobot = ({ propertyId }) => {
   const [scanResult, setScanResult] = useState(null);
   const [subTab, setSubTab] = useState("dashboard");
   const [competitors, setCompetitors] = useState([]);
+  const [compRevalidating, setCompRevalidating] = useState(false);
   const [compForm, setCompForm] = useState({ name: "", booking_url: "" });
+  const [compValidating, setCompValidating] = useState(false);
+  const [compValidation, setCompValidation] = useState(null); // { ok, hotel_name, sample_price, currency, error }
   const [compScanning, setCompScanning] = useState(false);
   const [scannerStatus, setScannerStatus] = useState(null);
 
@@ -103,14 +106,46 @@ export const MarketRobot = ({ propertyId }) => {
     setScanning(false);
   };
 
+  const validateCompetitorUrl = async () => {
+    if (!compForm.booking_url) { toast.error("Booking.com URL required"); return; }
+    setCompValidating(true);
+    setCompValidation(null);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/validate-booking-url`, {
+        booking_url: compForm.booking_url,
+        currency: config?.currency || "",
+      });
+      setCompValidation(data);
+      if (data.ok) {
+        toast.success(`URL OK: ${data.hotel_name} — ${data.currency} ${data.sample_price}`);
+        if (!compForm.name && data.hotel_name) {
+          setCompForm(p => ({ ...p, name: data.hotel_name }));
+        }
+      } else {
+        toast.error(`URL check failed: ${data.error || "unknown"}`);
+      }
+    } catch {
+      toast.error("Validator error");
+    }
+    setCompValidating(false);
+  };
+
   const addCompetitor = async () => {
     if (!compForm.booking_url) { toast.error("Booking.com URL required"); return; }
     try {
-      await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors`, compForm);
+      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors`, compForm);
+      if (data?.error === "invalid_booking_url") {
+        toast.error("Bad URL — Booking.com didn't return a valid hotel. Check the link.");
+        setCompValidation(data.validation || { ok: false, error: data.error });
+        return;
+      }
       toast.success("Competitor added");
       setCompForm({ name: "", booking_url: "" });
+      setCompValidation(null);
       loadAll();
-    } catch { toast.error("Failed"); }
+    } catch {
+      toast.error("Failed");
+    }
   };
 
   const removeCompetitor = async (id) => {
@@ -129,6 +164,24 @@ export const MarketRobot = ({ propertyId }) => {
       loadAll();
     } catch { toast.error("Failed"); }
     setCompScanning(false);
+  };
+
+  const revalidateAllCompetitors = async () => {
+    setCompRevalidating(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors/revalidate-all`);
+      const ok = data.valid || 0;
+      const bad = data.invalid || 0;
+      if (bad > 0) {
+        toast.warning(`${ok} geçerli · ${bad} hatalı rakip URL`);
+      } else {
+        toast.success(`Tüm ${ok} rakip URL'si geçerli`);
+      }
+      loadAll();
+    } catch {
+      toast.error("Re-validation failed");
+    }
+    setCompRevalidating(false);
   };
 
   const snapshots = supply?.snapshots || [];
@@ -538,25 +591,64 @@ export const MarketRobot = ({ propertyId }) => {
               <h3 className="font-bold text-stone-800">Competitor Hotels</h3>
               <p className="text-sm text-stone-400">Add Booking.com hotel URLs to track their prices and availability.</p>
             </div>
-            <button onClick={scanCompetitors} disabled={compScanning || competitors.length === 0}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50" data-testid="market-robot-scan-comps">
-              {compScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-              {compScanning ? "Scanning..." : "Scan All Prices"}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={revalidateAllCompetitors} disabled={compRevalidating || competitors.length === 0}
+                className="flex items-center gap-2 bg-white hover:bg-amber-50 border border-amber-300 text-amber-700 px-3 py-2 rounded-xl text-xs font-medium disabled:opacity-50"
+                data-testid="market-robot-revalidate-comps"
+                title="Tüm rakiplerin Booking.com URL'lerini yeniden doğrula — bozuk linkleri ortaya çıkarır">
+                {compRevalidating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                {compRevalidating ? "Checking..." : "Re-validate URLs"}
+              </button>
+              <button onClick={scanCompetitors} disabled={compScanning || competitors.length === 0}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50" data-testid="market-robot-scan-comps">
+                {compScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                {compScanning ? "Scanning..." : "Scan All Prices"}
+              </button>
+            </div>
           </div>
 
           {/* Add Competitor Form */}
           <div className="bg-white border border-stone-200 rounded-2xl p-5">
             <h4 className="font-semibold text-stone-700 mb-3">Add Competitor Hotel</h4>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-3">
               <input value={compForm.name} onChange={e => setCompForm(p => ({ ...p, name: e.target.value }))}
-                placeholder="Hotel name (optional)" className="border border-stone-200 rounded-lg px-3 py-2 text-sm w-48" data-testid="comp-name" />
-              <input value={compForm.booking_url} onChange={e => setCompForm(p => ({ ...p, booking_url: e.target.value }))}
-                placeholder="Booking.com hotel URL (paste full URL)" className="border border-stone-200 rounded-lg px-3 py-2 text-sm flex-1" data-testid="comp-url" />
-              <button onClick={addCompetitor}
-                className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap" data-testid="comp-add">+ Add</button>
+                placeholder="Hotel name (optional)" className="border border-stone-200 rounded-lg px-3 py-2 text-sm w-full sm:w-48" data-testid="comp-name" />
+              <input value={compForm.booking_url} onChange={e => { setCompForm(p => ({ ...p, booking_url: e.target.value })); setCompValidation(null); }}
+                placeholder="Booking.com hotel URL (paste full URL)" className="border border-stone-200 rounded-lg px-3 py-2 text-sm flex-1 min-w-[220px]" data-testid="comp-url" />
+              <button onClick={validateCompetitorUrl} disabled={compValidating || !compForm.booking_url}
+                className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap disabled:opacity-50 flex items-center gap-2"
+                data-testid="comp-validate">
+                {compValidating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+                {compValidating ? "Testing..." : "Test URL"}
+              </button>
+              <button onClick={addCompetitor} disabled={compValidating}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-semibold whitespace-nowrap disabled:opacity-50" data-testid="comp-add">+ Add</button>
             </div>
-            <p className="text-[10px] text-stone-400 mt-2">Example: https://www.booking.com/hotel/gb/the-barkston.html</p>
+            <p className="text-[10px] text-stone-400 mt-2">Example: https://www.booking.com/hotel/gb/the-barkston.html · "Test URL" Booking.com'dan anlık fiyat çeker; bozuk linkleri kaydetmeden görürsünüz.</p>
+            {compValidation && (
+              <div
+                className={`mt-3 border rounded-lg p-3 text-sm ${
+                  compValidation.ok
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-red-50 border-red-200 text-red-700"
+                }`}
+                data-testid="comp-validation-result"
+              >
+                {compValidation.ok ? (
+                  <>
+                    <div className="font-semibold">✓ Geçerli: {compValidation.hotel_name}</div>
+                    <div className="text-xs mt-1 text-emerald-600">
+                      Booking.com ID: <span className="font-mono">{compValidation.hotel_id}</span> · Örnek fiyat: <span className="font-bold">{compValidation.currency} {compValidation.sample_price}</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="font-semibold">✗ URL doğrulanamadı</div>
+                    <div className="text-xs mt-1 text-red-600">Hata: {compValidation.error || "Bilinmiyor"} — URL'yi kontrol edin veya farklı bir Booking.com linki deneyin.</div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Competitor List */}
@@ -571,11 +663,29 @@ export const MarketRobot = ({ propertyId }) => {
               {competitors.map(comp => (
                 <div key={comp.id} className="bg-white border border-stone-200 rounded-2xl p-5" data-testid={`comp-${comp.id}`}>
                   <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <h4 className="font-bold text-stone-800">{comp.name}</h4>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-stone-800">{comp.name}</h4>
+                        {comp.last_validation && !comp.last_validation.ok && (
+                          <Badge className="bg-red-100 text-red-700 text-[10px]" data-testid={`comp-${comp.id}-bad`}>
+                            ⚠ URL doğrulanmadı
+                          </Badge>
+                        )}
+                        {comp.last_validation?.ok && comp.last_validation?.hotel_name &&
+                         comp.last_validation.hotel_name.toLowerCase() !== (comp.name || "").toLowerCase() && (
+                          <Badge className="bg-amber-100 text-amber-700 text-[10px]" data-testid={`comp-${comp.id}-mismatch`}>
+                            Booking: {comp.last_validation.hotel_name}
+                          </Badge>
+                        )}
+                        {comp.booking_hotel_id && (
+                          <Badge className="bg-stone-100 text-stone-500 text-[10px] font-mono" data-testid={`comp-${comp.id}-id`}>
+                            #{comp.booking_hotel_id}
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-stone-400 truncate max-w-md">{comp.booking_url}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       {comp.last_scraped && <Badge className="bg-emerald-100 text-emerald-700 text-[10px]">Last scan: {new Date(comp.last_scraped).toLocaleString("en-GB", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</Badge>}
                       <button onClick={() => removeCompetitor(comp.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 className="w-4 h-4" /></button>
                     </div>

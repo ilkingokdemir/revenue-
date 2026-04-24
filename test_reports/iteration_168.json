@@ -1,0 +1,104 @@
+{
+  "summary": "Iteration 168 - Booking.com Scraper URL Validation Testing. Backend: 15/16 tests passed (93.75%). The revalidate-all endpoint times out at gateway level (502) when validating many competitors sequentially, but the endpoint itself works correctly as verified by backend logs and DB state.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/revenue/market-robot/{pid}/competitors/revalidate-all",
+        "issue": "Gateway timeout (502) when validating many competitors (5+) sequentially. Each validation takes 30-60s, so 5 competitors = 2.5-5 minutes which exceeds the 60s gateway timeout. The endpoint works correctly but response is lost.",
+        "priority": "LOW",
+        "workaround": "Endpoint works - results are persisted to DB. Check competitors list after calling to see updated booking_hotel_id and last_validation fields."
+      },
+      {
+        "endpoint": "Competitor: Hotel Hirschen",
+        "issue": "URL https://www.booking.com/hotel/ch/hirschen-zurich.en-gb.html fails validation - could_not_resolve_hotel_id. The URL may be incorrect or the hotel may have been delisted.",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration168_booking_scraper.py",
+    "/app/test_reports/pytest/pytest_iteration168_booking_scraper.xml"
+  ],
+  "action_items": [
+    "Consider adding background task support for revalidate-all endpoint to avoid gateway timeout",
+    "Review Hotel Hirschen competitor URL - may need to be updated or removed"
+  ],
+  "critical_code_review_comments": [
+    "booking_scraper.py: Well-designed with in-memory caching (_HOTEL_ID_CACHE) to avoid re-resolving hotel_ids",
+    "booking_scraper.py: Good fallback strategy (detail page → slug search) for hotel_id resolution",
+    "market_robot.py: URL validation properly blocks invalid competitors before saving",
+    "market_robot.py: skip_validation=true provides backward compatibility"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration168_booking_scraper.py"
+  ],
+  "success_rate": {
+    "backend": "93.75% (15/16 tests passed)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test competitors created and cleaned up during testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Booking.com scraper rewrite is working correctly. The validate_booking_url function successfully resolves hotel_ids and fetches sample prices. Key hotel_id for Franziskaner by Centra is 14990420. Each validation takes 30-60 seconds (headless Chromium). Cached URLs are much faster (~10s). The revalidate-all endpoint works but may timeout at gateway level for many competitors.",
+  "verified_features": {
+    "POST /api/revenue/market-robot/validate-booking-url": {
+      "valid_url": "Returns ok=true, hotel_id, hotel_name, sample_price for valid Booking.com URLs",
+      "invalid_url": "Returns ok=false, error='could_not_resolve_hotel_id' for non-existent hotels",
+      "non_booking_url": "Returns ok=false, error='not_a_booking_url' for non-booking.com URLs",
+      "missing_url": "Returns ok=false, error='missing_url'"
+    },
+    "POST /api/revenue/market-robot/{pid}/competitors": {
+      "valid_url": "Persists competitor with booking_hotel_id populated from validation",
+      "invalid_url": "Blocks with error='invalid_booking_url'",
+      "skip_validation": "Persists regardless of URL validity (backward compat)"
+    },
+    "POST /api/revenue/market-robot/{pid}/competitors/revalidate-all": {
+      "functionality": "Works correctly - updates booking_hotel_id and last_validation on all competitors",
+      "limitation": "May timeout at gateway level for many competitors (>5)"
+    },
+    "PUT /api/revenue/market-robot/{pid}/our-booking": {
+      "with_validation": "Sets booking_url and populates booking_hotel_id from validation",
+      "non_booking_url": "Rejects with 400 error"
+    },
+    "GET /api/revenue/market-robot/{pid}/competitors": "Returns list of competitors with booking_hotel_id",
+    "GET /api/revenue/market-robot/{pid}/our-booking": "Returns booking_url and booking_data",
+    "GET /api/revenue/market-robot/{pid}/config": "Returns market robot configuration"
+  },
+  "test_scenarios_executed": [
+    "Admin login and authentication",
+    "Validate valid Booking.com URL (Franziskaner by Centra, CHF)",
+    "Validate invalid Booking.com URL (non-existent hotel)",
+    "Validate non-Booking.com URL (Expedia)",
+    "Validate missing URL",
+    "Add competitor with valid URL (validation enabled)",
+    "Add competitor with invalid URL (blocked)",
+    "Add competitor with skip_validation=true",
+    "Get competitors list (regression)",
+    "Revalidate all competitors (works but gateway timeout)",
+    "Cleanup test competitors",
+    "Get our-booking (regression)",
+    "Set our-booking with validation",
+    "Set our-booking with non-booking URL (rejected)",
+    "Get config (regression)",
+    "Health check"
+  ],
+  "booking_scraper_details": {
+    "hotel_id_cache": "In-memory cache per process to avoid re-resolving",
+    "resolution_strategy": "1) Visit detail page for b_hotel_id, 2) Fallback to slug search",
+    "scraping_strategy": "Uses /searchresults.html?dest_id=X&dest_type=hotel to bypass anti-bot",
+    "timing": "First validation: 30-60s, Cached: ~10s",
+    "known_hotel_ids": {
+      "franziskaner-by-centra": "14990420",
+      "altstadt": "65040",
+      "roessli": "65117",
+      "alexander": "48327",
+      "swissqscheuble": "65191"
+    }
+  }
+}

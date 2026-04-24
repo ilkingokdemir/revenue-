@@ -35,6 +35,8 @@ export default function OurBookingLiveCard({ propertyId }) {
   const [editing, setEditing] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
   const [scraping, setScraping] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validation, setValidation] = useState(null); // {ok, hotel_id, hotel_name, sample_price, currency, error}
 
   const load = useCallback(() => {
     setLoading(true);
@@ -47,11 +49,35 @@ export default function OurBookingLiveCard({ propertyId }) {
 
   const cur = useMemo(() => makeCurrencyFormatter(data?.currency || data?.city || ""), [data]);
 
+  const testUrl = async () => {
+    if (!urlDraft) { toast.error("URL boş"); return; }
+    setValidating(true);
+    setValidation(null);
+    try {
+      const { data: v } = await axios.post(`${API}/revenue/market-robot/validate-booking-url`, {
+        booking_url: urlDraft,
+        currency: data?.currency || "",
+      });
+      setValidation(v);
+      if (v.ok) toast.success(`${v.hotel_name} · ${v.currency} ${v.sample_price}`);
+      else toast.error(`Doğrulanamadı: ${v.error || "bilinmeyen"}`);
+    } catch {
+      toast.error("Validator error");
+    }
+    setValidating(false);
+  };
+
   const save = async () => {
     try {
-      await axios.put(`${API}/revenue/market-robot/${propertyId}/our-booking`, { booking_url: urlDraft });
-      toast.success("Booking URL saved");
+      const { data: res } = await axios.put(`${API}/revenue/market-robot/${propertyId}/our-booking`, { booking_url: urlDraft });
+      const v = res?.validation;
+      if (v && !v.ok && urlDraft) {
+        toast.warning(`URL kaydedildi ama doğrulanamadı: ${v.error || "bilinmeyen"}`);
+      } else {
+        toast.success("Booking URL saved");
+      }
       setEditing(false);
+      setValidation(null);
       load();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to save URL");
@@ -198,7 +224,7 @@ export default function OurBookingLiveCard({ propertyId }) {
             </p>
             <div>
               <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Booking URL</label>
-              <Input value={urlDraft} onChange={(e) => setUrlDraft(e.target.value)} autoFocus
+              <Input value={urlDraft} onChange={(e) => { setUrlDraft(e.target.value); setValidation(null); }} autoFocus
                      className="mt-1 font-mono text-xs"
                      placeholder="https://www.booking.com/hotel/ch/your-hotel.en-gb.html"
                      data-testid="our-booking-url-input" />
@@ -206,14 +232,42 @@ export default function OurBookingLiveCard({ propertyId }) {
                 <p className="mt-1 text-[10px] text-rose-600">URL must be a booking.com link</p>
               )}
             </div>
+            {validation && (
+              <div
+                className={`rounded-lg border p-2.5 text-[11px] ${
+                  validation.ok
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                    : "bg-rose-50 border-rose-200 text-rose-700"
+                }`}
+                data-testid="our-booking-validation"
+              >
+                {validation.ok ? (
+                  <>
+                    <div className="font-bold">✓ {validation.hotel_name}</div>
+                    <div className="mt-0.5 text-emerald-600">
+                      Booking ID <span className="font-mono">{validation.hotel_id}</span> · Örnek fiyat <span className="font-bold">{validation.currency} {validation.sample_price}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div>✗ {validation.error || "Bilinmeyen hata"}</div>
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t">
-            <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
-            <Button onClick={save} disabled={urlDraft && !urlDraft.toLowerCase().includes("booking.com")}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                    data-testid="our-booking-save">
-              <Save className="w-3.5 h-3.5 mr-1.5" /> Save
+          <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t">
+            <Button variant="outline" onClick={testUrl} disabled={validating || !urlDraft}
+                    data-testid="our-booking-test-url">
+              {validating ? <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Eye className="w-3.5 h-3.5 mr-1.5" />}
+              {validating ? "Testing…" : "Test URL"}
             </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => { setEditing(false); setValidation(null); }}>Cancel</Button>
+              <Button onClick={save} disabled={urlDraft && !urlDraft.toLowerCase().includes("booking.com")}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                      data-testid="our-booking-save">
+                <Save className="w-3.5 h-3.5 mr-1.5" /> Save
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

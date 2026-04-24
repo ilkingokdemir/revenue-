@@ -4,6 +4,55 @@
 
 
 
+### Iter 177 (Feb 2026): 🏨 Our Hotel OTA Live Scraping via Playwright — Franziskaner by Centra
+
+User report (TR): _"my hotel zurichte... kendi booking.com linki olmadan nasil karsilastiracaksin... ucretsiz olan onerdigini yap"_
+
+User revealed that their hotel is **Franziskaner by Centra** in Zurich and noted that without scraping our OWN Booking.com page, competitor comparisons aren't apples-to-apples. Asked to implement the free Playwright option.
+
+**Problem discovered:** Competitor price data was silently failing the whole time. Raw `httpx` GET requests to Booking.com hit a **HTTP 202 + JavaScript CAPTCHA challenge** (3962-byte anti-bot page instead of real content). Verified in DB: all 6 competitors showed `scraped_ok=0/7` despite the UI implying fresh prices.
+
+**Shipped — Playwright-based scraper (the "free" option):**
+
+**1. New utility** (`/app/backend/utils/booking_scraper.py`):
+- Single shared headless Chromium process kept warm via `async_playwright()` singleton (~800 MB RAM — acceptable tradeoff for no-cost anti-bot bypass)
+- Each scrape spawns a fresh `browser_context` (private cookies) to evade session rate-limiting
+- **Layered price extraction:** DOM-based first via `[data-testid="price-and-discounted-price"]`, `.prco-valign-middle-helper`, fallback to currency-prefix regex across full HTML
+- Price floor raised to 40 to filter out review counts/star ratings
+- Review score also DOM-extracted via `[data-testid="review-score-right-component"]`
+- `PLAYWRIGHT_BROWSERS_PATH=/pw-browsers` added to `backend/.env` + defensive `os.environ.setdefault` in the scraper module (because supervisor runs backend without proper `$HOME`)
+
+**2. Backend endpoints** (`market_robot.py`):
+- `GET /api/revenue/market-robot/{pid}/our-booking` — returns property's Booking URL + latest snapshot
+- `PUT /api/revenue/market-robot/{pid}/our-booking` — save/update Booking URL (validates domain is booking.com)
+- `POST /api/revenue/market-robot/{pid}/our-booking/scan` — **now BackgroundTasks-queued** so HTTP doesn't timeout (scrape takes 30-90s)
+- `POST /api/revenue/market-robot/{pid}/competitors/scan` — same BackgroundTasks upgrade
+- New `_auto_our_hotel_scan()` scrapes 14 days, persists to `property_booking_snapshots` (cap 30/property) + `properties.booking_data` quick-read
+- New `_auto_competitor_scan()` rewritten to use Playwright scraper, 7 days per competitor, 1.5s polite pacing
+- Both hooked into Smart Scanner's 3-hour tier alongside events — `init_scanner()` now accepts `our_hotel_scan_fn` param
+
+**3. Frontend** (`components/dashboard/OurBookingLiveCard.js`, new):
+- Placed at top of Market Robot → Dashboard sub-tab
+- Live card with gradient sky→indigo background
+- 4 KPI tiles: 14-day avg, min/max range, review score /10, next-7-days inline schedule
+- Live pulsing badge "LIVE · Xm ago"
+- View (opens Booking page), Change (edit URL dialog), **Scan Now** (triggers background scrape with 20s polling auto-refresh)
+- Empty states: "No URL set" amber banner; "URL set but no scrape yet" neutral banner
+- Fully currency-aware via `makeCurrencyFormatter(data.currency)` — Franziskaner displays CHF
+
+**Verified end-to-end:**
+- Playwright opens Booking.com (1.95 MB real content, past CAPTCHA).
+- First scan of `default` (Franziskaner by Centra): **14/14 days** scraped, review 8.6/10, prices CHF 142-303, avg CHF 194.75.
+- DOM-based extraction cleaner than regex: next 7 days showing CHF 160/158/142/164/170/187/186 — realistic Zurich hotel pricing with weekday/weekend pattern.
+- Playwright screenshot confirms the "Our Booking.com Live" card renders with all KPIs + live status.
+
+**Known limitations & follow-ups:**
+- Seeded competitor URLs have some data hygiene issues (e.g. "Hotel Hirschen" was pointing to Franziskaner URL — copy-paste artifact). Users can now fix via Competitor Hotels tab. Scraper itself is working; wrong URLs return wrong hotel's data.
+- RAM: headless Chromium keeps ~800 MB warm. If this becomes an issue for multi-tenant scale, add `browser.close()` after N idle seconds.
+- Playwright updated `backend/.env` with `PLAYWRIGHT_BROWSERS_PATH` — required for supervisor context.
+
+
+
 ### Iter 176 (Feb 2026): 💱 Property Currency Auto-Sync fix — My Hotel Zurich should show CHF not £
 
 User report (TR): _"my hotel zurichte ama tablolarda currency gbp gorunuyor yaptigimiz degisiklik uglamamisin"_

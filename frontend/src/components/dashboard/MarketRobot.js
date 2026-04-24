@@ -14,6 +14,7 @@ import { MarketDemandDashboard } from "./MarketDemandDashboard";
 import { DemandRadar } from "./DemandRadar";
 import NeighborhoodScanPanel from "./NeighborhoodScanPanel";
 import MarketRobotHealthWidget from "./MarketRobotHealthWidget";
+import OurBookingLiveCard from "./OurBookingLiveCard";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -201,6 +202,9 @@ export const MarketRobot = ({ propertyId }) => {
       {/* Dashboard */}
       {subTab === "dashboard" && (
         <div className="space-y-6">
+          {/* Our Booking.com live scrape */}
+          <OurBookingLiveCard propertyId={propertyId} />
+
           {/* Cross-Branch Scanner Health */}
           <MarketRobotHealthWidget />
 

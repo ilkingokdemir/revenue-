@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, RefreshCw, ArrowUpRight, ArrowDownRight, Minus, Activity } from "lucide-react";
+import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -11,8 +12,15 @@ export const BookingPace = ({ propertyId }) => {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
-  const load = (d) => { setLoading(true); axios.get(`${API}/revenue/intelligence/${propertyId}/booking-pace?days=${d}`).then(r => { setData(r.data); setLoading(false); }).catch(() => setLoading(false)); };
-  useEffect(() => { load(days); }, [propertyId, days]);
+  const load = useCallback((d) => {
+    setLoading(true);
+    axios.get(`${API}/revenue/intelligence/${propertyId}/booking-pace?days=${d}`)
+      .then(r => { setData(r.data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [propertyId]);
+  useEffect(() => { load(days); }, [load, days]);
+  // ⚡ Live refresh: fresh bookings flip the chart without reload
+  useLivePolling(() => load(days), { intervalMs: 60000 });
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Analyzing booking pace...</div>;
   if (!data) return null;
@@ -35,7 +43,13 @@ export const BookingPace = ({ propertyId }) => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center"><Activity className="w-5 h-5 text-blue-300" /></div>
-            <div><h2 className="text-lg font-bold">Booking Pace & Pickup Velocity</h2><p className="text-xs text-white/40">How fast bookings come in vs last year</p></div>
+            <div>
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                Booking Pace & Pickup Velocity
+                <LiveBadge seconds={60} color="cyan" />
+              </h2>
+              <p className="text-xs text-white/40">How fast bookings come in vs last year · auto-updates</p>
+            </div>
           </div>
           <div className="flex items-center gap-1 bg-white/5 rounded-xl border border-white/10 p-0.5">
             {[7, 14, 30, 60, 90].map(d => (

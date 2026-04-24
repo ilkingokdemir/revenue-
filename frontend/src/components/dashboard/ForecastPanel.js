@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { ArrowsClockwise, ChartLine, CalendarBlank } from "@phosphor-icons/react";
 import { TrendingUp, BarChart3, Calendar } from "lucide-react";
+import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -22,6 +23,8 @@ export function ForecastPanel({ properties, activePropertyId }) {
   }, [propertyId]);
 
   useEffect(() => { fetchForecast(); }, [fetchForecast]);
+  // ⚡ Live occupancy forecast refresh
+  useLivePolling(fetchForecast, { intervalMs: 90000 });
 
   if (loading) return <div className="flex items-center justify-center h-96"><ArrowsClockwise size={24} className="animate-spin text-blue-300" /></div>;
   if (!forecast) return null;

@@ -3,9 +3,10 @@
  * Shows city + geo scanner status for every property, 24h scan counts,
  * stale-scan warnings, and auto-refreshes every 30 s.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Activity, CheckCircle2, AlertTriangle, MapPin, Globe2, Loader2, Radio, RefreshCw } from "lucide-react";
+import useLivePolling from "../../hooks/useLivePolling";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -13,20 +14,18 @@ export default function MarketRobotHealthWidget() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await axios.get(`${API}/revenue/market-robot/health`);
       setData(data);
     } catch { /* noop */ }
     setLoading(false);
-  };
-
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 30000);
-    return () => clearInterval(t);
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+  // ⚡ Visibility-aware polling replaces the naïve setInterval
+  useLivePolling(load, { intervalMs: 30000 });
 
   if (!data) {
     return (

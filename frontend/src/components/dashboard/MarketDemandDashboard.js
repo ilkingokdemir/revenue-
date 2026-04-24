@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { Activity, TrendingUp, TrendingDown, BarChart3, RefreshCw, Zap, PartyPopper, ArrowUpRight, ArrowDownRight, Minus, Calendar } from "lucide-react";
+import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -38,7 +39,7 @@ export const MarketDemandDashboard = ({ propertyId }) => {
     return (v) => fmt.format(v);
   }, [data]);
 
-  const load = (days) => {
+  const load = useCallback((days) => {
     setLoading(true);
     axios.get(`${API}/revenue/market-robot/${propertyId}/demand-dashboard?days=${days}`)
       .then(r => { setData(r.data); setLoading(false); })
@@ -49,8 +50,10 @@ export const MarketDemandDashboard = ({ propertyId }) => {
     // Load recent bookings
     axios.get(`${API}/revenue/market-robot/${propertyId}/recent-bookings?days=7`)
       .then(r => setRecentBookings(r.data)).catch(() => {});
-  };
-  useEffect(() => { load(range); }, [propertyId, range]);
+  }, [propertyId, pickupWindow]);
+  useEffect(() => { load(range); }, [load, range]);
+  // ⚡ Live refresh: demand/occupancy/recent-bookings repull every 60s
+  useLivePolling(() => load(range), { intervalMs: 60000 });
   // Reload pickup when window changes
   useEffect(() => {
     axios.get(`${API}/revenue/market-robot/${propertyId}/occupancy-pickup?days=90&pickup_window=${pickupWindow}`)

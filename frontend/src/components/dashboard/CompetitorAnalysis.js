@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { BarChart3, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Minus, Lightbulb, Target, AlertTriangle, CheckCircle, RefreshCw, Users, Zap } from "lucide-react";
+import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -26,13 +27,15 @@ export const CompetitorAnalysis = ({ propertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     axios.get(`${API}/revenue/market-robot/${propertyId}/competitor-analysis`)
       .then(r => { setData(r.data); setLoading(false); })
       .catch(() => { setLoading(false); });
-  };
-  useEffect(() => { load(); }, [propertyId]);
+  }, [propertyId]);
+  useEffect(() => { load(); }, [load]);
+  // ⚡ Live refresh — competitors re-price frequently
+  useLivePolling(load, { intervalMs: 60000 });
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Loading Analysis...</div>;
   if (!data) return null;

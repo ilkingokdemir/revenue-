@@ -10,6 +10,7 @@ import {
   Trophy, TrendingDown, TrendingUp, Minus, Star, Banknote, Sparkles,
   ArrowUp, ArrowDown, Info,
 } from "lucide-react";
+import useLivePolling from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -58,27 +59,8 @@ export default function RankingAnalysisCard({ propertyId }) {
   }, [propertyId]);
 
   useEffect(() => { load(); }, [load]);
-
-  // ⚡ Live refresh every 60s while visible + on tab-focus, so ranking shifts as scans land.
-  useEffect(() => {
-    let timer = null;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled) return;
-      if (document.visibilityState === "visible") {
-        try { await load(); } catch { /* silent */ }
-      }
-      if (!cancelled) timer = setTimeout(tick, 60000);
-    };
-    timer = setTimeout(tick, 60000);
-    const onFocus = () => { if (!cancelled) load().catch(() => {}); };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [load]);
+  // ⚡ Live refresh — shared hook
+  useLivePolling(load, { intervalMs: 60000 });
 
   const cur = useMemo(() => makeCurrencyFormatter(data?.currency || data?.city || ""), [data]);
 

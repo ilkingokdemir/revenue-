@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import NeighborhoodScanPanel from "./NeighborhoodScanPanel";
 import MarketRobotHealthWidget from "./MarketRobotHealthWidget";
 import OurBookingLiveCard from "./OurBookingLiveCard";
 import RankingAnalysisCard from "./RankingAnalysisCard";
+import useLivePolling from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -47,24 +48,25 @@ export const MarketRobot = ({ propertyId }) => {
   const [compScanning, setCompScanning] = useState(false);
   const [scannerStatus, setScannerStatus] = useState(null);
 
+  const loadAll = useCallback(() => {
+    axios.get(`${API}/revenue/market-robot/${propertyId}/config`).then(r => setConfig(r.data)).catch(() => {});
+    axios.get(`${API}/revenue/market-robot/${propertyId}/supply`).then(r => setSupply(r.data)).catch(() => {});
+    axios.get(`${API}/revenue/market-robot/${propertyId}/logs`).then(r => setLogs(r.data.logs || [])).catch(() => {});
+    axios.get(`${API}/revenue/market-robot/${propertyId}/adjustments`).then(r => setAdjustments(r.data.adjustments || [])).catch(() => {});
+    axios.get(`${API}/revenue/market-robot/${propertyId}/competitors`).then(r => setCompetitors(r.data.competitors || [])).catch(() => {});
+    axios.get(`${API}/revenue/market-robot/${propertyId}/scanner/status`).then(r => setScannerStatus(r.data)).catch(() => {});
+  }, [propertyId]);
+
   useEffect(() => {
     loadAll();
-    // ⚡ Live dashboard: full reload every 45s while visible, plus scanner status every 15s.
-    // Without this, competitor prices / supply / logs only updated when the user navigated.
+    // Scanner status pings more frequently for fresh "running/idle" UI
     const statusInterval = setInterval(() => {
       axios.get(`${API}/revenue/market-robot/${propertyId}/scanner/status`).then(r => setScannerStatus(r.data)).catch(() => {});
     }, 15000);
-    const fullInterval = setInterval(() => {
-      if (document.visibilityState === "visible") loadAll();
-    }, 45000);
-    const onFocus = () => { loadAll(); };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(statusInterval);
-      clearInterval(fullInterval);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [propertyId]);
+    return () => clearInterval(statusInterval);
+  }, [loadAll, propertyId]);
+  // ⚡ Full loadAll on the shared live-polling cadence (handles focus/visibility)
+  useLivePolling(loadAll, { intervalMs: 45000, busy: scanning });
 
   // Listen to cross-tab navigation events (e.g. "Add Competitor" CTA from Analysis tab)
   useEffect(() => {
@@ -72,15 +74,6 @@ export const MarketRobot = ({ propertyId }) => {
     window.addEventListener("market-robot-goto", onGoto);
     return () => window.removeEventListener("market-robot-goto", onGoto);
   }, []);
-
-  const loadAll = () => {
-    axios.get(`${API}/revenue/market-robot/${propertyId}/config`).then(r => setConfig(r.data)).catch(() => {});
-    axios.get(`${API}/revenue/market-robot/${propertyId}/supply`).then(r => setSupply(r.data)).catch(() => {});
-    axios.get(`${API}/revenue/market-robot/${propertyId}/logs`).then(r => setLogs(r.data.logs || [])).catch(() => {});
-    axios.get(`${API}/revenue/market-robot/${propertyId}/adjustments`).then(r => setAdjustments(r.data.adjustments || [])).catch(() => {});
-    axios.get(`${API}/revenue/market-robot/${propertyId}/competitors`).then(r => setCompetitors(r.data.competitors || [])).catch(() => {});
-    axios.get(`${API}/revenue/market-robot/${propertyId}/scanner/status`).then(r => setScannerStatus(r.data)).catch(() => {});
-  };
 
   const toggleScanner = async () => {
     const action = scannerStatus?.running ? "stop" : "start";

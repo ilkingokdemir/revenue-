@@ -11,6 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import useLivePolling from "../../hooks/useLivePolling";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -231,6 +232,8 @@ export function StaffPerformancePanel({ properties, activePropertyId }) {
   }, [propertyId, period]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  // ⚡ Staff performance KPIs refresh every 2min
+  useLivePolling(fetchData, { intervalMs: 120000 });
   useEffect(() => { if (data?.agents?.length > 0 && expandedAgent === null) setExpandedAgent(0); }, [data]);
 
   const team = data?.team_summary || {};

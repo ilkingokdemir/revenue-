@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, DollarSign, Zap, BarChart3, Calendar, Radar, PartyPopper, Activity, RefreshCw } from "lucide-react";
+import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -17,13 +18,15 @@ export const PerformanceReport = ({ propertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     axios.get(`${API}/revenue/market-robot/${propertyId}/performance`)
       .then(r => { setData(r.data); setLoading(false); })
       .catch(() => setLoading(false));
-  };
-  useEffect(() => { load(); }, [propertyId]);
+  }, [propertyId]);
+  useEffect(() => { load(); }, [load]);
+  // ⚡ Performance KPIs (RevPAR, ADR, occupancy) refresh every 90s
+  useLivePolling(load, { intervalMs: 90000 });
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Calculating performance...</div>;
   if (!data) return null;

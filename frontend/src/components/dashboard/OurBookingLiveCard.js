@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/i18n";
+import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -47,30 +48,8 @@ export default function OurBookingLiveCard({ propertyId }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // ⚡ Live refresh every 45s while visible + on tab-focus, so fresh OTA scrapes land on-screen
-  // without requiring the user to hit reload. Skip while actively scraping to avoid flicker.
-  useEffect(() => {
-    let timer = null;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled) return;
-      if (document.visibilityState === "visible" && !scraping) {
-        try { await load(); } catch { /* silent */ }
-      }
-      if (!cancelled) timer = setTimeout(tick, 45000);
-    };
-    timer = setTimeout(tick, 45000);
-    const onFocus = () => { if (!cancelled) load().catch(() => {}); };
-    const onVisible = () => { if (document.visibilityState === "visible" && !cancelled) load().catch(() => {}); };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [load, scraping]);
+  // ⚡ Live refresh — shared hook
+  useLivePolling(load, { intervalMs: 45000, busy: scraping });
 
   const cur = useMemo(() => makeCurrencyFormatter(data?.currency || data?.city || ""), [data]);
 

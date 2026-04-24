@@ -4,6 +4,39 @@
 
 
 
+### Iter 184 (Apr 2026): ⚡ Platform-Wide Live Polling + 🔔 Price Alert Toasts
+
+User asked for ALL charts in the software to auto-update as data arrives, plus alert toasts for significant market moves.
+
+**New reusable primitives:**
+- `/app/frontend/src/hooks/useLivePolling.js` — visibility-aware polling hook with focus/visibilitychange listeners and busy-guard. Drop-in one-liner for any chart.
+- `/app/frontend/src/hooks/useLivePolling.js → LiveBadge` — tiny pulsing-dot UI component to signal "chart is live" to users.
+- `/app/frontend/src/hooks/usePriceAlerts.js` — observer that toasts when market avg moves ≥10% (up or down) or our rate crosses >5% above market (price-war warning). Debounced per direction to avoid spam.
+
+**Applied to 14 chart/analytics panels:**
+| Panel | Interval |
+|---|---|
+| NeighborhoodScanPanel | 30s + price alerts |
+| MarketRobotHealthWidget | 30s |
+| OurBookingLiveCard | 45s |
+| MarketRobot main dashboard | 45s |
+| BookingPace | 60s (+ LiveBadge cyan) |
+| DemandRadar | 60s |
+| MarketDemandDashboard | 60s |
+| CompetitorAnalysis | 60s |
+| RankingAnalysisCard | 60s |
+| ForecastPanel | 90s |
+| RevenueForecast | 90s (+ LiveBadge violet) |
+| PerformanceReport | 90s |
+| StaffPerformancePanel | 120s |
+| HistoricalPricing | 180s |
+
+**Why visibility-aware:** the hook only polls while `document.visibilityState === "visible"`, so background tabs don't hammer the backend. On tab-focus / visibilitychange it force-refreshes instantly — switching back from another app always lands on the latest state.
+
+**Fixed along the way:** TDZ error in MarketRobot where `loadAll` was being passed to `useLivePolling` before its declaration — converted to `useCallback` and hoisted.
+
+
+
 ### Iter 183 (Apr 2026): ⚡ Live Chart Polling — "Grafiklerin dinamik olması gerek"
 
 User wants charts to update as fresh scraped data lands — without requiring manual navigation/reload.

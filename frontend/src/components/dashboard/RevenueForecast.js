@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, DollarSign, RefreshCw, BarChart3, Calendar } from "lucide-react";
+import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -11,8 +12,15 @@ export const RevenueForecast = ({ propertyId }) => {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(90);
 
-  const load = (d) => { setLoading(true); axios.get(`${API}/revenue/intelligence/${propertyId}/forecast?days=${d}`).then(r => { setData(r.data); setLoading(false); }).catch(() => setLoading(false)); };
-  useEffect(() => { load(days); }, [propertyId, days]);
+  const load = useCallback((d) => {
+    setLoading(true);
+    axios.get(`${API}/revenue/intelligence/${propertyId}/forecast?days=${d}`)
+      .then(r => { setData(r.data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [propertyId]);
+  useEffect(() => { load(days); }, [load, days]);
+  // ⚡ Refreshes as new bookings land in the pipeline
+  useLivePolling(() => load(days), { intervalMs: 90000 });
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Forecasting revenue...</div>;
   if (!data) return null;
@@ -27,7 +35,13 @@ export const RevenueForecast = ({ propertyId }) => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center"><DollarSign className="w-5 h-5 text-emerald-300" /></div>
-            <div><h2 className="text-lg font-bold">Revenue Forecast Engine</h2><p className="text-xs text-white/40">AI-powered projection | {days}-day outlook</p></div>
+            <div>
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                Revenue Forecast Engine
+                <LiveBadge seconds={90} color="violet" />
+              </h2>
+              <p className="text-xs text-white/40">AI-powered projection | {days}-day outlook · auto-updates</p>
+            </div>
           </div>
           <div className="flex items-center gap-1 bg-white/5 rounded-xl border border-white/10 p-0.5">
             {[30, 60, 90, 180, 365].map(d => (

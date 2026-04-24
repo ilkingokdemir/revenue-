@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { History, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, RefreshCw, CheckCircle, Calendar, BarChart3, Target, Zap, Download } from "lucide-react";
+import useLivePolling from "../../hooks/useLivePolling";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -19,13 +20,15 @@ export const HistoricalPricing = ({ propertyId }) => {
   const [loading, setLoading] = useState(true);
   const [applying, setApplying] = useState(false);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     axios.get(`${API}/revenue/historical-pricing/${propertyId}`)
       .then(r => { setData(r.data); setLoading(false); })
       .catch(() => { setLoading(false); });
-  };
-  useEffect(() => { load(); }, [propertyId]);
+  }, [propertyId]);
+  useEffect(() => { load(); }, [load]);
+  // ⚡ Historical pricing refresh — long cadence (data changes slowly)
+  useLivePolling(load, { intervalMs: 180000 });
 
   const applyFloors = async () => {
     if (!data?.min_price_suggestions) return;

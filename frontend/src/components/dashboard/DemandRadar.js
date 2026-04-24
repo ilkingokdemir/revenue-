@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { Radar, TrendingUp, TrendingDown, AlertTriangle, Zap, RefreshCw, Calendar, BarChart3, Activity } from "lucide-react";
+import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -21,13 +22,19 @@ export const DemandRadar = ({ propertyId }) => {
   const cur = (v) => currency.format(v, 2);
   const curShort = currency.short;
 
-  useEffect(() => {
-    setLoading(true);
+  const loadAll = useCallback(() => {
     Promise.all([
       axios.get(`${API}/revenue/demand-radar/${propertyId}?days=${days}`),
       axios.get(`${API}/revenue/demand-radar/${propertyId}/booking-behavior`),
     ]).then(([r1, r2]) => { setData(r1.data); setBehavior(r2.data); setLoading(false); }).catch(() => setLoading(false));
   }, [propertyId, days]);
+
+  useEffect(() => {
+    setLoading(true);
+    loadAll();
+  }, [loadAll]);
+  // ⚡ Live refresh — demand signals arrive constantly
+  useLivePolling(loadAll, { intervalMs: 60000 });
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Loading Demand Radar...</div>;
   if (!data) return null;

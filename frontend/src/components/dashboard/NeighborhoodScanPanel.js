@@ -15,6 +15,8 @@ import {
 import { toast } from "sonner";
 import CompetitivePricingPanel from "./CompetitivePricingPanel";
 import GapAnalyzerWidget from "./GapAnalyzerWidget";
+import useLivePolling from "../../hooks/useLivePolling";
+import usePriceAlerts from "../../hooks/usePriceAlerts";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -68,31 +70,18 @@ export default function NeighborhoodScanPanel({ propertyId }) {
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  // ⚡ Live updates: poll every 30s while the tab is visible + refresh when user returns to tab.
-  // The Market Robot runs scans every 2 hours in the background, so without polling the chart
-  // only changed when the user manually navigated. Now it stays in sync automatically.
-  useEffect(() => {
-    let timer = null;
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled) return;
-      if (document.visibilityState === "visible" && !refreshing) {
-        try { await loadAll(); } catch { /* silent */ }
-      }
-      if (!cancelled) timer = setTimeout(tick, 30000);
-    };
-    timer = setTimeout(tick, 30000);
-    const onFocus = () => { if (!cancelled) loadAll().catch(() => {}); };
-    const onVisible = () => { if (document.visibilityState === "visible" && !cancelled) loadAll().catch(() => {}); };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [loadAll, refreshing]);
+  // ⚡ Live updates — see hooks/useLivePolling.js
+  useLivePolling(loadAll, { intervalMs: 30000, busy: refreshing });
+
+  // 🔔 Price alerts — toast the revenue manager on significant market moves
+  usePriceAlerts({
+    propertyId,
+    scope: "neighborhood",
+    marketAvgPrice: summary?.avg_price,
+    ourAvgRate: ourSummary?.avg_rate,
+    currency: summary?.property_currency || "GBP",
+    enabled: propertyId !== "all",
+  });
 
   // Prefill the Fix dialog when opened — from property record or current scan location
   useEffect(() => {

@@ -28,13 +28,14 @@ COMPETITOR_SCAN_INTERVAL_MINS = 180
 
 
 class SmartScanner:
-    def __init__(self, db, scrape_fn, calculate_price_fn, apply_pricing_fn, event_scan_fn=None, competitor_scan_fn=None):
+    def __init__(self, db, scrape_fn, calculate_price_fn, apply_pricing_fn, event_scan_fn=None, competitor_scan_fn=None, our_hotel_scan_fn=None):
         self.db = db
         self.scrape_fn = scrape_fn
         self.calculate_price_fn = calculate_price_fn
         self.apply_pricing_fn = apply_pricing_fn
         self.event_scan_fn = event_scan_fn
         self.competitor_scan_fn = competitor_scan_fn
+        self.our_hotel_scan_fn = our_hotel_scan_fn
         self.running = False
         self.task = None
         self.stats = {
@@ -48,6 +49,9 @@ class SmartScanner:
             "last_competitor_scan": None,
             "competitors_scanned_today": 0,
             "competitor_scan_enabled": True,
+            "last_our_hotel_scan": None,
+            "our_booking_days_scraped": 0,
+            "our_hotel_scan_enabled": True,
             "tier_status": {},
             "started_at": None,
         }
@@ -115,7 +119,7 @@ class SmartScanner:
         }
 
     async def _run_competitor_scan(self, property_id: str):
-        """Run competitor price scraping in the background. Every COMPETITOR_SCAN_INTERVAL_MINS."""
+        """Run competitor price scraping + our own hotel scraping in the background. Every COMPETITOR_SCAN_INTERVAL_MINS."""
         if not self.competitor_scan_fn:
             return 0
 
@@ -128,20 +132,34 @@ class SmartScanner:
             if now < last_dt + timedelta(minutes=COMPETITOR_SCAN_INTERVAL_MINS):
                 return 0
 
+        total_scraped = 0
         try:
             logger.info(f"Smart Scanner: Starting competitor price scan for {property_id}")
             result = await self.competitor_scan_fn(self.db, property_id)
             comps_scanned = result.get("competitors_scanned", 0)
             prices_found = result.get("prices_found", 0)
-
-            self.stats["last_competitor_scan"] = now.isoformat()
             self.stats["competitors_scanned_today"] += comps_scanned
-
+            total_scraped += comps_scanned
             logger.info(f"Smart Scanner: Competitor scan complete — {comps_scanned} competitors, {prices_found} prices")
-            return comps_scanned
         except Exception as e:
             logger.error(f"Smart Scanner: Competitor scan failed: {e}")
-            return 0
+
+        # Also scrape our own hotel's Booking.com page (same cadence)
+        if self.our_hotel_scan_fn:
+            try:
+                our = await self.our_hotel_scan_fn(self.db, property_id)
+                if our.get("scraped"):
+                    self.stats["our_booking_days_scraped"] = self.stats.get("our_booking_days_scraped", 0) + int(our.get("days_with_price", 0))
+                    self.stats["last_our_hotel_scan"] = now.isoformat()
+                    total_scraped += 1
+                    logger.info(f"Smart Scanner: Our-hotel Booking scrape complete — avg_price={our.get('avg_price')} score={our.get('review_score')}")
+                else:
+                    logger.info(f"Smart Scanner: Our-hotel scrape skipped — {our.get('reason')}")
+            except Exception as e:
+                logger.error(f"Smart Scanner: Our-hotel scan failed: {e}")
+
+        self.stats["last_competitor_scan"] = now.isoformat()
+        return total_scraped
 
     async def _run_event_scan(self, property_id: str, city: str):
         """Run event intelligence scan in the background."""
@@ -309,7 +327,7 @@ def get_scanner(property_id=None):
     return _scanners.get(property_id)
 
 
-def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None, competitor_scan_fn=None):
+def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None, competitor_scan_fn=None, our_hotel_scan_fn=None):
     """Returns a manager object with .get(pid) / .start(pid) / .stop(pid) / .get_status(pid) / .resume_if_active()
     Each property gets its own SmartScanner instance on first use."""
     global _scanners
@@ -320,7 +338,7 @@ def init_scanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn=None, competito
 
         def _get_or_create(self, pid):
             if pid not in _scanners:
-                _scanners[pid] = SmartScanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn, competitor_scan_fn)
+                _scanners[pid] = SmartScanner(db, scrape_fn, calc_fn, apply_fn, event_scan_fn, competitor_scan_fn, our_hotel_scan_fn)
             return _scanners[pid]
 
         async def start(self, pid):

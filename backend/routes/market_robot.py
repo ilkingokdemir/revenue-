@@ -2564,9 +2564,112 @@ Date range: {date_from} to {date_to}."""
 
         return {"competitors_scanned": len(comps), "prices_found": total_prices}
 
-    # Initialize smart scanner with event + competitor scanning
+    async def _auto_our_hotel_scan(db_ref, property_id):
+        """Scrape OUR OWN hotel's Booking.com page — same cadence as competitors.
+
+        Without this, 'Biz vs Pazar' comparisons weren't apples-to-apples: competitor prices came
+        from live Booking.com, but our overlay came from internal rate_overrides. Now both sides
+        are measured from the same OTA surface.
+
+        Stores results in `property_booking_snapshots` collection + updates `properties.booking_data`
+        with the freshest snapshot for quick overlay reads.
+        """
+        prop = await db_ref.properties.find_one(
+            {"id": property_id},
+            {"_id": 0, "booking_url": 1, "name": 1, "currency": 1, "city": 1}
+        )
+        if not prop or not prop.get("booking_url"):
+            return {"scraped": False, "reason": "no_booking_url"}
+
+        base_url = prop["booking_url"].split("?")[0]
+        now = datetime.now(timezone.utc)
+        days_ahead = 14
+        prices = []
+        review_score = None
+
+        for i in range(days_ahead):
+            d = now + timedelta(days=i)
+            checkin = d.strftime("%Y-%m-%d")
+            checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
+            url = f"{base_url}?checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1"
+            try:
+                async with httpx.AsyncClient(timeout=25, follow_redirects=True) as client:
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                        "Accept-Language": "en-GB,en;q=0.9",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    }
+                    resp = await client.get(url, headers=headers)
+                    text = resp.text
+                    prices_found = []
+                    for p in re.findall(r'[$£€₺](\d+(?:,\d+)?)\s*(?:for 1 night|per night)', text):
+                        prices_found.append(float(p.replace(",", "")))
+                    for p in re.findall(r'"price":\s*"?(\d+(?:\.\d+)?)"?', text):
+                        val = float(p)
+                        if 20 < val < 5000:
+                            prices_found.append(val)
+                    # Capture review score once (it's the same every date)
+                    if review_score is None:
+                        sm = re.search(r'Scored\s+([\d.]+)', text)
+                        if sm:
+                            try:
+                                review_score = float(sm.group(1))
+                            except ValueError:
+                                pass
+                    if prices_found:
+                        lowest = min(prices_found)
+                        prices.append({
+                            "date": checkin,
+                            "lowest_price": lowest,
+                            "all_prices": sorted(set(prices_found))[:5],
+                            "scraped": True,
+                        })
+                    else:
+                        prices.append({"date": checkin, "lowest_price": None, "scraped": False})
+            except Exception as e:
+                logger.warning(f"Our-hotel Booking scrape failed for {property_id} on {checkin}: {e}")
+                prices.append({"date": checkin, "lowest_price": None, "scraped": False})
+            await asyncio.sleep(1.5)  # polite pacing
+
+        valid_prices = [p["lowest_price"] for p in prices if p.get("lowest_price")]
+        avg_price = round(sum(valid_prices) / len(valid_prices), 2) if valid_prices else None
+        snapshot = {
+            "property_id": property_id,
+            "snapshot_at": now.isoformat(),
+            "booking_url": base_url,
+            "currency": prop.get("currency", "GBP"),
+            "review_score": review_score,
+            "days_scraped": days_ahead,
+            "days_with_price": len(valid_prices),
+            "avg_price": avg_price,
+            "min_price": min(valid_prices) if valid_prices else None,
+            "max_price": max(valid_prices) if valid_prices else None,
+            "daily_prices": prices,
+        }
+
+        # Archive (keep last 30 snapshots per property for trend)
+        await db_ref.property_booking_snapshots.insert_one({**snapshot, "id": str(uuid.uuid4())[:12]})
+        # Trim to latest 30
+        to_delete = await db_ref.property_booking_snapshots.find(
+            {"property_id": property_id}, {"_id": 1}
+        ).sort("snapshot_at", -1).skip(30).to_list(1000)
+        if to_delete:
+            await db_ref.property_booking_snapshots.delete_many(
+                {"_id": {"$in": [d["_id"] for d in to_delete]}}
+            )
+
+        # Update quick-read field on property
+        await db_ref.properties.update_one(
+            {"id": property_id},
+            {"$set": {"booking_data": {k: v for k, v in snapshot.items() if k != "_id"}}}
+        )
+
+        return {"scraped": True, "days_with_price": len(valid_prices),
+                "avg_price": avg_price, "review_score": review_score}
+
+    # Initialize smart scanner with event + competitor + our-hotel scanning
     from routes.smart_scanner import init_scanner
-    scanner = init_scanner(db, _scrape_booking_date, _calculate_price_adjustment, _auto_apply_pricing, _auto_event_scan, _auto_competitor_scan)
+    scanner = init_scanner(db, _scrape_booking_date, _calculate_price_adjustment, _auto_apply_pricing, _auto_event_scan, _auto_competitor_scan, _auto_our_hotel_scan)
 
     @router.post("/revenue/market-robot/{property_id}/scanner/start")
     async def start_scanner(property_id: str,
@@ -2584,6 +2687,44 @@ Date range: {date_from} to {date_to}."""
     async def scanner_status(property_id: str,
                              current_user: dict = Depends(require_roles("admin", "manager"))):
         return scanner.get_status(property_id)
+
+    @router.get("/revenue/market-robot/{property_id}/our-booking")
+    async def get_our_booking(property_id: str,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Return the freshest Booking.com snapshot for THIS hotel (used by 'Biz vs Pazar' overlays)."""
+        prop = await db.properties.find_one(
+            {"id": property_id},
+            {"_id": 0, "name": 1, "booking_url": 1, "booking_data": 1, "currency": 1, "city": 1}
+        )
+        if not prop:
+            raise HTTPException(404, "Property not found")
+        return {
+            "property_id": property_id,
+            "name": prop.get("name", ""),
+            "booking_url": prop.get("booking_url", ""),
+            "currency": prop.get("currency", "GBP"),
+            "city": prop.get("city", ""),
+            "booking_data": prop.get("booking_data") or None,
+        }
+
+    @router.put("/revenue/market-robot/{property_id}/our-booking")
+    async def set_our_booking(property_id: str, data: Dict,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Save/update the property's Booking.com listing URL."""
+        url = (data.get("booking_url") or "").strip()
+        if url and "booking.com" not in url.lower():
+            raise HTTPException(400, "URL must be a booking.com link")
+        update = {"booking_url": url,
+                  "booking_url_updated_at": datetime.now(timezone.utc).isoformat()}
+        await db.properties.update_one({"id": property_id}, {"$set": update})
+        return {"ok": True, "booking_url": url}
+
+    @router.post("/revenue/market-robot/{property_id}/our-booking/scan")
+    async def trigger_our_booking_scan(property_id: str,
+                                       current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Manually trigger an immediate OTA scrape of our own hotel (bypasses 3h cadence)."""
+        result = await _auto_our_hotel_scan(db, property_id)
+        return {"ok": True, **result}
 
     @router.get("/revenue/market-robot/health")
     async def scanner_health(current_user: dict = Depends(require_roles("admin", "manager"))):

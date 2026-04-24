@@ -526,6 +526,90 @@ def create_market_robot_router(db, require_roles, resend=None):
                 return code
         return ""
 
+    @router.post("/revenue/market-robot/{property_id}/neighborhood/refresh")
+    async def refresh_neighborhood_data(property_id: str, data: Dict, background_tasks: BackgroundTasks,
+                                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        """One-click neighborhood refresh: wipe stale snapshots → trigger fresh scrape.
+
+        Why users need this: the 2026-04 scraper rewrite introduced a per-row `scan_currency`
+        stamp, but pre-rewrite snapshots have no such stamp (and may be in the wrong currency
+        entirely). The graph silently blends stale + fresh rows, which is why "grafik eski
+        veri gösteriyor" even after manual scans.
+
+        Body:
+          location?: str       (default: property's stored scan location OR postcode OR city)
+          radius_km?: float    (default: current geo-config radius)
+          days_ahead?: int     (default: 30)
+          keep_stale?: bool    (default: false — set true to only trigger a new scan without deletion)
+        """
+        prop = await db.properties.find_one({"id": property_id},
+                                            {"_id": 0, "city": 1, "currency": 1, "name": 1}) or {}
+        geo_cfg = await db.market_robot_geo_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+
+        location = (data.get("location") or geo_cfg.get("location") or prop.get("city") or "").strip()
+        if not location:
+            raise HTTPException(400, "No scan location — pass 'location' or set one in geo-config first.")
+        radius_km = float(data.get("radius_km") or geo_cfg.get("radius_km") or 3.2)
+        days_ahead = int(data.get("days_ahead") or geo_cfg.get("days_ahead") or 30)
+        keep_stale = bool(data.get("keep_stale", False))
+        currency = (prop.get("currency") or "GBP").upper()
+
+        deleted = 0
+        if not keep_stale:
+            res = await db.market_supply.delete_many({
+                "property_id": property_id,
+                "scan_type": "geo",
+                "$or": [
+                    {"scan_currency": {"$exists": False}},
+                    {"scan_currency": None},
+                    {"scan_currency": ""},
+                    {"scan_currency": {"$ne": currency}},
+                ],
+            })
+            deleted = res.deleted_count
+
+        # Also auto-seed the geo-config location if empty so future auto-runs work out of the box
+        if not geo_cfg.get("location"):
+            await db.market_robot_geo_config.update_one(
+                {"property_id": property_id},
+                {"$set": {
+                    "property_id": property_id,
+                    "location": location,
+                    "radius_km": radius_km,
+                    "days_ahead": days_ahead,
+                    "enabled": True,  # turn on auto-scan so the user sees fresh data on the dashboard
+                    "scan_interval_minutes": geo_cfg.get("scan_interval_minutes", 120),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+                upsert=True,
+            )
+
+        # Fire the fresh scan in the background — takes 30-60s per date so we don't block the request.
+        scan_payload = {
+            "mode": "geo",
+            "location": location,
+            "radius_km": radius_km,
+            "days_ahead": days_ahead,
+            "currency": currency,
+        }
+        background_tasks.add_task(_do_scan, property_id, scan_payload)
+
+        return {
+            "ok": True,
+            "property_id": property_id,
+            "stale_snapshots_cleared": deleted,
+            "scan_queued": True,
+            "location": location,
+            "radius_km": radius_km,
+            "days_ahead": days_ahead,
+            "currency": currency,
+            "message": (
+                f"Cleaned {deleted} stale snapshot(s). "
+                f"Fresh geo-scan queued for {location} · {radius_km}km · {days_ahead}d · {currency}. "
+                f"Check back in ~60-90s."
+            ),
+        }
+
     @router.post("/revenue/market-robot/{property_id}/fix-property-location")
     async def fix_property_location(property_id: str, data: Dict,
                                     current_user: dict = Depends(require_roles("admin", "manager"))):

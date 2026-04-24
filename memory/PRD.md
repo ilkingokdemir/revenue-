@@ -4,6 +4,23 @@
 
 
 
+### Iter 182 (Apr 2026): 🐛 Neighborhood Chart Still Showing Stale Pre-Rewrite Data
+
+User report (TR): _"neighborhood grafikleri yanlış, scrap edilen data grafiklere yansıması gerek sorun var"_
+
+**What was happening:** After Iter 181's currency-stamp fix, the chart would STILL show the old inconsistent numbers because `market_supply` had **630 pre-rewrite snapshots across 7 branches** that had no `scan_currency` stamp (or were in the wrong currency). The UI's fallback to `property.currency` made them look correct at a glance but the *values* were from the old scraper's random datacenter-currency runs.
+
+**Fixes:**
+- New `POST /revenue/market-robot/{pid}/neighborhood/refresh` endpoint — one call does: (a) delete stale snapshots (no `scan_currency` or mismatched), (b) auto-seed geo-config location from property.city if empty, (c) turn on auto-scan, (d) queue a fresh `_do_scan` in the background with the right currency pinned.
+- New **"Clear Stale & Refresh"** rose-colored button in `NeighborhoodScanPanel` hero — self-service for any future occurrence. Polls `loadAll` every 15s for 3 minutes so the chart updates live.
+- Data migration run on all 7 affected branches: Zurich cleared 90 stale + fresh CHF scan (30 CHF-stamped snapshots); Istanbul cleared 360; 5× London branches cleared 30 each. **Total: 600 stale rows purged, all with fresh currency-correct data.**
+- Normalized `market_robot_config.city` from `"zurich "` → `"Zurich"` on the default branch.
+- Removed the bad `Hotel Hirschen` competitor (URL dead — 4 valid Zurich competitors remain).
+
+**Verified in browser:** Zurich Neighborhood chart now shows 30/30 CHF-stamped snapshots, prices CHF 108-191 range, "Biz vs Pazar" shows CHF 109 vs CHF 152 (28.3% altında), our-rate purple line sitting below market-rate orange line as expected.
+
+
+
 ### Iter 181 (Apr 2026): 🐛 Neighborhood Graph Wrong Data / Currency Mismatch
 
 User report (TR): _"neighborhood market grafigi doğru değil, bilgileri doğru yüklememiş ve yapılan scrap data yansımıyor"_

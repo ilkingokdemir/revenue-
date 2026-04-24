@@ -35,6 +35,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [highlightDate, setHighlightDate] = useState(null);
   // Fix Branch Location dialog
   const [fixOpen, setFixOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [fixCity, setFixCity] = useState("");
   const [fixCurrency, setFixCurrency] = useState("");
   const [fixPostcode, setFixPostcode] = useState("");
@@ -96,6 +97,37 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       toast.error(e?.response?.data?.detail || "Fix failed");
     }
     setFixing(false);
+  };
+
+  const refreshNeighborhood = async () => {
+    if (!window.confirm("Eski/hatalı scrap kayıtlarını silip yeni tarama başlatmak ister misiniz? (Grafik 1-2 dakika içinde yenilenecek.)")) return;
+    setRefreshing(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/neighborhood/refresh`, {
+        location: location.trim(),
+        radius_km: Number(radiusKm),
+        days_ahead: Number(days),
+      });
+      toast.success(data.message || `Cleaned ${data.stale_snapshots_cleared || 0} rows, scan queued`);
+      // Poll for fresh data every 15s, up to 3 minutes
+      const started = Date.now();
+      const poll = async () => {
+        try {
+          await loadAll();
+          if (Date.now() - started > 3 * 60 * 1000) {
+            setRefreshing(false);
+            return;
+          }
+          setTimeout(poll, 15000);
+        } catch {
+          setRefreshing(false);
+        }
+      };
+      setTimeout(poll, 10000);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Refresh failed");
+      setRefreshing(false);
+    }
   };
 
   const runScan = async () => {
@@ -235,6 +267,13 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           </div>
           {autoCfg && (
             <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button onClick={refreshNeighborhood} disabled={refreshing}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/30 disabled:opacity-50"
+                data-testid="refresh-neighborhood-btn"
+                title="Eski/hatalı scrap verilerini temizle ve yeni tarama başlat (grafiği yeniler)">
+                {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
+                {refreshing ? "Refreshing…" : "Clear Stale & Refresh"}
+              </button>
               <button onClick={() => setFixOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30"
                 data-testid="fix-location-btn"

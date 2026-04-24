@@ -2697,6 +2697,185 @@ def create_market_robot_router(db, require_roles, resend=None):
             {"$set": {"status": "done", "finished_at": datetime.now(timezone.utc).isoformat()}},
         )
 
+    async def _do_auto_heal_competitors(db_ref, property_id: str, days_ahead: int = 30, threshold: int = 50):
+        """Background worker: heal under-performing competitors.
+
+        For every competitor whose hit_rate (days_covered / attempted_days * 100) is below
+        `threshold`, or which has never been scraped:
+          1. Re-validate the Booking.com URL (updates last_validation + hotel_id if resolved).
+          2. If validation OK → trigger a targeted re-scrape for `days_ahead` days.
+          3. If validation fails → leave the row with last_validation.ok=False so the UI
+             surfaces the broken URL to the user (never auto-delete — user owns the list).
+        """
+        from utils.booking_scraper import validate_booking_url as _validate, scrape_booking_url, build_dated_url
+
+        comps = await db_ref.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(50)
+        if not comps:
+            return {"healed": 0, "queued": 0}
+
+        prop = await db_ref.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
+        currency = prop.get("currency") or "GBP"
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        # Pick the under-performers (or never-scraped)
+        targets = []
+        for c in comps:
+            raw_prices = c.get("prices") or []
+            attempted = len(raw_prices)
+            covered = sum(1 for p in raw_prices if p.get("scraped") and p.get("lowest_price"))
+            hit = (covered / attempted) * 100 if attempted > 0 else 0
+            if attempted == 0 or hit < threshold:
+                targets.append(c)
+        if not targets:
+            await db_ref.market_robot_autoheal_status.update_one(
+                {"property_id": property_id},
+                {"$set": {"property_id": property_id, "status": "done",
+                          "finished_at": now_iso, "total": 0, "healed": 0, "failed": 0,
+                          "message": "All competitors already healthy — nothing to heal."}},
+                upsert=True,
+            )
+            return {"healed": 0, "queued": 0}
+
+        await db_ref.market_robot_autoheal_status.update_one(
+            {"property_id": property_id},
+            {"$set": {"property_id": property_id, "status": "running",
+                      "started_at": now_iso, "total": len(targets),
+                      "healed": 0, "failed": 0, "done": 0}},
+            upsert=True,
+        )
+
+        healed = 0
+        failed = 0
+        days_ahead = max(1, min(int(days_ahead), 90))
+        now = datetime.now(timezone.utc)
+
+        for comp in targets:
+            url = comp.get("booking_url", "")
+            name_hint = (comp.get("slug") or "").replace("-", " ")[:18]
+            if not url:
+                failed += 1
+                await db_ref.market_competitors.update_one(
+                    {"id": comp["id"]},
+                    {"$set": {"last_validation": {"ok": False, "error": "missing_url",
+                                                   "checked_at": datetime.now(timezone.utc).isoformat()}}},
+                )
+            else:
+                # Step 1: re-validate
+                try:
+                    v = await _validate(url, currency=currency)
+                except Exception as e:
+                    v = {"ok": False, "error": str(e)}
+
+                update_fields = {"last_validation": {**v, "checked_at": datetime.now(timezone.utc).isoformat()}}
+                resolved_hotel_id = v.get("hotel_id") or comp.get("booking_hotel_id")
+                if v.get("hotel_id"):
+                    update_fields["booking_hotel_id"] = v["hotel_id"]
+                if v.get("hotel_name"):
+                    orig = (comp.get("name") or "").strip().lower()
+                    slug_def = (comp.get("slug") or "").replace("-", " ").strip().lower()
+                    if orig in ("", slug_def):
+                        update_fields["name"] = v["hotel_name"]
+
+                # Step 2: if URL is valid → re-scrape days_ahead
+                if v.get("ok"):
+                    comp_prices = []
+                    for i in range(days_ahead):
+                        d = now + timedelta(days=i)
+                        ci = d.strftime("%Y-%m-%d")
+                        co = (d + timedelta(days=1)).strftime("%Y-%m-%d")
+                        try:
+                            r = await scrape_booking_url(
+                                build_dated_url(url, ci, co, currency),
+                                timeout_ms=30000,
+                                hotel_id=resolved_hotel_id,
+                                hotel_name_hint=name_hint,
+                            )
+                            if r.get("scraped"):
+                                comp_prices.append({
+                                    "date": ci, "lowest_price": r["lowest_price"],
+                                    "all_prices": r.get("all_prices"), "score": r.get("score"),
+                                    "scraped": True,
+                                })
+                            else:
+                                comp_prices.append({"date": ci, "lowest_price": None, "scraped": False,
+                                                    "error": r.get("error")})
+                        except Exception as e:
+                            logger.warning(f"Auto-heal scrape failed for {comp.get('name')}: {e}")
+                            comp_prices.append({"date": ci, "lowest_price": None, "scraped": False})
+                        await asyncio.sleep(1.2)
+                    update_fields["prices"] = comp_prices
+                    update_fields["last_scraped"] = datetime.now(timezone.utc).isoformat()
+                    update_fields["last_source"] = "auto-heal"
+                    healed += 1
+                else:
+                    failed += 1
+                await db_ref.market_competitors.update_one({"id": comp["id"]}, {"$set": update_fields})
+
+            await db_ref.market_robot_autoheal_status.update_one(
+                {"property_id": property_id},
+                {"$inc": {"done": 1}, "$set": {"healed": healed, "failed": failed}},
+            )
+
+        await db_ref.market_robot_autoheal_status.update_one(
+            {"property_id": property_id},
+            {"$set": {"status": "done", "finished_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        return {"healed": healed, "failed": failed, "queued": len(targets)}
+
+    @router.post("/revenue/market-robot/{property_id}/competitors/auto-heal")
+    async def auto_heal_competitors(property_id: str, background_tasks: BackgroundTasks, data: Dict = {},
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Fire-and-forget: re-validate + re-scrape all under-performing competitors.
+
+        Body (optional):
+          days_ahead: 1-90 (default 30) — window to re-scrape for each healed competitor.
+          threshold:  0-100 (default 50) — hit-rate below which a competitor is healed.
+        """
+        days_ahead = max(1, min(int(data.get("days_ahead") or 30), 90))
+        threshold = max(0, min(int(data.get("threshold") or 50), 100))
+
+        # Preview how many will be healed so the UI can show an accurate toast immediately
+        comps = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0, "prices": 1, "name": 1},
+        ).to_list(50)
+        targets = []
+        for c in comps:
+            raw = c.get("prices") or []
+            covered = sum(1 for p in raw if p.get("scraped") and p.get("lowest_price"))
+            hit = (covered / len(raw)) * 100 if raw else 0
+            if not raw or hit < threshold:
+                targets.append(c.get("name", "?"))
+
+        if not targets:
+            return {"ok": True, "status": "skipped", "queued": 0, "threshold": threshold,
+                    "message": "Tüm rakipler sağlıklı — iyileştirilecek kimse yok."}
+
+        background_tasks.add_task(_do_auto_heal_competitors, db, property_id, days_ahead, threshold)
+        await db.market_robot_autoheal_status.update_one(
+            {"property_id": property_id},
+            {"$set": {"property_id": property_id, "status": "queued",
+                      "started_at": datetime.now(timezone.utc).isoformat(),
+                      "total": len(targets), "healed": 0, "failed": 0, "done": 0,
+                      "threshold": threshold, "days_ahead": days_ahead}},
+            upsert=True,
+        )
+        return {
+            "ok": True, "status": "queued", "queued": len(targets),
+            "threshold": threshold, "days_ahead": days_ahead,
+            "targets": targets,
+            "message": f"{len(targets)} rakip için Auto-Heal başlatıldı (hit<{threshold}%). Arka planda çalışıyor — 1-2 dk sonra health kartı yenilenecek.",
+        }
+
+    @router.get("/revenue/market-robot/{property_id}/competitors/auto-heal/status")
+    async def auto_heal_status(property_id: str,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.market_robot_autoheal_status.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
+        return doc or {"property_id": property_id, "status": "idle"}
+
     @router.post("/revenue/market-robot/{property_id}/competitors/revalidate-all")
     async def revalidate_all_competitors(property_id: str, background_tasks: BackgroundTasks,
                                          current_user: dict = Depends(require_roles("admin", "manager"))):

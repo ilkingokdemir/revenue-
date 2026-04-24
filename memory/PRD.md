@@ -3,6 +3,33 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 192 (Apr 2026): ⚡ Auto-Heal — Fire-and-Forget Competitor Recovery
+
+User ask (TR): _"Öneriyi yap — Scrape Health Card üzerine Auto-Heal butonu ekle, hit_rate < 50% olan rakiplere otomatik re-validate + re-scrape tetikle."_
+
+**Backend (`market_robot.py`):**
+- New worker `_do_auto_heal_competitors(db, pid, days_ahead, threshold)`:
+  1. Picks competitors where `hit_rate < threshold` or never scraped
+  2. Re-validates URL (reuses `validate_booking_url`)
+  3. If OK → re-scrapes for `days_ahead` days (1-90), stores under `last_source="auto-heal"`
+  4. If URL broken → flags `last_validation.ok=false` but NEVER deletes the row
+- New endpoint `POST /revenue/market-robot/{pid}/competitors/auto-heal` body `{days_ahead, threshold}` defaults 30/50; returns preview count + triggers background task
+- New endpoint `GET /.../auto-heal/status` for progress polling (uses new `market_robot_autoheal_status` collection)
+
+**Frontend (`NeighborhoodScanPanel.js`):**
+- New state: `healing`, `healStatus`
+- New handler `autoHealCompetitors()` → POSTs auto-heal, polls status every 8s up to 4min, refreshes chart when done
+- **Auto-Heal button** added to Scrape Health Card header — only appears when ≥1 competitor has `hit_rate < 50`. Shows count (`⚡ Auto-Heal · 3`) with cyan-to-violet gradient
+- **Live progress bar** inside the health card while healing — shows `done/total · ✓healed · ✗failed` with animated fill bar
+- Button state: idle (gradient) → loading (`Healing 2/4` with spinner) → done (toast + chart refresh)
+
+**Verified:**
+- `POST /auto-heal {threshold:50}` on healthy property → `skipped, queued:0` ✓
+- `POST /auto-heal {threshold:95}` → targets 4 of 6 competitors, enqueues background job, returns `{status:queued, queued:4, targets:[...]}` ✓
+- `GET /auto-heal/status` → `{status:running, total:4, done:0, healed:0, failed:0}` while in progress ✓
+- Frontend lint clean, smoke screenshot shows dashboard loads correctly
+
+
 ### Iter 191 (Apr 2026): 💎 Δ vs Pazar Column in Hover Tooltip
 
 User ask (TR): _"Hover tooltip'e Δ vs Pazar kolonu ekleyelim mi (her satıra +£12 (%+7.8) gibi pazar ortalamasından sapma)?"_ → Evet.

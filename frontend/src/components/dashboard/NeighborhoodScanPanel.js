@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import {
   MapPin, Radar, Loader2, Clock, Building2, TrendingUp, Timer,
-  PoundSterling, Activity, ToggleLeft, ToggleRight, Save,
+  PoundSterling, Activity, ToggleLeft, ToggleRight, Save, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import CompetitivePricingPanel from "./CompetitivePricingPanel";
@@ -47,6 +47,9 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [hoveredCompId, setHoveredCompId] = useState(null);
   // Hover index on the chart (for the vertical crosshair + date tooltip).
   const [hoverIdx, setHoverIdx] = useState(null);
+  // Auto-Heal flow state
+  const [healing, setHealing] = useState(false);
+  const [healStatus, setHealStatus] = useState(null);
   const [fixCity, setFixCity] = useState("");
   const [fixCurrency, setFixCurrency] = useState("");
   const [fixPostcode, setFixPostcode] = useState("");
@@ -213,6 +216,53 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       });
       toast.success(next ? "Auto-scan enabled" : "Auto-scan paused");
     } catch { toast.error("Toggle failed"); }
+  };
+
+  // ⚡ Auto-Heal — re-validates + re-scrapes competitors with hit_rate below threshold
+  // (default 50). Background task; polls status for 3 min and refreshes the chart when done.
+  const autoHealCompetitors = async () => {
+    if (healing) return;
+    setHealing(true);
+    try {
+      const { data } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/competitors/auto-heal`,
+        { days_ahead: Number(days), threshold: 50 },
+      );
+      if (data.status === "skipped" || data.queued === 0) {
+        toast.success(data.message || "Tüm rakipler zaten sağlıklı ✓");
+        setHealing(false);
+        return;
+      }
+      toast.success(data.message || `Auto-Heal: ${data.queued} rakip için başlatıldı`);
+      setHealStatus({ status: "running", total: data.queued, healed: 0, failed: 0, done: 0 });
+      // Poll every 8s up to 4 min
+      const started = Date.now();
+      const poll = async () => {
+        try {
+          const { data: st } = await axios.get(
+            `${API}/revenue/market-robot/${propertyId}/competitors/auto-heal/status`,
+          );
+          setHealStatus(st);
+          if (st?.status === "done") {
+            toast.success(`Auto-Heal tamamlandı: ${st.healed || 0} iyileştirildi · ${st.failed || 0} başarısız`);
+            setHealing(false);
+            loadAll();
+            return;
+          }
+          if (Date.now() - started > 4 * 60 * 1000) {
+            setHealing(false);
+            return;
+          }
+          setTimeout(poll, 8000);
+        } catch {
+          setHealing(false);
+        }
+      };
+      setTimeout(poll, 5000);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Auto-Heal failed");
+      setHealing(false);
+    }
   };
 
   // Stable palette for competitor lines — vivid, high-contrast, colour-blind aware.
@@ -551,11 +601,56 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                     {healthy > 0 && <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold">{healthy} OK</span>}
                     {warn > 0 && <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold">{warn} Warn</span>}
                     {bad > 0 && <span className="px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300 font-bold">{bad} Low</span>}
+                    {/* Auto-Heal button — heals under-performers (hit<50%) silently in background */}
+                    {(() => {
+                      const needy = competitorSeries.filter(c => (c.hit_rate || 0) < 50).length;
+                      if (needy === 0 && !healing) return null;
+                      return (
+                        <button
+                          onClick={autoHealCompetitors}
+                          disabled={healing}
+                          data-testid="scrape-health-auto-heal-btn"
+                          className={`ml-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black border transition-all ${
+                            healing
+                              ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-300 cursor-wait"
+                              : "bg-gradient-to-r from-cyan-500 to-violet-500 text-black border-transparent hover:brightness-110 shadow-md shadow-cyan-500/20"
+                          }`}
+                          title={`${needy} under-performing rakibi arka planda re-validate + re-scrape et`}
+                        >
+                          {healing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+                          {healing
+                            ? (healStatus?.total
+                                ? `Healing ${healStatus.done || 0}/${healStatus.total}`
+                                : "Healing…")
+                            : `Auto-Heal · ${needy}`}
+                        </button>
+                      );
+                    })()}
                   </>
                 );
               })()}
             </div>
           </div>
+          {/* Auto-Heal live progress bar — visible while healing */}
+          {healing && healStatus?.total > 0 && (
+            <div className="mb-3 rounded-lg bg-cyan-500/5 border border-cyan-500/20 px-3 py-2"
+                 data-testid="auto-heal-progress">
+              <div className="flex items-center justify-between text-[10px] mb-1">
+                <span className="text-cyan-300 font-bold flex items-center gap-1">
+                  <Zap className="w-3 h-3" /> Auto-Heal · arka planda
+                </span>
+                <span className="text-stone-400 tabular-nums">
+                  {healStatus.done || 0} / {healStatus.total}
+                  {healStatus.healed > 0 && <> · <span className="text-emerald-300">{healStatus.healed} ✓</span></>}
+                  {healStatus.failed > 0 && <> · <span className="text-rose-300">{healStatus.failed} ✗</span></>}
+                </span>
+              </div>
+              <div className="w-full h-1 bg-stone-800 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-cyan-400 to-violet-400 transition-all"
+                     style={{ width: `${Math.min(100, ((healStatus.done || 0) / Math.max(healStatus.total, 1)) * 100)}%` }} />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
             {competitorSeries.map((c, idx) => {
               const colour = COMP_PALETTE[idx % COMP_PALETTE.length];

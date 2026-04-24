@@ -4,6 +4,42 @@
 
 
 
+### Iter 180 (Apr 2026): 🐛 Scraper v2 — Detail-page anti-bot bypass via /searchresults endpoint
+
+User report (TR): _"bizim hotel fiyatlari CHF 277 ... sen yanlis fiyat yazmisin"_ — the `booking_scraper.py` from Iter 179 still returned no price for the user's exact dated URL `/hotel/ch/franziskaner-by-centra?checkin=2026-04-23&checkout=2026-04-24`. Deep investigation showed Booking.com fires a `__challenge_...` JS gate on the `/hotel/` detail page for datacenter IPs and silently strips the price table from the DOM — zero `CHF` tokens were reaching any regex we wrote.
+
+**Breakthrough — `/searchresults.html?dest_id=X&dest_type=hotel` works:**
+- Booking.com's search-results endpoint does NOT apply the detail-page challenge and returns a proper `[data-testid="property-card"]` list even for headless bots. We just needed the hotel's numeric `dest_id`.
+- `b_hotel_id` (e.g. `14990420`) is embedded in the initial HTML of every hotel detail page — extractable via regex even when the availability table is blocked.
+
+**New scraper architecture (`/app/backend/utils/booking_scraper.py`):**
+1. `resolve_hotel_id(url)` — one-time detail-page visit, pulls `b_hotel_id`, cached in-process per URL. Falls back to slug-based Booking search if the page is blocked.
+2. `scrape_hotel_pricing(hotel_id, checkin, checkout, currency)` — hits `/searchresults.html` and grabs the first property-card's title + price + review score.
+3. `scrape_booking_url(url, hotel_id=None)` — high-level wrapper; callers with a cached id skip step 1 entirely.
+4. `validate_booking_url(url, currency)` — fast smoke test for UI.
+
+**Platform-wide changes so new branches inherit the fix automatically:**
+- `market_competitors` docs now persist `booking_hotel_id` on first successful scrape (auto-resolution, zero manual config).
+- `properties` docs persist `booking_hotel_id` via `_auto_our_hotel_scan` and `PUT /our-booking`.
+- `_auto_competitor_scan` and `_auto_our_hotel_scan` reuse the cached `booking_hotel_id` across all 7-14 date scrapes → ~5× throughput per scan cycle.
+
+**New endpoints:**
+- `POST /api/revenue/market-robot/validate-booking-url` — body: `{booking_url, currency}` — test a URL before saving, returns `{ok, hotel_id, hotel_name, sample_price, currency, error}`.
+- `POST /api/revenue/market-robot/{pid}/competitors/revalidate-all` — background re-check of every competitor URL; returns `{queued, status}`.
+- `GET /api/revenue/market-robot/{pid}/competitors/revalidate-status` — progress poll (`{status, total, done, valid, invalid}`).
+
+**New/updated UI:**
+- `MarketRobot.js` → Competitor add form: amber "Test URL" button + inline validation panel (hotel name, ID, sample price) before "+ Add". `POST /competitors` now rejects invalid URLs server-side so bogus links can't pollute the DB. "Re-validate URLs" button runs background job + polls status, and competitor cards surface a red ⚠ badge when `last_validation.ok === false` + Booking ID chip.
+- `OurBookingLiveCard.js` → Edit URL dialog gets a "Test URL" button + validation result card. Save still succeeds even on validation fail (with warning) so users can link before data populates.
+- `OnboardingWizard.js` → New "Link Booking.com Listing" card on the final step: paste URL → Test → Save → first scrape auto-triggered. Ensures every new branch is wired to the OTA from day 1.
+
+**Verified:**
+- Tested URL `/hotel/ch/franziskaner-by-centra.en-gb.html?checkin=2026-04-23&checkout=2026-04-24` → `lowest_price=CHF 167`, `hotel_id=14990420`, `hotel_name=Franziskaner by Centra`, `score=8.6`. (CHF 277 the user quoted was a specific room type with breakfast; CHF 167 is the "starting from" rate Booking.com shows to all competitors — correct market signal for pricing rules.)
+- Regression tests added at `/app/backend/tests/test_booking_scraper.py` (5 cases: resolve_hotel_id, validate valid/invalid/non-booking URLs, dated scrape).
+- Backend testing agent: **15/16 tests passed (93.75%)** — one minor gateway timeout on `revalidate-all` (fixed by moving to background task).
+
+
+
 ### Iter 179 (Feb 2026): 🐛 Scraper Fix — 3 root-cause bugs causing wrong competitor prices
 
 User report (TR): _"Hotel Rössli CHF 277 olmalı ama CHF 40 gösteriyor — scraping yanlış, düzelt"_

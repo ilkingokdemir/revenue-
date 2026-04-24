@@ -170,18 +170,34 @@ export const MarketRobot = ({ propertyId }) => {
     setCompRevalidating(true);
     try {
       const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors/revalidate-all`);
-      const ok = data.valid || 0;
-      const bad = data.invalid || 0;
-      if (bad > 0) {
-        toast.warning(`${ok} geçerli · ${bad} hatalı rakip URL`);
-      } else {
-        toast.success(`Tüm ${ok} rakip URL'si geçerli`);
-      }
-      loadAll();
+      toast.success(`Background re-validation started for ${data.queued || competitors.length} competitors`);
+      // Poll status every 8s, up to 5 minutes
+      const started = Date.now();
+      const poll = async () => {
+        try {
+          const { data: st } = await axios.get(`${API}/revenue/market-robot/${propertyId}/competitors/revalidate-status`);
+          if (st?.status === "done") {
+            toast.success(`Re-validation complete: ${st.valid || 0} valid · ${st.invalid || 0} hatalı`);
+            loadAll();
+            setCompRevalidating(false);
+            return;
+          }
+          if (Date.now() - started > 5 * 60 * 1000) {
+            setCompRevalidating(false);
+            toast.warning("Re-validation still running — check Competitor cards for updates");
+            loadAll();
+            return;
+          }
+          setTimeout(poll, 8000);
+        } catch {
+          setCompRevalidating(false);
+        }
+      };
+      setTimeout(poll, 5000);
     } catch {
       toast.error("Re-validation failed");
+      setCompRevalidating(false);
     }
-    setCompRevalidating(false);
   };
 
   const snapshots = supply?.snapshots || [];

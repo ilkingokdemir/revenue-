@@ -2144,68 +2144,104 @@ def create_market_robot_router(db, require_roles, resend=None):
         comp.pop("_id", None)
         return {**comp, "validation": validation}
 
-    @router.post("/revenue/market-robot/{property_id}/competitors/revalidate-all")
-    async def revalidate_all_competitors(property_id: str,
-                                         current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Re-run Booking.com URL validation on every competitor for this property.
-        Useful after a DB migration or when old competitor URLs point to wrong hotels.
-
-        Updates `booking_hotel_id`, `name` (if auto-generated), and marks each entry with
-        `last_validation` = { ok, sample_price, checked_at }.
-        """
+    async def _do_revalidate_competitors(db_ref, property_id: str):
+        """Background worker: re-run Booking.com URL validation on every competitor."""
         from utils.booking_scraper import validate_booking_url as _validate
-        comps = await db.market_competitors.find({"property_id": property_id}, {"_id": 0}).to_list(50)
+        comps = await db_ref.market_competitors.find({"property_id": property_id}, {"_id": 0}).to_list(50)
         if not comps:
-            return {"checked": 0, "valid": 0, "invalid": 0, "competitors": []}
+            return
 
-        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
+        prop = await db_ref.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
         currency = prop.get("currency") or "GBP"
         now_iso = datetime.now(timezone.utc).isoformat()
 
+        await db_ref.market_robot_revalidate_status.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "property_id": property_id,
+                "status": "running",
+                "started_at": now_iso,
+                "total": len(comps),
+                "done": 0,
+                "valid": 0,
+                "invalid": 0,
+            }},
+            upsert=True,
+        )
+
         valid_cnt = 0
         invalid_cnt = 0
-        results = []
+        done = 0
         for comp in comps:
             url = comp.get("booking_url", "")
             if not url:
                 invalid_cnt += 1
-                results.append({"id": comp["id"], "name": comp.get("name", ""), "ok": False, "error": "no_url"})
-                continue
-            try:
-                v = await _validate(url, currency=currency)
-            except Exception as e:
-                v = {"ok": False, "error": str(e)}
-
-            update_fields = {"last_validation": {**v, "checked_at": now_iso}}
-            if v.get("hotel_id"):
-                update_fields["booking_hotel_id"] = v["hotel_id"]
-                valid_cnt += 1
             else:
-                invalid_cnt += 1
-            if v.get("hotel_name"):
-                original = (comp.get("name") or "").strip().lower()
-                slug_default = (comp.get("slug") or "").replace("-", " ").strip().lower()
-                if original in ("", slug_default):
-                    update_fields["name"] = v["hotel_name"]
+                try:
+                    v = await _validate(url, currency=currency)
+                except Exception as e:
+                    v = {"ok": False, "error": str(e)}
 
-            await db.market_competitors.update_one({"id": comp["id"]}, {"$set": update_fields})
-            results.append({
-                "id": comp["id"],
-                "name": update_fields.get("name") or comp.get("name", ""),
-                "booking_url": url,
-                "ok": bool(v.get("ok")),
-                "hotel_id": v.get("hotel_id"),
-                "hotel_name": v.get("hotel_name"),
-                "sample_price": v.get("sample_price"),
-                "error": v.get("error"),
-            })
+                update_fields = {"last_validation": {**v, "checked_at": datetime.now(timezone.utc).isoformat()}}
+                if v.get("hotel_id"):
+                    update_fields["booking_hotel_id"] = v["hotel_id"]
+                    valid_cnt += 1
+                else:
+                    invalid_cnt += 1
+                if v.get("hotel_name"):
+                    original = (comp.get("name") or "").strip().lower()
+                    slug_default = (comp.get("slug") or "").replace("-", " ").strip().lower()
+                    if original in ("", slug_default):
+                        update_fields["name"] = v["hotel_name"]
+                await db_ref.market_competitors.update_one({"id": comp["id"]}, {"$set": update_fields})
+            done += 1
+            await db_ref.market_robot_revalidate_status.update_one(
+                {"property_id": property_id},
+                {"$set": {"done": done, "valid": valid_cnt, "invalid": invalid_cnt}},
+            )
 
+        await db_ref.market_robot_revalidate_status.update_one(
+            {"property_id": property_id},
+            {"$set": {"status": "done", "finished_at": datetime.now(timezone.utc).isoformat()}},
+        )
+
+    @router.post("/revenue/market-robot/{property_id}/competitors/revalidate-all")
+    async def revalidate_all_competitors(property_id: str, background_tasks: BackgroundTasks,
+                                         current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Kick off a background re-validation of every competitor's Booking.com URL.
+        Each URL takes 30-60s (Chromium-based scrape), so this is run in the background.
+
+        Poll GET /competitors/revalidate-status to watch progress, and GET /competitors to see
+        updated `booking_hotel_id` and `last_validation` fields per row.
+        """
+        comps_count = await db.market_competitors.count_documents({"property_id": property_id})
+        if comps_count == 0:
+            return {"queued": 0, "status": "no_competitors"}
+        background_tasks.add_task(_do_revalidate_competitors, db, property_id)
+        # Reset status doc optimistically so the UI shows the in-progress state immediately
+        await db.market_robot_revalidate_status.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "property_id": property_id,
+                "status": "queued",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "total": comps_count, "done": 0, "valid": 0, "invalid": 0,
+            }},
+            upsert=True,
+        )
         return {
-            "checked": len(comps),
-            "valid": valid_cnt,
-            "invalid": invalid_cnt,
-            "competitors": results,
+            "queued": comps_count,
+            "status": "queued",
+            "message": f"Re-validation of {comps_count} competitors started in background. Poll /competitors/revalidate-status for progress.",
         }
+
+    @router.get("/revenue/market-robot/{property_id}/competitors/revalidate-status")
+    async def revalidate_status(property_id: str,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.market_robot_revalidate_status.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
+        return doc or {"property_id": property_id, "status": "idle"}
 
     @router.delete("/revenue/market-robot/competitors/{competitor_id}")
     async def remove_competitor(competitor_id: str,

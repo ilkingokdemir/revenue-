@@ -2772,13 +2772,36 @@ Date range: {date_from} to {date_to}."""
     @router.get("/revenue/market-robot/{property_id}/our-booking")
     async def get_our_booking(property_id: str,
                               current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Return the freshest Booking.com snapshot for THIS hotel (used by 'Biz vs Pazar' overlays)."""
+        """Return the freshest Booking.com snapshot for THIS hotel (used by 'Biz vs Pazar' overlays).
+
+        When `property_id == 'all'` (user is in "All Branches" view) we return a neutral
+        empty-state response so the UI can render a "pick a branch" hint instead of crashing.
+        """
+        if property_id == "all":
+            return {
+                "property_id": "all",
+                "name": "",
+                "booking_url": "",
+                "currency": "GBP",
+                "city": "",
+                "booking_data": None,
+                "all_branches_mode": True,
+            }
         prop = await db.properties.find_one(
             {"id": property_id},
             {"_id": 0, "name": 1, "booking_url": 1, "booking_data": 1, "currency": 1, "city": 1}
         )
         if not prop:
-            raise HTTPException(404, "Property not found")
+            # Don't 404 — the card should render gracefully with an empty state.
+            return {
+                "property_id": property_id,
+                "name": "",
+                "booking_url": "",
+                "currency": "GBP",
+                "city": "",
+                "booking_data": None,
+                "missing": True,
+            }
         return {
             "property_id": property_id,
             "name": prop.get("name", ""),
@@ -2859,13 +2882,34 @@ Date range: {date_from} to {date_to}."""
         from datetime import date as _date
         import statistics as _stats
 
+        # 'All Branches' mode — ranking requires a specific property, so return empty.
+        if property_id == "all":
+            return {
+                "property_id": "all",
+                "property_name": "",
+                "currency": "GBP",
+                "city": "",
+                "rankings": [],
+                "summary": {},
+                "all_branches_mode": True,
+            }
+
         # Load our hotel data
         prop = await db.properties.find_one(
             {"id": property_id},
             {"_id": 0, "name": 1, "currency": 1, "city": 1, "booking_data": 1}
         )
         if not prop:
-            raise HTTPException(404, "Property not found")
+            # Graceful empty state instead of 404 so the UI doesn't crash
+            return {
+                "property_id": property_id,
+                "property_name": "",
+                "currency": "GBP",
+                "city": "",
+                "rankings": [],
+                "summary": {},
+                "missing": True,
+            }
         our_bd = prop.get("booking_data") or {}
         our_daily = {p["date"]: p for p in (our_bd.get("daily_prices") or []) if p.get("lowest_price")}
         our_review = our_bd.get("review_score")

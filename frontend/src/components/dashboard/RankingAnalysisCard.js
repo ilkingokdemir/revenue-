@@ -64,6 +64,23 @@ export default function RankingAnalysisCard({ propertyId }) {
   if (loading) return <div className="bg-white border border-stone-200 rounded-2xl p-5 text-sm text-stone-400">Loading ranking analysis…</div>;
   if (!data) return null;
 
+  // All-branches mode or missing property — render a neutral hint, not a broken card
+  if (data.all_branches_mode || data.missing || propertyId === "all") {
+    return (
+      <div className="bg-white border border-stone-200 rounded-2xl p-5 text-sm text-stone-500" data-testid="ranking-card-all">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-stone-100 text-stone-400 flex items-center justify-center">
+            <Trophy className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="font-bold text-stone-700">Ranking Analysis</div>
+            <div className="text-xs text-stone-400 mt-0.5">Tek bir şube seçin — bu kart pazar içindeki şube bazlı sıralamayı gösterir.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const rows = data.rankings || [];
   const today = rows[0];
   const delta = data.today_rank_delta_vs_previous_snapshot;

@@ -107,6 +107,25 @@ export default function OurBookingLiveCard({ propertyId }) {
     return <div className="bg-white border border-stone-200 rounded-2xl p-5 text-sm text-stone-400">Loading…</div>;
   }
 
+  // "All Branches" mode or no property record — render an empty-state hint instead of crashing
+  if (!data || data.all_branches_mode || propertyId === "all") {
+    return (
+      <div className="bg-white border border-stone-200 rounded-2xl p-5 text-sm text-stone-500" data-testid="our-booking-card-all">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-stone-100 text-stone-400 flex items-center justify-center">
+            <Link2 className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="font-bold text-stone-700">Our Booking.com Live</div>
+            <div className="text-xs text-stone-400 mt-0.5">
+              Bu kart şube-özel — yukarıdan tek bir şube seçin (All Branches değil).
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const bd = data?.booking_data;
   const hasUrl = !!data?.booking_url;
   const hasData = !!bd;

@@ -3,6 +3,36 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 193 (Apr 2026): 🔁 Auto-Heal Scheduled / Persistent Mode
+
+User ask (TR): _"Öneri yap — Auto-Heal'i otomatik moda geçir, saatlik arka planda kendi kendine iyileştirsin."_
+
+**Backend (`market_robot.py`):**
+- New collection `market_robot_autoheal_config` (per-property): `{enabled, interval_minutes, threshold, days_ahead, last_run, total_runs, last_result}`
+- New endpoints:
+  - `GET /competitors/auto-heal/config` → returns config or defaults `{enabled:false, interval_minutes:60, threshold:50, days_ahead:30}`
+  - `PUT /competitors/auto-heal/config` body `{enabled, interval_minutes (15-1440), threshold (0-100), days_ahead (1-90)}`
+- `auto_scan_loop` extended with Auto-Heal scheduler block (runs alongside city/geo scans every 60s tick):
+  - Picks enabled configs → checks if interval elapsed → calls `_do_auto_heal_competitors` → updates `last_run` + increments `total_runs`
+
+**Frontend (`NeighborhoodScanPanel.js`):**
+- New state: `healCfg`, `healCfgSaving`
+- `loadAll` now also GETs the auto-heal config (parallel with other fetches)
+- New `saveHealCfg(overrides)` handler → optimistic UI flip + toast, rolls back on failure
+- **Auto-Heal scheduler toggle** added next to manual Auto-Heal button in Health Card header:
+  - `Auto OFF` (stone/grey) ↔ `Auto ON` (emerald)
+  - When ON → interval dropdown `[30m | 1h | 2h | 4h | 8h | 24h]` appears
+- **Scheduler status line** (visible when `enabled` AND not currently healing):
+  - Shows `Auto-Heal saatlik çalışıyor · her Xdk · hit<Y% hedeflenir` + `Son: 12m · Sonraki: 48m · 3 tur`
+  - Emerald-accent row right under the Health Card header
+
+**Verified:**
+- GET returns defaults for new property ✓
+- PUT `{enabled:true, interval_minutes:60}` persists & returns the saved doc ✓
+- PUT `{enabled:false}` toggles off ✓
+- Frontend lint clean, smoke test shows dashboard renders
+
+
 ### Iter 192 (Apr 2026): ⚡ Auto-Heal — Fire-and-Forget Competitor Recovery
 
 User ask (TR): _"Öneriyi yap — Scrape Health Card üzerine Auto-Heal butonu ekle, hit_rate < 50% olan rakiplere otomatik re-validate + re-scrape tetikle."_

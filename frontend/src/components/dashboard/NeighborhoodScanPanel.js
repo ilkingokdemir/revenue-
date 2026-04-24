@@ -50,6 +50,9 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // Auto-Heal flow state
   const [healing, setHealing] = useState(false);
   const [healStatus, setHealStatus] = useState(null);
+  // Auto-Heal scheduler config (persistent — saved to backend)
+  const [healCfg, setHealCfg] = useState(null);
+  const [healCfgSaving, setHealCfgSaving] = useState(false);
   const [fixCity, setFixCity] = useState("");
   const [fixCurrency, setFixCurrency] = useState("");
   const [fixPostcode, setFixPostcode] = useState("");
@@ -58,10 +61,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
 
   const loadAll = useCallback(async () => {
     try {
-      const [{ data: supply }, { data: cfg }, { data: ob }] = await Promise.all([
+      const [{ data: supply }, { data: cfg }, { data: ob }, { data: hcfg }] = await Promise.all([
         axios.get(`${API}/revenue/market-robot/${propertyId}/geo-supply?days=${days}`),
         axios.get(`${API}/revenue/market-robot/${propertyId}/geo-config`),
         axios.get(`${API}/revenue/market-robot/${propertyId}/our-booking`).catch(() => ({ data: {} })),
+        axios.get(`${API}/revenue/market-robot/${propertyId}/competitors/auto-heal/config`).catch(() => ({ data: null })),
       ]);
       const sum = supply.summary || {};
       if (supply.property_currency) sum.property_currency = supply.property_currency;
@@ -71,6 +75,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       setCompetitorSeries(supply.competitor_series || []);
       setOurHotelName(supply.our_hotel_name || "");
       setAutoCfg(cfg);
+      setHealCfg(hcfg);
       setPropInfo({ city: ob?.city || "", currency: ob?.currency || supply.property_currency || "" });
       if (cfg && !location && cfg.location) {
         setLocation(cfg.location);
@@ -216,6 +221,35 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       });
       toast.success(next ? "Auto-scan enabled" : "Auto-scan paused");
     } catch { toast.error("Toggle failed"); }
+  };
+
+  // Persist Auto-Heal scheduler config. If `overrides` is provided, merge into current cfg.
+  const saveHealCfg = async (overrides = {}) => {
+    const base = healCfg || { enabled: false, interval_minutes: 60, threshold: 50, days_ahead: 30 };
+    const payload = {
+      enabled: overrides.enabled != null ? overrides.enabled : base.enabled,
+      interval_minutes: overrides.interval_minutes != null ? overrides.interval_minutes : (base.interval_minutes || 60),
+      threshold: overrides.threshold != null ? overrides.threshold : (base.threshold || 50),
+      days_ahead: overrides.days_ahead != null ? overrides.days_ahead : (base.days_ahead || Number(days) || 30),
+    };
+    setHealCfgSaving(true);
+    // Optimistic UI — flip immediately, rollback on failure
+    setHealCfg({ ...(base || {}), ...payload });
+    try {
+      const { data } = await axios.put(
+        `${API}/revenue/market-robot/${propertyId}/competitors/auto-heal/config`, payload,
+      );
+      setHealCfg(data);
+      toast.success(
+        payload.enabled
+          ? `Auto-Heal açık — her ${payload.interval_minutes} dk arka planda çalışır`
+          : "Auto-Heal kapatıldı"
+      );
+    } catch (e) {
+      toast.error("Save failed — değişiklik geri alındı");
+      setHealCfg(base);
+    }
+    setHealCfgSaving(false);
   };
 
   // ⚡ Auto-Heal — re-validates + re-scrapes competitors with hit_rate below threshold
@@ -626,6 +660,40 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                         </button>
                       );
                     })()}
+                    {/* Auto-Heal scheduler toggle — persistent; runs in background on interval. */}
+                    <button
+                      onClick={() => saveHealCfg({ enabled: !(healCfg?.enabled) })}
+                      disabled={healCfgSaving}
+                      data-testid="auto-heal-scheduler-toggle"
+                      className={`ml-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        healCfg?.enabled
+                          ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25"
+                          : "bg-stone-800 border-stone-700 text-stone-400 hover:border-stone-600"
+                      } disabled:opacity-50`}
+                      title={healCfg?.enabled
+                        ? `Her ${healCfg.interval_minutes || 60} dk'da bir kendi kendine iyileştirir. Tıkla → durdur`
+                        : "Saatlik otomatik sağlık kontrolü ve iyileştirme başlat"}
+                    >
+                      {healCfg?.enabled ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+                      <span className="tabular-nums">Auto {healCfg?.enabled ? "ON" : "OFF"}</span>
+                    </button>
+                    {healCfg?.enabled && (
+                      <select
+                        value={healCfg.interval_minutes || 60}
+                        onChange={(e) => saveHealCfg({ interval_minutes: Number(e.target.value) })}
+                        disabled={healCfgSaving}
+                        data-testid="auto-heal-interval-select"
+                        className="ml-0 px-1.5 py-1 text-[10px] font-bold bg-stone-950 border border-stone-700 rounded-lg text-stone-200 cursor-pointer hover:border-stone-500"
+                        title="Otomatik iyileştirme sıklığı"
+                      >
+                        <option value={30}>30m</option>
+                        <option value={60}>1h</option>
+                        <option value={120}>2h</option>
+                        <option value={240}>4h</option>
+                        <option value={480}>8h</option>
+                        <option value={1440}>24h</option>
+                      </select>
+                    )}
                   </>
                 );
               })()}
@@ -649,6 +717,25 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 <div className="h-full bg-gradient-to-r from-cyan-400 to-violet-400 transition-all"
                      style={{ width: `${Math.min(100, ((healStatus.done || 0) / Math.max(healStatus.total, 1)) * 100)}%` }} />
               </div>
+            </div>
+          )}
+          {/* Auto-Heal scheduler status line — visible when auto mode is ON and no active healing */}
+          {healCfg?.enabled && !healing && (
+            <div className="mb-3 flex items-center justify-between gap-2 text-[10px] rounded-lg bg-emerald-500/5 border border-emerald-500/20 px-3 py-2"
+                 data-testid="auto-heal-scheduler-status">
+              <span className="text-emerald-300 font-bold flex items-center gap-1.5">
+                <Zap className="w-3 h-3" /> Auto-Heal saatlik çalışıyor · her {healCfg.interval_minutes} dk · {`hit<${healCfg.threshold}%`} hedeflenir
+              </span>
+              <span className="text-stone-400 tabular-nums">
+                {healCfg.last_run ? (() => {
+                  const diff = Math.max(0, (Date.now() - new Date(healCfg.last_run).getTime()) / 60000);
+                  const remaining = Math.max(0, (healCfg.interval_minutes || 60) - diff);
+                  return remaining > 60
+                    ? `Son: ${Math.round(diff / 60)}h · Sonraki: ${Math.round(remaining / 60)}h`
+                    : `Son: ${Math.round(diff)}m · Sonraki: ${Math.round(remaining)}m`;
+                })() : "Henüz çalışmadı · ilk tur yakında"}
+                {healCfg.total_runs ? ` · ${healCfg.total_runs} tur` : ""}
+              </span>
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">

@@ -2876,6 +2876,38 @@ def create_market_robot_router(db, require_roles, resend=None):
         )
         return doc or {"property_id": property_id, "status": "idle"}
 
+    @router.get("/revenue/market-robot/{property_id}/competitors/auto-heal/config")
+    async def get_auto_heal_config(property_id: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Current Auto-Heal schedule config. Defaults: disabled, hourly, threshold 50%, 30 days."""
+        doc = await db.market_robot_autoheal_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
+        return doc or {
+            "property_id": property_id, "enabled": False,
+            "interval_minutes": 60, "threshold": 50, "days_ahead": 30,
+            "last_run": None, "total_runs": 0,
+        }
+
+    @router.put("/revenue/market-robot/{property_id}/competitors/auto-heal/config")
+    async def put_auto_heal_config(property_id: str, data: Dict,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Update the Auto-Heal schedule (enabled/interval/threshold/days_ahead)."""
+        payload = {
+            "property_id": property_id,
+            "enabled": bool(data.get("enabled", False)),
+            "interval_minutes": max(15, min(int(data.get("interval_minutes") or 60), 24 * 60)),
+            "threshold": max(0, min(int(data.get("threshold") or 50), 100)),
+            "days_ahead": max(1, min(int(data.get("days_ahead") or 30), 90)),
+        }
+        await db.market_robot_autoheal_config.update_one(
+            {"property_id": property_id}, {"$set": payload}, upsert=True,
+        )
+        doc = await db.market_robot_autoheal_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
+        return doc
+
     @router.post("/revenue/market-robot/{property_id}/competitors/revalidate-all")
     async def revalidate_all_competitors(property_id: str, background_tasks: BackgroundTasks,
                                          current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -4060,6 +4092,45 @@ Date range: {date_from} to {date_to}."""
                     await scanner.watchdog()
                 except Exception as e:
                     logger.warning(f"Scanner watchdog error: {e}")
+
+                # === Auto-Heal scheduler — periodically runs _do_auto_heal_competitors
+                # for every property that opted in. Each property's config says how often
+                # to heal (interval_minutes) and what hit-rate floor triggers healing.
+                try:
+                    heal_cfgs = await db.market_robot_autoheal_config.find(
+                        {"enabled": True}, {"_id": 0}
+                    ).to_list(500)
+                    for hc in heal_cfgs:
+                        pid = hc.get("property_id")
+                        if not pid or pid == "all":
+                            continue
+                        interval = int(hc.get("interval_minutes") or 60)
+                        last = hc.get("last_run")
+                        due = True
+                        if last:
+                            try:
+                                last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
+                                due = (now - last_dt) >= timedelta(minutes=interval)
+                            except Exception:
+                                due = True
+                        if due:
+                            logger.info(f"🩺 Auto-Heal scheduled run for {pid} (threshold={hc.get('threshold')}%)")
+                            try:
+                                result = await _do_auto_heal_competitors(
+                                    db, pid,
+                                    days_ahead=int(hc.get("days_ahead") or 30),
+                                    threshold=int(hc.get("threshold") or 50),
+                                )
+                                await db.market_robot_autoheal_config.update_one(
+                                    {"property_id": pid},
+                                    {"$set": {"last_run": datetime.now(timezone.utc).isoformat(),
+                                              "last_result": result},
+                                     "$inc": {"total_runs": 1}},
+                                )
+                            except Exception as e:
+                                logger.exception(f"Scheduled Auto-Heal failed for {pid}: {e}")
+                except Exception as e:
+                    logger.warning(f"Auto-Heal scheduler error: {e}")
 
                 # === Weekly email summary (Mondays 09:00 UTC) ===
                 if now.weekday() == 0 and now.hour == 9 and now.minute < 2:

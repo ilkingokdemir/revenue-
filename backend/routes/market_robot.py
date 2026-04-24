@@ -2120,6 +2120,128 @@ def create_market_robot_router(db, require_roles, resend=None):
 
     # ==================== PERFORMANCE REPORT ====================
 
+    @router.get("/revenue/market-robot/{property_id}/action-feed")
+    async def action_feed(property_id: str, since: Optional[str] = None, limit: int = 30,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Chronological feed of pricing & market events for the revenue manager.
+
+        Aggregates events from 4 sources so a single panel answers "what happened
+        recently?" without switching tabs:
+          • auto_pricing_logs     — Market Robot's rate adjustments (e.g. "+8.5% for 15 Mar")
+          • market_competitors    — Competitor price snapshots (detects >5% day-over-day change)
+          • rate_overrides        — Manual rate edits in the last 24h (authored by someone)
+          • smart_scanner_runs    — Significant scan outcomes (unavailable% jumps, scraper errors)
+
+        Query:
+          since?  ISO timestamp — only events strictly newer than this (for "unread" tracking)
+          limit   default 30, max 100
+
+        Returns: { events: [{ id, type, severity, timestamp, title, detail, meta }], latest_ts }
+        """
+        if property_id == "all":
+            return {"events": [], "latest_ts": None, "unread": 0}
+
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+        since_dt = None
+        if since:
+            try:
+                since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            except Exception:
+                since_dt = None
+        floor_dt = since_dt or (now - timedelta(days=2))
+        floor_iso = floor_dt.isoformat()
+
+        events = []
+
+        # 1) Auto-pricing log entries
+        async for log in db.auto_pricing_logs.find(
+            {"property_id": property_id, "timestamp": {"$gte": floor_iso}},
+            {"_id": 0},
+        ).sort("timestamp", -1).limit(limit):
+            ts = log.get("timestamp", "")
+            change_pct = log.get("change_pct") or log.get("adjustment_pct") or 0
+            direction = "up" if change_pct > 0 else ("down" if change_pct < 0 else "flat")
+            events.append({
+                "id": f"ap:{log.get('id', ts)}",
+                "type": "auto_pricing",
+                "severity": "info" if abs(change_pct) < 5 else ("warn" if abs(change_pct) < 12 else "alert"),
+                "timestamp": ts,
+                "title": f"Auto-pricing {direction} {abs(change_pct):.1f}% on {log.get('date','?')}",
+                "detail": log.get("reason") or log.get("trigger") or "",
+                "meta": {
+                    "date": log.get("date"),
+                    "old_rate": log.get("old_rate"),
+                    "new_rate": log.get("new_rate"),
+                    "change_pct": change_pct,
+                },
+            })
+
+        # 2) Competitor price change events (detect deltas since last scan)
+        async for comp in db.market_competitors.find(
+            {"property_id": property_id, "last_scraped": {"$gte": floor_iso}},
+            {"_id": 0, "name": 1, "prices": 1, "last_scraped": 1, "id": 1},
+        ).sort("last_scraped", -1).limit(10):
+            prices = [p.get("lowest_price") for p in (comp.get("prices") or []) if p.get("lowest_price")]
+            if len(prices) < 2:
+                continue
+            latest = prices[0]
+            prev   = next((p for p in prices[1:6] if p and p != latest), None)
+            if not prev:
+                continue
+            delta_pct = ((latest - prev) / prev) * 100
+            if abs(delta_pct) < 5:
+                continue
+            direction = "dropped" if delta_pct < 0 else "raised"
+            events.append({
+                "id": f"cp:{comp.get('id','?')}:{comp.get('last_scraped','')}",
+                "type": "competitor_move",
+                "severity": "warn" if abs(delta_pct) >= 10 else "info",
+                "timestamp": comp.get("last_scraped", ""),
+                "title": f"{comp.get('name','Competitor')} {direction} {abs(delta_pct):.1f}%",
+                "detail": f"{prev:.0f} → {latest:.0f} in the latest scan",
+                "meta": {"competitor_id": comp.get("id"), "prev": prev, "latest": latest, "delta_pct": delta_pct},
+            })
+
+        # 3) Manual rate overrides within the window
+        async for rov in db.rate_overrides.find(
+            {"property_id": property_id, "updated_at": {"$gte": floor_iso}},
+            {"_id": 0},
+        ).sort("updated_at", -1).limit(10):
+            # Skip Market Robot-authored entries (they're already in auto_pricing_logs)
+            if (rov.get("source") or "").lower() in ("auto", "market-robot", "auto-pricer"):
+                continue
+            events.append({
+                "id": f"ov:{rov.get('date','?')}:{rov.get('updated_at','')}",
+                "type": "manual_override",
+                "severity": "info",
+                "timestamp": rov.get("updated_at", ""),
+                "title": f"Manual rate override for {rov.get('date','?')}",
+                "detail": f"New rate {rov.get('override_rate', '?')}. Author: {rov.get('updated_by','?')}",
+                "meta": rov,
+            })
+
+        # 4) Scanner errors (from smart_scanner_runs)
+        async for run in db.smart_scanner_runs.find(
+            {"property_id": property_id, "started_at": {"$gte": floor_iso}, "status": "error"},
+            {"_id": 0},
+        ).sort("started_at", -1).limit(5):
+            events.append({
+                "id": f"sc:{run.get('id','?')}:{run.get('started_at','')}",
+                "type": "scanner_error",
+                "severity": "alert",
+                "timestamp": run.get("started_at", ""),
+                "title": f"Scanner error: {run.get('scan_type','?')}",
+                "detail": (run.get("error_message") or "")[:200],
+                "meta": {"scan_type": run.get("scan_type"), "city": run.get("city")},
+            })
+
+        # Sort newest-first and trim
+        events.sort(key=lambda e: e.get("timestamp", ""), reverse=True)
+        events = events[:limit]
+        latest_ts = events[0]["timestamp"] if events else None
+        return {"events": events, "latest_ts": latest_ts, "unread": len(events)}
+
     @router.get("/revenue/market-robot/{property_id}/performance")
     async def get_performance_report(property_id: str,
                                      current_user: dict = Depends(require_roles("admin", "manager"))):

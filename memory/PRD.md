@@ -4,6 +4,30 @@
 
 
 
+### Iter 185 (Apr 2026): 📡 Revenue Action Feed — global live event drawer
+
+Revenue manager morning workflow: "Open app → see what happened overnight in 30 seconds".
+
+**Backend aggregator — `GET /api/revenue/market-robot/{pid}/action-feed`**
+Merges 4 event sources into one chronological stream (newest-first):
+1. `auto_pricing_logs` — Market Robot rate changes (+/- %, trigger reason)
+2. `market_competitors.prices` — deltas ≥5% between the last 2 scrapes per competitor ("Altstadt raised 16.0% 191 → 222")
+3. `rate_overrides` — manual edits in the last 48h (skips auto-pricer-authored rows)
+4. `smart_scanner_runs` where `status=error` — surface scraper failures fast
+
+Returns `{events:[{id,type,severity,timestamp,title,detail,meta}], latest_ts}`. Severity drives the left-border colour in the UI (rose/amber/stone).
+
+**Frontend — `ActionFeedPanel.js` mounted globally in `App.js`**
+- Floating bell icon bottom-right (stacked above the existing Report Issue FAB) with pulsing **unread count** badge (localStorage persists last-seen timestamp per property).
+- Opens a 420px right drawer with chronological feed, type-coded icons (⚡ auto-pricing, 📈 competitor, 👤 manual, ⚠ scanner error), "Live · 30s" badge, and relative timestamps ("3h ago", "6m ago").
+- Auto-polls every 30s via `useLivePolling` — visibility-aware so background tabs stay quiet.
+- Hidden in "All Branches" mode (feed is per-property).
+- "Mark all read" footer button clears the unread dots.
+
+**Verified:** Zurich branch feed shows 14 real events — 4 competitor moves (raised 16%, dropped 34.4%, 30%, 11.1%) + 10 manual overrides + live refresh working.
+
+
+
 ### Iter 184 (Apr 2026): ⚡ Platform-Wide Live Polling + 🔔 Price Alert Toasts
 
 User asked for ALL charts in the software to auto-update as data arrives, plus alert toasts for significant market moves.

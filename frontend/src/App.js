@@ -90,6 +90,7 @@ import { SurveyPanel } from "./components/dashboard/SurveyPanel";
 import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
 import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
 import GlobalReportIssueFAB from "./components/dashboard/GlobalReportIssueFAB";
+import ActionFeedPanel from "./components/dashboard/ActionFeedPanel";
 import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
 import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
 import { ScheduledReports } from "./components/dashboard/ScheduledReports";
@@ -3629,6 +3630,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
       {/* Global "Report Maintenance Issue" FAB — available to ALL departments */}
       <GlobalReportIssueFAB propertyId={activePropertyId} currentUser={user} properties={properties} />
+
+      {/* Global Revenue Action Feed — live pricing events drawer (single-branch only) */}
+      <ActionFeedPanel propertyId={activePropertyId} />
     </div>
   );
 };

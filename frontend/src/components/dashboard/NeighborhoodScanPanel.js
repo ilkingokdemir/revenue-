@@ -13,6 +13,7 @@ import {
   PoundSterling, Activity, ToggleLeft, ToggleRight, Save, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslation } from "../../i18n";
 import CompetitivePricingPanel from "./CompetitivePricingPanel";
 import GapAnalyzerWidget from "./GapAnalyzerWidget";
 import useLivePolling from "../../hooks/useLivePolling";
@@ -22,6 +23,7 @@ import { makeCurrencyFormatter } from "../../lib/currency";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function NeighborhoodScanPanel({ propertyId }) {
+  const { t } = useTranslation();
   const [location, setLocation] = useState("");
   const [radiusKm, setRadiusKm] = useState(3.2);
   const [days, setDays] = useState(30);
@@ -451,7 +453,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
             </div>
             <div>
               <h2 className="text-xl font-black text-emerald-300 flex items-center gap-2">
-                Neighborhood Scan
+                {t("ns.hero.title")}
                 <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-400/80 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-1.5 py-0.5" title="Chart auto-updates every 30s">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                   Live · 30s
@@ -461,10 +463,10 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                     title={`Last scrape: ${summary.last_scan || "—"}`}>
                     {(() => {
                       const s = Number(summary.data_freshness_seconds || 0);
-                      if (s < 60) return `Updated ${s}s ago`;
-                      if (s < 3600) return `Updated ${Math.round(s / 60)}m ago`;
-                      if (s < 86400) return `Updated ${Math.round(s / 3600)}h ago`;
-                      return `Updated ${Math.round(s / 86400)}d ago`;
+                      if (s < 60) return t("ns.hero.updated_sec", { n: s });
+                      if (s < 3600) return t("ns.hero.updated_min", { n: Math.round(s / 60) });
+                      if (s < 86400) return t("ns.hero.updated_hr", { n: Math.round(s / 3600) });
+                      return t("ns.hero.updated_day", { n: Math.round(s / 86400) });
                     })()}
                   </span>
                 )}
@@ -478,12 +480,35 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                         : "bg-rose-500/10 border-rose-500/30 text-rose-300"
                     }`}
                     title={`${ourSummary.booking_cover_days}/${snapshots.length} gün için Booking.com canlı fiyatımız var. Geri kalan günler internal rate'den hesaplanıyor.`}>
-                    Biz · {ourSummary.booking_cover_pct.toFixed(0)}% Booking.com live
+                    {t("ns.hero.biz_booking_live", { pct: ourSummary.booking_cover_pct.toFixed(0) })}
                   </span>
                 )}
               </h2>
               <p className="text-xs text-stone-400 mt-1">
-                Booking.com hotels within <span className="text-emerald-300 font-semibold">{miles} miles</span> · runs <span className="text-amber-300 font-semibold">in parallel</span> with city scan · <span className="text-emerald-300 font-semibold">veri geldikçe otomatik güncellenir</span>.
+                {(() => {
+                  const txt = t("ns.hero.subtitle", {
+                    miles: `__M__${miles}__M__`,
+                    parallel: `__P__`,
+                    live: `__L__`,
+                  });
+                  // Replace markers with styled spans
+                  const parts = [];
+                  let rest = txt;
+                  const pushSpan = (cls, content, key) => parts.push(<span key={key} className={cls}>{content}</span>);
+                  // Simple sequential replace — tokens appear in order
+                  const re = /__M__(.+?)__M__|__P__|__L__/g;
+                  let m; let idx = 0; let lastIdx = 0;
+                  while ((m = re.exec(rest)) !== null) {
+                    if (m.index > lastIdx) parts.push(rest.slice(lastIdx, m.index));
+                    if (m[0].startsWith("__M__")) pushSpan("text-emerald-300 font-semibold", `${m[1]} miles`, `tk-m-${idx}`);
+                    else if (m[0] === "__P__") pushSpan("text-amber-300 font-semibold", t("ns.hero.parallel"), `tk-p-${idx}`);
+                    else if (m[0] === "__L__") pushSpan("text-emerald-300 font-semibold", t("ns.hero.live"), `tk-l-${idx}`);
+                    lastIdx = m.index + m[0].length;
+                    idx += 1;
+                  }
+                  if (lastIdx < rest.length) parts.push(rest.slice(lastIdx));
+                  return parts;
+                })()}
               </p>
             </div>
           </div>
@@ -492,22 +517,22 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               <button onClick={refreshNeighborhood} disabled={refreshing}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-rose-500/15 text-rose-300 hover:bg-rose-500/25 border border-rose-500/30 disabled:opacity-50"
                 data-testid="refresh-neighborhood-btn"
-                title="Eski/hatalı scrap verilerini temizle ve yeni tarama başlat (grafiği yeniler)">
+                title={t("ns.btn.clear_stale")}>
                 {refreshing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Radar className="w-4 h-4" />}
-                {refreshing ? "Refreshing…" : "Clear Stale & Refresh"}
+                {refreshing ? t("ns.btn.clear_stale_loading") : t("ns.btn.clear_stale")}
               </button>
               <button onClick={() => setFixOpen(true)}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-bold transition-all bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/30"
                 data-testid="fix-location-btn"
-                title="Bu şubenin şehir/currency/postkod ayarlarını düzelt ve eski veriyi temizle">
+                title={t("ns.btn.fix_location")}>
                 <MapPin className="w-4 h-4" />
-                Fix Branch Location
+                {t("ns.btn.fix_location")}
               </button>
               <button onClick={toggleAuto}
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition-all ${autoCfg.enabled ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" : "bg-stone-800 text-stone-400 hover:bg-stone-700"}`}
                 data-testid="geo-auto-toggle">
                 {autoCfg.enabled ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
-                Auto-Scan {autoCfg.enabled ? "ON" : "OFF"}
+                {t("ns.btn.auto_scan")} {autoCfg.enabled ? "ON" : "OFF"}
               </button>
             </div>
           )}
@@ -586,15 +611,15 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       {/* Summary cards */}
       {summary && summary.total_snapshots > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="geo-summary">
-          <KPI label="Snapshots" value={summary.total_snapshots} tone="slate" icon={Activity} />
-          <KPI label="Avg Unavail" value={`${summary.avg_unavailable_pct}%`} tone="amber" icon={Building2} />
-          <KPI label="Market Avg" value={cur(summary.avg_price)} tone="emerald" icon={PoundSterling} testId="geo-avg-price" />
-          <KPI label="Market Low" value={cur(summary.min_price)} tone="emerald" />
-          <KPI label="Market High" value={cur(summary.max_price)} tone="rose" />
+          <KPI label={t("ns.kpi.snapshots")} value={summary.total_snapshots} tone="slate" icon={Activity} />
+          <KPI label={t("ns.kpi.avg_unavail")} value={`${summary.avg_unavailable_pct}%`} tone="amber" icon={Building2} />
+          <KPI label={t("ns.kpi.market_avg")} value={cur(summary.avg_price)} tone="emerald" icon={PoundSterling} testId="geo-avg-price" />
+          <KPI label={t("ns.kpi.market_low")} value={cur(summary.min_price)} tone="emerald" />
+          <KPI label={t("ns.kpi.market_high")} value={cur(summary.max_price)} tone="rose" />
         </div>
       )}
 
-      {/* Head-to-head: BİZ vs RAKİP */}
+      {/* Head-to-head: Us vs Market */}
       {ourSummary && summary && summary.avg_price > 0 && (
         <div className="bg-gradient-to-r from-cyan-500/10 via-violet-500/10 to-stone-900/60 border border-cyan-500/30 rounded-2xl p-5" data-testid="us-vs-market">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -603,41 +628,46 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 <Activity className="w-5 h-5 text-cyan-400" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-cyan-200">Biz vs Pazar (önümüzdeki {days} gün)</h3>
-                <p className="text-[11px] text-stone-400 mt-0.5">Chart üzerinde mor = bizim fiyat, mor çizgiler = bizim doluluk</p>
+                <h3 className="text-sm font-black text-cyan-200">{t("ns.vs.title", { days })}</h3>
+                <p className="text-[11px] text-stone-400 mt-0.5">{t("ns.vs.subtitle")}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 md:max-w-3xl">
               <CompareCard
-                label="Ort. Fiyat"
+                label={t("ns.vs.avg_price")}
                 us={cur(ourSummary.avg_rate)}
                 them={cur(summary.avg_price)}
                 delta={((ourSummary.avg_rate - summary.avg_price) / summary.avg_price) * 100}
                 kind="price"
               />
               <CompareCard
-                label="Doluluk / Talep"
+                label={t("ns.vs.occupancy")}
                 us={`${ourSummary.avg_occupancy_pct}%`}
                 them={`${summary.avg_unavailable_pct}%`}
                 delta={ourSummary.avg_occupancy_pct - summary.avg_unavailable_pct}
                 kind="occupancy"
               />
               <CompareCard
-                label="Oda Sayısı"
+                label={t("ns.vs.rooms")}
                 us={ourSummary.total_rooms}
                 them={Math.round(summary.max_price > 0 ? snapshots.reduce((a,s) => a + (s.total_properties || 0), 0) / Math.max(snapshots.length, 1) : 0)}
                 kind="count"
-                hint="pazar ort. oda rakibi"
+                hint={t("ns.vs.rooms_hint")}
               />
               <div className="bg-stone-950/60 border border-stone-800 rounded-lg p-2.5">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-stone-400">Konum</p>
-                <p className="text-xs font-black text-cyan-300 mt-1">
-                  {ourSummary.avg_rate > summary.avg_price
-                    ? <>Pazarın <span className="text-rose-300">%{(((ourSummary.avg_rate - summary.avg_price) / summary.avg_price) * 100).toFixed(1)}</span> üstü</>
-                    : <>Pazarın <span className="text-emerald-300">%{(((summary.avg_price - ourSummary.avg_rate) / summary.avg_price) * 100).toFixed(1)}</span> altı</>}
-                </p>
+                <p className="text-[9px] font-bold uppercase tracking-widest text-stone-400">{t("ns.vs.position")}</p>
+                <p className="text-xs font-black text-cyan-300 mt-1"
+                   dangerouslySetInnerHTML={{
+                     __html: ourSummary.avg_rate > summary.avg_price
+                       ? t("ns.vs.above_market", {
+                           pct: `<span class="text-rose-300">${(((ourSummary.avg_rate - summary.avg_price) / summary.avg_price) * 100).toFixed(1)}</span>`,
+                         })
+                       : t("ns.vs.below_market", {
+                           pct: `<span class="text-emerald-300">${(((summary.avg_price - ourSummary.avg_rate) / summary.avg_price) * 100).toFixed(1)}</span>`,
+                         })
+                   }} />
                 <p className="text-[9px] text-stone-500 mt-0.5">
-                  {ourSummary.avg_occupancy_pct > summary.avg_unavailable_pct ? "Yüksek doluluk" : "Doluluk düşük"}
+                  {ourSummary.avg_occupancy_pct > summary.avg_unavailable_pct ? t("ns.vs.high_occ") : t("ns.vs.low_occ")}
                 </p>
               </div>
             </div>
@@ -651,8 +681,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-cyan-400" />
-              <h3 className="text-sm font-bold text-stone-100">Scrape Health · Rakip Başarı Panosu</h3>
-              <span className="text-[10px] text-stone-500">({competitorSeries.length} rakip · {days} gün hedef)</span>
+              <h3 className="text-sm font-bold text-stone-100">{t("ns.health.title")}</h3>
+              <span className="text-[10px] text-stone-500">{t("ns.health.subtitle", { n: competitorSeries.length, days })}</span>
             </div>
             <div className="flex items-center gap-2 text-[10px]">
               {(() => {
@@ -678,14 +708,14 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                               ? "bg-cyan-500/10 border-cyan-500/30 text-cyan-300 cursor-wait"
                               : "bg-gradient-to-r from-cyan-500 to-violet-500 text-black border-transparent hover:brightness-110 shadow-md shadow-cyan-500/20"
                           }`}
-                          title={`${needy} under-performing rakibi arka planda re-validate + re-scrape et`}
+                          title={t("ns.health.heal_title", { n: needy })}
                         >
                           {healing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
                           {healing
                             ? (healStatus?.total
-                                ? `Healing ${healStatus.done || 0}/${healStatus.total}`
-                                : "Healing…")
-                            : `Auto-Heal · ${needy}`}
+                                ? t("ns.health.heal_loading", { done: healStatus.done || 0, total: healStatus.total })
+                                : t("ns.health.heal_loading", { done: 0, total: "…" }))
+                            : t("ns.health.heal_button", { n: needy })}
                         </button>
                       );
                     })()}
@@ -700,11 +730,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                           : "bg-stone-800 border-stone-700 text-stone-400 hover:border-stone-600"
                       } disabled:opacity-50`}
                       title={healCfg?.enabled
-                        ? `Her ${healCfg.interval_minutes || 60} dk'da bir kendi kendine iyileştirir. Tıkla → durdur`
-                        : "Saatlik otomatik sağlık kontrolü ve iyileştirme başlat"}
+                        ? t("ns.health.auto_on_title", { n: healCfg.interval_minutes || 60 })
+                        : t("ns.health.auto_off_title")}
                     >
                       {healCfg?.enabled ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
-                      <span className="tabular-nums">Auto {healCfg?.enabled ? "ON" : "OFF"}</span>
+                      <span className="tabular-nums">{healCfg?.enabled ? t("ns.health.auto_on") : t("ns.health.auto_off")}</span>
                     </button>
                     {healCfg?.enabled && (
                       <select
@@ -734,7 +764,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                  data-testid="auto-heal-progress">
               <div className="flex items-center justify-between text-[10px] mb-1">
                 <span className="text-cyan-300 font-bold flex items-center gap-1">
-                  <Zap className="w-3 h-3" /> Auto-Heal · arka planda
+                  <Zap className="w-3 h-3" /> {t("ns.health.progress_bg")}
                 </span>
                 <span className="text-stone-400 tabular-nums">
                   {healStatus.done || 0} / {healStatus.total}
@@ -753,17 +783,17 @@ export default function NeighborhoodScanPanel({ propertyId }) {
             <div className="mb-3 flex items-center justify-between gap-2 text-[10px] rounded-lg bg-emerald-500/5 border border-emerald-500/20 px-3 py-2"
                  data-testid="auto-heal-scheduler-status">
               <span className="text-emerald-300 font-bold flex items-center gap-1.5">
-                <Zap className="w-3 h-3" /> Auto-Heal saatlik çalışıyor · her {healCfg.interval_minutes} dk · {`hit<${healCfg.threshold}%`} hedeflenir
+                <Zap className="w-3 h-3" /> {t("ns.health.scheduler_running", { interval: healCfg.interval_minutes, threshold: healCfg.threshold })}
               </span>
               <span className="text-stone-400 tabular-nums">
                 {healCfg.last_run ? (() => {
                   const diff = Math.max(0, (Date.now() - new Date(healCfg.last_run).getTime()) / 60000);
                   const remaining = Math.max(0, (healCfg.interval_minutes || 60) - diff);
                   return remaining > 60
-                    ? `Son: ${Math.round(diff / 60)}h · Sonraki: ${Math.round(remaining / 60)}h`
-                    : `Son: ${Math.round(diff)}m · Sonraki: ${Math.round(remaining)}m`;
-                })() : "Henüz çalışmadı · ilk tur yakında"}
-                {healCfg.total_runs ? ` · ${healCfg.total_runs} tur` : ""}
+                    ? t("ns.health.last_next_h", { last: Math.round(diff / 60), next: Math.round(remaining / 60) })
+                    : t("ns.health.last_next_m", { last: Math.round(diff), next: Math.round(remaining) });
+                })() : t("ns.health.never_ran")}
+                {healCfg.total_runs ? t("ns.health.runs_count", { n: healCfg.total_runs }) : ""}
               </span>
             </div>
           )}
@@ -838,7 +868,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-bold text-stone-100">Neighborhood Market · Per-Hotel Price Trend</h3>
+              <h3 className="text-sm font-bold text-stone-100">{t("ns.chart.title")}</h3>
               <span className="text-[10px] text-stone-500">({snapshots.length} gün)</span>
             </div>
             {/* Range picker pills */}
@@ -859,12 +889,12 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px] text-stone-400" data-testid="geo-chart-legend">
-              <span className="flex items-center gap-1.5" title="Komşuluktaki Booking.com doluluğu — ne kadar yüksek, o kadar talep var"><span className="w-2 h-3 rounded-sm bg-emerald-500/70" /> Talep</span>
-              <span className="flex items-center gap-1.5" title="Pazarın ortalama fiyatı — baseline"><span className="w-5 h-[2px]" style={{ background: "repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 4px,transparent 4px,transparent 7px)" }} /> Pazar</span>
+              <span className="flex items-center gap-1.5" title={t("ns.chart.legend.demand")}><span className="w-2 h-3 rounded-sm bg-emerald-500/70" /> {t("ns.chart.legend.demand")}</span>
+              <span className="flex items-center gap-1.5" title={t("ns.chart.legend.market")}><span className="w-5 h-[2px]" style={{ background: "repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 4px,transparent 4px,transparent 7px)" }} /> {t("ns.chart.legend.market")}</span>
               {ourHotelName && (
-                <span className="flex items-center gap-1.5" title="Bizim oteli — ana referans"><span className="w-5 h-[3px] rounded-full bg-violet-400" /> Biz</span>
+                <span className="flex items-center gap-1.5" title={t("ns.chart.legend.us")}><span className="w-5 h-[3px] rounded-full bg-violet-400" /> {t("ns.chart.legend.us")}</span>
               )}
-              <span className="text-stone-500/70 border-l border-stone-700 pl-3 italic">Hover: vurgula · Tıkla: gizle</span>
+              <span className="text-stone-500/70 border-l border-stone-700 pl-3 italic">{t("ns.chart.legend.hint")}</span>
             </div>
           </div>
 
@@ -872,7 +902,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Left legend — hotels list */}
             <div className="lg:w-52 flex-shrink-0 space-y-1.5 lg:max-h-[320px] lg:overflow-y-auto lg:pr-2" data-testid="geo-chart-hotel-legend">
-              <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">Hotels</div>
+              <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">{t("ns.chart.hotels")}</div>
               {/* Our hotel — hero row */}
               {ourHotelName && (
                 <div className="flex items-center justify-between gap-2 rounded-lg bg-violet-500/10 border border-violet-500/30 px-2.5 py-1.5" data-testid="geo-legend-ours">
@@ -891,7 +921,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               <div className="flex items-center justify-between gap-2 rounded-lg bg-amber-500/5 border border-amber-500/20 px-2.5 py-1.5" data-testid="geo-legend-market">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-3 h-[2px] bg-amber-400 flex-shrink-0" />
-                  <span className="text-[11px] font-black text-amber-300 truncate">Pazar Avg</span>
+                  <span className="text-[11px] font-black text-amber-300 truncate">{t("ns.chart.legend.market")}</span>
                 </div>
                 {summary?.avg_price && (
                   <span className="text-[10px] font-bold text-amber-300 tabular-nums flex-shrink-0">
@@ -900,10 +930,10 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 )}
               </div>
               <div className="h-px bg-stone-800 my-2" />
-              <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">Competitors ({competitorSeries.length})</div>
+              <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">{t("ns.chart.competitors", { n: competitorSeries.length })}</div>
               {/* Competitor rows — clickable to hide/show */}
               {competitorSeries.length === 0 && (
-                <div className="text-[10px] text-stone-500 italic px-2.5 py-1.5">Henüz rakip eklenmemiş — aşağıdaki "+ Add Competitor" ile ekleyin.</div>
+                <div className="text-[10px] text-stone-500 italic px-2.5 py-1.5">{t("ns.chart.no_comps")}</div>
               )}
               {chart.compLines.map((c) => {
                 const hidden = !!hiddenComps[c.id];
@@ -938,10 +968,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 );
               })}
               {competitorSeries.length > 0 && (
-                <div className="text-[9px] text-stone-500 italic px-2 pt-2 text-center leading-snug">
-                  💡 <b>Fare ile üstüne gel</b> → çizgiyi vurgula<br/>
-                  <b>Tıkla</b> → gizle/göster
-                </div>
+                <div className="text-[9px] text-stone-500 italic px-2 pt-2 text-center leading-snug"
+                     dangerouslySetInnerHTML={{ __html: "💡 " + t("ns.chart.tip") }} />
               )}
             </div>
 
@@ -1035,8 +1063,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 // can spot at a glance who's over/under priced on this date.
                 const market = s.avg_price || 0;
                 const rows = [];
-                if (s.our_avg_rate > 0) rows.push({ label: ourHotelName || "Biz", price: s.our_avg_rate, colour: "#a78bfa", hero: true, isMarket: false });
-                if (market > 0) rows.push({ label: "Pazar Avg", price: market, colour: "#f59e0b", dashed: true, isMarket: true });
+                if (s.our_avg_rate > 0) rows.push({ label: ourHotelName || t("ns.chart.legend.us"), price: s.our_avg_rate, colour: "#a78bfa", hero: true, isMarket: false });
+                if (market > 0) rows.push({ label: t("ns.chart.legend.market"), price: market, colour: "#f59e0b", dashed: true, isMarket: true });
                 chart.compLines.forEach((c) => {
                   if (hiddenComps[c.id]) return;
                   const v = competitorSeries.find(cs => cs.id === c.id)?.prices_by_date?.[s.date];
@@ -1059,7 +1087,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                       {dt.toLocaleDateString("en", { day: "2-digit", month: "short" })} <tspan fill="#a8a29e" fontWeight="600">·{dowLabel}</tspan>
                     </text>
                     <text x={tipX + tipW - 8} y={tipY + 14} fontSize="9" fontWeight="700" fill="#fbbf24" textAnchor="end">
-                      Talep {Math.round(s.unavailable_pct || 0)}%
+                      {t("ns.chart.demand_label", { pct: Math.round(s.unavailable_pct || 0) })}
                     </text>
                     {rows.map((r, ri) => {
                       // Δ vs market: positive = above market (rose), negative = below (emerald).
@@ -1071,7 +1099,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                       const deltaColour = Math.abs(delta) < 0.5 ? "#a8a29e" : (above ? "#fb7185" : "#6ee7b7");
                       const deltaStr = showDelta
                         ? `${above ? "+" : ""}${curShort(delta)} ${above ? "+" : ""}${deltaPct.toFixed(1)}%`
-                        : "baseline";
+                        : t("ns.chart.baseline");
                       return (
                         <g key={ri}>
                           <circle cx={tipX + 10} cy={tipY + 26 + ri * rowH + 2} r="3" fill={r.colour} />
@@ -1128,8 +1156,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
             <PoundSterling className="w-4 h-4 text-violet-400" />
           </div>
           <div>
-            <h4 className="text-sm font-black text-violet-300">Rekabetçi Fiyat Kuralı</h4>
-            <p className="text-xs text-stone-400 mt-1">Bu özelliği kullanmak için üst menüden belirli bir şube seçin — aggregated görünümde oda-tipi bazlı rate kuralı yoktur.</p>
+            <h4 className="text-sm font-black text-violet-300">{t("ns.rule.title")}</h4>
+            <p className="text-xs text-stone-400 mt-1">{t("ns.rule.all_branches_hint")}</p>
           </div>
         </div>
       )}
@@ -1140,12 +1168,12 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4 text-emerald-400" />
-              <h3 className="text-sm font-bold text-stone-100">Neighborhood Supply & Prices · Next {days} days</h3>
+              <h3 className="text-sm font-bold text-stone-100">{t("ns.supply.title", { days })}</h3>
             </div>
             {top3Changes.length > 0 && (
               <div className="flex flex-wrap items-center gap-2" data-testid="top3-changes">
                 <span className="text-[10px] text-stone-400 uppercase tracking-widest font-bold flex items-center gap-1">
-                  <span className="text-amber-400">🔥</span> TOP 3 Değişim
+                  <span className="text-amber-400">🔥</span> {t("ns.supply.top3")}
                 </span>
                 {top3Changes.map((t, i) => {
                   const up = t.pct > 0;

@@ -232,7 +232,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "strategy" && <RevenuePricingStrategy propertyId={pid} />}
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
-              {tab === "market-robot" && <MarketRobot propertyId={pid} />}
+              {tab === "market-robot" && <MarketRobot propertyId={pid} properties={properties} />}
               {tab === "compset-intel" && <CompsetIntelligence propertyId={pid} />}
               {tab === "price-alerts" && <PriceAlerts propertyId={pid} onNavigate={handleNavigate} />}
               {tab === "weekly-digest" && <WeeklyDigest propertyId={pid} />}

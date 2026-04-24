@@ -31,8 +31,13 @@ const TIERS_DISPLAY = [
   { label: "6-12 months out", interval_mins: 2880 },
 ];
 
-export const MarketRobot = ({ propertyId }) => {
+export const MarketRobot = ({ propertyId, properties = [] }) => {
   const { t } = useTranslation();
+  // Selected property — used to show which hotel's data is being displayed in the header.
+  const selectedProperty = propertyId === "all"
+    ? null
+    : (properties.find(p => p.id === propertyId) || null);
+  const selectedName = selectedProperty?.name || selectedProperty?.display_name || "";
   const [config, setConfig] = useState(null);
   const [supply, setSupply] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -278,7 +283,22 @@ export const MarketRobot = ({ propertyId }) => {
             <Bot className="w-6 h-6 text-white" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold text-stone-800">{t("mr.title")}</h2>
+            <h2 className="text-lg font-bold text-stone-800">
+              {t("mr.title")}
+              {selectedName && (
+                <>
+                  <span className="text-stone-400 font-normal mx-2">·</span>
+                  <span className="text-violet-600 font-black" data-testid="mr-selected-hotel-name">
+                    {selectedName}
+                  </span>
+                </>
+              )}
+              {propertyId === "all" && (
+                <span className="ml-2 text-[11px] font-semibold bg-stone-100 text-stone-500 px-2 py-0.5 rounded-full">
+                  {t("mr.all_branches")}
+                </span>
+              )}
+            </h2>
             <p className="text-xs text-stone-400 truncate">{t("mr.subtitle")}</p>
           </div>
         </div>

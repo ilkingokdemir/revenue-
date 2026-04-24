@@ -3,6 +3,41 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 195 (Apr 2026): 🏷️ Hotel Name in MR Header + EN/TR i18n Cleanup
+
+User ask (TR): _"Seçtiğim hotelin adı Market Robot dashboard'unda da olsun. İngilizce ve Türkçe dil opsiyonu olsun, şu anda iki dil karışık kullanılıyor. Düzeltip hangi dil seçilirse o dilde her şey olsun."_
+
+**Hotel name in Market Robot header:**
+- `RevenuePanel.js`: passes `properties` array to `<MarketRobot>` as a new prop
+- `MarketRobot.js`: derives `selectedName` from `propertyId + properties` and renders it in the header:
+  - `Market Robot · **Hotel Adler Zurich**` (violet accent, `data-testid="mr-selected-hotel-name"`)
+  - When `propertyId === "all"` → shows `[Tüm Şubeler]` / `[All Branches]` pill instead
+
+**i18n cleanup (NeighborhoodScanPanel.js was the biggest mixed-language offender):**
+- Added **60+ new keys** under `ns.*` namespace in both `tr.json` and `en.json`: `ns.hero.*`, `ns.btn.*`, `ns.kpi.*`, `ns.vs.*`, `ns.chart.*`, `ns.health.*`, `ns.rule.*`, `ns.supply.*`
+- Replaced hardcoded strings throughout the panel:
+  - Hero: title + subtitle + "updated Ns ago" + "Biz · X% Booking.com live"
+  - Toolbar buttons: "Clear Stale & Refresh", "Fix Branch Location", "Auto-Scan ON/OFF"
+  - 5 KPI cards (Snapshots / Avg Unavail / Market Avg / Market Low / Market High)
+  - "Biz vs Pazar" card: title, subtitle, all 4 comparison labels + position description
+  - Chart title: "Neighborhood Market · Per-Hotel Price Trend"
+  - Chart tooltip: "Pazar" label, "baseline", demand percentage
+  - Chart left legend: "Hotels", "Competitors (N)", empty-state hint, hover-click tip
+  - Scrape Health Card: title, subtitle, OK/Warn/Low badges, days-of format, URL-fail warning
+  - Auto-Heal button: title, loading state, count
+  - Auto-Heal scheduler toggle: ON/OFF labels + tooltips
+  - Auto-Heal scheduler status line: running text, never-run text, last/next m/h format, runs count
+  - "Rekabetçi Fiyat Kuralı" card (now fully translated)
+  - "Neighborhood Supply & Prices · Next X days" supply table title
+  - "TOP 3 Değişim" → `🔥 TOP 3 Movers` / `🔥 TOP 3 Değişim`
+
+**Verified:**
+- Frontend lint clean for all modified files
+- Smoke screenshot: dashboard loads, EN/TR language toggle visible bottom-left + inline in cards
+
+**Note:** Some deep-nested hardcoded strings in less-visible UI (dialogs, form placeholders, toast messages) still exist. They didn't make it into this iteration's visible surface — can be swept in a follow-up if user reports more mixed-language areas.
+
+
 ### Iter 194 (Apr 2026): 🐛 CRITICAL Branch Isolation Bug Fix
 
 User bug report (TR): _"Market robot şube değiştikçe o şubenin dashboard'u gelmesi gerek. Lokasyon o hotel için olmalı bütün scrape'lerin. Bütün modüllerin hepsinin o şubenin için çalışması gerek. Bütün şubeler birbirinden bağımsız. HATA VAR."_

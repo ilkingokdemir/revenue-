@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTranslation } from "@/i18n";
 import { RevenueDashboardEnhanced } from "./RevenueDashboardEnhanced";
 import { RevenuePricingStrategy } from "./RevenuePricingStrategy";
 import { RevenueSmartPricing } from "./RevenueSmartPricing";
@@ -41,72 +42,75 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const NAV_SECTIONS = [
   {
-    label: "Overview",
+    labelKey: "nav.dashboard",
     items: [
-      { id: "dashboard", label: "Dashboard", icon: BarChart3 },
-      { id: "ai-copilot", label: "AI Copilot", icon: Bot },
-      { id: "wizard", label: "Setup Wizard", icon: Wand2 },
+      { id: "dashboard", labelKey: "rev.tab.dashboard", icon: BarChart3 },
+      { id: "ai-copilot", labelKey: "rev.tab.ai_copilot", icon: Bot },
+      { id: "wizard", labelKey: "nav.setup_wizard", icon: Wand2 },
     ],
   },
   {
-    label: "Pricing",
+    labelKey: "section.pricing",
     items: [
-      { id: "dynamic-pricing", label: "AI Dynamic Pricing", icon: BrainCircuit },
-      { id: "calendar", label: "Rate Calendar", icon: CalendarDays },
-      { id: "smart-rate-control", label: "Smart Rate Control", icon: Zap },
-      { id: "strategy", label: "Pricing Strategy", icon: Settings2 },
-      { id: "smart-pricing", label: "Smart Pricing", icon: Zap },
-      { id: "approvals", label: "Approvals", icon: CheckSquare },
+      { id: "dynamic-pricing", labelKey: "rev.tab.dynamic_pricing", icon: BrainCircuit },
+      { id: "calendar", labelKey: "rev.tab.calendar", icon: CalendarDays },
+      { id: "smart-rate-control", labelKey: "rev.tab.smart_rate_control", icon: Zap },
+      { id: "strategy", labelKey: "rev.tab.strategy", icon: Settings2 },
+      { id: "smart-pricing", labelKey: "rev.tab.smart_pricing", icon: Zap },
+      { id: "approvals", labelKey: "rev.tab.approvals", icon: CheckSquare },
     ],
   },
   {
-    label: "Intelligence",
+    labelKey: "section.intelligence",
     items: [
-      { id: "market-robot", label: "Market Robot", icon: Radar },
-      { id: "compset-intel", label: "Compset Intelligence", icon: Trophy },
-      { id: "price-alerts", label: "Price Alerts", icon: AlertTriangle },
-      { id: "weekly-digest", label: "AI Weekly Digest", icon: Sparkles },
-      { id: "rate-scraper", label: "Rate Automation", icon: ScanLine },
-      { id: "booking-pace", label: "Booking Pace", icon: Activity },
-      { id: "revenue-forecast", label: "Revenue Forecast", icon: DollarSign },
-      { id: "rate-actions", label: "Rate Actions", icon: Zap },
-      { id: "what-if", label: "What-If Simulator", icon: FlaskConical },
-      { id: "displacement", label: "Displacement", icon: Scale },
-      { id: "los-optimizer", label: "LOS Optimizer", icon: Timer },
-      { id: "historical", label: "Historical Analysis", icon: History },
-      { id: "forecasting", label: "Forecasting", icon: LineChart },
-      { id: "analytics", label: "Analytics", icon: PieChart },
-      { id: "competitors", label: "Competitors", icon: Eye },
+      { id: "market-robot", labelKey: "rev.tab.market_robot", icon: Radar },
+      { id: "compset-intel", labelKey: "rev.tab.compset_intel", icon: Trophy },
+      { id: "price-alerts", labelKey: "rev.tab.price_alerts", icon: AlertTriangle },
+      { id: "weekly-digest", labelKey: "rev.tab.weekly_digest", icon: Sparkles },
+      { id: "rate-scraper", labelKey: "rev.tab.rate_scraper", icon: ScanLine },
+      { id: "booking-pace", labelKey: "rev.tab.booking_pace", icon: Activity },
+      { id: "revenue-forecast", labelKey: "rev.tab.revenue_forecast", icon: DollarSign },
+      { id: "rate-actions", labelKey: "rev.tab.rate_actions", icon: Zap },
+      { id: "what-if", labelKey: "rev.tab.what_if", icon: FlaskConical },
+      { id: "displacement", labelKey: "rev.tab.displacement", icon: Scale },
+      { id: "los-optimizer", labelKey: "rev.tab.los_optimizer", icon: Timer },
+      { id: "historical", labelKey: "rev.tab.historical_analysis", fallback: "Historical Analysis", icon: History },
+      { id: "forecasting", labelKey: "rev.tab.forecasting", icon: LineChart },
+      { id: "analytics", labelKey: "nav.analytics", icon: PieChart },
+      { id: "competitors", labelKey: "rev.tab.competitors", fallback: "Competitors", icon: Eye },
     ],
   },
   {
-    label: "Automation",
+    labelKey: "rev.section.automation",
+    fallback: "Automation",
     items: [
-      { id: "playbooks", label: "Playbooks", icon: BookOpen },
-      { id: "experiments", label: "Experiments", icon: FlaskConical },
-      { id: "action-center", label: "Action Center", icon: Bell },
+      { id: "playbooks", labelKey: "rev.tab.playbooks", fallback: "Playbooks", icon: BookOpen },
+      { id: "experiments", labelKey: "rev.tab.experiments", fallback: "Experiments", icon: FlaskConical },
+      { id: "action-center", labelKey: "rev.tab.action_center", fallback: "Action Center", icon: Bell },
     ],
   },
   {
-    label: "Distribution",
+    labelKey: "rev.section.distribution",
+    fallback: "Distribution",
     items: [
-      { id: "channel-manager", label: "Channel Manager", icon: Network },
-      { id: "segments", label: "Segments", icon: Users },
-      { id: "overbooking", label: "Overbooking", icon: Hotel },
-      { id: "distribution", label: "Distribution", icon: Network },
+      { id: "channel-manager", labelKey: "rev.tab.channel_manager", fallback: "Channel Manager", icon: Network },
+      { id: "segments", labelKey: "rev.tab.segments", fallback: "Segments", icon: Users },
+      { id: "overbooking", labelKey: "rev.tab.overbooking", fallback: "Overbooking", icon: Hotel },
+      { id: "distribution", labelKey: "rev.tab.distribution_item", fallback: "Distribution", icon: Network },
     ],
   },
   {
-    label: "Finance",
+    labelKey: "section.finance",
     items: [
-      { id: "profit-os", label: "Profit OS", icon: DollarSign },
-      { id: "reports", label: "Reports & Export", icon: Download },
-      { id: "rate-resolver", label: "Rate Resolver", icon: Search },
+      { id: "profit-os", labelKey: "rev.tab.profit_os", icon: DollarSign },
+      { id: "reports", labelKey: "rev.tab.reports", icon: Download },
+      { id: "rate-resolver", labelKey: "rev.tab.rate_resolver", icon: Search },
     ],
   },
 ];
 
 export const RevenuePanel = ({ properties, activePropertyId }) => {
+  const { t } = useTranslation();
   const [tab, setTab] = useState("dashboard");
   const [roomTypes, setRoomTypes] = useState([]);
   // Auto-collapse on mobile so the inner nav doesn't force horizontal overflow
@@ -130,6 +134,14 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
 
   const handleNavigate = (tabId) => setTab(tabId);
 
+  // Resolves a label via i18n — falls back to `fallback` prop when key is missing
+  const label = (o) => {
+    if (!o?.labelKey) return o?.label || "";
+    const tr = t(o.labelKey);
+    if (tr && tr !== o.labelKey) return tr;
+    return o.fallback || o.label || o.labelKey;
+  };
+
   const currentItem = NAV_SECTIONS.flatMap(s => s.items).find(i => i.id === tab);
 
   return (
@@ -140,8 +152,8 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
         <div className={`sticky top-0 bg-stone-900 z-10 border-b border-stone-700/50 ${collapsed ? "px-2 py-3" : "px-4 py-4"}`}>
           {!collapsed && (
             <div className="mb-1">
-              <h2 className="text-sm font-bold text-white tracking-wide">Revenue</h2>
-              <p className="text-[10px] text-stone-400">Management System</p>
+              <h2 className="text-sm font-bold text-white tracking-wide">{t("rev.breadcrumb.home")}</h2>
+              <p className="text-[10px] text-stone-400">{t("rev.system")}</p>
             </div>
           )}
           <button onClick={() => setCollapsed(!collapsed)}
@@ -154,15 +166,16 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
         {/* Nav Sections */}
         <div className="py-2">
           {NAV_SECTIONS.map(section => (
-            <div key={section.label} className="mb-1">
+            <div key={section.labelKey || section.label} className="mb-1">
               {!collapsed && (
                 <div className="px-4 py-2">
-                  <span className="text-[9px] font-bold text-stone-500 uppercase tracking-[0.15em]">{section.label}</span>
+                  <span className="text-[9px] font-bold text-stone-500 uppercase tracking-[0.15em]">{label(section)}</span>
                 </div>
               )}
               {collapsed && <div className="h-px bg-stone-700/40 mx-2 my-2" />}
               {section.items.map(item => {
                 const isActive = tab === item.id;
+                const itemLabel = label(item);
                 return (
                   <button
                     key={item.id}
@@ -175,18 +188,18 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
                         : "text-stone-400 hover:text-stone-200 hover:bg-stone-800/60"
                     }`}
                     data-testid={`rev-tab-${item.id}`}
-                    title={collapsed ? item.label : undefined}
+                    title={collapsed ? itemLabel : undefined}
                   >
                     {isActive && <div className="absolute left-0 top-1 bottom-1 w-[3px] rounded-r-full bg-violet-500" />}
                     <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? "text-violet-400" : "text-stone-500 group-hover:text-stone-300"}`} />
                     {!collapsed && (
                       <span className={`text-[13px] truncate ${isActive ? "font-semibold" : "font-medium"}`}>
-                        {item.label}
+                        {itemLabel}
                       </span>
                     )}
                     {collapsed && (
                       <div className="absolute left-full ml-2 px-2.5 py-1 bg-stone-800 text-white text-xs font-medium rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-lg border border-stone-700">
-                        {item.label}
+                        {itemLabel}
                       </div>
                     )}
                   </button>
@@ -203,9 +216,9 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
           {/* Breadcrumb */}
           {currentItem && tab !== "dashboard" && (
             <div className="flex items-center gap-1.5 text-xs text-stone-400 mb-4">
-              <button onClick={() => setTab("dashboard")} className="hover:text-stone-600 transition-colors">Revenue</button>
+              <button onClick={() => setTab("dashboard")} className="hover:text-stone-600 transition-colors">{t("rev.breadcrumb.home")}</button>
               <ChevronRight className="w-3 h-3" />
-              <span className="text-stone-600 font-medium">{currentItem.label}</span>
+              <span className="text-stone-600 font-medium">{label(currentItem)}</span>
             </div>
           )}
 

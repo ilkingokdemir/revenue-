@@ -4,6 +4,46 @@
 
 
 
+### Iter 173 (Feb 2026): 🌍 Revenue Management & Market Robot — 7-language i18n support
+
+User feedback (TR): _"revenue managements icindeki modullerde ve ana modulde multi dil opsiyonu yok"_
+
+Revenue Panel and Market Robot had ZERO i18n support despite the app already having a global 7-language system (EN/TR/ES/RU/AR/FR/DE) in `/src/i18n/index.js` used by the sidebar's LanguageSwitcher. All Revenue strings were hardcoded English.
+
+**What was shipped:**
+
+**A. i18n dictionary extension (all 7 languages)**
+- Added 80 new keys under namespaces `rev.*`, `mr.*`, `mr.sub.*`, `mr.kpi.*`, `section.*` to `/src/i18n/en.json` and `tr.json` (hand-written quality TR).
+- Used Emergent LLM key (GPT-4o-mini) to professionally translate the 80-key block to Spanish, Russian, Arabic, French, German — hotel-industry context preserved, proper nouns (AI, LOS, Market Robot, Profit OS, What-If) localized sensibly. Script at `/app/ (inline one-shot)`.
+
+**B. Revenue Panel fully wired** (`components/dashboard/RevenuePanel.js`)
+- `NAV_SECTIONS` refactored: each section + item now has `labelKey` + optional `fallback` instead of hardcoded `label`.
+- Added `useTranslation()` hook.
+- New `label(o)` resolver: returns `t(labelKey)` when translation exists, falls back to `fallback` when key missing (graceful degradation for sections we haven't translated yet like Automation/Distribution sub-items).
+- "Revenue" → `{t("rev.breadcrumb.home")}`, "Management System" → `{t("rev.system")}`, breadcrumb links, section headers (Pricing/Intelligence/Strategy/Analytics/Finance) all translated.
+- Collapsed-sidebar tooltip text also uses i18n.
+
+**C. Market Robot main panel wired** (`components/dashboard/MarketRobot.js`)
+- Title, subtitle, city placeholder, "Active" badge, "Run Scan" / "Scanning..." button.
+- All 13 sub-tabs (Dashboard, Demand Radar, Neighborhood Scan, Market Demand, Performance, Supply Data, Rate Parity, Competitor Analysis, Event Intelligence, Competitor Hotels, Auto-Adjustments, Configuration, Scan Logs).
+- Scan Result banner (Scan Complete, Dates Scanned, Auto-Adjustments, City).
+- Smart Tiered Scanner header + on/off subtitle + Activate/Stop Scanner buttons.
+- All 5 KPI cards (Market Demand, High Demand Days, Low Demand Days, Event Days, Active Adjustments) + hint subtitles + demand level word (High/Moderate/Low).
+- Runtime stats bar (Scans today, Requests today, Events found today, Last event scan, Last reprice).
+- Fixed a name collision bug: the sub-tab `.map(t => ...)` shadowed the `t()` i18n fn; renamed loop var to `tab`.
+
+**Verified end-to-end via Playwright at 1440px:**
+- 🇹🇷 Turkish: `Gelir > Market Robot`, `Piyasa Talebi`, `Tara`, `Aktif`, `Mahalle Taraması`, `Fiyat Takvimi` all render correctly.
+- 🇩🇪 German: `Umsatz`, `Marktnachfrage`, `Scan starten`, `Preiskalender`, `Intelligenter gestaffelter Scanner`.
+- 🇸🇦 Arabic: `الإيرادات`, `روبوت السوق`, `تشغيل الفحص`, `نشط`, RTL layout auto-applied (sidebar flips to right side, sub-tabs right-aligned) because `LanguageProvider` sets `document.documentElement.dir = "rtl"` for AR.
+- Graceful fallback: items without translation keys (e.g. Playbooks, Experiments, Segments) show English until translated — no broken UI.
+
+**Known follow-ups:**
+- Sub-panels inside Revenue (RevenueDashboardEnhanced, RevenuePricingStrategy, DynamicPricingEngine, DemandRadar, NeighborhoodScanPanel, CompsetIntelligence, PriceAlerts, etc.) still have internal hardcoded English. Future work will extend i18n into each sub-panel as prioritized.
+- Automation/Distribution section items (Playbooks, Experiments, Action Center, Channel Manager, Segments, Overbooking) have fallback-only labels, no i18n keys yet.
+
+
+
 ### Iter 172 (Feb 2026): 📱 Market Robot — mobile-responsive on phones
 
 User request (TR): _"Market robot Telefon uyumlu olsun"_

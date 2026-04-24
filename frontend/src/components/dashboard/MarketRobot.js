@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { useTranslation } from "@/i18n";
 import { Bot, Play, RefreshCw, TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, Settings, Activity, Clock, ArrowUpRight, ArrowDownRight, Eye, Trash2, MapPin, Globe, Radar, PartyPopper, Users } from "lucide-react";
 import { EventIntelligence } from "./EventIntelligence";
 import { RateParity } from "./RateParity";
@@ -28,6 +29,7 @@ const TIERS_DISPLAY = [
 ];
 
 export const MarketRobot = ({ propertyId }) => {
+  const { t } = useTranslation();
   const [config, setConfig] = useState(null);
   const [supply, setSupply] = useState(null);
   const [logs, setLogs] = useState([]);
@@ -135,8 +137,9 @@ export const MarketRobot = ({ propertyId }) => {
   const summary = supply?.summary || {};
   const upcomingEvents = supply?.upcoming_events || [];
 
-  const demandLevel = summary.avg_unavailable_pct >= 70 ? "High" : summary.avg_unavailable_pct >= 40 ? "Moderate" : "Low";
-  const demandColor = demandLevel === "High" ? "text-emerald-600" : demandLevel === "Moderate" ? "text-amber-500" : "text-red-500";
+  const demandKey = summary.avg_unavailable_pct >= 70 ? "mr.kpi.demand_high" : summary.avg_unavailable_pct >= 40 ? "mr.kpi.demand_moderate" : "mr.kpi.demand_low";
+  const demandLevel = t(demandKey);
+  const demandColor = demandKey === "mr.kpi.demand_high" ? "text-emerald-600" : demandKey === "mr.kpi.demand_moderate" ? "text-amber-500" : "text-red-500";
 
   return (
     <div className="space-y-4 md:space-y-6" data-testid="market-robot">
@@ -147,8 +150,8 @@ export const MarketRobot = ({ propertyId }) => {
             <Bot className="w-6 h-6 text-white" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg font-bold text-stone-800">Market Robot</h2>
-            <p className="text-xs text-stone-400 truncate">AI-powered market supply monitoring & auto-pricing</p>
+            <h2 className="text-lg font-bold text-stone-800">{t("mr.title")}</h2>
+            <p className="text-xs text-stone-400 truncate">{t("mr.subtitle")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 md:gap-3 flex-wrap">
@@ -161,23 +164,37 @@ export const MarketRobot = ({ propertyId }) => {
               onBlur={() => config?.city && saveConfig({ city: config.city })}
               onKeyDown={e => e.key === "Enter" && config?.city && saveConfig({ city: config.city })}
               className="text-sm font-semibold text-stone-800 w-full sm:w-32 bg-transparent outline-none"
-              placeholder="Enter city..."
+              placeholder={t("mr.city_placeholder")}
               data-testid="market-robot-city-quick"
             />
           </div>
-          {config?.enabled && <Badge className="bg-emerald-100 text-emerald-700 text-xs"><span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 inline-block animate-pulse" />Active</Badge>}
+          {config?.enabled && <Badge className="bg-emerald-100 text-emerald-700 text-xs"><span className="w-2 h-2 rounded-full bg-emerald-500 mr-1.5 inline-block animate-pulse" />{t("mr.active")}</Badge>}
           <button onClick={runScan} disabled={scanning}
             className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 sm:px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50 transition-all flex-1 sm:flex-none" data-testid="market-robot-scan">
             {scanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            <span className="whitespace-nowrap">{scanning ? "Scanning..." : "Run Scan"}</span>
+            <span className="whitespace-nowrap">{scanning ? t("mr.scanning") : t("mr.run_scan")}</span>
           </button>
         </div>
       </div>
 
       {/* Sub-tabs */}
       <div className="flex items-center gap-1 border-b border-stone-200 overflow-x-auto">
-        {[{id:"dashboard",label:"Dashboard"},{id:"radar",label:"Demand Radar"},{id:"neighborhood",label:"Neighborhood Scan"},{id:"demand",label:"Market Demand"},{id:"performance",label:"Performance"},{id:"supply",label:"Supply Data"},{id:"parity",label:"Rate Parity"},{id:"analysis",label:"Competitor Analysis"},{id:"events",label:"Event Intelligence"},{id:"competitors-tab",label:"Competitor Hotels"},{id:"adjustments",label:"Auto-Adjustments"},{id:"config",label:"Configuration"},{id:"logs",label:"Scan Logs"}].map(t => (
-          <button key={t.id} onClick={() => setSubTab(t.id)} className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-[1px] transition-all ${subTab === t.id ? "text-indigo-700 border-indigo-500" : "text-stone-400 border-transparent hover:text-stone-600"}`} data-testid={`market-robot-${t.id}`}>{t.label}</button>
+        {[
+          {id:"dashboard",labelKey:"mr.sub.dashboard"},
+          {id:"radar",labelKey:"mr.sub.radar"},
+          {id:"neighborhood",labelKey:"mr.sub.neighborhood"},
+          {id:"demand",labelKey:"mr.sub.demand"},
+          {id:"performance",labelKey:"mr.sub.performance"},
+          {id:"supply",labelKey:"mr.sub.supply"},
+          {id:"parity",labelKey:"mr.sub.parity"},
+          {id:"analysis",labelKey:"mr.sub.analysis"},
+          {id:"events",labelKey:"mr.sub.events"},
+          {id:"competitors-tab",labelKey:"mr.sub.competitors"},
+          {id:"adjustments",labelKey:"mr.sub.adjustments"},
+          {id:"config",labelKey:"mr.sub.config"},
+          {id:"logs",labelKey:"mr.sub.logs"},
+        ].map(tab => (
+          <button key={tab.id} onClick={() => setSubTab(tab.id)} className={`whitespace-nowrap px-4 py-2.5 text-sm font-medium border-b-2 -mb-[1px] transition-all ${subTab === tab.id ? "text-indigo-700 border-indigo-500" : "text-stone-400 border-transparent hover:text-stone-600"}`} data-testid={`market-robot-${tab.id}`}>{t(tab.labelKey)}</button>
         ))}
       </div>
 
@@ -192,12 +209,12 @@ export const MarketRobot = ({ propertyId }) => {
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4" data-testid="market-robot-result">
               <div className="flex items-center gap-2 mb-2">
                 <CheckCircle className="w-5 h-5 text-indigo-600" />
-                <span className="font-bold text-indigo-800">Scan Complete</span>
+                <span className="font-bold text-indigo-800">{t("mr.scan_complete")}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 text-sm">
-                <div><span className="text-indigo-500">Dates Scanned:</span> <strong>{scanResult.dates_scanned}</strong></div>
-                <div><span className="text-indigo-500">Auto-Adjustments:</span> <strong>{scanResult.auto_adjustments?.length || 0}</strong></div>
-                <div><span className="text-indigo-500">City:</span> <strong>{scanResult.city}</strong></div>
+                <div><span className="text-indigo-500">{t("mr.dates_scanned")}:</span> <strong>{scanResult.dates_scanned}</strong></div>
+                <div><span className="text-indigo-500">{t("mr.auto_adjustments")}:</span> <strong>{scanResult.auto_adjustments?.length || 0}</strong></div>
+                <div><span className="text-indigo-500">{t("mr.city")}:</span> <strong>{scanResult.city}</strong></div>
               </div>
             </div>
           )}
@@ -210,11 +227,9 @@ export const MarketRobot = ({ propertyId }) => {
                   <Activity className={`w-5 h-5 ${scannerStatus?.running ? "text-white animate-pulse" : "text-stone-400"}`} />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-stone-800">Smart Tiered Scanner</h3>
+                  <h3 className="font-bold text-stone-800">{t("mr.smart_scanner")}</h3>
                   <p className="text-xs text-stone-400">
-                    {scannerStatus?.running
-                      ? "Actively scanning market, events & auto-repricing your calendar"
-                      : "Activate to auto-scan market + events at optimal intervals & reprice dynamically"}
+                    {scannerStatus?.running ? t("mr.smart_scanner_on") : t("mr.smart_scanner_off")}
                   </p>
                 </div>
               </div>
@@ -224,7 +239,7 @@ export const MarketRobot = ({ propertyId }) => {
                     ? "bg-red-500 hover:bg-red-600 text-white"
                     : "bg-emerald-500 hover:bg-emerald-600 text-white"
                 }`} data-testid="smart-scanner-toggle">
-                {scannerStatus?.running ? <><AlertTriangle className="w-4 h-4" />Stop Scanner</> : <><Play className="w-4 h-4" />Activate Scanner</>}
+                {scannerStatus?.running ? <><AlertTriangle className="w-4 h-4" />{t("mr.stop_scanner")}</> : <><Play className="w-4 h-4" />{t("mr.activate_scanner")}</>}
               </button>
             </div>
             {/* Tier Schedule — horizontal scroll on mobile, 7-col grid on desktop */}
@@ -250,11 +265,11 @@ export const MarketRobot = ({ propertyId }) => {
             </div>
             {scannerStatus?.running && scannerStatus?.stats && (
               <div className="flex items-center gap-6 mt-3 text-xs text-stone-500 border-t border-stone-200 pt-3 flex-wrap">
-                <span>Scans today: <strong className="text-stone-700">{scannerStatus.stats.total_scans_today}</strong></span>
-                <span>Requests today: <strong className="text-stone-700">{scannerStatus.stats.total_requests_today}</strong></span>
-                <span>Events found today: <strong className="text-red-500">{scannerStatus.stats.events_found_today || 0}</strong></span>
-                {scannerStatus.stats.last_event_scan && <span>Last event scan: <strong className="text-red-500">{new Date(scannerStatus.stats.last_event_scan).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
-                {scannerStatus.stats.last_reprice_time && <span>Last reprice: <strong className="text-emerald-600">{new Date(scannerStatus.stats.last_reprice_time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
+                <span>{t("mr.scans_today")}: <strong className="text-stone-700">{scannerStatus.stats.total_scans_today}</strong></span>
+                <span>{t("mr.requests_today")}: <strong className="text-stone-700">{scannerStatus.stats.total_requests_today}</strong></span>
+                <span>{t("mr.events_today")}: <strong className="text-red-500">{scannerStatus.stats.events_found_today || 0}</strong></span>
+                {scannerStatus.stats.last_event_scan && <span>{t("mr.last_event_scan")}: <strong className="text-red-500">{new Date(scannerStatus.stats.last_event_scan).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
+                {scannerStatus.stats.last_reprice_time && <span>{t("mr.last_reprice")}: <strong className="text-emerald-600">{new Date(scannerStatus.stats.last_reprice_time).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</strong></span>}
               </div>
             )}
           </div>
@@ -262,29 +277,29 @@ export const MarketRobot = ({ propertyId }) => {
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="market-robot-kpis">
             <div className="bg-white border border-stone-200 rounded-2xl p-5">
-              <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">Market Demand</p>
+              <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">{t("mr.kpi.market_demand")}</p>
               <p className={`text-2xl font-bold mt-1 ${demandColor}`}>{demandLevel}</p>
-              <p className="text-xs text-stone-400 mt-1">{summary.avg_unavailable_pct || 0}% avg unavailability</p>
+              <p className="text-xs text-stone-400 mt-1">{summary.avg_unavailable_pct || 0}% {t("mr.kpi.unavailability_suffix")}</p>
             </div>
             <div className="bg-white border border-stone-200 rounded-2xl p-5">
-              <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">High Demand Days</p>
+              <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">{t("mr.kpi.high_demand_days")}</p>
               <p className="text-2xl font-bold text-emerald-600 mt-1">{summary.high_demand_days || 0}</p>
-              <p className="text-xs text-stone-400 mt-1">70%+ unavailable in market</p>
+              <p className="text-xs text-stone-400 mt-1">{t("mr.kpi.high_demand_hint")}</p>
             </div>
             <div className="bg-white border border-stone-200 rounded-2xl p-5">
-              <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">Low Demand Days</p>
+              <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">{t("mr.kpi.low_demand_days")}</p>
               <p className="text-2xl font-bold text-red-500 mt-1">{summary.low_demand_days || 0}</p>
-              <p className="text-xs text-stone-400 mt-1">&lt;30% unavailable = oversupply</p>
+              <p className="text-xs text-stone-400 mt-1">{t("mr.kpi.oversupply_hint")}</p>
             </div>
             <div className="bg-white border border-red-100 rounded-2xl p-5">
-              <p className="text-[10px] text-red-500 uppercase tracking-wider font-medium">Event Days</p>
+              <p className="text-[10px] text-red-500 uppercase tracking-wider font-medium">{t("mr.kpi.event_days")}</p>
               <p className="text-2xl font-bold text-red-500 mt-1">{summary.event_days || 0}</p>
-              <p className="text-xs text-stone-400 mt-1">Days with events detected</p>
+              <p className="text-xs text-stone-400 mt-1">{t("mr.kpi.events_hint")}</p>
             </div>
             <div className="bg-white border border-stone-200 rounded-2xl p-5">
-              <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">Active Adjustments</p>
+              <p className="text-[10px] text-stone-400 uppercase tracking-wider font-medium">{t("mr.kpi.active_adjustments")}</p>
               <p className="text-2xl font-bold text-indigo-600 mt-1">{adjustments.length}</p>
-              <p className="text-xs text-stone-400 mt-1">Auto-priced by robot</p>
+              <p className="text-xs text-stone-400 mt-1">{t("mr.kpi.adjustments_hint")}</p>
             </div>
           </div>
 

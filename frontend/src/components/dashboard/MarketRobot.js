@@ -48,6 +48,7 @@ export const MarketRobot = ({ propertyId }) => {
   const [compSearching, setCompSearching] = useState(false);
   const [compCandidates, setCompCandidates] = useState([]);
   const [compScanning, setCompScanning] = useState(false);
+  const [compScanDays, setCompScanDays] = useState(30);
   const [scannerStatus, setScannerStatus] = useState(null);
 
   const loadAll = useCallback(() => {
@@ -194,8 +195,8 @@ export const MarketRobot = ({ propertyId }) => {
   const scanCompetitors = async () => {
     setCompScanning(true);
     try {
-      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors/scan`, { days_ahead: 7 });
-      toast.success(`Scanned ${data.total_competitors} competitors`);
+      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors/scan`, { days_ahead: compScanDays });
+      toast.success(`${data.total_competitors} rakip · ${compScanDays} gün için scrape başlatıldı — 1-2 dk içinde grafiğe düşer`);
       loadAll();
     } catch { toast.error("Failed"); }
     setCompScanning(false);
@@ -650,10 +651,30 @@ export const MarketRobot = ({ propertyId }) => {
                 {compRevalidating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                 {compRevalidating ? "Checking..." : "Re-validate URLs"}
               </button>
+              {/* Days-ahead picker — controls how many forward days we scrape per competitor */}
+              <div className="flex items-center gap-1 bg-stone-100 border border-stone-300 rounded-xl p-0.5" data-testid="comp-scan-days-picker"
+                title="Kaç günlük scrape yapılsın? (İleriye doğru)">
+                {[7, 15, 30, 60, 90].map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setCompScanDays(d)}
+                    disabled={compScanning}
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-colors ${
+                      compScanDays === d
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-stone-600 hover:text-stone-900 hover:bg-white"
+                    } disabled:opacity-50`}
+                    data-testid={`comp-scan-days-${d}`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+              </div>
               <button onClick={scanCompetitors} disabled={compScanning || competitors.length === 0}
-                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50" data-testid="market-robot-scan-comps">
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50" data-testid="market-robot-scan-comps"
+                title={`${compScanDays} gün ileriye doğru tüm rakiplerin fiyatlarını scrape et`}>
                 {compScanning ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                {compScanning ? "Scanning..." : "Scan All Prices"}
+                {compScanning ? "Scanning..." : `Scan All Prices · ${compScanDays}d`}
               </button>
             </div>
           </div>

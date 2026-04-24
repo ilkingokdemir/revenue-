@@ -3,6 +3,25 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 189 (Apr 2026): 🗓️ 60/90-Day Visible Everywhere + Biz Line Extended
+
+User ask (TR): _"60 ve 90 günü göremiyorum, scrabi yaparken 30, 60 ve 90 günlük yap."_
+
+**Frontend (`NeighborhoodScanPanel.js`):**
+- Top "Days Ahead" `<select>` fixed: `[7,14,30,60,90]` → `[7,15,30,60,90]` (14 was a typo, cannot select 15).
+
+**Frontend (`MarketRobot.js`):**
+- "Scan All Prices" button: hardcoded `days_ahead: 7` → dynamic `compScanDays` state (default 30).
+- Added segmented pill picker `[7d | 15d | 30d | 60d | 90d]` next to the Scan button. Selection shown on the button itself (e.g. `Scan All Prices · 60d`).
+- Toast updated: now shows N rakip + selected day count.
+
+**Backend (`market_robot.py`):**
+- `_auto_our_hotel_scan` was hardcoded `days_ahead = 14` — so when user scraped 60/90 days the "Biz" violet line truncated at day 14. Function now accepts `days_ahead: int = 14` param, clamped to `[1, 90]`.
+- `POST /competitors/scan` now schedules BOTH `_auto_competitor_scan` AND `_auto_our_hotel_scan` with the same `days_ahead`, so the per-hotel trend chart's "Biz" line extends to match the competitor lines' timeline. Response now also returns `total_competitors` (was only `queued`).
+
+**Verified:** curl `POST /competitors/scan` with `{days_ahead: 90}` → `200 OK`, queued 6 competitors + our hotel for 90 days. Backend logs confirm both background tasks started without error.
+
+
 
 ### Iter 188 (Apr 2026): 🎨 Chart Range Picker + Palette Overhaul
 

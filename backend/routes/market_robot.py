@@ -2752,12 +2752,16 @@ def create_market_robot_router(db, require_roles, resend=None):
             return {"error": "No competitors configured", "queued": 0}
         days_ahead = max(1, min(int(data.get("days_ahead") or 30), 90))
         background_tasks.add_task(_auto_competitor_scan, db, property_id, days_ahead)
+        # Keep our own hotel's Booking.com scrape on the same window so the "Biz" line
+        # on the per-hotel trend chart extends to match the competitor timeline.
+        background_tasks.add_task(_auto_our_hotel_scan, db, property_id, days_ahead)
         return {
             "ok": True,
             "status": "queued",
             "queued": len(comps),
+            "total_competitors": len(comps),
             "days_ahead": days_ahead,
-            "message": f"Competitor scrape started for {days_ahead} days. Check /competitor-prices in ~60-120s.",
+            "message": f"Competitor + our-hotel scrape started for {days_ahead} days. Check /competitor-prices in ~60-120s.",
             "competitors": [{"id": c["id"], "name": c.get("name", "")} for c in comps],
         }
 
@@ -3145,7 +3149,7 @@ Date range: {date_from} to {date_to}."""
 
         return {"competitors_scanned": len(comps), "prices_found": total_prices}
 
-    async def _auto_our_hotel_scan(db_ref, property_id):
+    async def _auto_our_hotel_scan(db_ref, property_id, days_ahead: int = 14):
         """Scrape OUR OWN hotel's Booking.com page — same cadence as competitors.
 
         Without this, 'Biz vs Pazar' comparisons weren't apples-to-apples: competitor prices came
@@ -3169,7 +3173,9 @@ Date range: {date_from} to {date_to}."""
         cached_hotel_id = prop.get("booking_hotel_id")
         name_hint = (prop.get("name") or "").strip()[:18]
         now = datetime.now(timezone.utc)
-        days_ahead = 14
+        # Clamped to the same [1, 90] window competitors use — lets the violet "Our Hotel"
+        # line extend to match when the user scrapes 60 or 90 days of competitor data.
+        days_ahead = max(1, min(int(days_ahead), 90))
         prices = []
         review_score = None
         resolved_hotel_id = cached_hotel_id

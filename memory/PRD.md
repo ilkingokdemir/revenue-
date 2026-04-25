@@ -1,6 +1,24 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 175 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 176 Test Iterations (100%)
+
+
+### Iter 208 (Apr 2026): ⭐ Group Requests & Allotments admin panel
+
+User ask (TR): _"Yazılımımı incele rakiplerle karşılaştır eksik olanları tamamla"_ — agent ran a structural audit (134 backend routes, 135 frontend panels) and identified that Group Booking REQUESTS (B2B/corporate/wedding) had a working backend (POST `/group-booking/request` public, GET/PUT admin) but **no admin frontend** — guests' submissions were going into Mongo with no way for staff to action them. Built that missing UI.
+
+**Frontend (`components/dashboard/GroupRequestsPanel.js` — NEW):**
+- 5-tile filter bar: Total / Pending / Quoted / Confirmed + Quoted volume KPI (£ + rooms-held).
+- Two-column layout: 420px filterable list (contact, company, status pill, dates, rooms/guests, quoted £) + detail card with all submission fields (email, phone, dates, rooms, guests, room preferences, special requirements, budget range, submitted-at).
+- Admin actions: Status select + Quoted price + Admin notes textarea + four action buttons (Save / Send quote / Confirm & block / Cancel).
+- Distinct from existing `GroupBookingsPanel.js` (master-folio billing for in-house groups).
+- App.js wired with `group-requests` route, permission `view_bookings`.
+
+**Why this matters:** Every serious PMS (Cloudbeds, SiteMinder, Mews) has a request lifecycle queue. Without the UI, a £4-5k corporate retreat enquiry could sit unread forever. Now reception sees it pending in the sidebar count and can quote in 30 seconds.
+
+**Testing — `iteration_176.json`:** **12/12 backend ✅ · 100% frontend ✅ · zero issues.**
+
+---
 
 
 ### Iter 207 (Apr 2026): ⭐ Concierge Inbox — admin AI feedback loop

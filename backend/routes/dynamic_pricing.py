@@ -3,7 +3,7 @@ AI Dynamic Pricing Engine — Combines market supply, competitor data, occupancy
 DOW/monthly adjustments, lead time, and demand patterns to calculate optimal
 prices for every day across 365 days. Auto-applies to Rate Calendar.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import uuid
@@ -507,5 +507,179 @@ def create_dynamic_pricing_router(db, require_roles):
             "days": days_count,
             "room_types": len(room_types),
         }
+
+    @router.post("/dynamic-pricing/{property_id}/ai-v2/recommend")
+    async def ai_v2_recommend(property_id: str, data: Dict = None,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """AI Dynamic Pricing v2 — combines our heuristic (DOW/event/occupancy/competitor)
+        WITH a GPT-5.2 reasoning layer that reads pace data + competitor signals
+        and returns a structured recommendation list with human-readable explanations.
+
+        Body: { days?: int (default 14), room_type_id?: str }
+        Returns: { recommendations: [{date, dow, current_rate, suggested_rate, delta_pct, confidence, reasoning, signals}], summary }
+        """
+        import os, json, re
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+        days = int((data or {}).get("days") or 14)
+        days = max(7, min(days, 30))
+        room_type_id = (data or {}).get("room_type_id")
+
+        # Pull room types (pick first or specified)
+        room_types = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(20)
+        if not room_types:
+            return {"recommendations": [], "summary": "No room types configured", "error": "no_room_types"}
+        rt = next((r for r in room_types if r.get("id") == room_type_id), None) or room_types[0]
+        base_rate = float(rt.get("base_rate", 100) or 100)
+
+        # Gather signals
+        today = datetime.now(timezone.utc).date()
+        props = await _get_props(property_id)
+        total_rooms = await _total_rooms(props)
+
+        # Pace (per-day TY vs LY rooms)
+        pace_rows = []
+        for i in range(days):
+            tgt = today + timedelta(days=i)
+            ly = tgt - timedelta(days=365)
+            ty_iso, ly_iso = tgt.isoformat(), ly.isoformat()
+            ty = await db.bookings.count_documents({
+                "property_id": property_id, "check_in": {"$lte": ty_iso},
+                "check_out": {"$gt": ty_iso}, "status": {"$nin": ["cancelled"]},
+            })
+            ly_count = await db.bookings.count_documents({
+                "property_id": property_id, "check_in": {"$lte": ly_iso},
+                "check_out": {"$gt": ly_iso}, "status": {"$nin": ["cancelled"]},
+            })
+            pace_rows.append({"date": ty_iso, "dow": tgt.strftime("%a"),
+                              "ty_rooms": ty, "ly_rooms": ly_count,
+                              "occ_pct": round(min(100, ty / total_rooms * 100), 1)})
+
+        # Competitor avg per day (next `days`)
+        comp_docs = await db.market_competitors.find({"property_id": property_id}, {"_id": 0}).to_list(20)
+        comp_map = {}
+        for c in comp_docs:
+            for p in (c.get("prices") or []):
+                if p.get("scraped") and p.get("lowest_price"):
+                    comp_map.setdefault(p["date"], []).append(p["lowest_price"])
+
+        # Events
+        events_docs = await db.market_events.find({"property_id": property_id}, {"_id": 0}).to_list(100)
+        event_lookup = {}
+        for ev in events_docs:
+            evd = ev.get("date", "")
+            if evd:
+                event_lookup[evd] = {"name": ev.get("name", ""), "impact": ev.get("impact", "small")}
+
+        # Build a tight signal payload for the LLM (≤ ~6KB)
+        signals = []
+        for r in pace_rows:
+            ds = r["date"]
+            comp = comp_map.get(ds) or []
+            comp_avg = round(sum(comp) / len(comp), 2) if comp else None
+            signals.append({
+                "date": ds, "dow": r["dow"],
+                "occ_pct": r["occ_pct"],
+                "ty_rooms": r["ty_rooms"], "ly_rooms": r["ly_rooms"],
+                "stly_delta": r["ty_rooms"] - r["ly_rooms"],
+                "comp_avg": comp_avg, "comp_n": len(comp),
+                "event": event_lookup.get(ds),
+            })
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not api_key:
+            # Heuristic fallback
+            recs = []
+            for s in signals:
+                pct = 0
+                reasons = []
+                if s["occ_pct"] >= 85: pct += 15; reasons.append(f"high occ {s['occ_pct']}%")
+                elif s["occ_pct"] <= 30: pct -= 5; reasons.append(f"soft occ {s['occ_pct']}%")
+                if s["stly_delta"] > 2: pct += 5; reasons.append(f"+{s['stly_delta']} vs LY")
+                elif s["stly_delta"] < -2: pct -= 5; reasons.append(f"{s['stly_delta']} vs LY")
+                if s["comp_avg"]:
+                    if s["comp_avg"] > base_rate * 1.1: pct += 5; reasons.append(f"comps £{s['comp_avg']}")
+                if s["event"]: pct += 8; reasons.append(f"event:{s['event']['name']}")
+                suggested = round(base_rate * (1 + pct / 100), 2)
+                recs.append({
+                    "date": s["date"], "dow": s["dow"],
+                    "current_rate": base_rate, "suggested_rate": suggested,
+                    "delta_pct": pct, "confidence": "med",
+                    "reasoning": "; ".join(reasons) or "no strong signals",
+                    "signals": s,
+                })
+            return {"recommendations": recs, "summary": "Heuristic fallback (no LLM key)", "fallback": True,
+                    "room_type": rt.get("name", ""), "room_type_id": rt.get("id")}
+
+        sys_prompt = (
+            "You are a senior hotel revenue manager. Given a per-day signal payload (occupancy, "
+            "STLY pace deltas, competitor average rate, events) and the room's base rate, propose "
+            f"a suggested rate for each date for the next {days} days. Return STRICT JSON only:\n"
+            '{"recommendations":[{"date":"YYYY-MM-DD","dow":"Mon","suggested_rate":NUMBER,'
+            '"delta_pct":NUMBER,"confidence":"high|med|low","reasoning":"1-2 short sentences"}],'
+            '"summary":"3-line executive summary"}\n'
+            "Rules: never go below 80% of base rate or above 220%; use comp_avg as upper anchor when "
+            "supplied; raise more aggressively when ty_rooms>>ly_rooms; cut when occ<25% AND stly_delta<0; "
+            "weight events heavily. Do not include extra fields. No markdown."
+        )
+
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"ai-pricing-v2-{property_id}-{uuid.uuid4().hex[:6]}",
+                system_message=sys_prompt,
+            ).with_model("openai", "gpt-5.2")
+            payload = {
+                "base_rate": base_rate, "room_type": rt.get("name", ""),
+                "currency": "GBP", "total_rooms": total_rooms,
+                "signals": signals,
+            }
+            resp = await chat.send_message(UserMessage(text=json.dumps(payload)))
+            txt = (resp or "").strip()
+            m = re.search(r"\{.*\}", txt, re.DOTALL)
+            parsed = json.loads(m.group(0)) if m else {"recommendations": [], "summary": ""}
+            # Attach raw signals for transparency in the UI
+            sig_by_date = {s["date"]: s for s in signals}
+            for r in parsed.get("recommendations", []):
+                r.setdefault("current_rate", base_rate)
+                r["signals"] = sig_by_date.get(r.get("date"), {})
+            parsed["fallback"] = False
+            parsed["room_type"] = rt.get("name", "")
+            parsed["room_type_id"] = rt.get("id")
+            return parsed
+        except Exception as e:
+            logger.exception("ai_v2_recommend failed: %s", e)
+            return {"recommendations": [], "summary": "AI engine error", "error": str(e)[:200], "fallback": True}
+
+    @router.post("/dynamic-pricing/{property_id}/ai-v2/apply")
+    async def ai_v2_apply(property_id: str, data: Dict,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Persist a list of AI v2 recommendations to rate_overrides.
+
+        Body: { room_type_id, recommendations: [{date, suggested_rate, reasoning, delta_pct}] }
+        """
+        room_type_id = (data or {}).get("room_type_id")
+        recs = (data or {}).get("recommendations") or []
+        if not room_type_id or not recs:
+            raise HTTPException(400, "room_type_id and recommendations required")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        applied = 0
+        for r in recs:
+            ds = r.get("date")
+            rate = r.get("suggested_rate")
+            if not ds or rate is None: continue
+            await db.rate_overrides.update_one(
+                {"property_id": property_id, "date": ds, "room_type_id": room_type_id},
+                {"$set": {
+                    "property_id": property_id, "room_type_id": room_type_id, "date": ds,
+                    "custom_rate": float(rate), "set_by": "ai-v2",
+                    "reason": (r.get("reasoning") or "AI v2")[:240],
+                    "breakdown": {"delta_pct": r.get("delta_pct"), "confidence": r.get("confidence")},
+                    "updated_at": now_iso,
+                }},
+                upsert=True,
+            )
+            applied += 1
+        return {"applied": applied}
 
     return router

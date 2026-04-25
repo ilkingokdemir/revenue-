@@ -78,6 +78,8 @@ import { NightAuditPanel } from "./components/dashboard/NightAuditPanel";
 import { LoyaltyPanel } from "./components/dashboard/LoyaltyPanel";
 import { LogbookPanel } from "./components/dashboard/LogbookPanel";
 import { ForecastPanel } from "./components/dashboard/ForecastPanel";
+import PaceReports from "./components/dashboard/PaceReports";
+import AIPricingV2Panel from "./components/dashboard/AIPricingV2Panel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2669,6 +2671,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate Matrix", testId: "rate-matrix-btn" }] : []),
         { id: "forecast", icon: ChartLine, name: t("nav.forecast"), testId: "forecast-btn" },
+        { id: "pace-reports", icon: ChartLine, name: "Pace Reports (STLY)", testId: "pace-reports-btn" },
+        { id: "ai-pricing-v2", icon: Lightning, name: "AI Pricing v2 (GPT)", testId: "ai-pricing-v2-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
       ],
@@ -2785,6 +2789,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "reports-centre-btn":     "reports_overview_view",
     "analytics-btn":          "revenue_analytics_performance_view",
     "forecast-btn":           "revenue_forecasting_view",
+    "pace-reports-btn":       "revenue_forecasting_view",
+    "ai-pricing-v2-btn":      "revenue_forecasting_view",
     "revenue-btn":            "revenue_dashboard_view",
     "profit-os-btn":          "revenue_profit_os_view",
     "approval-queue-btn":     "revenue_approvals_view",
@@ -3360,6 +3366,22 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Occupancy Forecast */}
         {activeView === "forecast" && (
           <ForecastPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Pace Reports — STLY + Pickup + Source */}
+        {activeView === "pace-reports" && (
+          <PaceReports
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
+        )}
+
+        {/* AI Dynamic Pricing v2 (GPT-5.2) */}
+        {activeView === "ai-pricing-v2" && (
+          <AIPricingV2Panel
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
         )}
 
         {/* Accounting */}

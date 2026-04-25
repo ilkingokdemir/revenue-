@@ -14,15 +14,20 @@ Endpoints (/api/inbox/*):
 - GET  /threads                          → list of threads with last-message preview + unread count
 - GET  /threads/{guest_key}/messages     → full message list for a thread (chronological)
 - POST /threads/{guest_key}/send         → {channel, body, subject?} — save as outbound
+- POST /threads/{guest_key}/ai-suggest   → GPT-5.2 generates 3 reply tone variants (warm / brief / apologetic)
 - POST /mark-read/{guest_key}            → mark all inbound messages as read
 - POST /webhook/{channel}                → public inbound webhook (stub — real integrations wire here)
 """
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone
 from typing import Optional, List, Dict
+import os
 import uuid
+import logging
 
 from auth import require_perm
+
+logger = logging.getLogger(__name__)
 
 
 def create_unified_inbox_router(db):
@@ -116,6 +121,90 @@ def create_unified_inbox_router(db):
         await db.unified_messages.insert_one(dict(doc))
         doc.pop("_id", None)
         return doc
+
+    @router.post("/threads/{guest_key}/ai-suggest")
+    async def ai_suggest_reply(
+        guest_key: str, data: Optional[Dict] = None,
+        current_user: dict = Depends(require_perm("edit_bookings")),
+    ):
+        """Use GPT-5.2 to generate 3 reply suggestions (warm / brief / apologetic).
+
+        Pulls last ~10 messages of the thread for context, plus optional booking
+        info and hotel name. Returns: {suggestions: [{tone, channel, body}, …]}.
+        Falls back to a heuristic template if the LLM key/integration is missing.
+        """
+        msgs = await db.unified_messages.find(
+            {"guest_key": guest_key}, {"_id": 0},
+        ).sort("created_at", -1).to_list(10)
+        msgs = list(reversed(msgs))
+        if not msgs:
+            raise HTTPException(404, "Thread not found")
+
+        # Last inbound message is what we're replying to
+        last_inbound = next((m for m in reversed(msgs) if m.get("direction") == "inbound"), msgs[-1])
+        channel = (data or {}).get("channel") or last_inbound.get("channel", "email")
+        guest_name = msgs[0].get("guest_name", "") or guest_key
+        booking_id = msgs[0].get("booking_id", "")
+        hotel_name = (data or {}).get("hotel_name", "")
+
+        # Build conversation transcript
+        transcript = "\n".join(
+            f"[{m.get('channel','?')}|{m.get('direction','?')}] {m.get('body','')[:400]}"
+            for m in msgs[-8:]
+        )
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not api_key:
+            return {
+                "suggestions": [
+                    {"tone": "warm",       "channel": channel, "body": f"Hi {guest_name},\n\nThanks for reaching out — happy to help. {('We will get back to you shortly with the details.' if last_inbound else '')}\n\nBest regards,\n{hotel_name or 'Reception'}"},
+                    {"tone": "brief",      "channel": channel, "body": f"Hi {guest_name}, noted — we’ll get back to you shortly."},
+                    {"tone": "apologetic", "channel": channel, "body": f"Dear {guest_name},\n\nApologies for any inconvenience. We're looking into this right away and will revert with a resolution.\n\nKind regards,\n{hotel_name or 'Reception'}"},
+                ],
+                "fallback": True,
+            }
+
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        sys_prompt = (
+            "You are a senior front-office host at a boutique hotel writing reply suggestions "
+            "for a guest message. Reply in the SAME LANGUAGE the guest used. Be concise, "
+            "specific, never invent facts (e.g. don't promise upgrades or refunds you weren't told about). "
+            "If the guest asked a yes/no question, answer first, then add details. "
+            f"Hotel name: {hotel_name or 'our hotel'}. "
+            f"Booking ref: {booking_id or 'n/a'}. "
+            f"Channel: {channel}. "
+            "Output strict JSON: "
+            '{"suggestions":[{"tone":"warm","body":"…"},{"tone":"brief","body":"…"},{"tone":"apologetic","body":"…"}]} '
+            "— no markdown, no commentary."
+        )
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"inbox-suggest-{guest_key}-{uuid.uuid4().hex[:6]}",
+                system_message=sys_prompt,
+            ).with_model("openai", "gpt-5.2")
+            resp = await chat.send_message(UserMessage(
+                text=f"Conversation so far:\n{transcript}\n\nWrite 3 reply suggestions (warm, brief, apologetic) "
+                     f"for the LAST inbound message from {guest_name}. Return strict JSON only."
+            ))
+            import json, re
+            txt = (resp or "").strip()
+            # Strip markdown fences if any
+            m = re.search(r"\{.*\}", txt, re.DOTALL)
+            parsed = json.loads(m.group(0)) if m else {"suggestions": []}
+            sugg = parsed.get("suggestions", [])
+            for s in sugg:
+                s["channel"] = channel
+            return {"suggestions": sugg, "fallback": False}
+        except Exception as e:
+            logger.exception("Inbox AI-suggest failed: %s", e)
+            return {
+                "suggestions": [
+                    {"tone": "warm",       "channel": channel, "body": f"Hi {guest_name}, thanks for reaching out — we’ll get back to you shortly."},
+                ],
+                "fallback": True,
+                "error": str(e)[:200],
+            }
 
     @router.post("/mark-read/{guest_key}")
     async def mark_read(

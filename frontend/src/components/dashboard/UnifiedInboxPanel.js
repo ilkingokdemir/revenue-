@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Inbox, Send, MessageCircle, MessageSquare, Mail, RefreshCw, Search,
-  CheckCheck, Plus, X,
+  CheckCheck, Plus, X, Sparkles, Loader2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -35,6 +35,8 @@ export const UnifiedInboxPanel = () => {
   const [draft, setDraft] = useState("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
   const msgsEnd = useRef(null);
 
   const loadThreads = async () => {
@@ -64,8 +66,24 @@ export const UnifiedInboxPanel = () => {
       await axios.post(`${API}/inbox/threads/${encodeURIComponent(activeKey)}/send`,
         { channel, body: draft.trim() });
       setDraft("");
+      setSuggestions([]);
       loadMessages(activeKey);
     } catch { toast.error("Send failed"); }
+  };
+
+  const aiSuggest = async () => {
+    if (!activeKey) return;
+    setSuggesting(true);
+    setSuggestions([]);
+    try {
+      const { data } = await axios.post(
+        `${API}/inbox/threads/${encodeURIComponent(activeKey)}/ai-suggest`,
+        { channel, hotel_name: "" }
+      );
+      setSuggestions(data?.suggestions || []);
+      if (data?.fallback) toast.message("AI fallback (no key) — heuristic templates shown");
+    } catch (e) { toast.error("AI suggest failed"); }
+    setSuggesting(false);
   };
 
   // --- Demo / test flow helper: send a mock inbound message to seed a thread ---
@@ -216,7 +234,24 @@ export const UnifiedInboxPanel = () => {
                   className="text-xs border border-stone-200 rounded px-2 py-1 bg-stone-50">
                   {Object.entries(CHANNEL_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
+                <button onClick={aiSuggest} disabled={suggesting} data-testid="inbox-ai-suggest-btn"
+                  className="ml-auto flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-bold rounded-lg bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-60">
+                  {suggesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  {suggesting ? "Thinking…" : "AI Suggest"}
+                </button>
               </div>
+              {suggestions.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2" data-testid="inbox-suggestions">
+                  {suggestions.map((s, i) => (
+                    <button key={i} onClick={() => { setDraft(s.body); setSuggestions([]); }}
+                      data-testid={`inbox-suggestion-${s.tone || i}`}
+                      className="text-left p-2.5 rounded-lg border border-violet-200 bg-violet-50/60 hover:bg-violet-50 hover:border-violet-400 transition">
+                      <div className="text-[9px] uppercase font-black tracking-widest text-violet-600 mb-1">{s.tone || `option ${i+1}`}</div>
+                      <p className="text-[11px] text-stone-700 line-clamp-4 whitespace-pre-wrap">{s.body}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2">
                 <textarea value={draft} onChange={e => setDraft(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send(); }}

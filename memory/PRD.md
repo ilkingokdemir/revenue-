@@ -1,6 +1,26 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 173 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 174 Test Iterations (100%)
+
+
+### Iter 206 (Apr 2026): ⭐ AI Concierge — public chat for direct booking widget
+
+User ask (TR): _"Önce eksikleri tamamla"_ — agent autonomously shipped the next no-key competitor gap.
+
+**Backend (`routes/concierge.py` — NEW):**
+- `POST /api/concierge/{property_id}/chat` (PUBLIC, no auth) — body `{session_id, message}`. Builds tight hotel context (name, address, check-in/out times, room types + base rates + occupancy, amenities, WiFi, policies) and calls **GPT-5.2** via Emergent LLM key with a strict "warm, concise, never invent" system prompt. Persists messages in `concierge_chats` keyed by session_id. Returns `{reply, suggestions[], session_id, fallback}`. 400 on empty / >1000 char input.
+- `GET /api/concierge/{property_id}/history?session_id=...` — chronological message list.
+
+**Frontend (`components/ConciergeChat.js` — NEW):**
+- Floating "Need help?" bubble bottom-right (offset to clear Emergent watermark) → click expands into a 380×560 chat sheet with header, scrollable bubbles, suggestion chips, and composer.
+- Persists `session_id` in `localStorage` per property → returning visitors pick up the same conversation.
+- Suggestion chips are rotated heuristically based on the last user intent (rooms / wifi / check-in / fallback).
+- Powered-by-AI disclaimer footer.
+- Embedded into `BookingWidgetPage.js` ONLY when not in `?embed=1` mode.
+
+**Testing — `iteration_174.json`:** **100% backend ✅ · 100% frontend ✅.** GPT-5.2 verified to ground its answers (returned correct check-in 15:00 for Aldgate Flats; honestly admitted parking unknown). Embed mode correctly suppresses the bubble.
+
+---
 
 
 ### Iter 205 (Apr 2026): ⭐ Loyalty Direct-Book Discount + Marketing ROI Tracker + PWA

@@ -3,6 +3,42 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 199 (Apr 2026): 💳 Booking Engine MVP — Direct Booking + Stripe Payments
+
+User ask (TR): _"Tavsiyen Booking Engine MVP. Direkt rezervasyon = OTA komisyon kurtarması = anında ROI."_
+
+**Backend (`booking_widget.py` + `payments.py`):**
+- `POST /booking-widget/book` upgraded to handle 2 payment modes:
+  - `pay_now: true` → booking saved as `pending_payment`, Stripe Checkout Session created, returns `{checkout_url, session_id, booking_ref}` for frontend redirect
+  - `pay_now: false` → booking immediately `confirmed`, email mock logged
+- Reuses existing `emergentintegrations.payments.stripe.checkout.StripeCheckout` (already installed, `STRIPE_API_KEY=sk_test_emergent` already in env)
+- New `GET /booking-widget/payment-status/{booking_ref}` — polled by success page until webhook flips status
+- `POST /webhook/stripe` (existing) extended to:
+  - Mark booking `confirmed` + `payment_status=paid` when payment lands
+  - Insert MOCKED email log into `booking_email_log` collection (real email ships when user provides RESEND_API_KEY)
+  - Logs `📧 Booking confirmation email MOCKED — booking WEB-XXX, guest x@y.com`
+- Graceful fallback: if Stripe creation fails, booking stays `confirmed` with `payment_status=manual` so guest data isn't lost
+
+**Frontend (`BookingWidgetPage.js`):**
+- `paymentMode` state: `"pay_now" | "pay_at_property"` with radio-card toggle inside the guest details form (Stripe / Pay-at-Property options shown side-by-side)
+- `book()` handler now redirects to `data.checkout_url` when Stripe URL is returned
+- New `useEffect` parses `?payment=success&ref=...` / `?payment=cancelled` query params on mount, polls `payment-status` for up to 16s, transitions to confirmation page automatically
+- Confirmation page extended:
+  - **PAID** badge (emerald) when payment_status=paid
+  - **Payment Received · Finalising…** with spinner if webhook hasn't caught up yet (max 16s wait)
+  - **Payment Cancelled** banner (amber) with retry guidance
+  - Footer text dynamic: "Powered by Stripe" vs "No payment taken now"
+- "PROCEED TO PAYMENT" button text when pay_now selected; "COMPLETE BOOKING" otherwise
+
+**Verified (curl):**
+- Pay-at-property: `POST /book {pay_now:false}` → status=confirmed, booking_ref=WEB-9AED4987 ✓
+- Pay-now: `POST /book {pay_now:true}` → status=pending_payment, checkout_url=`https://checkout.stripe.com/c/pay/cs_test_a1dAtCSF...`, session_id=`cs_test_...` ✓
+- Payment status endpoint returns hydrated booking ✓
+- Frontend lint clean. Smoke screenshot: `/book?property=default` → Franziskaner by Centra page renders perfectly with rooms, pricing, search bar.
+
+**Note (MOCKED):** Email confirmation is logged to `booking_email_log` collection but not actually delivered. Real delivery ships once user provides `RESEND_API_KEY`. Stripe integration uses `sk_test_emergent` (provided by Emergent platform).
+
+
 ### Iter 198 (Apr 2026): 🔍 Discover Competitors — Postcode + Type Search
 
 User ask (TR): _"Postcode + oda tipine göre yakın hotelleri listele, admin seçsin sonra scrape et. Admin sınırsız ekleme/silme yapabilsin."_

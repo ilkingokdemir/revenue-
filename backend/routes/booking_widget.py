@@ -1,7 +1,7 @@
 """
 Online Booking Widget — Public booking form for hotel websites
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from datetime import datetime, timezone
 from typing import Dict
 import uuid
@@ -145,8 +145,17 @@ def create_booking_widget_router(db, require_roles):
     # ==================== PUBLIC: CREATE BOOKING ====================
 
     @router.post("/booking-widget/book")
-    async def create_widget_booking(data: Dict):
-        """Public: Guest creates booking from widget"""
+    async def create_widget_booking(data: Dict, request: Request):
+        """Public endpoint — guest submits the widget form.
+
+        If `pay_now=true` (default), the booking is saved with `status=pending_payment`
+        and a Stripe Checkout Session is created — the response includes `checkout_url`
+        so the frontend can redirect the guest. The Stripe webhook flips the booking to
+        `confirmed` + sends the confirmation email when payment lands.
+
+        If `pay_now=false` (pay-at-property mode), the booking is `confirmed` immediately
+        and an email mock is logged right away.
+        """
         required = ["property_id", "room_type", "check_in", "check_out", "guest_name", "guest_email"]
         for f in required:
             if not data.get(f):
@@ -162,8 +171,10 @@ def create_booking_widget_router(db, require_roles):
         except Exception:
             nights = 1
 
-        rate = data.get("rate", 0)
-        total = round(rate * nights, 2)
+        rate = float(data.get("rate", 0))
+        total = round(rate * nights * int(data.get("rooms", 1)), 2)
+        pay_now = bool(data.get("pay_now", True)) and total > 0
+        currency = (data.get("currency", "GBP") or "GBP").upper()
 
         booking = {
             "id": str(uuid.uuid4()),
@@ -174,21 +185,121 @@ def create_booking_widget_router(db, require_roles):
             "guest_phone": data.get("guest_phone", ""),
             "check_in": data["check_in"],
             "check_out": data["check_out"],
-            "rooms": data.get("rooms", 1),
+            "rooms": int(data.get("rooms", 1)),
             "room_type": data["room_type"],
             "rate": rate,
             "total": total,
+            "total_price": total,  # required by /payments/booking-checkout
             "nights": nights,
-            "currency": data.get("currency", "GBP"),
-            "status": "confirmed",
+            "currency": currency,
+            "status": "pending_payment" if pay_now else "confirmed",
+            "payment_status": "pending" if pay_now else "pay_at_property",
             "source": "website_widget",
             "special_requests": data.get("special_requests", ""),
-            "guests": data.get("guests", 1),
+            "guests": int(data.get("guests", 1)),
             "created_at": now,
         }
         await db.bookings.insert_one(booking)
         booking.pop("_id", None)
-        return {"status": "confirmed", "booking_ref": booking_ref, "booking": booking}
+
+        # Confirmed (no payment) → log email mock immediately
+        if not pay_now:
+            await db.booking_email_log.insert_one({
+                "id": str(uuid.uuid4()),
+                "booking_id": booking["id"],
+                "booking_ref": booking_ref,
+                "to": booking["guest_email"],
+                "subject": f"Booking confirmed · {booking_ref}",
+                "type": "booking_confirmation",
+                "status": "MOCKED",
+                "sent_at": now,
+            })
+            return {"status": "confirmed", "booking_ref": booking_ref, "booking": booking}
+
+        # Pay-now flow → forward to Stripe Checkout (reuses existing /payments/booking-checkout
+        # logic by calling its underlying StripeCheckout client directly to avoid an
+        # in-process HTTP hop).
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+        import os
+        api_key = os.environ.get("STRIPE_API_KEY", "")
+        host_url = str(request.base_url).rstrip("/")
+        # Origin URL where Stripe should redirect — fall back to request host
+        origin = (data.get("origin_url") or host_url).rstrip("/")
+        webhook_url = f"{host_url}/api/webhook/stripe"
+        sc = StripeCheckout(api_key=api_key, webhook_url=webhook_url)
+        success_url = f"{origin}/book?property={booking['property_id']}&payment=success&session_id={{CHECKOUT_SESSION_ID}}&ref={booking_ref}"
+        cancel_url = f"{origin}/book?property={booking['property_id']}&payment=cancelled&ref={booking_ref}"
+        req = CheckoutSessionRequest(
+            amount=total,
+            currency=currency.lower(),
+            success_url=success_url,
+            cancel_url=cancel_url,
+            metadata={
+                "type": "booking",
+                "booking_id": booking["id"],
+                "booking_ref": booking_ref,
+                "guest_name": booking["guest_name"],
+                "guest_email": booking["guest_email"],
+                "property_id": booking["property_id"],
+            },
+        )
+        try:
+            session = await sc.create_checkout_session(req)
+            await db.payment_transactions.insert_one({
+                "id": str(uuid.uuid4()),
+                "session_id": session.session_id,
+                "type": "booking",
+                "reference_id": booking["id"],
+                "reference_number": booking_ref,
+                "property_id": booking["property_id"],
+                "amount": total,
+                "currency": currency.lower(),
+                "guest_name": booking["guest_name"],
+                "guest_email": booking["guest_email"],
+                "payment_method": "stripe",
+                "payment_status": "initiated",
+                "metadata": req.metadata,
+                "created_at": now,
+            })
+            return {
+                "status": "pending_payment",
+                "booking_ref": booking_ref,
+                "booking": booking,
+                "checkout_url": session.url,
+                "session_id": session.session_id,
+            }
+        except Exception as e:
+            logger.error(f"Stripe checkout creation failed: {e}")
+            # Fall back to confirmed-without-payment so the guest's data isn't lost
+            await db.bookings.update_one(
+                {"id": booking["id"]},
+                {"$set": {"status": "confirmed", "payment_status": "manual"}},
+            )
+            return {
+                "status": "confirmed",
+                "booking_ref": booking_ref,
+                "booking": booking,
+                "warning": f"Payment unavailable, booking saved as confirmed (manual): {e}",
+            }
+
+    @router.get("/booking-widget/payment-status/{booking_ref}")
+    async def widget_payment_status(booking_ref: str):
+        """Polled by the success page after Stripe redirect. Returns the latest booking
+        status so the UI can show 'Confirmed' once the webhook flips it."""
+        booking = await db.bookings.find_one({"booking_ref": booking_ref}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+        return {
+            "booking_ref": booking_ref,
+            "status": booking.get("status"),
+            "payment_status": booking.get("payment_status"),
+            "total": booking.get("total"),
+            "currency": booking.get("currency"),
+            "guest_name": booking.get("guest_name"),
+            "guest_email": booking.get("guest_email"),
+            "check_in": booking.get("check_in"),
+            "check_out": booking.get("check_out"),
+        }
 
     # ==================== ADMIN: WIDGET CONFIG ====================
 

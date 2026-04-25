@@ -37,6 +37,51 @@ export default function BookingWidgetPage({ propertyId }) {
   const nights = (() => { try { return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)); } catch { return 1; } })();
   const fmtDate = (d) => { try { return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); } catch { return d; } };
 
+  const [paymentMode, setPaymentMode] = useState("pay_now"); // "pay_now" | "pay_at_property"
+
+  // After Stripe redirects back with ?payment=success or ?payment=cancelled, parse it
+  // and either show the confirmed receipt or surface a friendly cancellation banner.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const ref = params.get("ref");
+    if (payment === "success" && ref) {
+      // Poll up to 15s for the webhook to flip the booking → confirmed
+      let attempts = 0;
+      const poll = async () => {
+        attempts += 1;
+        try {
+          const { data } = await axios.get(`${API}/booking-widget/payment-status/${ref}`);
+          if (data.status === "confirmed") {
+            setConfirmation({
+              status: "confirmed",
+              booking_ref: ref,
+              booking: data,
+              paid: true,
+            });
+            setStep("confirmed");
+            return;
+          }
+        } catch { /* booking might not be visible yet */ }
+        if (attempts < 8) setTimeout(poll, 2000);
+        else {
+          // Show "Payment received, finalising…" — webhook will catch up shortly
+          setConfirmation({ status: "pending", booking_ref: ref, paid: true });
+          setStep("confirmed");
+        }
+      };
+      poll();
+    } else if (payment === "cancelled" && ref) {
+      setConfirmation({ status: "cancelled", booking_ref: ref });
+      setStep("confirmed");
+    }
+    // Clean URL after we've captured the params so a refresh doesn't replay
+    if (payment) {
+      const cleanUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, "", cleanUrl);
+    }
+  }, []);
+
   const search = async () => {
     if (!checkIn || !checkOut) return;
     setSearching(true);
@@ -56,7 +101,16 @@ export default function BookingWidgetPage({ propertyId }) {
         property_id: propertyId, room_type: selected.name, check_in: checkIn, check_out: checkOut,
         guest_name: form.guest_name, guest_email: form.guest_email, guest_phone: form.guest_phone,
         special_requests: form.special_requests, rate: selected.base_rate, guests, rooms: roomCount, currency: hotel.currency,
+        pay_now: paymentMode === "pay_now",
+        origin_url: window.location.origin,
       });
+      // Stripe path → redirect immediately (state lost on redirect; OK because effect picks
+      // it up on return via ?payment=success&ref=...).
+      if (data.checkout_url) {
+        window.location.href = data.checkout_url;
+        return;
+      }
+      // Pay-at-property or fallback path → show confirmation in-place
       setConfirmation(data);
       setStep("confirmed");
     } catch { /* silent */ }
@@ -471,13 +525,41 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Special Requests</label>
                   <textarea value={form.special_requests} onChange={e => setForm({ ...form, special_requests: e.target.value })} rows={3} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none resize-none" placeholder="Late check-in, extra pillows..." data-testid="be-special-requests" /></div>
               </div>
+              {/* Payment mode picker — guest chooses Pay Now (Stripe) vs Pay At Property */}
+              <div className="mt-5">
+                <label className="text-xs font-semibold text-stone-500 mb-2 block">Payment</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setPaymentMode("pay_now")}
+                    data-testid="be-pay-now"
+                    className={`flex items-center gap-2 p-3 rounded-xl border-2 text-left transition-all ${paymentMode === "pay_now" ? "border-emerald-500 bg-emerald-50" : "border-stone-200 hover:border-stone-300"}`}>
+                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${paymentMode === "pay_now" ? "border-emerald-500 bg-emerald-500" : "border-stone-300"}`}>
+                      {paymentMode === "pay_now" && <svg className="w-full h-full text-white p-0.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-stone-900">Pay Now · Card</div>
+                      <div className="text-[10px] text-stone-500">Secure Stripe checkout</div>
+                    </div>
+                  </button>
+                  <button type="button" onClick={() => setPaymentMode("pay_at_property")}
+                    data-testid="be-pay-at-property"
+                    className={`flex items-center gap-2 p-3 rounded-xl border-2 text-left transition-all ${paymentMode === "pay_at_property" ? "border-violet-500 bg-violet-50" : "border-stone-200 hover:border-stone-300"}`}>
+                    <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${paymentMode === "pay_at_property" ? "border-violet-500 bg-violet-500" : "border-stone-300"}`}>
+                      {paymentMode === "pay_at_property" && <svg className="w-full h-full text-white p-0.5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-stone-900">Pay at Property</div>
+                      <div className="text-[10px] text-stone-500">No charge today</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
               <button onClick={book} disabled={booking || !form.guest_name || !form.guest_email}
                 className="w-full mt-6 py-3.5 text-white rounded-xl font-semibold text-base hover:opacity-90 transition-colors shadow-lg disabled:opacity-50" style={{ backgroundColor: ac }} data-testid="be-confirm-booking">
-                {booking ? "Processing..." : "COMPLETE BOOKING"}
+                {booking ? "Processing..." : (paymentMode === "pay_now" ? "PROCEED TO PAYMENT" : "COMPLETE BOOKING")}
               </button>
               <div className="flex items-center justify-center gap-4 mt-4 text-[10px] text-stone-400">
                 <span className="flex items-center gap-1"><svg className="w-3.5 h-3.5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>SSL Encrypted</span>
-                <span>No payment taken now</span><span>Free cancellation</span>
+                <span>{paymentMode === "pay_now" ? "Powered by Stripe" : "No payment taken now"}</span><span>Free cancellation</span>
               </div>
             </div>
           </div>
@@ -508,25 +590,58 @@ export default function BookingWidgetPage({ propertyId }) {
   );
 
   // ─── CONFIRMATION PAGE ───
-  const ConfirmationPage = () => (
+  const ConfirmationPage = () => {
+    const isCancelled = confirmation?.status === "cancelled";
+    const isPaid = confirmation?.paid || confirmation?.booking?.payment_status === "paid";
+    const isPendingWebhook = confirmation?.status === "pending" && confirmation?.paid;
+    const guestEmail = confirmation?.booking?.guest_email || form.guest_email;
+    const total = confirmation?.booking?.total;
+    return (
     <div className="pt-20 pb-12 min-h-screen bg-[#f8f6f3] flex items-center justify-center" data-testid="be-confirmation-page">
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="max-w-lg mx-auto px-4 w-full">
         <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center shadow-lg">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-          </div>
-          <h2 className="text-xl font-semibold text-stone-800 mb-1">Booking Confirmed!</h2>
-          <p className="text-sm text-stone-500 mb-6">A confirmation email has been sent to {form.guest_email}</p>
-          <div className="bg-[#f8f6f3] rounded-xl p-4 mb-6 text-left space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-stone-500">Reference</span><span className="font-bold text-[#1a3c5e] text-base">{confirmation?.booking_ref}</span></div>
-            <div className="flex justify-between"><span className="text-stone-500">Hotel</span><span className="font-medium">{cn}</span></div>
-            <div className="flex justify-between"><span className="text-stone-500">Room</span><span>{confirmation?.booking?.room_type}</span></div>
-            <div className="flex justify-between"><span className="text-stone-500">Dates</span><span>{fmtDate(checkIn)} — {fmtDate(checkOut)}</span></div>
-            <div className="flex justify-between"><span className="text-stone-500">Total</span><span className="font-bold text-lg">{cur(confirmation?.booking?.total, cc)}</span></div>
-          </div>
+          {isCancelled ? (
+            <>
+              <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <h2 className="text-xl font-semibold text-stone-800 mb-1">Payment Cancelled</h2>
+              <p className="text-sm text-stone-500 mb-6">No charge was made. Your booking <b>{confirmation?.booking_ref}</b> is on hold — try again or contact us.</p>
+            </>
+          ) : (
+            <>
+              <div className={`w-16 h-16 rounded-full ${isPendingWebhook ? "bg-cyan-100" : "bg-emerald-100"} flex items-center justify-center mx-auto mb-4`}>
+                {isPendingWebhook ? (
+                  <svg className="w-8 h-8 text-cyan-600 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="4" stroke="currentColor" strokeDasharray="40" strokeDashoffset="20" /></svg>
+                ) : (
+                  <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                )}
+              </div>
+              <h2 className="text-xl font-semibold text-stone-800 mb-1">
+                {isPendingWebhook ? "Payment Received" : "Booking Confirmed!"}
+                {isPaid && !isPendingWebhook && (
+                  <span className="ml-2 text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-full px-2 py-0.5 uppercase tracking-wide">PAID</span>
+                )}
+              </h2>
+              <p className="text-sm text-stone-500 mb-6">
+                {isPendingWebhook
+                  ? "Finalising your reservation. A confirmation email will arrive shortly."
+                  : `A confirmation email has been sent to ${guestEmail}.`}
+              </p>
+            </>
+          )}
+          {!isCancelled && (
+            <div className="bg-[#f8f6f3] rounded-xl p-4 mb-6 text-left space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-stone-500">Reference</span><span className="font-bold text-[#1a3c5e] text-base">{confirmation?.booking_ref}</span></div>
+              <div className="flex justify-between"><span className="text-stone-500">Hotel</span><span className="font-medium">{cn}</span></div>
+              {confirmation?.booking?.room_type && <div className="flex justify-between"><span className="text-stone-500">Room</span><span>{confirmation.booking.room_type}</span></div>}
+              <div className="flex justify-between"><span className="text-stone-500">Dates</span><span>{fmtDate(confirmation?.booking?.check_in || checkIn)} — {fmtDate(confirmation?.booking?.check_out || checkOut)}</span></div>
+              {total != null && <div className="flex justify-between"><span className="text-stone-500">Total</span><span className="font-bold text-lg">{cur(total, cc)}</span></div>}
+            </div>
+          )}
           <div className="space-y-1.5 text-xs text-stone-500 mb-6">
             <p>Free cancellation up to 48 hours before arrival</p>
-            <p>No prepayment required — pay at property</p>
+            {isPaid ? <p className="text-emerald-700 font-semibold">Payment processed via Stripe</p> : <p>No prepayment required — pay at property</p>}
           </div>
           <button onClick={() => { setStep("home"); setConfirmation(null); setSelected(null); setForm({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" }); }}
             className="px-8 py-2.5 bg-[#1a3c5e] text-white rounded-xl font-medium text-sm" data-testid="be-back-home">
@@ -535,7 +650,8 @@ export default function BookingWidgetPage({ propertyId }) {
         </div>
       </motion.div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }} data-testid="booking-engine">

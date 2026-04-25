@@ -253,6 +253,36 @@ def create_payments_router(db, require_roles):
                         {"session_id": event.session_id},
                         {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
                     )
+                    # Auto-confirm booking + send confirmation email when payment lands
+                    if tx.get("type") == "booking" and tx.get("reference_id"):
+                        booking_id = tx["reference_id"]
+                        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+                        if booking:
+                            await db.bookings.update_one(
+                                {"id": booking_id},
+                                {"$set": {
+                                    "status": "confirmed",
+                                    "payment_status": "paid",
+                                    "paid_at": datetime.now(timezone.utc).isoformat(),
+                                }},
+                            )
+                            # Send confirmation email — currently mocked (Resend integration
+                            # ships once user provides RESEND_API_KEY). Logged so admin can
+                            # verify the trigger fires from the booking_email_log collection.
+                            await db.booking_email_log.insert_one({
+                                "id": str(uuid.uuid4()),
+                                "booking_id": booking_id,
+                                "booking_ref": booking.get("booking_ref", ""),
+                                "to": booking.get("guest_email", ""),
+                                "subject": f"Booking confirmed · {booking.get('booking_ref', '')}",
+                                "type": "booking_confirmation",
+                                "status": "MOCKED",
+                                "sent_at": datetime.now(timezone.utc).isoformat(),
+                            })
+                            logger.info(
+                                "📧 Booking confirmation email MOCKED — booking %s, guest %s",
+                                booking.get("booking_ref"), booking.get("guest_email"),
+                            )
             return {"status": "ok"}
         except Exception as e:
             logger.error(f"Webhook error: {e}")

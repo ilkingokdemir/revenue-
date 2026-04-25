@@ -1,6 +1,27 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 170 Test Iterations (100%)
+
+
+### Iter 202 (Apr 2026): ⭐ Pace Reports + AI Pricing v2 (GPT-5.2) + Smart Inbox AI Reply
+
+User ask (TR): _"Devam et"_ — sequential delivery of three Tier-1 PMS gaps.
+
+**Backend additions:**
+- `GET /api/forecast/pace/{property_id}?days=N` (already added) — STLY (rooms-on-the-books vs same date last year, per day for next N days), pickup windows (last 7/14/30d aggregated by source), source contribution (forecast window grouped by source with share %), totals. File: `routes/loyalty_logbook_forecast.py`.
+- `POST /api/dynamic-pricing/{property_id}/ai-v2/recommend` — body `{days, room_type_id?}`. Builds a per-day signal payload (occ %, ty/ly rooms, STLY delta, competitor avg, events) and asks **GPT-5.2** for a strict-JSON recommendation list `{date, dow, suggested_rate, delta_pct, confidence, reasoning}`. Heuristic fallback if no LLM key. File: `routes/dynamic_pricing.py`.
+- `POST /api/dynamic-pricing/{property_id}/ai-v2/apply` — persists selected recommendations to `rate_overrides` (set_by `ai-v2`).
+- `POST /api/inbox/threads/{guest_key}/ai-suggest` — pulls last 8 messages, sends them to GPT-5.2 with a hotel-host system prompt, returns 3 tone variants `{tone: warm|brief|apologetic, channel, body}`. Heuristic templates as fallback. File: `routes/unified_inbox.py`.
+
+**Frontend additions:**
+- `components/dashboard/PaceReports.js` (existing, now wired) — STLY line chart (TY solid cyan vs LY dashed amber), 3 pickup cards, source contribution bar list. Day picker 14/30/60/90/180.
+- `components/dashboard/AIPricingV2Panel.js` (NEW) — header with room-type select + day picker (7/14/21/30) + "Generate Recommendations" gradient button. Summary card (avg Δ% + executive summary). Per-day table (date / DOW / current / suggested / Δ% / confidence pill / reasoning / signals). Multi-select + "Apply Selected to Rate Calendar" button.
+- `components/dashboard/UnifiedInboxPanel.js` — added "AI Suggest" button in the composer (violet gradient with sparkles icon). Shows 3 suggestion cards (warm / brief / apologetic) above the textarea. Click a card → body populates `inbox-draft`.
+- `App.js` — imports + nav items `pace-reports-btn` and `ai-pricing-v2-btn` under "Revenue & Rates", routes wired with active property + hotel name. Permission `revenue_forecasting_view`.
+
+**Testing — `iteration_170.json`:** 17/19 backend tests passed (1 LLM budget cap, 1 skipped, both non-code). 100% frontend UI flows verified. Regression: admin login, inbox threads, properties, room-types, occupancy forecast — all PASS.
+
+---
 
 
 ### Iter 201 (Apr 2026): ⭐ Reputation Dashboard — Multi-Platform Review Aggregator + AI Reply

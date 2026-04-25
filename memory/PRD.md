@@ -1,6 +1,26 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 170 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 171 Test Iterations (100%)
+
+
+### Iter 203 (Apr 2026): ⭐ Rate Parity Heatmap + Morning Brief + Pricing Autopilot
+
+User ask (TR): _"rakipleri analiz et eksik olanların hepsini yap"_ — autonomous gap-fill batch.
+
+**Backend (`routes/competitor_parity.py` — NEW):**
+- `GET /api/parity/heatmap/{property_id}?days=N` — 60-day grid of `our_rate` (lowest active rate_override or base) vs competitor `lowest_price` per day. Each cell: comp_avg / min / max / count + competitors[] preview, delta_pct, classification (`underpriced` / `parity` / `overpriced` / `no_data`), occupancy %. Roll-up summary returned.
+- `GET /api/morning-brief/{property_id}` — single-fetch 8 AM digest: today arrivals/departures/in-house, last-7d pickup count + revenue, STLY 7-day delta, alerts (open logbook / unread inbox / unanswered reviews), latest 10 unanswered reviews, autopilot snapshot.
+- `GET/POST /api/autopilot/pricing/{property_id}` — config persistence (`enabled`, `schedule`, `days_window`, `auto_apply`).
+- `POST /api/autopilot/pricing/{property_id}/run-now` — stamps last_run_at; UI orchestrates the actual `/ai-v2/recommend` call then posts to `/save-run` for snapshot persistence.
+
+**Frontend:**
+- `components/dashboard/ParityHeatmapPanel.js` (NEW) — Mon-start 7-col calendar grid, colour-coded cells (amber underpriced / emerald parity / rose overpriced / stone no-data), summary chip strip, click-cell detail drawer showing competitor breakdown.
+- `components/dashboard/MorningBriefPanel.js` (NEW) — gradient header card, today stats, STLY pill, alert cards, latest reviews list, embedded Pricing Autopilot section (toggle + days window + schedule + auto-apply + run-now). Run-now sequentially calls `/run-now` → `/ai-v2/recommend` → `/save-run`.
+- `App.js` — added `parity-heatmap` and `morning-brief` routes + nav buttons under "Revenue & Rates".
+
+**Testing — `iteration_171.json`:** **18/18 backend ✅ · 100% frontend ✅** · zero issues.
+
+---
 
 
 ### Iter 202 (Apr 2026): ⭐ Pace Reports + AI Pricing v2 (GPT-5.2) + Smart Inbox AI Reply

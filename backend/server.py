@@ -555,6 +555,9 @@ api_router.include_router(deposit_policies_router)
 from routes.unified_inbox import create_unified_inbox_router
 unified_inbox_router = create_unified_inbox_router(db)
 api_router.include_router(unified_inbox_router)
+from routes.competitor_parity import create_competitor_parity_router
+competitor_parity_router = create_competitor_parity_router(db, require_roles)
+api_router.include_router(competitor_parity_router)
 from routes.currency_fx import create_currency_fx_router
 currency_fx_router = create_currency_fx_router(db)
 api_router.include_router(currency_fx_router)

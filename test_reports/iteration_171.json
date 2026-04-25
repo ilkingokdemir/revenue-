@@ -1,0 +1,74 @@
+{
+  "summary": "Iteration 171 - Three new features tested: Future-Date Rate Parity Heatmap, Morning Brief / 8AM digest, and Pricing Autopilot config + run-now. All backend APIs (18/18 tests passed) and frontend UI flows verified successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration171_parity_brief_autopilot.py",
+    "/app/test_reports/pytest/pytest_iteration171_parity_brief_autopilot.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All three new features implemented correctly with proper data-testid attributes",
+    "Parity Heatmap: GET /api/parity/heatmap/{property_id}?days=N returns property_id, base_rate, days, cells[], summary{avg_delta_pct,underpriced_days,parity_days,overpriced_days,no_data_days} - VERIFIED",
+    "Each heatmap cell contains: date, dow, is_weekend, our_rate, comp_avg, comp_min, comp_max, comp_count, competitors[], delta_pct, class, occ_pct - VERIFIED",
+    "Days parameter correctly clamped to 7-180 range - VERIFIED",
+    "Morning Brief: GET /api/morning-brief/{property_id} returns today{arrivals,departures,in_house}, pickup_7d{count,revenue}, stly_7d{ty_rooms,ly_rooms,delta,delta_pct}, alerts{open_logbook,unread_inbox,unanswered_reviews}, new_reviews[] - VERIFIED",
+    "Autopilot GET: Returns default config {enabled:false, schedule, days_window, auto_apply, last_run_at, last_summary, last_recommendations[]} - VERIFIED",
+    "Autopilot POST: Upserts config with enabled, schedule, days_window, auto_apply - VERIFIED",
+    "Autopilot run-now: POST /api/autopilot/pricing/{property_id}/run-now stamps last_run_at - VERIFIED",
+    "Autopilot save-run: POST /api/autopilot/pricing/{property_id}/save-run persists recommendations and summary - VERIFIED",
+    "Frontend: parity-heatmap-btn, morning-brief-btn menu items working",
+    "Frontend: parity-heatmap-panel, parity-summary, parity-grid, parity-days-{30,60,90,180}, parity-cell-{date}, parity-detail all working",
+    "Frontend: morning-brief-panel, brief-today, brief-stly, brief-alerts, brief-autopilot all working",
+    "Frontend: autopilot-toggle, autopilot-days-window, autopilot-schedule, autopilot-auto-apply, autopilot-run-now all working"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration171_parity_brief_autopilot.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 tests passed)",
+    "frontend": "100% (all UI flows verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing aldgate-flats property",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All three new features (Parity Heatmap, Morning Brief, Pricing Autopilot) are fully functional. The heatmap shows many 'no_data' cells (91 out of 180 days) because competitor scrape data is sparse - this is expected behavior. The autopilot Run Now button triggers 3 sequential API calls: /run-now → /ai-v2/recommend → /save-run. LLM may be budget-capped but save-run still succeeds. Regression tests for iter 170 features (Pace Reports, AI Pricing V2, Unified Inbox) all passed.",
+  "features_verified": {
+    "parity_heatmap": {
+      "endpoint": "GET /api/parity/heatmap/{property_id}?days=N",
+      "response_structure": ["property_id", "base_rate", "room_type", "days", "cells[]", "summary{avg_delta_pct,underpriced_days,parity_days,overpriced_days,no_data_days}", "generated_at"],
+      "cell_structure": ["date", "dow", "is_weekend", "our_rate", "our_set_by", "comp_avg", "comp_min", "comp_max", "comp_count", "competitors[]", "delta_pct", "class", "occ_pct"],
+      "ui_elements": ["parity-heatmap-panel", "parity-summary", "parity-grid", "parity-days-{30,60,90,180}", "parity-cell-{date}", "parity-detail", "parity-refresh"],
+      "status": "WORKING"
+    },
+    "morning_brief": {
+      "endpoint": "GET /api/morning-brief/{property_id}",
+      "response_structure": ["property_id", "as_of", "today{date,arrivals,departures,in_house}", "pickup_7d{count,revenue}", "stly_7d{ty_rooms,ly_rooms,delta,delta_pct}", "alerts{open_logbook,unread_inbox,unanswered_reviews}", "new_reviews[]", "autopilot"],
+      "ui_elements": ["morning-brief-panel", "brief-today", "brief-stly", "brief-alerts", "brief-reviews", "brief-refresh"],
+      "status": "WORKING"
+    },
+    "pricing_autopilot": {
+      "get_endpoint": "GET /api/autopilot/pricing/{property_id}",
+      "update_endpoint": "POST /api/autopilot/pricing/{property_id}",
+      "run_now_endpoint": "POST /api/autopilot/pricing/{property_id}/run-now",
+      "save_run_endpoint": "POST /api/autopilot/pricing/{property_id}/save-run",
+      "config_fields": ["property_id", "enabled", "schedule", "days_window", "auto_apply", "last_run_at", "last_summary", "last_recommendations[]"],
+      "ui_elements": ["brief-autopilot", "autopilot-toggle", "autopilot-days-window", "autopilot-schedule", "autopilot-auto-apply", "autopilot-run-now", "autopilot-last-run"],
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "admin_login": "PASSED",
+    "pace_reports_endpoint": "PASSED",
+    "ai_pricing_v2_endpoint": "PASSED",
+    "unified_inbox_endpoint": "PASSED"
+  }
+}

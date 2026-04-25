@@ -244,6 +244,116 @@ def create_loyalty_router(db, require_roles):
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
+    # ==================== PACE REPORTS · STLY + PICKUP + SOURCE ====================
+
+    @router.get("/forecast/pace/{property_id}")
+    async def get_pace_report(property_id: str, days: int = 30,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Pace report — STLY (same time last year) + pickup + source contribution.
+
+        Three views in one endpoint to power a single dashboard tab:
+
+          - **stly[]**: per-day rooms-on-the-books for next `days` days vs the same date
+            range last year (gives "are we ahead / behind LY pace?" answer)
+          - **pickup**: bookings that landed in the last 7 / 14 / 30 days, broken out by
+            source — proxy for revenue manager's "what just happened?" question
+          - **source_contribution[]**: bookings + revenue grouped by `source` for the
+            forecast window (Booking, Direct, Expedia, Airbnb, Corporate, ...)
+        """
+        today = datetime.now(timezone.utc).date()
+        days = max(7, min(int(days), 180))
+
+        # ─── STLY (same time last year) ───
+        stly = []
+        for i in range(days):
+            tgt = today + timedelta(days=i)
+            ly = tgt - timedelta(days=365)
+            ty_iso = tgt.isoformat()
+            ly_iso = ly.isoformat()
+            ty_count = await db.bookings.count_documents({
+                "property_id": property_id,
+                "check_in": {"$lte": ty_iso}, "check_out": {"$gt": ty_iso},
+                "status": {"$nin": ["cancelled"]},
+            })
+            ly_count = await db.bookings.count_documents({
+                "property_id": property_id,
+                "check_in": {"$lte": ly_iso}, "check_out": {"$gt": ly_iso},
+                "status": {"$nin": ["cancelled"]},
+            })
+            stly.append({
+                "date": ty_iso, "ly_date": ly_iso,
+                "ty_rooms": ty_count, "ly_rooms": ly_count,
+                "delta": ty_count - ly_count,
+                "delta_pct": round(((ty_count - ly_count) / ly_count) * 100, 1) if ly_count else 0,
+            })
+
+        # ─── PICKUP (bookings created in last N days) ───
+        pickup_windows = {}
+        for window in (7, 14, 30):
+            start_iso = (datetime.now(timezone.utc) - timedelta(days=window)).isoformat()
+            pipeline = [
+                {"$match": {"property_id": property_id,
+                            "created_at": {"$gte": start_iso},
+                            "status": {"$nin": ["cancelled"]}}},
+                {"$group": {"_id": "$source", "count": {"$sum": 1},
+                            "revenue": {"$sum": "$total_price"}}},
+            ]
+            by_source = {}
+            total_count, total_rev = 0, 0
+            async for d in db.bookings.aggregate(pipeline):
+                src = d.get("_id") or "direct"
+                cnt = d.get("count", 0)
+                rev = round(float(d.get("revenue") or 0), 2)
+                by_source[src] = {"count": cnt, "revenue": rev}
+                total_count += cnt
+                total_rev += rev
+            pickup_windows[f"last_{window}d"] = {
+                "total_bookings": total_count,
+                "total_revenue": round(total_rev, 2),
+                "by_source": by_source,
+            }
+
+        # ─── SOURCE CONTRIBUTION (forecast window) ───
+        end_iso = (today + timedelta(days=days)).isoformat()
+        today_iso = today.isoformat()
+        pipeline = [
+            {"$match": {"property_id": property_id,
+                        "check_in": {"$gte": today_iso, "$lte": end_iso},
+                        "status": {"$nin": ["cancelled"]}}},
+            {"$group": {"_id": "$source", "bookings": {"$sum": 1},
+                        "revenue": {"$sum": "$total_price"},
+                        "rooms": {"$sum": {"$ifNull": ["$rooms", 1]}}}},
+            {"$sort": {"revenue": -1}},
+        ]
+        sources_raw = []
+        total_rev = 0
+        async for d in db.bookings.aggregate(pipeline):
+            rev = round(float(d.get("revenue") or 0), 2)
+            sources_raw.append({
+                "source": d.get("_id") or "direct",
+                "bookings": d.get("bookings", 0),
+                "rooms": d.get("rooms", 0),
+                "revenue": rev,
+            })
+            total_rev += rev
+        # Add share %
+        for s in sources_raw:
+            s["share_pct"] = round((s["revenue"] / total_rev) * 100, 1) if total_rev > 0 else 0
+
+        return {
+            "property_id": property_id,
+            "window_days": days,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+            "stly": stly,
+            "pickup": pickup_windows,
+            "source_contribution": sources_raw,
+            "totals": {
+                "ty_total_rooms": sum(s["ty_rooms"] for s in stly),
+                "ly_total_rooms": sum(s["ly_rooms"] for s in stly),
+                "forecast_revenue": round(total_rev, 2),
+            },
+        }
+
     return router
 
 

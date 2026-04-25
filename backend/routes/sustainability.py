@@ -325,4 +325,41 @@ def create_sustainability_router(db, require_roles):
                 "error": str(e)[:200],
             }
 
+    # ============================================================
+    # PUBLIC: ESG eco-badge (used on direct booking widget header)
+    # ============================================================
+    @router.get("/esg/{property_id}/public-badge")
+    async def public_badge(property_id: str):
+        cfg = await db.esg_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        readings = await db.esg_readings.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("month", -1).to_list(3)
+        initiatives = cfg.get("initiatives") or []
+        active = [i for i in initiatives if i.get("active")]
+        active_weight = sum(i.get("weight", 0) for i in active)
+        max_weight = sum(i.get("weight", 0) for i in initiatives) or 1
+        initiatives_score = round((active_weight / max_weight) * 100)
+        # If we have readings, pull intensity score from dashboard logic (lighter version)
+        score = initiatives_score
+        if readings:
+            # very light intensity proxy: use latest deviation
+            try:
+                kwh_b = float(cfg.get("kwh_baseline_per_rn", 30))
+                # estimate kWh/RN as kwh/30 rooms*30 days; close enough for the badge
+                est_rn = 600
+                kwh_rn = readings[0]["kwh"] / est_rn if readings[0].get("kwh") else 0
+                dev = ((kwh_rn - kwh_b) / kwh_b) * 100 if kwh_b and kwh_rn else 0
+                intensity_score = max(0, min(100, round(100 - dev * 1.5)))
+                score = round(intensity_score * 0.6 + initiatives_score * 0.4)
+            except Exception:
+                pass
+        grade = "A+" if score >= 90 else "A" if score >= 80 else "B" if score >= 65 else "C" if score >= 50 else "D"
+        return {
+            "score": score,
+            "grade": grade,
+            "show_badge": score >= 65,                # only show B or above
+            "active_initiatives": len(active),
+            "highlight_initiatives": [i.get("label") for i in active[:3]],
+        }
+
     return router

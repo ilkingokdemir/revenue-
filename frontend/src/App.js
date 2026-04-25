@@ -86,6 +86,7 @@ import RMLabPanel from "./components/dashboard/RMLabPanel";
 import ConciergeInboxPanel from "./components/dashboard/ConciergeInboxPanel";
 import GroupRequestsPanel from "./components/dashboard/GroupRequestsPanel";
 import SustainabilityPanel from "./components/dashboard/SustainabilityPanel";
+import HousekeepingRoutePanel from "./components/dashboard/HousekeepingRoutePanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2653,6 +2654,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       color: "text-amber-400",
       items: [
         { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
+        { id: "hk-route", icon: Broom, name: "Cleaning Route Optimizer", testId: "hk-route-btn" },
         { id: "maintenance", icon: Wrench, name: t("nav.maintenance"), testId: "maintenance-btn" },
         { id: "asset-register", icon: Package, name: "Asset Register", testId: "asset-register-btn" },
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
@@ -2784,6 +2786,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     // Operations
     "operations-hub-btn":     "operations_reception_view",
     "housekeeping-btn":       "housekeeping_view",
+    "hk-route-btn":           "housekeeping_view",
     "maintenance-btn":        "maintenance_view",
     "shift-scheduler-btn":    "operations_shifts_view",
     "reception-report-btn":   "operations_reception_view",
@@ -3359,6 +3362,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Housekeeping */}
         {activeView === "housekeeping" && (
           <HousekeepingPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {activeView === "hk-route" && (
+          <HousekeepingRoutePanel
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
         )}
 
         {/* Maintenance */}

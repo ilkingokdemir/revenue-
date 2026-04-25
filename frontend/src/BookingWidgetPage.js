@@ -22,6 +22,7 @@ export default function BookingWidgetPage({ propertyId }) {
   const [form, setForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" });
   const [loyalty, setLoyalty] = useState(null);  // { is_member, tier, discount_pct, message }
   const [loyaltyChecking, setLoyaltyChecking] = useState(false);
+  const [ecoBadge, setEcoBadge] = useState(null);  // { score, grade, show_badge, highlight_initiatives[] }
 
   const checkLoyalty = async (email) => {
     const e = (email || "").trim();
@@ -41,6 +42,7 @@ export default function BookingWidgetPage({ propertyId }) {
   useEffect(() => {
     axios.get(`${API}/booking-widget/info/${propertyId}`).then(r => setHotel(r.data)).catch(() => {});
     axios.get(`${API}/booking-widget/gallery/${propertyId}`).then(r => setGallery(r.data)).catch(() => {});
+    axios.get(`${API}/esg/${propertyId}/public-badge`).then(r => setEcoBadge(r.data)).catch(() => {});
     const today = new Date();
     const ci = new Date(today); ci.setDate(ci.getDate() + 1);
     const co = new Date(today); co.setDate(co.getDate() + 3);
@@ -374,7 +376,7 @@ export default function BookingWidgetPage({ propertyId }) {
               <p className="text-xs font-semibold uppercase tracking-[0.2em] mb-2" style={{ color: ac }}>GUEST REVIEWS</p>
               <h2 className="text-2xl sm:text-3xl font-light text-stone-800" style={{ fontFamily: "'Georgia', serif" }}>What Our Guests Say</h2>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="text-white rounded-xl px-4 py-3 text-center" style={{ backgroundColor: ac }}>
                 <div className="text-2xl font-bold">{hotel.avg_rating}</div>
                 <div className="text-[10px] opacity-80">/10</div>
@@ -383,6 +385,18 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div className="font-semibold text-stone-800">{ratingLabel(hotel.avg_rating)}</div>
                 <div className="text-xs text-stone-400">{hotel.review_count} verified reviews</div>
               </div>
+              {ecoBadge?.show_badge && (
+                <div className="flex items-center gap-2 ml-2 px-3 py-2 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200" data-testid="be-eco-badge">
+                  <span className="text-2xl">🌿</span>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest font-bold text-emerald-700">Eco-friendly</div>
+                    <div className="text-sm font-black text-emerald-900">ESG {ecoBadge.grade} · {ecoBadge.score}/100</div>
+                    {ecoBadge.highlight_initiatives?.length > 0 && (
+                      <div className="text-[9px] text-emerald-700">{ecoBadge.highlight_initiatives.slice(0, 2).join(" · ")}</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

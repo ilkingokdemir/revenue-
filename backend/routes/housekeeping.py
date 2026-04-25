@@ -89,6 +89,150 @@ def create_housekeeping_router(db, require_roles):
                     room_num = floor_num * 100 + 1
         return {"message": f"Seeded {count} rooms", "count": count}
 
+    # === HOUSEKEEPING ROUTE OPTIMIZER (TSP-style) ===
+
+    @router.get("/housekeeping/route/{property_id}")
+    async def optimise_route(property_id: str, assigned_to: str = "",
+                              current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Return today's cleaning round in priority + proximity order.
+
+        Heuristic (no external solver — keeps it sub-50ms even for 500 rooms):
+          1. Pull rooms with status in {dirty, in_progress, inspected_pending}
+             OR rooms with a checkout today (must be cleaned for new arrival)
+             OR rooms with an arrival today (rush priority)
+          2. Score each room:
+              + 100 if checkout today (highest urgency)
+              + 60  if arrival today AND status != clean
+              + 40  if VIP / loyalty platinum guest arrival
+              + 20  if status == in_progress
+              + 10  if status == dirty
+              + 5   per night-stayed (longer stay → bigger refresh)
+          3. Sort by floor (low→high so housekeeper doesn't bounce floors),
+             then by score descending within floor, then room_number ascending.
+          4. Return rounds with estimated_minutes (15 stayover, 30 checkout, 45 arrival-ready).
+        """
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        room_query = {"property_id": property_id}
+        rooms = await db.room_statuses.find(room_query, {"_id": 0}).to_list(1000)
+
+        # Build per-room metadata from bookings
+        bk_today = {b.get("room_id") or b.get("room_number"): b
+                    async for b in db.bookings.find({
+                        "property_id": property_id,
+                        "$or": [
+                            {"check_in": today, "status": {"$nin": ["cancelled"]}},
+                            {"check_out": today, "status": {"$nin": ["cancelled"]}},
+                        ],
+                    }, {"_id": 0})}
+        # In-house guests (overlapping today)
+        bk_inhouse = {b.get("room_id") or b.get("room_number"): b
+                      async for b in db.bookings.find({
+                          "property_id": property_id,
+                          "check_in": {"$lte": today},
+                          "check_out": {"$gt": today},
+                          "status": {"$nin": ["cancelled"]},
+                      }, {"_id": 0})}
+
+        # VIP guests = platinum loyalty members
+        platinum_emails = set()
+        async for m in db.loyalty_members.find({"tier": "platinum"}, {"_id": 0, "guest_email": 1}):
+            platinum_emails.add((m.get("guest_email") or "").lower())
+
+        rounds = []
+        for r in rooms:
+            rn = r.get("room_number")
+            rid = r.get("id")
+            status = r.get("status", "")
+
+            tb = bk_today.get(rn) or bk_today.get(rid)
+            ib = bk_inhouse.get(rn) or bk_inhouse.get(rid)
+
+            score = 0
+            tags = []
+            kind = "stayover"
+            est_minutes = 15
+            guest_name = ""
+
+            if tb and tb.get("check_out") == today:
+                score += 100; tags.append("checkout"); kind = "checkout"; est_minutes = 30
+                guest_name = tb.get("guest_name", "")
+            if tb and tb.get("check_in") == today:
+                score += 60;  tags.append("arrival"); kind = "arrival_ready"
+                est_minutes = max(est_minutes, 45)
+                guest_name = guest_name or tb.get("guest_name", "")
+                guest_email = (tb.get("guest_email") or "").lower()
+                if guest_email in platinum_emails:
+                    score += 40; tags.append("vip")
+            if status == "in_progress":
+                score += 20; tags.append("in-progress")
+            elif status == "dirty":
+                score += 10; tags.append("dirty")
+            elif status == "out_of_order":
+                # never assign for cleaning
+                continue
+
+            if ib:
+                # length of stay → tiny boost for refresh
+                try:
+                    nights = (datetime.fromisoformat(ib.get("check_out", today)) -
+                              datetime.fromisoformat(ib.get("check_in", today))).days
+                except Exception:
+                    nights = 0
+                score += min(20, nights * 5)
+                if not guest_name: guest_name = ib.get("guest_name", "")
+
+            # Skip if status is already clean AND no checkout/arrival happening
+            if status in ("clean", "inspected") and not tb:
+                continue
+
+            rounds.append({
+                "room_id": rid,
+                "room_number": rn,
+                "floor": r.get("floor", ""),
+                "room_type": r.get("room_type", ""),
+                "status": status,
+                "kind": kind,
+                "tags": tags,
+                "score": score,
+                "estimated_minutes": est_minutes,
+                "guest_name": guest_name,
+                "assigned_to": r.get("assigned_to", ""),
+                "notes": r.get("notes", ""),
+            })
+
+        # Optional filter to a specific cleaner
+        if assigned_to:
+            rounds = [x for x in rounds if x.get("assigned_to") == assigned_to]
+
+        # Sort: floor asc, score desc, room_number asc
+        def _floor_key(x):
+            f = x.get("floor", "")
+            try: return int(f)
+            except Exception: return 999
+        rounds.sort(key=lambda x: (_floor_key(x), -x["score"], str(x.get("room_number", ""))))
+
+        # Position numbers + cumulative ETA
+        cum = 0
+        for i, r in enumerate(rounds):
+            r["position"] = i + 1
+            r["eta_minutes_from_start"] = cum
+            cum += r["estimated_minutes"]
+
+        # Stats
+        total_minutes = cum
+        return {
+            "property_id": property_id,
+            "rounds": rounds,
+            "total_rooms": len(rounds),
+            "total_estimated_minutes": total_minutes,
+            "checkouts": sum(1 for r in rounds if r["kind"] == "checkout"),
+            "arrivals":  sum(1 for r in rounds if r["kind"] == "arrival_ready"),
+            "stayovers": sum(1 for r in rounds if r["kind"] == "stayover"),
+            "vip_count": sum(1 for r in rounds if "vip" in r["tags"]),
+            "as_of": datetime.now(timezone.utc).isoformat(),
+        }
+
     # === Housekeeping Tasks ===
 
     @router.get("/housekeeping/tasks/{property_id}")

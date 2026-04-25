@@ -1,6 +1,34 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 171 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 172 Test Iterations (100%)
+
+
+### Iter 204 (Apr 2026): ⭐ Forecast Accuracy Tracker + Marketing Automation Triggers (RM Lab)
+
+User ask (TR): _"Rakiplerle kıyasladığımızda eksiklerimiz nedir öncelik o noktalara ver"_ — agent delivered prioritised gap analysis (P0/P1/P2) and built the two highest-impact items that don't require external API keys.
+
+**Competitor gap analysis prepared:**
+- 🔴 P0 (need keys): Real OTA Channel APIs (Booking.com / Expedia / Airbnb), Resend email, Twilio WhatsApp/SMS.
+- 🔴 P0 (no keys): Forecast Accuracy Tracker, Marketing Automation Triggers ← **DONE this iteration.**
+- 🟠 P1: Loyalty exclusive rates on widget, POS-PMS room-charge posting, QuickBooks/Xero export, Mobile PWA + push, Online check-in + Digital key.
+- 🟢 P2: AI Concierge, Voice bot, Predictive maintenance.
+
+**Backend (`routes/forecast_accuracy.py` — NEW):**
+- `POST /api/forecast/snapshot/{property_id}?days=30` — saves daily forecast snapshots into `forecast_snapshots` (forecast_booked, forecast_occ_pct, forecast_rate, lead_days).
+- `GET /api/forecast/accuracy/{property_id}?days=60` — auto-scores past snapshots vs actual bookings/avg paid rate; returns MAE occupancy, **trust_score (0-100)**, avg rate error %, **bias** (too_aggressive / balanced / too_cautious), and per-lead-time bucket breakdown (0-3d / 4-7d / 8-14d / 15-30d / 31d+).
+- `POST /api/marketing/automation/run/{property_id}` — idempotent rule engine that scans for **birthdays** (next 7 days), **abandoned bookings** (status=pending_payment, 30 min – 7 d old), **win-back** (last_stay 6-12 months ago). Composes drafted email subject + body with promo codes (BDAY15, WELCOMEBACK10, WELCOMEBACK20) and inserts into `marketing_queue`.
+- `GET /api/marketing/automation/queue/{property_id}` — lists queue + by_trigger/by_status stats.
+- `POST /api/marketing/automation/{queue_id}/sent` and `/skip` — flip status, both 404 on unknown id.
+
+**Frontend (`components/dashboard/RMLabPanel.js` — NEW):**
+- Two tabs (Accuracy / Marketing) inside a single panel.
+- Accuracy tab: Trust score big number, MAE occ + Avg rate error + Bias chip (colour-coded), lead-time breakdown table, "Take Snapshot" + "Refresh" actions.
+- Marketing tab: 3 trigger stat chips (birthday/abandoned/win-back), status filter, "Run automation" button, queue cards with sender/skip actions.
+- App.js wired with `rm-lab` route under "Revenue & Rates" with permission `revenue_forecasting_view`.
+
+**Testing — `iteration_172.json`:** **15/17 backend ✅** (2 conditional skips for empty queue) · **100% frontend ✅**. The skip-endpoint 404 inconsistency was found and fixed; option-text hydration warning silenced.
+
+---
 
 
 ### Iter 203 (Apr 2026): ⭐ Rate Parity Heatmap + Morning Brief + Pricing Autopilot

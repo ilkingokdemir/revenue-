@@ -307,12 +307,14 @@ def create_forecast_accuracy_router(db, require_roles):
     @router.post("/marketing/automation/{queue_id}/skip")
     async def mark_skip(queue_id: str,
                         current_user: dict = Depends(require_roles("admin", "manager"))):
-        await db.marketing_queue.update_one(
+        r = await db.marketing_queue.update_one(
             {"id": queue_id},
             {"$set": {"status": "skipped",
                       "skipped_at": datetime.now(timezone.utc).isoformat(),
                       "skipped_by": current_user.get("name", "")}}
         )
+        if r.modified_count == 0:
+            raise HTTPException(404, "Not found")
         return {"ok": True}
 
     return router

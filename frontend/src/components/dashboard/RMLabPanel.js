@@ -222,10 +222,10 @@ function MarketingTab({ propertyId }) {
         </div>
         <div className="flex items-center gap-2">
           <select value={filter} onChange={e => setFilter(e.target.value)} className="bg-stone-900 border border-stone-800 text-stone-100 text-xs rounded-lg px-2 py-1.5" data-testid="marketing-filter">
-            <option value="">All ({data?.total || 0})</option>
-            <option value="pending">Pending ({status.pending || 0})</option>
-            <option value="sent">Sent ({status.sent || 0})</option>
-            <option value="skipped">Skipped ({status.skipped || 0})</option>
+            <option value="">{`All (${data?.total || 0})`}</option>
+            <option value="pending">{`Pending (${status.pending || 0})`}</option>
+            <option value="sent">{`Sent (${status.sent || 0})`}</option>
+            <option value="skipped">{`Skipped (${status.skipped || 0})`}</option>
           </select>
           <button onClick={run} disabled={running} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold disabled:opacity-50" data-testid="marketing-run">
             {running ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}

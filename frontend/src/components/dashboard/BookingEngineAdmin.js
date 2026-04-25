@@ -282,7 +282,117 @@ const tabs = [
   { id: "photos", label: "Room Photos" },
   { id: "reviews", label: "Guest Reviews" },
   { id: "theme", label: "Theme & Branding" },
+  { id: "embed", label: "Embed Widget" },
 ];
+
+/* ─── EMBED CODE GENERATOR — copy-paste snippet for the hotel's own website ─── */
+const EmbedCodePanel = ({ propertyId }) => {
+  const [height, setHeight] = useState(900);
+  const [variant, setVariant] = useState("iframe"); // "iframe" | "popup-button"
+  const baseUrl = `${window.location.origin}/book/${propertyId}?embed=1`;
+
+  // Two embed flavours so the hotel's web designer can pick the one that fits.
+  const iframeSnippet = `<iframe
+  src="${baseUrl}"
+  width="${width}"
+  height="${height}"
+  style="border:0; border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,0.08);"
+  loading="lazy"
+  title="Book Direct"
+  allow="payment"
+></iframe>`;
+
+  const popupSnippet = `<button onclick="document.getElementById('hb-book-overlay').style.display='flex'"
+        style="background:#1a3c5e;color:#fff;padding:12px 22px;border:0;border-radius:10px;font-weight:700;cursor:pointer">
+  Book Direct
+</button>
+<div id="hb-book-overlay"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;align-items:center;justify-content:center;padding:20px"
+     onclick="if(event.target===this)this.style.display='none'">
+  <iframe src="${baseUrl}"
+          style="width:100%;max-width:1100px;height:90vh;border:0;border-radius:14px;background:#fff"
+          allow="payment" title="Book Direct"></iframe>
+</div>`;
+
+  const snippet = variant === "iframe" ? iframeSnippet : popupSnippet;
+
+  const copy = () => {
+    navigator.clipboard.writeText(snippet);
+    toast.success("Embed code copied — paste it into your website's HTML");
+  };
+
+  return (
+    <div className="space-y-4" data-testid="embed-panel">
+      <div className="bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200 rounded-xl p-4">
+        <h3 className="text-base font-bold text-stone-800 flex items-center gap-2">
+          <svg className="w-5 h-5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>
+          Embed on Your Website
+        </h3>
+        <p className="text-xs text-stone-600 mt-1">
+          Paste this snippet into your website's HTML to let guests book directly from your homepage —
+          OTA komisyonu kaçırmadan. Ödemeler doğrudan Stripe üzerinden alınır, rezervasyonlar otomatik
+          olarak buraya düşer.
+        </p>
+      </div>
+
+      {/* Variant picker */}
+      <div className="grid grid-cols-2 gap-2">
+        <button onClick={() => setVariant("iframe")}
+          className={`p-3 rounded-xl border-2 text-left transition-all ${variant === "iframe" ? "border-violet-500 bg-violet-50" : "border-stone-200 hover:border-stone-300"}`}
+          data-testid="embed-variant-iframe">
+          <div className="text-sm font-bold text-stone-900">Inline iframe</div>
+          <div className="text-[11px] text-stone-500">Embeds the booking form directly on the page (recommended)</div>
+        </button>
+        <button onClick={() => setVariant("popup-button")}
+          className={`p-3 rounded-xl border-2 text-left transition-all ${variant === "popup-button" ? "border-violet-500 bg-violet-50" : "border-stone-200 hover:border-stone-300"}`}
+          data-testid="embed-variant-popup">
+          <div className="text-sm font-bold text-stone-900">Popup button</div>
+          <div className="text-[11px] text-stone-500">A "Book Direct" button that opens a modal — no scroll-jack</div>
+        </button>
+      </div>
+
+      {/* Iframe size controls — only shown for inline mode */}
+      {variant === "iframe" && (
+        <div className="flex flex-wrap gap-3">
+          <label className="text-xs">
+            <span className="block font-bold text-stone-600 mb-1">Width</span>
+            <input value={width} onChange={(e) => setWidth(e.target.value)}
+              className="px-3 py-2 bg-white border border-stone-200 rounded-lg text-sm w-32" data-testid="embed-width" />
+          </label>
+          <label className="text-xs">
+            <span className="block font-bold text-stone-600 mb-1">Height (px)</span>
+            <input value={height} onChange={(e) => setHeight(e.target.value)} type="number"
+              className="px-3 py-2 bg-white border border-stone-200 rounded-lg text-sm w-32" data-testid="embed-height" />
+          </label>
+        </div>
+      )}
+
+      {/* Snippet box */}
+      <div className="relative">
+        <pre className="bg-stone-950 text-emerald-300 text-xs p-4 rounded-xl overflow-x-auto font-mono leading-relaxed whitespace-pre-wrap break-all"
+             data-testid="embed-snippet">{snippet}</pre>
+        <button onClick={copy} data-testid="embed-copy"
+          className="absolute top-3 right-3 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg shadow-md">
+          Copy
+        </button>
+      </div>
+
+      {/* Live preview */}
+      <div>
+        <h4 className="text-sm font-bold text-stone-800 mb-2">Live preview</h4>
+        <div className="border border-stone-200 rounded-xl overflow-hidden bg-stone-50">
+          <iframe
+            src={baseUrl}
+            title="Booking widget preview"
+            className="w-full"
+            style={{ height: variant === "iframe" ? `${height}px` : "700px", border: 0 }}
+            data-testid="embed-preview-iframe"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const BookingEngineAdmin = ({ properties, activePropertyId }) => {
   const [tab, setTab] = useState("photos");
@@ -347,6 +457,7 @@ export const BookingEngineAdmin = ({ properties, activePropertyId }) => {
           )}
           {tab === "reviews" && <ReviewsManager propertyId={pid} />}
           {tab === "theme" && <ThemeConfig propertyId={pid} />}
+          {tab === "embed" && <EmbedCodePanel propertyId={pid} />}
         </motion.div>
       </AnimatePresence>
     </div>

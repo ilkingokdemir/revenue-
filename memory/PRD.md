@@ -3,6 +3,40 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 200 (Apr 2026): 📦 Iframe Embed Widget — "Book Direct" on the hotel's own site
+
+User ask (TR): _"Olur"_ (response to: would you like an iframe-embeddable booking widget for hotel's own website?)
+
+**Frontend (`BookingWidgetPage.js`):**
+- New `isEmbed` flag derived from `?embed=1` query param
+- When embed mode is on, the marketing chrome is stripped:
+  - ❌ Header (logo + nav)
+  - ❌ TrustBar (5-star awards row)
+  - ❌ RoomsPreview (full room cards) — search results still show
+  - ❌ GallerySection · ReviewsSection · WhyDirect
+  - ❌ Footer
+  - ✅ Hero (compact, with date/guest picker)
+  - ✅ Search results, room selection, guest details, Stripe payment, confirmation page
+- Page renders without `min-h-screen` so it fits the iframe size exactly
+- Stripe payment, ?payment=success/cancelled return flow all still work inside iframe (allows `payment` permission)
+
+**Frontend (`BookingEngineAdmin.js`):**
+- New `Embed Widget` tab in the admin panel
+- New component `EmbedCodePanel`:
+  - **2 embed flavours** (variant picker):
+    - **Inline iframe** — drops booking flow into a `<div>` on the hotel's homepage (recommended)
+    - **Popup button** — "Book Direct" button that opens a modal overlay (no scroll-jack)
+  - Width/height controls for inline mode (defaults: `100% × 900px`)
+  - Pre-formatted code block with **Copy** button (toast on success)
+  - **Live preview iframe** showing exactly what guests will see — admin can verify before pasting
+- Embed URL pattern: `${origin}/book/{property_id}?embed=1`
+
+**Verified:**
+- Smoke screenshot: `/book/default?embed=1` renders only the booking flow (hero + search bar) — no header/footer chrome ✓
+- Frontend lint clean (`BookingWidgetPage.js`, `BookingEngineAdmin.js`)
+- iframe payment flow tested via existing pay_now → Stripe → return logic (works inside iframe with `allow="payment"`)
+
+
 ### Iter 199 (Apr 2026): 💳 Booking Engine MVP — Direct Booking + Stripe Payments
 
 User ask (TR): _"Tavsiyen Booking Engine MVP. Direkt rezervasyon = OTA komisyon kurtarması = anında ROI."_

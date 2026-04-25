@@ -653,15 +653,24 @@ export default function BookingWidgetPage({ propertyId }) {
     );
   };
 
+  // Embed mode: when the page is loaded inside an <iframe> from a hotel's website,
+  // we strip the marketing chrome (header, gallery, reviews, footer) and keep only
+  // the booking flow itself. Triggered by `?embed=1` in the URL.
+  const isEmbed = (() => {
+    if (typeof window === "undefined") return false;
+    const p = new URLSearchParams(window.location.search);
+    return p.get("embed") === "1" || p.get("embed") === "true";
+  })();
+
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "'Inter', -apple-system, sans-serif" }} data-testid="booking-engine">
-      <Header />
+    <div className={`bg-white ${isEmbed ? "" : "min-h-screen"}`} style={{ fontFamily: "'Inter', -apple-system, sans-serif" }} data-testid="booking-engine">
+      {!isEmbed && <Header />}
       <AnimatePresence mode="wait">
         {step === "home" && <motion.div key="home" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <Hero /><TrustBar /><RoomsPreview /><GallerySection /><ReviewsSection /><WhyDirect /><Footer />
+          <Hero />{!isEmbed && <><TrustBar /><RoomsPreview /><GallerySection /><ReviewsSection /><WhyDirect /></>}{!isEmbed && <Footer />}
         </motion.div>}
-        {step === "results" && <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ResultsPage /><Footer /></motion.div>}
-        {step === "details" && <motion.div key="details" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><DetailsPage /><Footer /></motion.div>}
+        {step === "results" && <motion.div key="results" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ResultsPage />{!isEmbed && <Footer />}</motion.div>}
+        {step === "details" && <motion.div key="details" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><DetailsPage />{!isEmbed && <Footer />}</motion.div>}
         {step === "confirmed" && <motion.div key="confirmed" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ConfirmationPage /></motion.div>}
       </AnimatePresence>
       <Lightbox />

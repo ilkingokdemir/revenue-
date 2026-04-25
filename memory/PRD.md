@@ -1,6 +1,26 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 172 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 173 Test Iterations (100%)
+
+
+### Iter 205 (Apr 2026): ⭐ Loyalty Direct-Book Discount + Marketing ROI Tracker + PWA
+
+User ask (TR): _"Eksiklerin hepsini tamamla"_ — agent autonomously shipped three more no-key competitor gaps.
+
+**Backend:**
+- `POST /api/booking-widget/loyalty-check` (PUBLIC, no auth) — `{guest_email}` → `{is_member, tier, discount_pct, message, lifetime_points, total_stays}`. Tier-based exclusive direct-book discount: standard 5%, silver 8%, gold 12%, platinum 18%.
+- `GET /api/marketing/automation/roi/{property_id}?days=90` — Cross-references `marketing_queue` (status=sent) with bookings created after sent_at for the same email, attributing conversions and revenue. Returns `{sent, conversions, conv_rate_pct, revenue, by_trigger:{birthday/abandoned/win_back -> {sent, conversions, revenue, conv_rate_pct}}}`.
+- `POST /api/booking-widget/book` (extended) — accepts `loyalty_tier`, `loyalty_discount_pct`, with `rate` already discounted client-side.
+
+**Frontend:**
+- `BookingWidgetPage.js` — new `loyalty` state + `checkLoyalty()` fn fired onBlur of the email input. Renders `loyalty-banner` (tier emoji + welcome message + lifetime points/stays) under the email field and `loyalty-line` row in the price summary (e.g. "PLATINUM member discount −18%"). The total at the bottom recomputes to the discounted amount.
+- `RMLabPanel.js` Marketing tab — fetches `/roi` in parallel with queue and renders `marketing-roi` gradient card with conversion count, conv-rate %, revenue attributed, plus per-trigger chips. Card hides when `sent==0` to avoid clutter.
+- `public/manifest.json` (NEW) — PWA manifest with hotel branding, standalone display, two app shortcuts (Today's arrivals · Morning Brief).
+- `public/index.html` — added `<link rel="manifest">` + Apple mobile-web-app meta tags. Theme colour set to brand `#1a3c5e`.
+
+**Testing — `iteration_173.json`:** **14/14 backend ✅ · 100% frontend ✅ · zero issues.** Loyalty flow confirmed with platinum member returning 18% off banner + price line.
+
+---
 
 
 ### Iter 204 (Apr 2026): ⭐ Forecast Accuracy Tracker + Marketing Automation Triggers (RM Lab)

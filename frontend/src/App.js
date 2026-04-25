@@ -85,6 +85,7 @@ import MorningBriefPanel from "./components/dashboard/MorningBriefPanel";
 import RMLabPanel from "./components/dashboard/RMLabPanel";
 import ConciergeInboxPanel from "./components/dashboard/ConciergeInboxPanel";
 import GroupRequestsPanel from "./components/dashboard/GroupRequestsPanel";
+import SustainabilityPanel from "./components/dashboard/SustainabilityPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2683,6 +2684,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "rm-lab", icon: ChartLine, name: "RM Lab (Accuracy + Marketing)", testId: "rm-lab-btn" },
         { id: "concierge-inbox", icon: ChartLine, name: "Concierge Inbox (AI)", testId: "concierge-inbox-btn" },
         { id: "group-requests", icon: Users, name: "Group Requests & Allotments", testId: "group-requests-btn" },
+        { id: "sustainability", icon: ChartLine, name: "Sustainability & ESG", testId: "sustainability-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
       ],
@@ -2806,6 +2808,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "rm-lab-btn":             "revenue_forecasting_view",
     "concierge-inbox-btn":    "revenue_forecasting_view",
     "group-requests-btn":     "view_bookings",
+    "sustainability-btn":     "revenue_forecasting_view",
     "revenue-btn":            "revenue_dashboard_view",
     "profit-os-btn":          "revenue_profit_os_view",
     "approval-queue-btn":     "revenue_approvals_view",
@@ -3434,6 +3437,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Group Requests & Allotments — B2B / corporate / wedding */}
         {activeView === "group-requests" && (
           <GroupRequestsPanel
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
+        )}
+
+        {/* Sustainability & ESG */}
+        {activeView === "sustainability" && (
+          <SustainabilityPanel
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
           />

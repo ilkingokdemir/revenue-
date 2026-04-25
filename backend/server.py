@@ -564,6 +564,9 @@ api_router.include_router(forecast_accuracy_router)
 from routes.concierge import create_concierge_router
 concierge_router = create_concierge_router(db)
 api_router.include_router(concierge_router)
+from routes.sustainability import create_sustainability_router
+sustainability_router = create_sustainability_router(db, require_roles)
+api_router.include_router(sustainability_router)
 from routes.currency_fx import create_currency_fx_router
 currency_fx_router = create_currency_fx_router(db)
 api_router.include_router(currency_fx_router)

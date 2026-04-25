@@ -10,7 +10,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Loader2, Users, Building2, Calendar, RefreshCw, Mail, Phone, FileText,
-  Check, X, DollarSign, MessageSquare, Briefcase,
+  Check, X, DollarSign, MessageSquare, Briefcase, Sparkles,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -31,6 +31,8 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
   const [filter, setFilter] = useState("");
   const [draft, setDraft] = useState({ status: "", admin_notes: "", quoted_price: "" });
   const [saving, setSaving] = useState(false);
+  const [aiQuoting, setAiQuoting] = useState(false);
+  const [aiQuote, setAiQuote] = useState(null);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -47,11 +49,34 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
 
   const open = (item) => {
     setActive(item);
+    setAiQuote(null);
     setDraft({
       status: item.status || "pending",
       admin_notes: item.admin_notes || "",
       quoted_price: item.quoted_price || "",
     });
+  };
+
+  const aiAutoQuote = async () => {
+    if (!active) return;
+    setAiQuoting(true);
+    setAiQuote(null);
+    try {
+      const { data } = await axios.post(`${API}/group-booking/${active.id}/ai-quote`);
+      setAiQuote(data);
+      if (data.fallback) toast.message("Heuristic quote (no LLM)");
+      else toast.success(`AI quote ready: £${data.suggested_total}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "AI quote failed");
+    }
+    setAiQuoting(false);
+  };
+
+  const applyAiQuote = () => {
+    if (!aiQuote) return;
+    setDraft(d => ({ ...d, quoted_price: aiQuote.suggested_total, admin_notes:
+      (d.admin_notes ? d.admin_notes + "\n\n" : "") + `AI: ${aiQuote.reasoning}` }));
+    toast.success("Pulled into draft — review and send");
   };
 
   const save = async (extraStatus = null) => {
@@ -190,13 +215,34 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
                 </div>
 
                 <div>
-                  <label className="text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-1 flex items-center gap-1">
-                    <DollarSign className="w-3 h-3" />Quoted price (total)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] uppercase tracking-widest text-stone-500 font-bold flex items-center gap-1">
+                      <DollarSign className="w-3 h-3" />Quoted price (total)
+                    </label>
+                    <button onClick={aiAutoQuote} disabled={aiQuoting} data-testid="gr-ai-quote"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold disabled:opacity-50">
+                      {aiQuoting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      AI Auto-Quote
+                    </button>
+                  </div>
                   <input type="number" value={draft.quoted_price} onChange={e => setDraft({ ...draft, quoted_price: e.target.value })}
                     placeholder="e.g. 4800"
                     className="w-full bg-stone-800 border border-stone-700 text-stone-100 text-sm rounded-lg px-3 py-2 tabular-nums"
                     data-testid="gr-quoted-price" />
+                  {aiQuote && (
+                    <div className="mt-2 p-3 rounded-lg bg-violet-500/10 border border-violet-500/30" data-testid="gr-ai-quote-card">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-2xl font-black text-violet-300 tabular-nums">£{Number(aiQuote.suggested_total || 0).toLocaleString()}</span>
+                          <span className="text-[10px] text-stone-400">£{Number(aiQuote.per_room_per_night || 0).toFixed(0)}/room/night · {aiQuote.discount_pct}% off</span>
+                        </div>
+                        <button onClick={applyAiQuote} data-testid="gr-ai-apply"
+                          className="px-2 py-1 rounded bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold">Use this</button>
+                      </div>
+                      <p className="text-[11px] text-stone-300 leading-relaxed">{aiQuote.reasoning}</p>
+                      {aiQuote.fallback && <p className="text-[9px] text-amber-400 mt-1">Heuristic fallback</p>}
+                    </div>
+                  )}
                 </div>
 
                 <div>

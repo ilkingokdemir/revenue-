@@ -386,3 +386,13 @@ frontend/node_modules/.cache/default-development/391.pack
 frontend/node_modules/.cache/default-development/392.pack
 frontend/node_modules/.cache/default-development/394.pack
 frontend/node_modules/.cache/default-development/398.pack
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
+frontend/node_modules/.cache/default-development/399.pack

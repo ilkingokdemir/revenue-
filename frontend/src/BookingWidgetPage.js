@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
+import ConciergeChat from "./components/ConciergeChat";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v, c) => `${c === "GBP" ? "£" : c === "EUR" ? "€" : c === "USD" ? "$" : c}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -716,6 +717,13 @@ export default function BookingWidgetPage({ propertyId }) {
         {step === "confirmed" && <motion.div key="confirmed" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ConfirmationPage /></motion.div>}
       </AnimatePresence>
       <Lightbox />
+      {!isEmbed && (
+        <ConciergeChat
+          propertyId={propertyId}
+          hotelName={hotel.hotel_name}
+          accentColor={ac}
+        />
+      )}
     </div>
   );
 }

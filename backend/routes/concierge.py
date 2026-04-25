@@ -142,4 +142,80 @@ def create_concierge_router(db):
         ).sort("created_at", 1).to_list(100)
         return {"messages": msgs}
 
+    # =========================================================
+    # ADMIN — Concierge Inbox (sessions list + flag/edit AI replies)
+    # =========================================================
+    @router.get("/concierge/admin/{property_id}/sessions")
+    async def admin_sessions(property_id: str):
+        """Group concierge_chats by session_id for the admin Inbox view."""
+        pipeline = [
+            {"$match": {"property_id": property_id}},
+            {"$sort": {"created_at": 1}},
+            {"$group": {
+                "_id": "$session_id",
+                "first_at":  {"$first": "$created_at"},
+                "last_at":   {"$last":  "$created_at"},
+                "last_role": {"$last":  "$role"},
+                "last_msg":  {"$last":  "$content"},
+                "messages":  {"$sum": 1},
+                "flagged":   {"$sum": {"$cond": [{"$eq": ["$flagged", True]}, 1, 0]}},
+            }},
+            {"$sort": {"last_at": -1}},
+            {"$limit": 200},
+        ]
+        rows = []
+        async for r in db.concierge_chats.aggregate(pipeline):
+            rows.append({
+                "session_id": r["_id"],
+                "first_at":  r.get("first_at"),
+                "last_at":   r.get("last_at"),
+                "last_role": r.get("last_role"),
+                "last_preview": (r.get("last_msg") or "")[:140],
+                "messages":  r.get("messages", 0),
+                "flagged":   r.get("flagged", 0),
+            })
+        total_sessions = len(rows)
+        total_msgs = sum(r["messages"] for r in rows)
+        flagged_msgs = sum(r["flagged"] for r in rows)
+        return {
+            "sessions": rows,
+            "total_sessions": total_sessions,
+            "total_messages": total_msgs,
+            "flagged_messages": flagged_msgs,
+        }
+
+    @router.get("/concierge/admin/{property_id}/session/{session_id}")
+    async def admin_session_detail(property_id: str, session_id: str):
+        msgs = await db.concierge_chats.find(
+            {"property_id": property_id, "session_id": session_id},
+            {"_id": 0}
+        ).sort("created_at", 1).to_list(200)
+        return {"session_id": session_id, "messages": msgs}
+
+    @router.post("/concierge/admin/messages/{message_id}/flag")
+    async def flag_message(message_id: str, data: Dict):
+        """Flag an AI reply for review. Body: {reason?, corrected_reply?}"""
+        update = {
+            "flagged": True,
+            "flag_reason": (data.get("reason") or "").strip(),
+            "flagged_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if data.get("corrected_reply"):
+            update["corrected_reply"] = data["corrected_reply"]
+        r = await db.concierge_chats.update_one({"id": message_id}, {"$set": update})
+        if r.matched_count == 0:
+            raise HTTPException(404, "Message not found")
+        return {"ok": True}
+
+    @router.post("/concierge/admin/messages/{message_id}/unflag")
+    async def unflag_message(message_id: str):
+        r = await db.concierge_chats.update_one(
+            {"id": message_id},
+            {"$set": {"flagged": False,
+                      "unflagged_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        if r.matched_count == 0:
+            raise HTTPException(404, "Message not found")
+        return {"ok": True}
+
     return router

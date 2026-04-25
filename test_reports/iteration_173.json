@@ -1,0 +1,96 @@
+{
+  "summary": "Iteration 173 - Loyalty Member Rates, Marketing ROI Tracker, PWA Manifest tested. All 14 backend tests passed. Frontend loyalty flow verified with platinum member discount (18%) correctly applied. PWA manifest accessible and link tag present in index.html.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Loyalty check on email blur",
+        "issue": "Standard Playwright page.fill() does not trigger React's controlled input onChange properly. Requires using native input value setter with dispatchEvent to trigger React state updates.",
+        "affected_selectors": ["[data-testid='be-guest-email']"],
+        "workaround": "Use page.evaluate with nativeInputValueSetter to set value and dispatch 'input' event"
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration173_loyalty_roi_pwa.py",
+    "/app/test_reports/pytest/pytest_iteration173_loyalty_roi_pwa.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "POST /api/booking-widget/loyalty-check (PUBLIC) - Returns correct tier discounts: standard=5%, silver=8%, gold=12%, platinum=18% - VERIFIED",
+    "Unknown email returns {is_member:false, tier:null, discount_pct:0} - VERIFIED",
+    "Known platinum member (test_stripe@example.com) returns is_member:true, tier:platinum, discount_pct:18 - VERIFIED",
+    "GET /api/marketing/automation/roi/{property_id}?days=90 returns correct structure with sent, conversions, conv_rate_pct, revenue, by_trigger - VERIFIED",
+    "ROI endpoint handles empty data gracefully (returns zeros) - VERIFIED",
+    "ROI endpoint requires admin auth (returns 401 without token) - VERIFIED",
+    "POST /api/booking-widget/book accepts loyalty_tier and loyalty_discount_pct fields - VERIFIED",
+    "Frontend loyalty-banner (data-testid='loyalty-banner') appears with tier emoji and discount message for members - VERIFIED",
+    "Frontend loyalty-line (data-testid='loyalty-line') shows discount percentage in price summary - VERIFIED",
+    "Frontend total price correctly shows discounted amount (£200 - 18% = £164) - VERIFIED",
+    "Non-member email does NOT show loyalty banner or discount line - VERIFIED",
+    "Marketing ROI card (data-testid='marketing-roi') renders ONLY when sent>0 - VERIFIED",
+    "PWA manifest.json accessible at /manifest.json with correct structure - VERIFIED",
+    "<link rel='manifest'> present in index.html - VERIFIED (after frontend restart)",
+    "Apple mobile meta tags present (apple-mobile-web-app-capable, status-bar-style, title) - VERIFIED"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration173_loyalty_roi_pwa.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all UI flows verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!, loyalty test email: test_stripe@example.com (platinum)",
+  "seed_data_creation": "None - used existing test_stripe@example.com platinum member",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Loyalty member rates feature is fully functional. The checkLoyalty function is triggered on email input blur. For Playwright testing, use native input value setter with dispatchEvent to properly trigger React controlled input updates. Marketing ROI card only renders when sent>0 (correct behavior). PWA manifest and meta tags are in place.",
+  "features_verified": {
+    "loyalty_member_rates": {
+      "endpoint": "POST /api/booking-widget/loyalty-check",
+      "auth": "PUBLIC (no auth required)",
+      "tiers": {
+        "standard": "5% discount",
+        "silver": "8% discount",
+        "gold": "12% discount",
+        "platinum": "18% discount"
+      },
+      "response_fields": ["is_member", "tier", "discount_pct", "message", "lifetime_points", "total_stays", "guest_name"],
+      "ui_elements": ["loyalty-banner", "loyalty-line"],
+      "status": "WORKING"
+    },
+    "marketing_roi_tracker": {
+      "endpoint": "GET /api/marketing/automation/roi/{property_id}?days=90",
+      "auth": "admin required",
+      "response_fields": ["sent", "conversions", "conv_rate_pct", "revenue", "by_trigger", "property_id", "window_days"],
+      "by_trigger_fields": ["sent", "conversions", "revenue", "conv_rate_pct"],
+      "ui_elements": ["marketing-roi", "marketing-roi-birthday", "marketing-roi-abandoned", "marketing-roi-win_back"],
+      "status": "WORKING"
+    },
+    "pwa_manifest": {
+      "manifest_url": "/manifest.json",
+      "manifest_fields": ["name", "short_name", "description", "start_url", "display", "icons", "shortcuts"],
+      "html_link": "<link rel='manifest' href='/manifest.json' />",
+      "apple_meta_tags": ["apple-mobile-web-app-capable", "apple-mobile-web-app-status-bar-style", "apple-mobile-web-app-title"],
+      "status": "WORKING"
+    },
+    "booking_with_loyalty_discount": {
+      "endpoint": "POST /api/booking-widget/book",
+      "new_fields": ["loyalty_tier", "loyalty_discount_pct"],
+      "rate_calculation": "rate field should contain discounted rate",
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "admin_login": "PASSED",
+    "booking_widget_search": "PASSED",
+    "rm_lab_accuracy_endpoint": "PASSED",
+    "rm_lab_marketing_queue_endpoint": "PASSED",
+    "rm_lab_btn_navigation": "PASSED"
+  }
+}

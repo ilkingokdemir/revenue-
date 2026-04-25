@@ -172,6 +172,7 @@ function AccuracyTab({ propertyId }) {
 // ====== MARKETING ======
 function MarketingTab({ propertyId }) {
   const [data, setData] = useState(null);
+  const [roi, setRoi] = useState(null);
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [filter, setFilter] = useState("");
@@ -180,8 +181,12 @@ function MarketingTab({ propertyId }) {
     if (!propertyId) return;
     setLoading(true);
     try {
-      const { data } = await axios.get(`${API}/marketing/automation/queue/${propertyId}${filter ? `?status=${filter}` : ""}`);
+      const [{ data }, { data: roiData }] = await Promise.all([
+        axios.get(`${API}/marketing/automation/queue/${propertyId}${filter ? `?status=${filter}` : ""}`),
+        axios.get(`${API}/marketing/automation/roi/${propertyId}?days=90`),
+      ]);
       setData(data);
+      setRoi(roiData);
     } catch { toast.error("Failed to load"); }
     setLoading(false);
   }, [propertyId, filter]);
@@ -212,6 +217,44 @@ function MarketingTab({ propertyId }) {
 
   return (
     <div className="space-y-4">
+      {/* ROI summary card */}
+      {roi && (roi.sent || 0) > 0 && (
+        <div className="bg-gradient-to-br from-emerald-900/30 via-teal-900/20 to-cyan-900/30 border border-emerald-500/30 rounded-2xl p-4" data-testid="marketing-roi">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-widest text-emerald-300 font-bold mb-1">Marketing ROI · last 90 days</div>
+              <h3 className="text-base font-bold text-stone-100">Conversions back to bookings</h3>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-black text-emerald-300 tabular-nums">{roi.conversions || 0}<span className="text-xs text-emerald-400 ml-1">/{roi.sent || 0}</span></div>
+                <div className="text-[10px] text-emerald-400/80">{roi.conv_rate_pct || 0}% conv. rate</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-black text-cyan-300 tabular-nums">{cur(roi.revenue || 0)}</div>
+                <div className="text-[10px] text-cyan-400/80">revenue attributed</div>
+              </div>
+            </div>
+          </div>
+          {Object.keys(roi.by_trigger || {}).length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-3">
+              {Object.entries(roi.by_trigger).map(([tg, v]) => {
+                const m = TRIGGER_META[tg] || TRIGGER_META.birthday;
+                return (
+                  <div key={tg} className={`rounded-lg p-2 border ${m.color}`} data-testid={`marketing-roi-${tg}`}>
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest mb-1">
+                      <span><m.icon className="w-3 h-3 inline mr-1" />{m.label}</span>
+                      <span>{v.conv_rate_pct || 0}%</span>
+                    </div>
+                    <div className="text-xs">{v.conversions || 0} / {v.sent || 0} → <span className="font-black tabular-nums">{cur(v.revenue || 0)}</span></div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           {Object.entries(TRIGGER_META).map(([k, m]) => (

@@ -19,6 +19,19 @@ export default function BookingWidgetPage({ propertyId }) {
   const [booking, setBooking] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
   const [form, setForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" });
+  const [loyalty, setLoyalty] = useState(null);  // { is_member, tier, discount_pct, message }
+  const [loyaltyChecking, setLoyaltyChecking] = useState(false);
+
+  const checkLoyalty = async (email) => {
+    const e = (email || "").trim();
+    if (!e || !e.includes("@")) { setLoyalty(null); return; }
+    setLoyaltyChecking(true);
+    try {
+      const { data } = await axios.post(`${API}/booking-widget/loyalty-check`, { guest_email: e });
+      setLoyalty(data?.is_member ? data : null);
+    } catch { setLoyalty(null); }
+    setLoyaltyChecking(false);
+  };
   const [guestOpen, setGuestOpen] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [gallery, setGallery] = useState([]);
@@ -96,12 +109,18 @@ export default function BookingWidgetPage({ propertyId }) {
   const book = async () => {
     if (!form.guest_name || !form.guest_email || !selected) return;
     setBooking(true);
+    const discPct = (loyalty?.is_member && loyalty.discount_pct) || 0;
+    const finalRate = discPct > 0
+      ? Number((selected.base_rate * (1 - discPct / 100)).toFixed(2))
+      : selected.base_rate;
     try {
       const { data } = await axios.post(`${API}/booking-widget/book`, {
         property_id: propertyId, room_type: selected.name, check_in: checkIn, check_out: checkOut,
         guest_name: form.guest_name, guest_email: form.guest_email, guest_phone: form.guest_phone,
-        special_requests: form.special_requests, rate: selected.base_rate, guests, rooms: roomCount, currency: hotel.currency,
+        special_requests: form.special_requests, rate: finalRate, guests, rooms: roomCount, currency: hotel.currency,
         pay_now: paymentMode === "pay_now",
+        loyalty_tier: loyalty?.tier || null,
+        loyalty_discount_pct: discPct,
         origin_url: window.location.origin,
       });
       // Stripe path → redirect immediately (state lost on redirect; OK because effect picks
@@ -519,7 +538,20 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Full Name *</label>
                   <input value={form.guest_name} onChange={e => setForm({ ...form, guest_name: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="John Smith" data-testid="be-guest-name" /></div>
                 <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Email Address *</label>
-                  <input type="email" value={form.guest_email} onChange={e => setForm({ ...form, guest_email: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="john@example.com" data-testid="be-guest-email" /></div>
+                  <input type="email" value={form.guest_email} onChange={e => setForm({ ...form, guest_email: e.target.value })} onBlur={e => checkLoyalty(e.target.value)} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="john@example.com" data-testid="be-guest-email" />
+                  {loyaltyChecking && <p className="text-[10px] text-stone-400 mt-1">Checking membership…</p>}
+                  {loyalty?.is_member && (
+                    <div className="mt-2 rounded-lg bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-300 p-3" data-testid="loyalty-banner">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{ {standard:"🏨", silver:"🥈", gold:"🥇", platinum:"💎"}[loyalty.tier] || "⭐"}</span>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-amber-900">{loyalty.message}</p>
+                          <p className="text-[10px] text-amber-700">{loyalty.lifetime_points?.toLocaleString() || 0} lifetime points · {loyalty.total_stays} stays</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Phone Number</label>
                   <input type="tel" value={form.guest_phone} onChange={e => setForm({ ...form, guest_phone: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="+44 7911 123456" data-testid="be-guest-phone" /></div>
                 <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Special Requests</label>
@@ -576,8 +608,18 @@ export default function BookingWidgetPage({ propertyId }) {
               </div>
               <div className="border-t border-stone-100 mt-4 pt-4">
                 <div className="flex justify-between text-xs text-stone-400 mb-1"><span>{nights} night{nights > 1 ? "s" : ""} x {cur(selected?.base_rate, cc)}</span><span>{cur(selected?.total_rate, cc)}</span></div>
+                {loyalty?.is_member && loyalty.discount_pct > 0 && (
+                  <div className="flex justify-between text-xs text-emerald-600 font-bold mb-1" data-testid="loyalty-line">
+                    <span>{(loyalty.tier || "").toUpperCase()} member discount</span>
+                    <span>−{loyalty.discount_pct}%</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs text-stone-400 mb-1"><span>Taxes & fees</span><span>Included</span></div>
-                <div className="flex justify-between"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold" style={{ color: ac }}>{cur(selected?.total_rate, cc)}</span></div>
+                <div className="flex justify-between"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold" style={{ color: ac }}>{
+                  loyalty?.is_member && loyalty.discount_pct > 0 && selected?.total_rate
+                    ? cur(Number((selected.total_rate * (1 - loyalty.discount_pct / 100)).toFixed(2)), cc)
+                    : cur(selected?.total_rate, cc)
+                }</span></div>
               </div>
               <div className="mt-4 space-y-1.5">{["Free cancellation until 48h before", "No prepayment needed", "Instant email confirmation"].map(t => (
                 <div key={t} className="flex items-center gap-1.5 text-[10px] text-emerald-600"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>{t}</div>

@@ -317,6 +317,63 @@ def create_forecast_accuracy_router(db, require_roles):
             raise HTTPException(404, "Not found")
         return {"ok": True}
 
+    @router.get("/marketing/automation/roi/{property_id}")
+    async def automation_roi(property_id: str, days: int = 90,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Cross-reference 'sent' marketing items with bookings created AFTER the send
+        date for the same guest_email. Reports conversions and revenue attributed."""
+        cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=int(days))).isoformat()
+        sent = await db.marketing_queue.find(
+            {"property_id": property_id, "status": "sent",
+             "sent_at": {"$gte": cutoff_iso}},
+            {"_id": 0, "id": 1, "trigger": 1, "guest_email": 1, "guest_id": 1,
+             "sent_at": 1, "subject": 1}
+        ).to_list(2000)
+
+        by_trigger = {}
+        total_conv = 0
+        total_rev = 0.0
+        for s in sent:
+            email = (s.get("guest_email") or "").strip().lower()
+            if not email:
+                continue
+            # Count bookings created strictly AFTER sent_at, attributable to this email
+            booking = await db.bookings.find_one(
+                {"property_id": property_id,
+                 "guest_email": {"$regex": f"^{email}$", "$options": "i"},
+                 "created_at": {"$gt": s.get("sent_at", "")},
+                 "status": {"$nin": ["cancelled"]}},
+                {"_id": 0, "id": 1, "total_price": 1, "created_at": 1, "booking_ref": 1}
+            )
+            tg = s.get("trigger", "")
+            slot = by_trigger.setdefault(tg, {"sent": 0, "conversions": 0, "revenue": 0.0})
+            slot["sent"] += 1
+            if booking:
+                rev = float(booking.get("total_price") or 0)
+                slot["conversions"] += 1
+                slot["revenue"] += rev
+                total_conv += 1
+                total_rev += rev
+
+        # Compute conversion-rate per trigger
+        for tg, slot in by_trigger.items():
+            slot["revenue"] = round(slot["revenue"], 2)
+            slot["conv_rate_pct"] = (
+                round((slot["conversions"] / slot["sent"]) * 100, 1) if slot["sent"] > 0 else 0
+            )
+
+        total_sent = sum(v["sent"] for v in by_trigger.values())
+        return {
+            "property_id": property_id,
+            "window_days": int(days),
+            "sent": total_sent,
+            "conversions": total_conv,
+            "conv_rate_pct": round((total_conv / total_sent) * 100, 1) if total_sent else 0,
+            "revenue": round(total_rev, 2),
+            "by_trigger": by_trigger,
+            "as_of": datetime.now(timezone.utc).isoformat(),
+        }
+
     return router
 
 

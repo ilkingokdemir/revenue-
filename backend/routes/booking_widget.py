@@ -79,6 +79,34 @@ def create_booking_widget_router(db, require_roles):
 
     # ==================== PUBLIC: CHECK AVAILABILITY ====================
 
+    @router.post("/booking-widget/loyalty-check")
+    async def widget_loyalty_check(data: Dict):
+        """Public: check whether a guest_email is a known loyalty member.
+        Returns the tier and the exclusive direct-booking discount % to apply.
+        """
+        email = (data.get("guest_email") or "").strip().lower()
+        if not email:
+            raise HTTPException(400, "guest_email required")
+        # Find loyalty member by email
+        member = await db.loyalty_members.find_one(
+            {"guest_email": {"$regex": f"^{email}$", "$options": "i"}},
+            {"_id": 0, "tier": 1, "guest_name": 1, "lifetime_points": 1, "total_stays": 1}
+        )
+        if not member:
+            return {"is_member": False, "tier": None, "discount_pct": 0}
+        tier = member.get("tier", "standard")
+        # Exclusive direct-book discounts (mirrors industry: bigger reward for higher tiers)
+        discount = {"standard": 5, "silver": 8, "gold": 12, "platinum": 18}.get(tier, 5)
+        return {
+            "is_member": True,
+            "tier": tier,
+            "guest_name": member.get("guest_name", ""),
+            "lifetime_points": member.get("lifetime_points", 0),
+            "total_stays": member.get("total_stays", 0),
+            "discount_pct": discount,
+            "message": f"Welcome back! As a {tier.upper()} member you get {discount}% off when you book direct.",
+        }
+
     @router.post("/booking-widget/check-availability")
     async def check_availability(data: Dict):
         """Public: Check room availability for dates"""

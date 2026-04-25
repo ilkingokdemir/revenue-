@@ -3,6 +3,39 @@
 ## 88+ Modules | Mobile Responsive | 167 Test Iterations (100%)
 
 
+### Iter 201 (Apr 2026): ⭐ Reputation Dashboard — Multi-Platform Review Aggregator + AI Reply
+
+User ask (TR): _"Olur, devam et eksiklerin hepsini tamamla"_ (Sprint 2 başlangıcı — Reputation Management widget)
+
+**Backend:** No new endpoints — `/api/reviews/*` collection was already rich (`stats/summary`, `generate-ai-response`, `respond`, `seed`, sentiment fields). Reused as-is.
+
+**Frontend (`ReputationDashboard.js` ~330 lines):**
+- New top-level component shipped to `RevenuePanel` as a tab (`reputation`, Star icon)
+- Header: hotel name pill + Seed Demo button + Refresh button
+- 4 KPI cards: Avg Rating ★, Response Rate %, Pending count, Positive %
+- 2 visualisation cards:
+  - **Sentiment Breakdown** bars (positive/neutral/negative) with % labels
+  - **By Platform** bars (Booking.com / Google / TripAdvisor / Expedia / Airbnb) — colour-coded per platform
+- Filter bar: 3 dropdowns (platform, sentiment, responded/pending) + live count
+- Review list (scrollable, max 50): each card shows
+  - Platform pill (colour-coded), star rating, sentiment badge with thumb-up/down icon, "Yanıtlandı" badge, guest name + date
+  - Review text + (if responded) inline emerald-highlighted reply quote
+  - **Yanıtla / Düzenle** gradient button → opens reply composer modal
+- **Reply Composer Modal**:
+  - Original review quoted at top
+  - Free-text textarea
+  - **AI ile yaz** button (cyan→violet gradient) — POSTs to `/reviews/generate-ai-response` (Claude via emergent LLM key) and pre-fills draft
+  - Send → PUTs to `/reviews/{id}/respond`
+  - Branch hygiene: state resets on `propertyId` change
+
+**i18n:** Added `rev.tab.reputation` keys to both `tr.json` (`İtibar`) and `en.json` (`Reputation`).
+
+**Verified:**
+- Backend `/reviews/stats/summary?property_id=default` → returns 38 reviews, 97.4% response_rate, by_platform breakdown ✓
+- Frontend lint clean (`ReputationDashboard.js`, `RevenuePanel.js`)
+- Smoke test: dashboard loads cleanly after JSON typo fix in `tr.json` (double comma issue caught + fixed)
+
+
 ### Iter 200 (Apr 2026): 📦 Iframe Embed Widget — "Book Direct" on the hotel's own site
 
 User ask (TR): _"Olur"_ (response to: would you like an iframe-embeddable booking widget for hotel's own website?)

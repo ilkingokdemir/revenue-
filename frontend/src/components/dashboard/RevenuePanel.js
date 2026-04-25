@@ -32,10 +32,11 @@ import { DisplacementAnalysis } from "./DisplacementAnalysis";
 import { LOSOptimizer } from "./LOSOptimizer";
 import { WeeklyDigest } from "./WeeklyDigest";
 import { RateScraper } from "./RateScraper";
+import ReputationDashboard from "./ReputationDashboard";
 import {
   BarChart3, CalendarDays, Settings2, Zap, CheckSquare, Users, Search, Wand2,
   LineChart, PieChart, BookOpen, FlaskConical, Hotel, Bell, DollarSign,
-  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper, History, Activity, Trophy, AlertTriangle, Scale, Timer, Sparkles, ScanLine
+  Network, Eye, Bot, Download, ChevronRight, Radar, BrainCircuit, PartyPopper, History, Activity, Trophy, AlertTriangle, Scale, Timer, Sparkles, ScanLine, Star
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -78,6 +79,7 @@ const NAV_SECTIONS = [
       { id: "forecasting", labelKey: "rev.tab.forecasting", icon: LineChart },
       { id: "analytics", labelKey: "nav.analytics", icon: PieChart },
       { id: "competitors", labelKey: "rev.tab.competitors", fallback: "Competitors", icon: Eye },
+      { id: "reputation", labelKey: "rev.tab.reputation", fallback: "Reputation", icon: Star },
     ],
   },
   {
@@ -233,6 +235,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
               {tab === "market-robot" && <MarketRobot propertyId={pid} properties={properties} />}
+              {tab === "reputation" && <ReputationDashboard propertyId={pid} hotelName={(properties || []).find(p => p.id === pid)?.name || ""} />}
               {tab === "compset-intel" && <CompsetIntelligence propertyId={pid} />}
               {tab === "price-alerts" && <PriceAlerts propertyId={pid} onNavigate={handleNavigate} />}
               {tab === "weekly-digest" && <WeeklyDigest propertyId={pid} />}

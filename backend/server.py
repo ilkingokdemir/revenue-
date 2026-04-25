@@ -567,6 +567,11 @@ api_router.include_router(concierge_router)
 from routes.sustainability import create_sustainability_router
 sustainability_router = create_sustainability_router(db, require_roles)
 api_router.include_router(sustainability_router)
+from routes.nightly_recap import create_nightly_recap_router, create_concierge_topics_router
+nightly_recap_router = create_nightly_recap_router(db, require_roles)
+api_router.include_router(nightly_recap_router)
+concierge_topics_router = create_concierge_topics_router(db, require_roles)
+api_router.include_router(concierge_topics_router)
 from routes.currency_fx import create_currency_fx_router
 currency_fx_router = create_currency_fx_router(db)
 api_router.include_router(currency_fx_router)

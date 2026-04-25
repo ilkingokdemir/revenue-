@@ -10,7 +10,7 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
-  MessageCircle, Loader2, Flag, RefreshCw, Sparkles, Clock, AlertCircle, Check,
+  MessageCircle, Loader2, Flag, RefreshCw, Sparkles, Clock, AlertCircle, Check, BarChart3,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -31,6 +31,18 @@ export default function ConciergeInboxPanel({ propertyId, hotelName = "" }) {
   const [activeId, setActiveId] = useState(null);
   const [thread, setThread] = useState(null);
   const [filter, setFilter] = useState("all");  // all | flagged
+  const [topics, setTopics] = useState(null);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+
+  const loadTopics = useCallback(async () => {
+    if (!propertyId) return;
+    setTopicsLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/concierge/admin/${propertyId}/topics?days=30`);
+      setTopics(data);
+    } catch { /* noop */ }
+    setTopicsLoading(false);
+  }, [propertyId]);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -42,7 +54,7 @@ export default function ConciergeInboxPanel({ propertyId, hotelName = "" }) {
     setLoading(false);
   }, [propertyId]);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setActiveId(null); setThread(null); }, [propertyId]);
+  useEffect(() => { setActiveId(null); setThread(null); setTopics(null); }, [propertyId]);
 
   const openThread = async (sid) => {
     setActiveId(sid);
@@ -100,6 +112,43 @@ export default function ConciergeInboxPanel({ propertyId, hotelName = "" }) {
         <Stat icon={MessageCircle} label="Total sessions"  value={data?.total_sessions ?? 0} color="text-cyan-300" />
         <Stat icon={Clock}          label="Total messages"  value={data?.total_messages ?? 0} color="text-violet-300" />
         <Stat icon={Flag}           label="Flagged"         value={data?.flagged_messages ?? 0} color="text-rose-300" />
+      </div>
+
+      {/* Most-asked topics (GPT-clustered) */}
+      <div className="bg-gradient-to-br from-violet-900/20 to-stone-900/40 border border-violet-500/20 rounded-2xl p-4 mb-4" data-testid="ci-topics">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-bold text-stone-100 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-violet-400" />Most-asked topics · last 30 days
+          </h3>
+          <button onClick={loadTopics} disabled={topicsLoading} data-testid="ci-topics-load"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-[11px] font-bold disabled:opacity-50">
+            {topicsLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+            {topics ? "Refresh" : "Analyse with AI"}
+          </button>
+        </div>
+        {topics ? (
+          topics.topics?.length > 0 ? (
+            <div className="space-y-1.5">
+              {topics.topics.slice(0, 8).map((t, i) => {
+                const pct = Math.round((t.count / Math.max(1, topics.samples)) * 100);
+                return (
+                  <div key={i} className="flex items-center gap-3" data-testid={`ci-topic-${i}`}>
+                    <div className="text-xs font-bold text-stone-200 w-44 truncate">{t.topic}</div>
+                    <div className="flex-1 h-2 bg-stone-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-violet-500 to-fuchsia-500" style={{ width: `${Math.min(100, pct * 2)}%` }} />
+                    </div>
+                    <div className="text-xs font-bold text-violet-300 tabular-nums w-14 text-right">{t.count}× · {pct}%</div>
+                  </div>
+                );
+              })}
+              <p className="text-[10px] text-stone-500 mt-2">{topics.fallback ? "Heuristic clustering" : "GPT-5.2 clustered"} · {topics.samples} guest questions</p>
+            </div>
+          ) : (
+            <p className="text-xs text-stone-500">No questions in the last {topics.window_days} days yet.</p>
+          )
+        ) : (
+          <p className="text-xs text-stone-500">Click <strong>Analyse with AI</strong> to see what guests keep asking.</p>
+        )}
       </div>
 
       {/* Two-column: sessions list + thread detail */}

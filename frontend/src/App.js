@@ -87,6 +87,7 @@ import ConciergeInboxPanel from "./components/dashboard/ConciergeInboxPanel";
 import GroupRequestsPanel from "./components/dashboard/GroupRequestsPanel";
 import SustainabilityPanel from "./components/dashboard/SustainabilityPanel";
 import HousekeepingRoutePanel from "./components/dashboard/HousekeepingRoutePanel";
+import NightlyRecapPanel from "./components/dashboard/NightlyRecapPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2683,6 +2684,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "ai-pricing-v2", icon: Lightning, name: "AI Pricing v2 (GPT)", testId: "ai-pricing-v2-btn" },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity Heatmap", testId: "parity-heatmap-btn" },
         { id: "morning-brief", icon: ChartLine, name: "Morning Brief & Autopilot", testId: "morning-brief-btn" },
+        { id: "nightly-recap", icon: ChartLine, name: "Nightly Recap (last night)", testId: "nightly-recap-btn" },
         { id: "rm-lab", icon: ChartLine, name: "RM Lab (Accuracy + Marketing)", testId: "rm-lab-btn" },
         { id: "concierge-inbox", icon: ChartLine, name: "Concierge Inbox (AI)", testId: "concierge-inbox-btn" },
         { id: "group-requests", icon: Users, name: "Group Requests & Allotments", testId: "group-requests-btn" },
@@ -2808,6 +2810,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "ai-pricing-v2-btn":      "revenue_forecasting_view",
     "parity-heatmap-btn":     "revenue_forecasting_view",
     "morning-brief-btn":      "revenue_forecasting_view",
+    "nightly-recap-btn":      "revenue_forecasting_view",
     "rm-lab-btn":             "revenue_forecasting_view",
     "concierge-inbox-btn":    "revenue_forecasting_view",
     "group-requests-btn":     "view_bookings",
@@ -3423,6 +3426,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Morning Brief & Pricing Autopilot */}
         {activeView === "morning-brief" && (
           <MorningBriefPanel
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
+        )}
+
+        {/* Nightly Recap */}
+        {activeView === "nightly-recap" && (
+          <NightlyRecapPanel
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
           />

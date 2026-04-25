@@ -1,6 +1,29 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 174 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 175 Test Iterations (100%)
+
+
+### Iter 207 (Apr 2026): ⭐ Concierge Inbox — admin AI feedback loop
+
+User ask (TR): _"Rakiplerle karşılaştır eksik olanları tamamla"_ — agent autonomously shipped the next no-key competitor differentiator.
+
+**Backend (4 admin endpoints in `routes/concierge.py`):**
+- `GET /api/concierge/admin/{property_id}/sessions` — Mongo aggregation grouping `concierge_chats` by `session_id`. Returns `{sessions:[{session_id, first_at, last_at, last_role, last_preview, messages, flagged}], total_sessions, total_messages, flagged_messages}`.
+- `GET /api/concierge/admin/{property_id}/session/{session_id}` — full ordered message list.
+- `POST /api/concierge/admin/messages/{message_id}/flag` body `{reason, corrected_reply?}` — marks flagged=true with reason; 404 on unknown id.
+- `POST /api/concierge/admin/messages/{message_id}/unflag` — clears flag; 404 on unknown id.
+
+**Frontend (`components/dashboard/ConciergeInboxPanel.js` — NEW):**
+- 3-stat header (sessions / messages / flagged), Flagged-only filter toggle.
+- Two-column layout: 340px sessions list (last_preview, role chip, msg count, flag count) + thread detail (chat-bubble UI).
+- Each AI reply has a "Flag" / "Clear flag" action — clicking Flag opens a prompt for the reason; flagged messages render with a rose border and a "FLAGGED" pill.
+- App.js wired with `concierge-inbox` route under "Revenue & Rates" menu.
+
+**Why it matters vs competitors:** No major PMS (Cloudbeds/SiteMinder/Eviivo/Mews) ships an AI conversation auditing console. Reception now has a feedback loop to grade AI accuracy, surface common gaps (e.g. "guests keep asking about parking"), and guide the next prompt revision.
+
+**Testing — `iteration_175.json`:** **10/10 backend ✅ · 100% frontend ✅ · zero issues.**
+
+---
 
 
 ### Iter 206 (Apr 2026): ⭐ AI Concierge — public chat for direct booking widget

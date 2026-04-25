@@ -82,6 +82,7 @@ import PaceReports from "./components/dashboard/PaceReports";
 import AIPricingV2Panel from "./components/dashboard/AIPricingV2Panel";
 import ParityHeatmapPanel from "./components/dashboard/ParityHeatmapPanel";
 import MorningBriefPanel from "./components/dashboard/MorningBriefPanel";
+import RMLabPanel from "./components/dashboard/RMLabPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2677,6 +2678,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "ai-pricing-v2", icon: Lightning, name: "AI Pricing v2 (GPT)", testId: "ai-pricing-v2-btn" },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity Heatmap", testId: "parity-heatmap-btn" },
         { id: "morning-brief", icon: ChartLine, name: "Morning Brief & Autopilot", testId: "morning-brief-btn" },
+        { id: "rm-lab", icon: ChartLine, name: "RM Lab (Accuracy + Marketing)", testId: "rm-lab-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
       ],
@@ -2797,6 +2799,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "ai-pricing-v2-btn":      "revenue_forecasting_view",
     "parity-heatmap-btn":     "revenue_forecasting_view",
     "morning-brief-btn":      "revenue_forecasting_view",
+    "rm-lab-btn":             "revenue_forecasting_view",
     "revenue-btn":            "revenue_dashboard_view",
     "profit-os-btn":          "revenue_profit_os_view",
     "approval-queue-btn":     "revenue_approvals_view",
@@ -3401,6 +3404,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Morning Brief & Pricing Autopilot */}
         {activeView === "morning-brief" && (
           <MorningBriefPanel
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
+        )}
+
+        {/* RM Lab — Forecast Accuracy + Marketing Automation */}
+        {activeView === "rm-lab" && (
+          <RMLabPanel
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
           />

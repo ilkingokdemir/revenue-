@@ -558,6 +558,9 @@ api_router.include_router(unified_inbox_router)
 from routes.competitor_parity import create_competitor_parity_router
 competitor_parity_router = create_competitor_parity_router(db, require_roles)
 api_router.include_router(competitor_parity_router)
+from routes.forecast_accuracy import create_forecast_accuracy_router
+forecast_accuracy_router = create_forecast_accuracy_router(db, require_roles)
+api_router.include_router(forecast_accuracy_router)
 from routes.currency_fx import create_currency_fx_router
 currency_fx_router = create_currency_fx_router(db)
 api_router.include_router(currency_fx_router)

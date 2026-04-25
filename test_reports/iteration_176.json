@@ -1,0 +1,80 @@
+{
+  "summary": "Iteration 176 - Group Requests & Allotments Admin Panel tested. All 3 backend endpoints working (POST public submit, GET admin list, PUT admin update). Frontend panel loads correctly with stats cards, list, detail view, and all action buttons. Status updates (quoted/confirmed/cancelled) work with toast notifications. Regression tests passed for Concierge Inbox and RM Lab navigation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration176_group_requests.py",
+    "/app/test_reports/pytest/pytest_iteration176_group_requests.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "POST /api/group-booking/request (PUBLIC) - accepts all required fields, returns {status:'submitted', id, message} - VERIFIED",
+    "GET /api/group-booking/requests/{property_id} (admin auth) - returns array sorted by created_at desc - VERIFIED",
+    "PUT /api/group-booking/{booking_id} (admin auth) - updates status/admin_notes/quoted_price - VERIFIED",
+    "Frontend panel (data-testid='group-requests-panel') loads correctly - VERIFIED",
+    "Stats cards (data-testid='gr-stats') show Total/Pending/Quoted/Confirmed/Quoted Volume - VERIFIED",
+    "List (data-testid='gr-list') populated with items (data-testid='gr-item-{id}') - VERIFIED",
+    "Detail panel (data-testid='gr-detail-{id}') shows contact info, dates, rooms, guests - VERIFIED",
+    "Status select (data-testid='gr-status-select') works - VERIFIED",
+    "Quoted price input (data-testid='gr-quoted-price') works - VERIFIED",
+    "Admin notes textarea (data-testid='gr-admin-notes') works - VERIFIED",
+    "Send quote button (data-testid='gr-quote') marks status as 'quoted' with toast - VERIFIED",
+    "Confirm & block button (data-testid='gr-confirm') marks status as 'confirmed' - VERIFIED",
+    "Cancel button (data-testid='gr-cancel') marks status as 'cancelled' - VERIFIED",
+    "Status filter via stat card clicks works - VERIFIED",
+    "Clear filter link works - VERIFIED",
+    "Panel correctly distinguishes from GroupBookingsPanel (master-folio billing) - VERIFIED"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration176_group_requests.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (all UI flows verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created test group request via POST /api/group-booking/request during backend tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Group Requests & Allotments panel fully functional. Panel requires a specific property selected (not 'All Branches') to show data. Test data exists for 'aldgate-flats' property. The panel is DIFFERENT from GroupBookingsPanel (master-folio billing) - they have different data-testids (group-requests-panel vs group-bookings-panel).",
+  "features_verified": {
+    "group_requests_admin": {
+      "backend_endpoints": {
+        "submit_request": "POST /api/group-booking/request (PUBLIC)",
+        "list_requests": "GET /api/group-booking/requests/{property_id} (admin auth)",
+        "update_request": "PUT /api/group-booking/{booking_id} (admin auth)"
+      },
+      "request_fields": ["property_id", "contact_name", "contact_email", "contact_phone", "company_name", "event_type", "check_in", "check_out", "total_rooms", "total_guests", "room_preferences", "special_requirements", "budget_range"],
+      "update_fields": ["status", "admin_notes", "quoted_price"],
+      "status_values": ["pending", "quoted", "confirmed", "cancelled"],
+      "ui_elements": {
+        "panel": "data-testid='group-requests-panel'",
+        "stats": "data-testid='gr-stats'",
+        "list": "data-testid='gr-list'",
+        "item": "data-testid='gr-item-{id}'",
+        "detail": "data-testid='gr-detail-{id}'",
+        "status_select": "data-testid='gr-status-select'",
+        "quoted_price": "data-testid='gr-quoted-price'",
+        "admin_notes": "data-testid='gr-admin-notes'",
+        "quote_btn": "data-testid='gr-quote'",
+        "confirm_btn": "data-testid='gr-confirm'",
+        "cancel_btn": "data-testid='gr-cancel'",
+        "refresh": "data-testid='gr-refresh'"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "concierge_inbox": "PASSED - panel loads with data-testid='concierge-inbox-panel'",
+    "rm_lab": "PASSED - panel loads with Accuracy/Marketing tabs",
+    "admin_login": "PASSED - redirects to dashboard",
+    "group_bookings_master_folio": "PASSED - different endpoint /api/group-blocks/{property_id} still works"
+  }
+}

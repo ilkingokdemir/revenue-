@@ -1,6 +1,25 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 178 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 179 Test Iterations (100%)
+
+
+### Iter 211 (Apr 2026): ⭐ Nightly Recap + Concierge Most-Asked Topics
+
+User ask (TR): _"Rakiplerde olan Bizde olmayanları yap önce"_ — explicit focus on competitor parity. Two real gaps shipped.
+
+**1. Nightly Recap (`routes/nightly_recap.py` + `NightlyRecapPanel.js` — both NEW):**
+- `GET /api/nightly-recap/{property_id}?date_str=&yoy=true` — single-night look-back digest with rooms_sold, occupancy_pct, revenue, ADR, RevPAR, arrivals, departures, no_shows, walk_ins, cancellations, top 5 room types by revenue, YoY comparison block (occ_delta_pp, rev_delta_pct, adr_delta_pct), and a **GPT-5.2 3-line commentary** highlighting biggest mover + tonight recommendation.
+- 400 on invalid date.
+- Frontend: Indigo gradient header with weekday label + date picker, 4 KPI tiles with delta arrows, violet AI commentary card, 5 movement tiles, YoY 4-row comparison block.
+- **Why it matters:** Cloudbeds + Mews ship "last night summary" emails as their sticky owner-engagement feature. We had Morning Brief (forward-looking) but not the look-back complement.
+
+**2. Concierge Most-Asked Topics (`/api/concierge/admin/{property_id}/topics`):**
+- GPT-5.2 reads the last 30 days of guest questions and returns `{topics:[{topic, count, samples[]}], samples, window_days, fallback}` — sorted desc by count, English topic labels even with mixed-language input. Heuristic keyword-bucket fallback if no LLM.
+- Frontend: integrated as a violet card at the top of the Concierge Inbox panel. Click "Analyse with AI" → renders horizontal bars per topic with count + percentage. Live test: 21 questions clustered into 5 topics (Room types 8×, Greetings 4×, Check-in 4×, Parking 3×, Meeting rooms 2×).
+
+**Testing — `iteration_211.json`:** **17/17 backend ✅ · 100% frontend ✅ · zero issues.**
+
+---
 
 
 ### Iter 210 (Apr 2026): ⭐ Housekeeping Route Optimizer + ESG Eco-Badge on widget

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="14" failures="0" skipped="0" tests="14" time="843.568" timestamp="2026-04-25T21:42:12.315389+00:00" hostname="agent-env-a9d7a5c1-de72-4617-a5b9-ed7dde4401f0"><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_summary_endpoint" time="60.294"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_summary_default_dates" time="60.191"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_sales_quickbooks_csv" time="60.265"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_sales_xero_csv" time="60.200"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_payments_quickbooks_csv" time="60.244"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_payments_xero_csv" time="60.233"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_sales_invalid_date_format" time="60.258"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_sales_invalid_to_date" time="60.226"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestAccountingExport" name="test_unauthorized_access" time="60.328"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:30: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestHousekeepingRoute" name="test_housekeeping_route_endpoint" time="60.230"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:228: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestRegressionSmoke" name="test_nightly_recap_endpoint" time="60.239"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:266: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestRegressionSmoke" name="test_sustainability_endpoint" time="60.230"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:266: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestRegressionSmoke" name="test_group_requests_endpoint" time="60.232"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:266: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase><testcase classname="backend.tests.test_iteration212_accounting_export_hk_print.TestRegressionSmoke" name="test_concierge_inbox_endpoint" time="60.206"><error message="failed on setup with &quot;AssertionError: Login failed: The preview environment is not responding. It may be starting up.&#10;  &#10;assert 502 == 200&#10; +  where 502 = &lt;Response [502]&gt;.status_code&quot;">backend/tests/test_iteration212_accounting_export_hk_print.py:266: in setup
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+E   AssertionError: Login failed: The preview environment is not responding. It may be starting up.
+E     
+E   assert 502 == 200
+E    +  where 502 = &lt;Response [502]&gt;.status_code</error></testcase></testsuite></testsuites>

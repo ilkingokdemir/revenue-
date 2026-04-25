@@ -11,7 +11,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Loader2, Route, RefreshCw, Crown, ArrowDownToLine, ArrowUpToLine, Clock,
-  CheckCircle2, AlertCircle, Bed,
+  CheckCircle2, AlertCircle, Bed, Printer,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -64,6 +64,44 @@ export default function HousekeepingRoutePanel({ propertyId, hotelName = "" }) {
     setCompleting(null);
   };
 
+  const printRound = () => {
+    // Render a printable HTML document in a new window — works on every browser
+    // without needing a backend PDF service.
+    const win = window.open("", "_blank");
+    if (!win) return toast.error("Pop-up blocked");
+    const html = `<!doctype html><html><head><title>Cleaning round · ${hotelName || ""} · ${new Date().toLocaleDateString()}</title>
+      <style>
+        body { font-family: -apple-system, system-ui, sans-serif; padding: 20px; color: #111; }
+        h1 { font-size: 18px; margin: 0 0 6px; }
+        .meta { font-size: 11px; color: #666; margin-bottom: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        th, td { border-bottom: 1px solid #ddd; padding: 6px 4px; text-align: left; }
+        th { background: #f5f5f5; font-size: 9px; text-transform: uppercase; }
+        .check { width: 18px; height: 18px; border: 2px solid #333; display: inline-block; }
+        .vip { color: #7c3aed; font-weight: bold; }
+        .checkout { background: #fef3c7; }
+        .arrival { background: #cffafe; }
+      </style></head><body>
+      <h1>Cleaning round · ${hotelName || ""}</h1>
+      <div class="meta">Generated ${new Date().toLocaleString()} · ${rounds.length} rooms · ETA ${fmtMins(data?.total_estimated_minutes || 0)}</div>
+      <table><thead><tr><th>#</th><th>Room</th><th>Floor</th><th>Type</th><th>Kind</th><th>Tags</th><th>Guest</th><th>ETA</th><th>Done</th></tr></thead><tbody>
+        ${rounds.map(r => `<tr class="${r.kind === 'checkout' ? 'checkout' : r.kind === 'arrival_ready' ? 'arrival' : ''}">
+          <td>${r.position}</td>
+          <td><strong>${r.room_number ?? "—"}</strong></td>
+          <td>${r.floor ?? ""}</td>
+          <td>${r.room_type ?? ""}</td>
+          <td>${r.kind}</td>
+          <td>${(r.tags || []).map(t => t === 'vip' ? `<span class="vip">${t}</span>` : t).join(", ")}</td>
+          <td>${r.guest_name || ""}</td>
+          <td>${fmtMins(r.eta_minutes_from_start)} (+${r.estimated_minutes}m)</td>
+          <td><span class="check"></span></td>
+        </tr>`).join("")}
+      </tbody></table></body></html>`;
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => win.print(), 400);
+  };
+
   const rounds = data?.rounds || [];
 
   return (
@@ -79,6 +117,10 @@ export default function HousekeepingRoutePanel({ propertyId, hotelName = "" }) {
         <button onClick={load} disabled={loading} data-testid="hk-route-refresh"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-white text-xs font-bold">
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}Refresh
+        </button>
+        <button onClick={printRound} disabled={!rounds.length} data-testid="hk-route-print"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold disabled:opacity-50">
+          <Printer className="w-3.5 h-3.5" />Print round
         </button>
       </div>
 

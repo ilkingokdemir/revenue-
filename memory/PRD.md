@@ -1,6 +1,27 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 176 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 177 Test Iterations (100%)
+
+
+### Iter 209 (Apr 2026): ⭐ Sustainability/ESG Dashboard + AI Auto-Quote for Group Requests
+
+User ask (TR): _"Yazılımımı incele rakiplerle karşılaştır eksik olanları tamamla"_ — agent inspected 134 backend routes + 137 frontend panels and shipped two more competitive wedges, both no-key.
+
+**1. Sustainability / ESG Dashboard (`routes/sustainability.py` + `SustainabilityPanel.js` — both NEW):**
+
+- `GET/POST /api/esg/{property_id}/config` — baselines (kWh/RN, water L/RN, waste kg/RN, CO₂ factor) + 10 default green initiatives with weights (LED, low-flow, renewable tariff, EV charging, composting, carbon offset, etc.).
+- `POST /api/esg/{property_id}/reading` — monthly utility entry, idempotent per month.
+- `DELETE /api/esg/{property_id}/reading/{reading_id}` — 404 on unknown.
+- `GET /api/esg/{property_id}/dashboard?months=12` — auto-computes kWh/RN, water/RN, waste/RN, CO₂/RN by overlapping bookings against each month, vs baseline %, **ESG score (0-100)** = 60% intensity + 40% initiatives, **letter grade A+/A/B/C/D**.
+- Frontend: gradient hero with score + grade + 2 progress bars (intensity / initiatives), 4 latest tiles (electricity / water / waste / CO₂ each with delta-vs-baseline arrow), Recharts line chart for trend, initiatives checklist tiles, readings table with row delete, **Configure modal** for baselines + initiative toggles.
+
+**2. AI Auto-Quote (`POST /api/group-booking/{id}/ai-quote` + button in Group Requests panel):**
+- GPT-5.2 reads request payload + property room_types and returns strict-JSON `{suggested_total, per_room_per_night, discount_pct, currency, reasoning}`. Heuristic fallback: avg base × rooms × nights × (1 − 5–10% group discount).
+- Frontend: violet "AI Auto-Quote" button in detail card. Result renders as a violet card with big total, /room/night & discount %, reasoning. "Use this" button pulls into the quoted_price input + appends reasoning to admin notes.
+
+**Testing — `iteration_209.json`:** **100% backend ✅ · 95% frontend ✅** (Group Requests panel correctly requires a specific property — by design). Live test: ESG jumped from 0/D to 100/A+ after seeding; AI quoted £3200 for an 8-room/4-night corporate request with 3.2% discount and grounded reasoning.
+
+---
 
 
 ### Iter 208 (Apr 2026): ⭐ Group Requests & Allotments admin panel

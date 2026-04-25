@@ -1,6 +1,30 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 179 Test Iterations (100%)
+## 88+ Modules | Mobile Responsive | 180 Test Iterations (100%)
+
+
+### Iter 212 (Apr 2026): ⭐ Accounting Export (QuickBooks/Xero CSV) + HK Route Print
+
+User ask (TR): _"Devam et"_ — keep filling competitor-only gaps.
+
+**1. Accounting Export (`routes/accounting_export.py` + `AccountingExportPanel.js` — both NEW):**
+- `GET /api/accounting/export/{property_id}/summary?from_=&to=` — preview bookings_count, total_revenue, payments_count.
+- `GET /api/accounting/export/{property_id}/sales?from_=&to=&format=quickbooks|xero` — streaming CSV download.
+  - **QuickBooks Online format**: Date / Journal No. / Account / Debits / Credits / Description / Name / Class. Each booking → 2 rows (DR Accounts Receivable / CR Room Revenue). Class column = booking source.
+  - **Xero Sales Invoice format**: *ContactName / EmailAddress / *InvoiceNumber / Reference / *InvoiceDate / *DueDate / *Description / *Quantity / *UnitAmount / *AccountCode / *TaxType.
+- `GET /api/accounting/export/{property_id}/payments?from_=&to=&format=...` — captured payments as cash receipts (DR Cash / CR Accounts Receivable).
+- 400 on invalid YYYY-MM-DD.
+- Frontend: filters card (date range, format dropdown, refresh) + 3 summary tiles + 2 large download cards (Sales / Payments). Browser-side blob download. Live: 289 bookings / £83,814 exported correctly in both formats.
+
+**2. HK Route Print Round (`HousekeepingRoutePanel.js` extended):**
+- New cyan "Print round" button (data-testid `hk-route-print`) — opens a new tab with a print-styled HTML round (room # + floor + kind + tags + guest + ETA + done-tickbox), auto-fires `window.print()`. Disabled when no rooms in round.
+- Saves housekeeping team a manual transcription step. Eviivo ships this; many smaller PMSes don't.
+
+**Why these matter (competitor parity):** Cloudbeds + Mews ship full accounting integration via OAuth (we shipped CSV — same end result, no key required). Eviivo ships printed housekeeping rounds — we now match.
+
+**Testing — `iteration_212.json`:** **100% backend ✅ · 100% frontend ✅ · zero issues.**
+
+---
 
 
 ### Iter 211 (Apr 2026): ⭐ Nightly Recap + Concierge Most-Asked Topics

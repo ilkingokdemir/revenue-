@@ -1,6 +1,36 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 100+ Modules | Mobile Responsive | 215 Test Iterations (100%)
+## 105+ Modules | Mobile Responsive | 216 Test Iterations (100%)
+
+
+### Iter 216 (Apr 2026): ⭐ Batch 3 — Spa Slots + Staff Ops + Revenue Protection (15/30 P0 done)
+
+User ask (TR): _"devam et"_ — Batch 3 ships 5 more P0 wedges.
+
+**1. Spa & Activity Time-Slot Booking (`routes/timeslots.py` + `TimeSlotsPanel.js`):**
+- Service definitions with category (spa/gym/golf/restaurant/activity), duration, capacity, weekday rules, buffer, price.
+- `availability` endpoint generates slots from open→close - duration intervals, deducts booked count per slot.
+- Booking posts charge to room folio if `charge_to=room` and a `booking_id` is supplied.
+
+**2. Staff Clock-In/Out + Tip Pool (`routes/staff_ops.py` + `StaffOpsPanel.js`):**
+- `POST /staff/clock-in` (idempotent — won't double-clock the same person) + `POST /staff/clock-out/{id}` (computes duration_min).
+- `POST /tip-pool/{property_id}/contribute` records tips. `POST /distribute` weights shifts by `hours * role_weight` (server 1.0 / busser 0.6 / kitchen 0.4 / etc.) and splits the pool with rounding correction. `GET /summary` returns pending pool + recent distributions.
+
+**3. Booking Insurance Upsell (`routes/revenue_protection.py` insurance endpoints):**
+- `POST /api/insurance/quote` is PUBLIC — booking widget calls at checkout. Premium = clamp(min, max, total*rate_pct/100). Configurable per property.
+
+**4. OTA Parity Defender (`routes/revenue_protection.py` parity endpoints):**
+- Reads latest `parity_analysis` snapshot, computes recommended_direct = lowest_ota - undercut_pct%. Returns per-date savings %.
+
+**5. Outbound Webhooks (`routes/revenue_protection.py` webhooks endpoints):**
+- 8 supported events (booking.created/cancelled/checked_in/checked_out, folio.charged, no_show.marked, review.received, complaint.created).
+- `POST /test/{id}` makes a real HTTPS POST via httpx with X-Webhook-Secret + X-Webhook-Event headers. Logs every fire to `webhook_log` (status_code, duration_ms, success/error). Subscriptions track fire_count + fail_count.
+
+**Frontend:** 3 new sidebar buttons, RevenueProtectionPanel has 3 tabs (Insurance / Parity Defender / Webhooks), StaffOpsPanel has 2 tabs (Clock + Tips).
+
+**Testing — `iteration_216.json`:** **42/42 backend ✅ · 100% frontend ✅ · 0 issues.** Real webhook fired to httpbin.org returned HTTP 200 in 160ms.
+
+---
 
 
 ### Iter 215 (Apr 2026): ⭐ Batch 2 — Cleaning Checklists + Room Move + Lost-Found Match + Group Rooming + Attribution

@@ -100,6 +100,9 @@ import CleaningChecklistsPanel from "./components/dashboard/CleaningChecklistsPa
 import AttributionPanel from "./components/dashboard/AttributionPanel";
 import GroupRoomingImportPanel from "./components/dashboard/GroupRoomingImportPanel";
 import OpsQuickActionsPanel from "./components/dashboard/OpsQuickActionsPanel";
+import TimeSlotsPanel from "./components/dashboard/TimeSlotsPanel";
+import StaffOpsPanel from "./components/dashboard/StaffOpsPanel";
+import RevenueProtectionPanel from "./components/dashboard/RevenueProtectionPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2687,6 +2690,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "cleaning-checklists", icon: Broom, name: "Cleaning Checklists", testId: "cleaning-checklists-btn" },
         { id: "ops-quick", icon: Lightning, name: "Quick Ops (Move + L&F)", testId: "ops-quick-btn" },
         { id: "group-rooming", icon: FileText, name: "Group Rooming Import", testId: "group-rooming-btn" },
+        { id: "timeslots", icon: Sparkle, name: "Spa & Activity Slots", testId: "timeslots-btn" },
+        { id: "staff-ops", icon: Clock, name: "Staff Clock-in & Tips", testId: "staff-ops-btn" },
+        { id: "rev-protection", icon: ShieldCheck, name: "Revenue Protection", testId: "rev-protection-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2824,6 +2830,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "cleaning-checklists-btn":"housekeeping_view",
     "ops-quick-btn":          "operations_reception_view",
     "group-rooming-btn":      "view_bookings",
+    "timeslots-btn":          "operations_reception_view",
+    "staff-ops-btn":          "operations_reception_view",
+    "rev-protection-btn":     "revenue_forecasting_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3500,6 +3509,33 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "attribution" && (
           <div className="p-6">
             <AttributionPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "timeslots" && (
+          <div className="p-6">
+            <TimeSlotsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "staff-ops" && (
+          <div className="p-6">
+            <StaffOpsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "rev-protection" && (
+          <div className="p-6">
+            <RevenueProtectionPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

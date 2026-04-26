@@ -752,6 +752,15 @@ api_router.include_router(create_group_rooming_router(db, require_roles))
 from routes.attribution import create_attribution_router
 api_router.include_router(create_attribution_router(db, require_roles))
 
+from routes.timeslots import create_timeslot_router
+api_router.include_router(create_timeslot_router(db, require_roles))
+
+from routes.staff_ops import create_staff_ops_router
+api_router.include_router(create_staff_ops_router(db, require_roles))
+
+from routes.revenue_protection import create_revenue_protection_router
+api_router.include_router(create_revenue_protection_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

@@ -1,6 +1,27 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 105+ Modules | Mobile Responsive | 216 Test Iterations (100%)
+## 109+ Modules | Mobile Responsive | 217 Test Iterations (100%)
+
+
+### Iter 217 (Apr 2026): ⭐ Batch 4 — Spaces + Multi-Currency + Multi-Property Rollup + BEO PDF (19/30 P0)
+
+User ask (TR): _"devam et"_ — Batch 4 ships 4 P0 keyless wedges.
+
+**1. Spaces — Multi-Product Inventory (`routes/spaces.py` + `SpacesPanel.js`):**
+- 8 kinds (parking, ev_charger, meeting_room, bicycle, locker, cabana, kayak, other), hourly or daily grain, capacity-aware overlap detection (409 on conflict), folio post if charge_to=room.
+
+**2. Multi-Currency Widget Pricing (`routes/extras_v1.py` currency block + `CurrencyPanel.js`):**
+- 20 default currencies (GBP base, fallback rates updated quarterly). Property-level FX overrides. Public `/convert` for booking widget.
+
+**3. Multi-Property Roll-up Dashboard (`MultiPropertyRollupPanel.js`):**
+- Per-property KPIs: rooms, bookings (excl cancelled+no-show), revenue, ADR, RevPAR, occupancy today, no-shows, complaints. Chain totals on top.
+
+**4. Banquet Event Order PDF (`routes/extras_v1.py` BEO block):**
+- Printable A4 HTML sheet for events: timing, function rooms, agenda, F&B, AV, billing, contact. Browser-print-to-PDF.
+
+**Testing — `iteration_217.json`:** **40/40 backend ✅ · 100% frontend ✅ · 0 issues.** Real conversion £100 GBP → 118 EUR (rate 1.18). Multi-rollup returned 10 properties / £188,703 chain revenue / 699 bookings.
+
+---
 
 
 ### Iter 216 (Apr 2026): ⭐ Batch 3 — Spa Slots + Staff Ops + Revenue Protection (15/30 P0 done)

@@ -92,6 +92,10 @@ import AccountingExportPanel from "./components/dashboard/AccountingExportPanel"
 import LateCheckoutPanel from "./components/dashboard/LateCheckoutPanel";
 import ServiceRecoveryPanel from "./components/dashboard/ServiceRecoveryPanel";
 import RoomQRPanel from "./components/dashboard/RoomQRPanel";
+import TaxPresetsPanel from "./components/dashboard/TaxPresetsPanel";
+import WalkInPanel from "./components/dashboard/WalkInPanel";
+import NoShowPanel from "./components/dashboard/NoShowPanel";
+import GuestPrefsPanel from "./components/dashboard/GuestPrefsPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2673,6 +2677,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
         { id: "service-recovery", icon: Notebook, name: "Service Recovery", testId: "service-recovery-btn" },
         { id: "late-checkout", icon: Clock, name: "Late Check-out", testId: "late-checkout-btn" },
+        { id: "no-show", icon: Crown, name: "No-Show Auto-Charge", testId: "no-show-btn" },
+        { id: "walkin", icon: UserPlus, name: "Walk-in Express", testId: "walkin-btn" },
+        { id: "guest-prefs", icon: Heart, name: "Guest Preferences", testId: "guest-prefs-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2718,6 +2725,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "pos", icon: Receipt, name: t("nav.pos"), testId: "pos-btn" },
         { id: "city-ledger", icon: Wallet, name: "City Ledger (AR)", testId: "city-ledger-btn" },
         { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
+        { id: "tax-presets", icon: Globe, name: "Tax Presets Library", testId: "tax-presets-btn" },
         { id: "deposit-policies", icon: ShieldCheck, name: "Deposit Policies", testId: "deposit-policies-btn" },
         { id: "currency-fx", icon: Globe, name: "Multi-Currency / FX", testId: "currency-fx-btn" },
         { id: "deposit-ledger", icon: Wallet, name: "Deposit Ledger", testId: "deposit-ledger-btn" },
@@ -2802,6 +2810,10 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "room-qr-btn":            "housekeeping_view",
     "service-recovery-btn":   "operations_reception_view",
     "late-checkout-btn":      "operations_reception_view",
+    "no-show-btn":            "operations_reception_view",
+    "walkin-btn":             "operations_reception_view",
+    "guest-prefs-btn":        "operations_reception_view",
+    "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
     "shift-scheduler-btn":    "operations_shifts_view",
     "reception-report-btn":   "operations_reception_view",
@@ -3407,6 +3419,43 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
           />
+        )}
+
+        {/* Iter 214 — Batch 1 Keyless Features */}
+        {activeView === "tax-presets" && (
+          <div className="p-6">
+            <TaxPresetsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "walkin" && (
+          <div className="p-6">
+            <WalkInPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "no-show" && (
+          <div className="p-6">
+            <NoShowPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "guest-prefs" && (
+          <div className="p-6">
+            <GuestPrefsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
         )}
 
         {/* Maintenance */}

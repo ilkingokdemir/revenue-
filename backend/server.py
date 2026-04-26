@@ -725,6 +725,18 @@ api_router.include_router(create_service_recovery_router(db, require_roles))
 from routes.room_qr import create_room_qr_router
 api_router.include_router(create_room_qr_router(db, require_roles))
 
+from routes.tax_presets import create_tax_presets_router
+api_router.include_router(create_tax_presets_router(db, require_roles))
+
+from routes.walkin import create_walkin_router
+api_router.include_router(create_walkin_router(db, require_roles))
+
+from routes.no_show import create_no_show_router
+api_router.include_router(create_no_show_router(db, require_roles))
+
+from routes.guest_prefs import create_guest_prefs_router
+api_router.include_router(create_guest_prefs_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

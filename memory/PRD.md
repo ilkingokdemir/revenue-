@@ -1,6 +1,39 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 95+ Modules | Mobile Responsive | 214 Test Iterations (100%)
+## 100+ Modules | Mobile Responsive | 215 Test Iterations (100%)
+
+
+### Iter 215 (Apr 2026): ⭐ Batch 2 — Cleaning Checklists + Room Move + Lost-Found Match + Group Rooming + Attribution
+
+User ask (TR): _"sirasiyla bunlari yap 🔴 Kritik 30 anahtarsız boşluk"_ — Batch 2 ships 5 more keyless P0 wedges (10/30 done; #1 Kiosk was already shipped earlier).
+
+**1. Cleaning Checklists per Room Type (`routes/cleaning_checklists.py` + `CleaningChecklistsPanel.js`):**
+- 18-point industry-standard default + per-room-type overrides + supervisor sign-off + photo evidence + completion records.
+- `GET/POST/DELETE /api/cleaning-checklists/{property_id}/templates`, `POST /run`, `POST /run/{id}/tick`, `POST /run/{id}/complete` (auto-flips room to clean if score=100%), `GET /runs`, `GET /stats` (cleaner KPIs).
+
+**2. Room Move / Walk (`routes/room_move.py` + `OpsQuickActionsPanel.js` tab):**
+- `GET /api/room-move/{booking_id}/options` filters out occupied / out_of_order / overlapping rooms.
+- `POST /api/room-move` atomically updates booking + flips both rooms + writes audit history. Reasons: upgrade/maintenance/noise/guest_request/overbook_walk/other.
+
+**3. Lost & Found Auto-Match (`routes/lost_found_match.py` + same panel tab):**
+- Scores recent checkouts: same room +80, room mention +40, ±0/1/2-day proximity +30/20/10.
+- `GET /api/lost-found/{item_id}/match-candidates` returns ranked top-10. `POST /notify-guest` queues a notification record (Resend email on API-key backlog).
+
+**4. Group Rooming List CSV Import (`routes/group_rooming.py` + `GroupRoomingImportPanel.js`):**
+- `POST /preview` parses CSV (guest_name required; email/phone/room_type/arrival/departure/rate_override/notes optional), maps room_type by name, returns rows + warnings.
+- `POST /commit` creates child bookings with `channel=group`, `group_id`, `GRP-XXXXXX-YYYYYY` ref, increments group's `rooms_booked`.
+- Frontend supports paste-text or .csv upload + sample-fill button.
+
+**5. Source Attribution (`routes/attribution.py` + `AttributionPanel.js`):**
+- `POST /attribution/log` (PUBLIC, no auth) — booking widget pings on every step with utm_*, referrer, session_id, event, optional booking_id.
+- `GET /report?days=` runs first_click/last_click/linear/channel_native models simultaneously. `GET /funnel` event counts.
+- Frontend: 4-model toggle buttons + horizontal-bar revenue share.
+
+**Sidebar nav additions:** Operations (cleaning-checklists, ops-quick, group-rooming) + Revenue (attribution).
+
+**Testing — `iteration_215.json`:** **24/24 backend ✅ · 100% frontend ✅ · 0 issues.**
+
+---
 
 
 ### Iter 214 (Apr 2026): ⭐ Tax Presets + Walk-in + No-Show + Guest Prefs (Batch 1 of 30 P0 gaps)

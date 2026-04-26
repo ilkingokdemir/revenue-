@@ -23,6 +23,15 @@ export default function BookingWidgetPage({ propertyId }) {
   const [loyalty, setLoyalty] = useState(null);  // { is_member, tier, discount_pct, message }
   const [loyaltyChecking, setLoyaltyChecking] = useState(false);
   const [ecoBadge, setEcoBadge] = useState(null);  // { score, grade, show_badge, highlight_initiatives[] }
+  const [carbonOffset, setCarbonOffset] = useState({ opt_in: false, total_fee: 0, co2_kg: 0 });
+
+  const fetchCarbonOffset = async (n, r) => {
+    if (!ecoBadge?.show_badge) return;
+    try {
+      const { data } = await axios.get(`${API}/esg/${propertyId}/carbon-offset-quote?nights=${n}&rooms=${r}`);
+      setCarbonOffset(prev => ({ ...prev, total_fee: data.total_fee, co2_kg: data.estimated_co2_kg }));
+    } catch { /* noop */ }
+  };
 
   const checkLoyalty = async (email) => {
     const e = (email || "").trim();
@@ -49,6 +58,12 @@ export default function BookingWidgetPage({ propertyId }) {
     setCheckIn(ci.toISOString().split("T")[0]);
     setCheckOut(co.toISOString().split("T")[0]);
   }, [propertyId]);
+
+  useEffect(() => {
+    if (selected && nights > 0 && roomCount > 0 && ecoBadge?.show_badge) {
+      fetchCarbonOffset(nights, roomCount);
+    }
+  }, [selected, nights, roomCount, ecoBadge]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const nights = (() => { try { return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)); } catch { return 1; } })();
   const fmtDate = (d) => { try { return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); } catch { return d; } };
@@ -124,6 +139,9 @@ export default function BookingWidgetPage({ propertyId }) {
         pay_now: paymentMode === "pay_now",
         loyalty_tier: loyalty?.tier || null,
         loyalty_discount_pct: discPct,
+        carbon_offset_opt_in: !!carbonOffset.opt_in,
+        carbon_offset_fee: carbonOffset.opt_in ? carbonOffset.total_fee : 0,
+        carbon_offset_co2_kg: carbonOffset.opt_in ? carbonOffset.co2_kg : 0,
         origin_url: window.location.origin,
       });
       // Stripe path → redirect immediately (state lost on redirect; OK because effect picks
@@ -629,12 +647,24 @@ export default function BookingWidgetPage({ propertyId }) {
                     <span>−{loyalty.discount_pct}%</span>
                   </div>
                 )}
+                {ecoBadge?.show_badge && carbonOffset.total_fee > 0 && (
+                  <div className="flex items-center justify-between text-xs text-emerald-700 font-bold mb-1" data-testid="carbon-offset-row">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={carbonOffset.opt_in}
+                        onChange={e => setCarbonOffset(p => ({ ...p, opt_in: e.target.checked }))}
+                        className="accent-emerald-600" data-testid="carbon-offset-toggle" />
+                      <span>🌿 Offset {carbonOffset.co2_kg} kg CO₂</span>
+                    </label>
+                    <span>+£{carbonOffset.total_fee}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs text-stone-400 mb-1"><span>Taxes & fees</span><span>Included</span></div>
-                <div className="flex justify-between"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold" style={{ color: ac }}>{
-                  loyalty?.is_member && loyalty.discount_pct > 0 && selected?.total_rate
-                    ? cur(Number((selected.total_rate * (1 - loyalty.discount_pct / 100)).toFixed(2)), cc)
-                    : cur(selected?.total_rate, cc)
-                }</span></div>
+                <div className="flex justify-between"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold" style={{ color: ac }}>{(() => {
+                  let t = selected?.total_rate || 0;
+                  if (loyalty?.is_member && loyalty.discount_pct > 0) t = Number((t * (1 - loyalty.discount_pct / 100)).toFixed(2));
+                  if (carbonOffset.opt_in) t += carbonOffset.total_fee;
+                  return cur(t, cc);
+                })()}</span></div>
               </div>
               <div className="mt-4 space-y-1.5">{["Free cancellation until 48h before", "No prepayment needed", "Instant email confirmation"].map(t => (
                 <div key={t} className="flex items-center gap-1.5 text-[10px] text-emerald-600"><svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>{t}</div>

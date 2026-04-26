@@ -25,6 +25,33 @@ logger = logging.getLogger(__name__)
 def create_accounting_export_router(db, require_roles):
     router = APIRouter()
 
+    DEFAULT_MAPPING = {
+        "ar_account":      "Accounts Receivable",
+        "revenue_account": "Room Revenue",
+        "cash_account":    "Cash",
+        "xero_revenue_code": "200",
+        "xero_payment_code": "200",
+        "xero_tax_type":     "Tax on Sales",
+    }
+
+    async def _mapping(property_id: str) -> dict:
+        doc = await db.accounting_mapping.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        return {**DEFAULT_MAPPING, **doc}
+
+    @router.get("/accounting/mapping/{property_id}")
+    async def get_mapping(property_id: str,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await _mapping(property_id)
+
+    @router.post("/accounting/mapping/{property_id}")
+    async def save_mapping(property_id: str, data: Dict,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        update = {"property_id": property_id, **{k: v for k, v in data.items() if k in DEFAULT_MAPPING}}
+        await db.accounting_mapping.update_one(
+            {"property_id": property_id}, {"$set": update}, upsert=True
+        )
+        return {"ok": True, "mapping": await _mapping(property_id)}
+
     def _csv(rows: List[List], headers: List[str], filename: str) -> StreamingResponse:
         out = io.StringIO()
         w = csv.writer(out)
@@ -64,6 +91,7 @@ def create_accounting_export_router(db, require_roles):
 
         bookings = await _bookings_in_window(property_id, from_, to)
         fname_base = f"sales_{property_id}_{from_}_to_{to}"
+        mp = await _mapping(property_id)
 
         if format == "xero":
             # Xero Sales Invoice CSV columns
@@ -84,13 +112,12 @@ def create_accounting_export_router(db, require_roles):
                     f"{property_id}-{b.get('source','direct')}",
                     ci, co, desc, 1,
                     round(float(b.get("total_price") or 0), 2),
-                    "200",          # Sales account code (typical Xero default)
-                    "Tax on Sales",
+                    mp["xero_revenue_code"],
+                    mp["xero_tax_type"],
                 ])
             return _csv(rows, headers, f"{fname_base}_xero.csv")
 
-        # QuickBooks General Journal CSV columns
-        # Common QB online import: Date, Journal No., Account, Debits, Credits, Description, Name, Class
+        # QuickBooks General Journal CSV
         headers = [
             "Date", "Journal No.", "Account",
             "Debits", "Credits", "Description", "Name", "Class",
@@ -102,18 +129,8 @@ def create_accounting_export_router(db, require_roles):
             total = round(float(b.get("total_price") or 0), 2)
             name = (b.get("guest_name") or "Walk-in")[:80]
             klass = b.get("source", "direct")
-            # DR: Accounts Receivable / Cash
-            rows.append([
-                ci, jno, "Accounts Receivable",
-                total, "",
-                f"Booking {jno} {ci}", name, klass,
-            ])
-            # CR: Room Revenue
-            rows.append([
-                ci, jno, "Room Revenue",
-                "", total,
-                f"Booking {jno} {ci}", name, klass,
-            ])
+            rows.append([ci, jno, mp["ar_account"],      total, "",     f"Booking {jno} {ci}", name, klass])
+            rows.append([ci, jno, mp["revenue_account"], "",    total,  f"Booking {jno} {ci}", name, klass])
         return _csv(rows, headers, f"{fname_base}_quickbooks.csv")
 
     @router.get("/accounting/export/{property_id}/payments")
@@ -135,6 +152,7 @@ def create_accounting_export_router(db, require_roles):
         }, {"_id": 0}).to_list(5000)
 
         fname_base = f"payments_{property_id}_{from_}_to_{to}"
+        mp = await _mapping(property_id)
         if format == "xero":
             headers = ["*Date", "*Amount", "*Reference", "*Account", "*Description", "ContactName"]
             rows = []
@@ -144,7 +162,7 @@ def create_accounting_export_router(db, require_roles):
                     d,
                     round(float(p.get("amount") or 0), 2),
                     p.get("id", "")[:24],
-                    "200",
+                    mp["xero_payment_code"],
                     f"Payment {p.get('method','card')} · {p.get('booking_id','')[:8]}",
                     p.get("guest_name", ""),
                 ])
@@ -158,9 +176,8 @@ def create_accounting_export_router(db, require_roles):
             amt = round(float(p.get("amount") or 0), 2)
             ref = p.get("id", "")[:18]
             name = p.get("guest_name", "")
-            # DR Cash CR Accounts Receivable
-            rows.append([d, ref, "Cash", amt, "", f"Payment {p.get('method','card')}", name])
-            rows.append([d, ref, "Accounts Receivable", "", amt, f"Payment {p.get('method','card')}", name])
+            rows.append([d, ref, mp["cash_account"],     amt, "",  f"Payment {p.get('method','card')}", name])
+            rows.append([d, ref, mp["ar_account"],       "",  amt, f"Payment {p.get('method','card')}", name])
         return _csv(rows, headers, f"{fname_base}_quickbooks.csv")
 
     @router.get("/accounting/export/{property_id}/summary")

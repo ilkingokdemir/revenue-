@@ -3,6 +3,7 @@ import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "@/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import SignaturePad from "./components/SignaturePad";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -371,7 +372,8 @@ export default function GuestRegistrationPage({ token }) {
               {/* Signature */}
               <div className="mb-5">
                 <label className="block text-xs font-medium text-stone-600 mb-1.5">{t("guest_reg.signature")} *</label>
-                <input data-testid="input-signature" type="text" value={signature} onChange={(e) => setSignature(e.target.value)} className="w-full px-3 py-2.5 rounded-lg border border-stone-200 text-sm italic focus:ring-2 focus:ring-[#1e3a5f]/20 focus:border-[#1e3a5f] outline-none transition" placeholder={t("guest_reg.signature_placeholder")} />
+                <SignaturePad onChange={setSignature} />
+                <p className="text-[10px] text-stone-400 mt-1 italic">By signing you confirm the information is correct.</p>
               </div>
 
               <div className="flex justify-between">

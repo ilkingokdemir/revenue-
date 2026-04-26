@@ -362,4 +362,35 @@ def create_sustainability_router(db, require_roles):
             "highlight_initiatives": [i.get("label") for i in active[:3]],
         }
 
+    # ============================================================
+    # PUBLIC: Carbon offset fee calculator
+    # ============================================================
+    @router.get("/esg/{property_id}/carbon-offset-quote")
+    async def carbon_offset_quote(property_id: str, nights: int = 1, rooms: int = 1):
+        """Public: small voluntary fee added at checkout for offsetting CO2.
+        £1.50 / room / night by default (industry typical) — fully transparent."""
+        try:
+            n = max(1, int(nights or 1))
+            r = max(1, int(rooms or 1))
+        except Exception:
+            n = r = 1
+        cfg = await db.esg_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        per_rn = float(cfg.get("offset_fee_per_rn", 1.50))
+        co2_factor = float(cfg.get("co2_factor_grid", 0.207))
+        kwh_per_rn = float(cfg.get("kwh_baseline_per_rn", 30))
+        # Estimated stay CO2: kwh × factor × room-nights
+        co2_kg = round(kwh_per_rn * co2_factor * n * r, 1)
+        return {
+            "property_id": property_id,
+            "nights": n, "rooms": r,
+            "fee_per_room_per_night": per_rn,
+            "total_fee": round(per_rn * n * r, 2),
+            "estimated_co2_kg": co2_kg,
+            "currency": "GBP",
+            "message": (
+                f"Offset the {co2_kg} kg CO₂ from your stay for £{round(per_rn * n * r, 2)}. "
+                "Funds support verified UK woodland creation projects."
+            ),
+        }
+
     return router

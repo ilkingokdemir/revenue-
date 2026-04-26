@@ -1,6 +1,38 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 88+ Modules | Mobile Responsive | 180 Test Iterations (100%)
+## 91+ Modules | Mobile Responsive | 213 Test Iterations (100%)
+
+
+### Iter 213 (Apr 2026): ⭐ Late Check-out + Service Recovery + Room QR Codes
+
+User ask (TR): _"Anahtarsiz siradakileri yap"_ — three more keyless competitor wedges.
+
+**1. Late Check-out Quote Engine (`routes/late_checkout.py` + `LateCheckoutPanel.js` — both NEW):**
+- `GET/POST /api/late-checkout/{property_id}/policy` — configurable bands (free_until/half_until/full_after hours, vip_grace, min_turnaround_min). Default: free ≤11, ½-night ≤14, full ≥16, VIP grace ≤13, 90-min turnaround.
+- `POST /api/late-checkout/quote` (body: booking_id, requested_hour 8-23) — smart band detection + occupancy-based 30% quiet-night discount + VIP detection + next-arrival turnaround block.
+- `POST /api/late-checkout/{booking_id}/accept` — creates `late_checkouts` record + posts charge to `folio_items`. Updates booking with late_checkout_hour/fee/time.
+- `GET /api/late-checkout/{property_id}/list` — recent approvals + total revenue.
+- Frontend: amber gradient header, booking + hour selector, real-time quote card with band chip + 4 KPI tiles, accept-to-folio button, recent table, policy modal.
+- **Why it matters:** Cloudbeds and Mews ship this as paid add-ons. We ship free with smarter defaults.
+
+**2. Service Recovery / Guest Complaint Tracker (`routes/service_recovery.py` + `ServiceRecoveryPanel.js` — both NEW):**
+- `POST /api/service-recovery` — creates complaint + auto-classifies severity (low/medium/high/critical) and recommended action (apology/discount/room_move/full_refund) via GPT-5.2 Emergent LLM key. Falls back to medium if LLM fails.
+- `PUT /api/service-recovery/{id}` — updates status (auto-stamps resolved_at/resolved_by). Tracks compensation_amount + compensation_type.
+- `GET /api/service-recovery/{property_id}` (filters: status, category, days). `GET .../stats` returns by_severity, by_category, by_status, compensation_total, avg_resolution_minutes.
+- `POST /api/service-recovery/{id}/classify` — re-runs AI classification.
+- Frontend: rose gradient header, 5 KPI tiles, severity bar chart + category breakdown, filter chips, complaint rows with severity/status badges and inline AI-suggestion line. Create-modal with category + channel pickers; update-modal shows AI tip and accepts compensation amount + notes.
+- **Why it matters:** Cloudbeds + Mews ship this as a paid "Guest Recovery" module. AI classification is unique vs both.
+
+**3. Room QR Codes (`routes/room_qr.py` + `RoomQRPanel.js` — both NEW):**
+- `GET /api/room-qr/{property_id}/list` — every room with `qr_url` (public) + `image_url` (PNG endpoint).
+- `GET /api/room-qr/{property_id}/png/{room_number}` — streams PNG (1.3-2KB each, server-rendered with `qrcode` lib).
+- `GET /api/room-qr/{property_id}/sheet` — printable A4 HTML, 3-column grid, dashed borders, room # + floor + property name + auto-print button.
+- Frontend: cyan header, grid of QR cards with thumbnails, "Print A4 sheet" opens authenticated HTML in new tab.
+- **Why it matters:** Eviivo ships this. Saves housekeeping team a step every shift.
+
+**Testing — `iteration_213`:** **21/21 backend ✅** (incl. regression smoke for E-signature, ESG carbon offset, accounting mapping). Frontend smoke: all 3 panels render, sidebar navigation works.
+
+---
 
 
 ### Iter 212 (Apr 2026): ⭐ Accounting Export (QuickBooks/Xero CSV) + HK Route Print

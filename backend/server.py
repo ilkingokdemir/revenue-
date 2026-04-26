@@ -761,6 +761,12 @@ api_router.include_router(create_staff_ops_router(db, require_roles))
 from routes.revenue_protection import create_revenue_protection_router
 api_router.include_router(create_revenue_protection_router(db, require_roles))
 
+from routes.spaces import create_spaces_router
+api_router.include_router(create_spaces_router(db, require_roles))
+
+from routes.extras_v1 import create_extras_router
+api_router.include_router(create_extras_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

@@ -103,6 +103,9 @@ import OpsQuickActionsPanel from "./components/dashboard/OpsQuickActionsPanel";
 import TimeSlotsPanel from "./components/dashboard/TimeSlotsPanel";
 import StaffOpsPanel from "./components/dashboard/StaffOpsPanel";
 import RevenueProtectionPanel from "./components/dashboard/RevenueProtectionPanel";
+import SpacesPanel from "./components/dashboard/SpacesPanel";
+import MultiPropertyRollupPanel from "./components/dashboard/MultiPropertyRollupPanel";
+import CurrencyPanel from "./components/dashboard/CurrencyPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -242,6 +245,8 @@ import {
   Heart,
   Clock,
   QrCode,
+  SquaresFour,
+  CurrencyDollar,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2693,6 +2698,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "timeslots", icon: Sparkle, name: "Spa & Activity Slots", testId: "timeslots-btn" },
         { id: "staff-ops", icon: Clock, name: "Staff Clock-in & Tips", testId: "staff-ops-btn" },
         { id: "rev-protection", icon: ShieldCheck, name: "Revenue Protection", testId: "rev-protection-btn" },
+        { id: "spaces", icon: SquaresFour, name: "Spaces (Parking, Meet, Bike)", testId: "spaces-btn" },
+        { id: "multi-rollup", icon: Buildings, name: "Multi-Property Roll-up", testId: "multi-rollup-btn" },
+        { id: "currency", icon: CurrencyDollar, name: "Currency / FX Rates", testId: "currency-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2833,6 +2841,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "timeslots-btn":          "operations_reception_view",
     "staff-ops-btn":          "operations_reception_view",
     "rev-protection-btn":     "revenue_forecasting_view",
+    "spaces-btn":             "operations_reception_view",
+    "multi-rollup-btn":       "revenue_forecasting_view",
+    "currency-btn":           "view_bookings",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3536,6 +3547,30 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "rev-protection" && (
           <div className="p-6">
             <RevenueProtectionPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "spaces" && (
+          <div className="p-6">
+            <SpacesPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "multi-rollup" && (
+          <div className="p-6">
+            <MultiPropertyRollupPanel hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""} />
+          </div>
+        )}
+
+        {activeView === "currency" && (
+          <div className="p-6">
+            <CurrencyPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

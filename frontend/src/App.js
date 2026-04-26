@@ -89,6 +89,9 @@ import SustainabilityPanel from "./components/dashboard/SustainabilityPanel";
 import HousekeepingRoutePanel from "./components/dashboard/HousekeepingRoutePanel";
 import NightlyRecapPanel from "./components/dashboard/NightlyRecapPanel";
 import AccountingExportPanel from "./components/dashboard/AccountingExportPanel";
+import LateCheckoutPanel from "./components/dashboard/LateCheckoutPanel";
+import ServiceRecoveryPanel from "./components/dashboard/ServiceRecoveryPanel";
+import RoomQRPanel from "./components/dashboard/RoomQRPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -226,6 +229,8 @@ import {
   CreditCard,
   Scales,
   Heart,
+  Clock,
+  QrCode,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2657,6 +2662,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       items: [
         { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
         { id: "hk-route", icon: Broom, name: "Cleaning Route Optimizer", testId: "hk-route-btn" },
+        { id: "room-qr", icon: QrCode, name: "Room QR codes (print)", testId: "room-qr-btn" },
         { id: "maintenance", icon: Wrench, name: t("nav.maintenance"), testId: "maintenance-btn" },
         { id: "asset-register", icon: Package, name: "Asset Register", testId: "asset-register-btn" },
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
@@ -2665,6 +2671,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "night-audit-close", icon: Lock, name: "Close Day (Lock)", testId: "night-audit-close-btn" },
         { id: "logbook", icon: Notebook, name: t("nav.logbook"), testId: "logbook-btn" },
         { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
+        { id: "service-recovery", icon: Notebook, name: "Service Recovery", testId: "service-recovery-btn" },
+        { id: "late-checkout", icon: Clock, name: "Late Check-out", testId: "late-checkout-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2791,6 +2799,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "operations-hub-btn":     "operations_reception_view",
     "housekeeping-btn":       "housekeeping_view",
     "hk-route-btn":           "housekeeping_view",
+    "room-qr-btn":            "housekeeping_view",
+    "service-recovery-btn":   "operations_reception_view",
+    "late-checkout-btn":      "operations_reception_view",
     "maintenance-btn":        "maintenance_view",
     "shift-scheduler-btn":    "operations_shifts_view",
     "reception-report-btn":   "operations_reception_view",
@@ -3372,6 +3383,27 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {activeView === "hk-route" && (
           <HousekeepingRoutePanel
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
+        )}
+
+        {activeView === "room-qr" && (
+          <RoomQRPanel
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
+        )}
+
+        {activeView === "service-recovery" && (
+          <ServiceRecoveryPanel
+            propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+            hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+          />
+        )}
+
+        {activeView === "late-checkout" && (
+          <LateCheckoutPanel
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
           />

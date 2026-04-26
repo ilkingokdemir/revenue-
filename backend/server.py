@@ -716,6 +716,15 @@ api_router.include_router(create_group_blocks_router(db, require_roles))
 from routes.smart_rate_control import create_smart_rate_control_router
 api_router.include_router(create_smart_rate_control_router(db, require_roles))
 
+from routes.late_checkout import create_late_checkout_router
+api_router.include_router(create_late_checkout_router(db, require_roles))
+
+from routes.service_recovery import create_service_recovery_router
+api_router.include_router(create_service_recovery_router(db, require_roles))
+
+from routes.room_qr import create_room_qr_router
+api_router.include_router(create_room_qr_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

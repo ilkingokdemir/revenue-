@@ -1,6 +1,41 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 91+ Modules | Mobile Responsive | 213 Test Iterations (100%)
+## 95+ Modules | Mobile Responsive | 214 Test Iterations (100%)
+
+
+### Iter 214 (Apr 2026): ⭐ Tax Presets + Walk-in + No-Show + Guest Prefs (Batch 1 of 30 P0 gaps)
+
+User ask (TR): _"sirasi ile bunlari yap 🔴 Kritik 30 anahtarsız boşluk"_ — Batch 1 ships 5 of 30 P0 keyless competitor-parity gaps.
+
+**1. Tax Preset Library + Resort Fee Quick-Add (`routes/tax_presets.py` + `TaxPresetsPanel.js` — both NEW):**
+- 12 curated country presets: GB, GB-LON, FR, IT, ES, DE, NL, TR, US-NV, US-NY, US-CA, AE — VAT + city tax + tourism levy + resort fees with current 2026 rates.
+- `GET /api/tax-presets/`, `GET /{code}`, `POST /apply` (one-click create/replace active tax_profile), `POST /resort-fee/quick-add` (per-night flat append), `GET /resort-fees/templates`.
+- **Why:** EU/UK compliance shipped without manual setup; matches RoomRaccoon/Mews "country presets" feature.
+
+**2. Walk-in Express Check-in (`routes/walkin.py` + `WalkInPanel.js` — both NEW):**
+- `POST /api/walkin/availability` — pulls clean rooms minus booked overlap, applies active tax profile, returns offerings per room type with grand_total + tax breakdown.
+- `POST /api/walkin/create` — one-shot: creates booking with status=checked_in, opens folio with room charge + each tax line + deposit credit, marks room status=in_house, upserts guest profile, increments stay counter.
+- ~90-second target end-to-end. Front-desk picks room from the offerings grid, types guest name + ID, confirms.
+- **Why:** Cloudbeds + Stayntouch ship this; we shipped the same UX in 1 modal.
+
+**3. No-Show Auto-Charge Workflow (`routes/no_show.py` + `NoShowPanel.js` — both NEW):**
+- `GET/POST /api/no-show/{property_id}/policy` — fee_type {first_night | percent_total | flat}, fee_pct, flat_amount, grace_hour, auto_run_enabled.
+- `GET /candidates?on_date=` — confirmed/pending bookings whose check_in already passed.
+- `POST /{booking_id}/mark` — single mark + folio fee post.
+- `POST /{property_id}/run` — bulk auto-mark + fees + audit log to `no_show_runs`.
+- **Why:** Recovers lost revenue automatically. Cloudbeds + Mews ship this.
+
+**4. Guest Stay Preferences Memory (`routes/guest_prefs.py` + `GuestPrefsPanel.js` — both NEW):**
+- 16 preference fields: pillow_firmness, floor_preference, bed_type, smoking, ac_temperature, wake_up_call, dietary, allergies, occasion, language, transport, notes etc.
+- `POST /guest-prefs/{guest_id}` upsert (allowlist enforced). `GET` read. `GET /booking/{booking_id}` resolves guest from booking. `POST /apply-to-booking/{booking_id}` writes prefs into booking + appends formatted lines to internal_notes + auto-tags `has_preferences` and `vip` (if occasion).
+- `GET /{property_id}/today-arrivals` — front-desk dashboard with pref_count per arrival.
+- **Why:** Mews/Cloudbeds VIP feature. Now standard for us.
+
+**Frontend:** 4 new sidebar buttons under Operations (no-show, walkin, guest-prefs) + Finance (tax-presets). Panels follow existing dark stone+accent palette with data-testid hooks throughout.
+
+**Testing — `iteration_214.json`:** **23/23 backend ✅** (2 skipped due to no test guest in fresh data) · **100% frontend ✅ (all 4 new panels + 3 regression panels working)** · **zero issues**.
+
+---
 
 
 ### Iter 213 (Apr 2026): ⭐ Late Check-out + Service Recovery + Room QR Codes

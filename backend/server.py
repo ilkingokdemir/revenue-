@@ -737,6 +737,21 @@ api_router.include_router(create_no_show_router(db, require_roles))
 from routes.guest_prefs import create_guest_prefs_router
 api_router.include_router(create_guest_prefs_router(db, require_roles))
 
+from routes.cleaning_checklists import create_cleaning_checklists_router
+api_router.include_router(create_cleaning_checklists_router(db, require_roles))
+
+from routes.room_move import create_room_move_router
+api_router.include_router(create_room_move_router(db, require_roles))
+
+from routes.lost_found_match import create_lost_found_match_router
+api_router.include_router(create_lost_found_match_router(db, require_roles))
+
+from routes.group_rooming import create_group_rooming_router
+api_router.include_router(create_group_rooming_router(db, require_roles))
+
+from routes.attribution import create_attribution_router
+api_router.include_router(create_attribution_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

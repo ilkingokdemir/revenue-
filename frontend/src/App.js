@@ -96,6 +96,10 @@ import TaxPresetsPanel from "./components/dashboard/TaxPresetsPanel";
 import WalkInPanel from "./components/dashboard/WalkInPanel";
 import NoShowPanel from "./components/dashboard/NoShowPanel";
 import GuestPrefsPanel from "./components/dashboard/GuestPrefsPanel";
+import CleaningChecklistsPanel from "./components/dashboard/CleaningChecklistsPanel";
+import AttributionPanel from "./components/dashboard/AttributionPanel";
+import GroupRoomingImportPanel from "./components/dashboard/GroupRoomingImportPanel";
+import OpsQuickActionsPanel from "./components/dashboard/OpsQuickActionsPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2680,6 +2684,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "no-show", icon: Crown, name: "No-Show Auto-Charge", testId: "no-show-btn" },
         { id: "walkin", icon: UserPlus, name: "Walk-in Express", testId: "walkin-btn" },
         { id: "guest-prefs", icon: Heart, name: "Guest Preferences", testId: "guest-prefs-btn" },
+        { id: "cleaning-checklists", icon: Broom, name: "Cleaning Checklists", testId: "cleaning-checklists-btn" },
+        { id: "ops-quick", icon: Lightning, name: "Quick Ops (Move + L&F)", testId: "ops-quick-btn" },
+        { id: "group-rooming", icon: FileText, name: "Group Rooming Import", testId: "group-rooming-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2706,6 +2713,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "concierge-inbox", icon: ChartLine, name: "Concierge Inbox (AI)", testId: "concierge-inbox-btn" },
         { id: "group-requests", icon: Users, name: "Group Requests & Allotments", testId: "group-requests-btn" },
         { id: "sustainability", icon: ChartLine, name: "Sustainability & ESG", testId: "sustainability-btn" },
+        { id: "attribution", icon: ChartBar, name: "Source Attribution", testId: "attribution-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports Centre", testId: "reports-centre-btn" },
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled Reports", testId: "scheduled-reports-btn" },
       ],
@@ -2813,6 +2821,10 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "no-show-btn":            "operations_reception_view",
     "walkin-btn":             "operations_reception_view",
     "guest-prefs-btn":        "operations_reception_view",
+    "cleaning-checklists-btn":"housekeeping_view",
+    "ops-quick-btn":          "operations_reception_view",
+    "group-rooming-btn":      "view_bookings",
+    "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
     "shift-scheduler-btn":    "operations_shifts_view",
@@ -3452,6 +3464,42 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "guest-prefs" && (
           <div className="p-6">
             <GuestPrefsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "cleaning-checklists" && (
+          <div className="p-6">
+            <CleaningChecklistsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "ops-quick" && (
+          <div className="p-6">
+            <OpsQuickActionsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "group-rooming" && (
+          <div className="p-6">
+            <GroupRoomingImportPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "attribution" && (
+          <div className="p-6">
+            <AttributionPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

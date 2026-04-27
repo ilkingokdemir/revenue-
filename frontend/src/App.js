@@ -113,6 +113,11 @@ import ChargebackPanel from "./components/dashboard/ChargebackPanel";
 import WebPushPanel from "./components/dashboard/WebPushPanel";
 import PmsCrsSyncPanel from "./components/dashboard/PmsCrsSyncPanel";
 import PublicApiPortalPanel from "./components/dashboard/PublicApiPortalPanel";
+import MidStaySurveyPanel from "./components/dashboard/MidStaySurveyPanel";
+import FolioLivePanel from "./components/dashboard/FolioLivePanel";
+import ABTestPanel from "./components/dashboard/ABTestPanel";
+import PreArrivalDripPanel from "./components/dashboard/PreArrivalDripPanel";
+import MenuEngineeringPanel from "./components/dashboard/MenuEngineeringPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -161,6 +166,7 @@ import CheckInKioskPage from "./CheckInKioskPage";
 import FeatureComparePage from "./FeatureComparePage";
 import QROrderPage from "./QROrderPage";
 import KioskPage from "./KioskPage";
+import MidStaySurveyPublicPage from "./MidStaySurveyPublicPage";
 import {
   Star,
   CheckCircle,
@@ -2716,6 +2722,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "web-push", icon: Bell, name: "Web Push Notifications", testId: "web-push-btn" },
         { id: "pms-crs", icon: ArrowsClockwise, name: "PMS-CRS Sync", testId: "pms-crs-btn" },
         { id: "public-api", icon: Code, name: "Developer API Portal", testId: "public-api-btn" },
+        { id: "mid-stay", icon: Smiley, name: "Mid-stay Pulse Survey", testId: "mid-stay-btn" },
+        { id: "folio-live", icon: Receipt, name: "In-stay Folio (PDF)", testId: "folio-live-btn" },
+        { id: "ab-test", icon: TestTube, name: "A/B Test Engine", testId: "ab-test-btn" },
+        { id: "pre-arrival", icon: Envelope, name: "Pre-arrival Drip", testId: "pre-arrival-btn" },
+        { id: "menu-engineering", icon: ChartBar, name: "Menu Engineering", testId: "menu-engineering-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2866,6 +2877,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "web-push-btn":           "operations_reception_view",
     "pms-crs-btn":            "operations_reception_view",
     "public-api-btn":         "operations_reception_view",
+    "mid-stay-btn":           "operations_reception_view",
+    "folio-live-btn":         "operations_reception_view",
+    "ab-test-btn":            "operations_reception_view",
+    "pre-arrival-btn":        "operations_reception_view",
+    "menu-engineering-btn":   "operations_reception_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3663,6 +3679,51 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           </div>
         )}
 
+        {activeView === "mid-stay" && (
+          <div className="p-6">
+            <MidStaySurveyPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "folio-live" && (
+          <div className="p-6">
+            <FolioLivePanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "ab-test" && (
+          <div className="p-6">
+            <ABTestPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "pre-arrival" && (
+          <div className="p-6">
+            <PreArrivalDripPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "menu-engineering" && (
+          <div className="p-6">
+            <MenuEngineeringPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
         {/* Maintenance */}
         {activeView === "maintenance" && (
           <MaintenancePanel properties={properties} activePropertyId={activePropertyId} />
@@ -4194,6 +4255,10 @@ function App() {
   if (window.location.pathname.startsWith("/kiosk/")) {
     const parts = window.location.pathname.split("/kiosk/")[1].split("/");
     return <KioskPage propertyId={parts[0]} outletId={parts[1]} />;
+  }
+  if (window.location.pathname.startsWith("/mid-stay/")) {
+    const inviteId = window.location.pathname.split("/mid-stay/")[1];
+    return <MidStaySurveyPublicPage inviteId={inviteId} />;
   }
   return <MainApp />;
 }

@@ -789,6 +789,22 @@ api_router.include_router(create_pms_crs_router(db, require_roles))
 from routes.public_api import create_public_api_router
 api_router.include_router(create_public_api_router(db, require_roles))
 
+# ===== Batch 7 (P1 keyless): Mid-stay survey, Live folio PDF, A/B tests, Pre-arrival drip, Menu engineering =====
+from routes.mid_stay import create_mid_stay_router
+api_router.include_router(create_mid_stay_router(db, require_roles))
+
+from routes.folio_live import create_folio_live_router
+api_router.include_router(create_folio_live_router(db, require_roles))
+
+from routes.ab_test import create_ab_test_router
+api_router.include_router(create_ab_test_router(db, require_roles))
+
+from routes.pre_arrival import create_pre_arrival_router
+api_router.include_router(create_pre_arrival_router(db, require_roles))
+
+from routes.menu_engineering import create_menu_engineering_router
+api_router.include_router(create_menu_engineering_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

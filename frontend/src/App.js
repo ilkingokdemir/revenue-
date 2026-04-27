@@ -106,6 +106,8 @@ import RevenueProtectionPanel from "./components/dashboard/RevenueProtectionPane
 import SpacesPanel from "./components/dashboard/SpacesPanel";
 import MultiPropertyRollupPanel from "./components/dashboard/MultiPropertyRollupPanel";
 import CurrencyPanel from "./components/dashboard/CurrencyPanel";
+import AgentsB2BPanel from "./components/dashboard/AgentsB2BPanel";
+import SecurityOwnerPanel from "./components/dashboard/SecurityOwnerPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -240,6 +242,7 @@ import {
   TShirt,
   Bug,
   Lock,
+  Briefcase,
   CreditCard,
   Scales,
   Heart,
@@ -2701,6 +2704,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "spaces", icon: SquaresFour, name: "Spaces (Parking, Meet, Bike)", testId: "spaces-btn" },
         { id: "multi-rollup", icon: Buildings, name: "Multi-Property Roll-up", testId: "multi-rollup-btn" },
         { id: "currency", icon: CurrencyDollar, name: "Currency / FX Rates", testId: "currency-btn" },
+        { id: "b2b-agents", icon: Briefcase, name: "B2B Portal (Agents)", testId: "b2b-agents-btn" },
+        { id: "security-owner", icon: Lock, name: "Security & Owner Portal", testId: "security-owner-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2844,6 +2849,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "spaces-btn":             "operations_reception_view",
     "multi-rollup-btn":       "revenue_forecasting_view",
     "currency-btn":           "view_bookings",
+    "b2b-agents-btn":         "view_bookings",
+    "security-owner-btn":     "operations_reception_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3571,6 +3578,24 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "currency" && (
           <div className="p-6">
             <CurrencyPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "b2b-agents" && (
+          <div className="p-6">
+            <AgentsB2BPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "security-owner" && (
+          <div className="p-6">
+            <SecurityOwnerPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

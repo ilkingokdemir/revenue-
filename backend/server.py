@@ -767,6 +767,12 @@ api_router.include_router(create_spaces_router(db, require_roles))
 from routes.extras_v1 import create_extras_router
 api_router.include_router(create_extras_router(db, require_roles))
 
+from routes.agents_b2b import create_agents_router
+api_router.include_router(create_agents_router(db, require_roles))
+
+from routes.extras_v2 import create_extras_v2_router
+api_router.include_router(create_extras_v2_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

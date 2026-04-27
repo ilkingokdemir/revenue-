@@ -48,6 +48,7 @@ import TodayHub from "./components/dashboard/TodayHub";
 import TRCompliancePanel from "./components/dashboard/TRCompliancePanel";
 import EUCompliancePanel from "./components/dashboard/EUCompliancePanel";
 import AIPredictionsPanel from "./components/dashboard/AIPredictionsPanel";
+import ChannelRevenuePanel from "./components/dashboard/ChannelRevenuePanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2797,6 +2798,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "ci-slots", icon: Clock, name: "Check-in Time Slots", testId: "ci-slots-btn" },
         { id: "tier1-dashboard", icon: ChartBar, name: "★ Tier-1 Master Dashboard", testId: "tier1-dashboard-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "✨ AI Tahminler (Risk + Upsell)", testId: "ai-predictions-btn" },
+        { id: "channel-revenue", icon: Lightning, name: "⚡ Açık Fiyat + Yield", testId: "channel-revenue-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2969,6 +2971,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "ci-slots-btn":           "operations_reception_view",
     "tier1-dashboard-btn":    "operations_reception_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
+    "channel-revenue-btn":    "revenue_forecasting_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3295,6 +3298,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* AI Predictions — Cancel Risk + Upsell Propensity */}
         {activeView === "ai-predictions" && (
           <AIPredictionsPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* Channel Revenue — Open Pricing + Yield Rules */}
+        {activeView === "channel-revenue" && (
+          <ChannelRevenuePanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />

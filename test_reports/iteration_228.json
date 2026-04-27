@@ -1,0 +1,97 @@
+{
+  "summary": "Iteration 228 - Batch 16 (Open Pricing per Channel + Yield Rules Engine) tested. Backend: 16/16 tests passed. Frontend: All UI elements verified. Channel Revenue Panel accessible via sidebar '⚡ Açık Fiyat + Yield' (data-testid='channel-revenue-btn'). 6 channel cards displayed with correct multipliers (direct=1.0, booking.com=1.18, expedia=1.20, corporate=0.85). Quote playground shows BAR, multiplier, per-night rate, total, occupancy%, and rules_applied[] with rate_before→rate_after transparency. 4 default yield rules seeded (Yüksek doluluk +20%, Hafta sonu primi +15%, Last-minute -10%, OTA kanal +5%). Rule editor modal has name, priority, triggers (occupancy, days-to-arrival, DOW buttons), and actions. Regression tests passed for Batch 13-15 (TR Compliance, AI Predictions, EU Compliance).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration228_batch16_channel_revenue.py",
+    "/app/test_reports/pytest/pytest_iteration228_batch16.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Channel configs auto-seed 6 defaults on first GET: direct(1.0), booking.com(1.18), expedia(1.20), airbnb(1.15), corporate(0.85), agent(0.88)",
+    "Each channel has base_multiplier, min_floor_pct, max_ceiling_pct for rate clamping",
+    "Quote pipeline: BAR → channel multiplier → yield rules (priority desc) → floor/ceiling clamp",
+    "rules_applied[] shows each rule's rate_before and rate_after for full transparency (Duetto-level explainability)",
+    "Yield rules support triggers: occupancy_gte/lte, days_to_arrival_lte/gte, dow_in[], channel_in[]",
+    "Yield rules support actions: rate_delta_pct, rate_delta_abs, min_los, cta_enabled, stop_sell",
+    "seed-defaults is idempotent - returns seeded=0 with note if rules already exist",
+    "DELETE /rules/{invalid_id} correctly returns 404",
+    "Weekend rule (Hafta sonu primi) triggers on fri/sat with +15% rate delta",
+    "Amber color theme distinguishes from violet (AI Predictions) / sky (EU) / rose (TR)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration228_batch16_channel_revenue.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "4 default yield rules seeded via /api/channel-revenue/rules/default/seed-defaults",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 228 validates Batch 16 (Open Pricing + Yield Rules). Sidebar button: '⚡ Açık Fiyat + Yield' (data-testid='channel-revenue-btn'). Panel: data-testid='channel-revenue-panel'. Tabs: cr-tab-pricing, cr-tab-rules. Pricing tab: 6 channel cards (channel-{name}), quote form (quote-channel, quote-checkin, quote-run), result card (quote-result). Rules tab: rule-new, rule-seed-defaults (hidden if rules exist), rule-editor modal with rule-name, rule-save. Backend endpoints: GET/PUT /channel-revenue/channels/{property_id}/{channel}, POST /channel-revenue/quote, GET/POST/PUT/DELETE /channel-revenue/rules, POST /channel-revenue/rules/{property_id}/seed-defaults.",
+  "features_verified": {
+    "batch_16_channel_revenue": {
+      "endpoints": {
+        "get_channels": "GET /api/channel-revenue/channels/default → 200 + channels[] with 6 entries",
+        "update_channel": "PUT /api/channel-revenue/channels/default/booking.com → 200 + updated=true",
+        "quote": "POST /api/channel-revenue/quote → 200 + bar, per_night_rate, total, multiplier_used, occupancy_pct, rules_applied[], floor, ceiling",
+        "list_rules": "GET /api/channel-revenue/rules/default → 200 + rules[] sorted by priority desc, count",
+        "create_rule": "POST /api/channel-revenue/rules → 200 + id",
+        "update_rule": "PUT /api/channel-revenue/rules/{id} → 200",
+        "delete_rule": "DELETE /api/channel-revenue/rules/{id} → 200 (404 for invalid id)",
+        "seed_defaults": "POST /api/channel-revenue/rules/default/seed-defaults → 200 + seeded=4 (or seeded=0 with note)"
+      },
+      "channels": {
+        "direct": {"multiplier": 1.0, "floor": 85, "ceiling": 140},
+        "booking.com": {"multiplier": 1.18, "floor": 95, "ceiling": 160},
+        "expedia": {"multiplier": 1.20, "floor": 95, "ceiling": 160},
+        "airbnb": {"multiplier": 1.15, "floor": 90, "ceiling": 155},
+        "corporate": {"multiplier": 0.85, "floor": 70, "ceiling": 100},
+        "agent": {"multiplier": 0.88, "floor": 72, "ceiling": 110}
+      },
+      "default_rules": [
+        {"name": "Yüksek doluluk → +%20", "trigger": "occupancy_gte:85", "action": "+20%", "priority": 10},
+        {"name": "Hafta sonu primi", "trigger": "dow_in:[fri,sat]", "action": "+15%", "priority": 8},
+        {"name": "Last-minute <3 gün indirimi", "trigger": "days_to_arrival_lte:3, occupancy_lte:60", "action": "-10%", "priority": 5},
+        {"name": "OTA kanalı sadece +%5", "trigger": "channel_in:[booking.com,expedia,airbnb]", "action": "+5%", "priority": 3}
+      ],
+      "ui_elements": {
+        "sidebar_btn": "data-testid='channel-revenue-btn'",
+        "panel": "data-testid='channel-revenue-panel'",
+        "pricing_tab": "data-testid='cr-tab-pricing'",
+        "rules_tab": "data-testid='cr-tab-rules'",
+        "channel_cards": "data-testid='channel-{name}'",
+        "quote_form": "quote-channel, quote-checkin, quote-run",
+        "quote_result": "data-testid='quote-result'",
+        "new_rule_btn": "data-testid='rule-new'",
+        "seed_defaults_btn": "data-testid='rule-seed-defaults'",
+        "rule_editor": "data-testid='rule-editor'",
+        "rule_name": "data-testid='rule-name'",
+        "rule_save": "data-testid='rule-save'"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "batch_13_tr_compliance": "PASSED (/kbs/default/history working)",
+    "batch_14_ai_predictions": "PASSED (/cancel-risk/default working, 11 bookings)",
+    "batch_15_eu_compliance": "PASSED (/catalog working, 7 countries)",
+    "today_hub": "PASSED (renders correctly)",
+    "command_palette": "PASSED (opens with Ctrl+K)"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "batch_completion_status": "Batch 16 (Open Pricing per Channel + Yield Rules Engine) COMPLETE"
+}

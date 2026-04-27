@@ -1,6 +1,46 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 227 Test Iterations
+## 113+ Modules | Mobile Responsive | 228 Test Iterations
+
+
+### Iter 229 (Apr 2026): ⚡ Batch 16 — Channel Revenue: Open Pricing + Yield Rules Engine
+
+User ask (TR): _"devam et"_ — Duetto/IDeaS seviyesi dinamik fiyatlama.
+
+**Backend (`routes/channel_revenue.py` — NEW, 8 endpoints):**
+
+**Open Pricing per Channel:**
+- `GET /channel-revenue/channels/{property_id}` — 6 kanal (direct/booking.com/expedia/airbnb/corporate/agent) için config. İlk erişimde defaults otomatik seed (direct ×1.00, Booking.com ×1.18, Expedia ×1.20, corporate ×0.85, etc.). Her kanalın base_multiplier + min_floor_pct + max_ceiling_pct + weekday_override var.
+- `PUT /channel-revenue/channels/{property_id}/{channel}` — Per-channel config update.
+- `POST /channel-revenue/quote` body {property_id, channel, check_in, nights, room_type_id?} → Full quote pipeline:
+  1. BAR resolve (rate_overrides varsa kullan, yoksa room_type.base_price)
+  2. Channel multiplier uygula (DOW override priority)
+  3. Yield rules evaluate (occupancy %, days-to-arrival, DOW, channel triggers)
+  4. Floor/ceiling clamp
+  → Dönen: bar, per_night_rate, total, rules_applied[], occupancy_pct, clamped flag, floor, ceiling.
+
+**Yield Rules Engine (if-then automation):**
+- `GET /channel-revenue/rules/{property_id}` — Liste (priority desc).
+- `POST /channel-revenue/rules` — Yeni kural create. Triggers supported: occupancy_gte/lte, days_to_arrival_gte/lte, dow_in[], channel_in[]. Actions: rate_delta_pct, rate_delta_abs.
+- `PUT /channel-revenue/rules/{rule_id}` + `DELETE /channel-revenue/rules/{rule_id}`.
+- `POST /channel-revenue/rules/{property_id}/seed-defaults` — 4 kural hazır: "Yüksek doluluk →+%20", "Hafta sonu primi +%15", "Last-minute ≤3g indirimi −%10", "OTA kanal +%5".
+
+**Frontend (`ChannelRevenuePanel.js` — NEW):**
+- 2 tab (amber tema): "Açık Fiyatlama" + "Yield Kuralları".
+- **Pricing tab:** 6 kanal kartı grid — inline çarpan/taban/tavan edit + one-click save. Quote oyun alanı: kanal + tarih + gece → "Quote Al" → 5 KPI sonuç + uygulanan kurallar transcript + clamp uyarısı.
+- **Rules tab:** Toggle switch (aktif/pasif) + inline summary ("Doluluk ≥85% → Fiyat +20%") + düzenle/sil/yeni. Modal editor: ad, öncelik, fiyat değişim %, occupancy thresholds, days-to-arrival, DOW multi-select.
+- Sidebar: "⚡ Açık Fiyat + Yield" Revenue & Rates grubunda.
+
+**Verified (curl):**
+- Booking.com, 2026-05-23 (Cumartesi), 2 gece, BAR £120 → Channel mult 1.18 £141.60 → Rule "Hafta sonu primi" +15% → £162.84 → Rule "OTA kanal" +5% → £170.98 → Total **£341.96**. Floor £114, ceiling £192, not clamped. Doluluk 66.7%.
+- 4 default rules seeded successfully.
+
+**Why this beats competitors:**
+- Duetto: Enterprise fiyatlı (yıllık $50k+). Biz: Built-in, serbest.
+- IDeaS: Rate recommendations sadece "geniş resim", channel bazlı değil. Biz: Per-channel clamp + rule stacking.
+- Opera/Stayntouch: Rate calendar var ama if-then yield yok. Biz: Transparent rules transcript — hangi kural kaç £ ekledi, net görünür.
+
+---
 
 
 ### Iter 228 (Apr 2026): 🇪🇺 Batch 15 — EU Compliance Hub (7 ülke)

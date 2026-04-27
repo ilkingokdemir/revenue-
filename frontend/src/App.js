@@ -118,6 +118,11 @@ import FolioLivePanel from "./components/dashboard/FolioLivePanel";
 import ABTestPanel from "./components/dashboard/ABTestPanel";
 import PreArrivalDripPanel from "./components/dashboard/PreArrivalDripPanel";
 import MenuEngineeringPanel from "./components/dashboard/MenuEngineeringPanel";
+import SRVoucherPanel from "./components/dashboard/SRVoucherPanel";
+import FolioSplitPanel from "./components/dashboard/FolioSplitPanel";
+import LoyaltyAutoPanel from "./components/dashboard/LoyaltyAutoPanel";
+import LateCheckoutOfferPanel from "./components/dashboard/LateCheckoutOfferPanel";
+import OTAStopSellForecastPanel from "./components/dashboard/OTAStopSellForecastPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2727,6 +2732,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "ab-test", icon: TestTube, name: "A/B Test Engine", testId: "ab-test-btn" },
         { id: "pre-arrival", icon: Envelope, name: "Pre-arrival Drip", testId: "pre-arrival-btn" },
         { id: "menu-engineering", icon: ChartBar, name: "Menu Engineering", testId: "menu-engineering-btn" },
+        { id: "sr-voucher", icon: Tag, name: "Service Recovery Vouchers", testId: "sr-voucher-btn" },
+        { id: "folio-split", icon: Receipt, name: "Folio Split-Billing", testId: "folio-split-btn" },
+        { id: "loyalty-auto", icon: Crown, name: "Loyalty Auto-Tier", testId: "loyalty-auto-btn" },
+        { id: "late-checkout-offer", icon: Clock, name: "Late-Checkout Offers", testId: "late-checkout-offer-btn" },
+        { id: "ota-forecast", icon: TrendUp, name: "OTA Stop-Sell Forecast", testId: "ota-forecast-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2882,6 +2892,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "ab-test-btn":            "operations_reception_view",
     "pre-arrival-btn":        "operations_reception_view",
     "menu-engineering-btn":   "operations_reception_view",
+    "sr-voucher-btn":         "operations_reception_view",
+    "folio-split-btn":        "operations_reception_view",
+    "loyalty-auto-btn":       "operations_reception_view",
+    "late-checkout-offer-btn":"operations_reception_view",
+    "ota-forecast-btn":       "operations_reception_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3718,6 +3733,51 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "menu-engineering" && (
           <div className="p-6">
             <MenuEngineeringPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "sr-voucher" && (
+          <div className="p-6">
+            <SRVoucherPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "folio-split" && (
+          <div className="p-6">
+            <FolioSplitPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "loyalty-auto" && (
+          <div className="p-6">
+            <LoyaltyAutoPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "late-checkout-offer" && (
+          <div className="p-6">
+            <LateCheckoutOfferPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "ota-forecast" && (
+          <div className="p-6">
+            <OTAStopSellForecastPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

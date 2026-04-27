@@ -805,6 +805,22 @@ api_router.include_router(create_pre_arrival_router(db, require_roles))
 from routes.menu_engineering import create_menu_engineering_router
 api_router.include_router(create_menu_engineering_router(db, require_roles))
 
+# ===== Batch 8 (P1 keyless): SR Voucher, Folio split, Loyalty auto, Late checkout offer, OTA stop-sell forecast =====
+from routes.sr_voucher import create_service_recovery_voucher_router
+api_router.include_router(create_service_recovery_voucher_router(db, require_roles))
+
+from routes.folio_split import create_folio_split_router
+api_router.include_router(create_folio_split_router(db, require_roles))
+
+from routes.loyalty_auto import create_loyalty_auto_router
+api_router.include_router(create_loyalty_auto_router(db, require_roles))
+
+from routes.late_checkout_offer import create_late_checkout_offer_router
+api_router.include_router(create_late_checkout_offer_router(db, require_roles))
+
+from routes.ota_stop_sell_forecast import create_ota_stop_sell_forecast_router
+api_router.include_router(create_ota_stop_sell_forecast_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

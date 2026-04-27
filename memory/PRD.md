@@ -1,6 +1,54 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 231 Test Iterations
+## 113+ Modules | Mobile Responsive | 232 Test Iterations
+
+
+### Iter 233 (Apr 2026): 📱 Batch 20 — Self Check-in v2 (pre-arrival wizard)
+
+User ask (TR): _"Devam et"_ — rakiplerin tier-1 "mobile check-in" özelliği.
+
+**Backend (`routes/self_checkin_v2.py` — NEW, 6 endpoints):**
+
+Full pre-arrival flow:
+- `POST /self-checkin-v2/token/{booking_id}?expiry_hours=72` — Admin/scheduler uuid token üretir, 72h expiry, `/selfcheckin-v2/{token}` link döner. Booking'e `self_checkin_v2_token` damgalanır, `self_checkin_tokens` tablosuna kayıt (status=issued).
+- `GET /self-checkin-v2/verify/{token}` — **Public (no auth)** — token doğrular, expired ise 410, otherwise booking + property public verisi + default_slots listesi döner. İlk açılışta status=started.
+- `POST /self-checkin-v2/reg-card/{token}` — **Public** — reg-card kayıt: first/last name, DOB, nationality, ID doc type/no, address, phone, email, ID photo base64, signature base64 PNG, marketing_consent, extra_guests. `self_checkin_reg_cards` collection'a yazılır, guest_profile patchlenir, status=reg_card_filled.
+- `POST /self-checkin-v2/slot/{token}` — **Public** — 11 default slot (10:00-21:00 her saat). Booking'e `arrival_slot` + `fast_track_enabled=true` damgalanır, status=completed.
+- `GET /self-checkin-v2/pipeline/{property_id}?days_ahead=N` — Admin: gelecek N günlük varışlar + her birinin pipeline durumu (token_issued, reg_card_filled, has_signature, has_id_photo, slot_booked, fast_track, arrival_slot). Aggregate: total, issued, completed, completion_pct.
+- `GET /self-checkin-v2/reg-card/{token}` — Admin: resepsiyona reg-card full view.
+
+**Frontend (2 component):**
+
+**1. `SelfCheckInPipelinePanel.js` (admin, sky tema):**
+- 4 KPI: toplam varış / link gönderildi / reg-card dolduruldu / tamamlandı + tamamlanma %
+- Satır bazlı 5 "StepDot" (Link → Form → İmza → ID → Slot) — emerald tick
+- "FAST" badge fast_track için, arrival_slot inline
+- "Link Gönder" tek tıkla token oluştur → pano kopyala
+- Sidebar: "📱 Pre-arrival Check-in" Operations grubunda
+
+**2. `SelfCheckInV2Page.js` (guest-facing public `/selfcheckin-v2/{token}`):**
+- 5 adımlı wizard: Hoş geldin → Bilgiler (reg-card) → İmza (canvas touch-capable) → Varış saati (slot grid) → Bitti ✨
+- Her adımda progress stepper (emerald check-mark past, sky current)
+- Canvas signature pad (touch + mouse), temizle butonu, PNG base64 export
+- ID fotoğraf upload (3MB limit), preview
+- Mobil-first tasarım, gradient hero, hotel logo, glass/sky tema
+- Tamamlandığında: "Hepsi bu kadar ✨ Resepsiyonda anahtarınız hazır olacak"
+
+**Route entegrasyonu:** `App.js`'e eklendi — path `/selfcheckin-v2/` ile başlıyorsa `SelfCheckInV2Page` render olur (pathname split — react-router dependency yok).
+
+**Verified (curl + headless):**
+- Token issued for Emily Rossi → `b574e737...` · expires_at 3 gün sonra
+- Public verify works (no auth) → status=issued → booking data + property data + 11 slots
+- Reg-card submit (with signature PNG base64) → status=reg_card_filled
+- Slot submit "15:00-16:00" → status=completed + fast_track=true
+- Pipeline after: **1 issued, 1 reg_card, 1 completed (%100)**
+
+**Why this beats competitors:**
+- Mews Online Check-in: Ayrı eklenti ($$). Biz: core'da built-in.
+- Cloudbeds Check-in Express: Sadece reg-card, imza yok. Biz: touch-capable signature canvas + 5-step wizard.
+- Stayntouch Guest Mobility: Separate app install. Biz: web-based link, app yok.
+
+---
 
 
 ### Iter 232 (Apr 2026): 💗 Batch 19 — Cross-Channel Sentiment Heatmap

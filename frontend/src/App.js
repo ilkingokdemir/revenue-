@@ -10,6 +10,7 @@ import ReviewWidget from "./ReviewWidget";
 import BookingEngine from "./BookingEngine";
 import ReviewCollectionPage from "./ReviewCollectionPage";
 import SelfCheckInPage from "./SelfCheckInPage";
+import SelfCheckInV2Page from "./SelfCheckInV2Page";
 import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
 import TurkishPayPage from "./TurkishPayPage";
@@ -52,6 +53,7 @@ import ChannelRevenuePanel from "./components/dashboard/ChannelRevenuePanel";
 import KDSPanel from "./components/dashboard/KDSPanel";
 import LoyaltyV2Panel from "./components/dashboard/LoyaltyV2Panel";
 import SentimentHeatmapPanel from "./components/dashboard/SentimentHeatmapPanel";
+import SelfCheckInPipelinePanel from "./components/dashboard/SelfCheckInPipelinePanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2851,6 +2853,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
         { id: "pos", icon: Receipt, name: t("nav.pos"), testId: "pos-btn" },
         { id: "kds", icon: ForkKnife, name: "🍽️ KDS + 86 + Reçete", testId: "kds-btn" },
+        { id: "self-checkin-v2", icon: SignIn, name: "📱 Pre-arrival Check-in", testId: "self-checkin-v2-btn" },
         { id: "city-ledger", icon: Wallet, name: "City Ledger (AR)", testId: "city-ledger-btn" },
         { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
         { id: "tax-presets", icon: Globe, name: "Tax Presets Library", testId: "tax-presets-btn" },
@@ -3054,6 +3057,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "promo-codes-btn":        "bookings_view",
     "pos-btn":                "finance_dashboard_view",
     "kds-btn":                "finance_dashboard_view",
+    "self-checkin-v2-btn":    "operations_reception_view",
     "smart-locks-btn":        "bookings_view",
     "automation-btn":         "channel_manager_connections_view",
     "templates-btn":          "settings_roles_view",
@@ -3341,6 +3345,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Sentiment Heatmap — Cross-channel guest voice */}
         {activeView === "sentiment-heatmap" && (
           <SentimentHeatmapPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* Self Check-in v2 — Pre-arrival pipeline */}
+        {activeView === "self-checkin-v2" && (
+          <SelfCheckInPipelinePanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />
@@ -4551,6 +4563,9 @@ function App() {
   }
   if (window.location.pathname === "/checkin") {
     return <SelfCheckInPage />;
+  }
+  if (window.location.pathname.startsWith("/selfcheckin-v2/")) {
+    return <SelfCheckInV2Page />;
   }
   if (window.location.pathname === "/guest-portal") {
     return <GuestPortalPage />;

@@ -1,0 +1,102 @@
+{
+  "summary": "Iteration 232 - Batch 20 (Self Check-in v2 Pre-arrival) tested. Backend: 20/20 passed. Frontend: All UI elements verified. Admin panel shows pipeline with KPI cards (total arrivals, links sent, reg-cards filled, completed). Guest-facing 5-step wizard works end-to-end: Welcome → Reg-card → Signature → Slot → Done. Public endpoints work without auth. Invalid token returns 404 with friendly error page.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Panel", "issues": ["Clipboard write permission error in automated testing (expected behavior in headless browser)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration232_batch20_self_checkin_v2.py",
+    "/app/test_reports/pytest/pytest_iteration232_batch20.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Token is 32-char hex UUID (uuid.uuid4().hex)",
+    "Default expiry is 72 hours, configurable via query param",
+    "Public endpoints (verify, reg-card, slot) don't require auth - correct for guest access",
+    "Status flow: issued → started → reg_card_filled → completed",
+    "11 default slots from 10:00-21:00 (hourly)",
+    "Signature captured as PNG base64 data URL from HTML canvas",
+    "Guest profile patched when reg-card submitted (if guest_id exists)",
+    "fast_track_enabled set on booking when flow completed",
+    "Email dispatch MOCKED (requires RESEND_API_KEY)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration232_batch20_self_checkin_v2.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - uses existing bookings data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 232 validates Batch 20 (Self Check-in v2). Admin sidebar: '📱 Pre-arrival Check-in' (data-testid='self-checkin-v2-btn'). Admin panel: data-testid='self-checkin-v2-panel'. Pipeline rows: data-testid='pipeline-row-{booking_id}'. Issue button: data-testid='pipeline-issue-{booking_id}'. Guest page at /selfcheckin-v2/{token} (PUBLIC). Steps: welcome-step, reg-card-step, signature-step, slot-step, done-step. Form fields: regcard-firstname, regcard-lastname, regcard-docno, regcard-file. Signature: signature-canvas, signature-clear, signature-next. Slots: slot-{time}, slot-next. Backend endpoints: POST /api/self-checkin-v2/token/{booking_id}, GET /api/self-checkin-v2/verify/{token} (PUBLIC), POST /api/self-checkin-v2/reg-card/{token} (PUBLIC), POST /api/self-checkin-v2/slot/{token} (PUBLIC), GET /api/self-checkin-v2/pipeline/{property_id}, GET /api/self-checkin-v2/reg-card/{token} (admin).",
+  "features_verified": {
+    "batch_20_self_checkin_v2": {
+      "token_generation": {
+        "valid_booking": "POST /api/self-checkin-v2/token/{booking_id}?expiry_hours=72 → 200 with token (32-char hex), link, expires_at, booking_id, guest_email",
+        "invalid_booking": "POST /api/self-checkin-v2/token/invalid → 404"
+      },
+      "token_verification": {
+        "valid_token": "GET /api/self-checkin-v2/verify/{token} → 200 with token, status, booking, property, default_slots (11), reg_card_filled, slot_booked",
+        "invalid_token": "GET /api/self-checkin-v2/verify/invalid → 404",
+        "status_update": "First call changes status from 'issued' to 'started'"
+      },
+      "reg_card_submission": {
+        "valid": "POST /api/self-checkin-v2/reg-card/{token} → 200 with status='reg_card_filled', submitted_at",
+        "invalid_token": "POST /api/self-checkin-v2/reg-card/invalid → 404",
+        "fields": "first_name, last_name, date_of_birth, nationality, id_doc_type, id_doc_no, address, phone, email, signature_svg, marketing_consent"
+      },
+      "slot_booking": {
+        "valid_slot": "POST /api/self-checkin-v2/slot/{token} → 200 with status='completed', arrival_slot, completed_at",
+        "invalid_slot": "POST /api/self-checkin-v2/slot/{token} with invalid slot → 400"
+      },
+      "pipeline_dashboard": {
+        "endpoint": "GET /api/self-checkin-v2/pipeline/{property_id}?days_ahead=14 → 200 with rows, count, issued, reg_card_filled, completed, completion_pct",
+        "row_structure": "booking_id, guest_name, guest_email, check_in, room_type_name, token_issued, reg_card_filled, has_signature, has_id_photo, slot_booked, arrival_slot, fast_track, status, token"
+      },
+      "admin_reg_card_view": {
+        "submitted": "GET /api/self-checkin-v2/reg-card/{token} → 200 with full reg-card doc",
+        "unsubmitted": "GET /api/self-checkin-v2/reg-card/invalid → 404"
+      },
+      "ui_elements": {
+        "admin_sidebar": "data-testid='self-checkin-v2-btn' - '📱 Pre-arrival Check-in'",
+        "admin_panel": "data-testid='self-checkin-v2-panel' - KPI cards + pipeline rows",
+        "pipeline_row": "data-testid='pipeline-row-{id}' - StepDots (LINK, FORM, IMZA, ID, SLOT)",
+        "issue_button": "data-testid='pipeline-issue-{id}' - 'Link Gönder'",
+        "guest_page": "data-testid='selfcheckin-v2-page' at /selfcheckin-v2/{token}",
+        "stepper": "5 steps: HOŞ GELDİN, BİLGİLER, İMZA, SLOT, BİTTİ",
+        "welcome_step": "Guest name, check-in/out dates, room type, total price, 'Başla' button",
+        "regcard_step": "Form fields with 'İleri' button",
+        "signature_step": "Canvas with 'Temizle' and 'Kaydet ve devam' buttons",
+        "slot_step": "11 time slot buttons with 'Tamamla' button",
+        "done_step": "'Hepsi bu kadar! ✨' confirmation"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "batch_13_tr_compliance": "PASSED (GET /api/tr-compliance/kbs/default/history)",
+    "batch_14_ai_predictions": "PASSED (GET /api/ai-predictions/cancel-risk/default)",
+    "batch_15_eu_compliance": "PASSED (GET /api/eu-compliance/catalog)",
+    "batch_16_channel_revenue": "PASSED (GET /api/channel-revenue/channels/default)",
+    "batch_17_kds": "PASSED (GET /api/kds/default)",
+    "batch_18_loyalty_v2_benefits": "PASSED (GET /api/loyalty-v2/benefits/default)",
+    "batch_18_loyalty_v2_packages": "PASSED (GET /api/loyalty-v2/packages/default)",
+    "batch_19_sentiment_heatmap": "PASSED (GET /api/sentiment/heatmap/default?days=90)"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Email dispatch via Resend (queued only, needs RESEND_API_KEY)"]
+  },
+  "batch_completion_status": "Batch 20 (Self Check-in v2 Pre-arrival) COMPLETE"
+}

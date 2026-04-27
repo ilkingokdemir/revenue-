@@ -123,6 +123,12 @@ import FolioSplitPanel from "./components/dashboard/FolioSplitPanel";
 import LoyaltyAutoPanel from "./components/dashboard/LoyaltyAutoPanel";
 import LateCheckoutOfferPanel from "./components/dashboard/LateCheckoutOfferPanel";
 import OTAStopSellForecastPanel from "./components/dashboard/OTAStopSellForecastPanel";
+import MsgTemplatesPanel from "./components/dashboard/MsgTemplatesPanel";
+import BirthdayPanel from "./components/dashboard/BirthdayPanel";
+import LowStockPanel from "./components/dashboard/LowStockPanel";
+import RebookPanel from "./components/dashboard/RebookPanel";
+import StayExtPanel from "./components/dashboard/StayExtPanel";
+import LongStayPanel from "./components/dashboard/LongStayPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2737,6 +2743,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "loyalty-auto", icon: Crown, name: "Loyalty Auto-Tier", testId: "loyalty-auto-btn" },
         { id: "late-checkout-offer", icon: Clock, name: "Late-Checkout Offers", testId: "late-checkout-offer-btn" },
         { id: "ota-forecast", icon: TrendUp, name: "OTA Stop-Sell Forecast", testId: "ota-forecast-btn" },
+        { id: "msg-templates", icon: Globe, name: "Message Templates (i18n)", testId: "msg-templates-btn" },
+        { id: "birthday", icon: Sparkle, name: "Birthday Auto-Discount", testId: "birthday-btn" },
+        { id: "low-stock", icon: Package, name: "Low-Stock Alerts", testId: "low-stock-btn" },
+        { id: "rebook", icon: ArrowsClockwise, name: "Quick Re-booking", testId: "rebook-btn" },
+        { id: "stay-ext", icon: Plus, name: "Stay Extension Wizard", testId: "stay-ext-btn" },
+        { id: "long-stay", icon: CalendarBlank, name: "Long-Stay Discount", testId: "long-stay-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2897,6 +2909,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "loyalty-auto-btn":       "operations_reception_view",
     "late-checkout-offer-btn":"operations_reception_view",
     "ota-forecast-btn":       "operations_reception_view",
+    "msg-templates-btn":      "operations_reception_view",
+    "birthday-btn":           "operations_reception_view",
+    "low-stock-btn":          "operations_reception_view",
+    "rebook-btn":             "operations_reception_view",
+    "stay-ext-btn":           "operations_reception_view",
+    "long-stay-btn":          "operations_reception_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3778,6 +3796,60 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "ota-forecast" && (
           <div className="p-6">
             <OTAStopSellForecastPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "msg-templates" && (
+          <div className="p-6">
+            <MsgTemplatesPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "birthday" && (
+          <div className="p-6">
+            <BirthdayPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "low-stock" && (
+          <div className="p-6">
+            <LowStockPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "rebook" && (
+          <div className="p-6">
+            <RebookPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "stay-ext" && (
+          <div className="p-6">
+            <StayExtPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "long-stay" && (
+          <div className="p-6">
+            <LongStayPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

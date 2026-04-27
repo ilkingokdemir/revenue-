@@ -821,6 +821,25 @@ api_router.include_router(create_late_checkout_offer_router(db, require_roles))
 from routes.ota_stop_sell_forecast import create_ota_stop_sell_forecast_router
 api_router.include_router(create_ota_stop_sell_forecast_router(db, require_roles))
 
+# ===== Batch 9 (P1 keyless): Msg Templates, Birthday auto-discount, Low-stock alerts, Rebook CTA, Stay extension, Long-stay discount =====
+from routes.msg_templates import create_msg_templates_router
+api_router.include_router(create_msg_templates_router(db, require_roles))
+
+from routes.birthday import create_birthday_router
+api_router.include_router(create_birthday_router(db, require_roles))
+
+from routes.low_stock import create_low_stock_router
+api_router.include_router(create_low_stock_router(db, require_roles))
+
+from routes.rebook import create_rebook_router
+api_router.include_router(create_rebook_router(db, require_roles))
+
+from routes.stay_ext import create_stay_ext_router
+api_router.include_router(create_stay_ext_router(db, require_roles))
+
+from routes.long_stay import create_long_stay_router
+api_router.include_router(create_long_stay_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

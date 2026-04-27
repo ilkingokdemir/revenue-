@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import "@/App.css";
 import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
@@ -43,6 +43,9 @@ import LaundrySettingsPanel from "./components/dashboard/LaundrySettingsPanel";
 import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
+import CommandPalette from "./components/CommandPalette";
+import TodayHub from "./components/dashboard/TodayHub";
+import TRCompliancePanel from "./components/dashboard/TRCompliancePanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2620,6 +2623,36 @@ const Dashboard = ({ user, onLogout, permissions }) => {
   const [isBatchResponding, setIsBatchResponding] = useState(false);
   const [batchResult, setBatchResult] = useState(null);
 
+  // Recents tracker for Command Palette
+  const [recentsRaw, setRecentsRaw] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("mhb_recents") || "[]"); }
+    catch (_) { return []; }
+  });
+  const pushRecent = useCallback((id) => {
+    if (!id || id === "dashboard") return;
+    setRecentsRaw((prev) => {
+      const next = [id, ...prev.filter((x) => x !== id)].slice(0, 8);
+      try { localStorage.setItem("mhb_recents", JSON.stringify(next)); } catch (_) {}
+      return next;
+    });
+  }, []);
+
+  // Centralised navigation: tracks recents + closes mobile sidebar
+  const navigate = useCallback((id) => {
+    setActiveView(id);
+    setSidebarOpen(false);
+    pushRecent(id);
+  }, [pushRecent]);
+
+  // Ask-AI handler from command palette: routes "?question" to concierge inbox
+  // (Concierge Inbox is the closest existing AI surface). Drops the query into a toast for now.
+  const handleAskAi = useCallback((q) => {
+    if (!q) return;
+    toast.info(`AI sorgusu: "${q}" → Concierge Inbox'e yönlendiriliyor`, { duration: 3500 });
+    navigate("concierge-inbox");
+  }, [navigate]);
+
+
   const batchAutoRespond = async (tone = "professional") => {
     setIsBatchResponding(true);
     setBatchResult(null);
@@ -2665,6 +2698,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "pass-over", icon: Notebook, name: "Pass Over Duties", testId: "pass-over-btn" },
         { id: "kiosk-launch", icon: DeviceTablet, name: "Self-Service Kiosk", testId: "kiosk-launch-btn", launchUrl: true },
         { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
+        { id: "tr-compliance", icon: FileText, name: "🇹🇷 KBS + e-Fatura", testId: "tr-compliance-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
         { id: "cash-drawer", icon: Wallet, name: "Cash Drawer", testId: "cash-drawer-btn" },
       ],
@@ -2937,6 +2971,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "reception-report-btn":   "operations_reception_view",
     "pass-over-btn":          "operations_notes_view",
     "compliance-btn":         "operations_compliance_view",
+    "tr-compliance-btn":      "operations_compliance_view",
     "laundry-btn":            "laundry_reports_view",
     "stock-management-btn":   "view_laundry_stock",
     "logbook-btn":            "operations_notes_view",
@@ -3035,6 +3070,32 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     items: section.items.filter(it => canSeeSidebar(it.testId)),
   })).filter(section => section.items.length > 0);
 
+  // Flatten gated navigation into a Command Palette catalogue
+  const commandItems = useMemo(() => {
+    const out = [];
+    for (const section of gatedNavigation) {
+      for (const it of section.items) {
+        if (it.launchUrl) continue; // external launches skipped
+        out.push({
+          id: it.id,
+          name: it.name,
+          group: section.label,
+          icon: it.icon,
+          testId: it.testId,
+          keywords: `${it.name} ${section.label} ${it.id}`,
+        });
+      }
+    }
+    return out;
+  }, [gatedNavigation]);
+
+  // Resolve recent IDs back into rich items
+  const recents = useMemo(
+    () => recentsRaw.map((id) => commandItems.find((i) => i.id === id)).filter(Boolean),
+    [recentsRaw, commandItems]
+  );
+
+
   return (
     <div className="min-h-screen bg-stone-50 flex" data-testid="review-dashboard">
       {/* Mobile Overlay */}
@@ -3076,6 +3137,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <div className="mt-3 hidden lg:flex items-center gap-2">
             <NotificationBell onNavigate={setActiveView} />
             <span className="text-[10px] text-stone-500">Notifications</span>
+          </div>
+          {/* ⌘K Command Palette trigger */}
+          <div className="mt-3">
+            <CommandPalette
+              items={commandItems}
+              recents={recents}
+              onSelect={navigate}
+              onAskAi={handleAskAi}
+            />
           </div>
           {/* Branch Selector — always visible */}
           <div className="mt-3" data-testid="branch-selector-container">
@@ -3145,7 +3215,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                         window.open(`/checkin-kiosk/${activePropertyId || "default"}`, "_blank", "noopener,noreferrer");
                         return;
                       }
-                      setActiveView(item.id); setSidebarOpen(false);
+                      navigate(item.id);
                     }}
                     className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
                       activeView === item.id
@@ -3191,9 +3261,21 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           />
         )}
 
-        {/* Dashboard Home */}
+        {/* Dashboard Home — AI-first "Today" hub */}
         {activeView === "dashboard" && (
-          <EnhancedDashboard propertyId={activePropertyId} />
+          <TodayHub
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+            onNavigate={navigate}
+          />
+        )}
+
+        {/* TR Compliance — KBS + e-Fatura */}
+        {activeView === "tr-compliance" && (
+          <TRCompliancePanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
         )}
 
         {/* My Tasks */}

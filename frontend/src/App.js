@@ -49,6 +49,7 @@ import TRCompliancePanel from "./components/dashboard/TRCompliancePanel";
 import EUCompliancePanel from "./components/dashboard/EUCompliancePanel";
 import AIPredictionsPanel from "./components/dashboard/AIPredictionsPanel";
 import ChannelRevenuePanel from "./components/dashboard/ChannelRevenuePanel";
+import KDSPanel from "./components/dashboard/KDSPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -214,6 +215,7 @@ import {
   TrendUp,
   TrendDown,
   Lightning,
+  ForkKnife,
   Users,
   Trophy,
   Target,
@@ -2843,6 +2845,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "payroll", icon: Wallet, name: "Payroll", testId: "payroll-btn" },
         { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
         { id: "pos", icon: Receipt, name: t("nav.pos"), testId: "pos-btn" },
+        { id: "kds", icon: ForkKnife, name: "🍽️ KDS + 86 + Reçete", testId: "kds-btn" },
         { id: "city-ledger", icon: Wallet, name: "City Ledger (AR)", testId: "city-ledger-btn" },
         { id: "tax-config", icon: Receipt, name: "Tax Configuration", testId: "tax-config-btn" },
         { id: "tax-presets", icon: Globe, name: "Tax Presets Library", testId: "tax-presets-btn" },
@@ -3043,6 +3046,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "loyalty-btn":            "bookings_view",
     "promo-codes-btn":        "bookings_view",
     "pos-btn":                "finance_dashboard_view",
+    "kds-btn":                "finance_dashboard_view",
     "smart-locks-btn":        "bookings_view",
     "automation-btn":         "channel_manager_connections_view",
     "templates-btn":          "settings_roles_view",
@@ -3306,6 +3310,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Channel Revenue — Open Pricing + Yield Rules */}
         {activeView === "channel-revenue" && (
           <ChannelRevenuePanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* KDS — Kitchen Display + 86 List + Recipes */}
+        {activeView === "kds" && (
+          <KDSPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />

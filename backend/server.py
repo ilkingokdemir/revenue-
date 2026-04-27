@@ -99,6 +99,7 @@ from routes.compliance import create_compliance_router
 from routes.tr_compliance import create_tr_compliance_router
 from routes.eu_compliance import create_eu_compliance_router
 from routes.channel_revenue import create_channel_revenue_router
+from routes.pos_kds import create_pos_kds_router
 from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
@@ -515,6 +516,8 @@ eu_compliance_router = create_eu_compliance_router(db, require_roles)
 api_router.include_router(eu_compliance_router)
 channel_revenue_router = create_channel_revenue_router(db, require_roles)
 api_router.include_router(channel_revenue_router)
+pos_kds_router = create_pos_kds_router(db, require_roles)
+api_router.include_router(pos_kds_router)
 ai_predictions_router = create_ai_predictions_router(db, require_roles)
 api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)

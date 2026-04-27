@@ -1,6 +1,45 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 228 Test Iterations
+## 113+ Modules | Mobile Responsive | 229 Test Iterations
+
+
+### Iter 230 (Apr 2026): 🍽️ Batch 17 — Kitchen Display + 86 List + Recipe Inventory
+
+User ask (TR): _"devam et"_ — F&B operational depth.
+
+**Backend (`routes/pos_kds.py` — NEW, 7 endpoints):**
+
+**Kitchen Display System (KDS) live:**
+- `GET /kds/{property_id}?station=optional` — Live queue of orders with `kitchen_status in [new, preparing, ready]`. Age-colored (green <5min, amber 5-10, red >10). Grouped by station (hot/cold/grill/bar/dessert). Returns counters per status + oldest_age.
+- `POST /kds/bump` body {order_id, next_status, station?} — new → preparing → ready → served. On "preparing", auto-deducts recipe components from stock + triggers inventory_alerts when stock drops below reorder_threshold.
+
+**86 List:**
+- `GET /86-list/{property_id}` — Items currently out-of-stock.
+- `POST /86-list/toggle` body {menu_item_id, on_86, reason?} — Mark/unmark. Logs to `pos_86_log`.
+
+**Recipe Inventory (pos_menu_items ⨯ stock):**
+- `GET /recipes/{menu_item_id}` — Read.
+- `POST /recipes` upsert {menu_item_id, components:[{stock_item_id,qty,unit}]}.
+- `GET /recipes/property/{property_id}` — Joined report: menu items × recipe coverage.
+
+**Frontend (`KDSPanel.js` — NEW):**
+- 3 tab (rose tema): "Canlı Ekran" + "86 Listesi" + "Reçeteler".
+- **Canlı Ekran:** 4 KPI (new/preparing/ready/oldest age min). Station cards grid (renk temalı: hot=rose, cold=sky, grill=amber, bar=violet). Her item kartı 4-renkli border-left (age_color) + timer + table + "Bump" butonu. 10sn auto-refresh.
+- **86 Listesi:** Üstte aktif 86 chip'leri × silme, altta menünün kalan ürünleri grid (prompt ile reason).
+- **Reçeteler:** Tüm menu × recipe coverage tablosu + modal editor (stock_items'dan bileşen + qty).
+- Sidebar: "🍽️ KDS + 86 + Reçete" Operations grubuna eklendi.
+
+**Verified (curl):**
+- KDS stream: 1 canlı order "Frontend Test Guest" masa 5, Ribeye Steak + yaşı ile gösteriliyor.
+- 86 toggle "Pint of Lager" on/off çalışıyor, `on_86_reason` yazılıyor, log tutuluyor.
+- Recipe report: 37 menu item, 1 tanesine reçete eklenebildi.
+
+**Why this beats competitors:**
+- Mews: KDS bir ayrı ürün (Mews Operations). Biz: built-in + 10sn refresh.
+- Cloudbeds: 86 list yok. Biz: one-click toggle + reason + log.
+- Opera: Recipe inventory sadece Micros/Simphony ile. Biz: core modülde + on_preparing otomatik deduction.
+
+---
 
 
 ### Iter 229 (Apr 2026): ⚡ Batch 16 — Channel Revenue: Open Pricing + Yield Rules Engine

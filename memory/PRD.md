@@ -1,6 +1,34 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 220 Test Iterations (100%)
+## 113+ Modules | Mobile Responsive | 221 Test Iterations (100%)
+
+
+### Iter 221 (Apr 2026): 🟡 Batch 8 — SR Vouchers + Folio Split + Loyalty Auto-Tier + Late-Checkout Offers + OTA Stop-Sell Forecast ⇒ 10/20 P1 keyless
+
+User ask (TR): _"devam et"_ — closes the half-way mark on P1 keyless backlog.
+
+**1. Service Recovery Auto-Voucher (`routes/sr_voucher.py` + `SRVoucherPanel.js`):**
+- Auto-tiered apology coupon based on survey score (≤1=25%/£200, =2=20%/£150, ≥3=15%/£100). Sweep auto-issues for open `service_recovery_tickets` without voucher_code. Public lookup endpoint validates code without auth (booking widget uses it).
+
+**2. Folio Split-Billing (`routes/folio_split.py` + `FolioSplitPanel.js`):**
+- Multiple payers per booking (guest + company/agent/event). Categories[] + cap_pct OR cap_amount per payer; charges that straddle a cap are split across line. `_allocate` computes per-payer mini-folio. Settle endpoint locks. Per-payer printable HTML PDF.
+
+**3. Loyalty Tier Auto-Upgrade (`routes/loyalty_auto.py` + `LoyaltyAutoPanel.js`):**
+- 4-tier ladder (bronze/silver/gold/platinum) configurable per property. Sweep recomputes from `guest_profiles.lifetime_stays` OR `lifetime_revenue` (either threshold triggers). Logs every upgrade/downgrade to `loyalty_auto_log`.
+
+**4. Late-Checkout Offer Engine (`routes/late_checkout_offer.py` + `LateCheckoutOfferPanel.js`):**
+- Hourly tier offers priced as max(nightly × pct_per_hour × hours, min_charge). Auto-blocks rooms whose next-night is already booked. One-click accept posts a `folio_charges` row. KPIs: conversion %, revenue.
+
+**5. OTA Stop-Sell Forecast (`routes/ota_stop_sell_forecast.py` + `OTAStopSellForecastPanel.js`):**
+- Per-date forecast for next 14d. Recommends stop-sell when rooms_left ≤ avg_last7_pickup × ((7-d)/7) AND rooms_left_pct ≤ threshold. Estimated commission savings per date. Per-date snooze.
+
+**Frontend:** 5 new sidebar buttons. SR Voucher panel has copy-code + auto-sweep. Folio split lets the receptionist print one page per payer. OTA forecast highlights stop-sell dates with amber background + commission savings.
+
+**Testing — `iteration_221.json`:** **29/29 backend ✅ · 5/5 frontend panels ✅ · 0 issues.** Smoke (curl): SR voucher SR-093BB4B2 issued + publicly looked up, folio split allocated £214.34/£53.58 across Acme Corp + guest, loyalty config returns defaults, late-checkout posts charge to folio.
+
+🎯 **Status: 30/30 P0 ✅ · 10/20 P1 done · 10 P1 to go · 15 P2 backlog (key-dependent).**
+
+---
 
 
 ### Iter 220 (Apr 2026): 🟡 Batch 7 — Mid-stay Survey + In-stay Folio + A/B Test + Pre-arrival Drip + Menu Engineering ⇒ 5/20 P1 keyless

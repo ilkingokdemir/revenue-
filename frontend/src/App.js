@@ -50,6 +50,7 @@ import EUCompliancePanel from "./components/dashboard/EUCompliancePanel";
 import AIPredictionsPanel from "./components/dashboard/AIPredictionsPanel";
 import ChannelRevenuePanel from "./components/dashboard/ChannelRevenuePanel";
 import KDSPanel from "./components/dashboard/KDSPanel";
+import LoyaltyV2Panel from "./components/dashboard/LoyaltyV2Panel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2733,6 +2734,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "guest-journey", icon: SignIn, name: t("nav.guest_journey"), testId: "guest-journey-btn" },
         { id: "guest-app", icon: MapPin, name: t("nav.guest_app"), testId: "guest-app-btn" },
         { id: "loyalty", icon: Crown, name: t("nav.loyalty"), testId: "loyalty-btn" },
+        { id: "loyalty-v2", icon: Crown, name: "👑 Tier + Referral + Paket", testId: "loyalty-v2-btn" },
         { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
         { id: "campaigns", icon: Megaphone, name: t("nav.campaigns"), testId: "campaigns-btn" },
         { id: "surveys", icon: Star, name: t("nav.surveys"), testId: "surveys-btn" },
@@ -3044,6 +3046,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "nav-reviews":            "bookings_view",
     "campaigns-btn":          "bookings_view",
     "loyalty-btn":            "bookings_view",
+    "loyalty-v2-btn":         "bookings_view",
     "promo-codes-btn":        "bookings_view",
     "pos-btn":                "finance_dashboard_view",
     "kds-btn":                "finance_dashboard_view",
@@ -3318,6 +3321,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* KDS — Kitchen Display + 86 List + Recipes */}
         {activeView === "kds" && (
           <KDSPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* Loyalty v2 — Tier Benefits + Referrals + Dynamic Packaging */}
+        {activeView === "loyalty-v2" && (
+          <LoyaltyV2Panel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />

@@ -1,6 +1,46 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 229 Test Iterations
+## 113+ Modules | Mobile Responsive | 230 Test Iterations
+
+
+### Iter 231 (Apr 2026): 👑 Batch 18 — Loyalty Enterprise: Tier Benefits + Referrals + Dynamic Packaging
+
+User ask (TR): _"devam et"_ — Marriott/IHG seviyesi loyalty.
+
+**Backend (`routes/loyalty_v2.py` — NEW, 11 endpoints):**
+
+**Tier Benefits Engine:**
+- `GET /loyalty-v2/benefits/{property_id}` — 4 tier (bronze/silver/gold/platinum) için hazır config (auto-seed). Her tier için 8 perk: early CI, late CO, room upgrade, free breakfast, welcome amenity, birthday gift, F&B %, spa %.
+- `PUT /loyalty-v2/benefits/{property_id}/{tier}` — Per-tier config update (one-click checkbox UI).
+- `POST /loyalty-v2/benefits/apply/{booking_id}` — Check-in'de auto-apply: guest tier çek → benefit config aç → eligible perks'leri `booking.tier_benefits_applied[]` olarak damgala + "Room upgrade → next tier room type" otomatik hesap (sorted by base_price).
+
+**Referral Program:**
+- `POST /loyalty-v2/referrals` — Referrer için benzersiz `REF{guest_4}{random_4}` kod üretir, misafir %X indirim + referrer Y puan kazanımı, expires 365 gün.
+- `GET /loyalty-v2/referrals/{property_id}` — Tüm kodlar + total_earned_points + total_bookings_generated aggregates.
+- `POST /loyalty-v2/referrals/claim` body {code, booking_id} — Booking'e indirim uygula (`original_total_price` saklanır), referrer'a puan yatır, `times_used` arttır.
+
+**Dynamic Packaging:**
+- `GET /loyalty-v2/packages/{property_id}` — Her paket için otomatik `alacarte_total`, `savings`, `savings_pct` hesaplaması.
+- `POST/PUT/DELETE /loyalty-v2/packages` — CRUD.
+- `POST /loyalty-v2/packages/{property_id}/seed-defaults` — 3 hazır paket: "Romantik Kaçamak £499 (save £111 / %18.2)", "İş Gezisi Kompakt £169 (save £24)", "Aile Hafta Sonu £539 (save £41)".
+
+**Frontend (`LoyaltyV2Panel.js` — NEW, violet tema, 3 tab):**
+- **Tier Ayrıcalıkları:** 4 tier kartı grid (🥉🥈🥇💎), tüm perks toggle + F&B/Spa % input inline update (auto-save).
+- **Referral Kodları:** 3 KPI (kod/booking/puan), form ile oluştur, liste clickable kod kopyalama + kullanım stats per row.
+- **Paketler:** "3 varsayılan ekle" seed button, paket kartları: a-la-carte line items breakdown + büyük paket fiyatı + emerald "tasarruf £X (%Y)" banner + aktif/pasif toggle + sil.
+- Sidebar: "👑 Tier + Referral + Paket" Customer grubunda klasik Loyalty'nin yanında.
+
+**Verified (curl):**
+- 4 tier auto-seeded: bronze (hiç perk), silver (+5% FnB), gold (+10% full upgrade), platinum (+20%).
+- 3 paket seeded: Romantik £499 (save £111), İş Gezisi £169 (£24 save), Aile £539 (£41 save).
+- Apply benefits bronze booking → `applied=[]` doğru (bronze'da perk yok).
+
+**Why this beats competitors:**
+- Marriott Bonvoy: Tier benefits hard-coded chain seviyesinde. Biz: Per-property customize + UI'dan toggle.
+- Mews: Packaging var ama savings hesabı yok. Biz: A-la-carte → Paket farkı otomatik hesap + % göster.
+- Cloudbeds: Referral feature yok. Biz: Code generation + claim + referrer puan yatırımı full flow.
+
+---
 
 
 ### Iter 230 (Apr 2026): 🍽️ Batch 17 — Kitchen Display + 86 List + Recipe Inventory

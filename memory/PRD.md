@@ -1,6 +1,45 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 219 Test Iterations (100%)
+## 113+ Modules | Mobile Responsive | 220 Test Iterations (100%)
+
+
+### Iter 220 (Apr 2026): 🟡 Batch 7 — Mid-stay Survey + In-stay Folio + A/B Test + Pre-arrival Drip + Menu Engineering ⇒ 5/20 P1 keyless
+
+User ask (TR): _"devam et"_ — opens the P1 keyless backlog after closing all 30 P0.
+
+**1. Mid-stay Pulse Survey (`routes/mid_stay.py` + `MidStaySurveyPanel.js` + `MidStaySurveyPublicPage.js`):**
+- Cron `/mid-stay/sweep` enrolls bookings on day 2+ with 2+ nights remaining, idempotent.
+- Public guest URL `/mid-stay/{invite_id}` shows star-rating + category + comment form.
+- Score ≤ 3 auto-opens a `service_recovery_tickets` row so management can compensate before checkout.
+- Aggregations: response_rate, avg_score, by_category breakdown, low_count.
+
+**2. In-stay Folio PDF (`routes/folio_live.py` + `FolioLivePanel.js`):**
+- GET `/folio-live/{booking_id}` returns running folio (charges + payments + balance_due) at any moment of stay.
+- GET `/folio-live/{booking_id}/html` returns printable A4 with one-click "Print / Save as PDF".
+- Falls back to implicit room-rate line when no folio_charges yet exist.
+
+**3. A/B Test Engine (`routes/ab_test.py` + `ABTestPanel.js`):**
+- Create experiments with weighted variants, deterministic assignment via MD5(salt|key|session_id) so same session always sees same variant.
+- Public `/ab/assign` + `/ab/track` for booking-widget SDK.
+- Per-variant impressions, conversions, conversion rate, Wilson 95% lower bound, leader auto-flagged at ≥30 impressions.
+
+**4. Pre-arrival Drip Sequence (`routes/pre_arrival.py` + `PreArrivalDripPanel.js`):**
+- 4 stages: T-7d / T-3d / T-1d / T+0 with property+language scoped templates.
+- Cron `/pre-arrival/sweep` schedules dispatch rows when today matches the stage offset, idempotent.
+- Merge tags: `{guest_name}`, `{first_name}`, `{checkin_date}`, `{hotel_name}`, `{room_type}`, `{booking_ref}`, etc. Preview endpoint renders the merged result.
+
+**5. Menu Engineering (`routes/menu_engineering.py` + `MenuEngineeringPanel.js`):**
+- 4-quadrant analysis (Star / Plowhorse / Puzzle / Dog) on POS sales over a window.
+- Computes unit_cm, pop_pct, leans on `menu_items` master for cost reference.
+- Auto-recommendations (e.g., "Re-engineer 'X' (popular but low margin) — review portion / cost / price by 5–10%."). CSV export.
+
+**Frontend:** 5 new sidebar buttons under Operations group. Public mid-stay survey route added at `/mid-stay/{invite_id}`. AB panel shows experiment list + Wilson-CI leader badge. Pre-arrival panel has Templates + Dispatches tabs with merge-tag preview.
+
+**Testing — `iteration_220.json`:** **35/35 backend ✅ · 5/5 frontend panels ✅ · 0 issues.** Smoke (curl): mid-stay sweep scanned 3 day-2 bookings, AB experiment created+assigned+tracked+results, pre-arrival sweep queued 1 dispatch, folio-live built running folio £267.92 for 2 nights, menu-engineering classified 4 POS items (2 stars + 2 plowhorses).
+
+🎯 **Status: 30/30 P0 ✅ · 5/20 P1 done · 15 P1 to go · 15 P2 backlog (key-dependent).**
+
+---
 
 
 ### Iter 219 (Apr 2026): 🏆 Batch 6 (FINAL) — Pre-Auth Holds + Chargeback Defense + Web Push + PMS-CRS Sync + Public API ⇒ **30/30 P0 KEYLESS COMPLETE**

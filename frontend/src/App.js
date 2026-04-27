@@ -108,6 +108,11 @@ import MultiPropertyRollupPanel from "./components/dashboard/MultiPropertyRollup
 import CurrencyPanel from "./components/dashboard/CurrencyPanel";
 import AgentsB2BPanel from "./components/dashboard/AgentsB2BPanel";
 import SecurityOwnerPanel from "./components/dashboard/SecurityOwnerPanel";
+import PreAuthPanel from "./components/dashboard/PreAuthPanel";
+import ChargebackPanel from "./components/dashboard/ChargebackPanel";
+import WebPushPanel from "./components/dashboard/WebPushPanel";
+import PmsCrsSyncPanel from "./components/dashboard/PmsCrsSyncPanel";
+import PublicApiPortalPanel from "./components/dashboard/PublicApiPortalPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2706,6 +2711,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "currency", icon: CurrencyDollar, name: "Currency / FX Rates", testId: "currency-btn" },
         { id: "b2b-agents", icon: Briefcase, name: "B2B Portal (Agents)", testId: "b2b-agents-btn" },
         { id: "security-owner", icon: Lock, name: "Security & Owner Portal", testId: "security-owner-btn" },
+        { id: "preauth", icon: CreditCard, name: "Pre-Auth Holds", testId: "preauth-btn" },
+        { id: "chargeback", icon: Scales, name: "Chargeback Defense", testId: "chargeback-btn" },
+        { id: "web-push", icon: Bell, name: "Web Push Notifications", testId: "web-push-btn" },
+        { id: "pms-crs", icon: ArrowsClockwise, name: "PMS-CRS Sync", testId: "pms-crs-btn" },
+        { id: "public-api", icon: Code, name: "Developer API Portal", testId: "public-api-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2851,6 +2861,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "currency-btn":           "view_bookings",
     "b2b-agents-btn":         "view_bookings",
     "security-owner-btn":     "operations_reception_view",
+    "preauth-btn":            "operations_reception_view",
+    "chargeback-btn":         "operations_reception_view",
+    "web-push-btn":           "operations_reception_view",
+    "pms-crs-btn":            "operations_reception_view",
+    "public-api-btn":         "operations_reception_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3596,6 +3611,52 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "security-owner" && (
           <div className="p-6">
             <SecurityOwnerPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "preauth" && (
+          <div className="p-6">
+            <PreAuthPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "chargeback" && (
+          <div className="p-6">
+            <ChargebackPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "web-push" && (
+          <div className="p-6">
+            <WebPushPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+              currentUser={user}
+            />
+          </div>
+        )}
+
+        {activeView === "pms-crs" && (
+          <div className="p-6">
+            <PmsCrsSyncPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "public-api" && (
+          <div className="p-6">
+            <PublicApiPortalPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

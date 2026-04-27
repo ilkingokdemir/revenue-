@@ -1,0 +1,159 @@
+{
+  "summary": "Iteration 219 - Batch 6 (FINAL) Keyless Competitor Parity Features tested. All 5 new P0 features working: (1) Pre-Authorization Holds, (2) Chargeback Defense Package, (3) PWA Web Push Notifications, (4) PMS-CRS Two-way Sync, (5) Public API Sandbox/Developer Portal. Backend: 49/49 tests passed. Frontend: All 5 new panels render correctly with proper data-testid attributes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration219_batch6_features.py",
+    "/app/test_reports/pytest/pytest_iteration219_batch6.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 5 Batch 6 features implemented correctly with proper state machines and validation",
+    "Pre-Auth Holds: State machine enforced (cannot capture released hold, capture <= authorized amount, second hold supersedes first)",
+    "Chargeback Defense: Evidence builder auto-compiles from 9 sources with scoring and narrative generation",
+    "Web Push: Simulated delivery mode when VAPID not configured, with pending queue for PWA polling",
+    "PMS-CRS Sync: Hash-based change detection, bidirectional sync with conflict detection",
+    "Public API: Proper key issuance (hk_ prefix), scope enforcement, property_id validation, rate limiting (429)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration219_batch6_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (49/49 passed)",
+    "frontend": "100% (all 5 new panels working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing default property with 99 seeded bookings",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 219 completes Batch 6 (FINAL batch) of 30 P0 keyless competitor-parity features. All 30 P0 features are now implemented. Features tested: (1) Pre-Auth Holds at /api/preauth/* - card hold ledger with state machine (authorized→captured|released|expired), supersede logic for same booking. (2) Chargeback Defense at /api/chargebacks/* - evidence builder from 9 sources (booking, folio, payments, preauth, lock events, comms, reg cards, ID docs, surveys) with scoring and narrative. (3) Web Push at /api/push/* - browser subscriptions with simulated delivery when VAPID not configured. (4) PMS-CRS Sync at /api/pms-crs/* - internal CRS index with hash-based change detection, bidirectional sync, conflict detection. (5) Public API at /api/developer/* - API key issuance (hk_ prefix), scope enforcement, property_id validation, rate limiting. Frontend panels: PreAuthPanel, ChargebackPanel, WebPushPanel, PmsCrsSyncPanel, PublicApiPortalPanel. Sidebar buttons: preauth-btn, chargeback-btn, web-push-btn, pms-crs-btn, public-api-btn.",
+  "features_verified": {
+    "preauth_holds": {
+      "endpoints": {
+        "create_hold": "POST /api/preauth/holds - creates hold with state=authorized",
+        "list_holds": "GET /api/preauth/{property_id}/holds - filter by status/days",
+        "get_summary": "GET /api/preauth/{property_id}/summary - KPI snapshot",
+        "capture_hold": "POST /api/preauth/holds/{id}/capture - full or partial capture",
+        "release_hold": "POST /api/preauth/holds/{id}/release - release without charge",
+        "expire_due": "POST /api/preauth/holds/expire-due - cron sweeper"
+      },
+      "state_machine": {
+        "cannot_capture_released": "VERIFIED - returns 400",
+        "capture_lte_authorized": "VERIFIED - returns 400 if amount > authorized",
+        "second_hold_supersedes": "VERIFIED - first hold marked released with notes_release=superseded"
+      },
+      "ui_elements": {
+        "panel": "data-testid='preauth-panel'",
+        "add_btn": "data-testid='preauth-add-btn'",
+        "filter_status": "data-testid='preauth-filter-status'",
+        "capture_btn": "data-testid='preauth-capture-btn'",
+        "release_btn": "data-testid='preauth-release-btn'"
+      },
+      "status": "WORKING"
+    },
+    "chargeback_defense": {
+      "endpoints": {
+        "open_case": "POST /api/chargebacks - opens case with status=pending",
+        "list_cases": "GET /api/chargebacks/{property_id} - returns won/lost/win_rate stats",
+        "build_evidence": "GET /api/chargebacks/case/{case_id}/evidence - auto-builds manifest with checks dict + score + narrative",
+        "update_status": "POST /api/chargebacks/case/{case_id}/status - status transitions",
+        "add_note": "POST /api/chargebacks/case/{case_id}/note - append note"
+      },
+      "evidence_sources": ["booking", "folio_charges", "payments", "preauth_holds", "door_lock_log", "guest_messages", "registration_cards", "id_documents", "survey_responses"],
+      "ui_elements": {
+        "panel": "data-testid='chargeback-panel'",
+        "add_btn": "data-testid='cb-add-btn'",
+        "build_btn": "data-testid='cb-build-btn'",
+        "mark_won_btn": "data-testid='cb-mark-won-btn'"
+      },
+      "status": "WORKING"
+    },
+    "web_push_notifications": {
+      "endpoints": {
+        "subscribe": "POST /api/push/subscribe - returns subscription id",
+        "unsubscribe": "POST /api/push/unsubscribe - idempotent removal",
+        "list_subscriptions": "GET /api/push/{property_id}/subscriptions - counts by_role",
+        "send_push": "POST /api/push/{property_id}/send - creates log + pending queue",
+        "get_log": "GET /api/push/{property_id}/log - dispatch history",
+        "get_pending": "GET /api/push/{property_id}/pending - PWA poll, marks delivered=true"
+      },
+      "delivery_modes": {
+        "simulated": "When property has no web_push_vapid keys - uses pending queue",
+        "real_vapid": "When VAPID keys configured - actual HTTPS POST"
+      },
+      "ui_elements": {
+        "panel": "data-testid='web-push-panel'",
+        "sub_btn": "data-testid='push-sub-btn'",
+        "unsub_btn": "data-testid='push-unsub-btn'",
+        "send_btn": "data-testid='push-send-btn'"
+      },
+      "status": "WORKING - MOCKED (simulated delivery mode)"
+    },
+    "pms_crs_sync": {
+      "endpoints": {
+        "push": "POST /api/pms-crs/sync/push - PMS→CRS with hash tracking, returns created/updated/unchanged",
+        "pull": "POST /api/pms-crs/sync/pull - CRS→PMS for crs_dirty rows",
+        "run": "POST /api/pms-crs/sync/run - bidirectional reconcile",
+        "get_index": "GET /api/pms-crs/index/{property_id} - CRS view",
+        "get_queue": "GET /api/pms-crs/queue - sync queue entries",
+        "get_status": "GET /api/pms-crs/status - drift + last_run + crs_dirty_pending_pull",
+        "get_conflicts": "GET /api/pms-crs/conflicts - hash drift detection"
+      },
+      "ui_elements": {
+        "panel": "data-testid='pms-crs-panel'",
+        "push_btn": "data-testid='crs-push-btn'",
+        "pull_btn": "data-testid='crs-pull-btn'",
+        "run_btn": "data-testid='crs-run-btn'"
+      },
+      "status": "WORKING"
+    },
+    "public_api_portal": {
+      "endpoints": {
+        "issue_key": "POST /api/developer/keys - returns secret (hk_...) once only",
+        "list_keys": "GET /api/developer/keys - without secret_hash",
+        "revoke_key": "DELETE /api/developer/keys/{id}",
+        "rotate_key": "POST /api/developer/keys/{id}/rotate",
+        "get_spec": "GET /api/developer/spec - OpenAPI pointer",
+        "get_usage": "GET /api/developer/usage/{property_id} - per-key stats"
+      },
+      "sandbox_endpoints": {
+        "availability": "GET /api/developer/sandbox/availability - requires read:availability scope + property_id match",
+        "booking": "GET /api/developer/sandbox/booking/{id} - requires read:bookings scope",
+        "echo": "POST /api/developer/sandbox/echo - auth test"
+      },
+      "auth_enforcement": {
+        "missing_key_401": "VERIFIED",
+        "invalid_key_401": "VERIFIED",
+        "scope_check_403": "VERIFIED",
+        "property_mismatch_403": "VERIFIED",
+        "revoked_key_401": "VERIFIED",
+        "rate_limit_429": "VERIFIED (60/min default)"
+      },
+      "ui_elements": {
+        "panel": "data-testid='public-api-panel'",
+        "add_btn": "data-testid='apikey-add-btn'",
+        "echo_btn": "data-testid='sandbox-echo-btn'"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "bookings_list": "PASSED",
+    "spaces_list": "PASSED (Batch 4)",
+    "agents_list": "PASSED (Batch 5)",
+    "door_locks_log": "PASSED (Batch 5)"
+  },
+  "mocked_apis": {
+    "web_push_delivery": "Simulated when property has no web_push_vapid keys - falls back to in-app pending queue",
+    "preauth_stripe_capture": "Ledger-only, no live card auth - state machine tracks authorized/captured/released/expired"
+  },
+  "p0_completion_status": "30/30 P0 keyless competitor-parity features COMPLETE"
+}

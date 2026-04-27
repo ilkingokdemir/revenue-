@@ -773,6 +773,22 @@ api_router.include_router(create_agents_router(db, require_roles))
 from routes.extras_v2 import create_extras_v2_router
 api_router.include_router(create_extras_v2_router(db, require_roles))
 
+# ===== Batch 6 (final P0): Pre-Auth, Chargeback, Web Push, PMS-CRS, Public API =====
+from routes.preauth import create_preauth_router
+api_router.include_router(create_preauth_router(db, require_roles))
+
+from routes.chargeback import create_chargeback_router
+api_router.include_router(create_chargeback_router(db, require_roles))
+
+from routes.web_push import create_web_push_router
+api_router.include_router(create_web_push_router(db, require_roles))
+
+from routes.pms_crs import create_pms_crs_router
+api_router.include_router(create_pms_crs_router(db, require_roles))
+
+from routes.public_api import create_public_api_router
+api_router.include_router(create_public_api_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

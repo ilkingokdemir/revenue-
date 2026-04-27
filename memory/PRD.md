@@ -1,6 +1,37 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 221 Test Iterations (100%)
+## 113+ Modules | Mobile Responsive | 222 Test Iterations (100%)
+
+
+### Iter 222 (Apr 2026): 🟡 Batch 9 — i18n Templates + Birthday Voucher + Low-Stock + Rebook CTA + Stay Ext + Long-Stay ⇒ 16/20 P1 keyless
+
+User ask (TR): _"devam et"_ — pushes P1 progress to 80%.
+
+**1. Multi-language Message Templates (`routes/msg_templates.py` + `MsgTemplatesPanel.js`):**
+- Central catalog of 12 known template keys × N languages. POST /msg-templates/render resolves with language fallback (requested → en → any-active). Verified `de` request fell back to `en` template + merged `{first_name}` correctly.
+
+**2. Birthday Auto-Discount (`routes/birthday.py` + `BirthdayPanel.js`):**
+- Sweeps `guest_profiles.date_of_birth` for upcoming birthdays (default 30d lookahead), generates `BDAY-XXX` voucher (uses `service_recovery_vouchers` collection with source='birthday'), idempotent per birthday-year.
+
+**3. Low-Stock Alerts (`routes/low_stock.py` + `LowStockPanel.js`):**
+- Scans first non-empty stock collection (stock_items / inventory_items / pos_inventory / menu_items) for items at/below reorder_threshold. Creates `inventory_alerts` + fan-out `notifications` rows. Dismissible.
+
+**4. Quick Re-booking CTA (`routes/rebook.py` + `RebookPanel.js`):**
+- 30-day post-checkout sweep. Generates a unique `token` per dispatch — public `/rebook/token/{token}` resolves to widget params + flips clicked. Click rate KPI.
+
+**5. Stay Extension Wizard (`routes/stay_ext.py` + `StayExtPanel.js`):**
+- Quote endpoint computes per-night × extra × (1-disc%) and checks same-room availability across the new range. Apply writes new check_out, posts folio charge, updates booking total. 409 if room busy.
+
+**6. Long-Stay Discount Auto-Apply (`routes/long_stay.py` + `LongStayPanel.js`):**
+- Configurable tier ladder (default 7n=10%, 14n=15%, 28n=25%). Sweep marks bookings, updates total_price, posts negative folio adjustment. Idempotent — won't reapply.
+
+**Frontend:** 6 new sidebar buttons. Templates panel has live preview with merge-tag substitution + coverage matrix. Stay Ext panel shows quote box with availability + cost breakdown.
+
+**Testing — `iteration_222.json`:** **33/33 backend ✅ · 6/6 frontend panels ✅ · 0 issues.** Smoke (curl): msg-templates fallback de→en rendered "Hi Klaus, your booking is confirmed!", long-stay sweep applied discounts to 3 of 99 bookings, stay-ext quote returned £241.12 for +2 nights @ 10% off.
+
+🎯 **Status: 30/30 P0 ✅ · 16/20 P1 done · 4 P1 to go · 15 P2 backlog (key-dependent).**
+
+---
 
 
 ### Iter 221 (Apr 2026): 🟡 Batch 8 — SR Vouchers + Folio Split + Loyalty Auto-Tier + Late-Checkout Offers + OTA Stop-Sell Forecast ⇒ 10/20 P1 keyless

@@ -1,6 +1,47 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 226 Test Iterations
+## 113+ Modules | Mobile Responsive | 227 Test Iterations
+
+
+### Iter 228 (Apr 2026): 🇪🇺 Batch 15 — EU Compliance Hub (7 ülke)
+
+User ask (TR): _"devam et"_ — pan-European compliance parity.
+
+**Backend (`routes/eu_compliance.py` — NEW, 3 endpoints, 7 countries × 2 obligations):**
+
+Countries covered:
+- 🇮🇹 Italy: FatturaPA 1.2 SDI XML + Alloggiati Web (170-char fixed-width police)
+- 🇪🇸 Spain: TicketBai/Verifactu UBL XML + SES.HOSPEDAJES CSV (Real Decreto 933/2021, 17 fields)
+- 🇫🇷 France: Factur-X UBL XML + Fiche de police CSV (Préfecture)
+- 🇬🇷 Greece: myDATA UBL XML + Tourism Police CSV
+- 🇭🇺 Hungary: KSZF Online Számla UBL XML
+- 🇵🇱 Poland: KSeF UBL XML
+- 🇲🇽 Mexico: CFDI 4.0 UBL XML
+
+**Endpoints:**
+- `GET /eu-compliance/catalog` — 7-country metadata (flag, scheme, format).
+- `POST /eu-compliance/export` body `{property_id, country, kind:'invoice'|'police', from_date, to_date}` → tek çağrıda:
+  - invoice: per-booking XML listesi (FatturaPA veya UBL-PEPPOL generic), country-specific VAT rate (IT 10%, ES/FR 10%, GR 13%, HU 18%, PL 8%, MX 16%).
+  - police: country-specific format — Italy 170-char Alloggiati fixed-width TXT, Spain/France/Greece CSV with proper field order.
+- `GET /eu-compliance/{property_id}/history` — Audit log.
+
+**Frontend (`EUCompliancePanel.js` — NEW):**
+- Tek sayfa: tarih aralığı seçici + 7 ülke kartı grid (sky tema). Her kartta ülke bayrağı + iki action row (e-Fatura XML + opsiyonel Polis bildirim).
+- Tek tıkla browser-side blob download. Son 15 aktarım listesi.
+- Sidebar: "🇪🇺 EU Uyum (7 ülke)" — Operations grubunda TR Compliance'ın yanında.
+
+**Verified (curl):**
+- Italy invoice build: 73 fatura · €21,097 total · sample FatturaPA 1.2 XML with proper FPR12 version + DatiTrasmissione + CedentePrestatore + DettaglioLinee.
+- Spain police CSV: 73 kayıt · SES.HOSPEDAJES formatında (17 field header + rows).
+
+**Why this beats competitors:**
+- Mews: Sadece İtalya SDI desteği (ücretli add-on). Biz: 7 ülke, tek ekran, ücretsiz.
+- Cloudbeds: CSV export var ama country-specific schema yok. Biz: Ülkeye özel XML/TXT/CSV, portala doğrudan yüklenebilir.
+- Opera: Her ülke için ayrı modül + setup. Biz: Tek panel, ülke kartı grid.
+
+**Test (iteration_228 bekleniyor)** — her ülke endpoint'i + frontend kart grid + download flow.
+
+---
 
 
 ### Iter 227 (Apr 2026): 🤖 Batch 14 — AI Operations Depth: Cancel Risk Scoring + Upsell Propensity

@@ -46,6 +46,7 @@ import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
 import CommandPalette from "./components/CommandPalette";
 import TodayHub from "./components/dashboard/TodayHub";
 import TRCompliancePanel from "./components/dashboard/TRCompliancePanel";
+import EUCompliancePanel from "./components/dashboard/EUCompliancePanel";
 import AIPredictionsPanel from "./components/dashboard/AIPredictionsPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
@@ -2700,6 +2701,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "kiosk-launch", icon: DeviceTablet, name: "Self-Service Kiosk", testId: "kiosk-launch-btn", launchUrl: true },
         { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
         { id: "tr-compliance", icon: FileText, name: "🇹🇷 KBS + e-Fatura", testId: "tr-compliance-btn" },
+        { id: "eu-compliance", icon: Globe, name: "🇪🇺 EU Uyum (7 ülke)", testId: "eu-compliance-btn" },
         { id: "lost-found", icon: Eye, name: "Lost & Found", testId: "lost-found-btn" },
         { id: "cash-drawer", icon: Wallet, name: "Cash Drawer", testId: "cash-drawer-btn" },
       ],
@@ -2975,6 +2977,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "pass-over-btn":          "operations_notes_view",
     "compliance-btn":         "operations_compliance_view",
     "tr-compliance-btn":      "operations_compliance_view",
+    "eu-compliance-btn":      "operations_compliance_view",
     "laundry-btn":            "laundry_reports_view",
     "stock-management-btn":   "view_laundry_stock",
     "logbook-btn":            "operations_notes_view",
@@ -3276,6 +3279,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* TR Compliance — KBS + e-Fatura */}
         {activeView === "tr-compliance" && (
           <TRCompliancePanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* EU Compliance — 7 country hub */}
+        {activeView === "eu-compliance" && (
+          <EUCompliancePanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />

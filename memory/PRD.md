@@ -1,6 +1,27 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 223 Test Iterations (100%)
+## 113+ Modules | Mobile Responsive | 224 Test Iterations (100%)
+
+
+### Iter 224 (Apr 2026): ⭐ Batch 11 — Tier-1 Master Operations Dashboard
+
+User ask (TR): _"devam et"_ — unifying dashboard now that 50/50 keyless features are complete.
+
+**Single endpoint** `GET /tier1-dashboard/{property_id}?days=N` aggregates 20 KPI groups in one call:
+- **Revenue captures**: Late-checkout revenue, Stay-extension revenue, Cancellation insurance net P&L, Long-stay discount given
+- **Guest experience**: Mid-stay avg score + low-score count, SR voucher redeem rate, Birthday issued, Loyalty upgrades, Re-booking click rate, Group rooming finalized
+- **Operations & risk**: Pre-auth held, Chargeback win rate, Low-stock alerts, CI slot reservations
+- **Distribution & integrations**: PMS-CRS drift, Public API calls, Web-push pushes, Pre-arrival drip, A/B experiment count, Folio split settlements
+- **Hero stat**: Total incremental revenue (late-checkout + stay-ext + insurance fees) — visible on entry.
+- **Auto-highlights**: Wins (revenue, win rates, upgrades) + alerts (low scores, drift, low stock) flagged as cards.
+
+**Frontend (`Tier1DashboardPanel.js`):** Sidebar entry "★ Tier-1 Master Dashboard". Hero card (emerald) for incremental revenue, highlights row, then 4 sections with KpiCard grids (good=green, alert=amber, neutral=stone). Refresh + window selector (7/14/30/60/90).
+
+**Testing — `iteration_224.json`:** **33/33 backend ✅ · frontend ✅ · 0 issues.** Smoke: 20 KPI groups returned, 1 auto highlight (Chargeback 100% win rate), insurance shows 2 policies/2 claimed for £18.44 fee revenue.
+
+🏆 **Status: 50/50 keyless features ✅ + Master Dashboard ✅ surfacing operational value at a glance.** Remaining: 15 P2 (key-dependent) + App.js refactor.
+
+---
 
 
 ### Iter 223 (Apr 2026): 🏆 Batch 10 (FINAL) — Cancel Insurance + Group Rooming Wizard + Tax Reports v2 + CI Slots ⇒ **20/20 P1 KEYLESS COMPLETE**

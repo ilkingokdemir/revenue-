@@ -1,6 +1,39 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 225 Test Iterations
+## 113+ Modules | Mobile Responsive | 226 Test Iterations
+
+
+### Iter 227 (Apr 2026): 🤖 Batch 14 — AI Operations Depth: Cancel Risk Scoring + Upsell Propensity
+
+User ask (TR): _"devam et"_ — rakipleri AI ile geçmek.
+
+**Backend (`routes/ai_predictions.py` — NEW, 5 endpoints):**
+
+**Cancellation Risk Scoring (hybrid rule-based engine, [0..100]):**
+- `GET /ai-predictions/cancel-risk/{property_id}?days_ahead=N&min_score=M` — Gelecek N gündeki tüm onaylı rezervasyonları tarar, her biri için 8 sinyalli heuristik skor üretir: lead_time (>90d +25, <3d −10), proximity, channel (OTA +12, direkt −8), payment_status (unpaid +18, paid −15), modification_count, price deviation vs property avg, lifetime_stays (3+ stays −18), VIP/Platinum (−10). Dönüş: rows[] + by_band (high/medium/low) + at_risk_revenue + signals per row.
+- `GET /ai-predictions/cancel-risk/booking/{booking_id}` — Tek rezervasyonun detaylı skor + sinyal breakdown.
+- `POST /ai-predictions/cancel-risk/{booking_id}/save-offer` — High-risk booking için `STAY-XXXXXX` %10 voucher, `save_offers` collection'a queue, booking'e `save_offer_sent_at` damga.
+
+**Upsell Propensity (per-category scoring):**
+- `GET /ai-predictions/upsell/{property_id}?days_ahead=N&category=...&min_score=M` — Gelecek arrival'ların her biri için 5 kategoriye özel skor (room_upgrade / late_checkout / breakfast / spa / transport). Sinyaller: direct channel boost (+8), occasion (honeymoon/anniversary/celebration +15), loyalty tier (platinum +15), lifetime_revenue (up to +15), stay_length, room_type (suite = 0, standard +15). Otomatik "top_recommendation" seçimi.
+- `POST /ai-predictions/upsell/{booking_id}/send-offer?category=X` — Kategori bazlı teklif queue, `UP-XXXXXX-XXX` offer ID.
+
+**Frontend (`AIPredictionsPanel.js` — NEW):**
+- Tek panel 2 tab: "İptal Riski" + "Upsell Fırsatı" (violet teması).
+- **İptal Riski:** 4 KPI (Yüksek/Orta/Düşük risk adedi + Risk altındaki gelir), gün + min skor filtresi, risk bantlı renkli satırlar (left-bar emerald/amber/rose), one-click "Save-Offer" butonu. Detay drawer: tüm sinyallerin impact (+/−) dökümü.
+- **Upsell Fırsatı:** 5 KPI kartı (her kategori için "ana öneri" sayısı), kategori filtresi, satır başı 5 kategori skoru inline görünüyor (≥70 emerald+bold, 50-70 stone, <50 muted), one-click "Gönder" butonu top_recommendation ile.
+- Sidebar: "✨ AI Tahminler (Risk + Upsell)" — Operations grubunda Tier-1 Dashboard'un altında.
+
+**Verified (curl):**
+- Cancel risk: William Jackson (Expedia + unpaid) → skor 60 (Orta), sinyaller: OTA +12 + Ödeme yok +18. Abigail Kim → skor 50. Save-offer voucher STAY-213F73 %10 queued.
+- Upsell: Emily Rossi → top rec `late_checkout` (skor 48). Offer UP-52D447-LAT queued.
+
+**Why this beats competitors:**
+- Cloudbeds: Hiç cancellation risk yok. Biz: per-booking skor + sinyal breakdown + one-click save-offer.
+- Mews: Upsell genel "hepsine kahvaltı önerin" seviyesinde. Biz: 5 kategori × per-guest score + top-rec otomatik öneri.
+- Duetto: Sadece revenue yöneticilerine kapalı. Biz: reception'a açık + UI seviyesinde tek tıkla teklif gönderimi.
+
+---
 
 
 ### Iter 226 (Apr 2026): 🇹🇷 Batch 13 — TR e-Fatura/e-Arşiv + KBS (Kimlik Bildirim)

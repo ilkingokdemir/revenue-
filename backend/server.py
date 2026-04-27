@@ -97,6 +97,7 @@ from routes.shift_scheduler import create_shift_scheduler_router
 from routes.pass_over import create_pass_over_router
 from routes.compliance import create_compliance_router
 from routes.tr_compliance import create_tr_compliance_router
+from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
 from routes.expenses import create_expenses_router
@@ -508,6 +509,8 @@ compliance_router = create_compliance_router(db, require_roles)
 api_router.include_router(compliance_router)
 tr_compliance_router = create_tr_compliance_router(db, require_roles)
 api_router.include_router(tr_compliance_router)
+ai_predictions_router = create_ai_predictions_router(db, require_roles)
+api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)
 api_router.include_router(laundry_router)
 payroll_router = create_payroll_router(db, require_roles)

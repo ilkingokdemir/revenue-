@@ -46,6 +46,7 @@ import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
 import CommandPalette from "./components/CommandPalette";
 import TodayHub from "./components/dashboard/TodayHub";
 import TRCompliancePanel from "./components/dashboard/TRCompliancePanel";
+import AIPredictionsPanel from "./components/dashboard/AIPredictionsPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2793,6 +2794,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "tax-reports-v2", icon: Receipt, name: "Tax Reports (multi-currency)", testId: "tax-reports-v2-btn" },
         { id: "ci-slots", icon: Clock, name: "Check-in Time Slots", testId: "ci-slots-btn" },
         { id: "tier1-dashboard", icon: ChartBar, name: "★ Tier-1 Master Dashboard", testId: "tier1-dashboard-btn" },
+        { id: "ai-predictions", icon: Sparkle, name: "✨ AI Tahminler (Risk + Upsell)", testId: "ai-predictions-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2964,6 +2966,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "tax-reports-v2-btn":     "operations_reception_view",
     "ci-slots-btn":           "operations_reception_view",
     "tier1-dashboard-btn":    "operations_reception_view",
+    "ai-predictions-btn":     "revenue_forecasting_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3273,6 +3276,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* TR Compliance — KBS + e-Fatura */}
         {activeView === "tr-compliance" && (
           <TRCompliancePanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* AI Predictions — Cancel Risk + Upsell Propensity */}
+        {activeView === "ai-predictions" && (
+          <AIPredictionsPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />

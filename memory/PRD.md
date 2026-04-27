@@ -1,6 +1,34 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 222 Test Iterations (100%)
+## 113+ Modules | Mobile Responsive | 223 Test Iterations (100%)
+
+
+### Iter 223 (Apr 2026): 🏆 Batch 10 (FINAL) — Cancel Insurance + Group Rooming Wizard + Tax Reports v2 + CI Slots ⇒ **20/20 P1 KEYLESS COMPLETE**
+
+User ask (TR): _"continue"_ — closes the final 4 P1 keyless wedges.
+
+**1. Cancellation Insurance (`routes/cancel_insurance.py` + `CancelInsurancePanel.js`):**
+- Optional add-on at booking. Quote returns clamped fee (% of total, min/max). Attach posts a `folio_charges` row category=insurance + creates policy. Claim flips status to claimed and cancels the booking with full refund (only if inside policy window).
+
+**2. Group Rooming Wizard (`routes/group_rooming_wiz.py` + `GroupRoomingWizPanel.js`):**
+- Session-based wizard: open → add guests → auto-assign rooms (greedy, prefer same floor + same room_type) → finalize (creates one booking per guest in single transaction). Reads `rooms` collection respecting room.name + room.room_type_id schema.
+
+**3. Multi-currency Tax Reports (`routes/tax_reports_v2.py` + `TaxReportsV2Panel.js`):**
+- Aggregates `folio_charges` by currency, category (with VAT rate), and property. Reverse-VAT (gross → net + tax) using DEFAULT_TAX_MAP overridable per property. CSV export. Cross-property roll-up endpoint for chain admin.
+
+**4. Dynamic Check-in Time Slots (`routes/ci_slots.py` + `CISlotsPanel.js`):**
+- Configurable slot grid + capacity. Public endpoint returns availability with free_seats per slot. Reserve endpoint enforces capacity (409 on full), auto-charges early-CI fee for pre-threshold slots. Reservations idempotent per booking+date.
+
+**Frontend:** 4 new sidebar entries. Group rooming wizard flow renders manifest+assignments side-by-side. CI slots renders a slot grid with capacity colors (green=free, amber=early-fee, rose=full).
+
+**Testing — `iteration_223.json`:** **30/30 backend ✅ · 4/4 frontend panels ✅ · 0 issues.** Smoke: insurance quote £12 (4% of £300, clamped 5-60), group rooming on aldgate-flats auto-assigned "Deluxe 03"+"Executive 04" same floor, tax reports returned 3 lines with by_currency aggregation, CI slot reserve at 15:00 (non-early, no fee).
+
+## 🎉 **MILESTONE: 50/50 KEYLESS COMPETITOR-PARITY GAPS CLOSED**
+- 30/30 P0 (Critical, anahtarsız) ✅
+- 20/20 P1 (Important, anahtarsız) ✅
+- 15 P2 (anahtar gerektiriyor — kullanıcıdan API anahtarı bekliyor)
+
+---
 
 
 ### Iter 222 (Apr 2026): 🟡 Batch 9 — i18n Templates + Birthday Voucher + Low-Stock + Rebook CTA + Stay Ext + Long-Stay ⇒ 16/20 P1 keyless

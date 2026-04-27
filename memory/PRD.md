@@ -1,6 +1,32 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 109+ Modules | Mobile Responsive | 217 Test Iterations (100%)
+## 113+ Modules | Mobile Responsive | 218 Test Iterations (100%)
+
+
+### Iter 218 (Apr 2026): ⭐ Batch 5 — Travel Agent B2B + Door-Lock Audit + Owner Portal + Savings Banner (23/30 P0)
+
+User ask (TR): _"Sonraki actionlara Devam et"_ — Batch 5 ships 4 P0 keyless wedges.
+
+**1. Travel Agent / Corporate B2B Portal (`routes/agents_b2b.py` + `AgentsB2BPanel.js`):**
+- Agents (TA / corporate / wholesaler) with negotiated_discount_pct, commission_pct, fixed_rate_overrides per room type, credit_limit, billing_terms, IATA #.
+- `/agents/{id}/rates` returns per-room-type breakdown (base vs agent rate, savings %).
+- `/agents/{id}/book` creates booking with channel=travel_agent, agent_id, agent_commission_amount accrued.
+- `/commission-report` aggregates revenue & commission by agent.
+
+**2. Door-Lock Audit Log (`routes/extras_v2.py` door-locks block):**
+- 6 method types (card / pin / mobile_key / master / maintenance / failed_attempt) × 3 result types. Filter by days/room/method/result. Returns denied_count + master_key_uses for security KPIs.
+
+**3. Owner Portal (`routes/extras_v2.py` owner-portal block):**
+- Resolves owner via `property.owner_ids` array or `property.owner_id` field. Returns per-property gross / management fee deducted / net_payout. Configurable `management_fee_pct` per property.
+
+**4. Direct Widget Savings Banner (`routes/extras_v2.py` savings-banner block):**
+- Public endpoint for booking widget. Reads parity_analysis snapshot if available, falls back to parity_defender_config.undercut_pct (default 10%). Returns `"You save X% vs Booking.com..."` message + savings_amount.
+
+**Frontend:** 2 new sidebar buttons in Operations group. SecurityOwnerPanel has 2 tabs (Door-lock audit log filtering + Owner Portal lookup). AgentsB2BPanel has 2 tabs (Agents directory + Commission report).
+
+**Testing — `iteration_218.json`:** **38/38 backend ✅ · 100% frontend ✅ · 0 issues.** Real B2B booking £107×0.85 = £90.95/n × 2n = £181.90, commission £21.83 (12%).
+
+---
 
 
 ### Iter 217 (Apr 2026): ⭐ Batch 4 — Spaces + Multi-Currency + Multi-Property Rollup + BEO PDF (19/30 P0)

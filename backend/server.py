@@ -840,6 +840,19 @@ api_router.include_router(create_stay_ext_router(db, require_roles))
 from routes.long_stay import create_long_stay_router
 api_router.include_router(create_long_stay_router(db, require_roles))
 
+# ===== Batch 10 (P1 keyless final): Cancel insurance, Group rooming wizard, Tax reports v2, Check-in slots =====
+from routes.cancel_insurance import create_cancel_insurance_router
+api_router.include_router(create_cancel_insurance_router(db, require_roles))
+
+from routes.group_rooming_wiz import create_group_rooming_router
+api_router.include_router(create_group_rooming_router(db, require_roles))
+
+from routes.tax_reports_v2 import create_tax_reports_router
+api_router.include_router(create_tax_reports_router(db, require_roles))
+
+from routes.ci_slots import create_ci_slots_router
+api_router.include_router(create_ci_slots_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

@@ -1,6 +1,53 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 230 Test Iterations
+## 113+ Modules | Mobile Responsive | 231 Test Iterations
+
+
+### Iter 232 (Apr 2026): 💗 Batch 19 — Cross-Channel Sentiment Heatmap
+
+User ask (TR): _"devam et"_ — Misafir sesinin tek ekranda birleştirilmesi.
+
+**Backend (`routes/sentiment.py` — NEW, 2 endpoints):**
+
+**Hybrid sentiment engine:**
+- Lexicon-based scoring (EN + TR mixed, 35+ positive words × 20+ negative, weights −2..+2) — $0 cost, ms latency.
+- 10 konu çıkarıcı regex sözlük: Temizlik, Personel, Oda, Yemek, Konum, Fiyat, Gürültü, Wi-Fi, Check-in/out, Klima.
+- Bandları: positive (≥+2), neutral, negative (≤−2).
+
+**Veri kaynakları birleştirmesi (otomatik):**
+- `reviews` collection (yorumlar)
+- `unified_inbox` / `inbox_messages` / `guest_messages` (inbound direction only)
+- `mid_stay_responses` / `survey_responses` / `post_stay_surveys` (open-ended + answer[] birleştirme)
+
+**Endpoint'ler:**
+- `GET /sentiment/heatmap/{property_id}?days=N` — Tek çağrı tüm analiz:
+  - `overall_avg`, `overall_band`, `nps_like` (pozitif% − negatif%)
+  - `by_channel{}` — per-channel count + avg + pos/neu/neg breakdown
+  - `topic_matrix{}` — 10 konu × 3 duygu hücre sayacı
+  - `trend[]` — günlük avg sentiment
+  - `top_complaints[]` + `top_praises[]` (ranked snippets with topic chips)
+- `GET /sentiment/drilldown/{property_id}?topic=X&band=Y` — Tek konuya odak filtreli kayıtlar (sorted by score).
+
+**Frontend (`SentimentHeatmapPanel.js` — NEW, pink tema):**
+- Hero: overall_avg + NPS-like + 3 count tile (pozitif/nötr/negatif).
+- Kanal stacked-bars: her kanal yanıt yoğunluğu pozitif/nötr/negatif olarak 3-renk bar + avg skor + count.
+- **Topic × Sentiment table:** 10 satır × 3 sütun clickable cells. Her hücre tıklanınca drilldown modal açılır.
+- Top Praises (emerald) + Top Complaints (rose) kartları — skor + kanal + author + topic chips.
+- 90-bar günlük trend (pozitif üst, negatif alt), hover ile date+avg+count.
+- Sidebar: "💗 Sentiment Heatmap" Revenue & Intelligence'a yakın.
+
+**Verified (curl - 365 gün):**
+- 38 yanıt analiz edildi (şu an sadece review kanalı)
+- overall_avg +1.45 (neutral), nps_like **+34.2** (iyi), 16 pozitif / 19 nötr / 3 negatif
+- 7 konu tespit: Personel, Oda, Yemek, Konum, Wi-Fi, Check-in/out, Klima
+- Drilldown "Oda/Room + positive" → 8 eşleşme, en üstte "+3.5 Absolutely wonderful stay! The staff was incredibly friendly, the room was spotless…"
+
+**Why this beats competitors:**
+- Cloudbeds: Reviews ekranı sadece rating; semantic analiz yok. Biz: konu-bazlı sentiment + topic matrix.
+- Mews: Sadece post-stay survey NPS gösterir. Biz: review + inbox + mid-stay + post-stay ALL merged.
+- Revinate/TrustYou: $$$ ayrı ürün. Biz: built-in, bedava.
+
+---
 
 
 ### Iter 231 (Apr 2026): 👑 Batch 18 — Loyalty Enterprise: Tier Benefits + Referrals + Dynamic Packaging

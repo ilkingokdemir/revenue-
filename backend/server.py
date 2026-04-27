@@ -101,6 +101,7 @@ from routes.eu_compliance import create_eu_compliance_router
 from routes.channel_revenue import create_channel_revenue_router
 from routes.pos_kds import create_pos_kds_router
 from routes.loyalty_v2 import create_loyalty_v2_router
+from routes.sentiment import create_sentiment_router as create_cross_sentiment_router
 from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
@@ -521,6 +522,8 @@ pos_kds_router = create_pos_kds_router(db, require_roles)
 api_router.include_router(pos_kds_router)
 loyalty_v2_router = create_loyalty_v2_router(db, require_roles)
 api_router.include_router(loyalty_v2_router)
+sentiment_router = create_cross_sentiment_router(db, require_roles)
+api_router.include_router(sentiment_router)
 ai_predictions_router = create_ai_predictions_router(db, require_roles)
 api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)

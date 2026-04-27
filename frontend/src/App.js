@@ -51,6 +51,7 @@ import AIPredictionsPanel from "./components/dashboard/AIPredictionsPanel";
 import ChannelRevenuePanel from "./components/dashboard/ChannelRevenuePanel";
 import KDSPanel from "./components/dashboard/KDSPanel";
 import LoyaltyV2Panel from "./components/dashboard/LoyaltyV2Panel";
+import SentimentHeatmapPanel from "./components/dashboard/SentimentHeatmapPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -217,6 +218,7 @@ import {
   TrendDown,
   Lightning,
   ForkKnife,
+  ChartLineUp,
   Users,
   Trophy,
   Target,
@@ -2803,6 +2805,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "tier1-dashboard", icon: ChartBar, name: "★ Tier-1 Master Dashboard", testId: "tier1-dashboard-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "✨ AI Tahminler (Risk + Upsell)", testId: "ai-predictions-btn" },
         { id: "channel-revenue", icon: Lightning, name: "⚡ Açık Fiyat + Yield", testId: "channel-revenue-btn" },
+        { id: "sentiment-heatmap", icon: ChartLineUp, name: "💗 Sentiment Heatmap", testId: "sentiment-heatmap-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2977,6 +2980,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "tier1-dashboard-btn":    "operations_reception_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
+    "sentiment-heatmap-btn":  "revenue_forecasting_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3329,6 +3333,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Loyalty v2 — Tier Benefits + Referrals + Dynamic Packaging */}
         {activeView === "loyalty-v2" && (
           <LoyaltyV2Panel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* Sentiment Heatmap — Cross-channel guest voice */}
+        {activeView === "sentiment-heatmap" && (
+          <SentimentHeatmapPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />

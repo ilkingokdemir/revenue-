@@ -853,6 +853,10 @@ api_router.include_router(create_tax_reports_router(db, require_roles))
 from routes.ci_slots import create_ci_slots_router
 api_router.include_router(create_ci_slots_router(db, require_roles))
 
+# ===== Batch 11: Tier-1 Master Operations Dashboard (aggregates KPIs from all 50 keyless features) =====
+from routes.tier1_dashboard import create_tier1_dashboard_router
+api_router.include_router(create_tier1_dashboard_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

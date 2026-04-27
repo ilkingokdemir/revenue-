@@ -133,6 +133,7 @@ import CancelInsurancePanel from "./components/dashboard/CancelInsurancePanel";
 import GroupRoomingWizPanel from "./components/dashboard/GroupRoomingWizPanel";
 import TaxReportsV2Panel from "./components/dashboard/TaxReportsV2Panel";
 import CISlotsPanel from "./components/dashboard/CISlotsPanel";
+import Tier1DashboardPanel from "./components/dashboard/Tier1DashboardPanel";
 import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
 import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
 import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
@@ -2757,6 +2758,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "group-rooming-wiz", icon: Users, name: "Group Rooming Wizard", testId: "group-rooming-wiz-btn" },
         { id: "tax-reports-v2", icon: Receipt, name: "Tax Reports (multi-currency)", testId: "tax-reports-v2-btn" },
         { id: "ci-slots", icon: Clock, name: "Check-in Time Slots", testId: "ci-slots-btn" },
+        { id: "tier1-dashboard", icon: ChartBar, name: "★ Tier-1 Master Dashboard", testId: "tier1-dashboard-btn" },
         { id: "events", icon: CalendarBlank, name: "Events & Rooms", testId: "events-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
@@ -2927,6 +2929,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "group-rooming-wiz-btn":  "operations_reception_view",
     "tax-reports-v2-btn":     "operations_reception_view",
     "ci-slots-btn":           "operations_reception_view",
+    "tier1-dashboard-btn":    "operations_reception_view",
     "attribution-btn":        "revenue_forecasting_view",
     "tax-presets-btn":        "view_bookings",
     "maintenance-btn":        "maintenance_view",
@@ -3898,6 +3901,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "ci-slots" && (
           <div className="p-6">
             <CISlotsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "tier1-dashboard" && (
+          <div className="p-6">
+            <Tier1DashboardPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

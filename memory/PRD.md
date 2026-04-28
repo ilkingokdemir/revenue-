@@ -1,6 +1,37 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 125+ Modules | Mobile Responsive | 246 Test Iterations
+## 126+ Modules | Mobile Responsive | 247 Test Iterations
+
+
+### Iter 247 (Feb 2026): ⚙️ Batch 35 — RM Auto-Apply Rules (Pricing Explainability v2)
+
+User ask (TR): _"devam et"_ — RM zamanını ↓80% düşüren kural motoru.
+
+**Backend (`pricing_explain.py` — extension, 4 yeni endpoint):**
+- `pricing_auto_apply_rules` collection: `{property_id, room_type ('*' = tümü), min_confidence (50..100), max_abs_delta_pct (0..100), max_increase_pct/max_decrease_pct (asimetrik), enabled, note, created_at, created_by}`.
+- `_evaluate_auto_apply(db, property_id, room_type, confidence, delta_pct)` helper → eşleşen ilk aktif kuralı döner ya da None.
+- POST `/pricing/explain` hooked: AI cevabı geldikten sonra kural eşleşirse `decision=accept` + `auto_applied=true` + `decision_by="auto:<rule_id_prefix>"` otomatik set.
+- GET `/pricing/auto-apply/rules/{property_id}` — listele.
+- POST `/pricing/auto-apply/rules` — yeni kural.
+- DELETE `/pricing/auto-apply/rules/{rule_id}` — sil.
+- PATCH `/pricing/auto-apply/rules/{rule_id}/toggle` — enabled flip.
+- Dashboard `auto_applied` count eklendi (projection fix testing agent tarafından).
+
+**Frontend (`PricingExplainPanel.js` — extension):**
+- 3. tab "⚙ Auto-Apply Kuralları (N aktif)".
+- KPI'lardaki "Override" → **"Auto-Apply"** sayacı.
+- **RulesPanel:** info banner + form (oda tipi text input, min güven slider 50-100, maks |Δ|% slider 1-50, opsiyonel not) + ekle butonu. Liste: row başına yeşil/gri renk dot, oda tipi + eşik özeti, AKTİF/PASİF toggle pill, çöp kutusu (window.confirm).
+- **ResultCard auto-apply badge:** `auto_applied=true` ise narrative üstüne yeşil "Otomatik uygulandı" şerit.
+
+**Test:** 23/23 backend pass (1 minor projection fix dahil), frontend %100. **23 ardışık batch %100.**
+
+**Beats competitors:**
+- IDeaS Auto-Pilot: pahalı modül, eşik yapılandırılamaz.
+- Duetto Open Pricing: tek tip auto-apply, room-type segmentasyonu yok.
+- Mews / Cloudbeds / Opera: native auto-apply yok, manuel decision zorunlu.
+- Bizim PMS: oda-tipi bazında, asimetrik yön (increase vs decrease) eşikleri, 2 tıkla aktif/pasif, audit trail (`decision_by="auto:<rule>"`).
+
+---
 
 
 ### Iter 246 (Feb 2026): 🧠 Batch 34 — AI Pricing Explainability (RM "Why?" Engine)

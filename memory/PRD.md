@@ -1,6 +1,58 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 116+ Modules | Mobile Responsive | 236 Test Iterations
+## 118+ Modules | Mobile Responsive | 238 Test Iterations
+
+
+### Iter 238 (Apr 2026): 👤 Batch 26 — Guest Self-Modify / Cancel Portal v2
+
+User ask (TR): _"devam et"_ — misafir self-servis, resepsiyon yükünü azalt.
+
+**Backend (`routes/guest_portal_v2.py` — NEW, 5 endpoints):**
+- `POST /guest-portal-v2/token/{booking_id}` (admin) — 72h token + policy (flexible/moderate/strict). Validation on all inputs.
+- `GET /guest-portal-v2/verify/{token}` (public) — booking + policy_label + days_to_arrival + refund_percent_if_cancel + can_modify/can_cancel flags. 404/410 handled.
+- `POST /guest-portal-v2/modify/{token}` (public) — dates/adults/children/special_requests. check-in <1 gün kala reddeder, booking_modifications audit log.
+- `POST /guest-portal-v2/cancel/{token}` (public) — policy matrix'e göre refund_percent hesaplar: flexible ≥2d=100%, moderate ≥5d=100%/2-5d=50%, strict ≥7d=50%.
+- `GET /guest-portal-v2/pipeline/{property_id}` (admin) — gelecek varışlar + token durumu.
+
+**Frontend:**
+- **`GuestPortalV2Page.js`** (public `/portal/{token}`): Hero + booking özeti + politika banner + Düzenle/İptal butonları (can_modify/can_cancel ile disabled), modify form (date picker + misafir sayısı + özel istekler), cancel form (reason + refund uyarısı), başarı ekranı refund tutarıyla.
+- **`GuestPortalV2Panel.js`** (admin, indigo tema): KPI (total/issued/modified/cancelled), gün ufku + politika selector, bookings tablosu, per-row "Link Gönder" → pano kopyala.
+
+**Verified (curl):** 33 upcoming booking pipeline, token issue → verify public → modify ("Erken giriş") → cancel (%0 iade, same-day ci), invalid policy 400, invalid token 404.
+
+**Test:** 20/20 backend passed.
+
+**Beats competitors:**
+- Cloudbeds/Mews: guest must call reception. Us: link-based self-service.
+- Opera: heavy integration. Us: zero-install public URL.
+
+---
+
+
+### Iter 237 (Apr 2026): 💰 Batch 25 — Digital Tipping (Stripe Checkout)
+
+User ask (TR): _"devam et"_ — P1 keyless feature, Stripe test key mevcut.
+
+**Backend (`routes/tipping.py` — NEW, 6 endpoints):**
+- `POST /tipping/session` (public) — Stripe Checkout URL, tip metadata (property/staff/role/message). Validasyon: 0.50-500 amount, 4 currency (GBP/EUR/USD/TRY), 8 staff_role.
+- `GET /tipping/status/{session_id}` (public) — Stripe poll + DB sync.
+- `GET /tipping/landing/{property_id}?staff_id=X` (public) — QR landing data (property + branding + staff + suggested amounts).
+- `GET /tipping/leaderboard/{property_id}` (admin) — total/count/avg + per-staff rank + by_role pie + recent messages.
+- `GET /tipping/list/{property_id}` (admin) — tips rows.
+- Webhook `type='tip'` → db.tips.status='paid' (server.py'ye eklendi).
+
+**Frontend:**
+- **`TipPage.js`** (public 3 view): `/tip/{prop}[/staff]` tip form (5 suggested £2/5/10/20/50 + özel + mesaj), `/tip/success` polling confirmation, `/tip/cancel` cancel page. Stripe Checkout redirect.
+- **`TippingPanel.js`** (admin, teal tema): Leaderboard + role dağılımı + son mesajlar, QR tab (qrserver.com ile PNG + panoya kopyala).
+
+**Verified:** Real Stripe cs_test_ session + URL oluştu, landing endpoint property + branding döndü, validation (£0.01 → 400, XXX currency → 400) çalıştı.
+
+**Test:** 23/23 backend passed.
+
+**Beats competitors:**
+- Grazzy/eTip: ~$2/stay + fees ayrı vendor. Us: native, 0 ek ücret.
+
+---
 
 
 ### Iter 236 (Apr 2026): 📡 Batch 24 — AI Anomali Radarı (z-score + GPT-5.2 kök neden)
@@ -16,11 +68,12 @@ User ask (TR): _"devam et"_ — AI-first revenue intelligence.
 - **Anomali Akışı:** KPI'lar (total/severe/moderate/days), gün aralığı + metric filtresi, satır bazlı anomali kartları (↑ spike emerald / ↓ drop rose icons), "Açıkla" butonu → LLM hipotez + aksiyon chip'leri violet kutu içinde.
 - **Zaman Serisi:** Metric & days selector, KPI (mean/std/count), SVG grafik ±2σ mor normal bant + anomali noktaları renkli (severe rose, moderate amber).
 
-**Verified (curl):** default property için 19 anomali (9 severe + 10 moderate), timeseries 91 gün 5 anomali. Explain endpoint GPT-5.2 gerçek Türkçe çıktı verdi: "15 Nisan 2026 Çarşamba günü gelirin 0 görünmesi, büyük olasılıkla PMS/CRS–kanal yöneticisi entegrasy...".
+**Verified (curl):** default property için 19 anomali (9 severe + 10 moderate), timeseries 91 gün 5 anomali. Explain endpoint GPT-5.2 gerçek Türkçe çıktı verdi.
 
-**Test:** 18/18 backend passed. Full frontend rendered.
+**Test:** 18/18 backend passed.
 
 ---
+
 
 
 ### Iter 235 (Apr 2026): 📈 Batch 23 — Forecast v2 (24-ay ufuk + Talep Takvimi + Pickup eğrisi)

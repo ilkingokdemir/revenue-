@@ -110,6 +110,7 @@ from routes.anomaly_detection import create_anomaly_router
 from routes.tipping import create_tipping_router
 from routes.guest_portal_v2 import create_guest_portal_v2_router
 from routes.conference_sc import create_conference_sc_router
+from routes.copilot import create_copilot_router
 from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
@@ -554,6 +555,8 @@ guest_portal_v2_router = create_guest_portal_v2_router(db, require_roles)
 api_router.include_router(guest_portal_v2_router)
 conference_sc_router = create_conference_sc_router(db, require_roles)
 api_router.include_router(conference_sc_router)
+copilot_router = create_copilot_router(db, require_roles, LlmChat, UserMessage)
+api_router.include_router(copilot_router)
 ai_predictions_router = create_ai_predictions_router(db, require_roles)
 api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)

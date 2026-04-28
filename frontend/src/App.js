@@ -63,6 +63,7 @@ import AnomalyPanel from "./components/dashboard/AnomalyPanel";
 import TippingPanel from "./components/dashboard/TippingPanel";
 import GuestPortalV2Panel from "./components/dashboard/GuestPortalV2Panel";
 import ConferenceSCPanel from "./components/dashboard/ConferenceSCPanel";
+import CopilotLibraryPanel from "./components/dashboard/CopilotLibraryPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2825,6 +2826,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "tipping", icon: Trophy, name: "💰 Dijital Bahşiş (Stripe)", testId: "tipping-btn" },
         { id: "guest-portal-v2", icon: Users, name: "👤 Guest Self-Modify / Cancel", testId: "guest-portal-v2-btn" },
         { id: "conference-sc", icon: Briefcase, name: "💼 Conference S&C (MICE)", testId: "conference-sc-btn" },
+        { id: "copilot", icon: Sparkle, name: "✨ AI Copilot Kütüphanesi", testId: "copilot-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
       ],
@@ -3004,6 +3006,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "tipping-btn":            "operations_reception_view",
     "guest-portal-v2-btn":    "operations_reception_view",
     "conference-sc-btn":      "operations_reception_view",
+    "copilot-btn":            "operations_reception_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
     "sentiment-heatmap-btn":  "revenue_forecasting_view",
@@ -3427,6 +3430,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Conference S&C — MICE Proposal Builder */}
         {activeView === "conference-sc" && (
           <ConferenceSCPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* AI Copilot Library */}
+        {activeView === "copilot" && (
+          <CopilotLibraryPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}

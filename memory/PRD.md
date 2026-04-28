@@ -1,6 +1,40 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 232 Test Iterations
+## 113+ Modules | Mobile Responsive | 233 Test Iterations
+
+
+### Iter 234 (Apr 2026): 🏢 Batch 21 — Brand Portal / Chain HQ + White-Label
+
+User ask (TR): _"devam et"_ — chain/franchise operator ihtiyacı.
+
+**Backend (`routes/brand_portal.py` — NEW, 5 endpoints):**
+
+**Per-property white-label:**
+- `GET /brand-portal/branding/{property_id}` — Auto-seed defaults. Fields: logo_url, primary_color, secondary_color, custom_domain, from_email, legal_footer, booking_engine_url, social_instagram/facebook, email_signature.
+- `PUT /brand-portal/branding/{property_id}` — Upsert update.
+- `GET /brand-portal/public-branding/{property_id}` — **Public** (no auth), from_email stripped — guest-facing sayfalar için tema.
+
+**Chain HQ:**
+- `GET /brand-portal/overview?days=N` — Tüm tesisler için KPI rollup (bookings, revenue, occupancy, ADR, RevPAR, avg rating per property). Aggregates: total{properties, rooms, bookings, revenue, avg_occupancy, avg_adr, avg_revpar, avg_rating}. Rank tables: by_revenue[10], by_occupancy[10], lowest_rating[5].
+- `GET /brand-portal/alerts?days=7` — Cross-property aggregated alert feed (unread_inbox >10, unanswered_reviews >5, low_occupancy <40%).
+
+**Frontend (`BrandPortalPanel.js` — NEW, indigo tema, 3 tab):**
+- **Konsolide KPI:** 8-tile rollup (tesis/oda/rezervasyon/gelir/doluluk/ADR/RevPAR/rating) + Top Revenue rank (emerald) + Lowest Rating rank (rose dikkat!) + full comparative table.
+- **Uyarılar:** Cross-property alert stream, severity-colored dots (amber/sky).
+- **White-Label:** Property selector → form (logo URL, primary/secondary color picker, custom_domain, from_email, booking_engine_url, socials, legal_footer) + **canlı önizleme** (hero banner with primary color + CTA button with secondary color).
+- Sidebar: "🏢 Brand Portal (Chain HQ)" Dashboard grubunda Tier-1'in yanında.
+
+**Verified (curl):**
+- Overview: 10 tesis, 59 oda, £39,552 gelir, %8.7 avg occ, £54 ADR. Top: London Suite £18k, Aldgate Flats £14k.
+- Alerts: 3 (Franziskaner 38 cevapsız yorum, 2 düşük doluluk).
+- Branding default auto-seeded with #0f172a/#f59e0b colors.
+
+**Why this beats competitors:**
+- Opera Cloud Central: Chain HQ modülü ayrı lisans ($$$$). Biz: built-in.
+- Cloudbeds franchise: Sadece rollup, white-label yok. Biz: Per-property tema + live preview.
+- Mews: Brand.Mews ayrı ürün. Biz: core.
+
+---
 
 
 ### Iter 233 (Apr 2026): 📱 Batch 20 — Self Check-in v2 (pre-arrival wizard)

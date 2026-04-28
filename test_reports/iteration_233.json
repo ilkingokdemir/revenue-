@@ -1,0 +1,95 @@
+{
+  "summary": "Iteration 233 - Batch 21 (Brand Portal / Chain HQ + White-Label) tested. Backend: 22/22 passed. Frontend: All UI elements verified. Brand Portal panel shows consolidated KPIs across 10 properties, alerts for unanswered reviews and low occupancy, and per-property white-label branding with live preview.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "White-Label Tab", "issues": ["Console warning about color input format when values are empty (cosmetic, doesn't affect functionality)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration233_batch21_brand_portal.py",
+    "/app/test_reports/pytest/pytest_iteration233_batch21.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/brand-portal/branding/{property_id} auto-seeds defaults (primary_color=#0f172a, secondary_color=#f59e0b) on first call",
+    "PUT /api/brand-portal/branding/{property_id} updates branding and returns {updated: true}",
+    "GET /api/brand-portal/public-branding/{property_id} works WITHOUT auth and strips from_email from response",
+    "GET /api/brand-portal/overview?days=30 returns total KPIs, properties[], by_revenue[] (sorted desc), by_occupancy[], lowest_rating[]",
+    "GET /api/brand-portal/alerts?days=7 returns alerts[] with type (unread_inbox|unanswered_reviews|low_occupancy), severity (warn|info)",
+    "Frontend uses indigo color theme for Brand Portal panel",
+    "Live preview card shows primary_color as background and secondary_color for CTA button"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration233_batch21_brand_portal.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - uses existing 10 MyHotelBox properties",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 233 validates Batch 21 (Brand Portal / Chain HQ + White-Label). Admin sidebar: '🏢 Brand Portal (Chain HQ)' (data-testid='brand-portal-btn'). Admin panel: data-testid='brand-portal-panel'. 3 tabs: 'Konsolide KPI' (brand-tab-overview), 'Uyarılar' (brand-tab-alerts), 'White-Label' (brand-tab-branding). Overview tab: 8 KPI tiles, by_revenue rank (rank-rev-0/1/2), property table (prop-row-{id}). Alerts tab: list of alert-{type}-{i} rows. Branding tab: property select (branding-property-select), form with logo_url input (branding-logo), save button (branding-save), live preview panel. Backend endpoints: GET/PUT /api/brand-portal/branding/{property_id}, GET /api/brand-portal/public-branding/{property_id} (PUBLIC), GET /api/brand-portal/overview?days=30, GET /api/brand-portal/alerts?days=7.",
+  "features_verified": {
+    "batch_21_brand_portal": {
+      "branding_endpoints": {
+        "get_branding": "GET /api/brand-portal/branding/{property_id} → 200, auto-seeds defaults (primary_color=#0f172a, secondary_color=#f59e0b, created_at)",
+        "put_branding": "PUT /api/brand-portal/branding/{property_id} → 200 {updated: true}",
+        "public_branding": "GET /api/brand-portal/public-branding/{property_id} → 200 WITHOUT auth, from_email stripped"
+      },
+      "overview_endpoint": {
+        "endpoint": "GET /api/brand-portal/overview?days=30 → 200",
+        "total_structure": "properties, rooms, bookings, revenue, avg_occupancy, avg_adr, avg_revpar, avg_rating",
+        "property_structure": "property_id, name, city, country, rooms, bookings, revenue, occupancy_pct, adr, revpar, avg_rating, review_count",
+        "by_revenue": "Sorted descending by revenue",
+        "by_occupancy": "Sorted descending by occupancy",
+        "lowest_rating": "Properties with reviews sorted ascending by avg_rating"
+      },
+      "alerts_endpoint": {
+        "endpoint": "GET /api/brand-portal/alerts?days=7 → 200",
+        "alert_structure": "property_id, property_name, type, severity, count, message",
+        "alert_types": ["unread_inbox", "unanswered_reviews", "low_occupancy"],
+        "severity_levels": ["warn", "info"]
+      },
+      "ui_elements": {
+        "sidebar_button": "data-testid='brand-portal-btn' - '🏢 Brand Portal (Chain HQ)'",
+        "panel": "data-testid='brand-portal-panel'",
+        "overview_tab": "data-testid='brand-tab-overview' - 'Konsolide KPI'",
+        "alerts_tab": "data-testid='brand-tab-alerts' - 'Uyarılar'",
+        "branding_tab": "data-testid='brand-tab-branding' - 'White-Label'",
+        "kpi_tiles": "8 tiles: TESIS, ODA, REZERVASYON, GELİR, DOLULUK, ADR, REVPAR, ORTALAMA ★",
+        "revenue_rank": "data-testid='rank-rev-{i}' - En Yüksek Gelir",
+        "property_rows": "data-testid='prop-row-{property_id}' - Tüm Tesisler table",
+        "alert_rows": "data-testid='alert-{type}-{i}'",
+        "property_select": "data-testid='branding-property-select'",
+        "logo_input": "data-testid='branding-logo'",
+        "save_button": "data-testid='branding-save' - 'Kaydet'",
+        "live_preview": "Shows primary_color as header background, secondary_color for CTA button"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "batch_13_tr_compliance": "PASSED (GET /api/tr-compliance/kbs/default/history)",
+    "batch_14_ai_predictions": "PASSED (GET /api/ai-predictions/cancel-risk/default)",
+    "batch_15_eu_compliance": "PASSED (GET /api/eu-compliance/catalog)",
+    "batch_16_channel_revenue": "PASSED (GET /api/channel-revenue/channels/default)",
+    "batch_17_kds": "PASSED (GET /api/kds/default)",
+    "batch_18_loyalty_v2": "PASSED (GET /api/loyalty-v2/benefits/default)",
+    "batch_19_sentiment_heatmap": "PASSED (GET /api/sentiment/heatmap/default?days=90)",
+    "batch_20_self_checkin_v2": "PASSED (GET /api/self-checkin-v2/pipeline/default?days_ahead=14)"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "batch_completion_status": "Batch 21 (Brand Portal / Chain HQ + White-Label) COMPLETE"
+}

@@ -1,6 +1,36 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 127+ Modules | Mobile Responsive | 249 Test Iterations
+## 128+ Modules | Mobile Responsive | 250 Test Iterations
+
+
+### Iter 250 (Feb 2026): 📋 Batch 37 — Banquet Event Order (BEO) Auto-PDF
+
+User ask (TR): _"devam et"_ — Phase 2 sürdür.
+
+**Sorun:** Conference S&C modülü vardı ama event-day'de F&B + banquet + AV + housekeeping ekiplerinin baktığı resmi belge **manuel Word doc** ile hazırlanıyordu → son dakika değişiklikte drift.
+
+**Backend (`routes/banquet_orders.py` — NEW, 7 endpoint, ~290 satır, **reportlab PDF**):**
+- BEO model: `event_name, event_date, start_time, end_time, venue_room, guest_count, setup_style (theatre/classroom/u-shape/boardroom/banquet/cabaret/cocktail/hollow-square/custom), menu[{course, items[], notes}], beverages, av, decoration, special_requests, billing_instructions, contacts, status (draft/confirmed/completed/cancelled), notes, proposal_id` (Conference S&C bağlantısı opsiyonel).
+- Auto-generated `ref` `BEO-YYMMDD-XXXX` (4-hex random).
+- POST/GET/PUT/DELETE CRUD + filter (from_date, to_date, status).
+- GET `/banquet-orders/{id}/pdf` — **reportlab ile A4 PDF**: header + status, summary table (event/date/venue/setup/guests/proposal_ref), F&B menu (course-by-course with sub-items), beverages table, AV table, decoration + special requests, billing, key contacts table, ops notes, footer (generated_at + UTC + property_id).
+- GET `/banquet-orders/dashboard/{property_id}` — total + by_status counts + upcoming_7d_count + upcoming_7d_guests + upcoming_7d list.
+
+**Frontend (`BanquetOrdersPanel.js` — NEW, pink tema, ~340 satır):**
+- 4 KPI: Toplam BEO, Onaylı, Önümüzdeki 7g, 7g Misafir.
+- Liste: status badge (draft/confirmed/completed/cancelled), tarih + saat aralığı, salon, misafir count, ref kodu — her satırda **PDF / Edit / Delete**.
+- Status filter dropdown.
+- BeoEditor modal: event basics grid + 3 dynamic section (Menu / İçecekler / AV ekipman) + decoration + special + billing + contacts + ops notes. Course'lar add/remove, virgülle yemek listesi.
+
+**Test:** 19/19 backend pass, frontend %100. **26 ardışık batch %100.**
+
+**Beats competitors:**
+- Cloudbeds: BEO yok, MICE=ekstra modül.
+- Mews: Spaces marketplace partner (yıllık $$).
+- Opera: ENTERPRISE tier'da, ek lisans.
+- Bizim PMS: structured BEO + native PDF + status filter + Conference S&C link, **ücretsiz**.
+
+---
 
 
 ### Iter 249 (Feb 2026): 🏆 Batch 36 — Loyalty Tier Engine v2

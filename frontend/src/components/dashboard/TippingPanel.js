@@ -10,6 +10,7 @@ import {
   QrCode,
   Copy,
 } from "@phosphor-icons/react";
+import CopilotButton from "../CopilotButton";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -103,6 +104,15 @@ function DashboardTab({ propertyId }) {
         <Kpi label="Adet" value={data.total_count} color="sky" testId="tip-kpi-count" />
         <Kpi label="Ortalama" value={`£${data.avg_tip}`} color="emerald" testId="tip-kpi-avg" />
         <Kpi label="Taranan Gün" value={`${data.days} gün`} color="amber" testId="tip-kpi-days" />
+      </div>
+
+      <div className="flex justify-end">
+        <CopilotButton
+          contextType="leaderboard"
+          data={{ total_amount: data.total_amount, total_count: data.total_count, avg: data.avg_tip, top_staff: data.leaderboard.slice(0, 5), by_role: data.by_role }}
+          label="AI Özet: Çalışan Performansı"
+          testId="tip-copilot-btn"
+        />
       </div>
 
       <div className="flex items-center gap-2">

@@ -64,6 +64,7 @@ import TippingPanel from "./components/dashboard/TippingPanel";
 import GuestPortalV2Panel from "./components/dashboard/GuestPortalV2Panel";
 import ConferenceSCPanel from "./components/dashboard/ConferenceSCPanel";
 import CopilotLibraryPanel from "./components/dashboard/CopilotLibraryPanel";
+import ImageAIPanel from "./components/dashboard/ImageAIPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -209,6 +210,7 @@ import {
   CheckCircle,
   WarningCircle,
   Sparkle,
+  Camera,
   ChatText,
   FunnelSimple,
   ArrowsClockwise,
@@ -2827,6 +2829,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "guest-portal-v2", icon: Users, name: "👤 Guest Self-Modify / Cancel", testId: "guest-portal-v2-btn" },
         { id: "conference-sc", icon: Briefcase, name: "💼 Conference S&C (MICE)", testId: "conference-sc-btn" },
         { id: "copilot", icon: Sparkle, name: "✨ AI Copilot Kütüphanesi", testId: "copilot-btn" },
+        { id: "image-ai", icon: Camera, name: "📸 AI Temizlik Skorlama", testId: "image-ai-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
       ],
@@ -3007,6 +3010,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "guest-portal-v2-btn":    "operations_reception_view",
     "conference-sc-btn":      "operations_reception_view",
     "copilot-btn":            "operations_reception_view",
+    "image-ai-btn":           "housekeeping_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
     "sentiment-heatmap-btn":  "revenue_forecasting_view",
@@ -3437,6 +3441,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* AI Copilot Library */}
         {activeView === "copilot" && (
           <CopilotLibraryPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* Image AI Cleanliness Scoring (HK) */}
+        {activeView === "image-ai" && (
+          <ImageAIPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}

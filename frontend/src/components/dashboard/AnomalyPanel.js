@@ -10,6 +10,7 @@ import {
   ArrowsClockwise,
   Lightbulb,
 } from "@phosphor-icons/react";
+import CopilotButton from "../CopilotButton";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -112,6 +113,16 @@ function FeedTab({ propertyId }) {
         <Kpi label="Ciddi" value={data.by_severity.severe || 0} color="rose" testId="anom-kpi-severe" />
         <Kpi label="Orta" value={data.by_severity.moderate || 0} color="amber" testId="anom-kpi-moderate" />
         <Kpi label="Taranan Gün" value={data.days} color="sky" testId="anom-kpi-days" />
+      </div>
+
+      <div className="flex justify-end">
+        <CopilotButton
+          contextType="anomaly"
+          data={{ total: data.total, by_severity: data.by_severity, by_metric: data.by_metric, top_anomalies: (data.anomalies || []).slice(0, 5) }}
+          label="AI Özet: Anomali Paterni"
+          testId="anom-copilot-btn"
+          propertyId={propertyId}
+        />
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">

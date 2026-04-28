@@ -9,6 +9,7 @@ import {
   Info,
   ArrowsClockwise,
 } from "@phosphor-icons/react";
+import CopilotButton from "../CopilotButton";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -111,6 +112,15 @@ function HorizonTab({ propertyId }) {
         <Kpi label="Toplam Tahmini Gelir" value={`£${Math.round(totalRev / 1000)}k`} color="emerald" testId="fcv2-kpi-revenue" />
         <Kpi label="Toplam Rezervasyon" value={totalBk} color="sky" testId="fcv2-kpi-bookings" />
         <Kpi label="YoY Büyüme" value={`${data.yoy_growth_pct > 0 ? "+" : ""}${data.yoy_growth_pct}%`} color={data.yoy_growth_pct >= 0 ? "emerald" : "rose"} testId="fcv2-kpi-yoy" />
+      </div>
+
+      <div className="flex justify-end">
+        <CopilotButton
+          contextType="forecast"
+          data={{ months, yoy_growth_pct: data.yoy_growth_pct, total_revenue: totalRev, total_bookings: totalBk, top_months: data.forecast.slice(0, 6) }}
+          label="AI Özet: Talep Stratejisi"
+          testId="fcv2-copilot-btn"
+        />
       </div>
 
       <div className="flex items-center gap-2">

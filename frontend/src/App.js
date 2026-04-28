@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import "@/App.css";
 import axios from "axios";
 import { Toaster } from "@/components/ui/sonner";
@@ -16,188 +16,62 @@ import GuestPortalV2Page from "./GuestPortalV2Page";
 import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
 import TurkishPayPage from "./TurkishPayPage";
-import { IntegrationsPanel } from "./components/dashboard/IntegrationsPanel";
-import { IntegrationsMarketplace } from "./components/dashboard/IntegrationsMarketplace";
-import { ArrivalsCockpit } from "./components/dashboard/ArrivalsCockpit";
-import { StaffContractsPanel } from "./components/dashboard/StaffContractsPanel";
-import { StaffOnboardingAdminPanel } from "./components/dashboard/StaffOnboardingAdminPanel";
-import { PayrollRateMatrix } from "./components/dashboard/finance/PayrollRateMatrix";
-import { CityLedgerPanel } from "./components/dashboard/finance/CityLedgerPanel";
-import { TaxConfigPanel } from "./components/dashboard/finance/TaxConfigPanel";
-import { DepositPolicyPanel } from "./components/dashboard/finance/DepositPolicyPanel";
-import { CurrencyFxPanel } from "./components/dashboard/finance/CurrencyFxPanel";
-import { RateStructurePanel } from "./components/dashboard/finance/RateStructurePanel";
-import { GroupBookingsPanel } from "./components/dashboard/GroupBookingsPanel";
-import { GdprPanel } from "./components/dashboard/GdprPanel";
-import {
-  NightAuditClosePanel, DepositLedgerPanel, CommissionReconPanel, GiftCardsPanel,
-  ReviewSentimentPanel, GuestRfmPanel, PreventiveMaintenancePanel,
-  AssetRegisterPanel, CashDrawerPanel, TwoFactorAuthPanel,
-  RevenueHealthPanel, IpAllowlistPanel, CardVaultPanel,
-  DepositAutomationPanel,
-} from "./components/dashboard/CompetitorGapPanels";
-import {
-  ChannelRestrictionsPanel, ChannelInboundPanel, ChannelParityPanel, OtaHealthPanel,
-  ChannelMappingsPanel, SyncQueuePanel,
-} from "./components/dashboard/ChannelManagerMvpPanels";
-import ChannelManagerHub from "./components/dashboard/ChannelManagerHub";
-import GroupBlocksPanel from "./components/dashboard/GroupBlocksPanel";
-import LaundrySettingsPanel from "./components/dashboard/LaundrySettingsPanel";
-import { OnboardingWizard } from "./components/dashboard/OnboardingWizard";
-import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
-import { UnifiedInboxPanel } from "./components/dashboard/UnifiedInboxPanel";
+// ---------- EAGER imports (rendered on every dashboard render or first paint) ----------
 import CommandPalette from "./components/CommandPalette";
 import TodayHub from "./components/dashboard/TodayHub";
-import TRCompliancePanel from "./components/dashboard/TRCompliancePanel";
-import EUCompliancePanel from "./components/dashboard/EUCompliancePanel";
-import AIPredictionsPanel from "./components/dashboard/AIPredictionsPanel";
-import ChannelRevenuePanel from "./components/dashboard/ChannelRevenuePanel";
-import KDSPanel from "./components/dashboard/KDSPanel";
-import LoyaltyV2Panel from "./components/dashboard/LoyaltyV2Panel";
-import SentimentHeatmapPanel from "./components/dashboard/SentimentHeatmapPanel";
-import SelfCheckInPipelinePanel from "./components/dashboard/SelfCheckInPipelinePanel";
-import BrandPortalPanel from "./components/dashboard/BrandPortalPanel";
-import OpsV2Panel from "./components/dashboard/OpsV2Panel";
-import ForecastV2Panel from "./components/dashboard/ForecastV2Panel";
-import AnomalyPanel from "./components/dashboard/AnomalyPanel";
-import TippingPanel from "./components/dashboard/TippingPanel";
-import GuestPortalV2Panel from "./components/dashboard/GuestPortalV2Panel";
-import ConferenceSCPanel from "./components/dashboard/ConferenceSCPanel";
-import CopilotLibraryPanel from "./components/dashboard/CopilotLibraryPanel";
-import ImageAIPanel from "./components/dashboard/ImageAIPanel";
-import FnbTabsPanel from "./components/dashboard/FnbTabsPanel";
-import BiFeedPanel from "./components/dashboard/BiFeedPanel";
-import HkTurnoverPanel from "./components/dashboard/HkTurnoverPanel";
-import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
-import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
-import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
-import { ProfitOSPanel } from "./components/dashboard/revenue/ProfitOSPanel";
-import { RolesPermissionsPanel } from "./components/dashboard/rbac/RolesPermissionsPanel";
-import { ImportModulePanel } from "./components/dashboard/imports/ImportModulePanel";
-import { LegalDocumentsPanel } from "./components/dashboard/LegalDocumentsPanel";
+import GlobalReportIssueFAB from "./components/dashboard/GlobalReportIssueFAB";
+import ActionFeedPanel from "./components/dashboard/ActionFeedPanel";
+import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
+import { NotificationBell } from "./components/dashboard/NotificationBell";
+import { LoginPage } from "./components/dashboard/LoginPage";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
 import { ContractSigningPage } from "./components/public/ContractSigningPage";
-import { AnalyticsPanel } from "./components/dashboard/AnalyticsPanel";
-import { ReportsSettings } from "./components/dashboard/ReportsSettings";
-import { LoginPage } from "./components/dashboard/LoginPage";
-import { BrandingPanel } from "./components/dashboard/BrandingPanel";
-import { SyncLogPanel } from "./components/dashboard/SyncLogPanel";
-import { PropertyMappingPanel } from "./components/dashboard/PropertyMappingPanel";
-import { BookingEnginePanel } from "./components/dashboard/BookingEnginePanel";
-import { TemplateGallery } from "./components/dashboard/TemplateGallery";
-import { TemplateCustomizer } from "./components/dashboard/TemplateCustomizer";
-import { PromoCodesPanel } from "./components/dashboard/PromoCodesPanel";
-import { AddOnsPanel } from "./components/dashboard/AddOnsPanel";
-import { PoliciesPanel } from "./components/dashboard/PoliciesPanel";
-import { MessagingHub } from "./components/dashboard/MessagingHub";
-import { ConciergeAnalyticsPanel } from "./components/dashboard/ConciergeAnalyticsPanel";
-import { AutomationPanel } from "./components/dashboard/AutomationPanel";
-import { ChannelSettingsPanel } from "./components/dashboard/ChannelSettingsPanel";
-import { DashboardHome } from "./components/dashboard/DashboardHome";
-import { StaffPerformancePanel } from "./components/dashboard/StaffPerformancePanel";
-import { GuestProfilesPanel } from "./components/dashboard/GuestProfilesPanel";
-import { AdminPanel } from "./components/dashboard/AdminPanel";
-import { HousekeepingPanel } from "./components/dashboard/HousekeepingPanel";
-import { NightAuditPanel } from "./components/dashboard/NightAuditPanel";
-import { LoyaltyPanel } from "./components/dashboard/LoyaltyPanel";
-import { LogbookPanel } from "./components/dashboard/LogbookPanel";
-import { ForecastPanel } from "./components/dashboard/ForecastPanel";
-import PaceReports from "./components/dashboard/PaceReports";
-import AIPricingV2Panel from "./components/dashboard/AIPricingV2Panel";
-import ParityHeatmapPanel from "./components/dashboard/ParityHeatmapPanel";
-import MorningBriefPanel from "./components/dashboard/MorningBriefPanel";
-import RMLabPanel from "./components/dashboard/RMLabPanel";
-import ConciergeInboxPanel from "./components/dashboard/ConciergeInboxPanel";
-import GroupRequestsPanel from "./components/dashboard/GroupRequestsPanel";
-import SustainabilityPanel from "./components/dashboard/SustainabilityPanel";
-import HousekeepingRoutePanel from "./components/dashboard/HousekeepingRoutePanel";
-import NightlyRecapPanel from "./components/dashboard/NightlyRecapPanel";
-import AccountingExportPanel from "./components/dashboard/AccountingExportPanel";
-import LateCheckoutPanel from "./components/dashboard/LateCheckoutPanel";
-import ServiceRecoveryPanel from "./components/dashboard/ServiceRecoveryPanel";
-import RoomQRPanel from "./components/dashboard/RoomQRPanel";
-import TaxPresetsPanel from "./components/dashboard/TaxPresetsPanel";
-import WalkInPanel from "./components/dashboard/WalkInPanel";
-import NoShowPanel from "./components/dashboard/NoShowPanel";
-import GuestPrefsPanel from "./components/dashboard/GuestPrefsPanel";
-import CleaningChecklistsPanel from "./components/dashboard/CleaningChecklistsPanel";
-import AttributionPanel from "./components/dashboard/AttributionPanel";
-import GroupRoomingImportPanel from "./components/dashboard/GroupRoomingImportPanel";
-import OpsQuickActionsPanel from "./components/dashboard/OpsQuickActionsPanel";
-import TimeSlotsPanel from "./components/dashboard/TimeSlotsPanel";
-import StaffOpsPanel from "./components/dashboard/StaffOpsPanel";
-import RevenueProtectionPanel from "./components/dashboard/RevenueProtectionPanel";
-import SpacesPanel from "./components/dashboard/SpacesPanel";
-import MultiPropertyRollupPanel from "./components/dashboard/MultiPropertyRollupPanel";
-import CurrencyPanel from "./components/dashboard/CurrencyPanel";
-import AgentsB2BPanel from "./components/dashboard/AgentsB2BPanel";
-import SecurityOwnerPanel from "./components/dashboard/SecurityOwnerPanel";
-import PreAuthPanel from "./components/dashboard/PreAuthPanel";
-import ChargebackPanel from "./components/dashboard/ChargebackPanel";
-import WebPushPanel from "./components/dashboard/WebPushPanel";
-import PmsCrsSyncPanel from "./components/dashboard/PmsCrsSyncPanel";
-import PublicApiPortalPanel from "./components/dashboard/PublicApiPortalPanel";
-import MidStaySurveyPanel from "./components/dashboard/MidStaySurveyPanel";
-import FolioLivePanel from "./components/dashboard/FolioLivePanel";
-import ABTestPanel from "./components/dashboard/ABTestPanel";
-import PreArrivalDripPanel from "./components/dashboard/PreArrivalDripPanel";
-import MenuEngineeringPanel from "./components/dashboard/MenuEngineeringPanel";
-import SRVoucherPanel from "./components/dashboard/SRVoucherPanel";
-import FolioSplitPanel from "./components/dashboard/FolioSplitPanel";
-import LoyaltyAutoPanel from "./components/dashboard/LoyaltyAutoPanel";
-import LateCheckoutOfferPanel from "./components/dashboard/LateCheckoutOfferPanel";
-import OTAStopSellForecastPanel from "./components/dashboard/OTAStopSellForecastPanel";
-import MsgTemplatesPanel from "./components/dashboard/MsgTemplatesPanel";
-import BirthdayPanel from "./components/dashboard/BirthdayPanel";
-import LowStockPanel from "./components/dashboard/LowStockPanel";
-import RebookPanel from "./components/dashboard/RebookPanel";
-import StayExtPanel from "./components/dashboard/StayExtPanel";
-import LongStayPanel from "./components/dashboard/LongStayPanel";
-import CancelInsurancePanel from "./components/dashboard/CancelInsurancePanel";
-import GroupRoomingWizPanel from "./components/dashboard/GroupRoomingWizPanel";
-import TaxReportsV2Panel from "./components/dashboard/TaxReportsV2Panel";
-import CISlotsPanel from "./components/dashboard/CISlotsPanel";
-import Tier1DashboardPanel from "./components/dashboard/Tier1DashboardPanel";
-import { CampaignsPanel } from "./components/dashboard/CampaignsPanel";
-import { GuestAppPanel } from "./components/dashboard/GuestAppPanel";
-import { SmartLocksPanel } from "./components/dashboard/SmartLocksPanel";
-import { SetupWizardPanel } from "./components/dashboard/SetupWizardPanel";
-import { StockManagementPanel } from "./components/dashboard/StockManagementPanel";
-import { AccountingPanel } from "./components/dashboard/AccountingPanel";
-import { POSPanel } from "./components/dashboard/POSPanel";
-import { PaymentsPanel } from "./components/dashboard/PaymentsPanel";
-import { SurveyPanel } from "./components/dashboard/SurveyPanel";
-import { GuestJourneyPanel } from "./components/dashboard/GuestJourneyPanel";
-import { MaintenancePanel } from "./components/dashboard/MaintenancePanel";
-import GlobalReportIssueFAB from "./components/dashboard/GlobalReportIssueFAB";
-import ActionFeedPanel from "./components/dashboard/ActionFeedPanel";
-import { RateManagerPanel } from "./components/dashboard/RateManagerPanel";
-import { ReportsCentrePanel } from "./components/dashboard/ReportsCentrePanel";
-import { ScheduledReports } from "./components/dashboard/ScheduledReports";
-import { MobileCompanion } from "./components/dashboard/MobileCompanion";
-import { EnhancedDashboard } from "./components/dashboard/EnhancedDashboard";
-import { ReportsHub } from "./components/dashboard/ReportsHub";
-import { FinancePL } from "./components/dashboard/FinancePL";
-import { ShiftScheduler } from "./components/dashboard/ShiftScheduler";
-import { ReceptionReport } from "./components/dashboard/ReceptionReport";
-import { PassOverDuties } from "./components/dashboard/PassOverDuties";
-import { ComplianceRegister } from "./components/dashboard/ComplianceRegister";
-import { LaundryManagement } from "./components/dashboard/LaundryManagement";
-import { PayrollManagement } from "./components/dashboard/PayrollManagement";
-import { ExpenseManagement } from "./components/dashboard/ExpenseManagement";
-import { CashFlowForecast } from "./components/dashboard/CashFlowForecast";
-import { OperationsHubPanel } from "./components/dashboard/OperationsHubPanel";
-import { NotificationBell } from "./components/dashboard/NotificationBell";
-import { FinancePanel } from "./components/dashboard/FinancePanel";
-import { StaffManagementPanel } from "./components/dashboard/StaffManagementPanel";
-import { MyTasksPanel } from "./components/dashboard/MyTasksPanel";
-import { LostFoundPanel } from "./components/dashboard/LostFoundPanel";
-import { EventsPanel } from "./components/dashboard/EventsPanel";
-import { SettingsHubPanel } from "./components/dashboard/SettingsHubPanel";
-import { BookingEngineAdmin } from "./components/dashboard/BookingEngineAdmin";
-import { BookingTimeline } from "./components/dashboard/BookingTimeline";
-import { RevenuePanel } from "./components/dashboard/RevenuePanel";
+
+// ---------- LAZY-LOADED dashboard panels (code-split per panel chunk) ----------
+import {
+  IntegrationsPanel, IntegrationsMarketplace, ArrivalsCockpit, StaffContractsPanel, StaffOnboardingAdminPanel,
+  PayrollRateMatrix, CityLedgerPanel, TaxConfigPanel, DepositPolicyPanel, CurrencyFxPanel, RateStructurePanel,
+  GroupBookingsPanel, GdprPanel,
+  NightAuditClosePanel, DepositLedgerPanel, CommissionReconPanel, GiftCardsPanel,
+  ReviewSentimentPanel, GuestRfmPanel, PreventiveMaintenancePanel,
+  AssetRegisterPanel, CashDrawerPanel, TwoFactorAuthPanel,
+  RevenueHealthPanel, IpAllowlistPanel, CardVaultPanel, DepositAutomationPanel,
+  ChannelRestrictionsPanel, ChannelInboundPanel, ChannelParityPanel, OtaHealthPanel,
+  ChannelMappingsPanel, SyncQueuePanel,
+  ChannelManagerHub, GroupBlocksPanel, LaundrySettingsPanel,
+  OnboardingWizard, UnifiedInboxPanel,
+  TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
+  KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
+  OpsV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
+  ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
+  BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
+  ImportModulePanel, LegalDocumentsPanel, AnalyticsPanel, ReportsSettings,
+  BrandingPanel, SyncLogPanel, PropertyMappingPanel, BookingEnginePanel,
+  TemplateGallery, TemplateCustomizer, PromoCodesPanel, AddOnsPanel, PoliciesPanel,
+  MessagingHub, ConciergeAnalyticsPanel, AutomationPanel, ChannelSettingsPanel,
+  DashboardHome, StaffPerformancePanel, GuestProfilesPanel, AdminPanel, HousekeepingPanel,
+  NightAuditPanel, LoyaltyPanel, LogbookPanel, ForecastPanel,
+  PaceReports, AIPricingV2Panel, ParityHeatmapPanel, MorningBriefPanel, RMLabPanel,
+  ConciergeInboxPanel, GroupRequestsPanel, SustainabilityPanel, HousekeepingRoutePanel,
+  NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel,
+  RoomQRPanel, TaxPresetsPanel, WalkInPanel, NoShowPanel, GuestPrefsPanel,
+  CleaningChecklistsPanel, AttributionPanel, GroupRoomingImportPanel, OpsQuickActionsPanel,
+  TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, MultiPropertyRollupPanel,
+  CurrencyPanel, AgentsB2BPanel, SecurityOwnerPanel, PreAuthPanel, ChargebackPanel,
+  WebPushPanel, PmsCrsSyncPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
+  ABTestPanel, PreArrivalDripPanel, MenuEngineeringPanel, SRVoucherPanel, FolioSplitPanel,
+  LoyaltyAutoPanel, LateCheckoutOfferPanel, OTAStopSellForecastPanel,
+  MsgTemplatesPanel, BirthdayPanel, LowStockPanel, RebookPanel, StayExtPanel, LongStayPanel,
+  CancelInsurancePanel, GroupRoomingWizPanel, TaxReportsV2Panel, CISlotsPanel, Tier1DashboardPanel,
+  CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
+  AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
+  RateManagerPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
+  ReportsHub, FinancePL, ShiftScheduler, ReceptionReport, PassOverDuties, ComplianceRegister,
+  LaundryManagement, PayrollManagement, ExpenseManagement, CashFlowForecast,
+  OperationsHubPanel, FinancePanel, StaffManagementPanel, MyTasksPanel, LostFoundPanel,
+  EventsPanel, SettingsHubPanel, BookingEngineAdmin, BookingTimeline, RevenuePanel,
+} from "./lazyPanels";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
@@ -333,6 +207,16 @@ const API = `${BACKEND_URL}/api`;
 
 // Configure axios to send cookies
 axios.defaults.withCredentials = true;
+
+// Loader shown while a lazy-loaded panel chunk is fetched
+const PanelLoader = () => (
+  <div className="flex items-center justify-center py-20" data-testid="panel-loader">
+    <div className="flex items-center gap-3 text-stone-400">
+      <div className="w-5 h-5 border-2 border-stone-200 border-t-cyan-500 rounded-full animate-spin" />
+      <span className="text-xs uppercase tracking-wider">Yükleniyor…</span>
+    </div>
+  </div>
+);
 
 function formatApiErrorDetail(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
@@ -3324,6 +3208,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           />
         )}
 
+        <Suspense fallback={<PanelLoader />}>
         {/* Dashboard Home — AI-first "Today" hub */}
         {activeView === "dashboard" && (
           <TodayHub
@@ -4562,6 +4447,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "profit-os" && (
           <div className="p-6"><ProfitOSPanel user={user} propertyId={activePropertyId} /></div>
         )}
+        </Suspense>
       </main>
 
       {/* Powered By Footer */}

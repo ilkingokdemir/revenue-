@@ -21,19 +21,22 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export default function PricingExplainPanel({ propertyId }) {
   const [stats, setStats] = useState(null);
   const [history, setHistory] = useState([]);
-  const [tab, setTab] = useState("new"); // new | history
+  const [rules, setRules] = useState([]);
+  const [tab, setTab] = useState("new"); // new | history | rules
   const [loading, setLoading] = useState(false);
 
   const reload = useCallback(async () => {
     if (!propertyId) return;
     setLoading(true);
     try {
-      const [s, h] = await Promise.all([
+      const [s, h, r] = await Promise.all([
         axios.get(`${API}/api/pricing/explain/dashboard/${propertyId}`, { withCredentials: true }),
         axios.get(`${API}/api/pricing/explain/history/${propertyId}?limit=50`, { withCredentials: true }),
+        axios.get(`${API}/api/pricing/auto-apply/rules/${propertyId}`, { withCredentials: true }),
       ]);
       setStats(s.data);
       setHistory(h.data.items || []);
+      setRules(r.data.rules || []);
     } catch (e) {
       toast.error("Veri yüklenemedi");
     } finally {
@@ -61,7 +64,7 @@ export default function PricingExplainPanel({ propertyId }) {
           <Kpi label="Toplam Açıklama" value={stats.total} color="stone" />
           <Kpi label="Bekleyen" value={stats.pending} color="amber" />
           <Kpi label="Onay Oranı" value={`%${stats.accept_rate_pct}`} color="emerald" />
-          <Kpi label="Override" value={stats.overridden} color="violet" />
+          <Kpi label="Auto-Apply" value={stats.auto_applied || 0} color="violet" />
           <Kpi label="Ort. Güven" value={`%${stats.avg_confidence}`} color="cyan" />
           <Kpi label="Ort. |Δ|" value={`%${stats.avg_abs_delta_pct}`} color="sky" />
         </div>
@@ -82,6 +85,13 @@ export default function PricingExplainPanel({ propertyId }) {
         >
           Geçmiş ({history.length})
         </button>
+        <button
+          onClick={() => setTab("rules")}
+          data-testid="pe-tab-rules"
+          className={`px-3 py-1.5 text-xs rounded-md ${tab === "rules" ? "bg-violet-600 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}
+        >
+          ⚙ Auto-Apply Kuralları ({rules.filter((r) => r.enabled).length})
+        </button>
         <button onClick={reload} className="ml-auto px-3 py-1.5 text-xs rounded-md border border-stone-200 text-stone-600 hover:bg-stone-50 inline-flex items-center gap-1.5">
           <ArrowsClockwise size={12} /> Yenile
         </button>
@@ -90,6 +100,9 @@ export default function PricingExplainPanel({ propertyId }) {
       {tab === "new" && <ExplainForm propertyId={propertyId} onCreated={() => { reload(); setTab("history"); }} />}
       {tab === "history" && (
         <HistoryList items={history} loading={loading} onChanged={reload} />
+      )}
+      {tab === "rules" && (
+        <RulesPanel propertyId={propertyId} rules={rules} onChanged={reload} />
       )}
     </div>
   );
@@ -269,6 +282,14 @@ function Field({ label, children }) {
 function ResultCard({ exp, onClose }) {
   return (
     <div className="bg-white border border-violet-200 rounded-xl p-5 space-y-4" data-testid="pe-result">
+      {exp.auto_applied && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg p-3 flex items-center gap-2 text-sm" data-testid="pe-auto-applied-badge">
+          <CheckCircle size={16} weight="fill" className="text-emerald-600" />
+          <div>
+            <b>Otomatik uygulandı.</b> Kurallar bu öneriyi onayladı — RM müdahalesi gerekmedi.
+          </div>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-wider text-violet-600 mb-1">AI Açıklaması</div>
@@ -497,3 +518,162 @@ function HistoryList({ items, loading, onChanged }) {
     </div>
   );
 }
+
+function RulesPanel({ propertyId, rules, onChanged }) {
+  const [form, setForm] = useState({
+    room_type: "*",
+    min_confidence: 85,
+    max_abs_delta_pct: 15,
+    note: "",
+  });
+  const [busy, setBusy] = useState(false);
+
+  const create = async () => {
+    setBusy(true);
+    try {
+      await axios.post(`${API}/api/pricing/auto-apply/rules`, {
+        property_id: propertyId,
+        room_type: form.room_type || "*",
+        min_confidence: parseInt(form.min_confidence) || 85,
+        max_abs_delta_pct: parseFloat(form.max_abs_delta_pct) || 15,
+        enabled: true,
+        note: form.note || null,
+      }, { withCredentials: true });
+      toast.success("Kural eklendi");
+      setForm({ room_type: "*", min_confidence: 85, max_abs_delta_pct: 15, note: "" });
+      onChanged?.();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Hata");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggle = async (id) => {
+    try {
+      await axios.patch(`${API}/api/pricing/auto-apply/rules/${id}/toggle`, {}, { withCredentials: true });
+      onChanged?.();
+    } catch (e) {
+      toast.error("Hata");
+    }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm("Bu kuralı sil?")) return;
+    try {
+      await axios.delete(`${API}/api/pricing/auto-apply/rules/${id}`, { withCredentials: true });
+      toast.success("Silindi");
+      onChanged?.();
+    } catch (e) {
+      toast.error("Hata");
+    }
+  };
+
+  return (
+    <div className="space-y-4" data-testid="pe-rules-panel">
+      <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-800">
+        <b>Auto-Apply Kuralları:</b> AI önerileri belirlediğin <b>min güven</b> ve <b>maks |Δ|%</b> eşiklerinin altındaysa <b>otomatik kabul edilir</b> — RM müdahalesi gerekmez. Eşik üstü öneriler bekleme listesinde kalır.
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3" data-testid="pe-rule-form">
+        <div className="text-sm font-semibold text-stone-800">+ Yeni Kural</div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Field label="Oda Tipi (* = tümü)">
+            <input
+              value={form.room_type}
+              onChange={(e) => setForm({ ...form, room_type: e.target.value })}
+              data-testid="pe-rule-room-type"
+              className="w-full px-2 py-1.5 text-sm border border-stone-200 rounded"
+            />
+          </Field>
+          <Field label="Min Güven">
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="50"
+                max="100"
+                value={form.min_confidence}
+                onChange={(e) => setForm({ ...form, min_confidence: e.target.value })}
+                data-testid="pe-rule-confidence"
+                className="flex-1"
+              />
+              <span className="text-sm font-mono text-violet-700 w-10">%{form.min_confidence}</span>
+            </div>
+          </Field>
+          <Field label="Maks |Δ| %">
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min="1"
+                max="50"
+                step="1"
+                value={form.max_abs_delta_pct}
+                onChange={(e) => setForm({ ...form, max_abs_delta_pct: e.target.value })}
+                data-testid="pe-rule-delta"
+                className="flex-1"
+              />
+              <span className="text-sm font-mono text-violet-700 w-10">%{form.max_abs_delta_pct}</span>
+            </div>
+          </Field>
+          <Field label="Not (opsiyonel)">
+            <input
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              data-testid="pe-rule-note"
+              className="w-full px-2 py-1.5 text-sm border border-stone-200 rounded"
+            />
+          </Field>
+        </div>
+        <button
+          onClick={create}
+          disabled={busy}
+          data-testid="pe-rule-create"
+          className="w-full py-2 rounded-md bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"
+        >
+          <Plus size={14} weight="bold" /> {busy ? "Ekleniyor…" : "Kuralı Ekle"}
+        </button>
+      </div>
+
+      <div className="space-y-2" data-testid="pe-rules-list">
+        {rules.length === 0 ? (
+          <div className="text-center text-stone-400 text-sm py-8">Henüz kural yok. Yukarıdan ekleyin.</div>
+        ) : (
+          rules.map((r) => (
+            <div
+              key={r.id}
+              className={`bg-white border rounded-lg p-3 flex items-center gap-3 ${r.enabled ? "border-emerald-200" : "border-stone-200 opacity-60"}`}
+              data-testid={`pe-rule-row-${r.id}`}
+            >
+              <div className={`w-2 h-2 rounded-full ${r.enabled ? "bg-emerald-500" : "bg-stone-300"}`} />
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-stone-900">
+                  {r.room_type === "*" ? "Tüm Odalar" : r.room_type}
+                  <span className="ml-2 text-xs text-stone-500">
+                    güven ≥%{r.min_confidence} · |Δ| ≤%{r.max_abs_delta_pct}
+                  </span>
+                </div>
+                {r.note && <div className="text-xs text-stone-400">{r.note}</div>}
+                <div className="text-[10px] text-stone-400 mt-0.5">{r.created_by} · {r.created_at?.slice(0, 10)}</div>
+              </div>
+              <button
+                onClick={() => toggle(r.id)}
+                data-testid={`pe-rule-toggle-${r.id}`}
+                className={`px-2 py-1 text-xs rounded ${r.enabled ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-600"}`}
+              >
+                {r.enabled ? "AKTİF" : "PASİF"}
+              </button>
+              <button
+                onClick={() => remove(r.id)}
+                data-testid={`pe-rule-delete-${r.id}`}
+                className="w-7 h-7 rounded bg-rose-50 text-rose-500 inline-flex items-center justify-center hover:bg-rose-100"
+              >
+                <Trash size={12} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+

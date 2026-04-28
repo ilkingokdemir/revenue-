@@ -58,6 +58,38 @@ class DecisionReq(BaseModel):
     note: Optional[str] = None
 
 
+class AutoApplyRuleReq(BaseModel):
+    property_id: str
+    room_type: str = "*"                       # "*" matches any
+    min_confidence: int = Field(85, ge=50, le=100)
+    max_abs_delta_pct: float = Field(15.0, ge=0.0, le=100.0)
+    max_increase_pct: Optional[float] = None   # null = use max_abs_delta_pct
+    max_decrease_pct: Optional[float] = None   # null = use max_abs_delta_pct
+    enabled: bool = True
+    note: Optional[str] = None
+
+
+async def _evaluate_auto_apply(db, property_id: str, room_type: str, confidence: int, delta_pct: float):
+    """Return matching rule dict if any rule allows auto-apply, else None."""
+    rules = await db.pricing_auto_apply_rules.find(
+        {"property_id": property_id, "enabled": True}, {"_id": 0}
+    ).to_list(50)
+    for r in rules:
+        rt = r.get("room_type", "*")
+        if rt != "*" and rt != room_type:
+            continue
+        if confidence < int(r.get("min_confidence", 100)):
+            continue
+        max_inc = r.get("max_increase_pct") if r.get("max_increase_pct") is not None else r.get("max_abs_delta_pct", 0)
+        max_dec = r.get("max_decrease_pct") if r.get("max_decrease_pct") is not None else r.get("max_abs_delta_pct", 0)
+        if delta_pct >= 0 and delta_pct > float(max_inc):
+            continue
+        if delta_pct < 0 and abs(delta_pct) > float(max_dec):
+            continue
+        return r
+    return None
+
+
 def create_pricing_explain_router(db, require_roles, LlmChat=None, UserMessage=None):
     router = APIRouter()
 
@@ -190,12 +222,38 @@ def create_pricing_explain_router(db, require_roles, LlmChat=None, UserMessage=N
             "decision_rate": None,
             "decision_at": None,
             "decision_by": None,
+            "auto_applied": False,
+            "auto_apply_rule_id": None,
             "notes": req.notes,
             "created_at": now,
             "created_by": current_user.get("email"),
         }
         await db.pricing_explanations.insert_one(doc)
         doc.pop("_id", None)
+
+        # ---- AUTO-APPLY: if a matching rule exists, decide=accept automatically ----
+        rule = await _evaluate_auto_apply(db, req.property_id, req.room_type, confidence, doc["delta_pct"])
+        if rule:
+            await db.pricing_explanations.update_one(
+                {"id": doc["id"]},
+                {"$set": {
+                    "decision": "accept",
+                    "decision_rate": req.proposed_rate,
+                    "decision_at": now,
+                    "decision_by": "auto:" + str(rule.get("id"))[:8],
+                    "auto_applied": True,
+                    "auto_apply_rule_id": rule.get("id"),
+                }}
+            )
+            doc.update({
+                "decision": "accept",
+                "decision_rate": req.proposed_rate,
+                "decision_at": now,
+                "decision_by": "auto:" + str(rule.get("id"))[:8],
+                "auto_applied": True,
+                "auto_apply_rule_id": rule.get("id"),
+            })
+
         return doc
 
     @router.get("/pricing/explain/history/{property_id}")
@@ -243,7 +301,7 @@ def create_pricing_explain_router(db, require_roles, LlmChat=None, UserMessage=N
     async def dashboard(property_id: str,
                         current_user: dict = Depends(require_roles("admin", "manager", "revenue"))):
         items = await db.pricing_explanations.find(
-            {"property_id": property_id}, {"_id": 0, "decision": 1, "delta_pct": 1, "confidence": 1, "decision_rate": 1, "proposed_rate": 1, "created_at": 1}
+            {"property_id": property_id}, {"_id": 0, "decision": 1, "delta_pct": 1, "confidence": 1, "decision_rate": 1, "proposed_rate": 1, "created_at": 1, "auto_applied": 1}
         ).sort("created_at", -1).to_list(500)
         total = len(items)
         decided = [i for i in items if i.get("decision")]
@@ -262,6 +320,55 @@ def create_pricing_explain_router(db, require_roles, LlmChat=None, UserMessage=N
             "accept_rate_pct": accept_rate,
             "avg_confidence": avg_conf,
             "avg_abs_delta_pct": avg_delta,
+            "auto_applied": sum(1 for i in items if i.get("decision") == "accept" and i.get("auto_applied")),
         }
+
+    # ---------- AUTO-APPLY RULES CRUD ----------
+    @router.get("/pricing/auto-apply/rules/{property_id}")
+    async def list_rules(property_id: str,
+                         current_user: dict = Depends(require_roles("admin", "manager", "revenue"))):
+        rules = await db.pricing_auto_apply_rules.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("created_at", -1).to_list(100)
+        return {"rules": rules, "count": len(rules)}
+
+    @router.post("/pricing/auto-apply/rules")
+    async def create_rule(req: AutoApplyRuleReq,
+                          current_user: dict = Depends(require_roles("admin", "manager", "revenue"))):
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": req.property_id,
+            "room_type": req.room_type or "*",
+            "min_confidence": req.min_confidence,
+            "max_abs_delta_pct": req.max_abs_delta_pct,
+            "max_increase_pct": req.max_increase_pct,
+            "max_decrease_pct": req.max_decrease_pct,
+            "enabled": req.enabled,
+            "note": req.note,
+            "created_at": now,
+            "created_by": current_user.get("email"),
+        }
+        await db.pricing_auto_apply_rules.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.delete("/pricing/auto-apply/rules/{rule_id}")
+    async def delete_rule(rule_id: str,
+                          current_user: dict = Depends(require_roles("admin", "manager", "revenue"))):
+        result = await db.pricing_auto_apply_rules.delete_one({"id": rule_id})
+        if result.deleted_count == 0:
+            raise HTTPException(404, "rule not found")
+        return {"deleted": rule_id}
+
+    @router.patch("/pricing/auto-apply/rules/{rule_id}/toggle")
+    async def toggle_rule(rule_id: str,
+                          current_user: dict = Depends(require_roles("admin", "manager", "revenue"))):
+        rule = await db.pricing_auto_apply_rules.find_one({"id": rule_id}, {"_id": 0})
+        if not rule:
+            raise HTTPException(404, "rule not found")
+        new_state = not rule.get("enabled", True)
+        await db.pricing_auto_apply_rules.update_one({"id": rule_id}, {"$set": {"enabled": new_state}})
+        return {"id": rule_id, "enabled": new_state}
 
     return router

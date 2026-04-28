@@ -1,6 +1,37 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 122+ Modules | Mobile Responsive | 242 Test Iterations
+## 123+ Modules | Mobile Responsive | 243 Test Iterations
+
+
+### Iter 243 (Apr 2026): 📊 Batch 32 — Enterprise BI Feed (Power BI · Tableau · Excel)
+
+User ask (TR): _"devam et"_ — keyless P1 enterprise integration.
+
+**Backend (`routes/bi_feed.py` — NEW, 8 endpoints):**
+- **Token yönetimi:** POST/GET/DELETE `/bi/tokens[/{id}]` (admin). Token format `hbk_<32_hex>`, masked listing (first6...last4), soft revoke. Expires 1..3650 gün, last_used_at + use_count tracking.
+- **OData v4 catalog:** GET `/bi/odata?token=X` — 6 EntitySet (Bookings, Tips, FnbTabs, Inquiries, CleanlinessScores, WorkOrders). 401 invalid/expired/revoked.
+- **OData metadata:** GET `/bi/odata/$metadata?token=X` — Edmx v4 XML schema.
+- **OData entity:** GET `/bi/odata/{Entity}?token=X&top=N&skip=N&filter=...` — basic $filter parser (eq/gt/lt/ge/le/ne + 'and'). property_id otomatik scope.
+- **CSV:** GET `/bi/csv/{Entity}?token=X` — RFC 4180 + Content-Disposition.
+- **Tableau WDC:** GET `/bi/tableau-wdc.html` — self-contained HTML, tableau wdc 2.3 script.
+- **Sample URLs:** GET `/bi/sample-urls/{token_id}` — Power BI/Excel/Tableau/OData talimat ve URL örnekleri.
+
+**Frontend (`BiFeedPanel.js` — NEW, indigo tema, 3 tab):**
+- **Token'lar:** Yeni token modal (name + days), oluşturulduktan sonra **bir kere** tam token gösterilir + kopya butonu, liste maskeli token + AKTİF/İPTAL badge + use_count, revoke confirm.
+- **Bağlanma Talimatları:** Aktif token selector → 4 gradient card (Power BI Desktop / Excel / Tableau / OData) numaralı adımlar + URL kopyala + Tableau external link.
+- **CSV İndir:** Token paste input + 6 entity buton grid → tarayıcı download.
+
+**Verified (curl):** Token oluştur → OData service 6 entity → metadata XML → Bookings 3 row → CSV 100 satır → Tableau HTML → revoke → 401.
+
+**Test:** 33/33 backend passed. 19 ardışık batch %100.
+
+**Beats competitors:**
+- Cloudbeds: BI export sadece statik CSV.
+- Mews: Marketplace üzerinden 3rd-party connector.
+- Opera: BI Publisher ($$$$).
+- Bizim PMS: native OData v4 + Tableau WDC + CSV, sıfır 3rd-party.
+
+---
 
 
 ### Iter 242 (Apr 2026): 🍷 Batch 31 — F&B Tab Transfer (Cross-Outlet)

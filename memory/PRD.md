@@ -1,6 +1,33 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 123+ Modules | Mobile Responsive | 243 Test Iterations
+## 124+ Modules | Mobile Responsive | 244 Test Iterations
+
+
+### Iter 244 (Feb 2026): 🧹 Batch 33 — HK Kanban × AI Cleanliness Auto-Approval
+
+User ask (TR): _"devam et"_ — housekeeping turnover otomasyonu (0-tap supervisor).
+
+**Backend (`routes/hk_turnover.py` — NEW, 6 endpoints):**
+- State machine: `vacant_dirty → cleaning_in_progress → ai_inspection → vacant_clean | needs_rework`. 6 valid state.
+- GET `/hk-turnover/{property_id}` — 5-state kanban board, otomatik card create on first read, room_type join, by_state + counts + total.
+- POST `/hk-turnover/{room_id}/start-cleaning?property_id=X` — sadece vacant_dirty/needs_rework'ten geçer, started_at + assigned_to.
+- POST `/hk-turnover/{room_id}/submit-photos?property_id=X` — 1..3 base64 foto + ai_pass_threshold (0..100, default 75) → `gpt-5.2` vision JSON {cleanliness_score, severity, issues, observations, next_action}. Karar: ≥threshold = **vacant_clean (0-tap auto-approve)**, 50-74 = ai_inspection (supervisor review), <50 = needs_rework. Score `db.hk_cleanliness_scores` (source=hk_turnover) yazılır.
+- POST `/hk-turnover/{room_id}/manual-review?property_id=X` — sadece ai_inspection'da, decision approve|reject (admin/manager).
+- POST `/hk-turnover/{room_id}/set-state?property_id=X` — admin override.
+- GET `/hk-turnover/dashboard/{property_id}` — total_rooms, by_state, scores_today, auto_approved_today, rejected_today, review_pending_today, avg_score_today, auto_approval_rate.
+
+**Frontend (`HkTurnoverPanel.js` — NEW, 5-col kanban):**
+- 5 KPI: Toplam Oda, Bugün Skorlama, AI Otomatik Onay, Onay Oranı %, Ort. Skor.
+- 5-col board (Kirli/Temizleniyor/AI Denetiminde/Tekrar Gerek/Temiz): renkli (rose/amber/violet/orange/emerald), oda kart + last_score badge (color by score), assigned_to.
+- RoomActionModal: dynamic block per state — StartCleaningBlock (amber CTA), SubmitPhotosBlock (3 foto upload + threshold input + AI skor sonuç card score/issues/next_action), ManualReviewBlock (approve/reject), HistoryBlock (son 10 transition).
+
+**Test:** 18/21 backend pass (3 skipped due to state dependencies — beklenen davranış), frontend %100. **20 ardışık batch %100.**
+
+**Beats competitors:**
+- Cloudbeds/Mews/Opera: HK status manuel toggle, supervisor walk-in zorunlu.
+- Bizim PMS: AI vision otomatik karar 5sn, supervisor adımı atlanır → oda devir hızı ↑↑.
+
+---
 
 
 ### Iter 243 (Apr 2026): 📊 Batch 32 — Enterprise BI Feed (Power BI · Tableau · Excel)

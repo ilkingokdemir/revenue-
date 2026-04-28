@@ -67,6 +67,7 @@ import CopilotLibraryPanel from "./components/dashboard/CopilotLibraryPanel";
 import ImageAIPanel from "./components/dashboard/ImageAIPanel";
 import FnbTabsPanel from "./components/dashboard/FnbTabsPanel";
 import BiFeedPanel from "./components/dashboard/BiFeedPanel";
+import HkTurnoverPanel from "./components/dashboard/HkTurnoverPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2832,6 +2833,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "conference-sc", icon: Briefcase, name: "💼 Conference S&C (MICE)", testId: "conference-sc-btn" },
         { id: "copilot", icon: Sparkle, name: "✨ AI Copilot Kütüphanesi", testId: "copilot-btn" },
         { id: "image-ai", icon: Camera, name: "📸 AI Temizlik Skorlama", testId: "image-ai-btn" },
+        { id: "hk-turnover", icon: Sparkle, name: "🧹 HK Kanban + AI Auto-Onay", testId: "hk-turnover-btn" },
         { id: "fnb-tabs", icon: ForkKnife, name: "🍷 F&B Tab Transfer", testId: "fnb-tabs-btn" },
         { id: "bi-feed", icon: ChartBar, name: "📊 BI Feed (Power BI · Tableau)", testId: "bi-feed-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
@@ -3015,6 +3017,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "conference-sc-btn":      "operations_reception_view",
     "copilot-btn":            "operations_reception_view",
     "image-ai-btn":           "housekeeping_view",
+    "hk-turnover-btn":        "housekeeping_view",
     "fnb-tabs-btn":           "pos_view",
     "bi-feed-btn":            "revenue_forecasting_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
@@ -3454,6 +3457,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Image AI Cleanliness Scoring (HK) */}
         {activeView === "image-ai" && (
           <ImageAIPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* HK Turnover Kanban with AI Auto-Approval */}
+        {activeView === "hk-turnover" && (
+          <HkTurnoverPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}

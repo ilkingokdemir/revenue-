@@ -114,6 +114,7 @@ from routes.copilot import create_copilot_router
 from routes.image_ai import create_image_ai_router
 from routes.fnb_tabs import create_fnb_tabs_router
 from routes.bi_feed import create_bi_feed_router
+from routes.hk_turnover import create_hk_turnover_router
 from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
@@ -566,6 +567,8 @@ fnb_tabs_router = create_fnb_tabs_router(db, require_roles)
 api_router.include_router(fnb_tabs_router)
 bi_feed_router = create_bi_feed_router(db, require_roles)
 api_router.include_router(bi_feed_router)
+hk_turnover_router = create_hk_turnover_router(db, require_roles, LlmChat, UserMessage, FileContent)
+api_router.include_router(hk_turnover_router)
 ai_predictions_router = create_ai_predictions_router(db, require_roles)
 api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)

@@ -62,6 +62,7 @@ import ForecastV2Panel from "./components/dashboard/ForecastV2Panel";
 import AnomalyPanel from "./components/dashboard/AnomalyPanel";
 import TippingPanel from "./components/dashboard/TippingPanel";
 import GuestPortalV2Panel from "./components/dashboard/GuestPortalV2Panel";
+import ConferenceSCPanel from "./components/dashboard/ConferenceSCPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2823,6 +2824,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
         { id: "tipping", icon: Trophy, name: "💰 Dijital Bahşiş (Stripe)", testId: "tipping-btn" },
         { id: "guest-portal-v2", icon: Users, name: "👤 Guest Self-Modify / Cancel", testId: "guest-portal-v2-btn" },
+        { id: "conference-sc", icon: Briefcase, name: "💼 Conference S&C (MICE)", testId: "conference-sc-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
       ],
@@ -3001,6 +3003,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "anomaly-btn":            "revenue_forecasting_view",
     "tipping-btn":            "operations_reception_view",
     "guest-portal-v2-btn":    "operations_reception_view",
+    "conference-sc-btn":      "operations_reception_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
     "sentiment-heatmap-btn":  "revenue_forecasting_view",
@@ -3417,6 +3420,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Guest Portal v2 — Self-Modify + Cancel */}
         {activeView === "guest-portal-v2" && (
           <GuestPortalV2Panel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* Conference S&C — MICE Proposal Builder */}
+        {activeView === "conference-sc" && (
+          <ConferenceSCPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}

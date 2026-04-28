@@ -1,0 +1,97 @@
+{
+  "summary": "Batch 32 — Enterprise BI Feed testing complete: OData v4 + Tableau WDC + CSV download. 33/33 backend tests passed, all frontend UI elements verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration243_bi_feed.py",
+    "/app/test_reports/pytest/pytest_iteration243_bi_feed.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration243_bi_feed.py"
+  ],
+  "success_rate": {
+    "backend": "100% (33/33 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test tokens created via API tests (TEST_BiToken_*, TEST_PowerBI_*, TEST_ToRevoke_*, TEST_Playwright_Token)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Batch 32 Enterprise BI Feed fully tested. All 10 endpoints working: POST /api/bi/tokens (create with hbk_ prefix), GET /api/bi/tokens/{property_id} (list with masked tokens), DELETE /api/bi/tokens/{token_id} (soft revoke), GET /api/bi/odata?token=X (service catalog with 6 entities), GET /api/bi/odata/$metadata?token=X (XML EDM v4), GET /api/bi/odata/{Entity}?token=X (entity collection with $top/$skip/$filter), GET /api/bi/csv/{Entity}?token=X (RFC 4180 CSV), GET /api/bi/tableau-wdc.html (public WDC 2.3 HTML), GET /api/bi/sample-urls/{token_id} (connection examples). Frontend BiFeedPanel has 3 tabs (Token'lar, Bağlanma Talimatları, CSV İndir), token creation with just-created banner, 4 connection cards (Power BI, Excel, Tableau, OData), 6 CSV entity download buttons.",
+  "features_tested": {
+    "backend": [
+      "POST /api/bi/tokens - requires auth (401 without)",
+      "POST /api/bi/tokens - creates token with hbk_<32_hex> format",
+      "POST /api/bi/tokens - expires_days < 1 returns 400",
+      "POST /api/bi/tokens - expires_days > 3650 returns 400",
+      "POST /api/bi/tokens - empty name returns 400",
+      "GET /api/bi/tokens/{property_id} - requires auth",
+      "GET /api/bi/tokens/{property_id} - returns rows with token_masked (first6...last4)",
+      "DELETE /api/bi/tokens/{token_id} - requires auth",
+      "DELETE /api/bi/tokens/{token_id} - non-existent returns 404",
+      "GET /api/bi/odata - requires token query param",
+      "GET /api/bi/odata - invalid token returns 401",
+      "GET /api/bi/odata?token=X - returns service catalog with 6 entities",
+      "GET /api/bi/odata/$metadata?token=X - returns XML EDM v4 with all entity types",
+      "GET /api/bi/odata/{Entity}?token=X - unknown entity returns 404",
+      "GET /api/bi/odata/Bookings?token=X - returns @odata.context, @odata.count, value array",
+      "GET /api/bi/odata/Bookings?top=5 - limits results",
+      "GET /api/bi/odata/Bookings?top=0 - returns 400 (1..5000)",
+      "GET /api/bi/odata/Bookings?top=10000 - returns 400 (1..5000)",
+      "GET /api/bi/odata/Bookings?skip=N - pagination works",
+      "GET /api/bi/odata/Bookings?filter=status eq 'confirmed' - eq operator works",
+      "GET /api/bi/odata/Bookings?filter=... and ... - 'and' clause works",
+      "All 6 entities accessible (Bookings, Tips, FnbTabs, Inquiries, CleanlinessScores, WorkOrders)",
+      "Entity access stamps last_used_at and increments use_count",
+      "GET /api/bi/csv/{Entity} - requires token",
+      "GET /api/bi/csv/UnknownEntity - returns 404",
+      "GET /api/bi/csv/Bookings - returns text/csv with Content-Disposition attachment",
+      "All 6 entities support CSV download",
+      "GET /api/bi/tableau-wdc.html - public (no auth required)",
+      "GET /api/bi/tableau-wdc.html - contains WDC 2.3 script and all entities",
+      "GET /api/bi/sample-urls/{token_id} - requires auth",
+      "GET /api/bi/sample-urls/{token_id} - non-existent returns 404",
+      "GET /api/bi/sample-urls/{token_id} - returns odata_root, odata_metadata, csv_examples, odata_examples, tableau_wdc, powerbi_instructions, excel_instructions",
+      "Full revocation flow: create → verify works → revoke → verify denied"
+    ],
+    "frontend": [
+      "BiFeedPanel renders with title 'Power BI · Tableau · Excel'",
+      "3 tabs: Token'lar (bi-tab-tokens), Bağlanma Talimatları (bi-tab-connect), CSV İndir (bi-tab-csv)",
+      "Yeni Token button (bi-new-token-btn) opens form",
+      "Token form: name input (bi-form-name), days input (bi-form-days), submit (bi-form-submit)",
+      "Just-created token banner (bi-just-created) with copy button (bi-copy-fresh-token)",
+      "Tokens list (bi-tokens-list) with token rows (bi-token-row-{id})",
+      "Token rows show: name, status badge (AKTİF/İPTAL EDİLDİ), token_masked, dates, use_count, last_used",
+      "Revoke button on active tokens",
+      "Connect tab: token selector (bi-token-select)",
+      "4 connection cards: Power BI (bi-connect-powerbi), Excel (bi-connect-excel), Tableau (bi-connect-tableau), OData (bi-connect-odata)",
+      "Connection cards have copy buttons and Tableau has external link",
+      "CSV tab: token paste input (bi-csv-token-input)",
+      "6 entity download buttons in grid (bi-csv-grid): Rezervasyonlar, Bahşişler, F&B Tab'lar, MICE Talepleri, Temizlik Skorları, İş Emirleri",
+      "Sidebar: BI Feed (Power BI · Tableau) button with ChartBar icon"
+    ]
+  },
+  "validation_details": {
+    "token_format": "hbk_<32_hex_chars> (36 chars total)",
+    "token_masking": "first6...last4",
+    "expires_days_range": "1..3650",
+    "top_range": "1..5000",
+    "entities": ["Bookings", "Tips", "FnbTabs", "Inquiries", "CleanlinessScores", "WorkOrders"],
+    "odata_filter_operators": ["eq", "ne", "gt", "lt", "ge", "le"],
+    "odata_filter_conjunction": "and",
+    "csv_content_type": "text/csv",
+    "csv_content_disposition": "attachment; filename=\"{Entity}-{date}.csv\"",
+    "tableau_wdc_version": "2.3",
+    "token_collection": "db.bi_tokens",
+    "usage_tracking": "last_used_at, use_count incremented on entity/csv access"
+  }
+}

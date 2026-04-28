@@ -66,6 +66,7 @@ import ConferenceSCPanel from "./components/dashboard/ConferenceSCPanel";
 import CopilotLibraryPanel from "./components/dashboard/CopilotLibraryPanel";
 import ImageAIPanel from "./components/dashboard/ImageAIPanel";
 import FnbTabsPanel from "./components/dashboard/FnbTabsPanel";
+import BiFeedPanel from "./components/dashboard/BiFeedPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2832,6 +2833,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "copilot", icon: Sparkle, name: "✨ AI Copilot Kütüphanesi", testId: "copilot-btn" },
         { id: "image-ai", icon: Camera, name: "📸 AI Temizlik Skorlama", testId: "image-ai-btn" },
         { id: "fnb-tabs", icon: ForkKnife, name: "🍷 F&B Tab Transfer", testId: "fnb-tabs-btn" },
+        { id: "bi-feed", icon: ChartBar, name: "📊 BI Feed (Power BI · Tableau)", testId: "bi-feed-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
       ],
@@ -3014,6 +3016,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "copilot-btn":            "operations_reception_view",
     "image-ai-btn":           "housekeeping_view",
     "fnb-tabs-btn":           "pos_view",
+    "bi-feed-btn":            "revenue_forecasting_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
     "sentiment-heatmap-btn":  "revenue_forecasting_view",
@@ -3458,6 +3461,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* F&B Tab Transfer */}
         {activeView === "fnb-tabs" && (
           <FnbTabsPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* BI Feed (Power BI / Tableau / Excel) */}
+        {activeView === "bi-feed" && (
+          <BiFeedPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}

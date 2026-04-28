@@ -55,6 +55,7 @@ import LoyaltyV2Panel from "./components/dashboard/LoyaltyV2Panel";
 import SentimentHeatmapPanel from "./components/dashboard/SentimentHeatmapPanel";
 import SelfCheckInPipelinePanel from "./components/dashboard/SelfCheckInPipelinePanel";
 import BrandPortalPanel from "./components/dashboard/BrandPortalPanel";
+import OpsV2Panel from "./components/dashboard/OpsV2Panel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2807,6 +2808,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "ci-slots", icon: Clock, name: "Check-in Time Slots", testId: "ci-slots-btn" },
         { id: "tier1-dashboard", icon: ChartBar, name: "★ Tier-1 Master Dashboard", testId: "tier1-dashboard-btn" },
         { id: "brand-portal", icon: Buildings, name: "🏢 Brand Portal (Chain HQ)", testId: "brand-portal-btn" },
+        { id: "ops-v2", icon: Wrench, name: "🔧 Ops v2 (Bakım + Linen + Denetim)", testId: "ops-v2-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "✨ AI Tahminler (Risk + Upsell)", testId: "ai-predictions-btn" },
         { id: "channel-revenue", icon: Lightning, name: "⚡ Açık Fiyat + Yield", testId: "channel-revenue-btn" },
         { id: "sentiment-heatmap", icon: ChartLineUp, name: "💗 Sentiment Heatmap", testId: "sentiment-heatmap-btn" },
@@ -2984,6 +2986,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "ci-slots-btn":           "operations_reception_view",
     "tier1-dashboard-btn":    "operations_reception_view",
     "brand-portal-btn":       "operations_reception_view",
+    "ops-v2-btn":             "maintenance_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
     "sentiment-heatmap-btn":  "revenue_forecasting_view",
@@ -3365,6 +3368,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "brand-portal" && (
           <BrandPortalPanel
             hotelName={branding?.app_name}
+          />
+        )}
+
+        {/* Ops v2 — Maintenance workflow + Linen PAR + HK Inspection */}
+        {activeView === "ops-v2" && (
+          <OpsV2Panel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+            hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />
         )}
 

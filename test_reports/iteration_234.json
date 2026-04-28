@@ -1,0 +1,92 @@
+{
+  "summary": "Iteration 234 - Batch 22 (Ops v2: Maintenance Work-Order State Machine + Linen PAR + HK Inspection) tested. Backend: 26/26 passed. Frontend: All UI elements verified and interactive features working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration234_ops_v2.py",
+    "/app/test_reports/pytest/pytest_iteration234_ops_v2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/ops-v2/workorders/{property_id} returns rows[], counters{}, critical_open count",
+    "POST /api/ops-v2/workorders creates work order with status='reported' and events[] array",
+    "POST /api/ops-v2/workorders/{wo_id}/action supports full state machine: assign→start→pause→resume→complete→verify→reopen",
+    "GET /api/ops-v2/linen/{property_id} returns items[] with states{clean,dirty,washing,in_use,lost}, low_par_count, low_par[]",
+    "POST /api/ops-v2/linen/cycle supports 5 movements: clean_to_in_use, checkout_to_dirty, dirty_to_washing, washing_to_clean, lost_or_damaged",
+    "POST /api/ops-v2/linen/{property_id}/seed-defaults creates 5 default linen items with initial stock",
+    "GET /api/ops-v2/inspection/template returns 10 default HK checks",
+    "POST /api/ops-v2/inspection auto-creates work orders for failed checks with priority='high' and category='housekeeping'",
+    "GET /api/ops-v2/inspections/{property_id} returns rows[], total, failed, pass_rate percentage",
+    "RBAC: ops-v2-btn requires 'maintenance_view' permission",
+    "Frontend uses Turkish labels: Bakım İş Emirleri, Çamaşır PAR, HK Denetim"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration234_ops_v2.py"
+  ],
+  "success_rate": {
+    "backend": "100% (26/26 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test work orders and inspections created during testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 234 validates Batch 22 (Ops v2). Sidebar: '🔧 Ops v2 (Bakım + Linen + Denetim)' (data-testid='ops-v2-btn'). Panel: data-testid='ops-v2-panel'. 3 tabs: 'Bakım İş Emirleri' (ops-tab-maintenance), 'Çamaşır PAR' (ops-tab-linen), 'HK Denetim' (ops-tab-inspection). Maintenance tab: KPI tiles (ops-kpi-critical/open/completed/verified), status filters (ops-filter-all/reported/assigned/in_progress/completed/verified), work order list (ops-wo-list), new WO button (ops-new-wo-btn), action buttons (ops-wo-action-{id}). Linen tab: low PAR badge (linen-low-par-badge), item cards (linen-card-{type}), cycle button (linen-cycle-{type}), movement buttons (linen-move-{type}-{movement}). Inspection tab: KPI tiles (insp-kpi-total/pass/failed), new button (insp-new-btn), form (insp-form), room input (insp-room-id), check toggles (insp-check-{i}), notes (insp-notes-{i}), submit (insp-submit), history (insp-history).",
+  "features_verified": {
+    "batch_22_ops_v2": {
+      "maintenance_workorders": {
+        "list_endpoint": "GET /api/ops-v2/workorders/{property_id}?status={filter} → 200 with rows[], counters{}, critical_open",
+        "create_endpoint": "POST /api/ops-v2/workorders → 200 with id, status='reported', events[]",
+        "action_endpoint": "POST /api/ops-v2/workorders/{wo_id}/action → 200 with new status",
+        "state_machine": "reported→assigned→in_progress→completed→verified (full flow tested)",
+        "pause_resume": "in_progress→paused→in_progress (tested)",
+        "reopen": "completed→reported (tested)",
+        "invalid_action": "Returns 400 for invalid action",
+        "not_found": "Returns 404 for non-existent work order"
+      },
+      "linen_par": {
+        "overview_endpoint": "GET /api/ops-v2/linen/{property_id} → 200 with items[], low_par_count, low_par[]",
+        "upsert_endpoint": "POST /api/ops-v2/linen/item → 200 {updated: true}",
+        "cycle_endpoint": "POST /api/ops-v2/linen/cycle → 200 with movement, qty, from, to",
+        "seed_endpoint": "POST /api/ops-v2/linen/{property_id}/seed-defaults → 200 {seeded: 5} or {seeded: 0, note: 'already exists'}",
+        "valid_movements": ["clean_to_in_use", "checkout_to_dirty", "dirty_to_washing", "washing_to_clean", "lost_or_damaged"],
+        "invalid_movement": "Returns 400 for invalid movement"
+      },
+      "hk_inspection": {
+        "template_endpoint": "GET /api/ops-v2/inspection/template → 200 with 10 default_checks",
+        "submit_endpoint": "POST /api/ops-v2/inspection → 200 with id, passed_count, failed_count, overall_pass, workorders_created[]",
+        "history_endpoint": "GET /api/ops-v2/inspections/{property_id} → 200 with rows[], total, failed, pass_rate",
+        "auto_workorder": "Failed checks auto-create work orders with priority='high', category='housekeeping'"
+      },
+      "ui_elements": {
+        "sidebar_button": "data-testid='ops-v2-btn' - '🔧 Ops v2 (Bakım + Linen + Denetim)'",
+        "panel": "data-testid='ops-v2-panel'",
+        "maintenance_tab": "data-testid='ops-tab-maintenance' - 'Bakım İş Emirleri'",
+        "linen_tab": "data-testid='ops-tab-linen' - 'Çamaşır PAR'",
+        "inspection_tab": "data-testid='ops-tab-inspection' - 'HK Denetim'",
+        "kpi_tiles": "Kritik Açık, Açık Toplam, Tamamlandı, Doğrulandı",
+        "status_filters": "Tümü, Rapor Edildi, Atandı, Devam Ediyor, Tamamlandı, Doğrulandı",
+        "linen_cards": "6 cards with state boxes (Temiz, Kullanımda, Kirli, Yıkanıyor)",
+        "cycle_actions": "5 movement buttons per linen type",
+        "inspection_form": "10 toggleable checks with notes for failed items"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "batch_21_brand_portal": "PASSED (sidebar button visible)"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "batch_completion_status": "Batch 22 (Ops v2: Maintenance Work-Order State Machine + Linen PAR + HK Inspection) COMPLETE"
+}

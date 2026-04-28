@@ -1,6 +1,36 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 120+ Modules | Mobile Responsive | 240 Test Iterations
+## 121+ Modules | Mobile Responsive | 241 Test Iterations
+
+
+### Iter 241 (Apr 2026): 📸 Batch 29-30 — Copilot Scatter + AI Cleanliness Scoring (Vision)
+
+User ask (TR): _"devam et"_ — Copilot her panele yayılsın + GPT-5.2 Vision ile HK skorlama.
+
+**Batch 29 — CopilotButton Scatter (frontend):**
+- `AnomalyPanel.FeedTab` → "AI Özet: Anomali Paterni" butonu
+- `ForecastV2Panel.HorizonTab` → "AI Özet: Talep Stratejisi" butonu
+- `TippingPanel.DashboardTab` → "AI Özet: Çalışan Performansı" butonu
+- Her biri ilgili context_type ile (anomaly/forecast/leaderboard) modal açar.
+
+**Batch 30 — Image AI Cleanliness Scoring (`routes/image_ai.py` — NEW, 3 endpoints):**
+- `POST /image-ai/cleanliness-score` body {property_id, room_id, photos_base64[1-3], notes?}. **GPT-5.2 Vision** kullanıyor (`FileContent(content_type='image', file_content_base64=b)`). 0-100 skor + severity (pass/warning/fail) + issues[] + observations[] + next_action — hepsi Türkçe JSON.
+- `GET /image-ai/cleanliness-history/{property_id}` — pass_rate + avg_score istatistikleri.
+- `GET /image-ai/cleanliness-score/{score_id}` — detay + foto.
+
+**Frontend (`ImageAIPanel.js` — NEW, cyan tema, 2 tab):**
+- **Skorla:** Oda no + 3 fotoğraf yükle (drag-drop hazır, ≤4MB, thumbnails + sil), notes, "AI ile Skorla" butonu. Sonuç kartı: büyük renkli skor + severity badge + 10 sorun + 10 gözlem + cyan kutuda "next_action".
+- **Geçmiş:** KPI (count/pass_rate/avg) + room filter + ikonlu satır listesi.
+
+**Verified (curl):** Test görsel için GPT-5.2 Vision: score=60, "Fotoğraf çok düşük çözünürlüklü", "Yatak/banyo değerlendirilemez", next_action: "yeniden ışıklı fotoğraflar gönderin".
+
+**Test:** 17/17 backend passed.
+
+**Beats competitors:**
+- Cloudbeds/Mews/Opera: AI vision HK denetimi yok.
+- Bizim PMS: dünyada ilk native AI temizlik skoru.
+
+---
 
 
 ### Iter 240 (Apr 2026): ✨ Batch 28 — AI Summary Copilot (cross-dashboard)

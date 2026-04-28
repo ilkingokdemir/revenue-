@@ -1,6 +1,37 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 121+ Modules | Mobile Responsive | 241 Test Iterations
+## 122+ Modules | Mobile Responsive | 242 Test Iterations
+
+
+### Iter 242 (Apr 2026): 🍷 Batch 31 — F&B Tab Transfer (Cross-Outlet)
+
+User ask (TR): _"devam et"_ — F&B derinliği, outlets arası tab transferi.
+
+**Backend (`routes/fnb_tabs.py` — NEW, 8 endpoints):**
+- **Açma:** POST /fnb/tabs — 8 outlet (bar/pool_bar/restaurant/rooftop/spa/poolside/lounge/in_room), auto-ref `TAB-YYMMDD-HHMMSS-XXXX`, party_size 1..50, opsiyonel booking_id (folyo için).
+- **Kalem ekle/sil:** POST /items + DELETE /items/{id} — auto subtotal+total recompute.
+- **Transfer:** POST /transfer body {new_outlet} — outlet değiştirir, transfer_history append, db.fnb_transfers'a audit yazar. Aynı outlet'e transfer reddedilir.
+- **Kapat:** POST /close body {payment_method, tip_amount, discount_pct} — 5 payment (cash/card/room_folio/complimentary/voucher). **room_folio** için booking_id zorunlu, varsa db.guest_folio_charges'a otomatik fatura yazar.
+- **Audit:** GET /transfers/{property_id} + GET /dashboard/{property_id} — bugün gelir/tip/transfer/outlet/payment kırılımı.
+
+**Frontend (`FnbTabsPanel.js` — NEW, orange tema, 3 tab):**
+- **Açık Tab'lar:** Outlet filter pills (counts), Yeni Tab modal, 2-col cards (transfer rozet + folyo bağlantı icon), tıkla → detail.
+- **Tab Detail:** Status + ref + total + items list (delete on open), 3 action modal (Kalem Ekle / Outlet Transferi / Kapat & Tahsil), transfer breadcrumb history chips.
+- **Close Modal:** 5 payment button grid, room_folio disabled if no booking, live total preview.
+- **Transfer Geçmişi:** From→To outlet audit rows.
+- **Bugün Özet:** 5 KPI + by_outlet bar chart + by_payment bar chart.
+
+**Verified (curl):** Pool Bar tab Anna 3p → Mojito x2 + Pina Colada + Club Sandwich x3 = £92 → transfer Restaurant R7 → +Wagyu Steak x2 = £262 → close cash 10% disc + £5 tip = **£240.80**. Validation: invalid outlet 400 with valid list, room_folio without booking 400.
+
+**Test:** 32/33 backend passed (1 skipped). 18 ardışık batch %100.
+
+**Beats competitors:**
+- Cloudbeds POS: per-outlet, no transfer.
+- Mews: separate POS module, manual reconciliation.
+- Opera Symphony: F&B Genie ($$$) gerekli.
+- Bizim PMS: native cross-outlet + folio link tek endpoint.
+
+---
 
 
 ### Iter 241 (Apr 2026): 📸 Batch 29-30 — Copilot Scatter + AI Cleanliness Scoring (Vision)

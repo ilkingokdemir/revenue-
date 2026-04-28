@@ -56,6 +56,7 @@ import SentimentHeatmapPanel from "./components/dashboard/SentimentHeatmapPanel"
 import SelfCheckInPipelinePanel from "./components/dashboard/SelfCheckInPipelinePanel";
 import BrandPortalPanel from "./components/dashboard/BrandPortalPanel";
 import OpsV2Panel from "./components/dashboard/OpsV2Panel";
+import ForecastV2Panel from "./components/dashboard/ForecastV2Panel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2828,6 +2829,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "rate-manager", icon: ChartLine, name: "Rate Manager", testId: "rate-manager-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate Matrix", testId: "rate-matrix-btn" }] : []),
         { id: "forecast", icon: ChartLine, name: t("nav.forecast"), testId: "forecast-btn" },
+        { id: "forecast-v2", icon: TrendUp, name: "📈 24-Ay Tahmin + Talep Takvimi", testId: "forecast-v2-btn" },
         { id: "pace-reports", icon: ChartLine, name: "Pace Reports (STLY)", testId: "pace-reports-btn" },
         { id: "ai-pricing-v2", icon: Lightning, name: "AI Pricing v2 (GPT)", testId: "ai-pricing-v2-btn" },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity Heatmap", testId: "parity-heatmap-btn" },
@@ -2987,6 +2989,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "tier1-dashboard-btn":    "operations_reception_view",
     "brand-portal-btn":       "operations_reception_view",
     "ops-v2-btn":             "maintenance_view",
+    "forecast-v2-btn":        "revenue_forecasting_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
     "sentiment-heatmap-btn":  "revenue_forecasting_view",
@@ -3376,6 +3379,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <OpsV2Panel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}
+        {activeView === "forecast-v2" && (
+          <ForecastV2Panel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}
 

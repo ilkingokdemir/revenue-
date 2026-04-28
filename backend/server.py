@@ -105,6 +105,7 @@ from routes.sentiment import create_sentiment_router as create_cross_sentiment_r
 from routes.self_checkin_v2 import create_self_checkin_v2_router
 from routes.brand_portal import create_brand_portal_router
 from routes.ops_v2 import create_ops_v2_router
+from routes.forecast_v2 import create_forecast_v2_router
 from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
@@ -533,6 +534,8 @@ brand_portal_router = create_brand_portal_router(db, require_roles)
 api_router.include_router(brand_portal_router)
 ops_v2_router = create_ops_v2_router(db, require_roles)
 api_router.include_router(ops_v2_router)
+forecast_v2_router = create_forecast_v2_router(db, require_roles)
+api_router.include_router(forecast_v2_router)
 ai_predictions_router = create_ai_predictions_router(db, require_roles)
 api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)

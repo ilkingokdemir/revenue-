@@ -1,0 +1,93 @@
+{
+  "summary": "Iteration 235 - Batch 23 (Forecast V2: 24-month horizon + Demand Calendar + Pickup Curve) tested. Backend: 18/18 passed. Frontend: All UI elements verified and interactive features working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration235_forecast_v2.py",
+    "/app/test_reports/pytest/pytest_iteration235_forecast_v2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/forecast-v2/horizon/{property_id}?months=24 returns forecast[] with 24 items, each containing {period, label, bookings, revenue, adr, los, confidence, vs_last_year}",
+    "Horizon endpoint validates months 3..36 (rejects 0 and 40 with 400)",
+    "GET /api/forecast-v2/demand-calendar/{property_id}?days=90 returns days[] with {date, dow, occupancy_pct, otb, demand_score, tier, tier_label, holiday, is_weekend}",
+    "Demand calendar validates days 7..365 (rejects 5 and 400 with 400)",
+    "Tier logic verified: score>=80 peak, >=60 high, >=40 medium, >=20 low, <20 trough",
+    "GET /api/forecast-v2/pickup-curve/{property_id}?target_date=YYYY-MM-DD returns actual_curve (91 points), historical_avg_curve, pace_vs_hist_pct, pace_status",
+    "Pickup curve rejects invalid date formats with 400",
+    "RBAC: horizon and pickup-curve require admin/manager, demand-calendar allows receptionist",
+    "All 3 endpoints require auth (401 without token)",
+    "Frontend uses Turkish labels: '24 Ay Ufku', 'Talep Takvimi', 'Pickup Eğrisi'"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration235_forecast_v2.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "No seed data created - used existing property 'default' with ~5 test bookings",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 235 validates Batch 23 (Forecast V2). Sidebar: '📈 24-Ay Tahmin + Talep Takvimi' (data-testid='forecast-v2-btn'). Panel: data-testid='forecast-v2-panel'. 3 tabs: '24 Ay Ufku' (fcv2-tab-horizon), 'Talep Takvimi' (fcv2-tab-calendar), 'Pickup Eğrisi' (fcv2-tab-pickup). Horizon tab: KPI tiles (fcv2-kpi-months/revenue/bookings/yoy), horizon selectors (fcv2-horizon-6/12/18/24/36), bar chart (fcv2-horizon-chart), detail table (fcv2-horizon-table). Calendar tab: KPI tiles (fcv2-cal-kpi-days/avg/peak/trough), days selectors (fcv2-cal-days-30/60/90/180/365), month grid heatmap (fcv2-calendar-grid), 5-tier color legend. Pickup tab: date picker (fcv2-pickup-date), refresh button (fcv2-pickup-refresh), KPI tiles (fcv2-pickup-kpi-dtg/otb/pace/status), SVG chart (fcv2-pickup-chart).",
+  "features_verified": {
+    "batch_23_forecast_v2": {
+      "horizon_endpoint": {
+        "endpoint": "GET /api/forecast-v2/horizon/{property_id}?months={3..36}",
+        "default_months": 24,
+        "response_fields": ["property_id", "months", "avg_adr", "avg_los", "yoy_growth_pct", "historical", "forecast"],
+        "forecast_item_fields": ["period", "label", "bookings", "revenue", "adr", "los", "confidence", "vs_last_year"],
+        "validation": "months must be 3..36 (400 for invalid)",
+        "auth": "admin/manager only (403 for receptionist)"
+      },
+      "demand_calendar_endpoint": {
+        "endpoint": "GET /api/forecast-v2/demand-calendar/{property_id}?days={7..365}",
+        "default_days": 90,
+        "response_fields": ["property_id", "start", "end", "days", "rooms_count", "avg_demand_score", "peak_days_count", "trough_days_count", "peak_days"],
+        "day_item_fields": ["date", "dow", "occupancy_pct", "otb", "demand_score", "tier", "tier_label", "holiday", "is_weekend"],
+        "tier_logic": "score>=80 peak, >=60 high, >=40 medium, >=20 low, <20 trough",
+        "validation": "days must be 7..365 (400 for invalid)",
+        "auth": "admin/manager/receptionist"
+      },
+      "pickup_curve_endpoint": {
+        "endpoint": "GET /api/forecast-v2/pickup-curve/{property_id}?target_date=YYYY-MM-DD",
+        "response_fields": ["target_date", "lead_days", "days_to_go", "current_otb", "actual_curve", "historical_avg_curve", "pace_vs_hist_pct", "pace_status"],
+        "actual_curve_points": 91,
+        "pace_status_values": ["ahead", "behind", "on_track", "no_history"],
+        "validation": "target_date must be YYYY-MM-DD format (400 for invalid)",
+        "auth": "admin/manager only (403 for receptionist)"
+      },
+      "ui_elements": {
+        "sidebar_button": "data-testid='forecast-v2-btn' - '📈 24-Ay Tahmin + Talep Takvimi'",
+        "panel": "data-testid='forecast-v2-panel'",
+        "horizon_tab": "data-testid='fcv2-tab-horizon' - '24 Ay Ufku'",
+        "calendar_tab": "data-testid='fcv2-tab-calendar' - 'Talep Takvimi'",
+        "pickup_tab": "data-testid='fcv2-tab-pickup' - 'Pickup Eğrisi'",
+        "horizon_kpis": "Ufuk, Toplam Tahmini Gelir, Toplam Rezervasyon, YoY Büyüme",
+        "horizon_selectors": "6/12/18/24/36 ay buttons",
+        "calendar_kpis": "Gün Aralığı, Ort. Talep Skoru, Peak Günler, Trough Günler",
+        "calendar_selectors": "30/60/90/180/365 gün buttons",
+        "calendar_legend": "5 tier colors: +20% (peak), +10% (high), BAR (medium), -10% (low), -20% (trough)",
+        "pickup_kpis": "Kalan Gün, Mevcut OTB, Tarih. Karşılaştırma, Pace Durumu"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "batch_22_ops_v2": "PASSED (sidebar button visible)"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "batch_completion_status": "Batch 23 (Forecast V2: 24-month demand horizon + daily Demand Calendar + Pickup Curve) COMPLETE"
+}

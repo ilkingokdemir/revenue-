@@ -106,6 +106,7 @@ from routes.self_checkin_v2 import create_self_checkin_v2_router
 from routes.brand_portal import create_brand_portal_router
 from routes.ops_v2 import create_ops_v2_router
 from routes.forecast_v2 import create_forecast_v2_router
+from routes.anomaly_detection import create_anomaly_router
 from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
@@ -536,6 +537,8 @@ ops_v2_router = create_ops_v2_router(db, require_roles)
 api_router.include_router(ops_v2_router)
 forecast_v2_router = create_forecast_v2_router(db, require_roles)
 api_router.include_router(forecast_v2_router)
+anomaly_router = create_anomaly_router(db, require_roles, LlmChat, UserMessage)
+api_router.include_router(anomaly_router)
 ai_predictions_router = create_ai_predictions_router(db, require_roles)
 api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)

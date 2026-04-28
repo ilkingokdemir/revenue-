@@ -57,6 +57,7 @@ import SelfCheckInPipelinePanel from "./components/dashboard/SelfCheckInPipeline
 import BrandPortalPanel from "./components/dashboard/BrandPortalPanel";
 import OpsV2Panel from "./components/dashboard/OpsV2Panel";
 import ForecastV2Panel from "./components/dashboard/ForecastV2Panel";
+import AnomalyPanel from "./components/dashboard/AnomalyPanel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2830,6 +2831,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate Matrix", testId: "rate-matrix-btn" }] : []),
         { id: "forecast", icon: ChartLine, name: t("nav.forecast"), testId: "forecast-btn" },
         { id: "forecast-v2", icon: TrendUp, name: "📈 24-Ay Tahmin + Talep Takvimi", testId: "forecast-v2-btn" },
+        { id: "anomaly", icon: Lightning, name: "📡 AI Anomali Radarı", testId: "anomaly-btn" },
         { id: "pace-reports", icon: ChartLine, name: "Pace Reports (STLY)", testId: "pace-reports-btn" },
         { id: "ai-pricing-v2", icon: Lightning, name: "AI Pricing v2 (GPT)", testId: "ai-pricing-v2-btn" },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity Heatmap", testId: "parity-heatmap-btn" },
@@ -2990,6 +2992,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "brand-portal-btn":       "operations_reception_view",
     "ops-v2-btn":             "maintenance_view",
     "forecast-v2-btn":        "revenue_forecasting_view",
+    "anomaly-btn":            "revenue_forecasting_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
     "sentiment-heatmap-btn":  "revenue_forecasting_view",
@@ -3385,6 +3388,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}
         {activeView === "forecast-v2" && (
           <ForecastV2Panel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* Anomaly Radar — statistical z-score detection + GPT root-cause explain */}
+        {activeView === "anomaly" && (
+          <AnomalyPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}

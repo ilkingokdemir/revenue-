@@ -1,6 +1,58 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 118+ Modules | Mobile Responsive | 238 Test Iterations
+## 120+ Modules | Mobile Responsive | 240 Test Iterations
+
+
+### Iter 240 (Apr 2026): ✨ Batch 28 — AI Summary Copilot (cross-dashboard)
+
+User ask (TR): _"devam et"_ — universal AI "Bunu açıkla" button'u.
+
+**Backend (`routes/copilot.py` — NEW, 2 endpoints):**
+- `POST /copilot/summarize` body: {context_type, data, query?, property_id?}. 7 context type'ı için specialized prompt: kpis, anomaly, timeseries, leaderboard, inquiry, forecast, custom. GPT-5.2 returns JSON `{insight, suggested_actions[]}`. Heuristic fallback (Türkçe) LLM yoksa. **SHA256 cache** — aynı payload 2. kez ücretsiz.
+- `GET /copilot/recent?limit=20` — son cache girdilerinin kütüphanesi.
+
+**Frontend:**
+- **`CopilotButton.js` (NEW)**: Reusable, her panele eklenebilir. Gradient (violet → fuchsia) buton, modal'da insight + 3 numara eylem chip'i.
+- **`CopilotLibraryPanel.js` (NEW)**: Otele özel custom query input (Enter ile gönder), son 30 analiz kütüphanesi.
+
+**Verified (curl):** KPI payload için GPT-5.2 Türkçe real output: "Doluluk %78 ile güçlü; ADR 120 ile orta-iyi... 3 eylem: fiyat +artırımı, iptal politikası optim, kanal maliyet analizi". Cache: 2. çağrı `cached=True`.
+
+**Test:** 17/17 backend passed.
+
+**Beats competitors:**
+- Mews/Cloudbeds: no unified AI copilot.
+- Opera Oracle AI: expensive add-on. Us: free with Emergent LLM key.
+
+---
+
+
+### Iter 239 (Apr 2026): 💼 Batch 27 — Conference S&C Proposal Builder (MICE)
+
+User ask (TR): _"devam et"_ — yüksek değerli MICE segmenti.
+
+**Backend (`routes/conference_sc.py` — NEW, 10 endpoints):**
+- **Event Spaces:** list/upsert + seed-defaults (4 mekan: Grand Ballroom 500p £2500, Executive Boardroom 20p £700, Rooftop Terrace 80p £1500, Meeting Room A 50p £350).
+- **Catering:** list/upsert + 6 paket (Coffee Break Classic £8, Premium £14, Business Lunch £35, Executive £55, Gala Dinner £95, Breakfast £22).
+- **Inquiries:** create (auto-ref `INQ-YYMMDD-XXXX`, days compute, status=new) + list (by_status aggregation) + detail. Validation: end>=start, attendees 1..5000.
+- **Proposal Builder:** POST lines (type=space|catering|room_block|av|custom) → subtotal/discount/total/per_person hesap. discount_pct 0..50.
+- **Status machine:** new → proposal_ready → sent → accepted/rejected/cancelled.
+- **Dashboard:** KPI aggregation (pipeline_value, won_value, conversion_rate, avg_deal_size, by_event_type).
+
+**Frontend (`ConferenceSCPanel.js` — NEW, rose tema, 3 tab):**
+- **Pipeline:** KPI tiles + event type distribution + avg deal büyük sayı.
+- **Talepler:** Status pill filter, yeni talep formu, tıklanabilir row list → InquiryDetail (status butonları + Proposal Builder).
+- **Proposal Builder (detail):** 4 add-line dropdown (mekan/catering/oda bloku/özel), inline edit qty+price, auto subtotal/discount/total/per-person, valid_until + notes.
+- **Mekan & Catering:** Seed butonu, 2-column kartlar (kapasite/alan/features/fiyat + includes).
+
+**Verified (curl):** Leadership Summit 120p 3 gün — Grand Ballroom £2500x3 + Business Lunch £35x360 + Room Block £120x160 = £39,300 - 10% = **£35,370 total, £294.75/person**.
+
+**Test:** 24/24 backend passed.
+
+**Beats competitors:**
+- Opera Sales&Catering: separate licence ($$$$). Us: native.
+- Cloudbeds: no S&C module. Us: quote-to-event complete.
+
+---
 
 
 ### Iter 238 (Apr 2026): 👤 Batch 26 — Guest Self-Modify / Cancel Portal v2

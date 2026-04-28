@@ -45,7 +45,7 @@ import {
   KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
   OpsV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
-  PricingExplainPanel,
+  PricingExplainPanel, LoyaltyTierPanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
   ImportModulePanel, LegalDocumentsPanel, AnalyticsPanel, ReportsSettings,
   BrandingPanel, SyncLogPanel, PropertyMappingPanel, BookingEnginePanel,
@@ -2638,6 +2638,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "guest-journey", icon: SignIn, name: t("nav.guest_journey"), testId: "guest-journey-btn" },
         { id: "guest-app", icon: MapPin, name: t("nav.guest_app"), testId: "guest-app-btn" },
         { id: "loyalty", icon: Crown, name: t("nav.loyalty"), testId: "loyalty-btn" },
+        { id: "loyalty-tier", icon: Trophy, name: "🏆 Tier Engine v2 (Auto-Upgrade)", testId: "loyalty-tier-btn" },
         { id: "loyalty-v2", icon: Crown, name: "👑 Tier + Referral + Paket", testId: "loyalty-v2-btn" },
         { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
         { id: "campaigns", icon: Megaphone, name: t("nav.campaigns"), testId: "campaigns-btn" },
@@ -2979,6 +2980,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "nav-reviews":            "bookings_view",
     "campaigns-btn":          "bookings_view",
     "loyalty-btn":            "bookings_view",
+    "loyalty-tier-btn":       "bookings_view",
     "loyalty-v2-btn":         "bookings_view",
     "promo-codes-btn":        "bookings_view",
     "pos-btn":                "finance_dashboard_view",
@@ -4110,6 +4112,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Loyalty Program */}
         {activeView === "loyalty" && (
           <LoyaltyPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {activeView === "loyalty-tier" && (
+          <LoyaltyTierPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
         )}
 
         {/* Duty Logbook */}

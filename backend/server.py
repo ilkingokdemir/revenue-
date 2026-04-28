@@ -112,6 +112,7 @@ from routes.guest_portal_v2 import create_guest_portal_v2_router
 from routes.conference_sc import create_conference_sc_router
 from routes.copilot import create_copilot_router
 from routes.image_ai import create_image_ai_router
+from routes.fnb_tabs import create_fnb_tabs_router
 from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
@@ -560,6 +561,8 @@ copilot_router = create_copilot_router(db, require_roles, LlmChat, UserMessage)
 api_router.include_router(copilot_router)
 image_ai_router = create_image_ai_router(db, require_roles, LlmChat, UserMessage, FileContent)
 api_router.include_router(image_ai_router)
+fnb_tabs_router = create_fnb_tabs_router(db, require_roles)
+api_router.include_router(fnb_tabs_router)
 ai_predictions_router = create_ai_predictions_router(db, require_roles)
 api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)

@@ -1,6 +1,43 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 126+ Modules | Mobile Responsive | 248 Test Iterations
+## 127+ Modules | Mobile Responsive | 249 Test Iterations
+
+
+### Iter 249 (Feb 2026): 🏆 Batch 36 — Loyalty Tier Engine v2
+
+User ask (TR): _"sen yapacaklarina basla"_ — Phase 2 başlangıç.
+
+**Sorun:** Mevcut LoyaltyPanel basit puan tracker. Marriott Bonvoy / Hilton Honors seviyesinde **otomatik tier upgrade matrix** yok.
+
+**Backend (`routes/loyalty_tier.py` — NEW, 7 endpoint, ~280 satır):**
+- 2 koleksiyon: `loyalty_tier_configs` (property bazlı tier ladder) + `loyalty_guest_tiers` (misafir başına tier + history).
+- 5 default tier (Member/Bronze/Silver/Gold/Platinum) configurable: `tier_key`, `name`, `color`, `threshold_nights`, `threshold_revenue`, `threshold_points`, `benefits[]`. İlk fetch'te otomatik seed.
+- `_select_tier(tiers, nights, revenue, points)` — descending order'da ilk üçü de geçilen tier'ı döner. **Asimetrik AND** logic: 3 eşik birden geçilmeli.
+- `_guest_aggregates(db, prop, guest)` — bookings tablosundan nights+revenue, guest_profile'dan loyalty_points.
+- POST `/loyalty-tier/evaluate/{prop}/{guest}` — tek misafir; manuel override aktifse skip + reason döner.
+- POST `/loyalty-tier/evaluate-batch/{prop}` — tüm guest_profiles loop, `{evaluated, upgraded, downgraded, unchanged, skipped_manual}` döner.
+- POST/DELETE `/loyalty-tier/manual/{prop}/{guest}` — admin override + revoke.
+- GET `/loyalty-tier/guest/{prop}/{guest}` — mevcut tier + 3 progress yüzdesi (gece/gelir/puan) + `next_tier`.
+- GET `/loyalty-tier/dashboard/{prop}` — distribution map + total + manual count + recent_upgrades (last 30d, en yeni 20).
+
+**Frontend (`LoyaltyTierPanel.js` — NEW, yellow tema, 3 tab):**
+- 4 KPI: Toplam Üye, Manuel Override, Son 30g Hareket, Tier Sayısı.
+- **Tier Dağılımı tab:** Visual ladder — her tier için color-coded card (Star/Trophy/Crown ikonları), eşik özeti, üye sayısı + %, fill bar, benefit chip rozetleri.
+- **Tier Yapılandırması tab:** Per-tier inline editor (key, name, color select, 3 threshold input, benefits CSV), kademe ekle/sil, tek seferde kaydet (validate non-empty + unique keys).
+- **Son Hareketler tab:** Last 30d tier transition feed (TrendUp/PencilSimple ikonları, from→to gösterim, tarih + reason + by).
+- "Tüm Misafirleri Yeniden Değerlendir" tek tıkla batch eval + toast özet.
+
+**Test:** 12/12 backend pass (2 skipped — guest_profiles id eksik), frontend %100. **25 ardışık batch %100.**
+
+**46 mevcut misafir** ilk batch'te %89 (41/46) member → bronze terfi etti.
+
+**Beats competitors:**
+- Cloudbeds Loyalty: tek tier, manuel toggle.
+- Mews Loyalty: marketplace partner (Como/Fivestars), native değil.
+- Opera OPERA Loyalty: enterprise pakette ek lisans.
+- Bizim PMS: native multi-criteria AND logic, asimetrik tier renderer, manual override + revoke + audit trail. Marriott Bonvoy mantığı ücretsiz.
+
+---
 
 
 ### Iter 248 (Feb 2026): 🛡️ Phase 1 — Production Hardening (Code Track)

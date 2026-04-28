@@ -1,6 +1,33 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 124+ Modules | Mobile Responsive | 245 Test Iterations
+## 125+ Modules | Mobile Responsive | 246 Test Iterations
+
+
+### Iter 246 (Feb 2026): 🧠 Batch 34 — AI Pricing Explainability (RM "Why?" Engine)
+
+User ask (TR): _"devam et"_ — RM team'in #1 cevapsız sorusu: "AI bu fiyatı neden önerdi?"
+
+**Backend (`routes/pricing_explain.py` — NEW, 4 endpoint):**
+- POST `/pricing/explain` — gpt-5.2 ile JSON şemasında: narrative (TR, 2-4 cümle), confidence 0-100, key_drivers [{label, weight 0-100, direction up/down/neutral}], risks (1-3), alternative_rates (2 senaryo). Otomatik comp_set context inject. ~5-8s response time.
+- GET `/pricing/explain/history/{property_id}?limit=50` — sıralı geçmiş.
+- POST `/pricing/explain/{id}/decision` — accept (final=proposed), reject (final=current), override (final=manual zorunlu pozitif). Idempotent: tekrar 400. Audit trail: decision_at + decision_by.
+- GET `/pricing/explain/dashboard/{property_id}` — total/pending/accepted/rejected/overridden + accept_rate_pct + avg_confidence + avg_abs_delta_pct.
+
+**Frontend (`PricingExplainPanel.js` — NEW, violet tema, 2 tab):**
+- 6 KPI: Toplam, Bekleyen, Onay Oranı, Override, Ort. Güven, Ort. |Δ|.
+- **Yeni Açıklama** form: oda tipi, tarih, current/proposed, doluluk %, pace 30g, talep sinyalleri (csv), etkinlikler (csv), comp set add/remove rows, opsiyonel not. Tek tıkla AI çağrısı.
+- **Sonuç card:** ConfidenceRing (SVG, renk eşikli — yeşil≥75 / sarı≥50 / kırmızı), AI narrative paragrafı (violet bg), DriverBar component (her sürücü = TrendUp/TrendDown/Lightning + label + weight % bar, yön renkli), risks list (amber Warning), 2 alternative rate kartı (alt scenario + büyük fiyat).
+- **Karar satırı:** Kabul (emerald) / Red (rose) / Override (violet input + onay).
+- **Geçmiş tab:** Decision badge'li (KABUL/RED/OVERRIDE/BEKLEME) liste, satır expand → ResultCard yeniden render.
+
+**Test:** 16/16 backend pass, frontend %100. **22 ardışık batch %100.**
+
+**Beats competitors:**
+- IDeaS / Duetto / Atomize: sadece sayı verir, mantığı kara kutu.
+- Mews RM: rate change history → "AI suggested" yazısı tek başına.
+- Bizim PMS: AI doğal dilde sebep + sürücü ağırlıkları + alternatif senaryolar + kabul/red audit. RM team güveni ↑↑, override kararları belgelenir.
+
+---
 
 
 ### Iter 245 (Feb 2026): 🛠️ P0 Refactor — App.js Code-Splitting (lazyPanels)

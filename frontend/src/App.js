@@ -45,6 +45,7 @@ import {
   KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
   OpsV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
+  PricingExplainPanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
   ImportModulePanel, LegalDocumentsPanel, AnalyticsPanel, ReportsSettings,
   BrandingPanel, SyncLogPanel, PropertyMappingPanel, BookingEnginePanel,
@@ -2737,6 +2738,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "anomaly", icon: Lightning, name: "📡 AI Anomali Radarı", testId: "anomaly-btn" },
         { id: "pace-reports", icon: ChartLine, name: "Pace Reports (STLY)", testId: "pace-reports-btn" },
         { id: "ai-pricing-v2", icon: Lightning, name: "AI Pricing v2 (GPT)", testId: "ai-pricing-v2-btn" },
+        { id: "pricing-explain", icon: Brain, name: "🧠 AI Fiyat Açıklayıcı", testId: "pricing-explain-btn" },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity Heatmap", testId: "parity-heatmap-btn" },
         { id: "morning-brief", icon: ChartLine, name: "Morning Brief & Autopilot", testId: "morning-brief-btn" },
         { id: "nightly-recap", icon: ChartLine, name: "Nightly Recap (last night)", testId: "nightly-recap-btn" },
@@ -2896,6 +2898,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "ops-v2-btn":             "maintenance_view",
     "forecast-v2-btn":        "revenue_forecasting_view",
     "anomaly-btn":            "revenue_forecasting_view",
+    "pricing-explain-btn":    "revenue_forecasting_view",
     "tipping-btn":            "operations_reception_view",
     "guest-portal-v2-btn":    "operations_reception_view",
     "conference-sc-btn":      "operations_reception_view",
@@ -3349,6 +3352,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* HK Turnover Kanban with AI Auto-Approval */}
         {activeView === "hk-turnover" && (
           <HkTurnoverPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* AI Pricing Explainability */}
+        {activeView === "pricing-explain" && (
+          <PricingExplainPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}

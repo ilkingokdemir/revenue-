@@ -43,6 +43,7 @@ export const ImageAIPanel = L(() => import("./components/dashboard/ImageAIPanel"
 export const FnbTabsPanel = L(() => import("./components/dashboard/FnbTabsPanel"));
 export const BiFeedPanel = L(() => import("./components/dashboard/BiFeedPanel"));
 export const HkTurnoverPanel = L(() => import("./components/dashboard/HkTurnoverPanel"));
+export const PricingExplainPanel = L(() => import("./components/dashboard/PricingExplainPanel"));
 export const PaceReports = L(() => import("./components/dashboard/PaceReports"));
 export const AIPricingV2Panel = L(() => import("./components/dashboard/AIPricingV2Panel"));
 export const ParityHeatmapPanel = L(() => import("./components/dashboard/ParityHeatmapPanel"));

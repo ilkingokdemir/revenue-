@@ -117,6 +117,7 @@ from routes.bi_feed import create_bi_feed_router
 from routes.hk_turnover import create_hk_turnover_router
 from routes.pricing_explain import create_pricing_explain_router
 from routes.loyalty_tier import create_loyalty_tier_router
+from routes.banquet_orders import create_banquet_orders_router
 from routes.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
@@ -575,6 +576,8 @@ pricing_explain_router = create_pricing_explain_router(db, require_roles, LlmCha
 api_router.include_router(pricing_explain_router)
 loyalty_tier_router = create_loyalty_tier_router(db, require_roles)
 api_router.include_router(loyalty_tier_router)
+banquet_orders_router = create_banquet_orders_router(db, require_roles)
+api_router.include_router(banquet_orders_router)
 ai_predictions_router = create_ai_predictions_router(db, require_roles)
 api_router.include_router(ai_predictions_router)
 laundry_router = create_laundry_router(db, require_roles)

@@ -45,7 +45,7 @@ import {
   KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
   OpsV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
-  PricingExplainPanel, LoyaltyTierPanel,
+  PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
   ImportModulePanel, LegalDocumentsPanel, AnalyticsPanel, ReportsSettings,
   BrandingPanel, SyncLogPanel, PropertyMappingPanel, BookingEnginePanel,
@@ -2717,6 +2717,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "tipping", icon: Trophy, name: "💰 Dijital Bahşiş (Stripe)", testId: "tipping-btn" },
         { id: "guest-portal-v2", icon: Users, name: "👤 Guest Self-Modify / Cancel", testId: "guest-portal-v2-btn" },
         { id: "conference-sc", icon: Briefcase, name: "💼 Conference S&C (MICE)", testId: "conference-sc-btn" },
+        { id: "banquet-orders", icon: CalendarBlank, name: "📋 Banquet Event Orders (BEO)", testId: "banquet-orders-btn" },
         { id: "copilot", icon: Sparkle, name: "✨ AI Copilot Kütüphanesi", testId: "copilot-btn" },
         { id: "image-ai", icon: Camera, name: "📸 AI Temizlik Skorlama", testId: "image-ai-btn" },
         { id: "hk-turnover", icon: Sparkle, name: "🧹 HK Kanban + AI Auto-Onay", testId: "hk-turnover-btn" },
@@ -2903,6 +2904,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "tipping-btn":            "operations_reception_view",
     "guest-portal-v2-btn":    "operations_reception_view",
     "conference-sc-btn":      "operations_reception_view",
+    "banquet-orders-btn":     "operations_reception_view",
     "copilot-btn":            "operations_reception_view",
     "image-ai-btn":           "housekeeping_view",
     "hk-turnover-btn":        "housekeeping_view",
@@ -3333,6 +3335,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Conference S&C — MICE Proposal Builder */}
         {activeView === "conference-sc" && (
           <ConferenceSCPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* Banquet Event Orders */}
+        {activeView === "banquet-orders" && (
+          <BanquetOrdersPanel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}

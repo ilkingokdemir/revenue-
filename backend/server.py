@@ -941,6 +941,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------- PRODUCTION HARDENING (health, request-id, error handler, env validation) ----------
+from hardening import install_hardening
+install_hardening(app, db)
+
 async def seed_myhotelbox_branches():
     """Seed all MyHotelBox branches as properties"""
     branches = [

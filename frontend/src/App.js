@@ -12,6 +12,7 @@ import ReviewCollectionPage from "./ReviewCollectionPage";
 import SelfCheckInPage from "./SelfCheckInPage";
 import SelfCheckInV2Page from "./SelfCheckInV2Page";
 import TipPage from "./TipPage";
+import GuestPortalV2Page from "./GuestPortalV2Page";
 import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
 import TurkishPayPage from "./TurkishPayPage";
@@ -60,6 +61,7 @@ import OpsV2Panel from "./components/dashboard/OpsV2Panel";
 import ForecastV2Panel from "./components/dashboard/ForecastV2Panel";
 import AnomalyPanel from "./components/dashboard/AnomalyPanel";
 import TippingPanel from "./components/dashboard/TippingPanel";
+import GuestPortalV2Panel from "./components/dashboard/GuestPortalV2Panel";
 import { BugTrackerPanel } from "./components/dashboard/ops/BugTrackerPanel";
 import { AuditTrailPanel } from "./components/dashboard/rbac/AuditTrailPanel";
 import { CollisionsPanel } from "./components/dashboard/ops/CollisionsPanel";
@@ -2820,6 +2822,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift Scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
         { id: "tipping", icon: Trophy, name: "💰 Dijital Bahşiş (Stripe)", testId: "tipping-btn" },
+        { id: "guest-portal-v2", icon: Users, name: "👤 Guest Self-Modify / Cancel", testId: "guest-portal-v2-btn" },
         { id: "mobile-companion", icon: DeviceMobile, name: "Mobile View", testId: "mobile-companion-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations Hub", testId: "operations-hub-btn" },
       ],
@@ -2997,6 +3000,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "forecast-v2-btn":        "revenue_forecasting_view",
     "anomaly-btn":            "revenue_forecasting_view",
     "tipping-btn":            "operations_reception_view",
+    "guest-portal-v2-btn":    "operations_reception_view",
     "ai-predictions-btn":     "revenue_forecasting_view",
     "channel-revenue-btn":    "revenue_forecasting_view",
     "sentiment-heatmap-btn":  "revenue_forecasting_view",
@@ -3406,6 +3410,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Digital Tipping — Stripe-powered guest-to-staff tipping */}
         {activeView === "tipping" && (
           <TippingPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+
+        {/* Guest Portal v2 — Self-Modify + Cancel */}
+        {activeView === "guest-portal-v2" && (
+          <GuestPortalV2Panel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}
@@ -4621,6 +4632,9 @@ function App() {
   }
   if (window.location.pathname.startsWith("/tip/") || window.location.pathname === "/tip") {
     return <TipPage />;
+  }
+  if (window.location.pathname.startsWith("/portal/")) {
+    return <GuestPortalV2Page />;
   }
   if (window.location.pathname === "/guest-portal") {
     return <GuestPortalPage />;

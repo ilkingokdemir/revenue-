@@ -1,6 +1,68 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 113+ Modules | Mobile Responsive | 233 Test Iterations
+## 116+ Modules | Mobile Responsive | 236 Test Iterations
+
+
+### Iter 236 (Apr 2026): 📡 Batch 24 — AI Anomali Radarı (z-score + GPT-5.2 kök neden)
+
+User ask (TR): _"devam et"_ — AI-first revenue intelligence.
+
+**Backend (`routes/anomaly_detection.py` — NEW, 3 endpoints):**
+- `GET /anomaly/scan/{property_id}?days=60` — Son N gün için 5 metrik üzerinde z-skor taraması (revenue, bookings, occupancy, adr, cancellations). Rolling 30-day window. |z|>2 moderate, |z|>3 severe. by_metric & by_severity özet sayaçları. Doğrulama: days 14..365.
+- `GET /anomaly/timeseries/{property_id}?metric=revenue&days=90` — Chart-ready seri: her gün için {value, is_anomaly, severity, z, direction}. Mean/std istatistikleri. Invalid metric 400.
+- `POST /anomaly/explain {property_id, date, metric, value, z}` — GPT-5.2 Türkçe 2-3 cümlelik kök-neden hipotezi (Emergent LLM key ile), ayrıca öneri aksiyonları listesi. LLM yoksa Türkçe heuristic fallback.
+
+**Frontend (`AnomalyPanel.js` — NEW, fuchsia tema, 2 tab):**
+- **Anomali Akışı:** KPI'lar (total/severe/moderate/days), gün aralığı + metric filtresi, satır bazlı anomali kartları (↑ spike emerald / ↓ drop rose icons), "Açıkla" butonu → LLM hipotez + aksiyon chip'leri violet kutu içinde.
+- **Zaman Serisi:** Metric & days selector, KPI (mean/std/count), SVG grafik ±2σ mor normal bant + anomali noktaları renkli (severe rose, moderate amber).
+
+**Verified (curl):** default property için 19 anomali (9 severe + 10 moderate), timeseries 91 gün 5 anomali. Explain endpoint GPT-5.2 gerçek Türkçe çıktı verdi: "15 Nisan 2026 Çarşamba günü gelirin 0 görünmesi, büyük olasılıkla PMS/CRS–kanal yöneticisi entegrasy...".
+
+**Test:** 18/18 backend passed. Full frontend rendered.
+
+---
+
+
+### Iter 235 (Apr 2026): 📈 Batch 23 — Forecast v2 (24-ay ufuk + Talep Takvimi + Pickup eğrisi)
+
+User ask (TR): _"devam et"_ — rakiplerin ayrı modül olarak sattığı uzun vadeli talep tahmini.
+
+**Backend (`routes/forecast_v2.py` — NEW, 3 endpoints):**
+- `GET /forecast-v2/horizon/{property_id}?months=24` — Aylık tahmin: LY aktuel * YoY growth (clamp 0.7-1.5) or avg_bk * seasonality_factor. Çıktı: 24 ay × {period, label, bookings, revenue, adr, los, confidence (decay %95→%40), vs_last_year}.
+- `GET /forecast-v2/demand-calendar/{property_id}?days=90` — Günlük talep skoru 0-100 = 0.4*occupancy + 0.3*DOW_weight + 0.3*season_weight. Fiyat tier önerisi (peak/high/medium/low/trough) + holiday overlay (TR milli bayramları + generic). 7..365 gün.
+- `GET /forecast-v2/pickup-curve/{property_id}?target_date=2026-06-15` — Hedef tarih için günlük pickup eğrisi + önceki 2 yılın aynı tarihteki ortalaması; pace_status (ahead/behind/on_track/no_history).
+
+**Frontend (`ForecastV2Panel.js` — NEW, violet tema, 3 tab):**
+- **24 Ay Ufku:** KPI'lar (months/total_rev/bookings/yoy), hover-tooltip'li renkli bar chart (emerald=YoY+, rose=YoY-, sky=stable), 12-satır ilk yıl tablosu.
+- **Talep Takvimi:** KPI'lar (gün/skor/peak/trough), aylık takvim ızgarası (Pzt-Paz), 5 tier renkli hücre, holiday emoji, hover tooltip (skor/OTB/doluluk/fiyat önerisi).
+- **Pickup Eğrisi:** Date picker + KPI'lar (kalan gün/OTB/pace%/durum), SVG mor aktüel vs gri kesikli geçmiş eğri.
+
+**Verified (curl):** Horizon 24 forecast item, Demand-calendar 90 days avg_score 44 peak 2 trough 2, Pickup 91 points.
+
+**Test:** 18/18 backend passed. Sidebar "Revenue & Rates" altında "forecast-v2-btn".
+
+---
+
+
+### Iter 234 (Apr 2026): 🔧 Batch 22 — Ops v2 (Maintenance workflow + Linen PAR + HK Inspection)
+
+User ask (TR): _"devam et"_ — operasyonel derinlik.
+
+**Backend (`routes/ops_v2.py` — NEW, 11 endpoints):**
+- **Maintenance:** CRUD + action state machine (reported → assigned → in_progress/paused → completed → verified). Fotoğraflar (before/after), events audit log. GET list with counters + critical_open.
+- **Linen PAR:** 6 item_type × 5 state (clean/in_use/dirty/washing/lost). below_par flag. Cycle transitions (checkout_to_dirty, dirty_to_washing, washing_to_clean, clean_to_in_use, lost_or_damaged). seed-defaults bootstrap.
+- **HK Inspection:** 10 varsayılan check maddesi, per-room pass/fail + photo + notes. Başarısız item için otomatik work_order oluşturma. Pass rate aggregate.
+
+**Frontend (`OpsV2Panel.js` — NEW, orange tema, 3 tab):**
+- **Bakım İş Emirleri:** KPI (kritik/açık/tamamlandı/doğrulandı), status filter pills, yeni WO formu, satır-bazlı action butonları (assign/start/complete/verify).
+- **Çamaşır PAR:** Per-item-type card, 4 state-box (temiz/kullanımda/kirli/yıkanıyor), temiz oranı bar, below_par rose badge, cycle hareket butonları.
+- **HK Denetim:** 10-check toggle'lı form, başarısız için not input, oda no, submit → toast "auto WO created".
+
+**Verified (curl):** Full state machine (assign→start→complete→verify) 4 ardışık 200. Linen cycle 40 adet clean→in_use başarılı. Inspection 1 başarısız → auto-WO oluşturuldu.
+
+**Test:** 26/26 backend passed. Sidebar "Operations" altında "ops-v2-btn".
+
+---
 
 
 ### Iter 234 (Apr 2026): 🏢 Batch 21 — Brand Portal / Chain HQ + White-Label

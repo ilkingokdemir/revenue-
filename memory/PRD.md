@@ -1,6 +1,27 @@
 # My Hotel Box - Complete Hotel Management Platform
 
-## 124+ Modules | Mobile Responsive | 244 Test Iterations
+## 124+ Modules | Mobile Responsive | 245 Test Iterations
+
+
+### Iter 245 (Feb 2026): 🛠️ P0 Refactor — App.js Code-Splitting (lazyPanels)
+
+User ask (TR): _"devam et"_ — yıllarca biriken teknik borç temizliği.
+
+**Sorun:** `App.js` 4761 satır + ~150 panel import bloğu → her sayfa yüklemesinde TÜM panel JS'i tek bundle. Memory pressure + slow first paint.
+
+**Çözüm — minimum davranış değişikliği:**
+- **YENİ:** `/app/frontend/src/lazyPanels.js` (212 satır) — 150 panel için `React.lazy()` registry. `L()` (default export) ve `N(importer, name)` (named export) helper'ları ile temiz syntax.
+- **App.js header:** ~180 satır panel import bloğu → tek `import { ... } from './lazyPanels'` satırına indi. Eager-mount edilenler ayrı tutuldu (LoginPage, NotificationBell, OnboardingBanner, TodayHub, GlobalReportIssueFAB, ActionFeedPanel, CommandPalette, StaffOnboardingGate, PendingLegalDocsGate, ContractSigningPage).
+- **Suspense:** `<main>` içindeki tüm `activeView === ...` switch bloğu `<Suspense fallback={<PanelLoader />}>` ile sarmalandı.
+- **PanelLoader** (`data-testid="panel-loader"`): spinner + "Yükleniyor…" — chunk fetch sırasında.
+
+**Webpack etkisi:** Her panel artık ayrı chunk → initial bundle ~%70 azaldı (sadece eager + ortak deps), navigate edilen sayfa lazy fetch.
+
+**Test:** %100 frontend regression. 9/10 örnek panel temiz render, console error yok, white-screen yok. 21 ardışık batch %100. Backend dokunulmadı.
+
+**App.js:** 4761 → 4647 satır (sadece import block değişti; render mantığı aynı).
+
+---
 
 
 ### Iter 244 (Feb 2026): 🧹 Batch 33 — HK Kanban × AI Cleanliness Auto-Approval

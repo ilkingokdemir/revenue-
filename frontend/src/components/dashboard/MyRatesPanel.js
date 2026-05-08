@@ -8,6 +8,7 @@ const COLS = [
   { id: "ai_status", label: "AI Status", type: "badge" },
   { id: "adr", label: "ADR", type: "money" },
   { id: "occupancy_pct", label: "Occupancy", type: "occ" },
+  { id: "free_total", label: "Boş Oda", type: "free" },
   { id: "pickup", label: "Pickup", type: "num" },
   { id: "min_rate", label: "Min Rate", type: "edit" },
   { id: "floor_rate", label: "Floor (LMF)", type: "edit" },
@@ -17,6 +18,7 @@ const COLS = [
   { id: "ai_rate", label: "Sentinel AI Rate", type: "ai" },
   { id: "target_sell_rate", label: "Target Sell Rate", type: "edit" },
   { id: "pms_override", label: "PMS Override", type: "edit" },
+  { id: "availability", label: "Oda Tipi Müsaitlik", type: "section" },
 ];
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -106,6 +108,8 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
 
   const visibleCols = useMemo(() => COLS.filter(c => visibleRows.includes(c.id)), [visibleRows]);
   const rows = data?.rows || [];
+  const roomTypes = data?.room_types || [];
+  const showAvail = visibleRows.includes("availability");
 
   return (
     <div className="bg-stone-950 text-stone-100 min-h-screen -m-6 p-6" data-testid="my-rates-panel">
@@ -234,7 +238,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
             </tr>
           </thead>
           <tbody>
-            {visibleCols.map(col => (
+            {visibleCols.filter(c => c.id !== "availability").map(col => (
               <tr key={col.id} className="border-t border-stone-800/60 hover:bg-stone-900/40">
                 <td className="px-3 py-2.5 sticky left-0 bg-stone-950 text-stone-300 font-medium">{col.label}</td>
                 {rows.map(r => (
@@ -244,6 +248,46 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
                 ))}
               </tr>
             ))}
+            {/* Per-room-type availability section */}
+            {showAvail && roomTypes.length > 0 && (
+              <>
+                <tr className="border-t-2 border-emerald-700/40 bg-stone-900/60">
+                  <td className="px-3 py-2 sticky left-0 bg-stone-900 text-emerald-400 text-[10px] uppercase tracking-wider font-bold" colSpan={1}>
+                    🛏 Oda Tipi · Boş / Toplam
+                  </td>
+                  {rows.map(r => (
+                    <td key={r.date} className="px-1 py-1 text-center text-[9px] text-stone-500">
+                      {r.in_house}/{data.total_rooms} dolu
+                    </td>
+                  ))}
+                </tr>
+                {roomTypes.map(rt => (
+                  <tr key={rt.id} className="border-t border-stone-800/40 hover:bg-stone-900/40 text-[11px]">
+                    <td className="px-3 py-1.5 sticky left-0 bg-stone-950 text-stone-400">
+                      <span className="text-stone-300">{rt.name}</span>
+                      <span className="text-stone-600 ml-1">({rt.total})</span>
+                    </td>
+                    {rows.map(r => {
+                      const a = (r.availability || []).find(x => x.room_type_id === rt.id);
+                      const free = a ? a.free : rt.total;
+                      const pct = rt.total ? free / rt.total : 1;
+                      let cls = "text-emerald-400";
+                      if (pct === 0) cls = "text-red-400 font-bold";
+                      else if (pct < 0.3) cls = "text-amber-400";
+                      else if (pct < 0.7) cls = "text-emerald-300";
+                      return (
+                        <td key={r.date} className="px-1 py-1 text-center">
+                          <span className={cls} data-testid={`avail-${rt.id}-${r.date}`}>
+                            {free}
+                            <span className="text-stone-600 text-[9px]">/{rt.total}</span>
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </>
+            )}
             {rows.length === 0 && !loading && (
               <tr>
                 <td colSpan={1 + rows.length} className="text-center py-12 text-stone-500">
@@ -287,6 +331,14 @@ function Cell({ row, col, pending, editPending }) {
   if (col.type === "num") {
     const n = Number(value || 0);
     return <span className={n > 0 ? "text-cyan-400 font-semibold" : "text-stone-600"}>{n > 0 ? `+${n}` : "—"}</span>;
+  }
+  if (col.type === "free") {
+    const v = Number(row.free_total || 0);
+    const cls = v === 0 ? "text-red-400 font-bold" : v < 5 ? "text-amber-400" : "text-emerald-400";
+    return <span className={cls}>{v}</span>;
+  }
+  if (col.type === "section") {
+    return <span className="text-stone-600">—</span>;
   }
   if (col.type === "ai") {
     return <span className="text-emerald-400 font-semibold">{fmtMoney(value)}</span>;

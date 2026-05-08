@@ -33,8 +33,23 @@ def create_rates_grid_router(db, require_roles):
         # Resolve property scope
         prop_filter = {} if property_id == "all" else {"property_id": property_id}
 
-        # 1) Total room count for occupancy denominator
+        # 1) Total room count for occupancy denominator + per-room-type inventory
         total_rooms = await db.rooms.count_documents(prop_filter) or 1
+        # Per room_type counts (total inventory)
+        room_types_docs = await db.room_types.find(prop_filter, {"_id": 0}).to_list(50)
+        rt_inventory = {}  # room_type_id -> {"name", "total"}
+        for rt in room_types_docs:
+            rt_id = rt.get("id")
+            if not rt_id:
+                continue
+            # Fallback to actual count of rooms with this room_type_id
+            actual = await db.rooms.count_documents({"room_type_id": rt_id, **prop_filter})
+            total_for_rt = int(rt.get("total_rooms") or actual or 0)
+            if total_for_rt > 0:
+                rt_inventory[rt_id] = {
+                    "name": rt.get("name") or rt_id,
+                    "total": total_for_rt,
+                }
 
         # 2) Existing owner-set overrides (separate collection from auto-scanner's rate_overrides)
         ov_query = {"date": {"$gte": start_date, "$lt": end_date}, **prop_filter}
@@ -66,7 +81,8 @@ def create_rates_grid_router(db, require_roles):
         bk_query = {"check_in": {"$lt": end_date}, "check_out": {"$gt": start_date},
                     "status": {"$in": ["confirmed", "checked_in", "checked_out"]}, **prop_filter}
         bookings = await db.bookings.find(bk_query,
-            {"_id": 0, "check_in": 1, "check_out": 1, "total_amount": 1, "rooms": 1, "created_at": 1}
+            {"_id": 0, "check_in": 1, "check_out": 1, "total_amount": 1, "total_price": 1,
+             "rooms": 1, "created_at": 1, "room_type_id": 1}
         ).to_list(5000)
         # Pickup = bookings created in last 24h that affect this date
         cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
@@ -83,11 +99,26 @@ def create_rates_grid_router(db, require_roles):
             in_house = sum(int(b.get("rooms") or 1) for b in stay)
             occ_pct = round(min(100.0, in_house / total_rooms * 100), 1) if total_rooms else 0.0
             # ADR — average paid amount among stay bookings
-            adrs = [float(b.get("total_amount") or 0) for b in stay if b.get("total_amount")]
+            adrs = [float(b.get("total_amount") or b.get("total_price") or 0) for b in stay
+                    if (b.get("total_amount") or b.get("total_price"))]
             adr = round(sum(adrs) / len(adrs), 2) if adrs else 0.0
             # Pickup count
             pickup = len([b for b in new_bookings
                           if (b.get("check_in") or "") <= ds and (b.get("check_out") or "") > ds])
+            # Per room type availability
+            availability = []
+            for rt_id, rt in rt_inventory.items():
+                booked_rt = sum(int(b.get("rooms") or 1) for b in stay
+                                if b.get("room_type_id") == rt_id)
+                free = max(0, rt["total"] - booked_rt)
+                availability.append({
+                    "room_type_id": rt_id,
+                    "name": rt["name"],
+                    "total": rt["total"],
+                    "booked": booked_rt,
+                    "free": free,
+                })
+            availability.sort(key=lambda x: x["name"])
             # Live PMS rate = override > base
             live_pms_rate = float(ov.get("live_pms_rate") or default_rate)
             current_sell_rate = comp.get("own")  # scraped from OTA
@@ -106,6 +137,7 @@ def create_rates_grid_router(db, require_roles):
                 "adr": adr,
                 "occupancy_pct": occ_pct,
                 "in_house": in_house,
+                "free_total": max(0, total_rooms - in_house),
                 "pickup": pickup,
                 "min_rate": min_rate,
                 "floor_rate": floor_rate,
@@ -115,6 +147,7 @@ def create_rates_grid_router(db, require_roles):
                 "ai_rate": ai_rate,
                 "target_sell_rate": target_sell,
                 "pms_override": pms_override,
+                "availability": availability,
             })
 
         # Min rate alerts
@@ -128,6 +161,8 @@ def create_rates_grid_router(db, require_roles):
             "days": len(days_list),
             "total_rooms": total_rooms,
             "default_rate": default_rate,
+            "room_types": [{"id": rt_id, "name": rt["name"], "total": rt["total"]}
+                           for rt_id, rt in rt_inventory.items()],
             "stats": {
                 "min_rate_days": min_rate_days,
                 "avg_occupancy_pct": avg_occ,

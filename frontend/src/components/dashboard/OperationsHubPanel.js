@@ -984,6 +984,18 @@ const ShiftSchedulerTab = ({ propertyId, user }) => {
         }} className="px-3 py-1.5 text-xs font-medium text-white bg-violet-500 rounded-lg hover:bg-violet-600 transition-colors" data-testid="shift-sync-salaries">Sync to Payroll</button>
         <button onClick={() => { if (window.confirm("Clear all shifts for this week?")) bulkAction("clear-week"); }}
           className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors" data-testid="shift-clear-week">Clear Week</button>
+        {canSeePay && (
+          <button
+            onClick={() => {
+              const url = `${API}/payroll/export/${propertyId || "all"}?week_start=${weekStart}`;
+              window.open(url, "_blank");
+            }}
+            className="px-3 py-1.5 text-xs font-medium text-white bg-amber-500 rounded-lg hover:bg-amber-600 transition-colors inline-flex items-center gap-1"
+            data-testid="shift-export-payroll-csv"
+          >
+            ⬇ Bordro CSV
+          </button>
+        )}
         <div className="flex items-center gap-2 ml-auto text-[10px] text-stone-400">
           <span className="font-medium text-stone-500">Durum:</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-stone-400 opacity-60"/>Taslak</span>

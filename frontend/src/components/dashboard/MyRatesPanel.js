@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import {
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Legend,
+} from "recharts";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -234,6 +238,50 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
             testId="rates-min-rate-days" />
           <Stat label="Pickup (24h)" value={`+${data.stats.total_pickup}`} color="text-cyan-400" />
           <Stat label="Default rate" value={fmtMoney(data.default_rate)} color="text-stone-300" />
+        </div>
+      )}
+
+      {/* FLOWCAST — unified timeline: occupancy bars + pickup line + AI rate + PMS rate + min rate guardrail */}
+      {data && data.rows.length > 0 && (
+        <div className="rounded-xl border border-stone-800 bg-stone-900/40 p-4 mb-5" data-testid="flowcast">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h3 className="text-sm font-semibold text-stone-200">FLOWCAST</h3>
+              <p className="text-[10px] text-stone-500">Tek timeline'da doluluk · pickup · PMS rate · Sentinel AI · Min rate guardrail</p>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={data.rows} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <CartesianGrid stroke="#27272a" strokeDasharray="3 3" />
+              <XAxis dataKey="date" stroke="#71717a" tick={{ fontSize: 10 }}
+                tickFormatter={(v) => new Date(v).getDate()} interval="preserveStartEnd" />
+              <YAxis yAxisId="rate" stroke="#71717a" tick={{ fontSize: 10 }}
+                tickFormatter={(v) => `£${v}`} />
+              <YAxis yAxisId="occ" orientation="right" stroke="#71717a" tick={{ fontSize: 10 }}
+                tickFormatter={(v) => `${v}%`} domain={[0, 100]} />
+              <Tooltip
+                contentStyle={{ background: "#18181b", border: "1px solid #27272a", borderRadius: 6, fontSize: 11 }}
+                labelFormatter={(v) => new Date(v).toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" })}
+                formatter={(v, name) => {
+                  if (name === "Doluluk %") return [`${v}%`, name];
+                  if (name === "Pickup") return [`+${v}`, name];
+                  return [`£${v}`, name];
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 10, paddingTop: 8 }} iconType="line" />
+              <Bar yAxisId="occ" dataKey="occupancy_pct" name="Doluluk %" fill="#0891b2" opacity={0.4} />
+              <Line yAxisId="rate" type="monotone" dataKey="ai_rate" name="Sentinel AI"
+                stroke="#10b981" strokeWidth={2} dot={false} />
+              <Line yAxisId="rate" type="monotone" dataKey="live_pms_rate" name="Live PMS"
+                stroke="#fafafa" strokeWidth={2} dot={{ r: 2, fill: "#fafafa" }} />
+              <Line yAxisId="rate" type="monotone" dataKey="min_rate" name="Min Rate"
+                stroke="#dc2626" strokeWidth={1} strokeDasharray="4 4" dot={false} />
+              <Line yAxisId="rate" type="monotone" dataKey="compset_avg" name="Compset Avg"
+                stroke="#a78bfa" strokeWidth={1} strokeDasharray="2 2" dot={false} connectNulls />
+              <Line yAxisId="occ" type="monotone" dataKey="pickup" name="Pickup"
+                stroke="#06b6d4" strokeWidth={1.5} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
         </div>
       )}
 

@@ -62,6 +62,7 @@ from routes.booking_widget import create_booking_widget_router
 from routes.operations import create_operations_router
 from routes.shifts import create_shifts_router, create_shifts_v2_router
 from routes.rates_grid import create_rates_grid_router
+from routes.workforce_extras import create_workforce_extras_router
 from routes.notifications import create_notifications_router
 from routes.finance import create_finance_router
 from routes.my_tasks import create_my_tasks_router
@@ -463,6 +464,9 @@ api_router.include_router(shifts_v2_router)
 
 rates_grid_router = create_rates_grid_router(db, require_roles)
 api_router.include_router(rates_grid_router)
+
+workforce_extras_router = create_workforce_extras_router(db, require_roles)
+api_router.include_router(workforce_extras_router)
 
 notifications_router = create_notifications_router(db, require_roles)
 api_router.include_router(notifications_router)

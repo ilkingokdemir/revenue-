@@ -1,0 +1,77 @@
+{
+  "summary": "PMS Link — Owner rates flow into rate_overrides and booking engine fully tested. All 12 tests passed covering: submit-to-pms creates rate_overrides doc with set_by='owner-override' and locked=true, effective rate priority (pms_override > target_sell_rate > live_pms_rate), guardrails (max of min_rate, floor_rate), booking engine per-night rate lookup from rate_overrides, fallback to base_price when no override, mixed booking (override + base), idempotency (update not duplicate), grid reads owner-override as live_pms_rate, availability array per row, and public booking endpoint.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pms_link_rates.py",
+    "/app/test_reports/pytest/pytest_iteration265_pms_link.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "POST /api/rates/grid/submit-to-pms correctly writes to BOTH owner_rate_overrides AND rate_overrides collections",
+    "rate_overrides doc created with set_by='owner-override', locked=true, custom_rate=effective_rate",
+    "Effective rate priority correctly implemented: pms_override > target_sell_rate > live_pms_rate",
+    "Guardrail correctly applied: effective = max(effective, min_rate, floor_rate)",
+    "POST /api/booking/reserve correctly does per-night rate lookup against rate_overrides where set_by='owner-override'",
+    "Booking with override date uses custom_rate (e.g., 150), not base_price (89)",
+    "Booking without override correctly falls back to room_types.base_price",
+    "Mixed booking (1 night override + 1 night no override) correctly sums: override + base_price",
+    "Idempotency verified: re-submitting same date UPDATEs rate_overrides doc (not duplicates)",
+    "GET /api/rates/grid reads back live_pms_rate from rate_overrides 'owner-override' lock",
+    "Grid rows include availability:[] array with room_type_id, name, total, booked, free per day",
+    "Availability free count = total - booked (verified correct)",
+    "/api/booking/reserve is PUBLIC (no auth required) - confirmed working"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pms_link_rates.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "N/A (backend only testing requested)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test bookings created with dates 2027-02-15 to 2027-04-02 for PMS link verification. Test overrides created for dates 2027-02-15, 2027-02-17, 2027-02-18, 2027-02-19.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "PMS link fully verified. Owner rates set in 'My Rates' panel flow correctly into rate_overrides collection (with set_by='owner-override', locked=true) and are picked up by the booking engine for per-night pricing. Property 'aldgate-flats' has room type 'double-aldgate-flats' with base_price=89. Availability array in grid rows shows per-room-type counts.",
+  "features_tested": {
+    "POST /api/rates/grid/submit-to-pms": {
+      "creates_rate_overrides_doc": "PASS",
+      "set_by_owner_override": "PASS",
+      "locked_true": "PASS",
+      "custom_rate_equals_effective": "PASS",
+      "pms_synced_count_returned": "PASS"
+    },
+    "Effective_Rate_Priority": {
+      "pms_override_first": "PASS (200 > 180)",
+      "target_sell_rate_second": "PASS",
+      "guardrails_applied": "PASS (max(50, 120, 100) = 120)"
+    },
+    "POST /api/booking/reserve": {
+      "uses_owner_override_custom_rate": "PASS (150 used)",
+      "fallback_to_base_price": "PASS (89 used when no override)",
+      "mixed_booking_correct_sum": "PASS (89 + 200 = 289)",
+      "is_public_endpoint": "PASS (no auth required)"
+    },
+    "Idempotency": {
+      "resubmit_updates_not_duplicates": "PASS (175 → 225)"
+    },
+    "GET /api/rates/grid": {
+      "reads_owner_override_as_live_pms_rate": "PASS (165)",
+      "availability_array_present": "PASS (6 room types)",
+      "availability_fields_complete": "PASS (room_type_id, name, total, booked, free)",
+      "free_equals_total_minus_booked": "PASS"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

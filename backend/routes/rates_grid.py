@@ -77,6 +77,12 @@ def create_rates_grid_router(db, require_roles):
                 if p:
                     entry["prices"].append(float(p))
 
+        # 4b) Owner-locked PMS rates (the actual rate guests see — pushed via submit-to-pms)
+        pms_locked_query = {"date": {"$gte": start_date, "$lt": end_date},
+                            "set_by": "owner-override", **prop_filter}
+        pms_locked = await db.rate_overrides.find(pms_locked_query, {"_id": 0}).to_list(500)
+        pms_locked_by_date = {p["date"]: p for p in pms_locked}
+
         # 5) Bookings for ADR + occupancy + pickup
         bk_query = {"check_in": {"$lt": end_date}, "check_out": {"$gt": start_date},
                     "status": {"$in": ["confirmed", "checked_in", "checked_out"]}, **prop_filter}
@@ -119,9 +125,15 @@ def create_rates_grid_router(db, require_roles):
                     "free": free,
                 })
             availability.sort(key=lambda x: x["name"])
-            # Live PMS rate = override > base
-            live_pms_rate = float(ov.get("live_pms_rate") or default_rate)
-            current_sell_rate = comp.get("own")  # scraped from OTA
+            # Live PMS rate = locked owner override > grid override > base
+            pms_locked = pms_locked_by_date.get(ds)
+            if pms_locked and pms_locked.get("custom_rate"):
+                live_pms_rate = float(pms_locked.get("custom_rate"))
+            else:
+                live_pms_rate = float(ov.get("live_pms_rate") or default_rate)
+            current_sell_rate = comp.get("own") or (
+                float(pms_locked.get("custom_rate")) if pms_locked and pms_locked.get("custom_rate") else None
+            )
             comp_avg = round(sum(comp.get("prices", [])) / len(comp["prices"]), 2) if comp.get("prices") else None
             # AI suggestion (simple heuristic: weight occupancy + pickup)
             ai_rate = _ai_suggest(default_rate, occ_pct, pickup, comp_avg, ov)
@@ -217,14 +229,17 @@ def create_rates_grid_router(db, require_roles):
     @router.post("/rates/grid/submit-to-pms")
     async def submit_to_pms(data: Dict,
                             current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Push pending overrides to channel sync queue.
-        For now this just logs the intent — real PMS/OTA sync is queued elsewhere."""
+        """Push pending overrides to channel sync queue AND to the PMS rate_overrides
+        collection (which booking engine, channel pushes, dynamic_pricing all read from).
+        This is the actual 'PMS link' — owner overrides become the live sell rate."""
         property_id = data.get("property_id", "")
         dates = data.get("dates", [])
         if not dates:
-            return {"queued": 0}
+            return {"queued": 0, "pms_synced": 0}
         now = datetime.now(timezone.utc).isoformat()
+        owner_name = current_user.get("name", "Owner")
         queued = 0
+        pms_synced = 0
         for d in dates:
             ov = await db.owner_rate_overrides.find_one(
                 {"property_id": property_id, "date": d}, {"_id": 0}
@@ -240,22 +255,61 @@ def create_rates_grid_router(db, require_roles):
             min_r = ov.get("min_rate") or 0
             floor_r = ov.get("floor_rate") or 0
             effective = max(effective, min_r, floor_r)
+
+            # 1) Write to channel sync queue (logical record of intent)
             await db.rate_sync_queue.insert_one({
                 "id": str(uuid.uuid4()),
                 "property_id": property_id,
                 "date": d,
                 "rate": effective,
                 "status": "queued",
+                "set_by": owner_name,
                 "created_at": now,
-                "created_by": current_user.get("name", ""),
             })
-            # Also write back as the new live_pms_rate for grid display
+
+            # 2) Update grid display
             await db.owner_rate_overrides.update_one(
                 {"property_id": property_id, "date": d},
                 {"$set": {"live_pms_rate": effective, "submitted_at": now}}
             )
+
+            # 3) PMS LINK — upsert into rate_overrides so booking engine, channel
+            # managers, dynamic pricing, scrapers all see the new rate.
+            # set_by="owner-override" + locked=True so auto-scanner doesn't overwrite.
+            reason_parts = []
+            if ov.get("pms_override"):
+                reason_parts.append(f"PMS Override £{ov.get('pms_override')}")
+            if ov.get("target_sell_rate"):
+                reason_parts.append(f"Target £{ov.get('target_sell_rate')}")
+            if min_r:
+                reason_parts.append(f"Min £{min_r}")
+            if floor_r:
+                reason_parts.append(f"Floor £{floor_r}")
+            reason = "Owner: " + " · ".join(reason_parts) if reason_parts else "Owner override"
+
+            await db.rate_overrides.update_one(
+                {"property_id": property_id, "date": d, "set_by": "owner-override",
+                 "room_type_id": ""},
+                {"$set": {
+                    "custom_rate": float(effective),
+                    "min_rate": float(min_r) if min_r else 0,
+                    "floor_rate": float(floor_r) if floor_r else 0,
+                    "locked": True,
+                    "reason": reason,
+                    "updated_at": now,
+                    "updated_by": owner_name,
+                 },
+                 "$setOnInsert": {"id": str(uuid.uuid4()),
+                                  "property_id": property_id,
+                                  "date": d,
+                                  "room_type_id": "",
+                                  "set_by": "owner-override",
+                                  "created_at": now}},
+                upsert=True
+            )
+            pms_synced += 1
             queued += 1
-        return {"queued": queued}
+        return {"queued": queued, "pms_synced": pms_synced}
 
     return router
 

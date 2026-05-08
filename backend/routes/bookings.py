@@ -1077,7 +1077,8 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         if available < booking_data.rooms:
             raise HTTPException(status_code=400, detail="Not enough rooms available for the selected dates")
 
-        # Calculate price
+        # Calculate price using owner-locked override if present, else room base.
+        # This is the PMS link from the My Rates panel.
         try:
             ci = datetime.fromisoformat(booking_data.check_in)
             co = datetime.fromisoformat(booking_data.check_out)
@@ -1085,7 +1086,18 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         except ValueError:
             nights = 1
 
-        total_price = room.get("base_price", 0) * nights * booking_data.rooms
+        base_price = room.get("base_price", 0)
+        nightly_total = 0.0
+        for n in range(nights):
+            d_iso = (ci + timedelta(days=n)).strftime("%Y-%m-%d")
+            ov = await db.rate_overrides.find_one(
+                {"property_id": booking_data.property_id, "date": d_iso,
+                 "set_by": "owner-override"},
+                {"_id": 0, "custom_rate": 1}
+            )
+            night_rate = float(ov["custom_rate"]) if ov and ov.get("custom_rate") else base_price
+            nightly_total += night_rate
+        total_price = nightly_total * booking_data.rooms
 
         # Pull native currency from property (source of truth) with fallbacks
         prop_doc = await db.properties.find_one(

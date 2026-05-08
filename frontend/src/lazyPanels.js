@@ -196,6 +196,7 @@ export const SurveyPanel = N(() => import("./components/dashboard/SurveyPanel"),
 export const GuestJourneyPanel = N(() => import("./components/dashboard/GuestJourneyPanel"), "GuestJourneyPanel");
 export const MaintenancePanel = N(() => import("./components/dashboard/MaintenancePanel"), "MaintenancePanel");
 export const RateManagerPanel = N(() => import("./components/dashboard/RateManagerPanel"), "RateManagerPanel");
+export const MyRatesPanel = N(() => import("./components/dashboard/MyRatesPanel"), "MyRatesPanel");
 export const ReportsCentrePanel = N(() => import("./components/dashboard/ReportsCentrePanel"), "ReportsCentrePanel");
 export const ScheduledReports = N(() => import("./components/dashboard/ScheduledReports"), "ScheduledReports");
 export const MobileCompanion = N(() => import("./components/dashboard/MobileCompanion"), "MobileCompanion");

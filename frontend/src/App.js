@@ -70,7 +70,7 @@ import {
   CancelInsurancePanel, GroupRoomingWizPanel, TaxReportsV2Panel, CISlotsPanel, Tier1DashboardPanel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
-  RateManagerPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
+  RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
   ReportsHub, FinancePL, ShiftScheduler, ReceptionReport, PassOverDuties, ComplianceRegister,
   LaundryManagement, PayrollManagement, ExpenseManagement, CashFlowForecast,
   OperationsHubPanel, FinancePanel, StaffManagementPanel, MyTasksPanel, LostFoundPanel,
@@ -2760,6 +2760,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       label: "Revenue & rates",
       color: "text-stone-500",
       items: [
+        { id: "my-rates", icon: ChartLine, name: "My Rates (Daily Grid)", testId: "my-rates-btn" },
         { id: "revenue", icon: ChartLine, name: "Revenue management", testId: "revenue-btn" },
         { id: "profit-os", icon: Target, name: "Profit OS", testId: "profit-os-btn" },
         { id: "rate-manager", icon: ChartLine, name: "Rate manager", testId: "rate-manager-btn" },
@@ -3013,6 +3014,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "approval-queue-btn":     "revenue_approvals_view",
     "setup-wizard-btn":       "revenue_wizard_view",
     "rate-manager-btn":       "rates_calendar_view",
+    "my-rates-btn":           "rates_calendar_view",
     "scheduled-reports-btn":  "reports_overview_view",
     "staff-performance-btn":  "reports_overview_view",
     "concierge-analytics-btn":"reports_overview_view",
@@ -4408,6 +4410,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Rate Manager */}
         {activeView === "rate-manager" && (
           <RateManagerPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* My Rates — Market-Pulse style 365-day grid with PMS Override + AI rate */}
+        {activeView === "my-rates" && (
+          <MyRatesPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Reports Centre */}

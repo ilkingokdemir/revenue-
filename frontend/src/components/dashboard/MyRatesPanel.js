@@ -43,6 +43,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
   const [pending, setPending] = useState({});
   const [visibleRows, setVisibleRows] = useState(() => COLS.filter(c => c.id !== "occupancy_pct").map(c => c.id));
   const [submitting, setSubmitting] = useState(false);
+  const [drawer, setDrawer] = useState(null); // {date}
 
   useEffect(() => {
     if (activePropertyId && activePropertyId !== propertyId) setPropertyId(activePropertyId);
@@ -225,7 +226,12 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
                 const dt = new Date(r.date);
                 const isWeekend = ["Sat", "Sun"].includes(r.dow);
                 return (
-                  <th key={r.date} className={`px-2 py-2 min-w-[78px] text-center ${isWeekend ? "text-emerald-400" : ""}`}>
+                  <th
+                    key={r.date}
+                    onClick={() => setDrawer({ date: r.date, propertyId })}
+                    className={`px-2 py-2 min-w-[78px] text-center cursor-pointer hover:bg-stone-800/60 ${isWeekend ? "text-emerald-400" : ""}`}
+                    data-testid={`date-header-${r.date}`}
+                  >
                     <div className="text-[10px] uppercase">{dt.toLocaleDateString("en-GB", { month: "short" })}</div>
                     <div className="text-[10px] uppercase opacity-70">{r.dow}</div>
                     <div className="font-bold text-base mt-0.5">{dt.getDate()}</div>
@@ -301,8 +307,17 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
 
       <p className="text-stone-500 text-xs mt-4 text-center">
         ⓘ 'PMS Override' veya 'Target Sell Rate' alanlarına tıklayıp manuel fiyat girebilirsiniz · Renkli alanlar pending değişiklik ·
-        Submit ile PMS+OTA kuyruğuna gönderilir · Live PMS sync active
+        Submit ile PMS+OTA kuyruğuna gönderilir · Tarih başlığına tıklayarak <strong className="text-emerald-400">Why this rate?</strong> + geçmiş + AI'a bırak
       </p>
+
+      {drawer && (
+        <RateDrawer
+          date={drawer.date}
+          propertyId={drawer.propertyId}
+          onClose={() => setDrawer(null)}
+          onChanged={() => { setDrawer(null); reload(); }}
+        />
+      )}
     </div>
   );
 };
@@ -374,6 +389,176 @@ function Stat({ label, value, color, testId }) {
     <div className="rounded-lg bg-stone-900/60 border border-stone-800 px-4 py-3" data-testid={testId}>
       <div className="text-[10px] uppercase tracking-wider text-stone-500 mb-1">{label}</div>
       <div className={`text-xl font-semibold ${color || "text-stone-200"}`}>{value}</div>
+    </div>
+  );
+}
+
+function RateDrawer({ date, propertyId, onClose, onChanged }) {
+  const [explain, setExplain] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [releasing, setReleasing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [e, h] = await Promise.all([
+          axios.get(`${API}/rates/grid/explain/${propertyId}/${date}`, { withCredentials: true }),
+          axios.get(`${API}/rates/grid/history/${propertyId}/${date}`, { withCredentials: true }),
+        ]);
+        if (!cancelled) { setExplain(e.data); setHistory(h.data?.history || []); }
+      } catch (err) {
+        if (!cancelled) toast.error("Drawer yüklenemedi");
+      } finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [date, propertyId]);
+
+  async function release() {
+    if (!confirm(`${date} için kilidi kaldır ve Sentinel AI'a bırak?`)) return;
+    setReleasing(true);
+    try {
+      await axios.post(`${API}/rates/grid/release/${propertyId}/${date}`, {}, { withCredentials: true });
+      toast.success("AI'a bırakıldı");
+      onChanged();
+    } catch {
+      toast.error("İşlem başarısız");
+    } finally { setReleasing(false); }
+  }
+
+  const ctx = explain?.context || {};
+  const isLocked = ctx.is_locked;
+  const dt = new Date(date);
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex justify-end" onClick={onClose} data-testid="rate-drawer">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-stone-950 border-l border-stone-800 h-full overflow-y-auto p-5 space-y-5"
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-stone-100">
+              {dt.toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </h2>
+            <p className="text-xs text-stone-500">
+              Lead {ctx.lead_time_days ?? "—"} gün · {ctx.day_of_week}
+              {isLocked && (
+                <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px]">
+                  🔒 OWNER LOCKED
+                </span>
+              )}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-200 text-xl" data-testid="drawer-close-btn">×</button>
+        </div>
+
+        {loading && <div className="text-stone-500 text-sm">Yükleniyor…</div>}
+
+        {/* AI rate + breakdown */}
+        {explain && (
+          <section className="space-y-3">
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/40 p-4">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-400 mb-1">Sentinel AI Rate</div>
+              <div className="text-3xl font-bold text-emerald-300">£{explain.ai_rate}</div>
+              {ctx.owner_override && (
+                <div className="text-[11px] text-amber-400 mt-1">Owner override: £{ctx.owner_override}</div>
+              )}
+            </div>
+
+            {/* Narrative */}
+            {explain.narrative && (
+              <div className="rounded-xl bg-stone-900 border border-stone-800 p-4">
+                <div className="text-[10px] uppercase tracking-wider text-stone-500 mb-2">Why this rate?</div>
+                <div className="text-stone-200 text-sm whitespace-pre-line leading-relaxed" data-testid="rate-narrative">
+                  {explain.narrative}
+                </div>
+              </div>
+            )}
+
+            {/* Breakdown */}
+            <div className="rounded-xl bg-stone-900 border border-stone-800 p-4 space-y-2">
+              <div className="text-[10px] uppercase tracking-wider text-stone-500">Sinyaller</div>
+              <Sig label={`Compset (${ctx.compset_count || 0} otel)`}
+                value={ctx.compset_avg ? `£${ctx.compset_avg}` : "—"}
+                sub={ctx.compset_min ? `min £${ctx.compset_min} · max £${ctx.compset_max}` : null} />
+              <Sig label="Doluluk" value={`${ctx.occupancy_pct}% (${ctx.in_house}/${ctx.total_rooms})`} />
+              <Sig label="Pickup (24s)" value={`+${ctx.pickup_24h}`} color={ctx.pickup_24h > 0 ? "text-cyan-400" : ""} />
+              <Sig label="Gün" value={ctx.day_of_week} />
+              <Sig label="Lead time" value={`${ctx.lead_time_days} gün`} />
+              {ctx.events?.length > 0 && (
+                <Sig label="Etkinlik" value={ctx.events.join(", ")} color="text-amber-400" />
+              )}
+            </div>
+
+            {isLocked && (
+              <button
+                onClick={release}
+                disabled={releasing}
+                className="w-full py-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-medium text-sm disabled:opacity-50"
+                data-testid="release-to-ai-btn"
+              >
+                {releasing ? "Bırakılıyor…" : "🤖 AI'a Bırak (kilidi kaldır)"}
+              </button>
+            )}
+          </section>
+        )}
+
+        {/* History */}
+        <section>
+          <div className="text-[10px] uppercase tracking-wider text-stone-500 mb-2">Geçmiş ({history.length})</div>
+          {history.length === 0 ? (
+            <div className="text-stone-600 text-xs">Henüz değişiklik yok</div>
+          ) : (
+            <ul className="space-y-2">
+              {history.map(h => (
+                <li key={h.id} className="rounded-lg bg-stone-900 border border-stone-800 p-3 text-xs"
+                    data-testid={`history-${h.id}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase ${
+                      h.action === "release" ? "bg-amber-500/20 text-amber-400"
+                                              : "bg-emerald-500/20 text-emerald-400"
+                    }`}>
+                      {h.action === "release" ? "AI'a bırakıldı" : "Submit"}
+                    </span>
+                    <span className="text-stone-500">{new Date(h.created_at).toLocaleString("tr-TR")}</span>
+                  </div>
+                  {h.action !== "release" && (
+                    <div className="text-stone-300">
+                      {h.previous_rate != null ? <>£{h.previous_rate}</> : <span className="text-stone-500">—</span>}
+                      <span className="mx-2 text-stone-500">→</span>
+                      <strong className="text-emerald-300">£{h.new_rate}</strong>
+                      {h.delta_pct != null && (
+                        <span className={`ml-2 text-[10px] ${h.delta_pct > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          {h.delta_pct > 0 ? "+" : ""}{h.delta_pct}%
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {h.action === "release" && h.previous_rate && (
+                    <div className="text-stone-400">£{h.previous_rate} kilidi kaldırıldı</div>
+                  )}
+                  <div className="text-stone-500 text-[10px] mt-0.5">{h.by}</div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function Sig({ label, value, sub, color }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-stone-400">{label}</span>
+      <div className="text-right">
+        <div className={`font-semibold ${color || "text-stone-200"}`}>{value}</div>
+        {sub && <div className="text-[10px] text-stone-500">{sub}</div>}
+      </div>
     </div>
   );
 }

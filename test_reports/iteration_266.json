@@ -1,0 +1,76 @@
+{
+  "summary": "Iteration 266: Rate Override History Audit Trail, AI 'Why this rate?' Explainer, and Release-to-AI feature fully tested. All 14 tests passed. Fixed bug where release endpoint wasn't clearing live_pms_rate from owner_rate_overrides.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration266_history_explain_release.py",
+    "/app/test_reports/pytest/pytest_iteration266_history_explain_release.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "POST /api/rates/grid/submit-to-pms correctly appends to rate_override_history collection with action='submit', previous_rate, new_rate, delta, delta_pct, by, created_at",
+    "GET /api/rates/grid/history/{property_id}/{date} returns history items sorted desc by created_at",
+    "POST /api/rates/grid/release/{property_id}/{date} deletes owner-override from rate_overrides AND clears pms_override+target_sell_rate+live_pms_rate from owner_rate_overrides AND adds 'release' action to history",
+    "After release: grid live_pms_rate correctly falls back to default_rate (90)",
+    "After release: booking/reserve uses base_price (not the released override)",
+    "GET /api/rates/grid/explain/{property_id}/{date} returns ai_rate, breakdown (anchor, occupancy_signal, pickup_signal, guardrails), context (occupancy_pct, in_house, total_rooms, pickup_24h, compset_avg, lead_time_days, day_of_week, owner_override, is_locked), and narrative (Turkish text from gpt-4o-mini)",
+    "Explain endpoint works with no compset data (compset_avg=null) - still returns valid response and narrative",
+    "All 3 new endpoints require admin/manager auth (401/403 without token)"
+  ],
+  "updated_files": [
+    "/app/backend/routes/rates_grid.py",
+    "/app/backend/tests/test_iteration266_history_explain_release.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "N/A (backend only testing requested)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test overrides created for dates 2027-05-15 to 2027-05-19 for history/release/explain verification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "History audit trail, AI explainer, and release-to-AI features fully verified. Property 'aldgate-flats' used for testing. Emergent LLM (gpt-4o-mini) integration working - returns Turkish narrative. Fixed bug: release endpoint now also clears live_pms_rate from owner_rate_overrides so grid falls back to default_rate.",
+  "features_tested": {
+    "Auth_Required": {
+      "history_endpoint": "PASS (401/403 without auth)",
+      "release_endpoint": "PASS (401/403 without auth)",
+      "explain_endpoint": "PASS (401/403 without auth)"
+    },
+    "History_Audit_Trail": {
+      "submit_creates_history_entry": "PASS (action='submit', new_rate=175)",
+      "history_sorted_desc_by_created_at": "PASS",
+      "history_has_delta_fields": "PASS (delta, delta_pct when previous_rate exists)"
+    },
+    "Release_To_AI": {
+      "release_removes_lock": "PASS (deleted_count=1)",
+      "release_adds_history_entry": "PASS (action='release', previous_rate=200, new_rate=None)",
+      "after_release_grid_shows_default_rate": "PASS (live_pms_rate=90 after release)",
+      "after_release_booking_uses_base_price": "PASS (not 250)"
+    },
+    "Explain_Endpoint": {
+      "returns_ai_rate": "PASS",
+      "returns_breakdown": "PASS (anchor, occupancy_signal, pickup_signal, guardrails)",
+      "returns_context": "PASS (occupancy_pct, in_house, total_rooms, pickup_24h, compset_avg, lead_time_days, day_of_week, owner_override, is_locked)",
+      "returns_narrative": "PASS (Turkish text from gpt-4o-mini)",
+      "works_without_compset_data": "PASS (compset_avg=null still returns valid response)"
+    }
+  },
+  "bug_fixed": {
+    "issue": "Release endpoint wasn't clearing live_pms_rate from owner_rate_overrides",
+    "root_cause": "Line 375 in rates_grid.py only unset pms_override and target_sell_rate, but not live_pms_rate",
+    "fix": "Added 'live_pms_rate': '' to the $unset operation in release_to_ai endpoint",
+    "file": "/app/backend/routes/rates_grid.py",
+    "line": 375
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

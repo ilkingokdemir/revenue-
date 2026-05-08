@@ -4,7 +4,9 @@ Combines: ADR (booked), Occupancy, Live PMS Rate, Scraped OTA Sell Rate,
 Min Rate, Floor (LMF), Target Sell Rate, PMS Override, Sentinel AI Rate.
 Owner can override AI on any day; batch submitted to PMS+OTA.
 """
+import json
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict
@@ -256,6 +258,13 @@ def create_rates_grid_router(db, require_roles):
             floor_r = ov.get("floor_rate") or 0
             effective = max(effective, min_r, floor_r)
 
+            # Capture previous PMS rate for history diff
+            prev_doc = await db.rate_overrides.find_one(
+                {"property_id": property_id, "date": d, "set_by": "owner-override",
+                 "room_type_id": ""}, {"_id": 0, "custom_rate": 1}
+            )
+            prev_rate = float(prev_doc["custom_rate"]) if prev_doc and prev_doc.get("custom_rate") else None
+
             # 1) Write to channel sync queue (logical record of intent)
             await db.rate_sync_queue.insert_one({
                 "id": str(uuid.uuid4()),
@@ -307,9 +316,206 @@ def create_rates_grid_router(db, require_roles):
                                   "created_at": now}},
                 upsert=True
             )
+
+            # 4) HISTORY — every submission appends an audit entry
+            await db.rate_override_history.insert_one({
+                "id": str(uuid.uuid4()),
+                "property_id": property_id,
+                "date": d,
+                "action": "submit",
+                "previous_rate": prev_rate,
+                "new_rate": float(effective),
+                "delta": round(float(effective) - prev_rate, 2) if prev_rate else None,
+                "delta_pct": round(((float(effective) - prev_rate) / prev_rate * 100), 1)
+                              if prev_rate else None,
+                "fields": {
+                    "pms_override": ov.get("pms_override"),
+                    "target_sell_rate": ov.get("target_sell_rate"),
+                    "min_rate": min_r if min_r else None,
+                    "floor_rate": floor_r if floor_r else None,
+                },
+                "by": owner_name,
+                "created_at": now,
+            })
+
             pms_synced += 1
             queued += 1
         return {"queued": queued, "pms_synced": pms_synced}
+
+    @router.get("/rates/grid/history/{property_id}/{date}")
+    async def rate_history(property_id: str, date: str, limit: int = 20,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Return the audit trail for a specific date."""
+        items = await db.rate_override_history.find(
+            {"property_id": property_id, "date": date}, {"_id": 0}
+        ).sort("created_at", -1).to_list(min(limit, 50))
+        return {"property_id": property_id, "date": date, "history": items}
+
+    @router.post("/rates/grid/release/{property_id}/{date}")
+    async def release_to_ai(property_id: str, date: str,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Remove the owner lock for this date — Sentinel AI takes over again."""
+        now = datetime.now(timezone.utc).isoformat()
+        owner_name = current_user.get("name", "Owner")
+        # Capture previous rate for history
+        prev_doc = await db.rate_overrides.find_one(
+            {"property_id": property_id, "date": date, "set_by": "owner-override",
+             "room_type_id": ""}, {"_id": 0, "custom_rate": 1}
+        )
+        prev_rate = float(prev_doc["custom_rate"]) if prev_doc and prev_doc.get("custom_rate") else None
+
+        # 1) Delete the owner-override doc from PMS source-of-truth
+        deleted = await db.rate_overrides.delete_one(
+            {"property_id": property_id, "date": date, "set_by": "owner-override",
+             "room_type_id": ""}
+        )
+        # 2) Clear pms_override + target_sell_rate + live_pms_rate from grid (keep min_rate, floor_rate)
+        await db.owner_rate_overrides.update_one(
+            {"property_id": property_id, "date": date},
+            {"$unset": {"pms_override": "", "target_sell_rate": "", "live_pms_rate": ""}}
+        )
+        # 3) History
+        await db.rate_override_history.insert_one({
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "date": date,
+            "action": "release",
+            "previous_rate": prev_rate,
+            "new_rate": None,
+            "by": owner_name,
+            "created_at": now,
+        })
+        return {"released": True, "deleted_count": deleted.deleted_count}
+
+    @router.get("/rates/grid/explain/{property_id}/{date}")
+    async def explain_rate(property_id: str, date: str,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        """AI-generated explanation of WHY the Sentinel rate is what it is.
+        Uses Emergent LLM (gpt-4o-mini) with all context: occupancy, pickup, compset,
+        events, day-of-week, lead time."""
+        # Re-fetch the day's grid context
+        prop_filter = {} if property_id == "all" else {"property_id": property_id}
+        # Stay/occupancy
+        bk_query = {"check_in": {"$lte": date}, "check_out": {"$gt": date},
+                    "status": {"$in": ["confirmed", "checked_in"]}, **prop_filter}
+        in_house = await db.bookings.count_documents(bk_query)
+        total_rooms = await db.rooms.count_documents(prop_filter) or 1
+        occ_pct = round(min(100.0, in_house / total_rooms * 100), 1)
+        # Pickup last 24h
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        pickup_q = {**bk_query, "created_at": {"$gte": cutoff}}
+        pickup_count = await db.bookings.count_documents(pickup_q)
+        # Compset
+        comp_q = {"check_in_date": date, **prop_filter}
+        comp_docs = await db.competitor_rates.find(comp_q, {"_id": 0}).to_list(50)
+        comp_prices = [float(c.get("rate") or c.get("price") or 0) for c in comp_docs
+                       if c.get("hotel_role") != "own" and (c.get("rate") or c.get("price"))]
+        comp_avg = round(sum(comp_prices) / len(comp_prices), 2) if comp_prices else None
+        comp_min = min(comp_prices) if comp_prices else None
+        comp_max = max(comp_prices) if comp_prices else None
+        # Events
+        events = await db.event_calendar.find({"date": date, **prop_filter},
+                                              {"_id": 0, "name": 1, "category": 1, "magnitude": 1}
+        ).to_list(10) if "event_calendar" in await db.list_collection_names() else []
+        # Owner override?
+        ov = await db.owner_rate_overrides.find_one(
+            {"property_id": property_id, "date": date}, {"_id": 0}
+        ) or {}
+        # PMS locked?
+        pms_lock = await db.rate_overrides.find_one(
+            {"property_id": property_id, "date": date, "set_by": "owner-override"}, {"_id": 0}
+        )
+        # Day-of-week + lead time
+        try:
+            d_obj = datetime.strptime(date, "%Y-%m-%d")
+            dow = d_obj.strftime("%A")
+            today = datetime.now(timezone.utc).date()
+            lead = (d_obj.date() - today).days
+        except ValueError:
+            dow = "?"
+            lead = 0
+
+        # Default base
+        rate_plan = await db.rate_plans.find_one(prop_filter, {"_id": 0}) or {}
+        base = float(rate_plan.get("base_rate") or 90)
+
+        # Heuristic decomposition
+        anchor = comp_avg or base
+        demand_score = min(100, occ_pct + pickup_count * 5)
+        multiplier = 1.0 + (demand_score - 50) / 200
+        ai_rate = round(max(anchor * multiplier, ov.get("min_rate") or 0,
+                            ov.get("floor_rate") or 0), 2)
+
+        breakdown = {
+            "anchor": {"label": "Compset average" if comp_avg else "Base rate",
+                       "value": anchor, "weight": "60%"},
+            "occupancy_signal": {"label": f"Occupancy {occ_pct}%",
+                                 "value": f"{(occ_pct - 50) / 200 * 100:+.1f}%",
+                                 "weight": "25%"},
+            "pickup_signal": {"label": f"Pickup +{pickup_count} (24h)",
+                              "value": f"{pickup_count * 5 / 200 * 100:+.1f}%",
+                              "weight": "15%"},
+            "guardrails": {"min_rate": ov.get("min_rate"),
+                           "floor_rate": ov.get("floor_rate")},
+        }
+
+        # LLM narrative
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        narrative = None
+        if api_key:
+            try:
+                from emergentintegrations.llm.chat import LlmChat, UserMessage
+                ctx = {
+                    "date": date, "day_of_week": dow, "lead_time_days": lead,
+                    "occupancy_pct": occ_pct, "in_house": in_house, "total_rooms": total_rooms,
+                    "pickup_24h": pickup_count,
+                    "compset_avg": comp_avg, "compset_min": comp_min, "compset_max": comp_max,
+                    "compset_count": len(comp_prices),
+                    "base_rate": base, "ai_suggested_rate": ai_rate,
+                    "owner_override": ov.get("pms_override"),
+                    "target_sell_rate": ov.get("target_sell_rate"),
+                    "min_rate": ov.get("min_rate"), "floor_rate": ov.get("floor_rate"),
+                    "events": [e.get("name") for e in events],
+                    "is_locked": bool(pms_lock),
+                }
+                prompt = (
+                    f"You are a hotel revenue analyst. Explain in 3 short Turkish bullet points "
+                    f"why the AI Sentinel rate for {date} is £{ai_rate}. "
+                    f"Be specific about which signals matter most (occupancy, pickup, compset, events, day-of-week). "
+                    f"If owner overrode the rate, mention what they changed. "
+                    f"Context (JSON): {json.dumps(ctx, ensure_ascii=False)}. "
+                    f"Format: ONLY 3 bullets, Turkish, each starting with • and 1-2 sentences max."
+                )
+                chat = LlmChat(
+                    api_key=api_key,
+                    session_id=f"explain-{property_id}-{date}",
+                    system_message="Sen bir otel gelir yöneticisi danışmanısın. Sadece kısa, net Türkçe yanıt ver."
+                ).with_model("openai", "gpt-4o-mini")
+                resp = await chat.send_message(UserMessage(text=prompt))
+                narrative = resp if isinstance(resp, str) else getattr(resp, "content", str(resp))
+            except Exception as e:
+                logger.warning(f"explain LLM failed: {e}")
+
+        return {
+            "date": date,
+            "ai_rate": ai_rate,
+            "breakdown": breakdown,
+            "context": {
+                "day_of_week": dow,
+                "lead_time_days": lead,
+                "occupancy_pct": occ_pct,
+                "in_house": in_house, "total_rooms": total_rooms,
+                "pickup_24h": pickup_count,
+                "compset_avg": comp_avg,
+                "compset_min": comp_min,
+                "compset_max": comp_max,
+                "events": [e.get("name") for e in events],
+                "owner_override": ov.get("pms_override"),
+                "target_sell_rate": ov.get("target_sell_rate"),
+                "is_locked": bool(pms_lock),
+            },
+            "narrative": narrative,
+        }
 
     return router
 

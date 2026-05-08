@@ -845,7 +845,16 @@ const ComplianceTab = ({ propertyId }) => {
 };
 
 /* ─────────────── SHIFT SCHEDULER TAB ─────────────── */
-const ShiftSchedulerTab = ({ propertyId }) => {
+// Vivid 24-color palette — each staff in the branch gets a UNIQUE color (index-based).
+const SHIFT_STAFF_PALETTE = [
+  "#dc2626", "#ea580c", "#ca8a04", "#65a30d", "#16a34a", "#0d9488",
+  "#0891b2", "#0284c7", "#2563eb", "#4338ca", "#7c3aed", "#9333ea",
+  "#c026d3", "#db2777", "#be123c", "#1e293b", "#854d0e", "#365314",
+  "#134e4a", "#1e3a8a", "#581c87", "#831843", "#7f1d1d", "#3f3f46",
+];
+
+const ShiftSchedulerTab = ({ propertyId, user }) => {
+  const canSeePay = ["admin", "manager"].includes((user?.role || "").toLowerCase());
   const [staff, setStaff] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [weekStart, setWeekStart] = useState(() => {
@@ -923,7 +932,12 @@ const ShiftSchedulerTab = ({ propertyId }) => {
   const days = getDays();
   const weekEnd = days[6];
   const filteredStaff = staff.filter(s => !search || s.name?.toLowerCase().includes(search.toLowerCase()));
-  const shiftColors = { planned: "bg-blue-500", published: "bg-emerald-500", completed: "bg-amber-500", approved: "bg-violet-500", draft: "bg-stone-400" };
+  // UNIQUE color per staff in this branch — sorted by id so colors are stable across reloads.
+  const sortedAll = [...staff].sort((a, b) => (a.id || "").localeCompare(b.id || ""));
+  const staffColorMap = {};
+  sortedAll.forEach((s, i) => { staffColorMap[s.id] = SHIFT_STAFF_PALETTE[i % SHIFT_STAFF_PALETTE.length]; });
+  const initialsOf = (name) => (name || "?").trim().split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase();
+  const STATUS_RING = { planned: "", published: "ring-1 ring-white", completed: "ring-2 ring-white", approved: "ring-2 ring-white shadow-md", draft: "opacity-60" };
 
   return (
     <div data-testid="shift-scheduler-tab">
@@ -971,7 +985,12 @@ const ShiftSchedulerTab = ({ propertyId }) => {
         <button onClick={() => { if (window.confirm("Clear all shifts for this week?")) bulkAction("clear-week"); }}
           className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors" data-testid="shift-clear-week">Clear Week</button>
         <div className="flex items-center gap-2 ml-auto text-[10px] text-stone-400">
-          {Object.entries(shiftColors).map(([k, c]) => <span key={k} className="flex items-center gap-1"><span className={`w-2.5 h-2.5 rounded-sm ${c}`}/>{k}</span>)}
+          <span className="font-medium text-stone-500">Durum:</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-stone-400 opacity-60"/>Taslak</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-stone-500"/>Planlı</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-stone-500 ring-1 ring-stone-700"/>Yayında</span>
+          <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-stone-500 ring-2 ring-stone-700"/>Tamamlandı/Onaylı</span>
+          <span className="ml-2 text-stone-500"><strong className="text-stone-600">Renk</strong> = personel kimliği (her kişiye özel)</span>
         </div>
       </div>
 
@@ -992,14 +1011,29 @@ const ShiftSchedulerTab = ({ propertyId }) => {
             <tbody>
               {filteredStaff.length === 0 ? (
                 <tr><td colSpan={8} className="text-center py-12 text-stone-400 text-sm">No staff members. Add staff to start scheduling.</td></tr>
-              ) : filteredStaff.map(s => (
+              ) : filteredStaff.map(s => {
+                const sColor = staffColorMap[s.id] || "#64748b";
+                return (
                 <tr key={s.id} className="border-b border-stone-100 hover:bg-stone-50/30" data-testid={`shift-row-${s.id}`}>
-                  <td className="px-4 py-3 sticky left-0 bg-white z-10">
-                    <div className="font-medium text-stone-800">{s.name}</div>
-                    <div className="text-xs text-stone-400 capitalize">{s.role}</div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <Badge className="text-[9px] bg-amber-50 text-amber-600 capitalize">{s.pay_type}</Badge>
-                      <span className="text-[10px] text-stone-400">{s.currency === "GBP" ? "\u00A3" : s.currency}{s.pay_rate}</span>
+                  <td className="px-4 py-3 sticky left-0 bg-white z-10" style={{ borderLeft: `4px solid ${sColor}` }}>
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-semibold text-white"
+                        style={{ backgroundColor: sColor }}
+                        data-testid={`staff-avatar-${s.id}`}
+                      >
+                        {initialsOf(s.name)}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="font-medium text-stone-800 truncate">{s.name}</div>
+                        <div className="text-xs text-stone-400 capitalize">{s.role}</div>
+                        {canSeePay && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Badge className="text-[9px] bg-amber-50 text-amber-600 capitalize">{s.pay_type}</Badge>
+                            <span className="text-[10px] text-stone-400">{s.currency === "GBP" ? "\u00A3" : s.currency}{s.pay_rate}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </td>
                   {days.map(d => {
@@ -1007,14 +1041,22 @@ const ShiftSchedulerTab = ({ propertyId }) => {
                     return (
                       <td key={d.date} className="px-1 py-2 align-top min-w-[120px]" data-testid={`shift-cell-${s.id}-${d.date}`}>
                         {dayShifts.map(sh => (
-                          <div key={sh.id} className={`${shiftColors[sh.status] || "bg-stone-400"} text-white text-[10px] font-medium px-2 py-1.5 rounded-md mb-1 group`}>
+                          <div
+                            key={sh.id}
+                            className={`text-white text-[10px] font-medium px-2 py-1.5 rounded-md mb-1 group ${STATUS_RING[sh.status] || ""}`}
+                            style={{ backgroundColor: sColor }}
+                            data-testid={`shift-block-${sh.id}`}
+                          >
                             <div className="flex items-center justify-between">
                               <span>{sh.start_time}-{sh.end_time}</span>
                               <button onClick={() => deleteShift(sh.id)} className="opacity-0 group-hover:opacity-100 ml-1" data-testid={`delete-shift-${sh.id}`}>
                                 <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"/></svg>
                               </button>
                             </div>
-                            <div className="text-[9px] opacity-80 mt-0.5">{sh.hours_worked || "8"}h &middot; £{sh.earned_amount || sh.pay_rate || 0}</div>
+                            <div className="text-[9px] opacity-90 mt-0.5">
+                              {sh.hours_worked || "8"}h
+                              {canSeePay && <> &middot; £{sh.earned_amount || sh.pay_rate || 0}</>}
+                            </div>
                           </div>
                         ))}
                         <button onClick={() => setShowAddShift({ staffId: s.id, date: d.date })}
@@ -1025,7 +1067,8 @@ const ShiftSchedulerTab = ({ propertyId }) => {
                     );
                   })}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1088,7 +1131,7 @@ const tabs = [
   { id: "shifts", label: "Shifts", icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" },
 ];
 
-export const OperationsHubPanel = ({ properties, activePropertyId }) => {
+export const OperationsHubPanel = ({ properties, activePropertyId, user }) => {
   const [activeTab, setActiveTab] = useState("reception");
   const pid = activePropertyId || "all";
 
@@ -1118,7 +1161,7 @@ export const OperationsHubPanel = ({ properties, activePropertyId }) => {
           {activeTab === "handover" && <PassOverDutiesTab propertyId={pid} />}
           {activeTab === "laundry" && <LaundryTab propertyId={pid} />}
           {activeTab === "compliance" && <ComplianceTab propertyId={pid} />}
-          {activeTab === "shifts" && <ShiftSchedulerTab propertyId={pid} />}
+          {activeTab === "shifts" && <ShiftSchedulerTab propertyId={pid} user={user} />}
         </motion.div>
       </AnimatePresence>
     </div>

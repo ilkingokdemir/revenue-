@@ -13,6 +13,50 @@ logger = logging.getLogger(__name__)
 def create_shifts_router(db, require_roles):
     router = APIRouter()
 
+    # ============== Helper: auto-sync completed/approved shifts to finance ==============
+    async def _sync_to_finance(query: dict) -> int:
+        """Push matching shift_entries to finance_earned_salaries (idempotent)."""
+        shifts = await db.shift_entries.find(query, {"_id": 0}).to_list(500)
+        now = datetime.now(timezone.utc).isoformat()
+        created = 0
+        for s in shifts:
+            existing = await db.finance_earned_salaries.find_one({"shift_id": s.get("id", "")})
+            if existing:
+                continue
+            hours = float(s.get("hours_worked", 0) or 0)
+            if hours == 0:
+                try:
+                    st = datetime.strptime(s.get("start_time", "09:00"), "%H:%M")
+                    en = datetime.strptime(s.get("end_time", "17:00"), "%H:%M")
+                    hours = round((en - st).seconds / 3600, 2)
+                except Exception:
+                    hours = 8.0
+            earned = float(s.get("earned_amount", 0) or 0)
+            if earned == 0:
+                pay_type = s.get("pay_type", "daily")
+                pay_rate = float(s.get("pay_rate", 0) or 0)
+                earned = round(hours * pay_rate, 2) if pay_type == "hourly" else round(pay_rate, 2)
+            if earned <= 0:
+                continue
+            await db.finance_earned_salaries.insert_one({
+                "id": str(uuid.uuid4()),
+                "shift_id": s.get("id", ""),
+                "property_id": s.get("property_id", ""),
+                "staff_id": s.get("staff_id", ""),
+                "staff_name": s.get("staff_name", ""),
+                "role": s.get("role", ""),
+                "date": s.get("date", ""),
+                "amount": earned,
+                "hours": hours,
+                "pay_type": s.get("pay_type", "daily"),
+                "pay_rate": float(s.get("pay_rate", 0) or 0),
+                "source": "shift",
+                "notes": f"Shift {s.get('start_time', '')}-{s.get('end_time', '')} ({hours}h)",
+                "created_at": now,
+            })
+            created += 1
+        return created
+
     # ==================== STAFF MEMBERS ====================
 
     @router.get("/shifts/staff/{property_id}")
@@ -118,6 +162,9 @@ def create_shifts_router(db, require_roles):
         updates.pop("_id", None)
         updates.pop("id", None)
         await db.shift_entries.update_one({"id": shift_id}, {"$set": updates})
+        # If status is now completed/approved, auto-push to finance
+        if updates.get("status") in ("completed", "approved"):
+            await _sync_to_finance({"id": shift_id})
         return await db.shift_entries.find_one({"id": shift_id}, {"_id": 0})
 
     @router.delete("/shifts/entries/{shift_id}")
@@ -186,7 +233,12 @@ def create_shifts_router(db, require_roles):
         if property_id and property_id != "all":
             query["property_id"] = property_id
         result = await db.shift_entries.update_many(query, {"$set": {"status": "completed"}})
-        return {"completed": result.modified_count}
+        # Auto-push completed shifts to finance
+        sync_q = {"week_start": week_start, "status": "completed"}
+        if property_id and property_id != "all":
+            sync_q["property_id"] = property_id
+        synced = await _sync_to_finance(sync_q)
+        return {"completed": result.modified_count, "synced_to_finance": synced}
 
     @router.post("/shifts/bulk/approve-completed")
     async def approve_completed(data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -196,7 +248,11 @@ def create_shifts_router(db, require_roles):
         if property_id and property_id != "all":
             query["property_id"] = property_id
         result = await db.shift_entries.update_many(query, {"$set": {"status": "approved"}})
-        return {"approved": result.modified_count}
+        sync_q = {"week_start": week_start, "status": "approved"}
+        if property_id and property_id != "all":
+            sync_q["property_id"] = property_id
+        synced = await _sync_to_finance(sync_q)
+        return {"approved": result.modified_count, "synced_to_finance": synced}
 
     # ==================== PAYROLL SUMMARY ====================
 

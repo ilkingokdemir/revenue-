@@ -4427,7 +4427,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Operations Hub */}
         {activeView === "operations-hub" && (
-          <OperationsHubPanel properties={properties} activePropertyId={activePropertyId} />
+          <OperationsHubPanel properties={properties} activePropertyId={activePropertyId} user={user} />
         )}
 
         {/* Finance */}

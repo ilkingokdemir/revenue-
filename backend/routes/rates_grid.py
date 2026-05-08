@@ -21,8 +21,14 @@ def create_rates_grid_router(db, require_roles):
 
     @router.get("/rates/grid/{property_id}")
     async def rates_grid(property_id: str, start_date: str = "", days: int = 90,
+                         room_type_id: str = "",
                          current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Return per-day metrics for the rate grid."""
+        """Return per-day metrics for the rate grid.
+
+        room_type_id (optional): if provided, override values returned (min/floor/
+        target/pms_override/live_pms_rate) are scoped to THAT room type only.
+        Empty string = property-wide (default) overrides.
+        """
         if not start_date:
             start_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         try:
@@ -31,6 +37,7 @@ def create_rates_grid_router(db, require_roles):
             raise HTTPException(400, "Invalid start_date")
         days = max(1, min(int(days or 90), 365))
         end_date = (sd + timedelta(days=days)).strftime("%Y-%m-%d")
+        room_type_id = (room_type_id or "").strip()
 
         # Resolve property scope
         prop_filter = {} if property_id == "all" else {"property_id": property_id}
@@ -53,8 +60,9 @@ def create_rates_grid_router(db, require_roles):
                     "total": total_for_rt,
                 }
 
-        # 2) Existing owner-set overrides (separate collection from auto-scanner's rate_overrides)
-        ov_query = {"date": {"$gte": start_date, "$lt": end_date}, **prop_filter}
+        # 2) Existing owner-set overrides scoped per room_type if requested
+        ov_query = {"date": {"$gte": start_date, "$lt": end_date},
+                    "room_type_id": room_type_id, **prop_filter}
         overrides = await db.owner_rate_overrides.find(ov_query, {"_id": 0}).to_list(1000)
         ov_by_date = {o["date"]: o for o in overrides}
 
@@ -81,7 +89,8 @@ def create_rates_grid_router(db, require_roles):
 
         # 4b) Owner-locked PMS rates (the actual rate guests see — pushed via submit-to-pms)
         pms_locked_query = {"date": {"$gte": start_date, "$lt": end_date},
-                            "set_by": "owner-override", **prop_filter}
+                            "set_by": "owner-override",
+                            "room_type_id": room_type_id, **prop_filter}
         pms_locked = await db.rate_overrides.find(pms_locked_query, {"_id": 0}).to_list(500)
         pms_locked_by_date = {p["date"]: p for p in pms_locked}
 
@@ -171,6 +180,7 @@ def create_rates_grid_router(db, require_roles):
 
         return {
             "property_id": property_id,
+            "room_type_id": room_type_id,
             "start_date": start_date,
             "days": len(days_list),
             "total_rooms": total_rooms,
@@ -226,9 +236,11 @@ def create_rates_grid_router(db, require_roles):
         return {"saved": saved}
 
     @router.delete("/rates/grid/override/{property_id}/{date}")
-    async def delete_override(property_id: str, date: str,
+    async def delete_override(property_id: str, date: str, room_type_id: str = "",
                               current_user: dict = Depends(require_roles("admin", "manager"))):
-        result = await db.owner_rate_overrides.delete_one({"property_id": property_id, "date": date})
+        result = await db.owner_rate_overrides.delete_one(
+            {"property_id": property_id, "date": date, "room_type_id": room_type_id or ""}
+        )
         return {"deleted": result.deleted_count}
 
     @router.post("/rates/grid/submit-to-pms")
@@ -268,7 +280,7 @@ def create_rates_grid_router(db, require_roles):
             # Capture previous PMS rate for history diff
             prev_doc = await db.rate_overrides.find_one(
                 {"property_id": property_id, "date": d, "set_by": "owner-override",
-                 "room_type_id": ""}, {"_id": 0, "custom_rate": 1}
+                 "room_type_id": room_type_id}, {"_id": 0, "custom_rate": 1}
             )
             prev_rate = float(prev_doc["custom_rate"]) if prev_doc and prev_doc.get("custom_rate") else None
 
@@ -360,32 +372,35 @@ def create_rates_grid_router(db, require_roles):
         return {"property_id": property_id, "date": date, "history": items}
 
     @router.post("/rates/grid/release/{property_id}/{date}")
-    async def release_to_ai(property_id: str, date: str,
+    async def release_to_ai(property_id: str, date: str, room_type_id: str = "",
                             current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Remove the owner lock for this date — Sentinel AI takes over again."""
+        """Remove the owner lock for this date — Sentinel AI takes over again.
+        Scoped to a specific room_type_id when supplied (else property-wide)."""
         now = datetime.now(timezone.utc).isoformat()
         owner_name = current_user.get("name", "Owner")
+        rt_id = room_type_id or ""
         # Capture previous rate for history
         prev_doc = await db.rate_overrides.find_one(
             {"property_id": property_id, "date": date, "set_by": "owner-override",
-             "room_type_id": ""}, {"_id": 0, "custom_rate": 1}
+             "room_type_id": rt_id}, {"_id": 0, "custom_rate": 1}
         )
         prev_rate = float(prev_doc["custom_rate"]) if prev_doc and prev_doc.get("custom_rate") else None
 
         # 1) Delete the owner-override doc from PMS source-of-truth
         deleted = await db.rate_overrides.delete_one(
             {"property_id": property_id, "date": date, "set_by": "owner-override",
-             "room_type_id": ""}
+             "room_type_id": rt_id}
         )
         # 2) Clear pms_override + target_sell_rate + live_pms_rate from grid (keep min_rate, floor_rate)
         await db.owner_rate_overrides.update_one(
-            {"property_id": property_id, "date": date},
+            {"property_id": property_id, "date": date, "room_type_id": rt_id},
             {"$unset": {"pms_override": "", "target_sell_rate": "", "live_pms_rate": ""}}
         )
         # 3) History
         await db.rate_override_history.insert_one({
             "id": str(uuid.uuid4()),
             "property_id": property_id,
+            "room_type_id": rt_id,
             "date": date,
             "action": "release",
             "previous_rate": prev_rate,
@@ -393,7 +408,8 @@ def create_rates_grid_router(db, require_roles):
             "by": owner_name,
             "created_at": now,
         })
-        return {"released": True, "deleted_count": deleted.deleted_count}
+        return {"released": True, "deleted_count": deleted.deleted_count,
+                "room_type_id": rt_id}
 
     @router.get("/rates/grid/explain/{property_id}/{date}")
     async def explain_rate(property_id: str, date: str,

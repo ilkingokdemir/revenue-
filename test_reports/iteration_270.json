@@ -1,0 +1,104 @@
+{
+  "summary": "Iteration 270: Per-Room-Type Rate Override feature fully tested. All 20 backend tests passed. Frontend UI tests verified room type selector, scope badge, clear button, drawer scope, and all existing features (FLOWCAST, winloss, insights) working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "MyRatesPanel Room Type Selector",
+        "issues": ["Console warning: '<span> cannot be a child of <option>' - React hydration warning due to dynamic content in select options. Minor issue, does not affect functionality."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration270_room_type_rates.py",
+    "/app/test_reports/pytest/pytest_iteration270_room_type_rates.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/rates/grid/{property_id}?room_type_id=<id> correctly returns scoped overrides with room_type_id field in response",
+    "GET /api/rates/grid/{property_id} (no room_type_id) returns property-wide overrides (room_type_id='')",
+    "POST /api/rates/grid/override saves with room_type_id - Standard (£200), Deluxe (£350), property-wide (£90) stored separately without collision",
+    "POST /api/rates/grid/submit-to-pms writes to db.rate_overrides scoped per room_type and updates rate_override_history with room_type_id",
+    "POST /api/rates/grid/release/{prop}/{date}?room_type_id=<id> only deletes scoped override, leaves other room types intact",
+    "DELETE /api/rates/grid/override/{prop}/{date}?room_type_id=<id> only deletes scoped doc",
+    "Booking creation (POST /api/booking/reserve) uses room-type-specific owner-override first, falls back to property-wide override",
+    "Existing endpoints (explain, winloss, insights) still work with lookback_days param",
+    "Frontend MyRatesPanel: data-testid='rates-room-type-select' loads room types correctly",
+    "Frontend: data-testid='scope-badge' shows 'Otel geneli (varsayılan)' for property-wide, room type name when selected",
+    "Frontend: data-testid='scope-clear-btn' (×) resets to property-wide",
+    "Frontend: Rate drawer shows scope badge with selected room type",
+    "Auth required for all rates endpoints (401/403 returned correctly)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration270_room_type_rates.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created test overrides for Standard (£200), Deluxe (£350), and property-wide (£90) on test dates",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Per-room-type rate override feature fully verified. Room type IDs used in tests: Standard Double='65564291-66e3-4516-aefa-bd2eff51c91d', Deluxe Suite='01896696-e727-4fd0-b91a-c6b5f4118565'. All rates_grid endpoints now support room_type_id parameter for scoping. Booking engine correctly uses room-type-specific override with fallback to property-wide.",
+  "features_tested": {
+    "GET_rates_grid_with_room_type_id": {
+      "property_wide_default": "PASS (room_type_id='' in response)",
+      "standard_room_type_scoped": "PASS",
+      "deluxe_room_type_scoped": "PASS"
+    },
+    "POST_rates_grid_override": {
+      "save_standard_override": "PASS (£200)",
+      "save_deluxe_override": "PASS (£350)",
+      "save_property_wide_override": "PASS (£90)",
+      "overrides_do_not_collide": "PASS (verified separate storage)"
+    },
+    "POST_rates_grid_submit_to_pms": {
+      "submit_standard": "PASS",
+      "submit_deluxe": "PASS",
+      "submit_property_wide": "PASS",
+      "writes_to_rate_overrides": "PASS",
+      "updates_rate_override_history": "PASS"
+    },
+    "POST_rates_grid_release": {
+      "release_only_deletes_scoped": "PASS (Deluxe released, Standard intact)"
+    },
+    "DELETE_rates_grid_override": {
+      "delete_only_scoped_doc": "PASS (Standard deleted, property-wide intact)"
+    },
+    "existing_endpoints_regression": {
+      "explain_endpoint": "PASS",
+      "winloss_endpoint": "PASS (lookback_days param works)",
+      "insights_endpoint": "PASS (lookback_days param works)"
+    },
+    "booking_uses_room_type_override": {
+      "room_type_specific_rate": "PASS",
+      "fallback_to_property_wide": "PASS"
+    },
+    "auth_required": {
+      "grid_requires_auth": "PASS (401)",
+      "override_requires_auth": "PASS (401)",
+      "submit_requires_auth": "PASS (401)"
+    },
+    "frontend_ui": {
+      "room_type_selector": "PASS (data-testid='rates-room-type-select')",
+      "scope_badge_property_wide": "PASS ('Otel geneli (varsayılan)')",
+      "scope_badge_room_type": "PASS (shows room type name)",
+      "scope_clear_button": "PASS (data-testid='scope-clear-btn')",
+      "drawer_scope_badge": "PASS (data-testid='drawer-scope-badge')",
+      "flowcast_chart": "PASS",
+      "winloss_tile": "PASS (10 wins, 1 loss, 90.9% win-rate)",
+      "insights_section": "PASS (3 Turkish insights displayed)",
+      "submit_button": "PASS"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

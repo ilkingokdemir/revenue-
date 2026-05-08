@@ -39,6 +39,7 @@ function occColor(pct) {
 
 export const MyRatesPanel = ({ properties, activePropertyId }) => {
   const [propertyId, setPropertyId] = useState(activePropertyId || "all");
+  const [roomTypeId, setRoomTypeId] = useState(""); // "" = property-wide
   const [startDate, setStartDate] = useState(todayISO());
   const [days, setDays] = useState(30);
   const [data, setData] = useState(null);
@@ -57,13 +58,16 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePropertyId]);
 
+  // Reset room type when property changes (room types are property-scoped)
+  useEffect(() => { setRoomTypeId(""); }, [propertyId]);
+
   const reload = useCallback(async () => {
     setLoading(true);
     setPending({});
     try {
       const [r, w, ins] = await Promise.all([
         axios.get(`${API}/rates/grid/${propertyId}`, {
-          params: { start_date: startDate, days },
+          params: { start_date: startDate, days, room_type_id: roomTypeId },
           withCredentials: true,
         }),
         axios.get(`${API}/rates/winloss/${propertyId}`, {
@@ -84,7 +88,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
     } finally {
       setLoading(false);
     }
-  }, [propertyId, startDate, days]);
+  }, [propertyId, startDate, days, roomTypeId]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -110,13 +114,18 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
       });
       const changes = Object.values(byDate);
       const r = await axios.post(`${API}/rates/grid/override`,
-        { property_id: propertyId, changes }, { withCredentials: true });
+        { property_id: propertyId, room_type_id: roomTypeId, changes },
+        { withCredentials: true });
       toast.success(`${r.data.saved} değişiklik kaydedildi`);
       // Push to PMS sync queue
       const dates = Object.keys(byDate);
       await axios.post(`${API}/rates/grid/submit-to-pms`,
-        { property_id: propertyId, dates }, { withCredentials: true });
-      toast.success(`${dates.length} gün PMS+OTA kuyruğuna gönderildi`);
+        { property_id: propertyId, room_type_id: roomTypeId, dates },
+        { withCredentials: true });
+      const scopeLabel = roomTypeId
+        ? (data?.room_types?.find(rt => rt.id === roomTypeId)?.name || "oda tipi")
+        : "tüm oteller";
+      toast.success(`${dates.length} gün PMS+OTA kuyruğuna gönderildi (${scopeLabel})`);
       setPending({});
       reload();
     } catch (e) {
@@ -161,7 +170,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
   return (
     <div className="bg-stone-950 text-stone-100 min-h-screen -m-6 p-6" data-testid="my-rates-panel">
       {/* Top filter bar */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 pb-4 border-b border-stone-800">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6 pb-4 border-b border-stone-800">
         <Field label="HOTEL">
           <select
             value={propertyId}
@@ -172,6 +181,21 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
             <option value="all">Tüm oteller</option>
             {(properties || []).map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="ODA TİPİ">
+          <select
+            value={roomTypeId}
+            onChange={e => setRoomTypeId(e.target.value)}
+            className={`w-full bg-stone-900 border rounded px-3 py-2 text-sm ${
+              roomTypeId ? "border-violet-500 text-violet-300" : "border-stone-700"
+            }`}
+            data-testid="rates-room-type-select"
+          >
+            <option value="">Tümü (otel geneli)</option>
+            {(data?.room_types || []).map(rt => (
+              <option key={rt.id} value={rt.id}>{rt.name} ({rt.total})</option>
             ))}
           </select>
         </Field>
@@ -226,6 +250,30 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
           </button>
         </div>
       </div>
+
+      {/* Scope indicator */}
+      {data && (
+        <div className="mb-4 flex items-center gap-2 text-xs">
+          <span className="text-stone-500 uppercase tracking-wider">Aktif kapsam:</span>
+          {roomTypeId ? (
+            <span className="px-2 py-0.5 rounded bg-violet-500/15 border border-violet-500/40 text-violet-300 font-medium" data-testid="scope-badge">
+              {data.room_types?.find(rt => rt.id === roomTypeId)?.name || "Oda Tipi"}
+              <button
+                onClick={() => setRoomTypeId("")}
+                className="ml-2 text-violet-400 hover:text-violet-200"
+                data-testid="scope-clear-btn"
+              >×</button>
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded bg-stone-800 border border-stone-700 text-stone-300" data-testid="scope-badge">
+              Otel geneli (varsayılan)
+            </span>
+          )}
+          <span className="text-stone-600 text-[10px] ml-1">
+            ⓘ Burada yapılan değişiklikler {roomTypeId ? "sadece seçili oda tipine" : "fiyatı oda tipi bazında set edilmemiş tüm odalara"} uygulanır.
+          </span>
+        </div>
+      )}
 
       {/* Stats strip */}
       {data && (
@@ -478,6 +526,8 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
         <RateDrawer
           date={drawer.date}
           propertyId={drawer.propertyId}
+          roomTypeId={roomTypeId}
+          roomTypeName={data?.room_types?.find(rt => rt.id === roomTypeId)?.name}
           onClose={() => setDrawer(null)}
           onChanged={() => { setDrawer(null); reload(); }}
         />
@@ -561,7 +611,7 @@ function Stat({ label, value, color, testId }) {
   );
 }
 
-function RateDrawer({ date, propertyId, onClose, onChanged }) {
+function RateDrawer({ date, propertyId, roomTypeId, roomTypeName, onClose, onChanged }) {
   const [explain, setExplain] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -585,10 +635,14 @@ function RateDrawer({ date, propertyId, onClose, onChanged }) {
   }, [date, propertyId]);
 
   async function release() {
-    if (!confirm(`${date} için kilidi kaldır ve Sentinel AI'a bırak?`)) return;
+    const scope = roomTypeId ? ` (${roomTypeName || "oda tipi"})` : " (otel geneli)";
+    if (!confirm(`${date}${scope} için kilidi kaldır ve Sentinel AI'a bırak?`)) return;
     setReleasing(true);
     try {
-      await axios.post(`${API}/rates/grid/release/${propertyId}/${date}`, {}, { withCredentials: true });
+      await axios.post(`${API}/rates/grid/release/${propertyId}/${date}`, {}, {
+        params: { room_type_id: roomTypeId || "" },
+        withCredentials: true,
+      });
       toast.success("AI'a bırakıldı");
       onChanged();
     } catch {
@@ -613,6 +667,11 @@ function RateDrawer({ date, propertyId, onClose, onChanged }) {
             </h2>
             <p className="text-xs text-stone-500">
               Lead {ctx.lead_time_days ?? "—"} gün · {ctx.day_of_week}
+              {roomTypeId && (
+                <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 text-[10px]" data-testid="drawer-scope-badge">
+                  {roomTypeName || "Oda Tipi"}
+                </span>
+              )}
               {isLocked && (
                 <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[10px]">
                   🔒 OWNER LOCKED

@@ -1087,14 +1087,23 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             nights = 1
 
         base_price = room.get("base_price", 0)
+        rt_id = booking_data.room_type_id or ""
         nightly_total = 0.0
         for n in range(nights):
             d_iso = (ci + timedelta(days=n)).strftime("%Y-%m-%d")
+            # 1) Room-type specific owner override
             ov = await db.rate_overrides.find_one(
                 {"property_id": booking_data.property_id, "date": d_iso,
-                 "set_by": "owner-override"},
+                 "set_by": "owner-override", "room_type_id": rt_id},
                 {"_id": 0, "custom_rate": 1}
             )
+            # 2) Fall back to property-wide owner override
+            if not ov or not ov.get("custom_rate"):
+                ov = await db.rate_overrides.find_one(
+                    {"property_id": booking_data.property_id, "date": d_iso,
+                     "set_by": "owner-override", "room_type_id": ""},
+                    {"_id": 0, "custom_rate": 1}
+                )
             night_rate = float(ov["custom_rate"]) if ov and ov.get("custom_rate") else base_price
             nightly_total += night_rate
         total_price = nightly_total * booking_data.rooms

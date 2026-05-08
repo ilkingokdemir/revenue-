@@ -318,10 +318,16 @@ def create_dynamic_pricing_router(db, require_roles):
                     base, d, i, strategy, supply_snap, our_occ, total_rooms, comp_avg, event_for_day, hist_floor
                 )
 
-                # Get current override if any
+                # Get current override if any (per room type, fallback to property-wide)
                 override = await db.rate_overrides.find_one(
-                    {"property_id": property_id, "date": ds}, {"_id": 0}
+                    {"property_id": property_id, "date": ds, "room_type_id": rt.get("id", "")},
+                    {"_id": 0}
                 )
+                if not override:
+                    override = await db.rate_overrides.find_one(
+                        {"property_id": property_id, "date": ds, "room_type_id": ""},
+                        {"_id": 0}
+                    )
                 current_rate = float(override.get("custom_rate", 0)) if override and override.get("custom_rate") else base
                 change = round(((final_price - current_rate) / current_rate) * 100, 1) if current_rate > 0 else 0
 

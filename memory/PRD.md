@@ -5,7 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
-### 2026-05-08
+### 2026-05-08 (iter 270)
+- **Per-Room-Type Rate Override** (NEW)
+  - Backend `rates_grid.py`: `GET /api/rates/grid/{prop}?room_type_id=` filter, override save/submit/delete/release all room-type scoped, response now returns `room_type_id`.
+  - `bookings.py`: booking total now reads room-type-specific override first, falls back to property-wide, then base price.
+  - `dynamic_pricing.py`: per-room-type override lookup with property-wide fallback.
+  - Frontend `MyRatesPanel.js`: new "Oda Tipi" selector (`rates-room-type-select`), scope badge (`scope-badge` + `scope-clear-btn`), drawer scope indicator (`drawer-scope-badge`), release respects scope.
+  - **20/20 backend tests passed + frontend UI verified** (iteration_270.json) — Standard £200 / Deluxe £350 / property-wide £90 verified non-colliding.
+
+### 2026-05-08 (iter 269)
 - **FLOWCAST chart + Bordro CSV export + Tip Pool** (NEW)
   - **FLOWCAST** (recharts): unified timeline on My Rates panel — occupancy bars + Live PMS line + Sentinel AI line + Compset avg + Min rate guardrail + Pickup line. Dual Y-axis (£ rate / occupancy %).
   - **Bordro CSV export** (`GET /api/payroll/export/{prop}?week_start=...&month=...`) — Turkish headers, completed/approved shifts only, TOPLAM row, downloadable from Operations Hub Shifts tab (admin/manager only)
@@ -31,12 +39,13 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - Native push notifications (Capacitor + FCM/APNs keys)
 
 ### P1
-- Per-room-type override (Standard/Deluxe/Suite distinct rates)
 - AI Status per-day toggle (SENTINEL/MANUAL/auto-revert)
 - Scheduled re-run of insights (nightly cron) + push notifications
 - Offline mobile mode (service worker)
-- Backend folder restructure
+- Backend folder restructure (~220 routes → domain subfolders)
 - Mobile bottom-nav
+- Monthly PDF Bordro generation (TR Labor Law fields + signature areas)
+- WhatsApp Voice inbound webhook completion (Twilio → Whisper → LLM → TTS)
 
 ### P2
 - Demand Radar (event/holiday correlation)
@@ -48,7 +57,7 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - PCI-DSS / SOC 2 cert prep
 
 ## Testing Status
-- **200 cumulative backend tests passing** across iterations 262-269
+- **220 cumulative backend tests passing** across iterations 262-270
 
 ## Test Credentials
 Admin: admin@hotelbox.com / HotelAdmin2026!

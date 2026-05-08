@@ -195,7 +195,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
           >
             <option value="">Tümü (otel geneli)</option>
             {(data?.room_types || []).map(rt => (
-              <option key={rt.id} value={rt.id}>{rt.name} ({rt.total})</option>
+              <option key={rt.id} value={rt.id}>{`${rt.name} (${rt.total})`}</option>
             ))}
           </select>
         </Field>

@@ -188,8 +188,10 @@ def create_rates_grid_router(db, require_roles):
     @router.post("/rates/grid/override")
     async def save_overrides(data: Dict,
                              current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Batch upsert per-date overrides."""
+        """Batch upsert per-date overrides. Optional room_type_id scopes the override
+        to a specific room type (else applies property-wide as default)."""
         property_id = data.get("property_id", "")
+        room_type_id = data.get("room_type_id", "") or ""
         changes = data.get("changes", [])
         if not changes:
             return {"saved": 0}
@@ -212,9 +214,10 @@ def create_rates_grid_router(db, require_roles):
             update["updated_at"] = now
             update["updated_by"] = current_user.get("name", "")
             result = await db.owner_rate_overrides.update_one(
-                {"property_id": property_id, "date": d},
+                {"property_id": property_id, "date": d, "room_type_id": room_type_id},
                 {"$set": update,
                  "$setOnInsert": {"id": str(uuid.uuid4()), "property_id": property_id,
+                                  "room_type_id": room_type_id,
                                   "date": d, "created_at": now}},
                 upsert=True
             )
@@ -232,9 +235,9 @@ def create_rates_grid_router(db, require_roles):
     async def submit_to_pms(data: Dict,
                             current_user: dict = Depends(require_roles("admin", "manager"))):
         """Push pending overrides to channel sync queue AND to the PMS rate_overrides
-        collection (which booking engine, channel pushes, dynamic_pricing all read from).
-        This is the actual 'PMS link' — owner overrides become the live sell rate."""
+        collection (which booking engine, channel pushes, dynamic_pricing all read from)."""
         property_id = data.get("property_id", "")
+        room_type_id = data.get("room_type_id", "") or ""
         dates = data.get("dates", [])
         if not dates:
             return {"queued": 0, "pms_synced": 0}
@@ -244,7 +247,8 @@ def create_rates_grid_router(db, require_roles):
         pms_synced = 0
         for d in dates:
             ov = await db.owner_rate_overrides.find_one(
-                {"property_id": property_id, "date": d}, {"_id": 0}
+                {"property_id": property_id, "date": d, "room_type_id": room_type_id},
+                {"_id": 0}
             )
             if not ov:
                 continue
@@ -281,13 +285,11 @@ def create_rates_grid_router(db, require_roles):
 
             # 2) Update grid display
             await db.owner_rate_overrides.update_one(
-                {"property_id": property_id, "date": d},
+                {"property_id": property_id, "date": d, "room_type_id": room_type_id},
                 {"$set": {"live_pms_rate": effective, "submitted_at": now}}
             )
 
-            # 3) PMS LINK — upsert into rate_overrides so booking engine, channel
-            # managers, dynamic pricing, scrapers all see the new rate.
-            # set_by="owner-override" + locked=True so auto-scanner doesn't overwrite.
+            # 3) PMS LINK — upsert into rate_overrides scoped per room_type if set.
             reason_parts = []
             if ov.get("pms_override"):
                 reason_parts.append(f"PMS Override £{ov.get('pms_override')}")
@@ -301,7 +303,7 @@ def create_rates_grid_router(db, require_roles):
 
             await db.rate_overrides.update_one(
                 {"property_id": property_id, "date": d, "set_by": "owner-override",
-                 "room_type_id": ""},
+                 "room_type_id": room_type_id},
                 {"$set": {
                     "custom_rate": float(effective),
                     "min_rate": float(min_r) if min_r else 0,
@@ -314,7 +316,7 @@ def create_rates_grid_router(db, require_roles):
                  "$setOnInsert": {"id": str(uuid.uuid4()),
                                   "property_id": property_id,
                                   "date": d,
-                                  "room_type_id": "",
+                                  "room_type_id": room_type_id,
                                   "set_by": "owner-override",
                                   "created_at": now}},
                 upsert=True
@@ -324,6 +326,7 @@ def create_rates_grid_router(db, require_roles):
             await db.rate_override_history.insert_one({
                 "id": str(uuid.uuid4()),
                 "property_id": property_id,
+                "room_type_id": room_type_id,
                 "date": d,
                 "action": "submit",
                 "previous_rate": prev_rate,

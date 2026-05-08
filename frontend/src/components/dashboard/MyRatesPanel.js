@@ -39,6 +39,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
   const [days, setDays] = useState(30);
   const [data, setData] = useState(null);
   const [winloss, setWinloss] = useState(null);
+  const [insights, setInsights] = useState([]);
   const [loading, setLoading] = useState(false);
   // Pending edits keyed by `${date}::${field}` -> value
   const [pending, setPending] = useState({});
@@ -56,7 +57,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
     setLoading(true);
     setPending({});
     try {
-      const [r, w] = await Promise.all([
+      const [r, w, ins] = await Promise.all([
         axios.get(`${API}/rates/grid/${propertyId}`, {
           params: { start_date: startDate, days },
           withCredentials: true,
@@ -65,9 +66,14 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
           params: { lookback_days: 60 },
           withCredentials: true,
         }).catch(() => ({ data: null })),
+        axios.get(`${API}/rates/grid/insights/${propertyId}`, {
+          params: { lookback_days: 90 },
+          withCredentials: true,
+        }).catch(() => ({ data: { insights: [] } })),
       ]);
       setData(r.data);
       setWinloss(w.data);
+      setInsights(ins.data?.insights || []);
     } catch (e) {
       console.error(e);
       toast.error("Rate grid yüklenemedi");
@@ -113,6 +119,33 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
       toast.error("Gönderim başarısız: " + (e?.response?.data?.detail || e.message));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function applyInsight(ins) {
+    if (!ins?.recommendation) return;
+    try {
+      const r = await axios.post(`${API}/rates/grid/insights/apply`,
+        { property_id: propertyId, recommendation: ins.recommendation, count: 3 },
+        { withCredentials: true });
+      const sugs = r.data?.suggested_dates || [];
+      if (sugs.length === 0) {
+        toast.error("Uygun tarih bulunamadı");
+        return;
+      }
+      // Pre-fill pending overrides — owner reviews then submits
+      setPending(p => {
+        const next = { ...p };
+        sugs.forEach(s => {
+          next[`${s.date}::pms_override`] = s.target_pms_override;
+        });
+        return next;
+      });
+      toast.success(`${sugs.length} tarih için öneri pending olarak eklendi — review et ve Submit butonuna tıkla`);
+      // Jump grid to first suggested date so user sees the changes
+      if (sugs[0]) setStartDate(sugs[0].date);
+    } catch (e) {
+      toast.error("Uygulanamadı: " + (e?.response?.data?.detail || e.message));
     }
   }
 
@@ -201,6 +234,40 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
             testId="rates-min-rate-days" />
           <Stat label="Pickup (24h)" value={`+${data.stats.total_pickup}`} color="text-cyan-400" />
           <Stat label="Default rate" value={fmtMoney(data.default_rate)} color="text-stone-300" />
+        </div>
+      )}
+
+      {/* Smart Insights — pattern detection alerts */}
+      {insights.length > 0 && (
+        <div className="space-y-2 mb-5" data-testid="insights-section">
+          <div className="text-[10px] uppercase tracking-wider text-stone-500 flex items-center gap-2">
+            🤖 Akıllı uyarılar
+            <span className="text-stone-600">({insights.length})</span>
+          </div>
+          {insights.map(ins => {
+            const sevColor = ins.severity === "warning" ? "border-amber-500/40 bg-amber-500/10"
+                            : ins.severity === "success" ? "border-emerald-500/40 bg-emerald-500/10"
+                            : "border-stone-700 bg-stone-800/40";
+            const sevIcon = ins.severity === "warning" ? "⚠️" : ins.severity === "success" ? "🏆" : "ℹ️";
+            return (
+              <div key={ins.id} className={`rounded-lg border ${sevColor} p-3 flex items-start gap-3`}
+                   data-testid={`insight-${ins.id}`}>
+                <span className="text-xl">{sevIcon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-stone-200 text-sm">{ins.message}</div>
+                  {ins.recommendation && (
+                    <button
+                      onClick={() => applyInsight(ins)}
+                      className="mt-2 text-xs px-3 py-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-200 inline-flex items-center gap-1 border border-stone-700"
+                      data-testid={`insight-apply-${ins.id}`}
+                    >
+                      ✨ {ins.recommendation.label}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

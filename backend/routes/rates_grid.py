@@ -643,6 +643,195 @@ def create_rates_grid_router(db, require_roles):
             "comparisons": comparisons,
         }
 
+    @router.get("/rates/grid/insights/{property_id}")
+    async def insights(property_id: str, lookback_days: int = 90,
+                       current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Pattern detection from override history: repeated wins/losses by day-of-week,
+        consecutive minimum-rate days, anomaly streaks. Returns actionable recommendations."""
+        today = datetime.now(timezone.utc).date()
+        start = (today - timedelta(days=int(lookback_days or 90))).strftime("%Y-%m-%d")
+        end = today.strftime("%Y-%m-%d")
+
+        prop_filter = {} if property_id == "all" else {"property_id": property_id}
+
+        # Historical submits
+        submits = await db.rate_override_history.find(
+            {**({"property_id": property_id} if property_id != "all" else {"property_id": {"$exists": True}}),
+             "action": "submit",
+             "date": {"$gte": start, "$lte": end}},
+            {"_id": 0}
+        ).to_list(2000)
+        # Latest per date
+        latest_by_date: dict = {}
+        for s in submits:
+            existing = latest_by_date.get(s["date"])
+            if not existing or s.get("created_at", "") > existing.get("created_at", ""):
+                latest_by_date[s["date"]] = s
+
+        # Group by day-of-week with outcomes
+        total_rooms = await db.rooms.count_documents(prop_filter) or 1
+        DOW_NAMES_TR = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+        dow_buckets: dict = {i: [] for i in range(7)}
+
+        for ds, s in latest_by_date.items():
+            owner_rate = float(s.get("new_rate") or 0)
+            ai_rate = float(s.get("ai_rate_at_submit") or 0)
+            if owner_rate <= 0 or ai_rate <= 0:
+                continue
+            try:
+                dt = datetime.strptime(ds, "%Y-%m-%d")
+            except ValueError:
+                continue
+            bk_query = {"check_in": {"$lte": ds}, "check_out": {"$gt": ds},
+                        "status": {"$in": ["confirmed", "checked_in", "checked_out"]}, **prop_filter}
+            bookings = await db.bookings.count_documents(bk_query)
+            occ_pct = round(min(100.0, bookings / total_rooms * 100), 1)
+            dow_buckets[dt.weekday()].append({
+                "date": ds, "owner": owner_rate, "ai": ai_rate,
+                "bookings": bookings, "occ_pct": occ_pct,
+                "delta_pct": round((owner_rate - ai_rate) / ai_rate * 100, 1) if ai_rate else 0,
+            })
+
+        insights_list = []
+
+        for dow_idx, items in dow_buckets.items():
+            if len(items) < 2:
+                continue
+            # Pattern 1: Repeated low-occupancy days when priced above AI (≥10% above)
+            low_occ_high_price = [it for it in items
+                                  if it["occ_pct"] < 30 and it["delta_pct"] >= 10]
+            if len(low_occ_high_price) >= 2:
+                avg_delta = round(sum(it["delta_pct"] for it in low_occ_high_price)
+                                  / len(low_occ_high_price), 1)
+                avg_owner = round(sum(it["owner"] for it in low_occ_high_price)
+                                  / len(low_occ_high_price), 2)
+                avg_ai = round(sum(it["ai"] for it in low_occ_high_price)
+                               / len(low_occ_high_price), 2)
+                avg_occ = round(sum(it["occ_pct"] for it in low_occ_high_price)
+                                / len(low_occ_high_price), 1)
+                insights_list.append({
+                    "id": str(uuid.uuid4()),
+                    "severity": "warning",
+                    "type": "repeated_loss_pattern",
+                    "dow": dow_idx,
+                    "dow_name": DOW_NAMES_TR[dow_idx],
+                    "message": (
+                        f"Son {len(low_occ_high_price)} {DOW_NAMES_TR[dow_idx]} günü "
+                        f"AI'dan ortalama %{avg_delta} yüksek (£{avg_owner} vs £{avg_ai}) "
+                        f"fiyatladın ve doluluk sadece %{avg_occ} oldu. Sonraki "
+                        f"{DOW_NAMES_TR[dow_idx]} için fiyatı AI'a yaklaştırmak doluluğu artırabilir."
+                    ),
+                    "recommendation": {
+                        "action": "lower_to_ai",
+                        "label": f"Sonraki 3 {DOW_NAMES_TR[dow_idx]} için AI fiyatına çek",
+                        "dow": dow_idx,
+                        "target_offset_pct": -10,
+                    },
+                    "evidence": low_occ_high_price[:5],
+                })
+
+            # Pattern 2: Repeated wins (owner > AI + good occupancy)
+            consistent_wins = [it for it in items
+                               if it["bookings"] > 0 and it["owner"] > it["ai"]
+                               and it["occ_pct"] >= 30]
+            if len(consistent_wins) >= 3:
+                avg_delta = round(sum(it["delta_pct"] for it in consistent_wins)
+                                  / len(consistent_wins), 1)
+                avg_extra = round(sum((it["owner"] - it["ai"]) * it["bookings"]
+                                      for it in consistent_wins), 2)
+                insights_list.append({
+                    "id": str(uuid.uuid4()),
+                    "severity": "success",
+                    "type": "consistent_win_pattern",
+                    "dow": dow_idx,
+                    "dow_name": DOW_NAMES_TR[dow_idx],
+                    "message": (
+                        f"{DOW_NAMES_TR[dow_idx]} günleri AI'dan %{avg_delta} yüksek "
+                        f"fiyatlayıp {len(consistent_wins)} kez kazandın "
+                        f"(toplam +£{avg_extra} ek gelir). Bu pattern devam edebilir."
+                    ),
+                    "recommendation": {
+                        "action": "keep_strategy",
+                        "label": f"Sonraki 3 {DOW_NAMES_TR[dow_idx]} için aynı strateji",
+                        "dow": dow_idx,
+                        "target_offset_pct": avg_delta,
+                    },
+                    "evidence": consistent_wins[:5],
+                })
+
+        # Pattern 3: Min-rate streak detection (last 7 days from owner_rate_overrides)
+        recent_overrides = await db.owner_rate_overrides.find(
+            {**prop_filter,
+             "date": {"$gte": (today - timedelta(days=14)).strftime("%Y-%m-%d"),
+                      "$lte": end}},
+            {"_id": 0}
+        ).to_list(50)
+        min_streak = sum(
+            1 for ov in recent_overrides
+            if ov.get("live_pms_rate") and ov.get("min_rate")
+            and float(ov["live_pms_rate"]) <= float(ov["min_rate"]) + 1
+        )
+        if min_streak >= 5:
+            insights_list.append({
+                "id": str(uuid.uuid4()),
+                "severity": "info",
+                "type": "min_rate_streak",
+                "message": (
+                    f"Son 14 gün içinde {min_streak} gün taban fiyata yapıştın. "
+                    f"Pazar düşüşte mi yoksa min_rate çok mu yüksek? Kontrol et."
+                ),
+                "recommendation": {
+                    "action": "review_min_rate",
+                    "label": "Min Rate'i gözden geçir",
+                },
+            })
+
+        # Sort by severity
+        sev_order = {"warning": 0, "success": 1, "info": 2}
+        insights_list.sort(key=lambda x: sev_order.get(x["severity"], 99))
+
+        return {
+            "property_id": property_id,
+            "lookback_days": lookback_days,
+            "insights": insights_list,
+            "count": len(insights_list),
+        }
+
+    @router.post("/rates/grid/insights/apply")
+    async def apply_insight(data: Dict,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Apply an insight recommendation to the next N matching weekdays.
+        Generates pending overrides — the owner still must Submit them."""
+        property_id = data.get("property_id", "")
+        rec = data.get("recommendation", {})
+        dow = rec.get("dow")
+        offset_pct = float(rec.get("target_offset_pct", 0))
+        count = int(data.get("count", 3))
+        if dow is None:
+            raise HTTPException(400, "dow required")
+        # Find next N dates matching this weekday
+        today = datetime.now(timezone.utc).date()
+        target_dates = []
+        d = today + timedelta(days=1)
+        while len(target_dates) < count:
+            if d.weekday() == int(dow):
+                target_dates.append(d.strftime("%Y-%m-%d"))
+            d += timedelta(days=1)
+            if (d - today).days > 90:
+                break
+        # For each target date, compute target rate from current AI suggestion + offset
+        prop_filter = {} if property_id == "all" else {"property_id": property_id}
+        rate_plan = await db.rate_plans.find_one(prop_filter, {"_id": 0}) or {}
+        base = float(rate_plan.get("base_rate") or 90)
+        suggestions = []
+        for ds in target_dates:
+            ai = await _compute_ai_rate_for_date(db, property_id, ds)
+            target_rate = round(ai * (1 + offset_pct / 100), 2)
+            suggestions.append({"date": ds, "target_pms_override": target_rate,
+                                "ai_rate": ai, "base_rate": base})
+        return {"applied_count": 0, "suggested_dates": suggestions,
+                "note": "Frontend should pre-fill these as pending — owner reviews before Submit."}
+
     return router
 
 

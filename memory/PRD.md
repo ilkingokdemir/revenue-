@@ -4,42 +4,39 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 ## Core Personas
-- Admin / Manager — Full platform control, scheduling, finance, reports
-- Receptionist — Check-in/out, walk-in, folio, time clock
-- Housekeeping — Turnover board, route, checklists, time clock
+- Admin / Manager — Full platform control, scheduling, finance, reports (sees all £ amounts)
+- Receptionist / Housekeeper / Maintenance — Operational view (no £ visibility)
 - Chef / F&B — POS, KDS, recipe COGS, banquet, tip pool
-- Maintenance — Lock SDK, tickets, asset register
 - Guest — Guest app, voice concierge, WhatsApp, kiosk, self check-in
 
 ## Key Tech Decisions
-- React + Tailwind + shadcn/ui · Capacitor for mobile (iOS/Android)
+- React + Tailwind + shadcn/ui · Capacitor for mobile
 - FastAPI + Motor (async Mongo) · supervisor-managed
 - Emergent LLM Key for OpenAI Whisper STT, TTS-1, GPT-4o-mini
 - Stripe (test key) for payments · Twilio (pending) for SMS/WhatsApp
-- TR İş Kanunu compliance for labour rules
 
 ## Implemented (latest first)
 
+### 2026-05-08
+- **Shift Scheduler — Per-Staff Unique Color & Pay Privacy**
+  - 24-color palette assigned deterministically per branch (id-sorted index)
+  - Each staff = unique color: avatar + 4px left border + shift cell background all matching
+  - Pay info (£ rate, earned amounts) HIDDEN from non-admin/manager users (frontend `canSeePay` check)
+  - **Auto-sync to finance** — when shift status becomes `completed` or `approved` (single PUT or bulk endpoints), `finance_earned_salaries` entries are created automatically (idempotent via shift_id)
+  - 42/42 backend tests passed (10 new + 32 regression, 0 failures)
+
 ### 2026-05-07
-- **Shift Scheduler v2 — RotaPro v2** (NEW)
-  - Drag & drop weekly grid, click-to-add modal with templates (Sabah/Öğle/Akşam/Gece)
-  - Copy previous week, Bulk publish, Clear week
-  - Live cost summary (haftalık £, kişi başı), occupancy panel
-  - Conflict detection: long_shift >12h, weekly_overtime >45h (TR İş Kanunu), double_booking, consecutive_nights, leave_clash
-  - **AI Auto-Schedule** via Emergent LLM (gpt-4o-mini) with deterministic fallback
-  - Occupancy-based staffing recommendation (housekeeper per 12 rooms, +1 receptionist if occ>70%)
-  - Time-off / leave requests with TR annual leave balance (14/20/26 days)
-  - Mobile clock-in/out events with GPS-ready
-  - Open shifts (claimable by staff)
-  - 32/32 backend tests passed
-- **Mobile & Apps consolidated sidebar section**
-  - 10 modules consolidated: Mobile view, Guest app, Self-service kiosk, Pre-arrival check-in, Auto pre-arrival trigger, Voice concierge, WhatsApp voice, Concierge inbox AI, Hardware lock SDK, Marketplace
-  - Removed from scattered sections (Reservations / Guests / Operations / System)
-  - New `MOBİL & UYGULAMALAR` quick-access grid on Mobile Home (4-col icon grid)
-  - WhatsApp Voice admin panel created with setup tab, dev test simulator, sessions log
+- **Shift Scheduler v2 — RotaPro v2** (backend)
+  - Conflict detection: long_shift >12h, weekly_overtime >45h (TR), double_booking, consecutive_nights, leave_clash
+  - AI Auto-Schedule via Emergent LLM
+  - Occupancy-based staffing recommendation
+  - Time-off / leave requests with TR annual leave balance
+  - Mobile clock-in/out events
+  - Open shifts (claimable)
+- **Mobile & Apps consolidated sidebar section** (preserved across rollback)
+- **WhatsApp Voice integration backend** — Twilio webhook → Whisper → GPT-4o-mini → TTS → auto-task
 
 ### Earlier 2026-05
-- WhatsApp Voice backend (Twilio webhook → Whisper → GPT-4o-mini → TTS → auto-task)
 - Voice Concierge (Whisper STT + TTS-1 + intent classifier)
 - Capacitor mobile wrapper (iOS/Android)
 - Hardware Lock SDK adapters
@@ -55,9 +52,10 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - Resend API key flow for real email dispatch
 
 ### P1
-- Backend folder restructure: `/routes/` → `/routes/revenue/`, `/routes/fnb/`, etc.
+- Backend folder restructure: `/routes/` → domain folders
 - Mobile bottom-nav with 5 most-used actions
 - Native push notifications (Capacitor)
+- Backend-side pay_rate/earned_amount filtering for non-admin GET requests (defense-in-depth)
 
 ### P2
 - Carbon Reporting v2 (Scope 1+2+3)
@@ -76,16 +74,13 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 │   └── hardening.py
 ├── frontend/
 │   ├── src/App.js (slim root + sidebar)
-│   ├── src/lazyPanels.js
-│   └── src/components/
-│       ├── MobileHome.js
-│       └── dashboard/ (panels)
+│   └── src/components/dashboard/
 └── memory/
     ├── PRD.md
     └── test_credentials.md
 ```
 
 ## Testing Status
-- 32/32 backend tests pass for Shift v2 endpoints
-- Voice Concierge / WhatsApp Voice already tested earlier
+- 42/42 backend tests pass (Shift v2 + auto-sync regression)
+- Voice Concierge / WhatsApp Voice tested earlier
 - Frontend smoke-tested via Playwright screenshots

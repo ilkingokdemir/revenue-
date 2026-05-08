@@ -9,37 +9,40 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - Chef / F&B — POS, KDS, recipe COGS, banquet, tip pool
 - Guest — Guest app, voice concierge, WhatsApp, kiosk, self check-in
 
-## Key Tech Decisions
-- React + Tailwind + shadcn/ui · Capacitor for mobile
-- FastAPI + Motor (async Mongo) · supervisor-managed
-- Emergent LLM Key for OpenAI Whisper STT, TTS-1, GPT-4o-mini
-- Stripe (test key) for payments · Twilio (pending) for SMS/WhatsApp
-
 ## Implemented (latest first)
 
 ### 2026-05-08
-- **My Rates — Market-Pulse style 365-day rate grid** (NEW, P0 done)
-  - Aggregates per-day: ADR, Occupancy %, Pickup (24h), Min Rate, Floor (LMF), Live PMS Rate, Current Sell Rate (scraped), Compset Avg, Sentinel AI Rate (heuristic), Target Sell Rate, PMS Override
-  - Owner inline-edits overrides; pending changes highlighted; batch "Submit X Change(s)" pushes to PMS+OTA queue with guardrails
-  - Effective rate priority: pms_override > target_sell_rate > live_pms_rate, capped above min/floor
-  - Sentinel AI rate anchored to compset_avg or default base, modulated by demand (occupancy + pickup), guardrail-clamped
-  - 28/28 backend tests passed (test_reports/iteration_264.json)
-  - New collections: `owner_rate_overrides`, `rate_sync_queue`
-  - New endpoints: GET/POST `/api/rates/grid/{property_id}`, POST/DELETE `/api/rates/grid/override`, POST `/api/rates/grid/submit-to-pms`
-  - Sidebar: "Revenue & rates → My Rates (Daily Grid)" first item
+- **Rate Override History + AI Explainer + Release-to-AI** (NEW)
+  - `rate_override_history` collection — every submit/release logged with previous→new, delta%, by-user, timestamp
+  - `GET /api/rates/grid/history/{prop}/{date}` — last 20 changes
+  - `POST /api/rates/grid/release/{prop}/{date}` — removes lock, AI takes over again
+  - `GET /api/rates/grid/explain/{prop}/{date}` — AI-generated 3-bullet Turkish explanation via Emergent LLM (gpt-4o-mini)
+  - Click any date column header → drawer with Sentinel rate + AI narrative + signal breakdown + history + Release button
+  - 14/14 backend tests passed (test_reports/iteration_266.json)
 
-- **Shift Scheduler — Per-Staff Unique Color & Pay Privacy**
-  - 24-color palette assigned deterministically per branch; avatars + cells matching
-  - £ pay info hidden from non-admin/manager via `canSeePay`
-  - Auto-sync shift status `completed`/`approved` → `finance_earned_salaries` (idempotent)
+- **PMS Link — Owner Rates Flow End-to-End**
+  - `submit-to-pms` writes to `owner_rate_overrides` (grid) + `rate_overrides` (PMS source) + `rate_sync_queue` (channel push)
+  - `set_by="owner-override"` + `locked=true` protect from auto-scanner overwrites
+  - Booking engine `/booking/reserve` uses per-night override lookup → owner rates flow into actual sales
+  - 12/12 backend tests passed (test_reports/iteration_265.json)
+
+- **Per-room-type Availability + Occupancy in date headers**
+  - Room types listed below the metric grid; per-day free count colored (red 0, amber low, green plenty)
+  - Doluluk % shown in column header (under date number)
+
+- **My Rates — Market-Pulse style 365-day rate grid**
+  - Aggregates per-day: ADR, Occupancy %, Pickup, Min Rate, Floor, Live PMS Rate, Current Sell Rate, Compset Avg, Sentinel AI Rate, Target Sell Rate, PMS Override
+  - Owner inline-edits; pending changes amber-ringed; batch Submit to PMS+OTA queue with guardrails
+  - 28/28 backend tests passed (test_reports/iteration_264.json)
+
+- **Shift Scheduler — Per-Staff Unique Color & Pay Privacy + Auto-sync to finance**
+  - 24-color palette per branch; £ pay info hidden from non-admin/manager
+  - Completed/approved shifts auto-sync to `finance_earned_salaries` (idempotent)
   - 42/42 backend tests passed (test_reports/iteration_263.json)
 
-### 2026-05-07
-- Shift Scheduler v2 backend (conflicts, AI auto-schedule, occupancy-needs, leaves, clock-in, open shifts)
-- Mobile & Apps consolidated sidebar section
-- WhatsApp Voice integration backend
-
 ### Earlier 2026-05
+- Mobile & Apps consolidated sidebar section (10 modules)
+- WhatsApp Voice integration backend (Twilio webhook → Whisper → GPT → TTS)
 - Voice Concierge (Whisper + TTS-1)
 - Capacitor mobile wrapper
 - Hardware Lock SDK adapters
@@ -51,31 +54,30 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 ## Backlog (P0 → P2)
 
 ### P0
+- Real channel push from `rate_sync_queue` → Booking.com/Expedia (needs OTA credentials)
 - Twilio API key flow (real WhatsApp/SMS dispatch)
 - Resend API key flow (real email dispatch)
-- FLOWCAST chart on My Rates panel (occupancy bars + pickup + PMS rate dots + AI line + min rate guardrail)
+- FLOWCAST chart on My Rates panel
 
 ### P1
+- Per-room-type override (different rates per Standard / Deluxe / Suite)
+- AI Status per-day toggle (SENTINEL/MANUAL/auto-revert schedule)
 - Backend folder restructure: `/routes/` → domain folders
 - Mobile bottom-nav with 5 most-used actions
 - Native push notifications (Capacitor)
-- Backend-side pay_rate/earned_amount filtering for non-admin GET requests (defense-in-depth)
-- Override history (who, when, what change)
-- Auto-revert (override expiry → back to AI)
-- AI Status per-day toggle (some days SENTINEL, some MANUAL)
-- Real OTA channel push from rate_sync_queue (currently queued only)
+- Backend-side pay_rate filter for non-admin (defense-in-depth)
 
 ### P2
+- Demand Radar (event/holiday calendar correlation)
+- Compset Intel dedicated tab
 - Carbon Reporting v2 (Scope 1+2+3)
-- Marketplace v1 (3rd-party app store architecture)
-- OTA XML syncing (Booking.com, Expedia)
+- Marketplace v1 (3rd-party app store)
+- OTA XML syncing
 - PCI-DSS Level 1 / SOC 2 cert prep
 - Tip pool (F&B auto-distribution)
 - Bordro CSV/.xlsx export
-- Demand Radar (event/holiday calendar correlation)
-- Compset Intel dedicated tab
 
 ## Testing Status
-- 28/28 + 42/42 + 32/32 backend tests pass across iterations 262-264
+- 14/14 + 12/12 + 28/28 + 42/42 + 32/32 backend tests across iterations 262-266, all green
 - Voice Concierge / WhatsApp Voice tested earlier
 - Frontend smoke-tested via Playwright

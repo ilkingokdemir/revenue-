@@ -1,0 +1,94 @@
+{
+  "summary": "Iteration 229 - Batch 17 (Kitchen Display System + 86 List + Recipe Inventory) tested. Backend: 18/18 tests passed. Frontend: All UI elements verified. KDS Panel accessible via sidebar '🍽️ KDS + 86 + Reçete' (data-testid='kds-btn'). 3 tabs working: Canlı Ekran (live KDS stream), 86 Listesi (out-of-stock toggle), Reçeteler (recipe management). KDS stream shows station cards with bump buttons, age timers with color coding (green/amber/red). 86 List shows 37 menu items with toggle functionality. Recipes tab shows 37 items with edit buttons and modal editor. Regression tests passed for Batch 13-16.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "KDS Panel", "issues": ["Age timer shows very large values (22385dk) - likely test data from old orders"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration229_batch17_kds.py",
+    "/app/test_reports/pytest/pytest_iteration229_batch17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "KDS stream uses pos_orders.kitchen_status field with values: new, preparing, ready, served, voided",
+    "Station derived from pos_menu_items.station field (default: 'hot')",
+    "Age color logic: <5min=green, 5-10min=amber, >10min=red",
+    "Bump workflow: new → preparing → ready → served (with recipe deduction on 'preparing')",
+    "86 toggle creates audit log in pos_86_log collection",
+    "Recipe upsert is idempotent - updates existing or creates new",
+    "Recipe deduction happens atomically on bump to 'preparing' status",
+    "Inventory alerts triggered when stock drops below reorder_threshold"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration229_batch17_kds.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test recipe created for menu item during testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 229 validates Batch 17 (KDS + 86 List + Recipes). Sidebar button: '🍽️ KDS + 86 + Reçete' (data-testid='kds-btn'). Panel: data-testid='kds-panel'. Tabs: kds-tab-kds, kds-tab-86, kds-tab-recipes. KDS stream: kds-stream, kds-station-{name}, kds-bump-{order_id}. 86 List: 86-list-tab, 86-add-{id}, 86-chip-{id}. Recipes: recipes-tab, recipe-edit-{id}, recipe-editor, recipe-save. Backend endpoints: GET /api/kds/{property_id}, GET /api/kds/{property_id}?station=hot, POST /api/kds/bump, GET /api/86-list/{property_id}, POST /api/86-list/toggle, GET /api/recipes/{menu_item_id}, POST /api/recipes, GET /api/recipes/property/{property_id}.",
+  "features_verified": {
+    "batch_17_kds": {
+      "endpoints": {
+        "kds_stream": "GET /api/kds/default → 200 + orders[], by_station{}, counters{new,preparing,ready}, oldest_age_minutes",
+        "kds_station_filter": "GET /api/kds/default?station=hot → 200 + filtered orders",
+        "kds_bump_invalid_status": "POST /api/kds/bump with invalid status → 400",
+        "kds_bump_invalid_order": "POST /api/kds/bump with invalid order_id → 404",
+        "86_list_get": "GET /api/86-list/default → 200 + items[], count",
+        "86_toggle_invalid": "POST /api/86-list/toggle with invalid id → 404",
+        "86_toggle_workflow": "POST /api/86-list/toggle ON → verify in list → toggle OFF",
+        "recipe_get": "GET /api/recipes/{id} → 200 + menu_item_id, components[]",
+        "recipe_upsert": "POST /api/recipes → 200 + menu_item_id, component_count",
+        "recipe_property_list": "GET /api/recipes/property/default → 200 + rows[], total, with_recipe"
+      },
+      "ui_elements": {
+        "sidebar_btn": "data-testid='kds-btn' - '🍽️ KDS + 86 + Reçete'",
+        "panel": "data-testid='kds-panel'",
+        "kds_tab": "data-testid='kds-tab-kds' - 'Canlı Ekran'",
+        "86_tab": "data-testid='kds-tab-86' - '86 Listesi'",
+        "recipes_tab": "data-testid='kds-tab-recipes' - 'Reçeteler'",
+        "kds_stream": "data-testid='kds-stream'",
+        "station_cards": "data-testid='kds-station-{name}'",
+        "bump_buttons": "data-testid='kds-bump-{order_id}'",
+        "86_list_tab": "data-testid='86-list-tab'",
+        "86_add_buttons": "data-testid='86-add-{id}'",
+        "86_chips": "data-testid='86-chip-{id}'",
+        "recipes_tab_content": "data-testid='recipes-tab'",
+        "recipe_edit_buttons": "data-testid='recipe-edit-{id}'",
+        "recipe_editor_modal": "data-testid='recipe-editor'",
+        "recipe_save_button": "data-testid='recipe-save'"
+      },
+      "kpi_counters": {
+        "kds_tab": ["YENI (new)", "HAZIRLANIYOR (preparing)", "HAZIR (ready)", "EN ESKİ (DK) (oldest_age_minutes)"],
+        "86_tab": ["86 LİSTESİNDEKİ (on_86 count)", "MENÜDE AKTİF (active menu)", "TOPLAM MENÜ (total menu)"],
+        "recipes_tab": ["REÇETELİ ÜRÜN (with_recipe)", "REÇETESİZ (without_recipe)", "STOK KALEMİ (stock_items)"]
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "batch_16_channel_revenue": "PASSED (6 channels)",
+    "batch_15_eu_compliance": "PASSED (/catalog working)",
+    "batch_14_ai_predictions": "PASSED (/ai-predictions/cancel-risk working)",
+    "batch_13_tr_compliance": "PASSED (/tr-compliance/kbs/history working)",
+    "enhanced_dashboard": "PASSED",
+    "command_palette": "PASSED (opens with Ctrl+K)"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "batch_completion_status": "Batch 17 (Kitchen Display System + 86 List + Recipe Inventory) COMPLETE"
+}

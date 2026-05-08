@@ -1,0 +1,147 @@
+{
+  "summary": "Iteration 150 - P0 Features (City Ledger, Tax Config, Deposit Policies) Testing Complete. Backend: 30/30 tests passed. Frontend: All 3 panels render correctly with all UI elements. Fixed missing imports in App.js and syntax error in city_ledger.py.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "city_ledger_backend": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/city-ledger/companies creates company with id, open_balance enrichment",
+        "GET /api/city-ledger/companies returns list with open_balance/open_invoices enriched",
+        "PUT /api/city-ledger/companies/{id} updates company",
+        "POST /api/city-ledger/invoices auto-generates invoice_number CL-YYYY-NNNNN",
+        "POST /api/city-ledger/invoices auto-calculates due_date = issue + company.payment_terms_days",
+        "GET /api/city-ledger/invoices enriches with company_name, is_overdue, days_overdue, balance",
+        "POST /api/city-ledger/invoices/{id}/pay supports partial payments (status=partial)",
+        "POST /api/city-ledger/invoices/{id}/pay supports full payments (status=paid)",
+        "GET /api/city-ledger/aging returns correct 0-30/31-60/61-90/90+ bucketing",
+        "GET /api/city-ledger/aging returns by_company breakdown",
+        "DELETE /api/city-ledger/companies/{id} blocks deletion when open invoices exist (400)",
+        "GET /api/city-ledger/companies/{id}/statement returns company + invoices + summary"
+      ]
+    },
+    "tax_config_backend": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/tax-config/profiles stores rules with kind/label/basis/rate/applies_to/channels/included_in_rate",
+        "GET /api/tax-config/profiles returns profiles list",
+        "PUT /api/tax-config/profiles/{id} updates profile",
+        "DELETE /api/tax-config/profiles/{id} returns 404 for non-existent",
+        "POST /api/tax-config/calculate correctly computes percent basis",
+        "POST /api/tax-config/calculate correctly computes per_night_per_guest basis (£3 × 2n × 2g = £12)",
+        "POST /api/tax-config/calculate respects included_in_rate flag (taxes_included vs taxes_added)",
+        "POST /api/tax-config/calculate filters rules by category (room/fnb/spa)"
+      ]
+    },
+    "deposit_policies_backend": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/deposit-policies/ creates policy with trigger object (channels, lead_days_lte, rate_plan_ids)",
+        "GET /api/deposit-policies/ returns policies sorted by priority",
+        "PUT /api/deposit-policies/{id} updates policy",
+        "DELETE /api/deposit-policies/{id} returns 404 for non-existent",
+        "POST /api/deposit-policies/evaluate matches policies in priority order",
+        "POST /api/deposit-policies/evaluate correctly calculates deposit_required for percent type",
+        "POST /api/deposit-policies/evaluate correctly calculates deposit_required for flat type",
+        "POST /api/deposit-policies/evaluate respects channel filter",
+        "POST /api/deposit-policies/evaluate respects lead_days_lte filter",
+        "POST /api/deposit-policies/evaluate returns matched=false when no policies apply"
+      ]
+    },
+    "frontend_navigation": {
+      "status": "PASS",
+      "tests": [
+        "data-testid='city-ledger-btn' in sidebar opens CityLedgerPanel (data-testid='city-ledger-panel')",
+        "data-testid='tax-config-btn' opens TaxConfigPanel (data-testid='tax-config-panel')",
+        "data-testid='deposit-policies-btn' opens DepositPolicyPanel (data-testid='deposit-policy-panel')"
+      ]
+    },
+    "frontend_city_ledger_ui": {
+      "status": "PASS",
+      "elements_verified": [
+        "Refresh button (data-testid='ledger-refresh')",
+        "New Company button (data-testid='ledger-new-company')",
+        "Companies tab (data-testid='ledger-tab-companies')",
+        "Invoices tab (data-testid='ledger-tab-invoices')",
+        "Aging Report tab (data-testid='ledger-tab-aging')",
+        "KPI cards: Total Open AR, Overdue, Companies, Open Invoices",
+        "Company table with Name, Contact, Credit Limit, Terms, Open AR, Actions"
+      ]
+    },
+    "frontend_tax_config_ui": {
+      "status": "PASS",
+      "elements_verified": [
+        "New Tax Profile button (data-testid='tax-new-btn')",
+        "Tax Calculator base input (data-testid='tax-calc-base')",
+        "Calculate button (data-testid='tax-calc-run')",
+        "Profile cards showing rules with basis/rate/applies_to",
+        "Tax Calculator with Base/Nights/Guests/Channel inputs"
+      ]
+    },
+    "frontend_deposit_policy_ui": {
+      "status": "PASS",
+      "elements_verified": [
+        "New Policy button (data-testid='dep-new-btn')",
+        "Policy Evaluator channel input (data-testid='dep-eval-channel')",
+        "Evaluate button (data-testid='dep-eval-run')",
+        "Policy table with Priority, Name, Trigger, Amount, Due Within, Non-refund, Active",
+        "Policy Evaluator with Channel/Lead Days/Rate Plan ID/Total inputs"
+      ]
+    }
+  },
+  "bugs_fixed": [
+    {
+      "file": "/app/backend/routes/city_ledger.py",
+      "issue": "Syntax error on line 160 - two statements merged on same line",
+      "fix": "Split 'r[\"company_name\"] = ...today = datetime...' into separate lines"
+    },
+    {
+      "file": "/app/frontend/src/App.js",
+      "issue": "Missing imports for CityLedgerPanel, TaxConfigPanel, DepositPolicyPanel",
+      "fix": "Added imports from ./components/dashboard/finance/"
+    }
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iteration150_p0_features.py",
+    "/app/test_reports/pytest/pytest_iteration150_p0_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 3 P0 features are fully functional end-to-end",
+    "City Ledger correctly enriches companies with open_balance/open_invoices from invoices collection",
+    "Invoice auto-numbering uses CL-YYYY-NNNNN format with sequential counter per year",
+    "Due date auto-calculation respects company.payment_terms_days",
+    "Aging report correctly buckets by days overdue (current/1-30/31-60/61-90/90+)",
+    "Tax calculation supports 4 basis types: percent, per_night_per_guest, per_night, flat",
+    "included_in_rate flag correctly separates taxes_added vs taxes_included",
+    "Deposit policy evaluation matches in priority order (lower priority = matches first)",
+    "All endpoints properly use require_perm for authorization"
+  ],
+  "updated_files": [
+    "/app/backend/routes/city_ledger.py",
+    "/app/frontend/src/App.js",
+    "/app/backend/tests/test_iteration150_p0_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test data created and cleaned up during pytest run. Existing data visible in UI: Acme Corp company with £1,500 open AR, UK Standard tax profile, Last-minute 50% deposit policy.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 150 tested the 3 P0 features from competitor audit: City Ledger (Corporate AR), Tax Configuration, and Deposit Policies. All backend APIs work correctly with proper enrichment, auto-generation, and calculation logic. Frontend panels render correctly with all interactive elements. Fixed 2 bugs: syntax error in city_ledger.py and missing imports in App.js.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

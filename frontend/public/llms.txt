@@ -1,0 +1,88 @@
+# MyHotelBox
+
+> The most complete Property Management System (PMS) for independent hotels, apartments, and small hospitality groups. 95+ production modules spanning front office, billing, revenue, guest communications, compliance, and AI — designed to meet or exceed the feature set of Mews, Cloudbeds, and Eviivo.
+
+MyHotelBox is a modern, full-stack hotel platform that gives independent operators enterprise-grade capabilities without the enterprise price tag. It combines a React + Tailwind UI with a FastAPI + MongoDB backend, and ships with AI integrations (Claude Sonnet 4.5, GPT-5.2, Gemini Nano Banana) for revenue optimisation, guest concierge, and content generation.
+
+## Who it's for
+
+- Independent hotels (1-200 rooms) wanting Mews/Cloudbeds feature parity at a lower TCO
+- Multi-property portfolios with mixed currencies and mixed brand identities
+- Short-stay apartment operators, hostels, and aparthotels
+- Finance teams that need proper corporate AR, multi-currency GL consolidation, and GDPR tooling
+
+## Core capabilities
+
+### Front office
+- Gantt-style drag-and-drop calendar with collision detection and overbooking alerts
+- One-click duplicate booking, no-show, check-in/out, cancel
+- Out-of-Service / Maintenance blocks with diagonal-striped overlays
+- Self-Service Kiosk (`/checkin-kiosk`) for passport-scan check-in
+
+### Billing & finance
+- Split folios with per-sub-folio Print / Email / Set-Payer
+- City Ledger (Corporate AR) with 30/60/90-day aging
+- Multi-currency consolidation — 41 ISO currencies, live FX, portfolio-wide reporting
+- Multi-currency line items on a single invoice (e.g. room in EUR + F&B in USD rolled up to GBP)
+- Full Tax Configuration (VAT, city tax, tourist tax, resort fee, OTA included-in-rate logic)
+- Deposit Policies with priority-based rule evaluator
+- Profit OS (ContributionPAR) — revenue net of OTA commission + payment processing fees
+
+### Commercial / revenue
+- Rate Products (BAR, Non-Refundable, Advance Purchase, Corporate, Package)
+- Derived rates (child rates that float ±% or ±£ from a parent)
+- OTA channel-code mapping UI (Booking.com, Expedia, Airbnb, Hotels.com, Agoda)
+- Promo codes with validate hook for the booking engine
+- AI Revenue Copilot (Claude Sonnet) for pricing decisions
+- Demand Radar, Compset, Price Alerts, Dynamic Pricing
+
+### Guest communications
+- Unified Inbox: WhatsApp + SMS + Email + Booking.com + Airbnb merged per-guest
+- Manual click-to-send communications (never automated without explicit operator action)
+- Pre-arrival digital check-in + upsell engine
+
+### Groups
+- Link multiple rooms to one organiser (weddings, conferences, tour groups)
+- Three billing modes: master-pays-all, master-pays-rooms-only, each-room-self-pays
+- Consolidated Master Folio view
+
+### Compliance
+- RBAC v2 with 313 granular permissions, sidebar gating, and permission-denial audit trail
+- GDPR Article 17 (erasure) and Article 20 (portability) fully implemented
+- Legal document e-signing, registration cards with passport + signature capture
+
+### AI
+- AI Weekly Digest (natural-language P&L summary)
+- Smart Scanner (mobile ID OCR)
+- Event Intelligence (auto-detects concerts/festivals and surfaces pricing pressure)
+- Concierge Analytics (intent mining across guest conversations)
+
+## Integrations
+
+- **LLMs**: Claude Sonnet 4.5, GPT-5.2, Gemini 3 Pro (via the Emergent Universal Key)
+- **Image/video**: Nano Banana, Sora 2, GPT Image 1
+- **Payments**: Stripe (including crypto)
+- **Email**: Resend
+- **Voice**: ElevenLabs, OpenAI TTS & Whisper
+- **Channels**: Booking.com, Expedia, Airbnb, Hotels.com, Agoda
+
+## Comparison
+
+See `/compare` for a full feature audit of MyHotelBox vs Mews vs Cloudbeds vs Eviivo. Score (2×full + 1×partial): MyHotelBox **70**, Mews 50, Cloudbeds 38, Eviivo 23.
+
+## Technical
+
+- Frontend: React 19 · Tailwind CSS · Shadcn/UI · Lucide icons
+- Backend: FastAPI · Python 3.11 · MongoDB (Motor async driver)
+- Auth: JWT-based with Emergent-managed Google OAuth option
+- 100% test pass rate across 153 testing iterations
+
+## Contact
+
+- Email: hello@myhotelbox.com
+- Demo: /book
+- Sign in: /
+
+## License
+
+Proprietary — all rights reserved. Contact for enterprise licensing and on-prem options.

@@ -1,0 +1,134 @@
+{
+  "summary": "Iteration 90 - Premium Booking Widget Testing Complete. All 11 backend API tests passed (100%). Frontend verified: Hero with booking bar, trust signals, rooms preview, why book direct, footer all present. Full booking flow works: search → results → checkout → confirmation. Mobile responsive with hamburger menu.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/booking-widget/info/{property_id}",
+        "issue": "Returns base_rate: 0 for all rooms in the info endpoint, but check-availability returns correct rates (£100). This causes room preview cards to show '£0/night' instead of actual prices.",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Rooms Preview Section",
+        "issues": ["Room cards show 'From £0/night' due to backend returning base_rate: 0 in info endpoint"]
+      }
+    ]
+  },
+  "features_tested": {
+    "booking_engine_home": {
+      "status": "PASS",
+      "tests": [
+        "Hero section with hotel name 'VILENZA HOTEL'",
+        "OFFICIAL WEBSITE — BEST RATE GUARANTEED badge",
+        "Booking bar with CHECK-IN, CHECK-OUT, GUESTS & ROOMS inputs",
+        "CHECK AVAILABILITY button",
+        "Trust bar with 5 signals (SSL, Best Price, Free Cancellation, No Prepayment, Instant Confirmation)",
+        "Rooms preview section with 5 room cards",
+        "Why Book Direct section with 3 benefit cards",
+        "Footer with hotel info, quick links, booking guarantee"
+      ]
+    },
+    "guests_dropdown": {
+      "status": "PASS",
+      "tests": [
+        "Dropdown opens on click",
+        "Adults/Children/Rooms adjustment with +/- buttons",
+        "Done button closes dropdown"
+      ]
+    },
+    "search_results": {
+      "status": "PASS",
+      "tests": [
+        "Results page loads after search",
+        "Search summary bar shows dates, guests, nights",
+        "Modify Search link present",
+        "5 room results displayed",
+        "Room cards show: photo, name, description, amenities, score (9.2), availability count",
+        "Pricing shows strikethrough original price and total",
+        "Free cancellation and No prepayment badges",
+        "Reserve buttons on each room"
+      ]
+    },
+    "checkout_page": {
+      "status": "PASS",
+      "tests": [
+        "Guest form with Full Name, Email, Phone, Special Requests",
+        "Booking Summary sidebar (Hotel, Room, Check-in/out, Duration, Guests, Total)",
+        "Trust messages (Free cancellation, No prepayment, Instant confirmation)",
+        "COMPLETE BOOKING button",
+        "SSL Encrypted, No payment taken now, Free cancellation badges"
+      ]
+    },
+    "booking_confirmation": {
+      "status": "PASS",
+      "tests": [
+        "Confirmation page loads after booking",
+        "Booking Confirmed! message with green checkmark",
+        "Booking reference (WEB-XXXXXXXX) displayed",
+        "Hotel, Room, Dates, Total shown",
+        "Trust messages displayed",
+        "Back to Home button works"
+      ]
+    },
+    "mobile_responsive": {
+      "status": "PASS",
+      "tests": [
+        "Hamburger menu visible on mobile",
+        "Mobile menu opens with Home and Book Now buttons",
+        "Hero stacks vertically",
+        "Booking form adapts to mobile width",
+        "Trust signals wrap nicely",
+        "Results page works on mobile",
+        "Checkout form stacks vertically on mobile"
+      ]
+    },
+    "backend_apis": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/booking-widget/info/vilenza-hotel returns hotel and room data",
+        "POST /api/booking-widget/check-availability returns available rooms with pricing",
+        "POST /api/booking-widget/book creates confirmed booking with WEB- reference"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration90_booking_widget.py",
+    "/app/test_reports/pytest/pytest_iteration90_booking_widget.xml"
+  ],
+  "action_items": [
+    "MINOR: Fix base_rate in /api/booking-widget/info endpoint to return actual room rates instead of 0"
+  ],
+  "critical_code_review_comments": [
+    "Booking widget is well-implemented with proper data-testid attributes for testing",
+    "All 4 states (home, results, details, confirmed) work correctly",
+    "Trust signals appear throughout the booking flow as expected",
+    "Mobile responsiveness is excellent with proper hamburger menu",
+    "Backend APIs properly validate required fields and return appropriate errors",
+    "Booking creates actual database entry with unique WEB- reference"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration90_booking_widget.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 tests passed)",
+    "frontend": "100% (All features verified)"
+  },
+  "test_credentials": {
+    "note": "No auth needed for booking engine (public)",
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test bookings created during testing with unique emails (test_*.example.com)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 90 tested the Premium Booking Widget at /book/vilenza-hotel. Key features: 1) Hero with booking bar and trust signals. 2) Rooms preview section with 5 room types. 3) Search returns results with photos, amenities, pricing, Reserve buttons. 4) Checkout has guest form and booking summary sidebar. 5) Confirmation shows booking reference (WEB-XXXXXXXX). 6) Mobile responsive with hamburger menu. All 11 backend tests passed. One minor issue: room preview cards show £0/night because info endpoint returns base_rate: 0 (but check-availability returns correct rates).",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All features are fully functional - no mocked APIs"
+  }
+}

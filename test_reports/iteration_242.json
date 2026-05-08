@@ -1,0 +1,91 @@
+{
+  "summary": "Batch 31 — F&B Tab Transfer testing complete: Cross-outlet guest tab management (bar→restaurant→room folio). 32/33 backend tests passed (1 skipped), all frontend UI elements verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration242_fnb_tabs.py",
+    "/app/test_reports/pytest/pytest_iteration242_fnb_tabs.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration242_fnb_tabs.py"
+  ],
+  "success_rate": {
+    "backend": "97% (32/33 tests passed, 1 skipped)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test tabs created via API tests (TEST_Anna, TEST_DetailGuest, TEST_ItemsGuest, TEST_WorkflowAnna, etc.)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Batch 31 F&B Tab Transfer fully tested. All 8 endpoints working: POST /api/fnb/tabs (open), GET /api/fnb/tabs/{property_id} (list with by_outlet aggregation), GET /api/fnb/tabs/detail/{tab_id}, POST /api/fnb/tabs/{tab_id}/items (add), DELETE /api/fnb/tabs/{tab_id}/items/{item_id} (remove), POST /api/fnb/tabs/{tab_id}/transfer (with audit log), POST /api/fnb/tabs/{tab_id}/close (with room_folio support), GET /api/fnb/tabs/transfers/{property_id} (audit), GET /api/fnb/tabs/dashboard/{property_id} (KPIs). Frontend FnbTabsPanel has 3 tabs (Açık Tab'lar, Transfer Geçmişi, Bugün Özet), outlet filter pills, tab detail with action buttons, add item/transfer/close forms all working.",
+  "features_tested": {
+    "backend": [
+      "POST /api/fnb/tabs - requires auth (401 without)",
+      "POST /api/fnb/tabs - invalid outlet returns 400 with valid list",
+      "POST /api/fnb/tabs - party_size < 1 returns 400",
+      "POST /api/fnb/tabs - party_size > 50 returns 400",
+      "POST /api/fnb/tabs - non-existent booking_id returns 404",
+      "POST /api/fnb/tabs - valid request returns doc with auto ref TAB-YYMMDD-HHMMSS-XXXX",
+      "GET /api/fnb/tabs/{property_id} - requires auth",
+      "GET /api/fnb/tabs/{property_id} - returns rows, count, by_outlet aggregation",
+      "GET /api/fnb/tabs/{property_id}?outlet=X - filters by outlet",
+      "GET /api/fnb/tabs/detail/{tab_id} - non-existent returns 404",
+      "GET /api/fnb/tabs/detail/{tab_id} - returns full tab document",
+      "POST /api/fnb/tabs/{tab_id}/items - qty <= 0 returns 400",
+      "POST /api/fnb/tabs/{tab_id}/items - unit_price < 0 returns 400",
+      "POST /api/fnb/tabs/{tab_id}/items - valid item recomputes subtotal/total",
+      "POST /api/fnb/tabs/{tab_id}/items - non-existent tab returns 404",
+      "DELETE /api/fnb/tabs/{tab_id}/items/{item_id} - removes item, recomputes totals",
+      "DELETE /api/fnb/tabs/{tab_id}/items/{item_id} - non-existent item returns 404",
+      "POST /api/fnb/tabs/{tab_id}/transfer - invalid new_outlet returns 400",
+      "POST /api/fnb/tabs/{tab_id}/transfer - same outlet returns 400 'Already at this outlet'",
+      "POST /api/fnb/tabs/{tab_id}/transfer - success updates outlet, adds transfer_history, writes audit",
+      "POST /api/fnb/tabs/{tab_id}/close - invalid payment_method returns 400",
+      "POST /api/fnb/tabs/{tab_id}/close - discount_pct > 50 returns 400",
+      "POST /api/fnb/tabs/{tab_id}/close - tip_amount < 0 returns 400",
+      "POST /api/fnb/tabs/{tab_id}/close - room_folio without booking returns 400",
+      "POST /api/fnb/tabs/{tab_id}/close - cash with tip/discount calculates total correctly",
+      "GET /api/fnb/tabs/transfers/{property_id} - returns audit log rows",
+      "GET /api/fnb/tabs/dashboard/{property_id} - requires auth",
+      "GET /api/fnb/tabs/dashboard/{property_id} - returns all KPIs (open_tabs, closed_today, revenue_today, tips_today, transfers_today, by_outlet_today, by_payment_today)",
+      "Full workflow: open → add items → transfer → add more → close with correct total calculation",
+      "Closed tab restrictions: cannot add items, transfer, or close again"
+    ],
+    "frontend": [
+      "FnbTabsPanel renders with Turkish title 'Tab Transfer & Folyo Aktarımı'",
+      "3 tabs: Açık Tab'lar (fnb-tab-active), Transfer Geçmişi (fnb-tab-transfers), Bugün Özet (fnb-tab-dashboard)",
+      "Outlet filter pills with Tümü + per-outlet counts (fnb-outlet-all, fnb-outlet-{outlet})",
+      "Yeni Tab button (fnb-open-btn) opens form",
+      "Open Tab form: outlet select (fnb-form-outlet), guest name (fnb-form-guest), table (fnb-form-table), party size (fnb-form-party), booking ID (fnb-form-booking), submit (fnb-form-submit)",
+      "Tab Detail view (fnb-tab-detail) with status badge, ref, total, items count",
+      "Action buttons when open: Kalem Ekle (fnb-add-item-btn), Outlet Transferi (fnb-transfer-btn), Kapat & Tahsil (fnb-close-btn)",
+      "Add Item form (fnb-add-form): name (fnb-add-name), qty (fnb-add-qty), price (fnb-add-price), note (fnb-add-note), submit (fnb-add-submit)",
+      "Transfer form (fnb-transfer-form): target outlet (fnb-transfer-outlet), table (fnb-transfer-table), submit (fnb-transfer-submit)",
+      "Close form (fnb-close-form): 5 payment buttons (fnb-pay-cash/card/room_folio/complimentary/voucher), tip (fnb-close-tip), discount (fnb-close-discount), submit (fnb-close-submit)",
+      "Items list (fnb-items-list) with delete buttons on open tabs",
+      "Transfer history breadcrumb chips (fnb-transfer-history)",
+      "Transfers tab: list of transfer audit rows (fnb-transfers-list)",
+      "Dashboard tab: 5 KPI tiles + 2 bar charts (by outlet revenue, by payment method)",
+      "Sidebar: F&B Tab Transfer button (fnb-tabs-btn) with ForkKnife icon"
+    ]
+  },
+  "validation_details": {
+    "outlets_validated": ["bar", "pool_bar", "restaurant", "rooftop", "spa", "poolside", "lounge", "in_room"],
+    "payment_methods_validated": ["cash", "card", "room_folio", "complimentary", "voucher"],
+    "party_size_range": "1..50",
+    "discount_pct_range": "0..50",
+    "tip_amount_validation": ">= 0",
+    "room_folio_requires_booking": true,
+    "transfer_audit_log_collection": "db.fnb_transfers",
+    "folio_charge_collection": "db.guest_folio_charges"
+  }
+}

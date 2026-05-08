@@ -1,0 +1,195 @@
+{
+  "summary": "Iteration 128 - Compliance Register & Laundry Management fully tested. All 26 backend tests passed (100%). Frontend UI verified with all components loading correctly, data displaying properly, and all data-testid selectors working. Fixed MongoDB conflict bug in laundry stock update endpoint.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "compliance_categories_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/compliance/categories/all",
+      "tests_passed": 1,
+      "features": [
+        "Returns 7 default categories: fire, food, hs, license, insurance, gdpr, training",
+        "Each category includes total/overdue/expiring_soon counts",
+        "Categories have name, icon, and color properties"
+      ]
+    },
+    "compliance_items_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/compliance/items/all - returns {items, kpis:{total,compliant,overdue,expiring_soon,action_needed}}",
+        "GET /api/compliance/items/all?category=fire - filters by category",
+        "GET /api/compliance/items/all?status=compliant - filters by computed status",
+        "POST /api/compliance/items/all - creates item with computed status based on due_date",
+        "PUT /api/compliance/items/all/{id} - updates allowed fields only",
+        "POST /api/compliance/items/all/{id}/check - sets last_checked=today and status=compliant",
+        "DELETE /api/compliance/items/all/{id} - removes item; 404 on unknown id"
+      ],
+      "tests_passed": 10,
+      "features": [
+        "Status computation: due_date < today => 'overdue'",
+        "Status computation: due_date within 30 days => 'expiring_soon'",
+        "Status computation: due_date > 30 days => 'compliant'",
+        "Returns 400 when title is missing",
+        "Delete returns 404 for unknown id",
+        "Create/update/delete require admin/manager role"
+      ]
+    },
+    "laundry_catalog_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/laundry/catalog",
+      "tests_passed": 1,
+      "features": [
+        "Returns 11 default items: bed_sheet_single/double/king, pillow_case, duvet_cover, bath_towel, hand_towel, face_cloth, bath_mat, table_cloth, napkin"
+      ]
+    },
+    "laundry_dispatches_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/laundry/dispatches/all - returns {dispatches, kpis:{pending,sent,received,total_items,total_cost}}",
+        "POST /api/laundry/dispatches/all - creates dispatch with status='sent' and auto-adjusts stock",
+        "POST /api/laundry/dispatches/all/{id}/receive - moves items from in_transit to on_hand_clean"
+      ],
+      "tests_passed": 4,
+      "features": [
+        "Dispatch creation auto-calculates total_cost from items",
+        "Stock adjustment: on_hand_clean -= qty_sent, in_transit += qty_sent",
+        "Receive flow: in_transit -= qty_sent, on_hand_clean += qty_received",
+        "Returns 400 when vendor or items missing"
+      ]
+    },
+    "laundry_stock_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/laundry/stock/all - returns 11 rows with on_hand_clean/dirty/in_transit/damaged/total",
+        "PUT /api/laundry/stock/all/{item_id} - upserts stock counts"
+      ],
+      "tests_passed": 2,
+      "features": [
+        "Merges DB stock with default catalog items",
+        "Each row has total = on_hand_clean + dirty + in_transit"
+      ]
+    },
+    "laundry_contracts_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/laundry/contracts/all - returns contracts list",
+        "POST /api/laundry/contracts/all - creates contract with rate card",
+        "DELETE /api/laundry/contracts/all/{id} - removes contract; 404 on unknown id"
+      ],
+      "tests_passed": 4,
+      "features": [
+        "Contract includes vendor, contact info, dates, pickup_schedule, terms, rates array",
+        "Returns 400 when vendor missing",
+        "Delete returns 404 for unknown id",
+        "Contracts require admin/manager role"
+      ]
+    },
+    "frontend_compliance_register": {
+      "status": "PASS",
+      "data_testids": [
+        "compliance-register",
+        "compliance-title",
+        "compliance-kpis",
+        "compliance-categories",
+        "cat-all",
+        "status-all",
+        "status-compliant",
+        "status-expiring_soon",
+        "status-overdue",
+        "status-action_needed",
+        "new-compliance-btn",
+        "compliance-title-input",
+        "compliance-due-input",
+        "compliance-submit-btn"
+      ],
+      "features_verified": [
+        "5 KPI cards: Total Items, Compliant, Expiring ≤30d, Overdue, Action Needed",
+        "7 category pills with icons and colors",
+        "Status filter tabs",
+        "New Item button opens dialog",
+        "Dialog has title input, due date input, category select, frequency select, submit button"
+      ]
+    },
+    "frontend_laundry_management": {
+      "status": "PASS",
+      "data_testids": [
+        "laundry-management",
+        "laundry-title",
+        "laundry-kpis",
+        "tab-dispatches",
+        "tab-stock",
+        "tab-contracts",
+        "new-dispatch-btn",
+        "dispatch-vendor-input",
+        "add-dispatch-item",
+        "dispatch-submit-btn",
+        "stock-table",
+        "stock-clean-{item_id}",
+        "contracts-list",
+        "new-contract-btn",
+        "contract-vendor-input",
+        "contract-submit-btn"
+      ],
+      "features_verified": [
+        "5 KPI cards: Items Sent (YTD), Sent, Received, Active Contracts, Total Spend",
+        "3 tabs: Dispatches, Stock, Contracts",
+        "Dispatches tab: table with vendor, sent date, items count, cost, status, receive button",
+        "Stock tab: 11 rows with editable Clean/Dirty/Damaged inputs, read-only In Transit, calculated Total",
+        "Contracts tab: contract cards with vendor, contact, dates, rates, delete button",
+        "New Dispatch dialog: vendor input, add item button, item selector, qty/rate inputs",
+        "New Contract dialog: vendor input, pickup schedule, contact fields, date range, rate card, terms"
+      ]
+    },
+    "navigation": {
+      "status": "PASS",
+      "features_verified": [
+        "Sidebar nav items present: Compliance, Laundry",
+        "Both nav items clickable and navigate to correct views"
+      ]
+    }
+  },
+  "bug_fixed": {
+    "file": "/app/backend/routes/laundry.py",
+    "issue": "MongoDB WriteError when updating stock with 'name' field - conflict between $set and $setOnInsert",
+    "fix": "Removed 'name' from $setOnInsert when it's already in $set updates"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration128_compliance_laundry.py",
+    "/app/test_reports/pytest/pytest_iteration128_compliance_laundry.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All data-testid attributes properly implemented for testing",
+    "All endpoints properly protected with role-based authentication",
+    "Compliance status computation correctly handles overdue (past due), expiring_soon (within 30 days), and compliant (>30 days)",
+    "Laundry dispatch creation correctly auto-adjusts stock (clean -= qty_sent, in_transit += qty_sent)",
+    "Laundry receive flow correctly moves items back (in_transit -= qty_sent, clean += qty_received)",
+    "Stock endpoint correctly merges DB records with default catalog items"
+  ],
+  "updated_files": [
+    "/app/backend/routes/laundry.py",
+    "/app/backend/tests/test_iteration128_compliance_laundry.py"
+  ],
+  "success_rate": {
+    "backend": "100% (26/26 passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Created TEST_ prefixed compliance items and laundry dispatches/contracts for testing, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 128 tested Compliance Register and Laundry Management features. Compliance: 7 categories (fire, food, hs, license, insurance, gdpr, training), status computation based on due_date (overdue if past, expiring_soon if within 30 days, compliant otherwise), CRUD with check endpoint. Laundry: 11 catalog items, dispatches with auto-stock-adjust (clean→in_transit on send, in_transit→clean on receive), stock endpoint merges DB with defaults, contracts with rate cards. Fixed MongoDB conflict bug in stock update. All 26 backend tests passed. All frontend components verified with data-testid selectors.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

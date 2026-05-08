@@ -1,0 +1,126 @@
+{
+  "summary": "Iteration 111 - 365-Day Market Demand Dashboard & Dynamic Pricing Expansion Testing Complete. All 17 backend API tests passed. Frontend UI fully verified: Market Demand dashboard shows dark theme with 8 KPIs, FLOWCAST chart, Rate Grid table with all required columns, and nights selector (30/60/90/180/365). AI Dynamic Pricing has nights selector with 365-day support. Smart Scanner shows 7 tiers including 3-6 months and 6-12 months. Market Robot has 11 sub-tabs including new Market Demand tab.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "demand_dashboard_365_days": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=365 returns 365 daily_data entries",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=30 returns 30 entries",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=60 returns 60 entries",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=90 returns 90 entries",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=180 returns 180 entries"
+      ]
+    },
+    "demand_dashboard_entry_structure": {
+      "status": "PASS",
+      "required_fields": ["date", "dow", "occupancy", "market_unavail", "demand_level", "base_rate", "ai_rate", "sell_rate", "min_rate", "floor_rate", "target_rate", "ai_status", "event", "event_impact"],
+      "ai_status_values": ["ai", "event", "manual", "base"],
+      "demand_level_values": ["high", "moderate", "low"]
+    },
+    "demand_dashboard_kpis": {
+      "status": "PASS",
+      "kpis": ["total_days", "avg_occupancy", "avg_sell_rate", "base_rate", "high_demand_days", "low_demand_days", "event_days", "ai_managed_days", "ai_managed_pct"]
+    },
+    "dynamic_pricing_365_days": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/revenue/dynamic-pricing/all/calculate with {days:365} returns 365 days",
+        "POST /api/revenue/dynamic-pricing/all/calculate with {days:30} returns 30 days",
+        "POST /api/revenue/dynamic-pricing/all/calculate with {days:60} returns 60 days",
+        "POST /api/revenue/dynamic-pricing/all/calculate with {days:90} returns 90 days",
+        "POST /api/revenue/dynamic-pricing/all/calculate with {days:180} returns 180 days"
+      ]
+    },
+    "dynamic_pricing_data_sources": {
+      "status": "PASS",
+      "sources": ["market_supply_dates", "competitors_with_prices", "strategy_configured", "events_loaded", "historical_floors"]
+    },
+    "scanner_7_tiers": {
+      "status": "PASS",
+      "tiers": [
+        {"label": "Today + Tomorrow", "interval_mins": 30},
+        {"label": "Next 3-7 days", "interval_mins": 60},
+        {"label": "1-2 weeks out", "interval_mins": 180},
+        {"label": "2-4 weeks out", "interval_mins": 360},
+        {"label": "1-3 months out", "interval_mins": 720},
+        {"label": "3-6 months out", "interval_mins": 1440},
+        {"label": "6-12 months out", "interval_mins": 2880}
+      ]
+    },
+    "frontend_market_demand_dashboard": {
+      "status": "PASS",
+      "tests": [
+        "Dark theme header with 'Market Demand & Rates' title",
+        "8 KPI cards: Days, Avg Occupancy, Avg Rate, Base Rate, High Demand, Low Demand, Event Days, AI Managed",
+        "Nights selector with 30/60/90/180/365 options",
+        "FLOWCAST chart showing occupancy bars + AI rate dots + min rate dashed line",
+        "Rate Grid table with columns: Date, Day, AI Status, ADR, Occupancy, Min Rate, Floor Rate, Sell Rate, Target Rate, Market, Event",
+        "AI Status badges: AI/EVENT/MANUAL/BASE"
+      ]
+    },
+    "frontend_dynamic_pricing_nights_selector": {
+      "status": "PASS",
+      "tests": [
+        "Nights selector with 30d/60d/90d/180d/1 Year options",
+        "Grid title shows selected range (e.g., '365-Day AI Price Recommendations')",
+        "Calculate button works for all day ranges"
+      ]
+    },
+    "frontend_market_robot_11_subtabs": {
+      "status": "PASS",
+      "tabs": ["Dashboard", "Market Demand", "Performance", "Supply Data", "Rate Parity", "Competitor Analysis", "Event Intelligence", "Competitor Hotels", "Auto-Adjustments", "Configuration", "Scan Logs"]
+    },
+    "frontend_smart_scanner_7_tiers": {
+      "status": "PASS",
+      "tests": [
+        "Smart Scanner panel shows 7 tiers",
+        "3-6 months out tier visible (Every 24h)",
+        "6-12 months out tier visible (Every 48h)"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration111_365day_demand.py",
+    "/app/test_reports/pytest/pytest_iteration111_365day_demand.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Demand dashboard endpoint correctly returns daily_data for requested days (30/60/90/180/365)",
+    "Each daily_data entry includes all required fields: date, dow, occupancy, market_unavail, demand_level, base_rate, ai_rate, sell_rate, min_rate, floor_rate, target_rate, ai_status, event, event_impact",
+    "ai_status correctly set based on set_by field: ai (ai-dynamic-pricing/auto-scanner), event (event-intelligence), manual (market-robot), base (no override)",
+    "Dynamic pricing calculate endpoint supports 365-day range",
+    "Smart Scanner has 7 tiers covering full year: 0-2d, 2-7d, 7-14d, 14-28d, 28-90d, 90-180d, 180-365d",
+    "Frontend MarketDemandDashboard.js uses proper data-testid attributes",
+    "FLOWCAST chart renders occupancy bars with demand-based coloring and AI rate dots"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration111_365day_demand.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "No new seed data created. Using existing rate_overrides and market_supply data from previous iterations.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 111 tested the 365-day expansion for Market Demand dashboard and Dynamic Pricing. Key endpoints: GET /api/revenue/market-robot/{property_id}/demand-dashboard?days=365, POST /api/revenue/dynamic-pricing/{property_id}/calculate with {days:365}, GET /api/revenue/market-robot/{property_id}/scanner/status (shows 7 tiers). Navigation: Revenue > Market Robot > Market Demand tab (2nd tab). Market Robot now has 11 sub-tabs. Smart Scanner has 7 tiers covering full year.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Market Robot Booking.com scraper uses simulated fallback when direct scraping blocked",
+      "Historical data seeded from previous iterations"
+    ]
+  }
+}

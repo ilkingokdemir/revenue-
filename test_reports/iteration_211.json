@@ -1,0 +1,97 @@
+{
+  "summary": "Iteration 211 - Nightly Recap + Concierge Most-Asked Topics tested. All backend APIs working (100% pass - 17/17 tests). Frontend Nightly Recap panel shows KPIs, YoY comparison, GPT-5.2 commentary, movements, and top room types. Concierge Inbox topics feature shows GPT-clustered guest questions with counts and percentages. Regression tests pass for morning-brief-btn, hk-route-btn, sustainability-btn, group-requests-btn.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration211_nightly_recap_topics.py",
+    "/app/test_reports/pytest/pytest_iteration211_nightly_recap_topics.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/nightly-recap/{property_id}?yoy=true - Returns full recap with date, rooms_sold, total_rooms, occupancy_pct, revenue, adr, revpar, arrivals, departures, no_shows, walk_ins, cancellations, top_rooms[], yoy block, commentary, as_of - VERIFIED",
+    "GET /api/nightly-recap/{property_id}?date_str=YYYY-MM-DD - Recap specific date - VERIFIED",
+    "GET /api/nightly-recap/{property_id}?date_str=invalid - Returns 400 with proper error message - VERIFIED",
+    "GET /api/nightly-recap/{property_id}?yoy=false - Returns recap without YoY block (yoy=null) - VERIFIED",
+    "GET /api/concierge/admin/{property_id}/topics?days=30 - Returns GPT-5.2 clustered topics with count, samples, window_days, fallback - VERIFIED",
+    "Topics endpoint uses GPT-5.2 (fallback=false) when EMERGENT_LLM_KEY present - VERIFIED",
+    "Topics endpoint clamps days parameter to 7-90 range - VERIFIED",
+    "Frontend nightly-recap-btn menu item - VERIFIED",
+    "Frontend nightly-recap-panel with gradient header, date label - VERIFIED",
+    "Frontend recap-kpis (4 KPI tiles with delta arrows) - VERIFIED",
+    "Frontend recap-commentary (AI commentary card) - VERIFIED",
+    "Frontend recap-movements (5 movement tiles) - VERIFIED",
+    "Frontend recap-yoy (YoY comparison block with 4 rows) - VERIFIED",
+    "Frontend recap-date-picker and recap-refresh - VERIFIED",
+    "Frontend ci-topics section in Concierge Inbox - VERIFIED",
+    "Frontend ci-topics-load (Analyse with AI button) - VERIFIED",
+    "Frontend ci-topic-{i} bars with counts and percentages - VERIFIED",
+    "Regression: morning-brief-btn - VERIFIED",
+    "Regression: hk-route-btn - VERIFIED",
+    "Regression: sustainability-btn - VERIFIED",
+    "Regression: group-requests-btn - VERIFIED"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration211_nightly_recap_topics.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17 passed)",
+    "frontend": "100% (all panels and features working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing data. aldgate-flats has 21+ concierge questions seeded for topics clustering.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 211 adds two competitor gap features: (1) Nightly Recap at /api/nightly-recap/{property_id} - returns last night's KPIs (occ/rev/adr/revpar), movements (arrivals/departures/walk-ins/no-shows/cancellations), top room types, YoY comparison, and GPT-5.2 commentary. Frontend: nightly-recap-btn opens NightlyRecapPanel with gradient header, 4 KPI tiles, AI commentary, 5 movement tiles, YoY block. (2) Concierge Topics at /api/concierge/admin/{property_id}/topics - GPT-5.2 clusters guest questions into topics with counts. Frontend: ci-topics section in ConciergeInboxPanel with ci-topics-load button and ci-topic-{i} bars.",
+  "features_verified": {
+    "nightly_recap": {
+      "endpoint": "GET /api/nightly-recap/{property_id}",
+      "auth": "admin/manager",
+      "query_params": ["date_str (YYYY-MM-DD)", "yoy (bool)"],
+      "response_fields": ["property_id", "date", "rooms_sold", "total_rooms", "occupancy_pct", "revenue", "adr", "revpar", "arrivals", "departures", "no_shows", "walk_ins", "cancellations", "top_rooms", "yoy", "commentary", "as_of"],
+      "yoy_fields": ["date", "rooms_sold", "occupancy_pct", "revenue", "adr", "revpar", "occ_delta_pp", "rev_delta_pct", "adr_delta_pct"],
+      "ui_elements": {
+        "menu_btn": "data-testid='nightly-recap-btn'",
+        "panel": "data-testid='nightly-recap-panel'",
+        "kpis": "data-testid='recap-kpis'",
+        "commentary": "data-testid='recap-commentary'",
+        "movements": "data-testid='recap-movements'",
+        "yoy": "data-testid='recap-yoy'",
+        "date_picker": "data-testid='recap-date-picker'",
+        "refresh": "data-testid='recap-refresh'"
+      },
+      "status": "WORKING"
+    },
+    "concierge_topics": {
+      "endpoint": "GET /api/concierge/admin/{property_id}/topics",
+      "auth": "admin/manager",
+      "query_params": ["days (7-90, default 30)"],
+      "response_fields": ["topics", "samples", "window_days", "fallback"],
+      "topic_fields": ["topic", "count", "samples"],
+      "gpt_clustering": "Uses GPT-5.2 when EMERGENT_LLM_KEY present (fallback=false)",
+      "ui_elements": {
+        "section": "data-testid='ci-topics'",
+        "load_btn": "data-testid='ci-topics-load'",
+        "topic_bar": "data-testid='ci-topic-{i}'"
+      },
+      "aldgate_flats_data": {
+        "samples": 21,
+        "topics_count": 6,
+        "example_topics": ["Room types & availability", "Check-in & check-out times", "Greetings", "Parking", "Meeting rooms & events"]
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "morning_brief_btn": "PASSED - Morning Brief panel loads",
+    "hk_route_btn": "PASSED - HK Route panel loads",
+    "sustainability_btn": "PASSED - Sustainability/ESG panel loads",
+    "group_requests_btn": "PASSED - Group Requests panel loads"
+  }
+}

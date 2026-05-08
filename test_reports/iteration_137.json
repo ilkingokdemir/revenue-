@@ -1,0 +1,138 @@
+{
+  "summary": "Iteration 137 - Staff Onboarding Gate fully tested. All backend APIs and frontend UI working correctly. Non-activated staff users see blocking onboarding gate with 4-tab flow (passport, address, HMRC, contract). Account activates after completing all tasks. PendingLegalDocsGate correctly skips when user.is_activated===false.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "PendingLegalDocsGate", "issues": ["Minor HTML nesting warning: <p> contains <div> (Badge component) - causes React hydration warning in console but doesn't affect functionality"]}
+    ]
+  },
+  "features_tested": {
+    "auth_is_activated_field": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/auth/login returns is_activated field",
+        "GET /api/auth/me returns is_activated field",
+        "Admin login returns is_activated=true",
+        "Non-activated staff login returns is_activated=false"
+      ]
+    },
+    "register_role_based_activation": {
+      "status": "PASS",
+      "tests": [
+        "Register receptionist sets is_activated=false, needs_onboarding=true",
+        "Register housekeeper sets is_activated=false (if role valid)",
+        "Register manager sets is_activated=true, needs_onboarding=false",
+        "Register admin sets is_activated=true"
+      ]
+    },
+    "staff_onboarding_me_endpoint": {
+      "status": "PASS",
+      "tests": [
+        "GET /staff-onboarding/me auto-creates onboarding doc if missing",
+        "Returns progress object with tasks, done, total, pct, complete",
+        "Returns hmrc_statements dict with A, B, C statements",
+        "Auto-syncs contract_signed from staff_contracts when status=signed"
+      ]
+    },
+    "staff_onboarding_upload_endpoints": {
+      "status": "PASS",
+      "tests": [
+        "POST /staff-onboarding/upload/passport accepts jpg/png/pdf/heic/webp <= 10MB",
+        "POST /staff-onboarding/upload/address accepts same file types",
+        "Rejects invalid file types with 400 error",
+        "Sets passport_uploaded/address_proof_uploaded=true on success"
+      ]
+    },
+    "staff_onboarding_hmrc_endpoint": {
+      "status": "PASS",
+      "tests": [
+        "POST /staff-onboarding/hmrc validates required fields",
+        "Rejects NI number != 9 characters",
+        "Rejects invalid statement (must be A, B, or C)",
+        "Stores student_loan_plan when student_loan=true",
+        "Sets hmrc_submitted=true on success"
+      ]
+    },
+    "staff_onboarding_complete_endpoint": {
+      "status": "PASS",
+      "tests": [
+        "POST /staff-onboarding/complete returns 400 with 'Incomplete tasks: ...' when any task false",
+        "When all tasks true, sets users.is_activated=true",
+        "Returns {ok:true, activated:true} on success"
+      ]
+    },
+    "admin_onboarding_endpoints": {
+      "status": "PASS",
+      "tests": [
+        "GET /staff-onboarding/list returns list of onboardings (admin/manager only)",
+        "Supports status filter (pending|activated|complete|incomplete)",
+        "POST /admin-activate/{user_id} activates user (admin only)",
+        "POST /admin-deactivate/{user_id} deactivates user (admin only)",
+        "Non-admin users get 403 on admin endpoints"
+      ]
+    },
+    "frontend_onboarding_gate": {
+      "status": "PASS",
+      "tests": [
+        "Gate appears for non-activated users (z-[90])",
+        "Shows 4 tabs: ID/Passport, Address Proof, HMRC Checklist, Employment Contract",
+        "Progress bar reflects real task completion",
+        "Tabs switchable via data-testid onboard-tab-{passport|address|hmrc|contract}",
+        "Passport/address tabs have upload buttons and file inputs",
+        "HMRC form has all required fields with data-testid attributes",
+        "Contract tab shows emerald success state when signed, amber awaiting state when not",
+        "Complete button only appears when all 4 tasks done",
+        "Clicking complete activates account and dismisses gate"
+      ]
+    },
+    "critical_flow_fix": {
+      "status": "PASS",
+      "tests": [
+        "PendingLegalDocsGate (z-[100]) does NOT fire while user.is_activated===false",
+        "Only StaffOnboardingGate shows during onboarding",
+        "After activation, PendingLegalDocsGate fires for pending legal docs"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration137_staff_onboarding.py",
+    "/app/test_reports/pytest/pytest_iteration137_staff_onboarding.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "StaffOnboardingGate correctly uses user.is_activated===false check to show gate",
+    "PendingLegalDocsGate correctly skips when user.is_activated===false (line 27)",
+    "Backend staff_onboarding.py uses current_user.get('id') which relies on user doc having 'id' field (UUID)",
+    "Contract auto-sync works by checking staff_contracts for matching staff_email with status=signed",
+    "HMRC validation correctly checks NI number length (9 chars) and statement (A/B/C)",
+    "Minor: HTML nesting issue in PendingLegalDocsGate - <p> contains Badge which renders as <div>"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration137_staff_onboarding.py"
+  ],
+  "success_rate": {
+    "backend": "100% (24 passed, 1 skipped)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "staff": "sarah@hotel.test / StaffP@ss1 (role=receptionist, is_activated reset to false for testing)"
+  },
+  "seed_data_creation": "Sarah's onboarding record deleted and is_activated reset to false for testing. Sarah has a signed contract in staff_contracts that auto-syncs.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 137 added Staff Onboarding Gate - a blocking gate for non-activated staff users. Gate shows 4-tab flow: passport upload, address proof upload, HMRC starter checklist form, and employment contract status. Contract auto-syncs from staff_contracts collection. After completing all 4 tasks, user clicks 'Activate my account' which sets is_activated=true. PendingLegalDocsGate correctly waits until after onboarding (checks user.is_activated===false to skip). Test user sarah@hotel.test can be reset by setting is_activated=false and deleting staff_onboarding record.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Document storage is local filesystem only (/app/backend/uploads/onboarding)",
+      "HMRC form data stored in MongoDB only - not transmitted to HMRC RTI",
+      "No virus scanning or OCR on uploaded documents"
+    ]
+  }
+}

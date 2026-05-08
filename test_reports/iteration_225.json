@@ -1,0 +1,114 @@
+{
+  "summary": "Iteration 225 - Batch 12 (TodayHub + Command Palette) + Batch 13 (TR Compliance KBS + e-Fatura) tested. Backend: 20/20 tests passed. Frontend: All features working. TodayHub shows Turkish greeting with 8 KPI tiles, 3 action cards, 3 info cards. Command Palette trigger visible, dialog opens, search works ('walk' → 'Walk-in Express'), Ctrl+K shortcut works. TR Compliance Panel has 2 tabs (KBS · Kimlik Bildirim, e-Arşiv / e-Fatura), KBS export creates TXT with history tracking, e-Fatura builds UBL-TR 2.1 XML with correct ProfileID (EARSIVFATURA/TICARIFATURA). Smoke regression passed for Tier-1 Dashboard and Morning Brief.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Command Palette Dialog",
+        "issues": ["Console warning: DialogContent requires DialogTitle for accessibility - minor a11y improvement needed"]
+      },
+      {
+        "screen": "e-Fatura booking select",
+        "issues": ["Console warning: <span> cannot be child of <option> - hydration warning, cosmetic only"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration225_batch12_13.py",
+    "/app/test_reports/pytest/pytest_iteration225_batch12_13.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TodayHub correctly pulls from /api/morning-brief/{property_id} and /api/tier1-dashboard/{property_id}?days=7 with graceful fallback",
+    "Command Palette uses localStorage 'mhb_recents' for recent navigation tracking",
+    "KBS export correctly skips bookings without TC kimlik no or passport (expected behavior per agent note)",
+    "e-Fatura XML follows UBL-TR 2.1 spec: CustomizationID=TR1.2, ProfileID=EARSIVFATURA (B2C) or TICARIFATURA (B2B), TaxScheme code 0015 for KDV",
+    "All TR Compliance endpoints require admin/manager role (auth enforced)",
+    "Minor a11y warning in CommandPalette dialog - should add DialogTitle with VisuallyHidden wrapper"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration225_batch12_13.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing default property with bookings",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 225 validates Batch 12 (TodayHub + Command Palette) and Batch 13 (TR Compliance KBS + e-Fatura). TodayHub: data-testid='today-hub', shows Turkish greeting, 8 KPI tiles (today-tile-*), 3 action cards (today-action-*), 3 info cards. Command Palette: trigger='command-palette-trigger', input='command-palette-input', items='command-palette-item-{id}', Ctrl+K shortcut works. TR Compliance: panel='tr-compliance-panel', tabs='tr-tab-kbs'/'tr-tab-efatura', KBS form (tr-kbs-from/to/build/download), e-Fatura form (tr-efatura-booking-select/type/build). KBS exports may have 0 rows if bookings lack TC/passport - this is expected. e-Fatura XML uses EARSIVFATURA for B2C, TICARIFATURA for B2B.",
+  "features_verified": {
+    "batch_12_todayhub": {
+      "endpoint_dependencies": [
+        "GET /api/morning-brief/{property_id}",
+        "GET /api/tier1-dashboard/{property_id}?days=7"
+      ],
+      "ui_elements": {
+        "panel": "data-testid='today-hub'",
+        "greeting": "Turkish: İyi günler/Günaydın/İyi akşamlar/İyi geceler",
+        "kpi_tiles": "8 tiles (Doluluk, In-house, Giriş, Çıkış, No-show, Bugün gelir, ADR, RevPAR)",
+        "action_cards": "3 cards with navigation targets",
+        "info_cards": "Öne çıkan KPI'lar, Aksiyon gerektirenler, Pickup (son 7 gün)"
+      },
+      "status": "WORKING"
+    },
+    "batch_12_command_palette": {
+      "ui_elements": {
+        "trigger": "data-testid='command-palette-trigger' (Ara veya komut çalıştır… ⌘K)",
+        "input": "data-testid='command-palette-input'",
+        "items": "data-testid='command-palette-item-{id}'",
+        "keyboard_shortcut": "Ctrl+K / ⌘K"
+      },
+      "search_test": "'walk' → 'Walk-in Express' result",
+      "recents": "localStorage key 'mhb_recents'",
+      "status": "WORKING"
+    },
+    "batch_13_kbs": {
+      "endpoints": {
+        "export": "POST /api/tr-compliance/kbs/export → 200 + export_id, row_count, skipped, included_bookings, txt, filename",
+        "history": "GET /api/tr-compliance/kbs/{property_id}/history → history[], pending_count",
+        "download": "GET /api/tr-compliance/kbs/export/{export_id}/download → text/plain attachment",
+        "mark_sent": "POST /api/tr-compliance/kbs/export/{export_id}/mark-sent → 200, sent_at"
+      },
+      "ui_elements": {
+        "tab": "data-testid='tr-tab-kbs'",
+        "stats": "3 stats (bekleyen/toplam/son)",
+        "form": "tr-kbs-from, tr-kbs-to, tr-kbs-build",
+        "download": "tr-kbs-download (appears after build)"
+      },
+      "status": "WORKING"
+    },
+    "batch_13_efatura": {
+      "endpoints": {
+        "build": "POST /api/tr-compliance/efatura/build → 200 + uuid, invoice_no, xml (UBL-TR 2.1)",
+        "list": "GET /api/tr-compliance/efatura/{property_id}/list → invoices[], total_count, total_amount, by_status",
+        "mark_submitted": "POST /api/tr-compliance/efatura/{id}/mark-submitted → status='submitted'"
+      },
+      "xml_validation": {
+        "CustomizationID": "TR1.2",
+        "ProfileID_earsiv": "EARSIVFATURA (B2C)",
+        "ProfileID_efatura": "TICARIFATURA (B2B)",
+        "TaxScheme": "KDV code 0015",
+        "LegalMonetaryTotal": "LineExtensionAmount, TaxExclusiveAmount, TaxInclusiveAmount, PayableAmount"
+      },
+      "ui_elements": {
+        "tab": "data-testid='tr-tab-efatura'",
+        "stats": "3 stats (toplam fatura/tutar/GİB gönderilmiş)",
+        "form": "tr-efatura-booking-select, tr-efatura-type, tr-efatura-build"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "tier1_dashboard": "PASSED",
+    "morning_brief": "PASSED"
+  },
+  "batch_completion_status": "Batch 12 (TodayHub + Command Palette) + Batch 13 (TR Compliance KBS + e-Fatura) COMPLETE"
+}

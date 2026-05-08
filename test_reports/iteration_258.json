@@ -1,0 +1,70 @@
+{
+  "summary": "Iteration 258: Self Check-in Auto Trigger System - All tests PASSED. Backend: 12/12 tests passed (settings CRUD, run-once, log, stats, duplicate prevention, regressions). Frontend: SCA panel loads with all elements (4 KPI cards, 3 tabs, settings/templates/log). Cosmetic fixes verified: Turkish text on /checkin, kiosk footer branding.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_self_checkin_auto.py",
+    "/app/test_reports/pytest/pytest_iteration258_self_checkin_auto.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_self_checkin_auto.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test booking 1292de94-369c-45c8-a4d9-dc05cc3d2906 pre-set with check_in=tomorrow",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Self Check-in Auto feature fully tested. Backend endpoints: GET/PUT settings, POST run-once, GET log, GET stats. Frontend panel at /self-checkin-auto with 3 tabs (settings, templates, log). Email dispatch returns 'queued' status because RESEND_API_KEY is placeholder - this is intended behavior. Background loop registered at startup (server.py:752-755).",
+  "features_tested": {
+    "backend_api": {
+      "GET /api/self-checkin-auto/settings/default": "PASS - Returns DEFAULT_SETTINGS with enabled=true, email_window_h=48, sms_window_h=4, language=tr, all templates populated",
+      "PUT /api/self-checkin-auto/settings/default": "PASS - Partial update merges and persists (tested sms_window_h=6, language=en)",
+      "POST /api/self-checkin-auto/run-once/default (disabled)": "PASS - Returns skipped=true, reason=disabled",
+      "POST /api/self-checkin-auto/run-once/default (enabled)": "PASS - Returns processed count, email/sms stats",
+      "GET /api/self-checkin-auto/log/default": "PASS - Returns items array with dispatch attempts",
+      "GET /api/self-checkin-auto/stats/default": "PASS - Returns total_attempts, email/sms counts",
+      "Duplicate prevention": "PASS - Re-run doesn't re-send (auto_email_sent_at gate)"
+    },
+    "frontend_ui": {
+      "SCA panel loads": "PASS - data-testid='sca-panel' found",
+      "4 KPI cards": "PASS - E-posta gönderildi, E-posta kuyrukta, SMS gönderildi, SMS kuyrukta",
+      "3 tabs": "PASS - sca-tab-settings, sca-tab-templates, sca-tab-log",
+      "Settings tab elements": "PASS - enabled toggle, email/sms enabled, window fields, expiry, language, save button",
+      "Templates tab elements": "PASS - TR/EN subject, body, sms textareas, save templates button",
+      "Log tab": "PASS - Shows dispatch attempts with email/sms status pills",
+      "Run-once button": "PASS - Triggers pass and shows toast",
+      "Refresh button": "PASS - Re-fetches data"
+    },
+    "cosmetic_fixes": {
+      "/checkin (no token)": "PASS - Shows Turkish 'Geçersiz check-in bağlantısı'",
+      "/checkin-kiosk/default footer": "PASS - Shows 'Powered by Hotel PMS & Revenue Management'"
+    },
+    "regressions": {
+      "Self check-in V2 pipeline": "PASS",
+      "Site Feasibility": "PASS",
+      "Help Guide": "PASS",
+      "Banquet Orders": "PASS",
+      "Loyalty Tier": "PASS"
+    },
+    "background_loop": "REGISTERED - auto_trigger_loop created at startup (server.py:752-755)"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Resend email dispatch (returns 'queued' because RESEND_API_KEY is placeholder)",
+      "Twilio SMS dispatch (returns 'queued' or 'skipped' if no phone)"
+    ]
+  }
+}

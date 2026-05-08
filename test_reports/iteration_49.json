@@ -1,0 +1,131 @@
+{
+  "summary": "Iteration 49 - Full Regression Test for Stock Management (128-item catalog + 9 advanced features) and Hotel Accounting (USALI, invoicing, VAT, trends). All 51 backend tests passed (100%). Frontend verified with all 11 Stock tabs and 8 Accounting tabs working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration49_stock_accounting_full.py",
+    "/app/test_reports/pytest/pytest_iteration49.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All Stock Management endpoints working correctly with 128-item product catalog",
+    "Catalog organized by 11 categories: spirits, wine, beer, soft_drinks, dairy, meat, produce, dry_goods, cleaning, supplies, beverage",
+    "9 advanced Apicbase-level features verified: Menu Engineering, Food Cost %, Par Level Auto-Ordering, Allergen Tracking, Price History, Yield Management, Perishable Alerts, Multi-Outlet Transfers, Inventory Turnover",
+    "Full Accounting suite working: Income/Expense CRUD, P&L statements, USALI Chart of Accounts (19 accounts), Invoicing with VAT, VAT reports, 6-month trends, Budget vs Actual, CSV export",
+    "Stock panel has 11 tabs: Products, Recipes, Movements, Suppliers & POs, Stock Counts, Cost %, Menu Engineering, Theo vs Actual, Turnover, Expiry Alerts, Variances",
+    "Accounting panel has 8 tabs: P&L Overview, Income, Expenses, Invoices, VAT, Trends, Budget vs Actual, Chart of Accounts",
+    "Both panels accessible from OPERATIONS sidebar section"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration49_stock_accounting_full.py"
+  ],
+  "success_rate": {
+    "backend": "100% (51/51 tests passed)",
+    "frontend": "100% (all 11 Stock tabs + 8 Accounting tabs verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test products created with TEST_ prefix for testing purposes",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 49 completed full regression on Stock Management and Accounting. Stock panel has 11 tabs with 128-item product catalog. Accounting panel has 8 tabs with USALI chart of accounts. Use property_id 'city-gate' for testing. All APIs require admin authentication. Token field in login response is 'token'. Catalog add endpoints skip products that already exist (returns 'skipped' count). P&L auto-pulls room_revenue from bookings when no manual entries exist.",
+  "features_tested": {
+    "backend_api_tests": {
+      "status": "PASS",
+      "tests_passed": 51,
+      "tests_failed": 0,
+      "stock_endpoints_tested": [
+        {"endpoint": "POST /api/auth/login", "status": "PASS"},
+        {"endpoint": "GET /api/stock/catalog", "status": "PASS", "notes": "Returns 128 products in 11 categories"},
+        {"endpoint": "POST /api/stock/catalog/add", "status": "PASS", "notes": "Add selected products from catalog"},
+        {"endpoint": "POST /api/stock/catalog/add-all", "status": "PASS", "notes": "Bulk add by category"},
+        {"endpoint": "POST /api/stock/products", "status": "PASS"},
+        {"endpoint": "GET /api/stock/products/{property_id}", "status": "PASS"},
+        {"endpoint": "PUT /api/stock/products/{product_id}", "status": "PASS"},
+        {"endpoint": "DELETE /api/stock/products/{product_id}", "status": "PASS"},
+        {"endpoint": "POST /api/stock/recipes", "status": "PASS"},
+        {"endpoint": "GET /api/stock/recipes/{property_id}", "status": "PASS"},
+        {"endpoint": "POST /api/stock/record-sale", "status": "PASS", "notes": "COGS deduction working"},
+        {"endpoint": "POST /api/stock/movements", "status": "PASS"},
+        {"endpoint": "GET /api/stock/movements/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/outlets/{property_id}", "status": "PASS", "notes": "Auto-seeds 4 outlets"},
+        {"endpoint": "POST /api/stock/suppliers", "status": "PASS"},
+        {"endpoint": "GET /api/stock/suppliers/{property_id}", "status": "PASS"},
+        {"endpoint": "POST /api/stock/purchase-orders", "status": "PASS"},
+        {"endpoint": "PUT /api/stock/purchase-orders/{id}/receive", "status": "PASS"},
+        {"endpoint": "POST /api/stock/count-sheets", "status": "PASS"},
+        {"endpoint": "POST /api/stock/count-sheets/{id}/complete", "status": "PASS"},
+        {"endpoint": "POST /api/stock/waste", "status": "PASS"},
+        {"endpoint": "GET /api/stock/waste-report/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/menu-engineering/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/food-cost-dashboard/{property_id}", "status": "PASS"},
+        {"endpoint": "POST /api/stock/auto-order/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/allergens/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/price-history/{product_id}", "status": "PASS"},
+        {"endpoint": "POST /api/stock/price-update/{product_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/yield-analysis/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/perishable-alerts/{property_id}", "status": "PASS"},
+        {"endpoint": "POST /api/stock/transfer", "status": "PASS"},
+        {"endpoint": "GET /api/stock/turnover-rate/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/theoretical-vs-actual/{property_id}", "status": "PASS"},
+        {"endpoint": "POST /api/stock/variance/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/all-inclusive-cost/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/stats/{property_id}", "status": "PASS"}
+      ],
+      "accounting_endpoints_tested": [
+        {"endpoint": "POST /api/accounting/income", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/income/{property_id}", "status": "PASS"},
+        {"endpoint": "POST /api/accounting/expenses", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/expenses/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/pnl/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/stats/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/chart-of-accounts/{property_id}", "status": "PASS", "notes": "19 USALI accounts"},
+        {"endpoint": "POST /api/accounting/invoices", "status": "PASS", "notes": "VAT calculation working"},
+        {"endpoint": "PUT /api/accounting/invoices/{id}", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/vat-report/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/trends/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/export/{property_id}", "status": "PASS"},
+        {"endpoint": "POST /api/accounting/budgets", "status": "PASS"},
+        {"endpoint": "GET /api/accounting/budget-vs-actual/{property_id}", "status": "PASS"},
+        {"endpoint": "POST /api/accounting/sync-revenue/{property_id}", "status": "PASS"}
+      ]
+    },
+    "frontend_tests": {
+      "status": "PASS",
+      "panels_verified": [
+        {
+          "panel": "Stock Management",
+          "status": "PASS",
+          "tabs": ["Products", "Recipes", "Movements", "Suppliers & POs", "Stock Counts", "Cost %", "Menu Engineering", "Theo vs Actual", "Turnover", "Expiry Alerts", "Variances"],
+          "features": ["Browse Catalog button (128 items)", "Record Movement button", "Add Product button", "Category filters in catalog"]
+        },
+        {
+          "panel": "Accounting",
+          "status": "PASS",
+          "tabs": ["P&L Overview", "Income", "Expenses", "Invoices", "VAT", "Trends", "Budget vs Actual", "Chart of Accounts"],
+          "features": ["Month picker", "Sync Bookings button", "USALI Chart of Accounts (19 accounts)"]
+        }
+      ],
+      "sidebar_section": "OPERATIONS section visible with Stock / F&B and Accounting links",
+      "data_testids_verified": [
+        "stock-panel", "stock-title", "browse-catalog-btn", "record-movement-btn", "add-product-btn",
+        "tab-products", "tab-recipes", "tab-movements", "tab-suppliers", "tab-counts", "tab-cost",
+        "tab-menu-eng", "tab-theo", "tab-turnover", "tab-perishable", "tab-variances",
+        "accounting-panel", "accounting-title", "sync-revenue-btn", "month-picker",
+        "tab-overview", "tab-income", "tab-expenses", "tab-invoices", "tab-vat", "tab-trends", "tab-budgets", "tab-accounts"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

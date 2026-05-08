@@ -1,0 +1,85 @@
+{
+  "summary": "Batch 34 — AI Pricing Explainability testing complete. 16/16 backend tests passed, all frontend UI elements verified. Real AI integration working with EMERGENT_LLM_KEY.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration246_pricing_explain.py",
+    "/app/test_reports/pytest/pytest_iteration246_pricing_explain.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration246_pricing_explain.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test explanations created via API tests (TEST_Standard, TEST_Accept, TEST_Reject, TEST_Override_*, TEST_Idempotent, TEST_Decision, TEST_Playwright)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Batch 34 AI Pricing Explainability fully tested. All 4 endpoints working: POST /api/pricing/explain (AI generates narrative + drivers + risks + alternatives in ~8s), GET /api/pricing/explain/history/{property_id} (sorted desc by created_at), GET /api/pricing/explain/dashboard/{property_id} (KPIs: total/pending/accepted/rejected/overridden/accept_rate_pct/avg_confidence/avg_abs_delta_pct), POST /api/pricing/explain/{id}/decision (accept/reject/override with idempotency check). Frontend PricingExplainPanel has 6 KPI cards, form with all fields, AI result display with drivers/risks/alternatives, decision buttons, and history tab with expandable rows. Sidebar button 'AI Fiyat Açıklayıcı' navigates correctly. Regression tests on HK Turnover and BI Feed panels passed.",
+  "features_tested": {
+    "backend": [
+      "POST /api/pricing/explain - requires auth (401 without)",
+      "POST /api/pricing/explain - validates occupancy_pct 0..100 (422 for out of range)",
+      "POST /api/pricing/explain - returns 200 with id, narrative (Turkish), confidence (0-100), key_drivers (3-5 items), risks (1-3), alternative_rates (2 items)",
+      "GET /api/pricing/explain/history/{property_id} - requires auth",
+      "GET /api/pricing/explain/history/{property_id} - returns items sorted desc by created_at",
+      "GET /api/pricing/explain/dashboard/{property_id} - requires auth",
+      "GET /api/pricing/explain/dashboard/{property_id} - returns total/pending/accepted/rejected/overridden/accept_rate_pct/avg_confidence/avg_abs_delta_pct",
+      "POST /api/pricing/explain/{id}/decision - requires auth",
+      "POST /api/pricing/explain/{id}/decision - invalid decision string returns 400",
+      "POST /api/pricing/explain/{id}/decision - non-existent id returns 404",
+      "POST /api/pricing/explain/{id}/decision - accept sets decision_rate=proposed_rate",
+      "POST /api/pricing/explain/{id}/decision - reject sets decision_rate=current_rate",
+      "POST /api/pricing/explain/{id}/decision - override requires positive final_rate (400 if missing)",
+      "POST /api/pricing/explain/{id}/decision - override with final_rate works",
+      "POST /api/pricing/explain/{id}/decision - idempotent (second call returns 400 'already decided')"
+    ],
+    "frontend": [
+      "Sidebar 'AI Fiyat Açıklayıcı' (data-testid='pricing-explain-btn') opens PricingExplainPanel",
+      "PricingExplainPanel (data-testid='pricing-explain-panel') renders with title 'Fiyat Önerisi Açıklayıcı'",
+      "KPI stats (data-testid='pe-stats') render: TOPLAM AÇIKLAMA, BEKLEYEN, ONAY ORANI, OVERRIDE, ORT. GÜVEN, ORT. |Δ|",
+      "Form (data-testid='pe-form') with all fields: pe-room-type, pe-target-date, pe-current-rate, pe-proposed-rate, pe-occupancy, pe-pace, pe-demand, pe-events, pe-comp-name-*, pe-comp-rate-*, pe-notes",
+      "Submit button (data-testid='pe-submit') triggers AI explanation",
+      "AI result (data-testid='pe-result') displays narrative, confidence ring, drivers (pe-driver), risks, alternatives (pe-alt-0, pe-alt-1)",
+      "Decision buttons (pe-accept, pe-reject, pe-show-override) present",
+      "History tab (data-testid='pe-tab-history') shows past explanations",
+      "History list (data-testid='pe-history') with expandable rows (pe-row-{id})",
+      "Decision badges: KABUL (green), RED (red), OVERRIDE (violet), BEKLEME (amber)"
+    ],
+    "regression_tests": [
+      "HK Turnover Panel (iteration 244) - loads correctly via lazy loading",
+      "BI Feed Panel (iteration 243) - loads correctly via lazy loading",
+      "Navigation between panels works without errors"
+    ]
+  },
+  "validation_details": {
+    "ai_response_structure": {
+      "narrative": "2-4 sentences in Turkish, plain language",
+      "confidence": "0-100 integer",
+      "key_drivers": "3-5 items with label/weight/direction (up|down|neutral)",
+      "risks": "1-3 short risk descriptions in Turkish",
+      "alternative_rates": "2 items with rate and scenario"
+    },
+    "decision_logic": {
+      "accept": "decision_rate = proposed_rate",
+      "reject": "decision_rate = current_rate",
+      "override": "decision_rate = final_rate (required, must be positive)"
+    },
+    "idempotency": "Second decision on same ID returns 400 with 'already decided' message"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "Real EMERGENT_LLM_KEY used for AI generation"
+  }
+}

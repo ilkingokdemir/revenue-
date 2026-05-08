@@ -1,0 +1,71 @@
+{
+  "summary": "Iteration 256: i18n Turkish Translation Fix testing complete. All sidebar section labels and menu items now translate correctly when switching to Turkish. The fix adds ~190 nav.<id> + 9 section_label.<key> + 4 ui.* keys to all 7 i18n JSON files. Language switching via LanguageSwitcher works without page reload. SectionHub pages show translated labels and search placeholders. Existing modules (Site Feasibility, Help Guide, Banquet Orders) continue to work after i18n changes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_256.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only test)",
+    "frontend": "100% (all i18n features verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "i18n translation fix verified. Language switching works via LanguageSwitcher component at bottom of sidebar. Turkish translations include all sidebar section labels (section_label.*) and menu item names (nav.*). The tNav() and tSectionLabel() helper functions in App.js handle runtime translation with English fallback for missing keys.",
+  "features_tested": {
+    "turkish_section_labels": {
+      "overview": "GENEL BAKIŞ",
+      "reservations": "REZERVASYONLAR",
+      "guests": "MİSAFİRLER",
+      "operations": "OPERASYONLAR",
+      "revenue_rates": "GELİR VE FİYATLAR",
+      "food_events": "YİYECEK VE ETKİNLİKLER",
+      "finance": "FİNANS",
+      "reports": "RAPORLAR",
+      "system": "SİSTEM",
+      "status": "ALL PASS"
+    },
+    "turkish_menu_items": {
+      "my_tasks": "Görevlerim",
+      "help_guide": "Yardım ve kullanım kılavuzu",
+      "walkin": "Walk-in (anlık giriş)",
+      "late_checkout": "Geç çıkış",
+      "pricing_explain": "AI fiyat açıklayıcı",
+      "site_feasibility": "Yatırım fizibilitesi",
+      "banquet_orders": "Banket etkinlik emirleri",
+      "status": "ALL PASS"
+    },
+    "section_hub_page": {
+      "h1_label": "Rezervasyonlar (Turkish)",
+      "search_placeholder": "Rezervasyonlar bölümünde ara…",
+      "card_names": "All translated to Turkish",
+      "status": "PASS"
+    },
+    "language_switch_back_to_english": {
+      "status": "PASS - All labels switch back to English without page reload"
+    },
+    "data_testid_stability": {
+      "status": "PASS - testIds remain stable, only display text changes"
+    },
+    "regression_modules": {
+      "site_feasibility": "PASS - Panel loads correctly",
+      "help_guide": "PASS - Panel loads with Turkish content",
+      "banquet_orders": "PASS - Panel accessible"
+    }
+  },
+  "mocked_apis": {
+    "booking_com_scrape": "MOCKED - unchanged from prior iteration"
+  }
+}

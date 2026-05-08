@@ -1,0 +1,211 @@
+{
+  "summary": "Iteration 129 - Payroll Management & Expense Management fully tested. All 33 backend API tests passed (100%). Frontend UI verified with all components loading correctly, all data-testid selectors working, and full CRUD operations functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "payroll_earnings_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/payroll/earnings/{property_id}?year=&month=",
+      "tests_passed": 3,
+      "features": [
+        "Returns period, total_staff, total_gross, total_adjustments, total_advances, grand_total, rows",
+        "Each row has staff_id, name, role, days_worked, daily_rate, gross, adjustments, advances, net",
+        "Uses ROLE_RATES: receptionist=50, housekeeper=80, maintenance=100, manager=120, admin=150",
+        "Defaults to current month when year/month not provided"
+      ]
+    },
+    "payroll_runs_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/payroll/runs/{property_id} - returns runs list",
+        "POST /api/payroll/runs/{property_id} - creates draft run with snapshot; 400 on duplicate year/month",
+        "POST /api/payroll/runs/{property_id}/{id}/approve - sets status=approved",
+        "POST /api/payroll/runs/{property_id}/{id}/mark-paid - sets status=paid, auto-marks linked advances as repaid (admin-only)",
+        "DELETE /api/payroll/runs/{property_id}/{id} - deletes draft only; 400 on paid"
+      ],
+      "tests_passed": 6
+    },
+    "payroll_adjustments_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/payroll/adjustments/{property_id}?year=&month= - returns adjustments list",
+        "POST /api/payroll/adjustments/{property_id} - creates adjustment; supports types: bonus/overtime/commission/deduction/tax/benefit/other",
+        "DELETE /api/payroll/adjustments/{property_id}/{id} - removes adjustment"
+      ],
+      "tests_passed": 4,
+      "features": [
+        "Deduction and tax types subtract in earnings calculation",
+        "Returns 400 when staff_id missing"
+      ]
+    },
+    "payroll_advances_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/payroll/advances/{property_id} - returns advances + kpis (pending/approved/rejected/repaid/total_outstanding)",
+        "POST /api/payroll/advances/{property_id} - creates pending request (any role)",
+        "POST /api/payroll/advances/{property_id}/{id}/approve - changes status to approved",
+        "POST /api/payroll/advances/{property_id}/{id}/reject - changes status to rejected",
+        "POST /api/payroll/advances/{property_id}/{id}/mark-repaid - sets repaid=true"
+      ],
+      "tests_passed": 5
+    },
+    "expense_categories_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/expenses/categories/{property_id}?year=&month= - returns 9 default categories with spent/budget/usage_pct",
+        "PUT /api/expenses/categories/{property_id}/{cat}/budget - upserts monthly budget"
+      ],
+      "tests_passed": 2,
+      "features": [
+        "9 default categories: utilities, supplies, maintenance, marketing, salaries, rent, food, tech, other",
+        "Each category includes spent, budget, usage_pct"
+      ]
+    },
+    "expenses_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/expenses/{property_id}?year=&month=[&category=] - returns expenses, kpis (total/count/avg), by_category",
+        "POST /api/expenses/{property_id} - creates expense; 400 on amount<=0",
+        "PUT /api/expenses/{property_id}/{id} - updates allowed fields",
+        "DELETE /api/expenses/{property_id}/{id} - removes expense"
+      ],
+      "tests_passed": 6
+    },
+    "recurring_expenses_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/expenses/recurring/{property_id} - returns recurring + due_count",
+        "POST /api/expenses/recurring/{property_id} - creates with frequency (weekly/biweekly/monthly/quarterly/annual)",
+        "POST /api/expenses/recurring/{property_id}/{id}/post - creates expense from template, advances next_due, increments total_posted",
+        "POST /api/expenses/recurring/{property_id}/run-due - posts all enabled+due templates in one call",
+        "DELETE /api/expenses/recurring/{property_id}/{id} - removes template"
+      ],
+      "tests_passed": 5,
+      "features": [
+        "Monthly next_due advances +1 month correctly",
+        "Sets last_run timestamp on post"
+      ]
+    },
+    "frontend_payroll_management": {
+      "status": "PASS",
+      "data_testids": [
+        "payroll-management",
+        "payroll-title",
+        "payroll-kpis",
+        "month-select",
+        "tab-earnings",
+        "tab-runs",
+        "tab-adjustments",
+        "tab-advances",
+        "earnings-table",
+        "create-run-btn",
+        "new-adjustment-btn",
+        "adj-staff-select",
+        "adj-amount-input",
+        "adj-submit-btn",
+        "new-advance-btn",
+        "adv-staff-select",
+        "adv-amount-input",
+        "adv-submit-btn"
+      ],
+      "features_verified": [
+        "5 KPI cards: Staff, Gross, Adjustments, Advances, Net Payable",
+        "4 tabs: Earned Salaries, Payroll Runs, Adjustments, Cash Advances",
+        "Earnings table with staff, role, days, rate, gross, adj, adv, net columns",
+        "Create Run button for current month",
+        "New Adjustment dialog with staff select, type select, amount input, reason textarea",
+        "New Advance dialog with staff select, amount input, reason textarea",
+        "Run actions: approve-{id}, pay-{id} buttons",
+        "Advance actions: approve-adv-{id} button"
+      ]
+    },
+    "frontend_expense_management": {
+      "status": "PASS",
+      "data_testids": [
+        "expense-management",
+        "expenses-title",
+        "expense-kpis",
+        "month-select",
+        "tab-expenses",
+        "tab-recurring",
+        "tab-budgets",
+        "new-expense-btn",
+        "exp-vendor-input",
+        "exp-cat-select",
+        "exp-amount-input",
+        "exp-submit-btn",
+        "new-recurring-btn",
+        "rec-vendor-input",
+        "rec-amount-input",
+        "rec-freq-select",
+        "rec-submit-btn",
+        "budgets-grid",
+        "budget-card-{cat}",
+        "budget-amount-input",
+        "budget-submit-btn",
+        "run-due-btn",
+        "post-{id}"
+      ],
+      "features_verified": [
+        "4 KPI cards: Total Spent, Transactions, Avg/Expense, Recurring",
+        "3 tabs: Expenses, Recurring, Categories & Budgets",
+        "Category filter pills with spending amounts",
+        "Expenses table with date, vendor, category, description, amount, method, actions",
+        "New Expense dialog with vendor, date, category, amount, payment method, reference, description, receipt URL, notes",
+        "New Recurring dialog with vendor, category, amount, frequency, next due, description, auto-post checkbox",
+        "9 budget category cards with icons, colors, spent/budget, usage bars",
+        "Budget dialog with amount input and save button",
+        "Run Due button (visible when due_count > 0)",
+        "Post Now button on due recurring items"
+      ]
+    },
+    "navigation": {
+      "status": "PASS",
+      "features_verified": [
+        "Sidebar nav items present: Payroll, Expenses",
+        "Both nav items clickable and navigate to correct views"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration129_payroll_expenses.py",
+    "/app/test_reports/pytest/pytest_iteration129_payroll_expenses.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All data-testid attributes properly implemented for testing",
+    "All endpoints properly protected with role-based authentication (admin/manager for most, any role for advance requests)",
+    "ROLE_RATES correctly implemented: receptionist=50, housekeeper=80, maintenance=100, manager=120, admin=150 GBP/day",
+    "Earnings calculation correctly applies adjustments (deduction/tax subtract, others add) and advances",
+    "Payroll run snapshot captures earnings at creation time",
+    "Mark-paid correctly auto-marks linked cash advances as repaid",
+    "Expense categories correctly return 9 defaults with spent/budget/usage_pct",
+    "Recurring post correctly advances next_due based on frequency",
+    "Run-due batch posts all enabled+due templates in one call"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration129_payroll_expenses.py"
+  ],
+  "success_rate": {
+    "backend": "100% (33/33 passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Created TEST_ prefixed adjustments, advances, expenses, and recurring templates for testing, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 129 tested Payroll Management (earnings from shifts with ROLE_RATES, runs with draft→approved→paid lifecycle, adjustments with 7 types, cash advances with approve/reject/repay workflow) and Expense Management (9 default categories with budgets, one-off expenses, recurring templates with 5 frequencies, run-due batch posting). All 33 backend tests passed. All frontend components verified with data-testid selectors. Payroll shows Ali (maintenance) with 2 days worked = £200 gross. Expenses show £220 total spent across 5 transactions.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

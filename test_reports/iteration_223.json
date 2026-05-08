@@ -1,0 +1,137 @@
+{
+  "summary": "Iteration 223 - Batch 10 FINAL P1 Keyless Features (17-20 of 20) tested. All 4 features working: (1) Cancellation Insurance with config/quote/attach/claim/policies, (2) Group Rooming Wizard with sessions/add-guest/auto-assign/finalize, (3) Multi-currency Tax Reports with property/all/CSV export, (4) Dynamic Check-in Time Slots with config/availability/reserve/cancel. Backend: 30/30 passed. Frontend: All 4 panels render correctly with proper data-testid attributes. MILESTONE: This completes all 20 P1 keyless features (Batches 7-10) + all 30 P0 features = 50 competitor-parity gaps now closed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TaxReportsV2Panel", "issues": ["Minor React hydration warning about <span> inside <option> - cosmetic only, doesn't affect functionality"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration223_batch10_final.py",
+    "/app/test_reports/pytest/pytest_iteration223_batch10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 4 Batch 10 P1 features implemented correctly with proper validation and error handling",
+    "Cancel Insurance: Config saves fee_pct/min/max, quote computes fee with clamp, attach creates policy + folio_charges (category=insurance), idempotent 409 on second attach, claim flips status + cancels booking (only inside claim window), policies aggregates fee_revenue/claimed/claim_loss_estimate",
+    "Group Rooming Wizard: Sessions open as draft, add-guest appends to manifest, auto-assign reads rooms collection (room.name is public room number, room.room_type_id is type), filters busy rooms, prefers same-floor sort, 409 if not enough free rooms, finalize creates one booking per assignment (status=confirmed, source=group_rooming), idempotent (won't refinalize)",
+    "Tax Reports V2: Property report aggregates folio_charges by currency/category/property, all-properties admin-only roll-up, CSV export returns text/plain, amount-as-gross treatment (category=room rate 20% → gross=120 → net=100, tax=20)",
+    "CI Slots: Config saves start/end hour, slot_minutes, capacity_per_slot, availability returns slots with free_seats + is_early flag, slots before early_ci_threshold_hour have fee, reserve writes reservation + 409 if slot full + posts folio_charges category=early_checkin if is_early, re-calling reserve for same booking_id+date updates slot (no duplicate), delete frees seat"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration223_batch10_final.py"
+  ],
+  "success_rate": {
+    "backend": "100% (30/30 passed)",
+    "frontend": "100% (all 4 new panels working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing default property with seeded bookings, aldgate-flats for group rooming (59 rooms)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 223 completes Batch 10 (FINAL 4 P1 keyless competitor-parity features). All 50 P0/P1 features from Batches 1-10 now complete. Features tested: (1) Cancel Insurance at /api/cancel-insurance/* - config, quote with clamp, attach (creates policy + folio_charges), idempotent 409, claim (flips status + cancels booking), policies aggregation. (2) Group Rooming Wizard at /api/group-rooming/sessions/* - open session, add-guest, auto-assign (uses room.name for room number, room.room_type_id for type), 409 if not enough rooms, finalize creates bookings (source=group_rooming), idempotent. (3) Tax Reports V2 at /api/tax-reports/* - property report, all-properties admin roll-up, CSV export, amount-as-gross treatment. (4) CI Slots at /api/ci-slots/* - config, availability with is_early flag, reserve (409 if full, posts early_checkin folio charge), update same booking, delete frees seat. Frontend panels: CancelInsurancePanel, GroupRoomingWizPanel, TaxReportsV2Panel, CISlotsPanel. Sidebar buttons: cancel-insurance-btn, group-rooming-wiz-btn, tax-reports-v2-btn, ci-slots-btn. Property aldgate-flats has 59 rooms (good for group rooming tests).",
+  "features_verified": {
+    "cancel_insurance": {
+      "endpoints": {
+        "config_save": "POST /api/cancel-insurance/config - saves fee_pct/min/max/claim_window_hours",
+        "config_get": "GET /api/cancel-insurance/{property_id}/config",
+        "quote": "POST /api/cancel-insurance/quote - computes fee = clamp(booking_total*fee_pct/100, min, max)",
+        "attach": "POST /api/cancel-insurance/attach - creates policy + folio_charges (category=insurance)",
+        "claim": "POST /api/cancel-insurance/{booking_id}/claim - flips status to claimed + cancels booking",
+        "policies": "GET /api/cancel-insurance/{property_id}/policies - aggregates fee_revenue/claimed/claim_loss_estimate"
+      },
+      "fee_calculation": "4% of booking total, clamped between min (5) and max (60)",
+      "idempotent": "409 on second attach to same booking",
+      "claim_window": "Only inside claim_window_hours_before_ci (default 24h)",
+      "ui_elements": {
+        "panel": "data-testid='cancel-insurance-panel'",
+        "save_cfg_btn": "data-testid='ci-save-cfg-btn'",
+        "booking_input": "data-testid='ci-booking-input'",
+        "attach_btn": "data-testid='ci-attach-btn'",
+        "policy_row": "data-testid='ci-policy-row'",
+        "claim_btn": "data-testid='ci-claim-btn'"
+      },
+      "status": "WORKING"
+    },
+    "group_rooming_wizard": {
+      "endpoints": {
+        "open_session": "POST /api/group-rooming/sessions - opens draft session",
+        "add_guest": "POST /api/group-rooming/sessions/{id}/add-guest - appends to manifest",
+        "auto_assign": "POST /api/group-rooming/sessions/{id}/auto-assign - assigns rooms (uses room.name, room.room_type_id)",
+        "finalize": "POST /api/group-rooming/sessions/{id}/finalize - creates bookings (source=group_rooming)",
+        "view_session": "GET /api/group-rooming/sessions/{id}",
+        "list_sessions": "GET /api/group-rooming/{property_id}/sessions"
+      },
+      "room_assignment": "Filters busy rooms in date range, prefers same-floor sort, 409 if not enough free rooms",
+      "booking_creation": "One booking per assignment, status=confirmed, source=group_rooming",
+      "idempotent": "Won't refinalize (400 if session not draft)",
+      "test_property": "aldgate-flats has 59 rooms",
+      "ui_elements": {
+        "panel": "data-testid='group-rooming-wiz-panel'",
+        "new_btn": "data-testid='grw-new-btn'",
+        "name_input": "data-testid='grw-name-input'",
+        "create_btn": "data-testid='grw-create-btn'",
+        "session_row": "data-testid='grw-session-row'",
+        "guest_name_input": "data-testid='grw-guest-name-input'",
+        "add_guest_btn": "data-testid='grw-add-guest-btn'",
+        "auto_assign_btn": "data-testid='grw-auto-assign-btn'",
+        "finalize_btn": "data-testid='grw-finalize-btn'",
+        "manifest_row": "data-testid='grw-manifest-row'"
+      },
+      "status": "WORKING"
+    },
+    "tax_reports_v2": {
+      "endpoints": {
+        "property_report": "GET /api/tax-reports/{property_id}?days=30 - aggregates folio_charges",
+        "all_properties": "GET /api/tax-reports/all?days=30 - admin-only cross-property roll-up",
+        "csv_export": "GET /api/tax-reports/{property_id}/export.csv - returns text/plain CSV"
+      },
+      "aggregation": "by_currency / by_category / by_property dicts with net/tax/gross",
+      "tax_calculation": "Amount treated as gross, backs out tax based on category rate (room=20%, food=12%, etc.)",
+      "example": "category=room (rate 20%), gross=120 → net=100, tax=20",
+      "ui_elements": {
+        "panel": "data-testid='tax-reports-v2-panel'",
+        "scope_select": "data-testid='trv2-scope'",
+        "export_btn": "data-testid='trv2-export-btn'",
+        "currency_row": "data-testid='trv2-currency-row'",
+        "category_row": "data-testid='trv2-category-row'",
+        "property_row": "data-testid='trv2-property-row'"
+      },
+      "status": "WORKING"
+    },
+    "ci_slots": {
+      "endpoints": {
+        "config_save": "POST /api/ci-slots/config - saves start/end hour, slot_minutes, capacity_per_slot",
+        "config_get": "GET /api/ci-slots/{property_id}/config",
+        "availability": "GET /api/ci-slots/{property_id}/{date}/availability - returns slots with free_seats + is_early",
+        "reserve": "POST /api/ci-slots/reserve - writes reservation, 409 if full, posts folio_charges if early",
+        "cancel": "DELETE /api/ci-slots/reservations/{id} - frees seat",
+        "list_reservations": "GET /api/ci-slots/{property_id}/{date}/reservations"
+      },
+      "slot_generation": "Slots from start_hour to end_hour in slot_minutes increments",
+      "early_slots": "Slots before early_ci_threshold_hour (default 14) have is_early=true and fee",
+      "capacity": "409 if slot reaches capacity_per_slot",
+      "update_behavior": "Re-calling reserve for same booking_id+date updates slot (no duplicate)",
+      "folio_charge": "Posts folio_charges category=early_checkin if is_early",
+      "ui_elements": {
+        "panel": "data-testid='ci-slots-panel'",
+        "save_cfg_btn": "data-testid='cis-save-cfg-btn'",
+        "slot_cell": "data-testid='cis-slot-cell'",
+        "res_row": "data-testid='cis-res-row'",
+        "cancel_btn": "data-testid='cis-cancel-btn'"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "bookings_list": "PASSED",
+    "properties_list": "PASSED"
+  },
+  "batch_completion_status": "Batch 10 (4/4 P1 features) COMPLETE - All 50 P0/P1 features from Batches 1-10 now complete. MILESTONE: 20/20 P1 keyless + 30/30 P0 = 50 competitor-parity gaps closed."
+}

@@ -1,0 +1,101 @@
+{
+  "summary": "Iteration 32 - Testing 6 NEW Hotel Booking Engine Features: Guest Review Collection, Mobile Self-Check-in, Guest Portal, Cart Abandonment Recovery, Multi-Currency Support, and Group Booking Engine. All 23 backend tests passed (100%). All frontend features verified working. Fixed missing timedelta import in models.py.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [],
+    "fixed": [
+      {
+        "file": "/app/backend/models.py",
+        "issue": "Missing timedelta import causing 500 error on guest-portal/request-access endpoint",
+        "fix": "Added timedelta to datetime import"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration32_new_features.py",
+    "/app/test_reports/pytest/pytest_iteration32_new_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/models.py"
+  ],
+  "success_rate": {
+    "backend": "100% (23/23 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "property_id": "aldgate-flats"
+  },
+  "seed_data_creation": "Created test bookings for review collection and check-in testing",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 6 new features are working: 1) Review Collection - /review?property={id}&ref={booking_ref} with star rating and submission, 2) Self Check-in - /checkin?ref={booking_ref} with 4-step process, 3) Guest Portal - /guest-portal with magic link login and booking dashboard, 4) Cart Abandonment - save/recover APIs working, 5) Multi-Currency - 18 currencies with live conversion, 6) Group Booking - modal form with submission. Currency conversion rates are static/approximate (MOCKED).",
+  "features_tested": {
+    "review_collection": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "GET /api/review-collection/settings/{property_id}",
+        "PUT /api/review-collection/settings/{property_id}",
+        "GET /api/review-collection/page/{property_id}/{booking_ref}",
+        "POST /api/review-collection/submit"
+      ],
+      "frontend_tested": "/review?property=aldgate-flats&ref={booking_ref} - star rating, review form, submission"
+    },
+    "self_checkin": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "GET /api/checkin/settings/{property_id}",
+        "POST /api/checkin/start/{booking_ref}",
+        "POST /api/checkin/complete/{booking_ref}",
+        "GET /api/checkin/admin/{property_id}"
+      ],
+      "frontend_tested": "/checkin?ref={booking_ref} - 4-step check-in process visible"
+    },
+    "guest_portal": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "POST /api/guest-portal/request-access",
+        "POST /api/guest-portal/verify",
+        "GET /api/guest-portal/bookings"
+      ],
+      "frontend_tested": "/guest-portal - email input, magic link login, booking dashboard"
+    },
+    "cart_abandonment": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "POST /api/cart/save",
+        "GET /api/cart/recover/{token}",
+        "GET /api/cart/abandoned/{property_id}",
+        "GET /api/cart/stats/{property_id}"
+      ]
+    },
+    "multi_currency": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "GET /api/currencies (18 currencies)",
+        "GET /api/currency/convert"
+      ],
+      "frontend_tested": "Currency selector in booking engine header - dropdown with GBP, USD, EUR, AED, SAR, JPY, CNY, INR"
+    },
+    "group_booking": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "POST /api/group-booking/request",
+        "GET /api/group-booking/requests/{property_id}"
+      ],
+      "frontend_tested": "Group booking CTA banner, modal form with fields, successful submission"
+    }
+  },
+  "mocked_apis": {
+    "currency_conversion": "Rates are static/approximate - not live exchange rates",
+    "magic_link_email": "Token returned directly in response for dev mode - email not actually sent",
+    "cart_abandonment_email": "Not yet implemented"
+  }
+}

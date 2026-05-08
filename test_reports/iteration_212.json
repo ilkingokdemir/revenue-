@@ -1,0 +1,88 @@
+{
+  "summary": "Iteration 212 - Accounting Export (QuickBooks/Xero) + HK Route Print Round tested. All backend APIs working (100% pass). Frontend Accounting Export panel shows date filters, format selector (QB/Xero), summary tiles (bookings/revenue/payments), and download buttons. HK Route Print button correctly disabled when no rounds. Regression tests pass for nightly-recap-btn, sustainability-btn, group-requests-btn, concierge-inbox-btn.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration212_accounting_export_hk_print.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/accounting/export/{property_id}/summary - Returns {from, to, bookings_count, total_revenue, payments_count, by_source} - VERIFIED (650 bookings, £220,177.43 revenue)",
+    "GET /api/accounting/export/{property_id}/sales?format=quickbooks - Returns CSV with DR/CR pairs (Date, Journal No., Account, Debits, Credits, Description, Name, Class) - VERIFIED",
+    "GET /api/accounting/export/{property_id}/sales?format=xero - Returns Xero Sales Invoice CSV (*ContactName, *InvoiceNumber, *InvoiceDate, *UnitAmount, *AccountCode, *TaxType) - VERIFIED",
+    "GET /api/accounting/export/{property_id}/payments?format=quickbooks|xero - Returns payments CSV - VERIFIED",
+    "GET /api/accounting/export/{property_id}/sales?from_=invalid - Returns 400 'from/to must be YYYY-MM-DD' - VERIFIED",
+    "Frontend accounting-export-btn menu item - VERIFIED",
+    "Frontend accounting-export-panel with ae-filters, ae-summary, ae-downloads - VERIFIED",
+    "Frontend ae-from, ae-to date inputs - VERIFIED",
+    "Frontend ae-format dropdown (QuickBooks/Xero) - VERIFIED",
+    "Frontend ae-refresh button - VERIFIED",
+    "Frontend ae-download-sales button - VERIFIED (triggers CSV download with toast 'sales CSV downloaded')",
+    "Frontend ae-download-payments button - VERIFIED",
+    "HK Route hk-route-print button - VERIFIED (correctly disabled when rounds.length=0)",
+    "HK Route panel shows empty state when no cleaning round needed - VERIFIED",
+    "Regression: nightly-recap-btn - PASSED",
+    "Regression: sustainability-btn - PASSED",
+    "Regression: group-requests-btn - PASSED",
+    "Regression: concierge-inbox-btn - PASSED"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration212_accounting_export_hk_print.py"
+  ],
+  "success_rate": {
+    "backend": "100% (all endpoints working)",
+    "frontend": "100% (all panels and features working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing data. aldgate-flats has 650 bookings for accounting export testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 212 adds two competitor gap features: (1) Accounting Export at /api/accounting/export/{property_id}/[summary|sales|payments] - exports bookings and payments as QuickBooks Journal CSV or Xero Sales Invoice CSV. Frontend: accounting-export-btn opens AccountingExportPanel with date filters (ae-from, ae-to), format selector (ae-format), summary tiles (ae-summary), and download cards (ae-download-sales, ae-download-payments). (2) HK Route Print Round button (hk-route-print) - opens printable A4 HTML via window.print(). Button is disabled when rounds.length=0.",
+  "features_verified": {
+    "accounting_export": {
+      "endpoints": {
+        "summary": "GET /api/accounting/export/{property_id}/summary?from_=&to=",
+        "sales": "GET /api/accounting/export/{property_id}/sales?from_=&to=&format=quickbooks|xero",
+        "payments": "GET /api/accounting/export/{property_id}/payments?from_=&to=&format=quickbooks|xero"
+      },
+      "auth": "admin/manager",
+      "formats": {
+        "quickbooks": "Journal CSV with DR/CR pairs (Accounts Receivable / Room Revenue)",
+        "xero": "Sales Invoice CSV with *ContactName, *InvoiceNumber, etc."
+      },
+      "ui_elements": {
+        "menu_btn": "data-testid='accounting-export-btn'",
+        "panel": "data-testid='accounting-export-panel'",
+        "filters": "data-testid='ae-filters'",
+        "from_input": "data-testid='ae-from'",
+        "to_input": "data-testid='ae-to'",
+        "format_select": "data-testid='ae-format'",
+        "refresh_btn": "data-testid='ae-refresh'",
+        "summary": "data-testid='ae-summary'",
+        "downloads": "data-testid='ae-downloads'",
+        "download_sales": "data-testid='ae-download-sales'",
+        "download_payments": "data-testid='ae-download-payments'"
+      },
+      "status": "WORKING"
+    },
+    "hk_route_print": {
+      "button": "data-testid='hk-route-print'",
+      "behavior": "Opens printable A4 HTML via window.open() + window.print()",
+      "disabled_when": "rounds.length === 0",
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "nightly_recap_btn": "PASSED - Button found, panel loads",
+    "sustainability_btn": "PASSED - Button found, panel loads",
+    "group_requests_btn": "PASSED - Button found, panel found",
+    "concierge_inbox_btn": "PASSED - Button found, panel found"
+  }
+}

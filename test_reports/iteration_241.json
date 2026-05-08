@@ -1,0 +1,70 @@
+{
+  "summary": "Batch 29-30 testing complete: Image AI Cleanliness Scoring (GPT-5.2 Vision) + CopilotButton scatter into 3 panels. 17/17 backend tests passed, frontend UI fully functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration241_image_ai.py",
+    "/app/test_reports/pytest/pytest_iteration241_image_ai.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration241_image_ai.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test scores created via API tests (TEST_101, TEST_102, TEST_103, TEST_DETAIL rooms)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Batch 29-30 fully tested. Image AI Cleanliness Scoring with GPT-5.2 Vision works correctly - POST /api/image-ai/cleanliness-score accepts 1-3 photos, strips data: prefix, returns score/severity/issues/observations/next_action. History endpoint returns stats (count, pass_rate, avg_score). CopilotButton scatter verified in AnomalyPanel (anom-copilot-btn), ForecastV2Panel (fcv2-copilot-btn), and TippingPanel (tip-copilot-btn).",
+  "features_tested": {
+    "backend": [
+      "POST /api/image-ai/cleanliness-score - requires auth (401 without)",
+      "POST /api/image-ai/cleanliness-score - empty photos returns 400 'At least 1 photo required'",
+      "POST /api/image-ai/cleanliness-score - >3 photos returns 400 'Max 3 photos per scoring'",
+      "POST /api/image-ai/cleanliness-score - valid photo returns score 0-100, severity pass/warning/fail",
+      "POST /api/image-ai/cleanliness-score - strips data: URI prefix correctly",
+      "POST /api/image-ai/cleanliness-score - accepts 3 photos, returns photo_count=3",
+      "GET /api/image-ai/cleanliness-history/{property_id} - requires auth",
+      "GET /api/image-ai/cleanliness-history/{property_id} - returns rows, count, pass_count, fail_count, pass_rate, avg_score",
+      "GET /api/image-ai/cleanliness-history/{property_id}?room_id=X - filters by room",
+      "GET /api/image-ai/cleanliness-history/{property_id}?limit=0 - returns 400 'limit must be 1..200'",
+      "GET /api/image-ai/cleanliness-history/{property_id}?limit=201 - returns 400 'limit must be 1..200'",
+      "GET /api/image-ai/cleanliness-score/{score_id} - requires auth",
+      "GET /api/image-ai/cleanliness-score/{score_id} - non-existent returns 404",
+      "GET /api/image-ai/cleanliness-score/{score_id} - returns full record with photos_b64",
+      "POST /api/copilot/summarize - anomaly context type works",
+      "POST /api/copilot/summarize - forecast context type works",
+      "POST /api/copilot/summarize - leaderboard context type works"
+    ],
+    "frontend": [
+      "ImageAIPanel renders with Turkish title 'AI Temizlik Skorlaması'",
+      "Skorla tab: Room ID input (img-room-id) works",
+      "Skorla tab: Photo upload button (img-upload-btn) shows '(0/3)' counter",
+      "Skorla tab: Notes textarea (img-notes) works",
+      "Skorla tab: Submit button (img-submit) disabled without photos",
+      "Skorla tab: Result area (img-result) shows placeholder text",
+      "Geçmiş tab: KPI tiles show Toplam Skor, Geçme Oranı, Ort. Skor",
+      "Geçmiş tab: Room filter input (img-filter-room) works",
+      "Geçmiş tab: History list (img-history-list) shows scored rooms with severity badges",
+      "Sidebar: AI Temizlik Skorlama button (image-ai-btn) navigates correctly",
+      "AnomalyPanel: CopilotButton (anom-copilot-btn) 'AI Özet: Anomali Paterni' present",
+      "ForecastV2Panel: CopilotButton (fcv2-copilot-btn) 'AI Özet: Talep Stratejisi' present in HorizonTab",
+      "TippingPanel: CopilotButton (tip-copilot-btn) 'AI Özet: Çalışan Performansı' present in DashboardTab"
+    ]
+  },
+  "ai_integration_verified": {
+    "gpt_5_2_vision": "Working - returns Turkish analysis with score, severity, issues, observations, next_action",
+    "copilot_summarize": "Working - anomaly, forecast, leaderboard context types all return insights"
+  }
+}

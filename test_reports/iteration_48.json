@@ -1,0 +1,116 @@
+{
+  "summary": "Iteration 48 - Stock Management Upgrade Testing COMPLETE. All 17 backend tests passed (100%). Frontend verified with all 11 tabs in Stock panel working correctly. 9 new Apicbase-level features tested: Menu Engineering (Stars/Puzzles/Plowhorses/Dogs), Food Cost % Dashboard, Par Level Auto-Ordering, Allergen & Nutrition Tracking, Supplier Price History, Yield Management, Perishable Forecasting (FIFO), Multi-Outlet Transfers, Inventory Turnover Rate.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration48_stock_upgrade.py",
+    "/app/test_reports/pytest/pytest_iteration48_stock_upgrade.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 9 new Stock Management endpoints working correctly",
+    "Menu Engineering classifies recipes as star/puzzle/plowhorse/dog based on margin vs sales averages",
+    "Food Cost % Dashboard uses COGS formula with target range 28-35%",
+    "Auto-order generates POs for products where current_stock < par_level grouped by supplier",
+    "Allergen report aggregates allergens from recipe ingredients",
+    "Price history tracks supplier price changes with timestamps",
+    "Yield analysis calculates effective cost based on yield percentage",
+    "Perishable alerts check expiry_days from last purchase date with FIFO logic",
+    "Transfer creates paired transfer_out/transfer_in movements between outlets",
+    "Turnover rate = COGS / avg_inventory with target 4-8x monthly",
+    "Waste tracking includes reason codes (expired, spoiled, overproduction, etc.)",
+    "Stock panel has 11 tabs: Products, Recipes, Movements, Suppliers & POs, Stock Counts, Cost %, Menu Engineering, Theo vs Actual, Turnover, Expiry Alerts, Variances"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration48_stock_upgrade.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (all 11 tabs and features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "No new seed data created - used existing products from property 'city-gate'",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 48 upgraded Stock Management with 9 new Apicbase-level features. Stock panel now has 11 tabs. Use property_id 'city-gate' for testing. All APIs require admin authentication. Token field in login response is 'token' (not 'access_token'). Perishable alerts require products with expiry_days > 0 and purchase movements to show alerts. Yield analysis requires products with yield_pct < 100.",
+  "features_tested": {
+    "backend_api_tests": {
+      "status": "PASS",
+      "tests_passed": 17,
+      "tests_failed": 0,
+      "endpoints_tested": [
+        {"endpoint": "POST /api/auth/login", "status": "PASS", "notes": "Admin login successful"},
+        {"endpoint": "GET /api/stock/menu-engineering/{property_id}", "status": "PASS", "notes": "Profitability matrix classification working"},
+        {"endpoint": "GET /api/stock/food-cost-dashboard/{property_id}", "status": "PASS", "notes": "Real-time food cost % with COGS formula"},
+        {"endpoint": "POST /api/stock/auto-order/{property_id}", "status": "PASS", "notes": "Auto-generate POs from par levels"},
+        {"endpoint": "GET /api/stock/allergens/{property_id}", "status": "PASS", "notes": "Allergen report per recipe"},
+        {"endpoint": "GET /api/stock/price-history/{product_id}", "status": "PASS", "notes": "Supplier price history"},
+        {"endpoint": "POST /api/stock/price-update/{product_id}", "status": "PASS", "notes": "Update price with history log"},
+        {"endpoint": "GET /api/stock/yield-analysis/{property_id}", "status": "PASS", "notes": "Ingredient yield tracking"},
+        {"endpoint": "GET /api/stock/perishable-alerts/{property_id}", "status": "PASS", "notes": "FIFO expiry alerts"},
+        {"endpoint": "POST /api/stock/transfer", "status": "PASS", "notes": "Multi-outlet stock transfer"},
+        {"endpoint": "GET /api/stock/turnover-rate/{property_id}", "status": "PASS", "notes": "Inventory turnover calculation"},
+        {"endpoint": "POST /api/stock/waste", "status": "PASS", "notes": "Record waste with reason code"},
+        {"endpoint": "GET /api/stock/waste-report/{property_id}", "status": "PASS", "notes": "Waste breakdown by reason"}
+      ],
+      "regression_tests": [
+        {"endpoint": "GET /api/stock/products/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/recipes/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/movements/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/stock/stats/{property_id}", "status": "PASS"}
+      ]
+    },
+    "frontend_tests": {
+      "status": "PASS",
+      "panels_verified": [
+        {
+          "panel": "Stock Management",
+          "status": "PASS",
+          "tabs": ["Products", "Recipes", "Movements", "Suppliers & POs", "Stock Counts", "Cost %", "Menu Engineering", "Theo vs Actual", "Turnover", "Expiry Alerts", "Variances"]
+        }
+      ],
+      "sidebar_section": "OPERATIONS section visible with Stock / F&B link",
+      "data_testids_verified": [
+        "stock-panel",
+        "stock-title",
+        "tab-products",
+        "tab-recipes",
+        "tab-movements",
+        "tab-suppliers",
+        "tab-counts",
+        "tab-cost",
+        "tab-menu-eng",
+        "tab-theo",
+        "tab-turnover",
+        "tab-perishable",
+        "tab-variances",
+        "add-product-btn",
+        "record-movement-btn",
+        "food-cost-tab",
+        "menu-eng-tab",
+        "turnover-tab",
+        "perishable-tab",
+        "products-list"
+      ],
+      "new_features_ui_verified": [
+        "Food Cost % Dashboard with target range indicator (28-35%)",
+        "Menu Engineering with Star/Puzzle/Plowhorse/Dog classification",
+        "Turnover rate with slow movers count and value",
+        "Perishable alerts with days remaining and at-risk value"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

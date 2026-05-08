@@ -1,0 +1,118 @@
+{
+  "summary": "Iteration 132 - AI-Powered Marketplace Recommendations fully tested. All 14 backend API tests passed (100%). Frontend UI verified with all data-testid selectors working. GPT-5.2 AI recommendations feature working correctly with real LLM calls via Emergent LLM Key.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "ai_recommendations_generate_api": {
+      "status": "PASS",
+      "endpoint": "POST /api/marketplace/recommendations/{pid}/generate",
+      "tests_passed": 5,
+      "features": [
+        "Returns 3 AI recommendations with id/title/reason/impact/priority/cat/domain/name/desc",
+        "Returns headline, recommendations array, generated_at, signal_snapshot",
+        "signal_snapshot contains bookings, revenue, connected_count, top_sources",
+        "Recommendations exclude already-installed integrations",
+        "Idempotent - calling twice upserts (updates generated_at)",
+        "Requires admin/manager auth (401 without token)",
+        "Uses real GPT-5.2 via Emergent LLM Key (not mocked)"
+      ]
+    },
+    "ai_recommendations_get_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/marketplace/recommendations/{pid}",
+      "tests_passed": 3,
+      "features": [
+        "Returns {status: 'none'} before first generate",
+        "Returns cached document after generation",
+        "Requires admin/manager auth (401 without token)"
+      ]
+    },
+    "marketplace_regression": {
+      "status": "PASS",
+      "tests_passed": 6,
+      "features": [
+        "Catalog returns 124 integrations (total_available=124)",
+        "Catalog returns 17 categories",
+        "Install/toggle/sync/uninstall flow works correctly",
+        "Category filter works",
+        "Search filter works",
+        "Invalid integration returns 404"
+      ]
+    },
+    "frontend_ai_recommendations": {
+      "status": "PASS",
+      "data_testids_verified": [
+        "ai-rec-strip - AI recommendations strip with dark indigo gradient",
+        "ai-rec-headline - Shows AI-generated headline",
+        "ai-rec-generate - 'Get AI Picks' / 'Refresh Picks' button",
+        "ai-rec-list - Container for 3 recommendation cards",
+        "ai-rec-{id} - Individual recommendation cards (e.g., ai-rec-siteminder)",
+        "ai-rec-connect-{id} - Connect buttons per recommendation"
+      ],
+      "features_verified": [
+        "AI strip shows 'AI PICKS · GPT-5.2' badge and 'RECOMMENDED FOR YOU' label",
+        "Headline reflects AI output (e.g., 'Add a channel manager + Google visibility to unlock more demand fast')",
+        "Signal snapshot shows 'Analysed 768 bookings · 3 apps connected · top sources: agoda, direct, walk-in'",
+        "3 recommendation cards with priority badges (HIGH/MEDIUM)",
+        "Impact estimates shown (e.g., '+6-10h/week manual work', '+2-5% RevPAR')",
+        "Connect button installs integration and shows 'Integration connected' toast",
+        "Clicking recommendation card opens detail drawer for that integration",
+        "Refresh Picks button regenerates recommendations"
+      ]
+    },
+    "frontend_marketplace_regression": {
+      "status": "PASS",
+      "features_verified": [
+        "Hero section shows 124 available, N connected, coverage percentage",
+        "17 category chips with counts",
+        "Search input filters integrations",
+        "Filter tabs (All/Connected/Featured) work",
+        "Integration cards show real brand logos via Google favicons",
+        "Connect/Pause/Sync/Disconnect flows work"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration132_ai_recommendations.py",
+    "/app/test_reports/pytest/pytest_iteration132_ai_recommendations.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AI recommendations use real GPT-5.2 via Emergent LLM Key - NOT mocked",
+    "Gracefully handles LLM JSON with code-fence prefixes (strips ``` and json prefix)",
+    "Recommendations correctly exclude already-installed integrations",
+    "All data-testid attributes properly implemented for testing",
+    "Endpoints properly protected with role-based authentication (admin/manager)",
+    "AI call takes ~5-10 seconds as expected for real LLM inference"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration132_ai_recommendations.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test integrations installed during testing (stripe, kayak, siteminder) - cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 132 added AI-powered recommendations to the Integrations Marketplace. Two new endpoints: GET /api/marketplace/recommendations/{pid} returns cached recs or {status:'none'}, POST /api/marketplace/recommendations/{pid}/generate calls GPT-5.2 to analyze property signals (bookings, OTA mix, category gaps) and returns top 3 integration picks. Frontend shows AI strip with dark indigo gradient, headline, 3 recommendation cards with priority badges and impact estimates, Connect buttons. Install flow is still MOCKED (no real OAuth) but AI layer uses REAL GPT-5.2 via Emergent LLM Key.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "marketplace install flow is MOCKED (no real OAuth) - installing simply records the integration as connected in MongoDB without real external API calls"
+    ],
+    "real_apis": [
+      "AI recommendations use REAL GPT-5.2 via Emergent LLM Key"
+    ]
+  }
+}

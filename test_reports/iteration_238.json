@@ -1,0 +1,82 @@
+{
+  "summary": "Guest Portal V2 (Self-Modify/Cancel) feature testing complete. All 20 backend API tests passed. Frontend public portal and admin panel fully functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_guest_portal_v2.py",
+    "/app/test_reports/pytest/pytest_iteration238_guest_portal_v2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_guest_portal_v2.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Used existing bookings from pipeline endpoint",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Guest Portal V2 feature fully tested. Backend endpoints: POST /api/guest-portal-v2/token/{booking_id} (ADMIN), GET /api/guest-portal-v2/verify/{token} (PUBLIC), POST /api/guest-portal-v2/modify/{token} (PUBLIC), POST /api/guest-portal-v2/cancel/{token} (PUBLIC), GET /api/guest-portal-v2/pipeline/{property_id} (ADMIN). All refund policies (flexible/moderate/strict) verified. Frontend public portal at /portal/{token} and admin panel GuestPortalV2Panel both working correctly.",
+  "tests_executed": {
+    "backend_api_tests": [
+      "test_issue_token_success - PASSED",
+      "test_issue_token_all_policies - PASSED",
+      "test_issue_token_invalid_policy - PASSED (400 returned)",
+      "test_issue_token_invalid_expiry_hours - PASSED (400 returned)",
+      "test_issue_token_booking_not_found - PASSED (404 returned)",
+      "test_issue_token_without_auth - PASSED (401 returned)",
+      "test_verify_token_success - PASSED",
+      "test_verify_token_invalid - PASSED (404 with Turkish message)",
+      "test_modify_booking_special_requests - PASSED",
+      "test_modify_booking_adults_validation - PASSED (400 for invalid values)",
+      "test_modify_booking_invalid_token - PASSED (404 returned)",
+      "test_cancel_booking_success - PASSED",
+      "test_cancel_booking_invalid_token - PASSED (404 returned)",
+      "test_refund_policy_flexible_calculation - PASSED",
+      "test_refund_policy_moderate_calculation - PASSED",
+      "test_refund_policy_strict_calculation - PASSED",
+      "test_pipeline_success - PASSED",
+      "test_pipeline_days_ahead_validation - PASSED (400 for invalid values)",
+      "test_pipeline_without_auth - PASSED (401 returned)",
+      "test_pipeline_row_structure - PASSED"
+    ],
+    "frontend_ui_tests": [
+      "Public portal page loads correctly - PASSED",
+      "Booking summary displays (guest name, dates, nights, guests, price) - PASSED",
+      "Policy banner shows correct Turkish text - PASSED",
+      "Düzenle (Modify) button present and clickable - PASSED",
+      "İptal Et (Cancel) button present and clickable - PASSED",
+      "Modify form: date pickers, adults/children inputs, special_requests textarea - PASSED",
+      "Modify form: Kaydet button present - PASSED",
+      "Cancel form: refund warning banner with days_to_arrival and refund_percent - PASSED",
+      "Cancel form: reason textarea present - PASSED",
+      "Cancel form: Rezervasyonu İptal Et button present - PASSED",
+      "Invalid token shows 'Bağlantı geçersiz' error - PASSED",
+      "Admin GuestPortalV2Panel loads - PASSED",
+      "Admin KPI tiles (total/issued/modified/cancelled) - PASSED",
+      "Admin days selector (7/14/30/60) - PASSED",
+      "Admin policy selector - PASSED",
+      "Admin bookings table with Link Gönder button - PASSED",
+      "Link Gönder issues token successfully - PASSED"
+    ]
+  },
+  "features_verified": {
+    "token_issuance": "Admin can issue tokens with flexible/moderate/strict policies, expiry_hours 1-720",
+    "token_verification": "Public endpoint returns full booking info, policy_label, days_to_arrival, refund_percent, can_modify/can_cancel flags",
+    "booking_modification": "Guests can modify dates, adults, children, special_requests. Validation: adults 1-10, check_out after check_in, no past dates, no modification <1 day before arrival",
+    "booking_cancellation": "Guests can cancel with optional reason. Refund calculated based on policy and days_to_arrival",
+    "refund_matrix": "Flexible: >=2d=100%, <2d=0%. Moderate: >=5d=100%, 2-5d=50%, <2d=0%. Strict: >=7d=50%, <7d=0%",
+    "pipeline_view": "Admin can view upcoming bookings with token status, days_ahead 1-90 validation",
+    "auth_protection": "Admin endpoints return 401 without authentication"
+  }
+}

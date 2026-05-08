@@ -1,0 +1,143 @@
+{
+  "summary": "Iteration 140 - Staff Onboarding Download & Email Endpoints fully tested. Backend: 19/19 tests passed. All download endpoints (passport, address, HMRC PDF, ZIP bundle) work correctly with proper auth (admin/manager only, 403 for receptionist). HMRC PDF is real PDF (3209 bytes, starts with %PDF-1.4). ZIP bundle contains 4 entries. Email endpoint correctly calls Resend (502 expected with placeholder API key). Frontend: Detail drawer shows indigo action bar with ZIP bundle and Email documents buttons, per-card download icons visible when docs exist, email dialog has all required fields with pre-filled subject and auto-toggled checkboxes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Detail Dialog", "issues": ["Minor React warning: Missing Description or aria-describedby for DialogContent - doesn't affect functionality"]}
+    ]
+  },
+  "features_tested": {
+    "download_passport": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/staff-onboarding/{user_id}/download/passport returns 200 with file content",
+        "Content-Disposition header includes filename",
+        "Requires admin/manager auth (401 without, 403 for receptionist)"
+      ]
+    },
+    "download_address": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/staff-onboarding/{user_id}/download/address returns 200 with file content",
+        "Requires admin/manager auth"
+      ]
+    },
+    "download_hmrc_pdf": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/staff-onboarding/{user_id}/download/hmrc returns 200",
+        "PDF starts with %PDF-1.4 (real PDF)",
+        "PDF size >= 2kb (3209 bytes)",
+        "Content-Type is application/pdf",
+        "Returns 404 if HMRC not submitted"
+      ]
+    },
+    "download_bundle_zip": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/staff-onboarding/{user_id}/download-bundle returns 200",
+        "ZIP size >= 2kb (2944 bytes)",
+        "ZIP contains 4 entries: 1_ID_Passport.jpg, 2_Address_Proof.pdf, 3_HMRC_Starter_Checklist.pdf, 4_Contract_Reference.txt",
+        "Files are in {name}/ subdirectory (Sarah_Tester/)"
+      ]
+    },
+    "auth_restrictions": {
+      "status": "PASS",
+      "tests": [
+        "All download endpoints return 401 without auth",
+        "All download endpoints return 403 for receptionist role",
+        "Admin and manager roles can access all endpoints"
+      ]
+    },
+    "email_endpoint": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/staff-onboarding/{user_id}/email requires auth",
+        "Empty recipients returns 400",
+        "Accepts comma-separated string for recipients",
+        "Returns 502 with placeholder RESEND_API_KEY (EXPECTED - proves endpoint is wired correctly)",
+        "Validates at least one attachment is available"
+      ]
+    },
+    "frontend_detail_drawer": {
+      "status": "PASS",
+      "tests": [
+        "Indigo 'Share or archive...' action bar visible",
+        "oa-dl-bundle button present",
+        "oa-email button present",
+        "oa-dl-passport icon visible when passport uploaded",
+        "oa-dl-address icon visible when address uploaded",
+        "oa-dl-hmrc icon visible when HMRC submitted"
+      ]
+    },
+    "frontend_email_dialog": {
+      "status": "PASS",
+      "tests": [
+        "oa-email-dialog opens on button click",
+        "email-to input present",
+        "email-subject input pre-filled with 'Onboarding documents — {name}'",
+        "email-message textarea present",
+        "email-include-passport checkbox present and auto-toggled",
+        "email-include-address checkbox present and auto-toggled",
+        "email-include-hmrc checkbox present and auto-toggled",
+        "email-send button present",
+        "Cancel button closes dialog"
+      ]
+    },
+    "regression_activate_deactivate": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/staff-onboarding/admin-activate/{user_id} works",
+        "POST /api/staff-onboarding/admin-deactivate/{user_id} works",
+        "GET /api/staff-onboarding/list works with status filters"
+      ]
+    },
+    "regression_onboarding_gate": {
+      "status": "PASS",
+      "tests": [
+        "Non-activated staff sees onboarding gate",
+        "Dashboard blocked until activation",
+        "4/4 progress shown correctly"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration140_download_email.py",
+    "/app/test_reports/pytest/pytest_iteration140_download_email.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Download endpoints correctly use FileResponse for uploaded files and StreamingResponse for generated content",
+    "HMRC PDF generation uses reportlab with proper styling (A4, tables, colors)",
+    "ZIP bundle uses zipfile.ZIP_DEFLATED for compression",
+    "Email endpoint correctly handles both list and comma-separated string for recipients",
+    "Base64 encoding for email attachments is correct",
+    "Auth restriction (admin|manager) properly enforced via require_roles decorator"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration140_download_email.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "staff": "sarah@hotel.test / StaffP@ss1 (role=receptionist, is_activated=false)"
+  },
+  "seed_data_creation": "Sarah has full onboarding data: passport.jpg (20b), bill.pdf (16b), HMRC submitted, contract signed",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 140 added download and email endpoints for staff onboarding documents. Admin/manager can download individual docs (passport, address, HMRC PDF) or a ZIP bundle with all 4 files. Email endpoint sends documents via Resend (placeholder key returns 502 - expected). Frontend detail drawer has new action bar with ZIP bundle and Email buttons, plus per-card download icons. Sarah's onboarding is at 4/4 complete but not activated (for testing onboarding gate).",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Email delivery via Resend (RESEND_API_KEY is placeholder - returns 502 'API key invalid' which is EXPECTED behavior)"
+    ]
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "summary": "Iteration 156 - Top 10 Competitor Gap Features. All 38 backend tests PASSED (100%). All 10 frontend panels render correctly. Fixed route conflict for /reviews/sentiment/* by registering sentiment router before reviews router.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration156_competitor_gap.py",
+    "/app/test_reports/pytest/pytest_iteration156_competitor_gap.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration156_competitor_gap.py",
+    "/app/backend/server.py (moved sentiment router registration before reviews router to fix route conflict)"
+  ],
+  "success_rate": {
+    "backend": "100% (38/38 tests passed)",
+    "frontend": "100% (all 10 panels verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Used existing seed data. RFM shows 1,069 guests with £432,501.52 revenue.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 10 competitor gap features fully tested and working. Backend APIs return correct structures. Frontend panels render without React errors. Cash Drawer flow tested (open/transaction/close). Gift Cards flow tested (issue card with MHB-XXXX code). 2FA flow tested (enroll shows QR + secret). RFM shows real guest data with 5 segments.",
+  "tests_verified": {
+    "backend": {
+      "night_audit_close": [
+        "GET /api/night-audit/close-status/{pid} returns closed=false initially - PASS",
+        "POST /api/night-audit/close-day/{pid} creates close record - PASS",
+        "POST /api/night-audit/close-day/{pid} returns 409 for duplicate - PASS",
+        "GET /api/night-audit/close-history/{pid} returns records - PASS",
+        "POST /api/night-audit/reopen-day/{pid} admin only - PASS"
+      ],
+      "deposit_ledger": [
+        "GET /api/deposit-ledger/{pid} returns structure - PASS",
+        "by_booking items have required fields - PASS"
+      ],
+      "commission_recon": [
+        "GET /api/commission-recon/statements/{pid} returns list - PASS",
+        "POST /api/commission-recon/upload/{pid} reconciles lines - PASS",
+        "DELETE /api/commission-recon/statements/{id} admin only - PASS"
+      ],
+      "gift_cards": [
+        "POST /api/gift-cards creates card with MHB-XXXX code - PASS",
+        "GET /api/gift-cards returns list - PASS",
+        "GET /api/gift-cards/summary/{pid} returns totals - PASS",
+        "GET /api/gift-cards/lookup/{code} finds card - PASS",
+        "POST /api/gift-cards/{id}/cancel sets status - PASS"
+      ],
+      "review_sentiment": [
+        "GET /api/reviews/sentiment/summary/{pid} returns structure - PASS",
+        "POST /api/reviews/sentiment/analyze works (LLM key present) - PASS"
+      ],
+      "guest_rfm": [
+        "GET /api/guests/rfm/{pid} returns segments and guests - PASS",
+        "5 segments present (Champions, Loyal, Potential Loyalists, At Risk, Lost) - PASS",
+        "Guest records have RFM scores - PASS"
+      ],
+      "preventive_maintenance": [
+        "GET /api/preventive-maintenance/{pid} returns plans - PASS",
+        "POST /api/preventive-maintenance creates plan - PASS",
+        "POST /api/preventive-maintenance/{id}/complete advances next_due - PASS"
+      ],
+      "asset_register": [
+        "GET /api/assets/{pid} returns list - PASS",
+        "POST /api/assets creates asset - PASS",
+        "GET /api/assets/summary/{pid} returns totals - PASS",
+        "Assets have computed fields (depreciated_value, age_years) - PASS"
+      ],
+      "cash_drawer": [
+        "GET /api/cash-drawer/active/{pid} returns status - PASS",
+        "POST /api/cash-drawer/open/{pid} opens session - PASS",
+        "POST /api/cash-drawer/open/{pid} returns 409 if already open - PASS",
+        "POST /api/cash-drawer/sessions/{id}/transaction logs tx - PASS",
+        "POST /api/cash-drawer/sessions/{id}/close computes variance - PASS",
+        "GET /api/cash-drawer/sessions/{pid} returns history - PASS"
+      ],
+      "two_factor_auth": [
+        "GET /api/2fa/status returns enabled/enrolled - PASS",
+        "POST /api/2fa/enroll returns secret and otpauth_url - PASS",
+        "POST /api/2fa/verify with valid TOTP code activates - PASS",
+        "POST /api/2fa/verify with invalid code returns 401 - PASS",
+        "POST /api/2fa/disable with valid code disables - PASS"
+      ]
+    },
+    "frontend": {
+      "sidebar_entries": [
+        "night-audit-close-btn - FOUND",
+        "deposit-ledger-btn - FOUND",
+        "commission-recon-btn - FOUND",
+        "gift-cards-btn - FOUND",
+        "review-sentiment-btn - FOUND",
+        "guest-rfm-btn - FOUND",
+        "preventive-maintenance-btn - FOUND",
+        "asset-register-btn - FOUND",
+        "cash-drawer-btn - FOUND",
+        "two-factor-auth-btn - FOUND"
+      ],
+      "panels_render": [
+        "night-audit-close-panel - RENDERS",
+        "deposit-ledger-panel - RENDERS",
+        "commission-recon-panel - RENDERS",
+        "gift-cards-panel - RENDERS",
+        "sentiment-panel - RENDERS",
+        "rfm-panel - RENDERS",
+        "preventive-maintenance-panel - RENDERS",
+        "asset-register-panel - RENDERS",
+        "cash-drawer-panel - RENDERS",
+        "two-factor-panel - RENDERS"
+      ],
+      "flows_tested": [
+        "Cash Drawer: Open £100 → Add IN £50 → Expected £150 → Close with £150 → Variance £0 - PASS",
+        "Gift Cards: Issue £100 card → Toast 'Gift card issued: MHB-XXXX' → Card in list - PASS",
+        "2FA: Enroll → QR rendered → Secret displayed → Code input present - PASS"
+      ]
+    }
+  },
+  "bug_fix_applied": {
+    "issue": "POST /api/reviews/sentiment/analyze returned 404 instead of 200/503",
+    "root_cause": "Route conflict - /reviews/{review_id} was catching /reviews/sentiment/analyze because 'sentiment' was treated as review_id",
+    "fix": "Moved sentiment router registration before reviews router in server.py (line 379)",
+    "verified": "Endpoint now returns 200 with analyzed count"
+  },
+  "sample_data_observed": {
+    "rfm": {
+      "total_guests": 1069,
+      "total_revenue": 432501.52,
+      "avg_stays": 1.29,
+      "segments": {
+        "champions": 143,
+        "loyal": 108,
+        "potential_loyalists": 335,
+        "at_risk": 453,
+        "lost": 30
+      }
+    },
+    "gift_card_issued": "MHB-RRZN-TR5T-FXR7"
+  }
+}

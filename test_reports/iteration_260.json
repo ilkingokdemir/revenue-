@@ -1,0 +1,99 @@
+{
+  "summary": "Iteration 260: Mobile-first MobileHome component testing complete. All core features working. Desktop (1280x800) shows TodayHub correctly. Mobile (390x844) shows MobileHome with 6 role-based cards for admin. Card navigation, search button (command palette), and wake-server button all functional. Minor issue: viewport resize doesn't trigger re-render (MobileHome stays visible after resize to desktop until page reload).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "App.js - isMobileViewport()",
+        "issue": "Viewport resize from mobile to desktop doesn't trigger re-render. MobileHome stays visible after resize to 1024px+ until page reload or navigation. The isMobileViewport() function is called at render time but no resize event listener triggers re-render.",
+        "selector": "N/A",
+        "priority": "LOW",
+        "note": "Acceptable for real mobile devices where users don't resize browser. Only affects desktop browser testing."
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_260.json"
+  ],
+  "action_items": [
+    "OPTIONAL: Add window resize listener to trigger re-render for MobileHome/TodayHub switch if desktop browser resize support is needed"
+  ],
+  "critical_code_review_comments": [
+    "useCapacitor.js: Lazy imports with try/catch work correctly for web fallback",
+    "MobileHome.js: All data-testid attributes present and working",
+    "App.js line 239-241: isMobileViewport() comment says 'Re-evaluated on every render so orientation/resize works' but this is misleading - no resize listener exists to trigger re-render"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only testing)",
+    "frontend": "95% (all features work, minor resize behavior issue)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "MobileHome component fully tested. All 6 admin role cards work (dashboard, arrivals, revenue, operations-hub, reports, site-feasibility). Search button triggers command palette via document.dispatchEvent(keydown). useCapacitor hook gracefully falls back to web APIs. Native badge correctly hidden in web mode. Resize behavior has minor issue but acceptable for production mobile use.",
+  "features_tested": {
+    "desktop_view_1280x800": {
+      "login": "PASS - admin@hotelbox.com / HotelAdmin2026!",
+      "TodayHub_renders": "PASS - data-testid='today-hub' visible"
+    },
+    "mobile_view_390x844": {
+      "login": "PASS",
+      "MobileHome_renders": "PASS - data-testid='mobile-home' visible",
+      "header_brand_name": "PASS - 'Hotel PMS & Revenue Management' shown",
+      "greeting": "PASS - 'Merhaba Hotel' with user name",
+      "role_label": "PASS - 'Admin' shown",
+      "search_button": "PASS - data-testid='mobile-search-btn' present and functional",
+      "role_cards_admin": {
+        "mobile-card-dashboard": "PASS",
+        "mobile-card-arrivals": "PASS",
+        "mobile-card-revenue": "PASS",
+        "mobile-card-operations-hub": "PASS",
+        "mobile-card-reports": "PASS",
+        "mobile-card-site-feasibility": "PASS"
+      },
+      "online_indicator": "PASS - green dot visible",
+      "native_badge_hidden": "PASS - correctly hidden in web mode"
+    },
+    "card_navigation": {
+      "tap_arrivals_card": "PASS - navigates to Arrivals Cockpit panel"
+    },
+    "search_button_command_palette": {
+      "click_search_btn": "PASS - command palette opens with search input"
+    },
+    "resize_behavior": {
+      "mobile_to_desktop": "PARTIAL - MobileHome stays visible after resize (no re-render triggered)",
+      "desktop_to_mobile": "PASS - MobileHome returns after resize back to mobile"
+    },
+    "wake_server_button": {
+      "visible_on_login": "PASS - data-testid='wake-server-btn' present",
+      "click_functionality": "PASS - shows 'Sunucu hazır (59ms)' toast"
+    },
+    "useCapacitor_hook": {
+      "web_fallback": "PASS - no crashes, graceful fallback",
+      "isNative": "PASS - returns false in web browser",
+      "platform": "PASS - returns 'web'",
+      "online": "PASS - returns true (browser online)"
+    },
+    "regression_panels": {
+      "Site_Feasibility": "PASS - loads without errors",
+      "Lock_SDK": "PASS - loads without errors",
+      "Recipe_COGS": "PASS - loads without errors",
+      "Self_Checkin_Auto": "PASS - loads without errors",
+      "Banquet_Orders": "PASS - loads without errors",
+      "Loyalty_Tier": "PASS - loads without errors"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Capacitor native APIs (web fallback in browser) - takePhoto falls back to file picker, network uses browser online/offline events"
+    ]
+  }
+}

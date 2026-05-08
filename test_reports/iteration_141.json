@@ -1,0 +1,133 @@
+{
+  "summary": "Iteration 141 - Staff Onboarding Security Lockdown fully tested. Backend: 23/23 tests passed. All security features working correctly: /me endpoint strips sensitive fields (filenames, urls, paths, hmrc_data, email_log), re-upload/re-submit blocked with 400 'locked' message, direct file access returns 401 (unauth), 403 (staff), 200 (admin). Frontend: Staff sees 'locked' chips with security disclaimer, no upload buttons, no filenames, no View links. HMRC tab shows sealed state with 'SUBMITTED & LOCKED' badge. Admin detail drawer shows full HMRC data, image previews, download icons, ZIP bundle and Email buttons.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "staff_me_endpoint_security": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/staff-onboarding/me does NOT expose passport_filename",
+        "GET /api/staff-onboarding/me does NOT expose passport_url",
+        "GET /api/staff-onboarding/me does NOT expose passport_path",
+        "GET /api/staff-onboarding/me does NOT expose passport_uploaded_at",
+        "GET /api/staff-onboarding/me does NOT expose address_proof_filename",
+        "GET /api/staff-onboarding/me does NOT expose address_proof_url",
+        "GET /api/staff-onboarding/me does NOT expose hmrc_data",
+        "GET /api/staff-onboarding/me does NOT expose email_log",
+        "Response contains only safe fields: passport_uploaded (bool), address_proof_uploaded (bool), hmrc_submitted (bool), contract_signed (bool), progress, hmrc_statements"
+      ]
+    },
+    "upload_lockdown": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/staff-onboarding/upload/passport returns 400 'ID / Passport already submitted and locked...' when passport_uploaded=true",
+        "POST /api/staff-onboarding/upload/address returns 400 'Address proof already submitted and locked...' when address_proof_uploaded=true",
+        "POST /api/staff-onboarding/hmrc returns 400 'HMRC Starter Checklist already submitted and locked...' when hmrc_submitted=true"
+      ]
+    },
+    "direct_file_access_security": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/uploads/onboarding/{filename} returns 401 without auth",
+        "GET /api/uploads/onboarding/{filename} returns 403 for staff role",
+        "GET /api/uploads/onboarding/{filename} returns 200 for admin role",
+        "Path traversal with .. returns 404 (file not found, not actual file content)",
+        "Path traversal with / returns 404 (file not found)"
+      ]
+    },
+    "admin_download_regression": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/staff-onboarding/{user_id}/download/passport returns 200 with file content",
+        "GET /api/staff-onboarding/{user_id}/download/address returns 200 with file content",
+        "GET /api/staff-onboarding/{user_id}/download/hmrc returns 200 with PDF (starts with %PDF-)",
+        "GET /api/staff-onboarding/{user_id}/download-bundle returns 200 with ZIP (starts with PK)"
+      ]
+    },
+    "admin_list_shows_all_data": {
+      "status": "PASS",
+      "tests": [
+        "Admin list endpoint includes hmrc_data for each user",
+        "Admin list endpoint includes passport_filename/url"
+      ]
+    },
+    "complete_onboarding_regression": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/staff-onboarding/complete validates all tasks are done",
+        "Complete endpoint activates user when all 4 tasks done"
+      ]
+    },
+    "frontend_staff_locked_ui": {
+      "status": "PASS",
+      "tests": [
+        "Onboarding gate displays for non-activated staff",
+        "Passport tab shows 'ID / Passport received · locked' chip",
+        "Passport tab shows security disclaimer text",
+        "Passport tab does NOT show upload button when locked",
+        "Passport tab does NOT show filename",
+        "Passport tab does NOT show View link",
+        "Address tab shows 'Address proof received · locked' chip",
+        "Address tab does NOT show upload button when locked",
+        "HMRC tab shows sealed state (data-testid=tab-hmrc-sealed)",
+        "HMRC tab shows 'SUBMITTED & LOCKED' badge",
+        "HMRC tab shows 'Checklist signed and submitted' headline",
+        "HMRC form is NOT rendered when hmrc_submitted=true",
+        "Contract tab shows 'Contract signed' state"
+      ]
+    },
+    "frontend_admin_full_access": {
+      "status": "PASS",
+      "tests": [
+        "Admin detail drawer opens on Review button click",
+        "Admin sees ZIP bundle button",
+        "Admin sees Email documents button",
+        "Admin sees ID/Passport image preview with download icon",
+        "Admin sees Address Proof PDF preview with download icon",
+        "Admin sees full HMRC data (Last Name, First Names, Sex, DOB, NI Number, Statement, etc.)",
+        "Admin sees Employment Contract section"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration141_security_lockdown.py",
+    "/app/test_reports/pytest/pytest_iteration141_security_lockdown.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Security implementation is correct: /me endpoint uses dict comprehension to strip forbidden fields",
+    "Upload lockdown checks existing record before allowing upload",
+    "Direct file access route registered BEFORE static mount, ensuring auth kicks in first",
+    "Path traversal protection checks for '/', '\\', '..' in filename",
+    "Frontend correctly splits HMRC tab into tab-hmrc (form) and tab-hmrc-sealed (locked state)",
+    "UploadedChip component simplified to show only label+locked, no filename or View link"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration141_security_lockdown.py"
+  ],
+  "success_rate": {
+    "backend": "100% (23/23 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "staff": "sarah@hotel.test / StaffP@ss1 (role=receptionist, is_activated=true after test)"
+  },
+  "seed_data_creation": "Sarah has full onboarding data: passport.jpg, bill.pdf, HMRC submitted (Statement B, NI: AB123456C), contract signed",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 141 implemented security lockdown for staff onboarding. Staff cannot view, re-upload, or access documents after submission. /me endpoint strips sensitive fields. Re-upload returns 400 'locked'. Direct file access returns 403 for staff, 200 for admin. Frontend shows 'locked' chips with security disclaimer, no upload buttons, no filenames. HMRC tab shows sealed state when submitted. Admin retains full access via detail drawer with all HMRC data, image previews, download icons, ZIP bundle and Email buttons.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Email delivery via Resend (RESEND_API_KEY is placeholder - returns 502 'API key invalid' which is EXPECTED behavior)"
+    ]
+  }
+}

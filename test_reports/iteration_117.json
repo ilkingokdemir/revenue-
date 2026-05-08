@@ -1,0 +1,127 @@
+{
+  "summary": "Iteration 117 - Revenue Intelligence Features (4 new features). All 21 backend tests passed. All 4 frontend components verified working: Booking Pace, Revenue Forecast, Rate Actions, What-If Simulator. All sidebar navigation items present under Intelligence section.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "backend_booking_pace": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/intelligence/all/booking-pace?days=7",
+      "response_fields": ["daily_pace", "kpis", "alerts"],
+      "kpis_verified": ["total_this_year", "total_last_year", "diff", "pace_status", "pickup_24h", "velocity_change_pct"],
+      "day_ranges_tested": [7, 14, 30, 60, 90]
+    },
+    "backend_revenue_forecast": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/intelligence/all/forecast?days=30",
+      "response_fields": ["forecast_daily", "monthly_forecast", "kpis"],
+      "kpis_verified": ["projected_revenue", "projected_avg_adr", "projected_avg_occ", "projected_revpar", "yoy_change_pct"],
+      "day_ranges_tested": [30, 60, 90, 180, 365]
+    },
+    "backend_rate_recommendations": {
+      "status": "PASS",
+      "endpoint": "GET /api/revenue/intelligence/all/recommendations",
+      "response_fields": ["recommendations", "kpis"],
+      "kpis_verified": ["total_actions", "increases", "decreases", "critical"],
+      "card_fields": ["id", "date", "dow", "current_rate", "recommended_rate", "diff", "diff_pct", "action", "reasons", "priority"]
+    },
+    "backend_accept_recommendation": {
+      "status": "PASS",
+      "endpoint": "POST /api/revenue/intelligence/all/recommendations/accept",
+      "payload": {"date": "YYYY-MM-DD", "rate": 150.00},
+      "response": {"applied": true}
+    },
+    "backend_accept_all_recommendations": {
+      "status": "PASS",
+      "endpoint": "POST /api/revenue/intelligence/all/recommendations/accept-all",
+      "payload": {"recommendations": []},
+      "response": {"applied": "count"}
+    },
+    "backend_whatif_simulator": {
+      "status": "PASS",
+      "endpoint": "POST /api/revenue/intelligence/all/what-if",
+      "payload": {"rate_change_pct": 10, "date_from": "YYYY-MM-DD", "date_to": "YYYY-MM-DD"},
+      "response_fields": ["simulation", "current", "projected", "impact", "daily_comparison"],
+      "verdicts_tested": ["positive", "negative", "neutral"]
+    },
+    "frontend_sidebar_items": {
+      "status": "PASS",
+      "items_found": ["Booking Pace", "Revenue Forecast", "Rate Actions", "What-If Simulator"],
+      "location": "Revenue > Intelligence section"
+    },
+    "frontend_booking_pace": {
+      "status": "PASS",
+      "component": "BookingPace.js",
+      "kpis_displayed": ["This Year (33)", "Last Year (44)", "Difference (-11, -25%)", "24h Pickup (4)", "Velocity Change (+100%)"],
+      "day_range_buttons": ["7d", "14d", "30d", "60d", "90d"],
+      "alerts_displayed": ["You're 11 bookings BEHIND last year", "Booking velocity is ACCELERATING"],
+      "chart": "This Year (cyan) vs Last Year (dashed grey)"
+    },
+    "frontend_revenue_forecast": {
+      "status": "PASS",
+      "component": "RevenueForecast.js",
+      "kpis_displayed": ["Projected Revenue", "ADR", "Occupancy", "RevPAR"],
+      "monthly_forecast_section": true
+    },
+    "frontend_rate_actions": {
+      "status": "PASS",
+      "component": "RateRecommendations.js",
+      "kpis_displayed": ["Actions (18)", "Increases (5)", "Decreases (13)", "Critical (0)"],
+      "accept_all_button": true,
+      "individual_accept_buttons": 19,
+      "card_info": ["Date", "Current Rate", "Recommended Rate", "Priority Badge", "Reasons"]
+    },
+    "frontend_whatif_simulator": {
+      "status": "PASS",
+      "component": "WhatIfSimulator.js",
+      "inputs": ["Rate Change %", "From Date", "To Date"],
+      "preset_buttons": ["-20%", "-10%", "-5%", "+5%", "+10%", "+15%", "+20%", "+30%"],
+      "simulate_button": true,
+      "verdict_displayed": "GO AHEAD: +10.0% rate change generates £4,229 extra revenue with acceptable occupancy impact",
+      "comparison_cards": ["Current (No Change)", "Projected (+10% Change)"],
+      "metrics_compared": ["Revenue", "Occupancy", "ADR", "Rooms Sold"]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration117_revenue_intelligence.py",
+    "/app/test_reports/pytest/pytest_iteration117_revenue_intelligence.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 4 revenue intelligence features implemented correctly",
+    "Backend APIs return proper response structures with all required fields",
+    "Frontend components have proper data-testid attributes for testing",
+    "Day range selectors work correctly for both Booking Pace and Revenue Forecast",
+    "What-If Simulator correctly shows verdict and comparison cards after simulation",
+    "Rate Actions shows individual Accept buttons per recommendation plus Accept All bulk button",
+    "Booking Pace chart shows this year vs last year comparison with proper styling"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration117_revenue_intelligence.py"
+  ],
+  "success_rate": {
+    "backend": "100% (21/21 tests passed)",
+    "frontend": "100% (all 4 components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "No new seed data created",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 117 tested 4 NEW revenue intelligence features: 1) Booking Pace & Pickup Velocity - shows this year vs last year comparison with alerts, 2) Revenue Forecast Engine - AI-projected RevPAR/ADR/Occupancy/Revenue with monthly breakdown, 3) Rate Recommendation Actions - daily to-do list with one-click accept buttons, 4) What-If Simulator - test rate changes before committing with verdict. All 4 are sidebar items under Intelligence section in Revenue panel. Navigation: Revenue > click sidebar items (Booking Pace, Revenue Forecast, Rate Actions, What-If Simulator).",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Last year booking data is simulated (offset from this year data)",
+      "Revenue forecast uses historical performance + events + seasonality model",
+      "What-If uses price elasticity model (-0.3 elasticity factor)"
+    ]
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "summary": "Completed comprehensive testing of iteration 18 features: Real-time Red Popup Notifications with Sound. All 14 backend tests passed (100%). Frontend testing verified: red notification popup with slideIn animation, guest name, platform badge, star rating, review preview, dismiss X button, dismiss all button for multiple notifications, auto-dismiss after 8 seconds, sound via Web Audio API, polling every 20 seconds, widget stats update, and review list refresh.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "passed_tests": [
+    "GET /api/widget/reviews/new without api_key returns 401",
+    "GET /api/widget/reviews/new with invalid api_key returns 401",
+    "GET /api/widget/reviews/new without since parameter returns empty array",
+    "GET /api/widget/reviews/new with old since timestamp returns reviews",
+    "GET /api/widget/reviews/new with future since timestamp returns empty array",
+    "GET /api/widget/reviews/new with property_id filter works",
+    "GET /api/widget/reviews/new response contains required fields (id, guest_name, platform, rating, review_text)",
+    "Create review and verify it appears in /widget/reviews/new endpoint",
+    "GET /api/widget/reviews still works",
+    "GET /api/widget/stats still works",
+    "GET /api/widget/unread-count still works",
+    "Admin login still works",
+    "GET /api/reviews still works",
+    "GET /api/reviews/stats/summary still works",
+    "Frontend: Widget loads at /widget?api_key=rhk_xxx without errors",
+    "Frontend: Widget shows unread badge with count (e.g., '12 new reviews')",
+    "Frontend: Red notification popup appears when new review is created and poll detects it",
+    "Frontend: Notification popup has red gradient background (linear-gradient #DC2626 to #B91C1C)",
+    "Frontend: Notification popup shows bell icon, 'NEW REVIEW' label, guest name, platform badge, star rating, review preview",
+    "Frontend: Notification popup has dismiss X button that removes individual notification",
+    "Frontend: Dismiss all button appears when multiple notifications exist",
+    "Frontend: Clicking dismiss all removes all notifications",
+    "Frontend: Widget review list updates when new review arrives",
+    "Frontend: Widget stats update when new review arrives (total_reviews increments)",
+    "Frontend: Unread red dots still appear on review cards",
+    "Frontend: Mark as read still works (click review -> dot disappears, badge decrements)",
+    "Frontend: Platform filter works (Google filter shows 9 reviews)",
+    "Frontend: Review detail panel shows correctly with Generate AI Response button",
+    "Frontend: Main app login with admin@hotelbox.com / HotelAdmin2026! works",
+    "Frontend: Dashboard shows stats and review list"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_notification_popup.py",
+    "/app/test_reports/pytest/pytest_notification_popup_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_notification_popup.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all notification popup features verified)"
+  },
+  "seed_data_creation": "Created test reviews: TEST_NotificationTest_User, TEST_PopupNotification_Guest, TEST_LiveNotification_Guest, TEST_QuickNotification_Guest, TEST_MultiNotif_Guest1, TEST_MultiNotif_Guest2",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 18 adds: Real-time red popup notifications with sound when new reviews arrive. New endpoint: GET /api/widget/reviews/new?api_key=rhk_xxx&since=TIMESTAMP. Polling happens every 20 seconds. Notification popup has red gradient background, slideIn animation, bell icon, guest name, platform badge, star rating, review preview, dismiss X button. Dismiss all button appears when >1 notification. Auto-dismiss after 8 seconds. Sound uses Web Audio API (3 tones). Test API key: rhk_17354979397db960bcb68db21ed42b7acc103e7940715667. Platform syncing remains MOCKED. AI generation uses REAL OpenAI GPT-5.2 via Emergent LLM Key.",
+  "mocked_apis": {
+    "note": "Platform syncing (Booking.com, Google, etc.) is MOCKED. Auth, API keys, webhooks, widget API, notification popup API, and AI generation are REAL."
+  },
+  "feature_verification": {
+    "notification_popup": {
+      "status": "PASS",
+      "popup_visible": "Appears when polling detects new reviews",
+      "popup_position": "Fixed, top-right corner (top: 16px, right: 16px)",
+      "popup_background": "Red gradient (linear-gradient 135deg, #DC2626, #B91C1C)",
+      "popup_animation": "slideIn 0.4s ease-out",
+      "popup_content": {
+        "bell_icon": "32x32 circular with white background",
+        "label": "NEW REVIEW (uppercase, 11px)",
+        "guest_name": "13px, font-weight 600",
+        "platform_badge": "10px, rounded, semi-transparent background",
+        "star_rating": "5 stars, filled yellow (#FDE68A) or gray",
+        "review_preview": "11px, 2-line clamp with ellipsis"
+      },
+      "dismiss_x_button": "Works - removes individual notification",
+      "dismiss_all_button": "Appears when >1 notification, works correctly",
+      "auto_dismiss": "8 seconds timeout"
+    },
+    "notification_sound": {
+      "status": "PASS (code verified)",
+      "implementation": "Web Audio API with 3 tones (880Hz, 1100Hz, 1320Hz)",
+      "trigger": "playNotificationSound() called when new reviews detected"
+    },
+    "polling": {
+      "status": "PASS",
+      "interval": "20 seconds",
+      "endpoint": "GET /api/widget/reviews/new?api_key=xxx&since=timestamp",
+      "behavior": "Fetches reviews created after lastCheckRef timestamp"
+    },
+    "widget_updates": {
+      "status": "PASS",
+      "stats_refresh": "fetchData() called when new reviews detected",
+      "list_refresh": "Review list updates with new reviews at top"
+    },
+    "existing_features": {
+      "unread_badge": "PASS - still shows count with pulse animation",
+      "unread_dots": "PASS - red dots on unread review cards",
+      "mark_as_read": "PASS - click review removes dot, decrements badge",
+      "platform_filter": "PASS - filters reviews by platform",
+      "status_filter": "PASS - filters reviews by status",
+      "review_detail": "PASS - shows full review with AI response button",
+      "main_app_login": "PASS",
+      "dashboard_stats": "PASS"
+    }
+  },
+  "test_credentials": {
+    "admin": {
+      "email": "admin@hotelbox.com",
+      "password": "HotelAdmin2026!",
+      "role": "admin",
+      "department": "management"
+    },
+    "test_api_key": "rhk_17354979397db960bcb68db21ed42b7acc103e7940715667",
+    "widget_url": "https://review-hub-108.preview.emergentagent.com/widget?api_key=rhk_17354979397db960bcb68db21ed42b7acc103e7940715667"
+  }
+}

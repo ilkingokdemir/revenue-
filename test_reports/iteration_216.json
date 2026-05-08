@@ -1,0 +1,140 @@
+{
+  "summary": "Iteration 216 - Batch 3 Keyless Competitor Parity Features (5 of 30 P0 gaps) tested. All 5 new backend routers working (timeslots, staff_ops, revenue_protection). All 3 new frontend panels load correctly. Backend: 42/42 tests passed. Frontend: All panels render with proper data-testid attributes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration216_batch3_features.py",
+    "/app/test_reports/pytest/pytest_iteration216_batch3.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All 3 new backend routers properly registered in server.py (lines 755-762)",
+    "Timeslots: _slots_for() correctly handles weekdays filter, capacity check returns 409 when full, folio post on charge_to=room",
+    "Staff Ops: ROLE_WEIGHTS for tip distribution (server=1.0, busser=0.6, kitchen=0.4), double clock-in prevented with warning",
+    "Insurance: PUBLIC /quote endpoint (no auth), premium = clamp(min, max, total*rate_pct/100)",
+    "Parity Defender: Reads parity_analysis collection, returns empty recommendations if no data (graceful degradation)",
+    "Webhooks: REAL httpx outbound calls (not mocked), X-Webhook-Secret + X-Webhook-Event headers, logs to webhook_log collection"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration216_batch3_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (42/42 passed)",
+    "frontend": "100% (all 3 new panels working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing city-gate property",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 216 adds 5 keyless competitor-parity features (Batch 3 of 30 P0 gaps): (1) Spa & Activity Time-Slot Booking at /api/timeslot-services/* and /api/timeslot-bookings/* with concurrent_capacity check, weekday filtering, folio posting. (2) Staff Clock-In + Tip Pool at /api/staff/* and /api/tip-pool/* with ROLE_WEIGHTS for weighted distribution, double clock-in prevention. (3) Insurance Upsell at /api/insurance/* with PUBLIC /quote endpoint, rule-based pricing (no real Booking Protect partnership yet). (4) Parity Defender at /api/parity-defender/* reading parity_analysis snapshots, returns recommendations with undercut_pct. (5) Outbound Webhooks at /api/webhooks/* with REAL httpx POST calls, X-Webhook-Secret headers, webhook_log collection. Frontend panels: TimeSlotsPanel, StaffOpsPanel (2 tabs: Clock + Tips), RevenueProtectionPanel (3 tabs: Insurance, Parity, Webhooks). Sidebar buttons: 'Spa & Activity Slots', 'Staff Clock-in & Tips', 'Revenue Protection'. Test service created: TEST_Spa Massage with capacity=2. Webhook test uses httpbin.org/post.",
+  "features_verified": {
+    "timeslot_booking": {
+      "endpoints": {
+        "list_services": "GET /api/timeslot-services/{property_id}",
+        "upsert_service": "POST /api/timeslot-services/{property_id}",
+        "delete_service": "DELETE /api/timeslot-services/{property_id}/{service_id}",
+        "availability": "GET /api/timeslot-services/{property_id}/{service_id}/availability?date=",
+        "book_slot": "POST /api/timeslot-bookings - returns 409 when slot full",
+        "list_bookings": "GET /api/timeslot-bookings/{property_id}",
+        "cancel_booking": "POST /api/timeslot-bookings/{booking_id}/cancel"
+      },
+      "ui_elements": {
+        "panel": "data-testid='timeslots-panel'",
+        "refresh_btn": "data-testid='ts-refresh-btn'",
+        "new_service_btn": "data-testid='ts-new-service-btn'",
+        "service_tab": "data-testid='ts-service-tab'",
+        "date_picker": "data-testid='ts-date'",
+        "slot_btn": "data-testid='ts-slot'",
+        "booking_row": "data-testid='ts-booking-row'"
+      },
+      "status": "WORKING"
+    },
+    "staff_clock_in_tip_pool": {
+      "endpoints": {
+        "clock_in": "POST /api/staff/clock-in - prevents double clock-in with warning",
+        "clock_out": "POST /api/staff/clock-out/{entry_id} - computes duration_min",
+        "active": "GET /api/staff/{property_id}/active",
+        "shifts": "GET /api/staff/{property_id}/shifts",
+        "contribute": "POST /api/tip-pool/{property_id}/contribute",
+        "distribute": "POST /api/tip-pool/{property_id}/distribute - weighted by hours * role_weight",
+        "summary": "GET /api/tip-pool/{property_id}/summary"
+      },
+      "ui_elements": {
+        "panel": "data-testid='staff-ops-panel'",
+        "tab_clock": "data-testid='staff-tab-clock'",
+        "tab_tips": "data-testid='staff-tab-tips'",
+        "clockin_name": "data-testid='staff-clockin-name'",
+        "clockin_btn": "data-testid='staff-clockin-btn'",
+        "clockout_btn": "data-testid='staff-clockout-btn'",
+        "tip_amount": "data-testid='staff-tip-amount'",
+        "tip_add": "data-testid='staff-tip-add'",
+        "tip_distribute": "data-testid='staff-tip-distribute'"
+      },
+      "status": "WORKING"
+    },
+    "insurance_upsell": {
+      "endpoints": {
+        "get_config": "GET /api/insurance/{property_id}/config - returns defaults (5% rate)",
+        "set_config": "POST /api/insurance/{property_id}/config",
+        "quote": "POST /api/insurance/quote - PUBLIC (no auth), premium = clamp(min, max, total*rate_pct/100)"
+      },
+      "ui_elements": {
+        "tab": "data-testid='rp-tab-ins'",
+        "save_btn": "data-testid='rp-ins-save'"
+      },
+      "status": "WORKING"
+    },
+    "parity_defender": {
+      "endpoints": {
+        "get_config": "GET /api/parity-defender/{property_id}/config - returns defaults (5% undercut)",
+        "set_config": "POST /api/parity-defender/{property_id}/config",
+        "recommendation": "GET /api/parity-defender/{property_id}/recommendation - returns 200 even with no parity data"
+      },
+      "ui_elements": {
+        "tab": "data-testid='rp-tab-parity'",
+        "save_btn": "data-testid='rp-parity-save'"
+      },
+      "status": "WORKING"
+    },
+    "outbound_webhooks": {
+      "endpoints": {
+        "list": "GET /api/webhooks/{property_id} - includes supported_events list",
+        "subscribe": "POST /api/webhooks/{property_id} - requires https:// URL",
+        "delete": "DELETE /api/webhooks/{property_id}/{webhook_id}",
+        "test": "POST /api/webhooks/{property_id}/test/{webhook_id} - REAL httpx POST",
+        "log": "GET /api/webhooks/{property_id}/log"
+      },
+      "ui_elements": {
+        "tab": "data-testid='rp-tab-wh'",
+        "url_input": "data-testid='rp-wh-url'",
+        "add_btn": "data-testid='rp-wh-add'",
+        "webhook_row": "data-testid='rp-wh-row'"
+      },
+      "status": "WORKING (REAL httpx outbound, not mocked)"
+    }
+  },
+  "regression_tests": {
+    "tax_presets": "PASSED - Returns presets dict with 12+ country codes",
+    "walkin_availability": "PASSED - Endpoint working (404 if no room types)",
+    "no_show_policy": "PASSED - Returns fee_type, grace_hour",
+    "guest_prefs_upsert": "PASSED - Creates/updates guest preferences",
+    "late_checkout_quote": "PASSED - Endpoint working",
+    "service_recovery_list": "PASSED - Returns complaints list",
+    "room_qr_list": "PASSED - Endpoint working",
+    "cleaning_checklists_templates": "PASSED - Returns items dict with templates",
+    "room_move_recent": "PASSED - Returns items dict with moves",
+    "group_rooming_list": "PASSED - Endpoint working",
+    "attribution_report": "PASSED - Returns 4 models (first_click, last_click, linear, channel_native)"
+  },
+  "mocked_apis": {
+    "insurance_quote": "Rule-based pricing (no real Booking Protect partnership yet - API-key blocked P2)",
+    "webhook_outbound": "REAL httpx calls (not mocked) - tested with httpbin.org/post"
+  }
+}

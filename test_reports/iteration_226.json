@@ -1,0 +1,84 @@
+{
+  "summary": "Iteration 226 - Batch 14 (AI Predictions: Cancellation Risk Scoring + Upsell Propensity Scoring) tested. Backend: 15/15 tests passed. Frontend: All features working. AI Predictions Panel accessible via sidebar '✨ AI Tahminler (Risk + Upsell)'. Cancel Risk tab shows 4 KPIs (Yüksek/Orta/Düşük risk + Risk altındaki gelir), filter controls (days/min_score), booking rows with scores (0-100) and band labels. Detail drawer opens on row click showing signals with +/- impact. Upsell tab shows 5 category KPI cards (Oda Upgrade, Geç Çıkış, Kahvaltı, SPA, Transfer), category filter dropdown, rows with per-category scores. Save-offer and send-offer APIs working (MOCKED email delivery). Regression smoke passed for Today Hub, Command Palette, TR Compliance.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Upsell Tab",
+        "issues": ["With min_score=50 and default bookings, no upsell rows appear - this is expected behavior as bookings don't have high enough propensity scores. Lower min_score to 40 to see results."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration226_batch14_ai_predictions.py",
+    "/app/test_reports/pytest/pytest_iteration226_batch14.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Cancel risk scoring uses baseline 30 + signal impacts, clamped to 0-100. Signals include: lead_time, days_to_arrival, channel (OTA vs direct), payment_status, modification_count, price_deviation, guest_loyalty, VIP tags",
+    "Upsell propensity scores 5 categories independently: room_upgrade, late_checkout, breakfast, spa, transport. Factors: channel, occasion, loyalty_tier, lifetime_revenue, room_type, stay_length",
+    "Save-offer creates voucher STAY-{booking_id[:6]} with 10% discount, queued status. Updates booking.save_offer_sent_at and inserts to save_offers collection",
+    "Upsell send-offer creates offer UP-{booking_id[:6]}-{category[:3]} with queued status. Validates category against allowed set",
+    "Email delivery is MOCKED (RESEND_API_KEY not configured for real dispatch) - offers are queued only",
+    "All AI prediction endpoints require admin/manager/receptionist role (auth enforced)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration226_batch14_ai_predictions.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing default property with bookings",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 226 validates Batch 14 (AI Predictions - Cancellation Risk + Upsell Propensity). Sidebar button: '✨ AI Tahminler (Risk + Upsell)' navigates to panel (data-testid='ai-predictions-panel'). Two tabs: 'İptal Riski' (ai-tab-cancel) and 'Upsell Fırsatı' (ai-tab-upsell). Cancel tab: 4 KPIs, filter controls (cancel-risk-days, min_score select), rows (cancel-risk-row-{booking_id}), detail drawer (cancel-risk-detail) with signals. Upsell tab: 5 category KPIs, category filter (upsell-category-filter), rows (upsell-row-{booking_id}). Backend endpoints: GET /api/ai-predictions/cancel-risk/{property_id}, GET /api/ai-predictions/cancel-risk/booking/{booking_id}, POST /api/ai-predictions/cancel-risk/{booking_id}/save-offer, GET /api/ai-predictions/upsell/{property_id}, POST /api/ai-predictions/upsell/{booking_id}/send-offer?category=X. Email delivery is MOCKED.",
+  "features_verified": {
+    "batch_14_cancel_risk": {
+      "endpoints": {
+        "list": "GET /api/ai-predictions/cancel-risk/{property_id}?days_ahead=60&min_score=30 → 200 + rows[], by_band{high,medium,low}, at_risk_revenue, count",
+        "single": "GET /api/ai-predictions/cancel-risk/booking/{booking_id} → 200 + score, band, signals[]",
+        "save_offer": "POST /api/ai-predictions/cancel-risk/{booking_id}/save-offer → 200 + voucher_code STAY-*, discount_pct 10, status queued"
+      },
+      "ui_elements": {
+        "tab": "data-testid='ai-tab-cancel'",
+        "kpis": "4 cards (Yüksek risk, Orta risk, Düşük risk, Risk altındaki gelir)",
+        "filters": "days dropdown (14/30/60/90), min_score dropdown (30/40/55/70)",
+        "rows": "data-testid='cancel-risk-row-{booking_id}' with score, band label, Save-Offer button for high risk",
+        "detail_drawer": "data-testid='cancel-risk-detail' with signals list showing name + impact (+/-)"
+      },
+      "status": "WORKING"
+    },
+    "batch_14_upsell": {
+      "endpoints": {
+        "list": "GET /api/ai-predictions/upsell/{property_id}?days_ahead=14&min_score=40 → 200 + rows[], by_top_recommendation, count",
+        "list_filtered": "GET /api/ai-predictions/upsell/{property_id}?category=late_checkout&min_score=40 → rows sorted by category score",
+        "send_offer": "POST /api/ai-predictions/upsell/{booking_id}/send-offer?category=late_checkout → 200 + offer_id UP-*, status queued"
+      },
+      "ui_elements": {
+        "tab": "data-testid='ai-tab-upsell'",
+        "kpis": "5 category cards (Oda Upgrade, Geç Çıkış, Kahvaltı, SPA, Transfer)",
+        "filters": "days dropdown, category filter (upsell-category-filter), min_score dropdown",
+        "rows": "data-testid='upsell-row-{booking_id}' with 5 inline category scores, Gönder button"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "today_hub": "PASSED",
+    "command_palette": "PASSED (Ctrl+K shortcut working)",
+    "tr_compliance": "PASSED (KBS + e-Fatura accessible)"
+  },
+  "mocked_apis": {
+    "save_offer_email": "MOCKED - queued only, no real email dispatch (RESEND_API_KEY not configured)",
+    "upsell_offer_email": "MOCKED - queued only, no real email dispatch"
+  },
+  "batch_completion_status": "Batch 14 (AI Predictions: Cancellation Risk + Upsell Propensity) COMPLETE"
+}

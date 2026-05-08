@@ -1,0 +1,85 @@
+{
+  "summary": "Batch 35 — AI Pricing Auto-Apply Rules testing complete. 23/23 backend tests passed, all frontend UI elements verified. Auto-apply logic working correctly with real AI integration.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/pricing/explain/dashboard/{property_id}",
+        "issue": "Dashboard query was missing 'auto_applied' field in projection - FIXED during testing",
+        "priority": "LOW"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration247_auto_apply_rules.py",
+    "/app/test_reports/pytest/pytest_iteration247_auto_apply_rules.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration247_auto_apply_rules.py",
+    "/app/backend/routes/pricing_explain.py"
+  ],
+  "success_rate": {
+    "backend": "100% (23/23 passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test rules and explanations created via API tests (TEST_AutoApply_*, TEST_Playwright, TEST_BadgeTest, TEST_VeryPermissive)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Batch 35 AI Pricing Auto-Apply Rules fully tested. All 4 CRUD endpoints working: GET /api/pricing/auto-apply/rules/{property_id} (returns {rules:[], count}), POST /api/pricing/auto-apply/rules (validates min_confidence 50-100, max_abs_delta_pct 0-100), PATCH /api/pricing/auto-apply/rules/{rule_id}/toggle (flips enabled state), DELETE /api/pricing/auto-apply/rules/{rule_id} (404 if missing). Auto-apply logic in POST /api/pricing/explain works correctly: when AI returns confidence >= rule.min_confidence AND |delta_pct| <= rule.max_abs_delta_pct, the response has decision='accept', auto_applied=true, decision_by='auto:<rule_id_prefix>'. Disabled rules are skipped. Room-specific rules only fire on matching room types. Dashboard includes auto_applied count. Frontend RulesPanel has form with confidence/delta sliders, create button, rules list with toggle (AKTİF/PASİF) and delete buttons. Auto-applied badge shows green CheckCircle banner with 'Otomatik uygulandı' message.",
+  "features_tested": {
+    "backend": [
+      "GET /api/pricing/auto-apply/rules/{property_id} - requires auth (401 without)",
+      "GET /api/pricing/auto-apply/rules/{property_id} - returns {rules:[], count}",
+      "POST /api/pricing/auto-apply/rules - requires auth (401 without)",
+      "POST /api/pricing/auto-apply/rules - validates min_confidence 50-100 (422 for out of range)",
+      "POST /api/pricing/auto-apply/rules - validates max_abs_delta_pct 0-100 (422 for out of range)",
+      "POST /api/pricing/auto-apply/rules - creates rule with valid body",
+      "PATCH /api/pricing/auto-apply/rules/{rule_id}/toggle - requires auth (401 without)",
+      "PATCH /api/pricing/auto-apply/rules/{rule_id}/toggle - flips enabled state",
+      "PATCH /api/pricing/auto-apply/rules/{rule_id}/toggle - returns 404 for non-existent rule",
+      "DELETE /api/pricing/auto-apply/rules/{rule_id} - requires auth (401 without)",
+      "DELETE /api/pricing/auto-apply/rules/{rule_id} - removes rule",
+      "DELETE /api/pricing/auto-apply/rules/{rule_id} - returns 404 for non-existent rule",
+      "POST /api/pricing/explain - auto-applies when rule matches (confidence >= threshold AND |delta| <= threshold)",
+      "POST /api/pricing/explain - does NOT auto-apply when delta exceeds threshold",
+      "POST /api/pricing/explain - disabled rules are skipped",
+      "POST /api/pricing/explain - room-specific rules only fire on matching room types",
+      "GET /api/pricing/explain/dashboard/{property_id} - includes auto_applied count"
+    ],
+    "frontend": [
+      "pe-tab-rules button opens RulesPanel (data-testid='pe-rules-panel')",
+      "RulesPanel shows rule form (data-testid='pe-rule-form')",
+      "Confidence slider (data-testid='pe-rule-confidence') present and functional",
+      "Delta slider (data-testid='pe-rule-delta') present and functional",
+      "Create rule via pe-rule-create button works, rule appears in pe-rules-list",
+      "pe-rule-toggle-{id} toggles AKTİF/PASİF state",
+      "pe-rule-delete-{id} removes rule (with window.confirm)",
+      "KPI stats include 'AUTO-APPLY' card",
+      "Auto-applied badge (pe-auto-applied-badge) shows green CheckCircle banner when auto_applied=true",
+      "Tab navigation (pe-tab-new, pe-tab-history, pe-tab-rules) works correctly"
+    ],
+    "regression_tests": [
+      "POST /api/pricing/explain - still returns valid AI response",
+      "GET /api/pricing/explain/history/{property_id} - still works",
+      "GET /api/pricing/explain/dashboard/{property_id} - still works",
+      "POST /api/pricing/explain/{id}/decision - still works"
+    ]
+  },
+  "bug_fix_applied": {
+    "file": "/app/backend/routes/pricing_explain.py",
+    "issue": "Dashboard query missing 'auto_applied' field in MongoDB projection",
+    "fix": "Added 'auto_applied': 1 to the projection in dashboard endpoint"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "Real EMERGENT_LLM_KEY used for AI generation"
+  }
+}

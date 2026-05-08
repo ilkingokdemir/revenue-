@@ -1,0 +1,77 @@
+{
+  "summary": "Iteration 31 - P0 Revenue/Conversion Features Testing Complete. All 15 backend API tests passed (100%). Frontend UI testing verified all 4 P0 features: Smart Upsell Engine (10 templates, CRUD, toggle selection, total calculation), Price Comparison Widget (OTA vs direct pricing with savings), Social Proof Notifications (cycling messages every 12s), and Google Hotel Structured Data (JSON-LD in page head).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration31_upsell_socialproof.py",
+    "/app/test_reports/pytest/pytest_iteration31_upsell_socialproof.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration31_upsell_socialproof.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Enabled social proof settings for aldgate-flats (was disabled). Created and deleted TEST_Custom Upsell during CRUD testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "P0 revenue/conversion features fully functional. Upsells seeded (10+ items for aldgate-flats). Social proof enabled with 35 bookings in last 24h. Price comparison shows 18% OTA markup. Google structured data injected as script#hotel-structured-data in page head.",
+  "features_verified": {
+    "smart_upsell_engine": {
+      "api_get_templates": "PASS - GET /api/upsell-templates returns 10 predefined templates",
+      "api_seed_upsells": "PASS - POST /api/upsells/seed/aldgate-flats returns existing count (10+)",
+      "api_get_upsells": "PASS - GET /api/upsells/aldgate-flats returns active upsell items",
+      "api_crud_auth": "PASS - POST/PUT/DELETE require admin auth",
+      "ui_upsell_engine": "PASS - data-testid='upsell-engine' with amber gradient background",
+      "ui_toggle_selection": "PASS - Clicking upsell toggles selection (border highlight, checkmark)",
+      "ui_show_more": "PASS - 'Show 7 more options' expands to show all 10+ upsells",
+      "ui_summary_line_items": "PASS - Selected upsells appear in booking summary sidebar",
+      "ui_total_calculation": "PASS - £89 room + £25 Late Check-out = £114 total"
+    },
+    "price_comparison_widget": {
+      "api_ota_markup": "PASS - ota_markup_percent=18 in social proof settings",
+      "ui_widget_visible": "PASS - data-testid='price-comparison-widget' in sidebar",
+      "ui_booking_com_price": "PASS - £105 struck-through",
+      "ui_expedia_price": "PASS - £102 struck-through",
+      "ui_direct_price": "PASS - £89 green with SAVE badge",
+      "ui_savings_message": "PASS - 'You save £16 per night by booking directly with us'"
+    },
+    "social_proof_notifications": {
+      "api_get_social_proof": "PASS - GET /api/social-proof/aldgate-flats returns settings and booking counts",
+      "api_settings_auth": "PASS - GET/PUT /api/social-proof/settings require admin auth",
+      "ui_notification_visible": "PASS - data-testid='social-proof-notification' floating bottom-left",
+      "ui_viewing_count": "PASS - 'X people are looking at this property right now'",
+      "ui_recent_bookings": "PASS - '35 bookings in the last 24 hours'",
+      "ui_cycling_12s": "PASS - Notifications cycle every 12s with 4s display time",
+      "ui_verified_activity": "PASS - 'Verified activity' label shown"
+    },
+    "google_hotel_structured_data": {
+      "ui_json_ld_injected": "PASS - script#hotel-structured-data in page head",
+      "ui_schema_type": "PASS - @type=Hotel, @context=https://schema.org",
+      "ui_hotel_name": "PASS - name='Aldgate Luxury Flats'"
+    },
+    "property_endpoint_integration": {
+      "api_includes_upsells": "PASS - /api/booking/property/aldgate-flats includes 'upsells' array",
+      "api_includes_social_proof": "PASS - Response includes 'social_proof' object with settings and recent_bookings_24h"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Social proof 'viewing count' uses randomized numbers (3-15 viewers) for demonstration purposes - not real tracking"
+    ]
+  }
+}

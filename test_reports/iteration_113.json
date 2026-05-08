@@ -1,0 +1,111 @@
+{
+  "summary": "Iteration 113 - Market Demand Dashboard: 8 Range Options + 3-Column ADR/Occupancy Comparison. All 14 backend API tests passed. Frontend UI fully verified: 8 range selector buttons (Today, 7 Days, 15 Days, 30 Days, 60 Days, 90 Days, 180 Days, 1 Year), 3-column comparison panel (Your Hotel cyan, Market Average amber, Competitors violet) each showing ADR + Occupancy, Quick Stats row with 8 cards, Competitive Landscape chart, Market Demand Heatmap, and Rate Grid table with 10 columns.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "backend_8_range_options": {
+      "status": "PASS",
+      "tests": [
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=1 returns 1 day (Today)",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=7 returns 7 days",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=15 returns 15 days",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=30 returns 30 days",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=60 returns 60 days",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=90 returns 90 days",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=180 returns 180 days",
+        "GET /api/revenue/market-robot/all/demand-dashboard?days=365 returns 365 days (1 Year)"
+      ]
+    },
+    "backend_3_column_kpis": {
+      "status": "PASS",
+      "kpis_verified": {
+        "our_hotel": ["our_adr", "our_occupancy"],
+        "market_average": ["market_adr", "market_occupancy", "market_data_days"],
+        "competitors": ["comp_adr", "comp_occupancy", "competitors_tracked"]
+      }
+    },
+    "backend_quick_stats_kpis": {
+      "status": "PASS",
+      "kpis": ["above_market_days", "below_market_days", "aligned_days", "high_demand_days", "low_demand_days", "event_days", "ai_managed_pct", "total_days"]
+    },
+    "backend_daily_data_fields": {
+      "status": "PASS",
+      "fields": ["date", "dow", "ai_status", "sell_rate", "occupancy", "comp_avg", "position", "position_pct", "market_unavail", "floor_rate", "event"]
+    },
+    "frontend_8_range_selector": {
+      "status": "PASS",
+      "buttons_found": "8/8",
+      "buttons": ["Today", "7 Days", "15 Days", "30 Days", "60 Days", "90 Days", "180 Days", "1 Year"],
+      "functionality": "Clicking each button reloads data for that period"
+    },
+    "frontend_3_column_comparison": {
+      "status": "PASS",
+      "columns": [
+        {"name": "Your Hotel", "color": "cyan", "metrics": ["ADR £111.98", "Occupancy 0%"]},
+        {"name": "Market Average", "color": "amber", "metrics": ["Market ADR £107.04", "Market Occ 64%", "90 days of supply data"]},
+        {"name": "Competitors", "color": "violet", "metrics": ["Comp ADR —", "Comp Occ —", "1 tracked"]}
+      ]
+    },
+    "frontend_quick_stats_row": {
+      "status": "PASS",
+      "cards_found": "8/8",
+      "cards": ["Above Market", "Below Market", "Aligned", "High Demand", "Low Demand", "Event Days", "AI Managed", "Days"]
+    },
+    "frontend_rate_grid_table": {
+      "status": "PASS",
+      "headers_found": "10/10",
+      "headers": ["Date", "Day", "Status", "Our ADR", "Our Occ", "Comp ADR", "Position", "Market", "Floor", "Event"]
+    },
+    "frontend_competitive_landscape_chart": {
+      "status": "PASS",
+      "legend": ["Our Rate", "Competitor Avg", "Base Rate", "Floor", "Above", "Below"]
+    },
+    "frontend_demand_heatmap": {
+      "status": "PASS",
+      "legend": ["High", "Moderate", "Low", "No Data"]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration113_demand_ranges.py",
+    "/app/test_reports/pytest/pytest_iteration113_demand_ranges.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend correctly returns exact number of days requested (1/7/15/30/60/90/180/365)",
+    "KPIs include all 6 ADR/Occupancy metrics for 3-column comparison: our_adr, our_occupancy, market_adr, market_occupancy, comp_adr, comp_occupancy",
+    "Supporting metrics present: market_data_days (90 days available), competitors_tracked (1)",
+    "Frontend RANGES array correctly defines 8 options with values 1/7/15/30/60/90/180/365",
+    "3-column comparison panel uses proper color coding: cyan for Your Hotel, amber for Market Average, violet for Competitors",
+    "Quick stats row shows 8 cards with proper labels and values",
+    "Rate Grid table has all 10 required columns including Our ADR, Our Occ, Comp ADR, Position"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration113_demand_ranges.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "No new seed data created. Using existing market_supply data (~90 days) and rate_overrides from previous iterations.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 113 tested the NEW 8-range selector (1/7/15/30/60/90/180/365 days) and 3-column ADR/Occupancy comparison panel. Key endpoint: GET /api/revenue/market-robot/{property_id}/demand-dashboard?days=N. The 3-column panel shows: Your Hotel (our_adr, our_occupancy), Market Average (market_adr, market_occupancy from supply data), Competitors (comp_adr, comp_occupancy - currently null as no competitor prices scraped). Navigation: Revenue > Market Robot > Market Demand tab. Market data available for ~90 days from supply scans.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Market Robot Booking.com scraper uses simulated fallback when direct scraping blocked",
+      "No competitor prices currently scraped - comp_adr and comp_occupancy show null/dash",
+      "Market data from supply scans (~90 days available)"
+    ]
+  }
+}

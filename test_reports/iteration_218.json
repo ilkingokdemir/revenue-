@@ -1,0 +1,133 @@
+{
+  "summary": "Iteration 218 - Batch 5 Keyless Competitor Parity Features (4 of 30 P0 gaps) tested. All 4 new features working: Travel Agent B2B Portal, Door-Lock Audit Log, Owner Portal, Direct Widget Savings Banner. Backend: 38/38 tests passed. Frontend: Both new panels (AgentsB2BPanel, SecurityOwnerPanel) render correctly with proper data-testid attributes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration218_batch5_features.py",
+    "/app/test_reports/pytest/pytest_iteration218_batch5.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Added missing sidebar items for B2B Portal and Security & Owner Portal in App.js",
+    "Added missing activeView rendering for b2b-agents and security-owner panels in App.js",
+    "Travel Agent B2B Portal: CRUD agents, negotiated rates with discount %, book-on-behalf with commission calculation, commission report aggregation",
+    "Door-Lock Audit Log: POST events with method/actor_role/result, GET with filters (days/room/method/result), returns denied_count + master_key_uses",
+    "Owner Portal: Resolves properties via owner_ids array OR owner_id field, summary aggregates bookings/gross/fees/net_payout per property",
+    "Direct Widget Savings Banner: PUBLIC endpoint, falls back to undercut_pct from parity_defender_config when no parity snapshot"
+  ],
+  "updated_files": [
+    "/app/frontend/src/App.js",
+    "/app/backend/tests/test_iteration218_batch5_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (38/38 passed)",
+    "frontend": "100% (both new panels working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing city-gate property",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 218 adds 4 keyless competitor-parity features (Batch 5 of 30 P0 gaps): (1) Travel Agent B2B Portal at /api/agents/* with CRUD, negotiated rates (discount %), book-on-behalf (commission calculation), commission report. (2) Door-Lock Audit Log at /api/door-locks/log POST and /api/door-locks/{property_id}/log GET with filters (days/room/method/result), returns items + denied_count + master_key_uses. (3) Owner Portal at /api/owner-portal/{owner_id}/properties and /summary - resolves via owner_ids array OR owner_id field. (4) Direct Widget Savings Banner at /api/widget/savings-banner (PUBLIC) - falls back to undercut_pct from parity_defender_config. Frontend panels: AgentsB2BPanel (Agents tab + Commission report tab, New agent modal), SecurityOwnerPanel (Door-lock audit tab + Owner portal tab). Sidebar buttons: b2b-agents-btn, security-owner-btn. After this: 23/30 P0 done.",
+  "features_verified": {
+    "travel_agent_b2b_portal": {
+      "endpoints": {
+        "list_agents": "GET /api/agents/{property_id}",
+        "upsert_agent": "POST /api/agents/{property_id}",
+        "delete_agent": "DELETE /api/agents/{property_id}/{agent_id}",
+        "get_rates": "GET /api/agents/{agent_id}/rates - returns room types with agent_rate and savings_pct",
+        "book_on_behalf": "POST /api/agents/{agent_id}/book - creates booking with channel=travel_agent, commission calculated",
+        "commission_report": "GET /api/agents/{property_id}/commission-report - aggregates by agent"
+      },
+      "ui_elements": {
+        "panel": "data-testid='b2b-panel'",
+        "agents_tab": "data-testid='b2b-tab-agents'",
+        "report_tab": "data-testid='b2b-tab-report'",
+        "new_agent_btn": "data-testid='b2b-new-agent'",
+        "save_agent_btn": "data-testid='b2b-save-agent'",
+        "agent_card": "data-testid='b2b-agent-card'",
+        "report_row": "data-testid='b2b-report-row'"
+      },
+      "status": "WORKING"
+    },
+    "door_lock_audit_log": {
+      "endpoints": {
+        "log_event": "POST /api/door-locks/log - logs card/pin/mobile_key/master/maintenance/failed_attempt events",
+        "get_log": "GET /api/door-locks/{property_id}/log - filters by days/room/method/result, returns items + denied_count + master_key_uses"
+      },
+      "ui_elements": {
+        "tab": "data-testid='door-lock-tab'",
+        "filter_room": "data-testid='lock-filter-room'",
+        "refresh_btn": "data-testid='lock-refresh-btn'",
+        "add_btn": "data-testid='lock-add-btn'",
+        "event_row": "data-testid='lock-event-row'"
+      },
+      "status": "WORKING"
+    },
+    "owner_portal": {
+      "endpoints": {
+        "get_properties": "GET /api/owner-portal/{owner_id}/properties - resolves via owner_ids array OR owner_id field",
+        "get_summary": "GET /api/owner-portal/{owner_id}/summary?days=30 - aggregates bookings/gross/fees/net_payout per property"
+      },
+      "ui_elements": {
+        "tab": "data-testid='owner-tab'",
+        "owner_input": "data-testid='owner-id-input'",
+        "load_btn": "data-testid='owner-load-btn'",
+        "property_row": "data-testid='owner-prop-row'"
+      },
+      "status": "WORKING"
+    },
+    "direct_widget_savings_banner": {
+      "endpoints": {
+        "savings_banner": "GET /api/widget/savings-banner?property_id=&total= (PUBLIC) - returns show/savings_pct/savings_amount/message"
+      },
+      "fallback_behavior": "Falls back to undercut_pct from parity_defender_config when no parity snapshot",
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "tax_presets": "PASSED (404 - no presets configured)",
+    "walkin_availability": "PASSED",
+    "no_show_policy": "PASSED",
+    "guest_prefs_upsert": "PASSED",
+    "late_checkout_quote": "PASSED",
+    "service_recovery_list": "PASSED",
+    "room_qr_list": "PASSED",
+    "cleaning_checklists_templates": "PASSED",
+    "room_move_recent": "PASSED",
+    "lost_found_match": "PASSED",
+    "group_rooming_list": "PASSED",
+    "attribution_report": "PASSED",
+    "timeslots_services": "PASSED",
+    "staff_clock_in": "PASSED",
+    "tip_pool_summary": "PASSED",
+    "insurance_config": "PASSED",
+    "parity_defender_config": "PASSED",
+    "webhooks_list": "PASSED",
+    "spaces_list": "PASSED (Batch 4)",
+    "currency_rates": "PASSED (Batch 4)",
+    "multi_property_rollup": "PASSED (Batch 4)"
+  },
+  "mocked_apis": {
+    "door_lock_log": "Accepts external webhook events but no real lock-vendor SDK integration (P2 backlog)",
+    "owner_portal": "Needs property.owner_ids/owner_id fields populated to return data"
+  },
+  "fixes_applied": [
+    {
+      "file": "/app/frontend/src/App.js",
+      "issue": "Missing sidebar items for B2B Portal and Security & Owner Portal",
+      "fix": "Added sidebar items with data-testid b2b-agents-btn and security-owner-btn"
+    },
+    {
+      "file": "/app/frontend/src/App.js",
+      "issue": "Missing activeView rendering for new panels",
+      "fix": "Added activeView === 'b2b-agents' and activeView === 'security-owner' panel rendering"
+    }
+  ]
+}

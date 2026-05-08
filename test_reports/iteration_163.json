@@ -1,0 +1,125 @@
+{
+  "summary": "Iteration 165 - Group Blocks + Smart Rate Control (Batch A parity features) fully tested. 32/32 backend tests PASSED (100%). All frontend UI elements verified working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Smart Rate Control",
+        "issues": ["Minor React hydration warning about <span> inside <option> - cosmetic only, doesn't affect functionality"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration165_group_blocks_smart_rate.py",
+    "/app/test_reports/pytest/pytest_iteration165_group_blocks_smart_rate.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration165_group_blocks_smart_rate.py"
+  ],
+  "success_rate": {
+    "backend": "100% (32/32 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Tests create TEST_ prefixed blocks which are cleaned up after test run",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 165 adds 2 new sidebar entries under 'Reservations & Booking': Group Blocks and Smart Rate Control. Backend modules: group_blocks.py (~200 lines, 7 endpoints) and smart_rate_control.py (~180 lines, 2 endpoints). All endpoints require admin/manager role. No external API calls - uses real MongoDB state.",
+  "tests_verified": {
+    "backend": {
+      "group_blocks_list": [
+        "GET /api/group-blocks/{pid} requires auth - PASS",
+        "GET /api/group-blocks/{pid} returns {rows, count, stats} with stats breakdown by status - PASS"
+      ],
+      "group_blocks_get": [
+        "GET /api/group-blocks/{pid}/{block_id} returns single block - PASS",
+        "GET /api/group-blocks/{pid}/{block_id} nonexistent returns 404 - PASS"
+      ],
+      "group_blocks_create": [
+        "POST /api/group-blocks/{pid} missing name returns 400 - PASS",
+        "POST /api/group-blocks/{pid} to_date <= from_date returns 400 - PASS",
+        "POST /api/group-blocks/{pid} allocation qty < 1 returns 400 - PASS",
+        "POST /api/group-blocks/{pid} creates block with auto-generated code - PASS",
+        "POST /api/group-blocks/{pid} preserves custom code - PASS",
+        "POST /api/group-blocks/{pid} auto-computes nights - PASS"
+      ],
+      "group_blocks_update": [
+        "PUT /api/group-blocks/{block_id} increments version - PASS",
+        "PUT /api/group-blocks/{block_id} recomputes nights when dates changed - PASS",
+        "PUT /api/group-blocks/{block_id} invalid status returns 400 - PASS"
+      ],
+      "group_blocks_cancel": [
+        "DELETE /api/group-blocks/{block_id} soft-cancels (status=cancelled) - PASS",
+        "DELETE /api/group-blocks/{block_id} nonexistent returns 404 - PASS"
+      ],
+      "group_blocks_hard_delete": [
+        "DELETE /api/group-blocks/{block_id}/hard removes block completely - PASS"
+      ],
+      "group_blocks_materialize": [
+        "POST /api/group-blocks/{block_id}/materialize creates bookings (qty * allocations) - PASS",
+        "POST /api/group-blocks/{block_id}/materialize sets materialized=true - PASS",
+        "POST /api/group-blocks/{block_id}/materialize cancelled block returns 400 - PASS"
+      ],
+      "smart_rate_control_apply": [
+        "POST /api/smart-rate-control/{pid}/apply requires auth - PASS",
+        "POST /api/smart-rate-control/{pid}/apply invalid action returns 400 - PASS",
+        "POST /api/smart-rate-control/{pid}/apply invalid target returns 400 - PASS",
+        "POST /api/smart-rate-control/{pid}/apply missing dates returns 400 - PASS",
+        "POST /api/smart-rate-control/{pid}/apply range > 365 days returns 400 - PASS",
+        "POST /api/smart-rate-control/{pid}/apply boolean target requires boolean value - PASS",
+        "POST /api/smart-rate-control/{pid}/apply increase rates by percent - PASS",
+        "POST /api/smart-rate-control/{pid}/apply set stop_sell=true - PASS",
+        "POST /api/smart-rate-control/{pid}/apply set min_los - PASS",
+        "POST /api/smart-rate-control/{pid}/apply writes audit log - PASS"
+      ],
+      "smart_rate_control_calendar": [
+        "GET /api/smart-rate-control/{pid}/calendar requires auth - PASS",
+        "GET /api/smart-rate-control/{pid}/calendar returns cells - PASS",
+        "GET /api/smart-rate-control/{pid}/calendar default 30-day range - PASS"
+      ]
+    },
+    "frontend": {
+      "sidebar_entries": [
+        "data-testid='group-blocks-btn' found under Reservations & Booking - PASS",
+        "data-testid='smart-rate-control-btn' found under Reservations & Booking - PASS"
+      ],
+      "group_blocks_panel": [
+        "data-testid='group-blocks-panel' found - PASS",
+        "Tentative/Definite/Cancelled stat chips - PASS",
+        "Search input (data-testid='group-blocks-search') - PASS",
+        "Status filter dropdown (data-testid='group-blocks-status-filter') - PASS",
+        "New Group Block button (data-testid='group-blocks-new') - PASS",
+        "Table with Group Name/Code/Dates/Rooms/Status/Ver/Actions columns - PASS"
+      ],
+      "group_blocks_modal": [
+        "Name input (data-testid='group-blocks-form-name') - PASS",
+        "Code input (data-testid='group-blocks-form-code') - PASS",
+        "From/To/Cutoff date pickers - PASS",
+        "Status dropdown - PASS",
+        "Company input - PASS",
+        "Contact fields (name/email/phone) - PASS",
+        "Room Allocations table with Add button (data-testid='group-blocks-add-alloc') - PASS",
+        "Create Block button (data-testid='group-blocks-form-save') - PASS"
+      ],
+      "smart_rate_control_panel": [
+        "data-testid='smart-rate-control-panel' found - PASS",
+        "Type dropdown (data-testid='src-action') with Increase/Decrease/Set - PASS",
+        "Target dropdown (data-testid='src-target') with rates/availability/min_los/max_los/cta/ctd/stop_sell - PASS",
+        "Value input (data-testid='src-value') with %/£ unit selector - PASS",
+        "Date range inputs (data-testid='src-from', 'src-to') - PASS",
+        "Rate Plans multi-select (data-testid='src-plan-ids') - PASS",
+        "Room Types multi-select (data-testid='src-room-ids') - PASS",
+        "Apply button (data-testid='src-apply') - PASS",
+        "Boolean target (stop_sell) shows Enable/Disable selector (data-testid='src-boolvalue') - PASS"
+      ]
+    }
+  },
+  "mocked_apis_note": "No external API calls. All MongoDB-backed."
+}

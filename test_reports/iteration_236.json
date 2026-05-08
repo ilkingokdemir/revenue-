@@ -1,0 +1,94 @@
+{
+  "summary": "Iteration 236 - Batch 24 (AI Anomaly Detection) tested. Backend: 18/18 passed. Frontend: All UI elements verified and interactive features working including LLM explain.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration236_anomaly_detection.py",
+    "/app/test_reports/pytest/pytest_iteration236_anomaly_detection.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/anomaly/scan/{property_id}?days=60 returns anomalies list with by_metric and by_severity totals. Validates days 14..365.",
+    "GET /api/anomaly/timeseries/{property_id}?metric=revenue&days=90 returns points array with is_anomaly flag, mean, std, anomaly_count. Validates metric in (revenue|bookings|occupancy|adr|cancellations).",
+    "Timeseries rejects invalid metric (e.g. 'foo') with 400.",
+    "POST /api/anomaly/explain returns {source, hypothesis, actions}. When EMERGENT_LLM_KEY present source='llm' and hypothesis is Turkish GPT-5.2 output.",
+    "All endpoints require auth + admin/manager role (401 without token, 403 for receptionist).",
+    "Frontend AnomalyPanel has 2 tabs: 'Anomali Akışı' (Feed) and 'Zaman Serisi' (Series).",
+    "Feed tab: KPI tiles (total=19, severe=9, moderate=10, days), days/metric filters, anomaly rows with spike/drop icons, 'Açıkla' button calls explain API and renders hypothesis + actions.",
+    "Series tab: metric + days selectors, KPI tiles (mean, std, anomaly_count), SVG chart with ±2σ band, anomaly dots highlighted red/amber.",
+    "LLM explain returns real Turkish GPT-5.2 output with actionable insights."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration236_anomaly_detection.py"
+  ],
+  "success_rate": {
+    "backend": "100% (18/18 passed)",
+    "frontend": "100% (all elements working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "No seed data created - used existing property 'default' with synthetic booking data that produces realistic anomalies",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 236 validates Batch 24 (AI Anomaly Detection). Sidebar: '📡 AI Anomali Radarı' (data-testid='anomaly-btn'). Panel: data-testid='anomaly-panel'. 2 tabs: 'Anomali Akışı' (anom-tab-feed), 'Zaman Serisi' (anom-tab-series). Feed tab: KPI tiles (anom-kpi-total/severe/moderate/days), days selectors (anom-days-30/60/90/180), metric filters (anom-filter-all/revenue/bookings/occupancy/adr/cancellations), refresh button (anom-refresh), feed list (anom-feed-list), anomaly rows (anom-row-{date}-{metric}), explain buttons (anom-explain-{date}-{metric}), explanation panels (anom-expl-{date}-{metric}). Series tab: metric selectors (anom-series-metric-{metric}), days selectors (anom-series-days-{days}), KPI tiles (anom-series-kpi-mean/std/count), chart (anom-timeseries-chart).",
+  "features_verified": {
+    "batch_24_anomaly_detection": {
+      "scan_endpoint": {
+        "endpoint": "GET /api/anomaly/scan/{property_id}?days={14..365}",
+        "default_days": 60,
+        "response_fields": ["property_id", "days", "total", "by_metric", "by_severity", "anomalies"],
+        "anomaly_fields": ["date", "metric", "value", "mean", "std", "z", "direction", "severity"],
+        "validation": "days must be 14..365 (400 for invalid)",
+        "auth": "admin/manager only (403 for receptionist)"
+      },
+      "timeseries_endpoint": {
+        "endpoint": "GET /api/anomaly/timeseries/{property_id}?metric={metric}&days={14..365}",
+        "default_metric": "revenue",
+        "default_days": 90,
+        "valid_metrics": ["revenue", "bookings", "occupancy", "adr", "cancellations"],
+        "response_fields": ["property_id", "metric", "days", "points", "mean", "std", "anomaly_count"],
+        "point_fields": ["date", "value", "is_anomaly", "severity", "z", "direction"],
+        "validation": "metric must be valid (400 for invalid), days must be 14..365",
+        "auth": "admin/manager only (403 for receptionist)"
+      },
+      "explain_endpoint": {
+        "endpoint": "POST /api/anomaly/explain",
+        "request_body": ["property_id", "date", "metric", "value", "z"],
+        "response_fields": ["source", "hypothesis", "actions"],
+        "source_values": ["llm", "heuristic", "heuristic_fallback"],
+        "llm_integration": "Uses EMERGENT_LLM_KEY with GPT-5.2 for Turkish hypothesis",
+        "auth": "admin/manager only (403 for receptionist)"
+      },
+      "ui_elements": {
+        "sidebar_button": "data-testid='anomaly-btn' - '📡 AI Anomali Radarı'",
+        "panel": "data-testid='anomaly-panel'",
+        "feed_tab": "data-testid='anom-tab-feed' - 'Anomali Akışı'",
+        "series_tab": "data-testid='anom-tab-series' - 'Zaman Serisi'",
+        "feed_kpis": "Toplam Anomali, Ciddi, Orta, Taranan Gün",
+        "feed_filters": "30/60/90/180 gün buttons, Tümü/Gelir/Yeni Rezervasyon/Doluluk/ADR/İptal metric filters",
+        "anomaly_rows": "spike/drop icons, severity badges (SEVERE/MODERATE), date, metric, value, mean, std, z-score, direction",
+        "explain_button": "'Açıkla' button triggers LLM explain API",
+        "explanation_panel": "Shows 'AI KÖK-NEDEN (GPT-5.2)' header, Turkish hypothesis, action buttons",
+        "series_kpis": "Ort. {metric}, Std Sapma, Anomali Sayısı",
+        "series_chart": "SVG chart with ±2σ purple band, normal points (purple), moderate anomalies (amber), severe anomalies (red)",
+        "series_legend": "Normal, Orta anomali, Ciddi anomali"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "auth_login": "PASSED",
+    "batch_23_forecast_v2": "PASSED (sidebar button visible)"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "batch_completion_status": "Batch 24 (AI Anomaly Detection: z-score analysis + GPT-5.2 root-cause hypothesis) COMPLETE"
+}

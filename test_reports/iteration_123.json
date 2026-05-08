@@ -1,0 +1,174 @@
+{
+  "summary": "Iteration 123 - PMS Features: Digital Check-in, Invoice/Folio Management, Scheduled Reports. All 23 backend tests passed (100%). Frontend UI fully functional with tabbed detail panel (Info/Folio/Actions), folio management, and Scheduled Reports page verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "digital_checkin_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/guest-checkin/{booking_id} - Public endpoint returns booking info + registration status",
+        "POST /api/guest-checkin/{booking_id} - Public endpoint submits guest registration form",
+        "POST /api/guest-checkin/send-link/{booking_id} - Sends check-in link notification (auth required)"
+      ],
+      "tests_passed": 5,
+      "features": [
+        "Public access for guest check-in form (no auth needed)",
+        "Returns booking details, property info, registration status",
+        "Accepts full registration data (name, passport, address, signature, terms)",
+        "Updates booking with registration_completed flag",
+        "Send check-in link creates notification log entry"
+      ]
+    },
+    "folio_management_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/folio/{booking_id} - Returns full folio with invoice_number, items, totals",
+        "POST /api/folio/{booking_id}/add-charge - Adds charge (minibar, room service, etc)",
+        "POST /api/folio/{booking_id}/add-payment - Records payment and updates payment_status",
+        "POST /api/folio/{booking_id}/adjust - Adds adjustment (discount, refund)"
+      ],
+      "tests_passed": 9,
+      "features": [
+        "Auto-generates room charge on first folio access",
+        "Invoice number format: INV-{booking_id_prefix}",
+        "Calculates totals: charges, payments, adjustments, balance_due",
+        "Supports multiple charge categories (minibar, room_service, laundry, spa, parking, damage)",
+        "Payment recording updates booking payment_status (pending/partial/paid)",
+        "Adjustments support discounts and refunds"
+      ]
+    },
+    "scheduled_reports_api": {
+      "status": "PASS",
+      "endpoints": [
+        "GET /api/scheduled-reports/{property_id} - Lists scheduled report configs",
+        "POST /api/scheduled-reports/{property_id} - Creates new scheduled report",
+        "POST /api/scheduled-reports/{property_id}/preview - Generates report preview",
+        "DELETE /api/scheduled-reports/{property_id}/{report_id} - Deletes scheduled report"
+      ],
+      "tests_passed": 8,
+      "features": [
+        "CRUD operations for scheduled reports",
+        "Configurable frequency (daily/weekly/monthly)",
+        "Configurable sections (occupancy, revenue, arrivals, departures, housekeeping)",
+        "Multiple recipients support",
+        "Report preview with real data (occupancy %, revenue, ADR, arrivals/departures count)",
+        "Housekeeping status breakdown (clean/dirty/inspected)"
+      ]
+    },
+    "frontend_booking_detail_tabs": {
+      "status": "PASS",
+      "data_testids": [
+        "booking-detail-panel",
+        "detail-tabs",
+        "detail-tab-info",
+        "detail-tab-folio",
+        "detail-tab-actions"
+      ],
+      "features_verified": [
+        "Tabbed view with Info/Folio/Actions tabs",
+        "Info tab shows guest details, dates, room info, summary",
+        "Folio tab shows invoice number, line items, totals",
+        "Actions tab shows status change buttons and Send Check-in Link"
+      ]
+    },
+    "frontend_folio_tab": {
+      "status": "PASS",
+      "data_testids": [
+        "folio-tab",
+        "add-charge-btn",
+        "add-charge-form",
+        "submit-charge-btn",
+        "folio-totals",
+        "record-payment-btn"
+      ],
+      "features_verified": [
+        "Invoice number displayed (INV-XXXXXXXX)",
+        "Line items with description, category, amount",
+        "Charges, payments, adjustments color-coded",
+        "Totals section with charges, payments, adjustments, balance_due",
+        "Add Charge form with description, amount, category dropdown",
+        "Record Full Payment button shows balance amount"
+      ]
+    },
+    "frontend_actions_tab": {
+      "status": "PASS",
+      "data_testids": [
+        "actions-tab",
+        "send-checkin-link",
+        "action-checkin",
+        "action-checkout",
+        "action-confirm",
+        "action-cancel"
+      ],
+      "features_verified": [
+        "Send Digital Check-in Link button",
+        "Status change buttons (Check In, Check Out, Confirm, Cancel)",
+        "Buttons shown based on current booking status"
+      ]
+    },
+    "frontend_scheduled_reports": {
+      "status": "PASS",
+      "data_testids": [
+        "scheduled-reports",
+        "scheduled-reports-btn",
+        "reports-title",
+        "preview-report-btn",
+        "create-report-btn",
+        "create-report-form",
+        "section-occupancy",
+        "section-revenue",
+        "section-arrivals",
+        "section-departures",
+        "section-housekeeping",
+        "save-report-btn",
+        "report-list",
+        "report-preview"
+      ],
+      "features_verified": [
+        "Sidebar navigation to Scheduled Reports",
+        "Create Report form with name, frequency, time, recipients",
+        "Section toggles for report content",
+        "Preview Report generates real-time data",
+        "KPI cards show occupancy %, revenue, arrivals, departures, housekeeping",
+        "Today's Arrivals list in preview"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration123_pms_features.py",
+    "/app/test_reports/pytest/pytest_iteration123_pms_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Digital check-in GET endpoint is correctly public (no auth) for guest access",
+    "Folio auto-generates room charge on first access - good UX",
+    "Payment recording correctly updates booking payment_status based on balance",
+    "Scheduled reports preview returns real occupancy/revenue data from bookings",
+    "All data-testid attributes properly implemented for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration123_pms_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (23/23 passed)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test folio items created: TEST_Minibar - Wine (£31.00), TEST_Partial payment (-£50.00), TEST_Loyalty discount (-£10.00)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 123 tested 3 new PMS features: Digital Check-in (public guest form + auth send-link), Folio Management (charges/payments/adjustments), Scheduled Reports (CRUD + preview). Navigation: Calendar -> click booking -> tabs (Info/Folio/Actions). Scheduled Reports in sidebar. Digital check-in GET is PUBLIC (no auth). Folio auto-creates room charge on first access. All 23 backend tests passed. Frontend components verified with data-testid selectors.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

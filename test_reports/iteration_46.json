@@ -1,0 +1,101 @@
+{
+  "summary": "Iteration 46 - Stock Management & Hotel Accounting Modules Testing COMPLETE. All 29 backend tests passed (100%). Frontend verified with all panels, tabs, and buttons working correctly. Fixed MongoDB ObjectId serialization bug in variance check endpoint.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration46_stock_accounting.py",
+    "/app/test_reports/pytest/pytest_iteration46_stock_accounting.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fixed MongoDB ObjectId serialization bug in POST /api/stock/variance/{property_id} - added doc.pop('_id', None) after insert_one",
+    "Stock Management module has 5 tabs: Products, Recipes, Movements, Cost Analysis, Variances",
+    "Accounting module has 4 tabs: P&L Overview, Income, Expenses, Budget vs Actual",
+    "All CRUD operations for products, recipes, movements, income, expenses, budgets working correctly",
+    "Stock movements auto-update product current_stock based on movement_type",
+    "Recipes auto-calculate total_cost and margin_pct from ingredient products",
+    "Outlets auto-seed 4 default outlets (Main Restaurant, Lobby Bar, Pool Café, Kitchen Store) on first call",
+    "P&L auto-pulls room_revenue from bookings collection when no manual entries exist",
+    "All-inclusive cost calculation combines F&B costs with guest nights from bookings",
+    "Variance check compares expected vs actual stock to detect theft/waste"
+  ],
+  "updated_files": [
+    "/app/backend/routes/stock.py",
+    "/app/backend/tests/test_iteration46_stock_accounting.py"
+  ],
+  "success_rate": {
+    "backend": "100% (29/29 tests passed)",
+    "frontend": "100% (all panels and tabs verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test data created with TEST_ prefix for products, recipes, movements, income, expenses, budgets - all cleaned up after tests",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 46 added two new modules: Stock Management and Hotel Accounting. Stock Management handles F&B inventory with products, recipes, movements, cost analysis, and variance detection. Accounting handles income, expenses, P&L statements, and budget vs actual comparisons. The sidebar shows these under 'OPERATIONS' section as 'Stock / F&B' and 'Accounting'. Use property_id 'city-gate' for testing. Stock may show 0 initially on 'All Branches' - select a specific branch.",
+  "features_tested": {
+    "backend_api_tests": {
+      "status": "PASS",
+      "tests_passed": 29,
+      "tests_failed": 0,
+      "endpoints_tested": [
+        {"endpoint": "POST /api/auth/login", "status": "PASS", "notes": "Admin login successful"},
+        {"endpoint": "POST /api/stock/products", "status": "PASS", "notes": "Create product with cost/reorder/stock"},
+        {"endpoint": "GET /api/stock/products/{property_id}", "status": "PASS", "notes": "List products with search filter"},
+        {"endpoint": "PUT /api/stock/products/{product_id}", "status": "PASS", "notes": "Update product"},
+        {"endpoint": "DELETE /api/stock/products/{product_id}", "status": "PASS", "notes": "Delete product"},
+        {"endpoint": "POST /api/stock/recipes", "status": "PASS", "notes": "Create recipe with ingredients, auto-calculates cost/margin"},
+        {"endpoint": "GET /api/stock/recipes/{property_id}", "status": "PASS", "notes": "List recipes"},
+        {"endpoint": "POST /api/stock/movements", "status": "PASS", "notes": "Record movement (purchase/usage/waste), auto-updates stock"},
+        {"endpoint": "GET /api/stock/movements/{property_id}", "status": "PASS", "notes": "List movements"},
+        {"endpoint": "GET /api/stock/outlets/{property_id}", "status": "PASS", "notes": "List outlets (auto-seeds 4 defaults)"},
+        {"endpoint": "POST /api/stock/variance/{property_id}", "status": "PASS", "notes": "Run variance check - FIXED ObjectId bug"},
+        {"endpoint": "GET /api/stock/variances/{property_id}", "status": "PASS", "notes": "List variances"},
+        {"endpoint": "GET /api/stock/all-inclusive-cost/{property_id}", "status": "PASS", "notes": "Cost per guest per night calculation"},
+        {"endpoint": "GET /api/stock/stats/{property_id}", "status": "PASS", "notes": "Stock dashboard stats"},
+        {"endpoint": "POST /api/accounting/income", "status": "PASS", "notes": "Create income entry"},
+        {"endpoint": "GET /api/accounting/income/{property_id}", "status": "PASS", "notes": "List income"},
+        {"endpoint": "POST /api/accounting/expenses", "status": "PASS", "notes": "Create expense entry"},
+        {"endpoint": "GET /api/accounting/expenses/{property_id}", "status": "PASS", "notes": "List expenses"},
+        {"endpoint": "GET /api/accounting/pnl/{property_id}", "status": "PASS", "notes": "P&L statement (auto-pulls booking revenue)"},
+        {"endpoint": "GET /api/accounting/stats/{property_id}", "status": "PASS", "notes": "Accounting dashboard stats"},
+        {"endpoint": "POST /api/accounting/budgets", "status": "PASS", "notes": "Create budget"},
+        {"endpoint": "GET /api/accounting/budget-vs-actual/{property_id}", "status": "PASS", "notes": "Budget comparison with variance"},
+        {"endpoint": "POST /api/accounting/sync-revenue/{property_id}", "status": "PASS", "notes": "Sync booking revenue as income"}
+      ],
+      "regression_tests": [
+        {"endpoint": "GET /api/dashboard/overview/{property_id}", "status": "PASS"},
+        {"endpoint": "GET /api/reviews", "status": "PASS"},
+        {"endpoint": "GET /api/bookings", "status": "PASS"},
+        {"endpoint": "GET /api/properties", "status": "PASS"}
+      ]
+    },
+    "frontend_tests": {
+      "status": "PASS",
+      "panels_verified": [
+        {"panel": "Stock Management", "status": "PASS", "tabs": ["Products", "Recipes", "Movements", "Cost Analysis", "Variances"]},
+        {"panel": "Accounting", "status": "PASS", "tabs": ["P&L Overview", "Income", "Expenses", "Budget vs Actual"]}
+      ],
+      "sidebar_section": "OPERATIONS section visible with Stock / F&B and Accounting links",
+      "regression": ["Dashboard", "Reviews", "Bookings all working"]
+    }
+  },
+  "bug_fixed": {
+    "endpoint": "POST /api/stock/variance/{property_id}",
+    "issue": "MongoDB ObjectId not JSON serializable - ValueError: [TypeError(\"'ObjectId' object is not iterable\")]",
+    "fix": "Added doc.pop('_id', None) after insert_one in /app/backend/routes/stock.py line 223",
+    "root_cause": "MongoDB insert_one adds _id field to the document which contains ObjectId type that FastAPI cannot serialize to JSON"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

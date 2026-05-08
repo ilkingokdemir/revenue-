@@ -1,0 +1,97 @@
+{
+  "summary": "Iteration 255: Site Feasibility & Investor Analysis (Batch 38) testing complete. All 21 backend API tests passed. Frontend panel renders correctly with all form fields, KPIs, tabs, AI verdict, and PDF export. Pasha Hotel numbers verified: turnover £722,700, hurdle £720,000, headroom £2,700, lease multiple 4.01×, verdict 'on-the-line', per-key £24,090. Regression panels (Help Guide, Banquet Orders, Loyalty Program, AI Pricing Explainer) all accessible.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "SiteFeasibilityPanel",
+        "issues": ["Minor: useMemo dependency warning in AdrView component (line 771) - functional but could cause unnecessary re-renders"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_site_feasibility.py",
+    "/app/test_reports/pytest/pytest_iteration255_feasibility.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SiteFeasibilityPanel.js line 771: useMemo dependency warning - 'c' logical expression could change on every render. Consider wrapping 'c' initialization in its own useMemo()"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_site_feasibility.py"
+  ],
+  "success_rate": {
+    "backend": "100% (21/21 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test studies created with TEST_ prefix and cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Site Feasibility module fully tested. Backend at /app/backend/routes/site_feasibility.py with 15 endpoints. Frontend at /app/frontend/src/components/dashboard/SiteFeasibilityPanel.js. All data-testid attributes present. Booking.com comp-scrape is MOCKED (synthetic data). AI verdict uses gpt-4o-mini via Emergent LLM.",
+  "features_tested": {
+    "backend_endpoints": {
+      "POST /api/feasibility/analysis": "200 OK - creates study with all computed fields (hurdle, sensitivity, ota_risk, ramp_up, adr_curve, scrape)",
+      "GET /api/feasibility/analyses/{property_id}": "200 OK - lists studies for property",
+      "GET /api/feasibility/analysis/{id}": "200 OK - returns single study",
+      "PUT /api/feasibility/analysis/{id}": "200 OK - updates and recomputes all derived fields",
+      "DELETE /api/feasibility/analysis/{id}": "200 OK - removes study",
+      "GET /api/feasibility/analysis/{id}/hurdle": "200 OK - returns annual_turnover, hurdle_target, headroom, lease_multiple, verdict",
+      "GET /api/feasibility/analysis/{id}/sensitivity": "200 OK - returns 2N+1 items with delta_pp/occupancy/headroom/passes",
+      "GET /api/feasibility/analysis/{id}/ramp-up": "200 OK - returns months, schedule[], working_capital_required",
+      "GET /api/feasibility/analysis/{id}/ota-risk": "200 OK - returns turnover_after_haircut, headroom_after_haircut, still_passes",
+      "GET /api/feasibility/analysis/{id}/adr-curve": "200 OK - returns by_dow with 7 days",
+      "POST /api/feasibility/analysis/{id}/scrape": "200 OK - refreshes mock comp scrape",
+      "POST /api/feasibility/analysis/{id}/verdict": "200 OK - AI narrative via gpt-4o-mini, available=true",
+      "GET /api/feasibility/analysis/{id}/pdf": "200 OK - returns application/pdf > 5KB",
+      "GET /api/feasibility/dashboard/{property_id}": "200 OK - returns total/passing/failing/latest",
+      "unauthenticated_requests": "All endpoints correctly return 401"
+    },
+    "pasha_hotel_numbers_verified": {
+      "rooms": 30,
+      "target_adr": "£88",
+      "target_occupancy": "75%",
+      "annual_lease": "£180,000",
+      "lease_multiple_target": "4×",
+      "annual_turnover": "£722,700",
+      "hurdle_target": "£720,000",
+      "headroom": "£2,700",
+      "lease_multiple_actual": "4.01×",
+      "verdict": "on-the-line",
+      "per_key_revenue": "£24,090"
+    },
+    "frontend_ui": {
+      "feasibility-panel": "Renders correctly with data-testid='feasibility-panel'",
+      "feasibility-new-btn": "New study button works",
+      "feasibility-form": "Form with all fields (project, location, currency, rooms, adr, occ, lease, mult, ota, ws-share, ws-cut, ramp, ramp-start, notes)",
+      "feasibility-submit": "Submit creates study and shows results",
+      "feasibility-kpis": "KPI strip shows turnover, hurdle, headroom, per-key",
+      "feasibility-tab-hurdle": "Hurdle test tab with progress bar and table",
+      "feasibility-tab-sensitivity": "Sensitivity tab with ±5pp scenarios",
+      "feasibility-tab-compset": "Comp set tab with mock scrape data",
+      "feasibility-tab-ota": "OTA/Wholesaler risk tab",
+      "feasibility-tab-ramp": "Y1 Rampa tab with monthly schedule",
+      "feasibility-tab-adr": "ADR Curve tab with day-of-week chart",
+      "feasibility-verdict-btn": "AI verdict button generates narrative",
+      "feasibility-pdf-btn": "PDF download button present",
+      "feasibility-delete-btn": "Delete button present",
+      "feasibility-add-comp": "Add competitor button works",
+      "comp-name-N": "Competitor name fields work",
+      "comp-remove-N": "Remove competitor buttons work"
+    },
+    "regression_panels": {
+      "help-guide": "Help & User Guide panel accessible and renders",
+      "banquet-orders": "Banquet Event Orders panel accessible (shows 2 BEOs)",
+      "loyalty-program": "Loyalty Program panel accessible (shows members, tiers)",
+      "ai-pricing-explainer": "AI Pricing Explainer panel accessible and renders"
+    }
+  },
+  "mocked_apis": {
+    "booking_com_scrape": "MOCKED - uses synthetic estimator with ±5pp confidence band. To switch live, Booking.com partner key needed."
+  }
+}

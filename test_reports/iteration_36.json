@@ -1,0 +1,99 @@
+{
+  "summary": "Iteration 36 - Automation Engine Testing Complete. All 21 backend tests passed (100%). All frontend features verified working via Playwright automation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Rule Editor Modal",
+        "issues": ["Minor: Missing aria-describedby for DialogContent (accessibility warning in console)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration36_automation_engine.py",
+    "/app/test_reports/pytest/pytest_iteration36_automation.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration36_automation_engine.py"
+  ],
+  "success_rate": {
+    "backend": "100% (21/21 tests passed)",
+    "frontend": "100% (all features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "property_id": "aldgate-flats"
+  },
+  "seed_data_creation": "6 default automation rules auto-seeded on first GET /api/automation/rules/{property_id}. Rules include: Pre-Arrival Welcome (email), Day-of-Arrival Reminder (whatsapp), Mid-Stay Satisfaction Check (whatsapp), Post-Checkout Thank You & Review (email), Post-Checkout WhatsApp Follow-up (whatsapp), Cart Abandonment Recovery (email).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Automation Engine features working: 1) Automation Panel - sidebar nav 'Automation' button under Guest Messaging section loads panel correctly. 2) 6 pre-seeded rules displayed with trigger badges (Pre-Arrival, Arrival Day, During Stay, Post-Checkout, Cart Recovery) and channel icons (email, whatsapp). 3) Stats cards show Active Rules (6), Total Sent, Sent Today, Failed, Queued, By Channel. 4) Run Now button triggers automation execution (POST /api/automation/run/{property_id}). 5) Logs button toggles to logs table view. 6) New Rule button opens rule editor modal with trigger selector (5 options), channel buttons (email, whatsapp, sms, telegram, internal), timing input, template textarea. 7) Template variable buttons insert variables into message ({guest_name}, {hotel_name}, {booking_ref}, etc). 8) Preview button fills template with sample data (John Smith, BK-2026-0412). 9) Save creates/updates rule. 10) Toggle switch enables/disables rules. 11) Edit button opens modal with existing rule data. 12) Delete button removes rule.",
+  "features_tested": {
+    "automation_rules_api": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "GET /api/automation/rules/aldgate-flats - returns 6 default rules",
+        "POST /api/automation/rules - creates new rule",
+        "PUT /api/automation/rules/{id} - updates rule",
+        "DELETE /api/automation/rules/{id} - deletes rule",
+        "POST /api/automation/rules/{id}/toggle - toggles enabled state"
+      ]
+    },
+    "automation_run_api": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "POST /api/automation/run/aldgate-flats - matches bookings and sends messages"
+      ],
+      "notes": "Returns {message, sent, results[]} with per-rule stats. Since no bookings match today/tomorrow dates, sent=0 but API works correctly."
+    },
+    "automation_logs_api": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "GET /api/automation/logs/aldgate-flats - returns execution logs",
+        "GET /api/automation/logs/aldgate-flats?limit=10 - respects limit parameter"
+      ]
+    },
+    "automation_stats_api": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "GET /api/automation/stats/aldgate-flats - returns stats with total_rules, active_rules, total_sent, sent_today, failed, queued, by_channel, by_rule"
+      ]
+    },
+    "automation_preview_api": {
+      "status": "PASS",
+      "endpoints_tested": [
+        "POST /api/automation/preview - fills template with sample data (John Smith, BK-2026-0412, deluxe-double)"
+      ]
+    },
+    "frontend_automation_panel": {
+      "status": "PASS",
+      "features_tested": [
+        "Sidebar nav Automation button loads panel",
+        "6 rules displayed with trigger badges and channel icons",
+        "Stats cards (Active Rules, Total Sent, Sent Today, Failed, Queued, By Channel)",
+        "Run Now button triggers automation",
+        "Logs toggle shows/hides logs table",
+        "New Rule button opens editor modal",
+        "Rule editor: trigger selector, channel buttons, timing input, template textarea",
+        "Variable buttons insert placeholders into template",
+        "Preview button fills template with sample data",
+        "Save button creates/updates rule",
+        "Toggle switch enables/disables rules",
+        "Edit button opens modal with existing data",
+        "Delete button removes rule"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "resend_email": "RESEND_API_KEY is placeholder (re_123456789) - emails log as 'failed' status",
+    "whatsapp_meta_cloud_api": "SANDBOX MODE - No real credentials configured. Messages log as 'queued' status",
+    "telegram_bot_api": "SANDBOX MODE - No real credentials configured. Messages log as 'queued' status"
+  }
+}

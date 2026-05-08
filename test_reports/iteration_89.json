@@ -1,0 +1,122 @@
+{
+  "summary": "Iteration 89 - Shift-to-Payroll Pipeline Complete. All 20 backend API tests passed (100%). Frontend verified: Shift creation auto-calculates hours_worked and earned_amount, Sync to Payroll button works with idempotent behavior, Finance Dashboard includes payroll in total_costs with correct Net calculation, Shift calendar cells show 'Xh · £Y' format.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "shift_hours_calculation": {
+      "status": "PASS",
+      "tests": [
+        "Shift creation auto-calculates hours_worked from start_time/end_time",
+        "8-hour shift (09:00-17:00) = 8.0 hours",
+        "6-hour shift (10:00-16:00) = 6.0 hours",
+        "2-hour shift (14:00-16:00) = 2.0 hours"
+      ]
+    },
+    "shift_earned_amount_calculation": {
+      "status": "PASS",
+      "tests": [
+        "Daily rate: 8h shift at £80/day = £80 (flat rate)",
+        "Hourly rate: 6h shift at £11.44/hr = £68.64",
+        "Hourly rate: 2h shift at £15/hr = £30",
+        "Zero pay rate handled correctly = £0"
+      ]
+    },
+    "sync_to_salaries": {
+      "status": "PASS",
+      "endpoint": "POST /api/shifts/sync-to-salaries",
+      "tests": [
+        "Creates earned salary entries from completed/approved shifts",
+        "Sync is idempotent - doesn't duplicate if same shift_id already synced",
+        "Synced entries have shift_id, hours, pay_type, source='shift'",
+        "Returns {synced: N, total_shifts_processed: M}"
+      ],
+      "frontend_verified": [
+        "Sync to Payroll button visible (data-testid='shift-sync-salaries')",
+        "Button is violet color between 'Approve All Completed' and 'Clear Week'",
+        "Toast shows 'X salary entries created from Y shifts'"
+      ]
+    },
+    "finance_dashboard_payroll": {
+      "status": "PASS",
+      "tests": [
+        "Dashboard includes payroll from earned salaries in total_costs",
+        "Dashboard includes unsynced shift pay in payroll calculation",
+        "Net = Gross Revenue - Expenses - Payroll - Commission",
+        "Total Costs = Expenses + Payroll + Commission"
+      ],
+      "frontend_verified": [
+        "PAYROLL field shows £148.64",
+        "TOTAL COSTS field shows £15,648.64",
+        "NET field shows £-10,053.64",
+        "Operating Ledger shows: Expenses £15,500.00 · Payroll £148.64 · Commission £0.00"
+      ]
+    },
+    "shift_calendar_display": {
+      "status": "PASS",
+      "frontend_verified": [
+        "Shift cells show hours and earned amount format: '8h · £80'",
+        "Maria's shifts: Thu 16 Apr '09:00-17:00 8h · £80', Fri 17 Apr '08:00-14:00 6h · £68.64'",
+        "Staff members show pay type badge (Daily) and rate (£80)"
+      ]
+    },
+    "earned_salaries_display": {
+      "status": "PASS",
+      "frontend_verified": [
+        "Earned Salaries tab shows synced entries",
+        "Stats: Staff Count=1, Working Days=2, Total Rows=2, Total Earned=£148.64",
+        "Breakdown by date: 16 Thu=£80.00, 17 Fri=£68.64"
+      ]
+    },
+    "regression_tests": {
+      "status": "PASS",
+      "tests": [
+        "Shifts staff CRUD operations",
+        "Shifts entries CRUD operations",
+        "Shifts bulk actions (publish-all, mark-completed, approve-completed, clear-week)",
+        "Payroll summary endpoint",
+        "Finance earned salaries endpoint",
+        "Finance expenses endpoint",
+        "Finance payroll runs endpoint",
+        "Operations reception report endpoint",
+        "Operations routine templates endpoint"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration89_shift_payroll_pipeline.py",
+    "/app/test_reports/pytest/pytest_iteration89_shift_payroll.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Shift hours calculation correctly handles time parsing with fallback to 8.0 hours",
+    "Earned amount calculation correctly differentiates daily (flat) vs hourly (hours × rate)",
+    "Sync-to-salaries endpoint properly checks for existing shift_id to prevent duplicates",
+    "Finance dashboard correctly aggregates payroll from both synced salaries AND unsynced shifts",
+    "All data-testid attributes properly implemented for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration89_shift_payroll_pipeline.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (All features verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Test data created during testing was cleaned up. Existing Maria (housekeeper) has 2 shifts: daily 8h=£80, hourly 6h=£68.64 which were already synced to earned salaries.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 89 tested Shift-to-Payroll Pipeline. Key features: 1) POST /api/shifts/entries auto-calculates hours_worked and earned_amount. 2) POST /api/shifts/sync-to-salaries syncs completed/approved shifts to finance_earned_salaries with shift_id dedup. 3) Finance dashboard includes payroll from earned salaries + unsynced shifts. 4) Shift calendar cells show 'Xh · £Y' format. 5) Sync to Payroll button (data-testid='shift-sync-salaries') is violet between Approve All and Clear Week. All 20 backend tests passed. Frontend fully verified.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All features are fully functional - no mocked APIs"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "Hotel PMS & Revenue Management",
+  "short_name": "Hotel PMS",
+  "description": "Boutique hotel PMS / RMS for staff and managers — front desk, housekeeping, maintenance, revenue, and reports on the go.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0c0a09",
+  "theme_color": "#1a3c5e",
+  "categories": ["business", "productivity", "travel"],
+  "icons": [
+    {
+      "src": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=192&h=192&fit=crop",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=512&h=512&fit=crop",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Today's arrivals",
+      "url": "/?view=arrivals",
+      "description": "Jump straight to today's arrivals list"
+    },
+    {
+      "name": "Morning Brief",
+      "url": "/?view=morning-brief",
+      "description": "8 AM digest"
+    }
+  ]
+}

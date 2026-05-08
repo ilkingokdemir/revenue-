@@ -1,0 +1,76 @@
+{
+  "summary": "Iteration 155 - Payment Mix Report Testing. All backend (14/14) and frontend tests PASSED. The new Finance dashboard tile correctly breaks down payments by method (cash/card/bank_transfer/channel_collection) and shows OTA channel breakdown for channel_collection payments.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration155_payment_mix.py",
+    "/app/test_reports/pytest/pytest_iteration155_payment_mix.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration155_payment_mix.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Used existing folio_items with payment_method field",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Payment Mix tile fully tested. Backend API returns correct structure with 4 method buckets (always present even if 0), channels sorted desc by amount, daily series, and direct/OTA split. Frontend tile displays stacked bar, 4 method cards with colors (emerald/sky/violet/fuchsia), OTA channel breakdown with progress bars, and Direct/OTA percentage split. Auth correctly restricts to admin/manager roles - receptionist denied.",
+  "tests_verified": {
+    "backend": [
+      "GET /api/finance/payment-mix/{property_id} returns 200 for admin - PASS",
+      "Response contains all required fields (total, direct_captured, direct_percent, ota_captured, ota_percent, methods, channels, daily, transactions) - PASS",
+      "4 method buckets always appear (cash, card, bank_transfer, channel_collection) - PASS",
+      "Method labels are correct (Cash, Card, Bank Transfer, Channel Collection) - PASS",
+      "Method percents sum to ~100% - PASS",
+      "Channel percents sum to 100% of OTA captured - PASS",
+      "Channels sorted descending by amount - PASS",
+      "Daily array has correct structure (date, cash, card, bank_transfer, channel_collection, total) - PASS",
+      "property_id='all' works (aggregates across all properties) - PASS",
+      "direct_captured + ota_captured = total - PASS",
+      "Unauthenticated request rejected (401/403) - PASS",
+      "Receptionist role denied access (403) - PASS",
+      "Empty period returns valid structure with zeros - PASS",
+      "Default dates applied when not provided - PASS"
+    ],
+    "frontend": [
+      "Payment Mix tile visible (data-testid='payment-mix-tile') - PASS",
+      "Tile positioned after Operating P/L card - PASS",
+      "4-segment stacked bar visible (data-testid='payment-mix-bar') - PASS",
+      "Bar colors correct: emerald(cash), sky(card), violet(bank_transfer), fuchsia(channel_collection) - PASS",
+      "4 method cards rendered (payment-mix-card-cash, -card, -bank_transfer, -channel_collection) - PASS",
+      "Method cards show £amount, tx count, and percentage - PASS",
+      "OTA Collected — Channel Breakdown section visible (data-testid='payment-mix-channels') - PASS",
+      "Channel rows show name, progress bar, £amount, tx count, % - PASS",
+      "Direct/OTA split displayed in top-right (98.6% / 1.4%) - PASS"
+    ]
+  },
+  "sample_data_observed": {
+    "total": 2576.39,
+    "transactions": 31,
+    "direct_percent": 98.6,
+    "ota_percent": 1.4,
+    "methods": {
+      "cash": {"amount": 598.12, "count": 6, "percent": 23.2},
+      "card": {"amount": 1733.21, "count": 14, "percent": 67.3},
+      "bank_transfer": {"amount": 209.06, "count": 7, "percent": 8.1},
+      "channel_collection": {"amount": 36.00, "count": 4, "percent": 1.4}
+    },
+    "channels": [
+      {"channel": "Booking.com", "amount": 25.00, "percent": 69.4},
+      {"channel": "Expedia", "amount": 10.00, "percent": 27.8},
+      {"channel": "Walk-in", "amount": 1.00, "percent": 2.8}
+    ]
+  }
+}

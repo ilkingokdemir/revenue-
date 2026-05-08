@@ -1,0 +1,64 @@
+{
+  "summary": "Iteration 257: Wake Server Button Bug Fix VERIFIED. The CORS-with-credentials issue has been fixed. Button now transitions from 'Sunucuyu uyandır' to green 'Hazır (100ms)' state in ~0.8 seconds (well under 2s target). Network request sent WITHOUT credentials (withCredentials=false). Toast notification 'Sunucu hazır (100 ms · 1. deneme)' displays correctly. Login flow works normally after wake.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_257.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only test)",
+    "frontend": "100%"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Wake server button bug fix verified. The fix in LoginPage.js:28-31 sets withCredentials=false on the /api/health/live axios call, bypassing the CORS issue where Access-Control-Allow-Origin: * is incompatible with credentials. Button transitions to green 'Hazır' state in <1 second on first attempt.",
+  "features_tested": {
+    "wake_server_button": {
+      "initial_state": "Sunucuyu uyandır (idle)",
+      "click_response_time": "0.80 seconds",
+      "final_state": "Hazır (100ms) - green/emerald styling",
+      "toast_notification": "Sunucu hazır (100 ms · 1. deneme)",
+      "status": "PASS"
+    },
+    "network_request": {
+      "endpoint": "GET /api/health/live",
+      "http_status": 200,
+      "response_body": "{\"status\":\"alive\"}",
+      "with_credentials": false,
+      "cookie_header_sent": false,
+      "status": "PASS - No CORS blocking"
+    },
+    "login_after_wake": {
+      "credentials": "admin@hotelbox.com / HotelAdmin2026!",
+      "result": "Dashboard loaded successfully",
+      "status": "PASS - No regression"
+    },
+    "button_state_persistence": {
+      "note": "Button keeps green 'Hazır' state until page reload",
+      "status": "PASS"
+    }
+  },
+  "bug_fix_verification": {
+    "original_issue": "Wake server button not working - clicking didn't wake server",
+    "root_cause": "axios.defaults.withCredentials=true globally set, but /api/health/live returns Access-Control-Allow-Origin: * which is incompatible with credentials (CORS spec)",
+    "fix_applied": "withCredentials: false explicitly set on axios.get call for /health/live endpoint",
+    "fix_location": "/app/frontend/src/components/dashboard/LoginPage.js:28-31",
+    "verification_result": "FIXED - Button now works correctly in <1 second"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "summary": "Iteration 121 - Booking Timeline Drag-and-Drop & Bulk Actions. All 25 backend tests passed (1 skipped). Frontend UI fully functional with bulk mode, today's action badges, drag-and-drop elements, and toast notifications verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "backend_reassign_api": {
+      "status": "PASS",
+      "endpoint": "PUT /api/bookings/timeline/{property_id}/reassign/{booking_id}",
+      "tests_passed": 5,
+      "features": [
+        "Requires room_id parameter",
+        "Validates booking exists",
+        "Validates room exists",
+        "Detects date conflicts with existing bookings",
+        "Returns new room info on success"
+      ]
+    },
+    "backend_bulk_action_api": {
+      "status": "PASS",
+      "endpoint": "POST /api/bookings/timeline/{property_id}/bulk-action",
+      "tests_passed": 9,
+      "features": [
+        "Requires booking_ids and action parameters",
+        "Validates action type (checked_in, checked_out, confirmed, cancelled, no_show)",
+        "Validates status transitions (e.g., can't check-in from checked_out)",
+        "Returns updated count and errors array",
+        "Handles nonexistent booking IDs gracefully"
+      ]
+    },
+    "backend_todays_actions_api": {
+      "status": "PASS",
+      "endpoint": "GET /api/bookings/timeline/{property_id}/todays-actions",
+      "tests_passed": 5,
+      "features": [
+        "Returns today's date",
+        "Returns arrivals (confirmed/pending with check_in = today)",
+        "Returns departures (checked_in with check_out = today)",
+        "Returns in_house (checked_in spanning today)",
+        "Counts match array lengths"
+      ]
+    },
+    "backend_authorization": {
+      "status": "PASS",
+      "tests_passed": 3,
+      "features": [
+        "All new endpoints require authentication",
+        "Returns 401/403 without auth token"
+      ]
+    },
+    "frontend_bulk_mode": {
+      "status": "PASS",
+      "data_testid": "bulk-mode-btn",
+      "features_verified": [
+        "Toggle button shows 'Bulk Actions' / 'Exit Bulk'",
+        "Bulk panel appears with selection count",
+        "Select all arrivals button with count",
+        "Select all departures button with count",
+        "Clear button resets selection",
+        "Bulk Check In/Out/Confirm/No Show buttons"
+      ]
+    },
+    "frontend_bulk_panel": {
+      "status": "PASS",
+      "data_testid": "bulk-panel",
+      "components_verified": [
+        "Selected count display (e.g., '3 selected')",
+        "bulk-checkin-btn",
+        "bulk-checkout-btn",
+        "bulk-confirm-btn",
+        "bulk-noshow-btn",
+        "select-arrivals-btn",
+        "select-departures-btn"
+      ]
+    },
+    "frontend_todays_action_badges": {
+      "status": "PASS",
+      "data_testids": ["arrivals-badge", "departures-badge", "inhouse-badge"],
+      "features_verified": [
+        "Arrivals badge shows count (e.g., '3 arrivals')",
+        "Departures badge shows count when > 0",
+        "In-house badge shows count when > 0",
+        "Badges update after bulk actions"
+      ]
+    },
+    "frontend_drag_and_drop": {
+      "status": "PASS",
+      "features_verified": [
+        "Booking bars have draggable='true' attribute",
+        "Booking bar titles mention 'Drag to move'",
+        "GripVertical drag handle icon visible on bars",
+        "Room rows serve as drop targets (22 rooms)",
+        "Drop target highlight (violet ring) on drag over"
+      ]
+    },
+    "frontend_booking_selection": {
+      "status": "PASS",
+      "features_verified": [
+        "Checkboxes appear on booking bars in bulk mode",
+        "Clicking booking bar toggles selection",
+        "Selection count updates in real-time",
+        "Multiple bookings can be selected"
+      ]
+    },
+    "frontend_toast_notifications": {
+      "status": "PASS",
+      "library": "sonner",
+      "verified": [
+        "Toast appears on bulk check-in: '3 booking(s) updated to checked in'",
+        "Toast appears on successful reassignment",
+        "Toast appears on status change"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration121_timeline_dnd_bulk.py",
+    "/app/test_reports/pytest/pytest_iteration121_timeline_dnd_bulk.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Reassign endpoint properly validates booking and room existence before attempting reassignment",
+    "Conflict detection correctly checks for overlapping dates in target room",
+    "Bulk action validates status transitions (e.g., can only check-in from confirmed/pending)",
+    "Today's actions endpoint correctly filters by check_in/check_out dates and status",
+    "Frontend properly implements HTML5 drag-and-drop with draggable attribute",
+    "Bulk mode UI is intuitive with clear selection count and action buttons",
+    "Toast notifications provide immediate feedback on actions"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration121_timeline_dnd_bulk.py"
+  ],
+  "success_rate": {
+    "backend": "100% (25/25 passed, 1 skipped)",
+    "frontend": "100% (all components verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Used existing seeded data from iteration 120 (22 rooms, 25 bookings for aldgate-flats)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 121 tested drag-and-drop room reassignment and bulk check-in/out features. Navigation: Login -> Calendar in sidebar. Bulk mode: click 'Bulk Actions' button -> checkboxes appear on booking bars -> select bookings or use 'Select all arrivals/departures' -> click action button. Drag-and-drop: drag booking bar to different room row (violet highlight appears). Today's action badges show arrivals/departures/in-house counts. Toast notifications (sonner) appear on successful actions. All 3 new endpoints tested: reassign, bulk-action, todays-actions.",
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Rooms and bookings auto-seeded with realistic sample data",
+      "Guest data randomly generated from predefined lists"
+    ]
+  }
+}

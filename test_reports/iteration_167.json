@@ -1,0 +1,113 @@
+{
+  "summary": "Iteration 167 - Maintenance Photo Upload + FAB Language Toggle Testing. Backend: 12/12 tests passed. Frontend: FAB with TR/EN language toggle verified on mobile (412x915) and desktop (1920x1080). Photo upload button with (0/3) counter confirmed. Housekeeper role can now upload photos (role fix verified).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "FAB Modal on mobile",
+        "issues": ["'Made with Emergent' badge at bottom can intercept clicks on Cancel button - minor z-index issue"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration167_maintenance_photo_fab.py",
+    "/app/test_reports/pytest/pytest_iteration167_maintenance_photo.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration167_maintenance_photo_fab.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "95%"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!, testhk@hotelbox.com / Test2026!",
+  "seed_data_creation": "Test issues created and cleaned up during testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Maintenance photo upload feature fully functional. FAB (GlobalReportIssueFAB) appears when a specific property is selected (not 'All Branches'). Language toggle (TR/EN) works correctly. Housekeeper role can now create issues and upload photos.",
+  "verified_features": {
+    "backend": {
+      "housekeeper_role_fix": {
+        "POST /api/maintenance/issues": "Housekeeper can create maintenance issues (200 OK)",
+        "POST /api/maintenance/upload-photo/{id}": "Housekeeper can upload photos (200 OK) - ROLE FIX VERIFIED",
+        "GET /api/maintenance/issues/{property_id}": "Housekeeper can list issues (200 OK)",
+        "GET /api/maintenance/issues/detail/{id}": "Returns photos_before array correctly populated"
+      },
+      "photo_upload": {
+        "multiple_photos": "Up to 3 photos can be uploaded per issue",
+        "photo_types": "Both 'before' and 'after' photo types work",
+        "photos_before_array": "Correctly populated with url, filename, uploaded_by, uploaded_at, type",
+        "photos_after_array": "Correctly populated for 'after' type photos"
+      },
+      "admin_regression": {
+        "admin_upload": "Admin can still upload photos (regression test passed)"
+      }
+    },
+    "frontend": {
+      "GlobalReportIssueFAB": {
+        "visibility": "FAB appears when specific property selected (not 'All Branches')",
+        "data_testid": "global-report-issue-fab",
+        "language_toggle_pill": "fab-pill-lang-tr, fab-pill-lang-en - switches all labels",
+        "modal_language_toggle": "fab-lang-tr, fab-lang-en - in modal header"
+      },
+      "turkish_labels": {
+        "title": "Bakım Arızası Bildir",
+        "subtitle": "Hızlı bildirim — tüm personel, her cihazdan",
+        "photo_button": "Fotoğraf ekle",
+        "photo_counter": "FOTOĞRAFLAR (0/3)",
+        "categories": "Genel, Tesisat, Elektrik, HVAC, Mobilya, Beyaz Eşya, Temizlik, Güvenlik",
+        "priorities": "Düşük, Orta, Yüksek, Kritik",
+        "submit": "Kaydet",
+        "cancel": "İptal"
+      },
+      "english_labels": {
+        "title": "Report Maintenance Issue",
+        "subtitle": "Fast reporting — any staff, any device",
+        "photo_button": "Add photo",
+        "photo_counter": "PHOTOS (0/3)",
+        "categories": "General, Plumbing, Electrical, HVAC, Furniture, Appliance, Cleaning, Safety",
+        "priorities": "Low, Medium, High, Critical",
+        "submit": "Submit",
+        "cancel": "Cancel"
+      },
+      "form_elements": {
+        "title_input": "fab-title",
+        "category_buttons": "fab-cat-{category}",
+        "priority_buttons": "fab-pri-{priority}",
+        "location_input": "fab-location",
+        "room_input": "fab-room",
+        "description": "fab-desc",
+        "photo_button": "fab-photo-btn",
+        "photo_input": "fab-photo-input (hidden file input)",
+        "photo_remove": "fab-photo-remove-{i}",
+        "submit_button": "fab-submit",
+        "cancel_button": "fab-cancel"
+      }
+    }
+  },
+  "test_scenarios_executed": [
+    "Admin login and authentication",
+    "Housekeeper login and authentication",
+    "Housekeeper creates maintenance issue",
+    "Housekeeper uploads photo to issue (ROLE FIX TEST)",
+    "Multiple photos upload (3 photos)",
+    "Admin uploads photo (regression)",
+    "After photo type upload",
+    "List issues with photos",
+    "Housekeeper list issues",
+    "Upload to non-existent issue (404)",
+    "Stats endpoint verification",
+    "FAB visibility on mobile viewport",
+    "FAB language toggle TR/EN",
+    "FAB modal Turkish labels",
+    "FAB modal English labels",
+    "FAB form fill and category/priority selection"
+  ]
+}

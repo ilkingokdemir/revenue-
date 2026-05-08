@@ -1,0 +1,112 @@
+{
+  "summary": "Iteration 149 - AI Column Mapping Feature Testing Complete. Backend: 12/12 tests passed. Frontend: All UI components working correctly. GPT-5.2 AI mapping successfully maps Spanish/foreign headers to canonical fields with HIGH confidence.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "features_tested": {
+    "backend_ai_mapping": {
+      "status": "PASS",
+      "tests": [
+        "POST /api/imports/ai-map with Spanish headers (messy_guests.csv) - maps all 6 fields with HIGH confidence",
+        "POST /api/imports/ai-map with English headers - maps all 6 fields correctly",
+        "Returns 400 for unknown entity",
+        "Returns 404 for expired/invalid file_token",
+        "Requires authentication (401 without token)",
+        "Receptionist role gets 403 (admin/manager only)"
+      ]
+    },
+    "backend_regex_fallback": {
+      "status": "PASS",
+      "tests": [
+        "/imports/parse returns auto_mapping for standard headers via regex",
+        "Spanish headers return empty/minimal regex auto_mapping (proving AI is needed)"
+      ]
+    },
+    "backend_no_regression": {
+      "status": "PASS",
+      "tests": [
+        "GET /imports/schemas returns all entity schemas",
+        "GET /imports lists jobs correctly",
+        "Full import flow: parse → ai-map → create job → dry-run → run → delete",
+        "Create job with missing required fields returns 400"
+      ]
+    },
+    "frontend_ai_button": {
+      "status": "PASS",
+      "tests": [
+        "Purple/gradient 'Auto-map with AI' button visible in Map step (data-testid=ai-map-btn)",
+        "GPT-5.2 badge present in button",
+        "Loading state shows 'GPT-5.2 is reading...' with spinner"
+      ]
+    },
+    "frontend_ai_result": {
+      "status": "PASS",
+      "tests": [
+        "AI result card (data-testid=ai-result) displays after AI completes",
+        "Shows reasoning text in Spanish-aware format",
+        "Shows 'GPT-5.2 MAPPED 6 OF 6 HEADERS' count"
+      ]
+    },
+    "frontend_confidence_badges": {
+      "status": "PASS",
+      "tests": [
+        "HIGH confidence badges shown (emerald color)",
+        "MEDIUM confidence badges shown (amber color)",
+        "Colored rings on dropdowns (emerald for HIGH, amber for MEDIUM)"
+      ]
+    },
+    "frontend_wizard_flow": {
+      "status": "PASS",
+      "tests": [
+        "Validate & preview button enabled after AI mapping",
+        "Review step shows 3 valid rows with correct data",
+        "Commit import button available"
+      ]
+    }
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration149_ai_column_mapping.py",
+    "/app/test_reports/pytest/pytest_iteration149_ai_column_mapping.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AI mapping endpoint correctly validates entity and file_token before calling LLM",
+    "LLM response parsing includes JSON extraction from response text with regex",
+    "Invalid keys from LLM response are auto-filtered (only valid canonical fields kept)",
+    "Confidence levels properly propagated from LLM response to frontend",
+    "Frontend correctly displays confidence badges with appropriate colors",
+    "Colored rings on dropdowns provide visual feedback for AI confidence",
+    "Error handling for 502 (LLM failures) is graceful with descriptive message"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration149_ai_column_mapping.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "receptionist": "sarah@hotel.test / StaffP@ss1"
+  },
+  "seed_data_creation": "Used /tmp/messy_guests.csv (Spanish headers) provided by main agent. Created English CSV dynamically in tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 149 tested the AI Column Mapping feature for the Import Module. The POST /api/imports/ai-map endpoint uses GPT-5.2 to intelligently map messy/foreign CSV headers to canonical fields. Spanish headers (Apellido Completo, Correo Electronico, etc.) are correctly mapped to (name, email, phone, nationality, notes, date_of_birth) with HIGH confidence. Frontend shows beautiful UX with gradient AI button, loading state, result card with reasoning, confidence badges (HIGH/MEDIUM/LOW), and colored rings on dropdowns. Full wizard flow works end-to-end.",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "ai_mapping_details": {
+    "spanish_headers_tested": ["Apellido Completo", "Correo Electronico", "Telefono Movil", "Pais Origen", "Observaciones", "Fecha Nacimiento"],
+    "mapped_to": ["name", "email", "phone", "nationality", "notes", "date_of_birth"],
+    "confidence_levels": "5 HIGH, 1 MEDIUM (name field)",
+    "reasoning_sample": "Spanish headers align directly with guest fields; 'Apellido Completo' likely intended as full name based on sample values"
+  }
+}

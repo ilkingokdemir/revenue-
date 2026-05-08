@@ -1,0 +1,133 @@
+{
+  "summary": "Iteration 215 - Batch 2 Keyless Features (5 of 30 P0 gaps) tested. All 5 new backend routers working (cleaning-checklists, room-move, lost-found-match, group-rooming, attribution). All 4 new frontend panels load correctly with proper data-testid attributes. Backend: 24/24 tests passed. Frontend: All panels render, sidebar buttons work, all interactive elements functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration215_batch2_features.py",
+    "/app/test_reports/pytest/pytest_iteration215_batch2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FIXED: App.js was missing attribution sidebar item in Revenue section - added line 2716",
+    "All 5 new backend routers properly registered in server.py (lines 740-753)",
+    "Cleaning Checklists: 18-point default template auto-created, run+tick+complete flow works, auto_flipped_to_clean=true when score=100%",
+    "Room Move: Options returns eligible rooms filtering out_of_order and overlapping bookings, move updates booking.room_number and move_history",
+    "Lost-Found Auto-Match: Scoring works (same room +80, ±1d +20, ±2d +10), notify-guest queues to lost_found_notifications collection (MOCKED - no real email)",
+    "Group Rooming: Uses db.groups collection (fixed earlier), CSV preview maps room_type by name, commit creates GRP-XXXXXX-YYYYYY refs",
+    "Attribution: POST /log is PUBLIC (no auth), report returns all 4 models (first_click, last_click, linear, channel_native)"
+  ],
+  "updated_files": [
+    "/app/frontend/src/App.js",
+    "/app/backend/tests/test_iteration215_batch2_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24 passed)",
+    "frontend": "100% (all 4 new panels + regression panels working)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing city-gate property with seeded rooms and bookings",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 215 adds 5 keyless competitor-parity features (Batch 2 of 30 P0 gaps): (1) Cleaning Checklists at /api/cleaning-checklists/* with 18-point default template, run/tick/complete flow, auto-flip room to clean on 100% score. (2) Room Move/Walk at /api/room-move/* with options filtering and move_history audit. (3) Lost-Found Auto-Match at /api/lost-found/{item_id}/match-candidates with scoring algorithm and notify-guest (MOCKED - queues notification, no real email). (4) Group Rooming CSV Import at /api/group-rooming/* with preview/commit flow creating GRP-XXXXXX-YYYYYY booking refs. (5) Source Attribution at /api/attribution/* with PUBLIC /log endpoint and 4-model report (first_click, last_click, linear, channel_native). Frontend panels: CleaningChecklistsPanel, OpsQuickActionsPanel (2 tabs), GroupRoomingImportPanel, AttributionPanel - all with data-testid attributes. Sidebar buttons: cleaning-checklists-btn, ops-quick-btn, group-rooming-btn (Operations), attribution-btn (Revenue). Test group: 751a0e98-0015-4b59-a940-74261439eff4. Test lost-found item: a102162b-4305-4e11-b3ad-6f509cf5f9e1.",
+  "features_verified": {
+    "cleaning_checklists": {
+      "endpoints": {
+        "list_templates": "GET /api/cleaning-checklists/{property_id}/templates - auto-creates 18-point default",
+        "upsert_template": "POST /api/cleaning-checklists/{property_id}/templates",
+        "delete_template": "DELETE /api/cleaning-checklists/{property_id}/templates/{template_id}",
+        "start_run": "POST /api/cleaning-checklists/run - deep-copies items from template",
+        "tick": "POST /api/cleaning-checklists/run/{run_id}/tick - toggles checked + photo_url + note",
+        "complete": "POST /api/cleaning-checklists/run/{run_id}/complete - computes score_pct, duration_min, auto_flipped_to_clean",
+        "list_runs": "GET /api/cleaning-checklists/{property_id}/runs",
+        "stats": "GET /api/cleaning-checklists/{property_id}/stats - cleaner KPIs"
+      },
+      "ui_elements": {
+        "panel": "data-testid='cleaning-checklists-panel'",
+        "template_card": "data-testid='checklist-template-card'",
+        "refresh_btn": "data-testid='checklist-refresh-btn'",
+        "new_template_btn": "data-testid='checklist-new-template-btn'",
+        "save_template_btn": "data-testid='checklist-save-template-btn'"
+      },
+      "status": "WORKING"
+    },
+    "room_move": {
+      "endpoints": {
+        "options": "GET /api/room-move/{booking_id}/options - returns eligible target rooms",
+        "execute": "POST /api/room-move - updates booking.room_number/assigned_room/move_history/internal_notes",
+        "recent": "GET /api/room-move/{property_id}/recent - last 14 days of moves"
+      },
+      "ui_elements": {
+        "tab": "data-testid='tab-room-move'",
+        "booking_input": "data-testid='room-move-bid'",
+        "search_btn": "data-testid='room-move-search-btn'",
+        "target_btn": "data-testid='room-move-target'"
+      },
+      "status": "WORKING"
+    },
+    "lost_found_match": {
+      "endpoints": {
+        "candidates": "GET /api/lost-found/{item_id}/match-candidates - scored candidates (same room +80, ±1d +20, ±2d +10)",
+        "notify": "POST /api/lost-found/{item_id}/notify-guest - queues notification (MOCKED - no real email)"
+      },
+      "ui_elements": {
+        "tab": "data-testid='tab-lost-match'",
+        "item_input": "data-testid='lost-match-iid'",
+        "search_btn": "data-testid='lost-match-search-btn'",
+        "candidate": "data-testid='lost-match-candidate'"
+      },
+      "status": "WORKING (notify-guest MOCKED)"
+    },
+    "group_rooming": {
+      "endpoints": {
+        "preview": "POST /api/group-rooming/preview - parses CSV, maps room_type, returns rows + warnings",
+        "commit": "POST /api/group-rooming/commit - creates child bookings with GRP-XXXXXX-YYYYYY refs",
+        "list": "GET /api/group-rooming/{group_id} - lists group children"
+      },
+      "ui_elements": {
+        "panel": "data-testid='group-rooming-panel'",
+        "group_picker": "data-testid='group-rooming-pick'",
+        "csv_textarea": "data-testid='group-rooming-csv'",
+        "file_input": "data-testid='group-rooming-file'",
+        "preview_btn": "data-testid='group-rooming-preview-btn'",
+        "commit_btn": "data-testid='group-rooming-commit-btn'"
+      },
+      "status": "WORKING"
+    },
+    "attribution": {
+      "endpoints": {
+        "log": "POST /api/attribution/log - PUBLIC (no auth), writes attribution_touches",
+        "report": "GET /api/attribution/{property_id}/report - first_click/last_click/linear/channel_native breakdowns",
+        "funnel": "GET /api/attribution/{property_id}/funnel - event counts"
+      },
+      "ui_elements": {
+        "panel": "data-testid='attribution-panel'",
+        "days_select": "data-testid='attr-days'",
+        "refresh_btn": "data-testid='attr-refresh-btn'",
+        "model_first_click": "data-testid='attr-model-first_click'",
+        "model_last_click": "data-testid='attr-model-last_click'",
+        "model_linear": "data-testid='attr-model-linear'",
+        "model_channel_native": "data-testid='attr-model-channel_native'"
+      },
+      "status": "WORKING"
+    }
+  },
+  "regression_tests": {
+    "tax_presets": "PASSED - Returns 12 country codes (GB, GB-LON, FR, IT, ES, DE, NL, TR, US-NV, US-NY, US-CA, AE)",
+    "walkin_availability": "PASSED - Returns offerings with tax breakdown",
+    "no_show_policy": "PASSED - Returns fee_type, grace_hour, auto_run",
+    "guest_prefs_upsert": "PASSED - Creates/updates guest preferences",
+    "late_checkout_quote": "PASSED - Returns quote with fee",
+    "service_recovery_post": "PASSED - Creates complaint with AI classification",
+    "room_qr_list": "PASSED - Returns room QR codes"
+  },
+  "mocked_apis": {
+    "lost_found_notify_guest": "Queues notification to lost_found_notifications collection - actual Resend email is on API-key blocked backlog (P2)"
+  }
+}

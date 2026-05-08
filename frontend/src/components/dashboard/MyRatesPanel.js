@@ -38,12 +38,14 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
   const [startDate, setStartDate] = useState(todayISO());
   const [days, setDays] = useState(30);
   const [data, setData] = useState(null);
+  const [winloss, setWinloss] = useState(null);
   const [loading, setLoading] = useState(false);
   // Pending edits keyed by `${date}::${field}` -> value
   const [pending, setPending] = useState({});
   const [visibleRows, setVisibleRows] = useState(() => COLS.filter(c => c.id !== "occupancy_pct").map(c => c.id));
   const [submitting, setSubmitting] = useState(false);
   const [drawer, setDrawer] = useState(null); // {date}
+  const [winlossOpen, setWinlossOpen] = useState(false);
 
   useEffect(() => {
     if (activePropertyId && activePropertyId !== propertyId) setPropertyId(activePropertyId);
@@ -54,11 +56,18 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
     setLoading(true);
     setPending({});
     try {
-      const r = await axios.get(`${API}/rates/grid/${propertyId}`, {
-        params: { start_date: startDate, days },
-        withCredentials: true,
-      });
+      const [r, w] = await Promise.all([
+        axios.get(`${API}/rates/grid/${propertyId}`, {
+          params: { start_date: startDate, days },
+          withCredentials: true,
+        }),
+        axios.get(`${API}/rates/winloss/${propertyId}`, {
+          params: { lookback_days: 60 },
+          withCredentials: true,
+        }).catch(() => ({ data: null })),
+      ]);
       setData(r.data);
+      setWinloss(w.data);
     } catch (e) {
       console.error(e);
       toast.error("Rate grid yüklenemedi");
@@ -195,6 +204,46 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
         </div>
       )}
 
+      {/* AI vs Owner Win/Loss Scoreboard */}
+      {winloss?.summary && winloss.summary.total_overrides > 0 && (
+        <button
+          onClick={() => setWinlossOpen(true)}
+          className="w-full mb-5 rounded-xl bg-gradient-to-r from-violet-900/30 to-emerald-900/30 border border-violet-700/40 p-4 hover:border-violet-500 transition text-left"
+          data-testid="winloss-tile"
+        >
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-violet-400 mb-1">
+                ⚔️ AI vs Sahip Performans (son {winloss.lookback_days} gün)
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-emerald-400">
+                  <strong className="text-2xl">{winloss.summary.wins}</strong> kazanç
+                </span>
+                <span className="text-red-400">
+                  <strong className="text-2xl">{winloss.summary.losses}</strong> kayıp
+                </span>
+                <span className="text-stone-400">
+                  <strong className="text-2xl">{winloss.summary.neutrals}</strong> nötr
+                </span>
+                <span className="text-violet-300 ml-2">
+                  Win-rate: <strong>{winloss.summary.win_rate_pct}%</strong>
+                </span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] uppercase tracking-wider text-stone-500 mb-1">
+                Sahip kararı vs AI baseline
+              </div>
+              <div className={`text-2xl font-bold ${winloss.summary.revenue_lift >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                {winloss.summary.revenue_lift >= 0 ? "+" : ""}£{winloss.summary.revenue_lift.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-stone-500">detay için tıklayın →</div>
+            </div>
+          </div>
+        </button>
+      )}
+
       {/* Row visibility toggles */}
       <div className="flex items-center gap-2 mb-4 flex-wrap text-xs">
         <span className="text-stone-500 font-medium uppercase tracking-wider">Row visibility:</span>
@@ -317,6 +366,10 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
           onClose={() => setDrawer(null)}
           onChanged={() => { setDrawer(null); reload(); }}
         />
+      )}
+
+      {winlossOpen && winloss && (
+        <WinLossModal data={winloss} onClose={() => setWinlossOpen(false)} />
       )}
     </div>
   );
@@ -559,6 +612,127 @@ function Sig({ label, value, sub, color }) {
         <div className={`font-semibold ${color || "text-stone-200"}`}>{value}</div>
         {sub && <div className="text-[10px] text-stone-500">{sub}</div>}
       </div>
+    </div>
+  );
+}
+
+function WinLossModal({ data, onClose }) {
+  const s = data.summary;
+  const VERDICT_BADGE = {
+    win: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40",
+    loss: "bg-red-500/20 text-red-400 border-red-500/40",
+    neutral: "bg-stone-500/20 text-stone-400 border-stone-500/40",
+  };
+  const VERDICT_LABEL = { win: "KAZANÇ", loss: "KAYIP", neutral: "NÖTR" };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose} data-testid="winloss-modal">
+      <div onClick={(e) => e.stopPropagation()}
+           className="bg-stone-950 border border-stone-800 rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 space-y-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-stone-100">⚔️ AI vs Sahip Performans Raporu</h2>
+            <p className="text-xs text-stone-500 mt-1">
+              {data.start_date} — {data.end_date} arası, {s.total_overrides} override karşılaştırması
+            </p>
+          </div>
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-200 text-2xl" data-testid="winloss-close-btn">×</button>
+        </div>
+
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KPI label="Kazanç" value={s.wins} color="text-emerald-400" sub={`%${s.win_rate_pct} win-rate`} />
+          <KPI label="Kayıp" value={s.losses} color="text-red-400" />
+          <KPI label="Nötr" value={s.neutrals} color="text-stone-400" />
+          <KPI label="Net Gelir Etkisi" color={s.revenue_lift >= 0 ? "text-emerald-400" : "text-red-400"}
+               value={`${s.revenue_lift >= 0 ? "+" : ""}£${s.revenue_lift.toLocaleString()}`}
+               sub={`AI olsaydı: £${s.revenue_ai_counterfactual.toLocaleString()}`} />
+        </div>
+
+        {/* Best/worst */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {s.biggest_win && (
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-400 mb-1">🏆 En büyük kazanç</div>
+              <div className="text-stone-100 font-semibold">{s.biggest_win.date}</div>
+              <div className="text-xs text-stone-400 mt-1">
+                Sahip £{s.biggest_win.owner_rate} vs AI £{s.biggest_win.ai_rate} ·
+                <strong className="text-emerald-300"> +£{s.biggest_win.revenue_delta}</strong>
+                <span className="text-stone-500"> ({s.biggest_win.bookings} rez)</span>
+              </div>
+            </div>
+          )}
+          {s.biggest_loss && (
+            <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-4">
+              <div className="text-[10px] uppercase tracking-wider text-red-400 mb-1">⚠️ En büyük kayıp</div>
+              <div className="text-stone-100 font-semibold">{s.biggest_loss.date}</div>
+              <div className="text-xs text-stone-400 mt-1">
+                Sahip £{s.biggest_loss.owner_rate} vs AI £{s.biggest_loss.ai_rate} ·
+                <strong className="text-red-300"> £{s.biggest_loss.revenue_delta}</strong>
+                <span className="text-stone-500"> ({s.biggest_loss.bookings} rez)</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Detailed table */}
+        <div className="rounded-xl border border-stone-800 overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-stone-900 text-stone-500">
+              <tr>
+                <th className="text-left px-3 py-2">Tarih</th>
+                <th className="text-right px-3 py-2">Sahip £</th>
+                <th className="text-right px-3 py-2">AI £</th>
+                <th className="text-right px-3 py-2">Δ /gece</th>
+                <th className="text-right px-3 py-2">Rez</th>
+                <th className="text-right px-3 py-2">Doluluk</th>
+                <th className="text-right px-3 py-2">Net Gelir Δ</th>
+                <th className="text-center px-3 py-2">Sonuç</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.comparisons.length === 0 && (
+                <tr><td colSpan={8} className="text-center py-6 text-stone-600">Henüz karşılaştırılabilir kayıt yok</td></tr>
+              )}
+              {data.comparisons.slice(0, 30).map((c, i) => (
+                <tr key={i} className="border-t border-stone-800/60 hover:bg-stone-900/40"
+                    data-testid={`winloss-row-${c.date}`}>
+                  <td className="px-3 py-2 text-stone-300">{c.date}</td>
+                  <td className="px-3 py-2 text-right text-stone-200">£{c.owner_rate}</td>
+                  <td className="px-3 py-2 text-right text-emerald-400">£{c.ai_rate}</td>
+                  <td className={`px-3 py-2 text-right ${c.delta_per_night > 0 ? "text-emerald-400" : c.delta_per_night < 0 ? "text-red-400" : "text-stone-500"}`}>
+                    {c.delta_per_night > 0 ? "+" : ""}£{c.delta_per_night}
+                  </td>
+                  <td className="px-3 py-2 text-right text-cyan-400">{c.bookings}</td>
+                  <td className={`px-3 py-2 text-right ${occColor(c.occupancy_pct)}`}>{c.occupancy_pct}%</td>
+                  <td className={`px-3 py-2 text-right font-semibold ${c.revenue_delta > 0 ? "text-emerald-400" : c.revenue_delta < 0 ? "text-red-400" : "text-stone-500"}`}>
+                    {c.revenue_delta > 0 ? "+" : ""}£{c.revenue_delta}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${VERDICT_BADGE[c.verdict]}`}>
+                      {VERDICT_LABEL[c.verdict]}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <p className="text-stone-500 text-[10px] text-center">
+          ⓘ Naive karşılaştırma: AI fiyatı uygulanmış olsaydı aynı talep koşulunda gelir varsayımıyla. Gerçek elastiklik için A/B testi gerekir.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function KPI({ label, value, color, sub }) {
+  return (
+    <div className="rounded-xl bg-stone-900/60 border border-stone-800 p-4">
+      <div className="text-[10px] uppercase tracking-wider text-stone-500 mb-1">{label}</div>
+      <div className={`text-2xl font-bold ${color || "text-stone-200"}`}>{value}</div>
+      {sub && <div className="text-[10px] text-stone-500 mt-1">{sub}</div>}
     </div>
   );
 }

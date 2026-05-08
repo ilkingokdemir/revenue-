@@ -258,6 +258,9 @@ def create_rates_grid_router(db, require_roles):
             floor_r = ov.get("floor_rate") or 0
             effective = max(effective, min_r, floor_r)
 
+            # Capture AI rate at submit time for win/loss comparison
+            ai_at_submit = await _compute_ai_rate_for_date(db, property_id, d)
+
             # Capture previous PMS rate for history diff
             prev_doc = await db.rate_overrides.find_one(
                 {"property_id": property_id, "date": d, "set_by": "owner-override",
@@ -325,9 +328,11 @@ def create_rates_grid_router(db, require_roles):
                 "action": "submit",
                 "previous_rate": prev_rate,
                 "new_rate": float(effective),
+                "ai_rate_at_submit": ai_at_submit,
                 "delta": round(float(effective) - prev_rate, 2) if prev_rate else None,
                 "delta_pct": round(((float(effective) - prev_rate) / prev_rate * 100), 1)
                               if prev_rate else None,
+                "delta_vs_ai": round(float(effective) - ai_at_submit, 2) if ai_at_submit else None,
                 "fields": {
                     "pms_override": ov.get("pms_override"),
                     "target_sell_rate": ov.get("target_sell_rate"),
@@ -517,7 +522,153 @@ def create_rates_grid_router(db, require_roles):
             "narrative": narrative,
         }
 
+    @router.get("/rates/winloss/{property_id}")
+    async def winloss(property_id: str, lookback_days: int = 60,
+                      current_user: dict = Depends(require_roles("admin", "manager"))):
+        """AI vs Owner performance scoreboard for past dates with owner overrides.
+        Compares Owner's locked rate vs Sentinel AI rate at the time of submit and
+        actual booking outcomes (occupancy + revenue captured)."""
+        today = datetime.now(timezone.utc).date()
+        start = (today - timedelta(days=int(lookback_days or 60))).strftime("%Y-%m-%d")
+        end = today.strftime("%Y-%m-%d")
+        # Find historical submits for past dates only
+        submits = await db.rate_override_history.find(
+            {"property_id": property_id if property_id != "all" else {"$exists": True},
+             "action": "submit",
+             "date": {"$gte": start, "$lte": end}},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(1000)
+
+        # Dedupe to latest submit per date (most recent rate wins)
+        latest_by_date: dict = {}
+        for s in submits:
+            if s["date"] not in latest_by_date:
+                latest_by_date[s["date"]] = s
+
+        prop_filter = {} if property_id == "all" else {"property_id": property_id}
+        comparisons = []
+        wins = 0
+        losses = 0
+        neutrals = 0
+        revenue_owner = 0.0
+        revenue_ai_counterfactual = 0.0
+        biggest_win = None
+        biggest_loss = None
+
+        for ds, s in latest_by_date.items():
+            owner_rate = float(s.get("new_rate") or 0)
+            ai_rate = float(s.get("ai_rate_at_submit") or 0)
+            if owner_rate <= 0 or ai_rate <= 0:
+                continue
+            # Actual bookings on this date
+            bk_query = {"check_in": {"$lte": ds}, "check_out": {"$gt": ds},
+                        "status": {"$in": ["confirmed", "checked_in", "checked_out"]}, **prop_filter}
+            bookings_count = await db.bookings.count_documents(bk_query)
+            # Total rooms for occupancy
+            total_rooms = await db.rooms.count_documents(prop_filter) or 1
+            occ_pct = round(min(100.0, bookings_count / total_rooms * 100), 1)
+
+            # Revenue model:
+            # actual: bookings × owner_rate
+            # counterfactual: bookings × ai_rate (assume same demand — naive)
+            actual_rev = bookings_count * owner_rate
+            cf_rev = bookings_count * ai_rate
+            delta_rev = actual_rev - cf_rev
+
+            # Classification
+            verdict = "neutral"
+            if owner_rate > ai_rate:
+                # Owner priced higher
+                if bookings_count > 0:
+                    verdict = "win"  # captured higher ADR with same bookings
+                elif occ_pct == 0:
+                    verdict = "loss"  # priced too high, 0 bookings
+            elif owner_rate < ai_rate:
+                # Owner priced lower
+                if bookings_count > 0 and occ_pct >= 50:
+                    verdict = "neutral"  # leaving money on table but full
+                else:
+                    verdict = "loss"  # priced lower without filling
+
+            if verdict == "win":
+                wins += 1
+            elif verdict == "loss":
+                losses += 1
+            else:
+                neutrals += 1
+
+            revenue_owner += actual_rev
+            revenue_ai_counterfactual += cf_rev
+
+            entry = {
+                "date": ds,
+                "owner_rate": owner_rate,
+                "ai_rate": ai_rate,
+                "delta_per_night": round(owner_rate - ai_rate, 2),
+                "bookings": bookings_count,
+                "occupancy_pct": occ_pct,
+                "actual_revenue": round(actual_rev, 2),
+                "ai_counterfactual": round(cf_rev, 2),
+                "revenue_delta": round(delta_rev, 2),
+                "verdict": verdict,
+                "submitted_by": s.get("by"),
+                "submitted_at": s.get("created_at"),
+            }
+            comparisons.append(entry)
+
+            if verdict == "win" and (biggest_win is None or delta_rev > biggest_win["revenue_delta"]):
+                biggest_win = entry
+            if verdict == "loss" and (biggest_loss is None or delta_rev < biggest_loss["revenue_delta"]):
+                biggest_loss = entry
+
+        comparisons.sort(key=lambda x: x["date"], reverse=True)
+        total = wins + losses + neutrals
+        return {
+            "property_id": property_id,
+            "lookback_days": lookback_days,
+            "start_date": start,
+            "end_date": end,
+            "summary": {
+                "total_overrides": total,
+                "wins": wins,
+                "losses": losses,
+                "neutrals": neutrals,
+                "win_rate_pct": round(wins / total * 100, 1) if total else 0,
+                "revenue_owner": round(revenue_owner, 2),
+                "revenue_ai_counterfactual": round(revenue_ai_counterfactual, 2),
+                "revenue_lift": round(revenue_owner - revenue_ai_counterfactual, 2),
+                "biggest_win": biggest_win,
+                "biggest_loss": biggest_loss,
+            },
+            "comparisons": comparisons,
+        }
+
     return router
+
+
+async def _compute_ai_rate_for_date(db, property_id: str, date: str) -> float:
+    """Lightweight version of the AI heuristic — used at submit time to capture
+    the rate Sentinel WOULD have suggested."""
+    prop_filter = {} if property_id == "all" else {"property_id": property_id}
+    rate_plan = await db.rate_plans.find_one(prop_filter, {"_id": 0}) or {}
+    base = float(rate_plan.get("base_rate") or 90)
+    bk_query = {"check_in": {"$lte": date}, "check_out": {"$gt": date},
+                "status": {"$in": ["confirmed", "checked_in"]}, **prop_filter}
+    in_house = await db.bookings.count_documents(bk_query)
+    total_rooms = await db.rooms.count_documents(prop_filter) or 1
+    occ_pct = round(min(100.0, in_house / total_rooms * 100), 1)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+    pickup = await db.bookings.count_documents({**bk_query, "created_at": {"$gte": cutoff}})
+    comp = await db.competitor_rates.find(
+        {"check_in_date": date, **prop_filter}, {"_id": 0, "rate": 1, "price": 1, "hotel_role": 1}
+    ).to_list(50)
+    comp_prices = [float(c.get("rate") or c.get("price") or 0) for c in comp
+                   if c.get("hotel_role") != "own" and (c.get("rate") or c.get("price"))]
+    comp_avg = round(sum(comp_prices) / len(comp_prices), 2) if comp_prices else None
+    anchor = comp_avg or base
+    demand_score = min(100, occ_pct + pickup * 5)
+    multiplier = 1.0 + (demand_score - 50) / 200
+    return round(anchor * multiplier, 2)
 
 
 def _to_float(v):

@@ -39,7 +39,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
   const [loading, setLoading] = useState(false);
   // Pending edits keyed by `${date}::${field}` -> value
   const [pending, setPending] = useState({});
-  const [visibleRows, setVisibleRows] = useState(() => COLS.map(c => c.id));
+  const [visibleRows, setVisibleRows] = useState(() => COLS.filter(c => c.id !== "occupancy_pct").map(c => c.id));
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -221,10 +221,13 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
                 const dt = new Date(r.date);
                 const isWeekend = ["Sat", "Sun"].includes(r.dow);
                 return (
-                  <th key={r.date} className={`px-2 py-2 min-w-[70px] text-center ${isWeekend ? "text-emerald-400" : ""}`}>
+                  <th key={r.date} className={`px-2 py-2 min-w-[78px] text-center ${isWeekend ? "text-emerald-400" : ""}`}>
                     <div className="text-[10px] uppercase">{dt.toLocaleDateString("en-GB", { month: "short" })}</div>
                     <div className="text-[10px] uppercase opacity-70">{r.dow}</div>
                     <div className="font-bold text-base mt-0.5">{dt.getDate()}</div>
+                    <div className={`text-[10px] font-semibold mt-0.5 ${occColor(r.occupancy_pct)}`} data-testid={`header-occ-${r.date}`}>
+                      {r.occupancy_pct != null ? `${Math.round(r.occupancy_pct)}%` : "—"}
+                    </div>
                   </th>
                 );
               })}

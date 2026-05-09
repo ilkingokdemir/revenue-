@@ -996,6 +996,21 @@ const ShiftSchedulerTab = ({ propertyId, user }) => {
             ⬇ Bordro CSV
           </button>
         )}
+        {canSeePay && (
+          <button
+            onClick={() => {
+              // Monthly PDF — derive month from current weekStart
+              const month = (weekStart || new Date().toISOString().slice(0, 10)).slice(0, 7);
+              const url = `${API}/payroll/export-pdf/${propertyId || "all"}?month=${month}`;
+              window.open(url, "_blank");
+            }}
+            className="px-3 py-1.5 text-xs font-medium text-white bg-rose-600 rounded-lg hover:bg-rose-700 transition-colors inline-flex items-center gap-1"
+            data-testid="shift-export-payroll-pdf"
+            title="Aylık TR Bordro PDF (4857/5510 sayılı kanunlara uygun)"
+          >
+            📄 Bordro PDF (Aylık)
+          </button>
+        )}
         <div className="flex items-center gap-2 ml-auto text-[10px] text-stone-400">
           <span className="font-medium text-stone-500">Durum:</span>
           <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-stone-400 opacity-60"/>Taslak</span>

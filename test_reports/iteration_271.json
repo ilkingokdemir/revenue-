@@ -1,0 +1,98 @@
+{
+  "summary": "Iteration 271: Turkish Bordro PDF Generation feature fully tested. All 24 backend tests passed. Frontend UI verified - both PDF and CSV buttons visible to admin in Operations Hub > Shifts tab with correct styling and positioning.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration271_bordro_pdf.py",
+    "/app/test_reports/pytest/pytest_iteration271_bordro_pdf.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/payroll/preview/{property_id}?month=YYYY-MM returns correct TR Labor Law deduction breakdown (brut/sgk/issizlik/gelir_vergisi/damga_vergisi/net)",
+    "Deduction math verified: SGK 14%, İşsizlik 1%, Gelir Vergisi 15% (of tax base), Damga Vergisi 0.759%",
+    "Net calculation: net = brut - sgk - issizlik - gelir_vergisi - damga_vergisi (within 1 cent tolerance)",
+    "Custom rates via query params (sgk=0.20 etc) correctly override default rates",
+    "GET /api/payroll/export-pdf/{property_id}?month=YYYY-MM returns valid PDF (Content-Type: application/pdf, %PDF- magic header)",
+    "PDF has Content-Disposition attachment with .pdf filename",
+    "PDF returns 404 with Turkish detail message when no completed shifts in period",
+    "Both preview and PDF endpoints require admin/manager role (401/403 for non-auth)",
+    "Existing CSV endpoint /api/payroll/export still works (regression verified)",
+    "Frontend: data-testid='shift-export-payroll-pdf' button visible in Operations Hub > Shifts tab",
+    "Frontend: data-testid='shift-export-payroll-csv' button visible alongside PDF button",
+    "Frontend: canSeePay check correctly restricts buttons to admin/manager roles only",
+    "PDF button styling: bg-rose-600 with Turkish title 'Aylık TR Bordro PDF (4857/5510 sayılı kanunlara uygun)'",
+    "CSV button styling: bg-amber-500",
+    "Both buttons positioned side-by-side on same row"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration271_bordro_pdf.py"
+  ],
+  "success_rate": {
+    "backend": "100% (24/24 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Used existing shift data from May 2026 (property_id='all', month='2026-05')",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Turkish Bordro PDF feature fully verified. Endpoints: /api/payroll/preview/{property_id}?month=YYYY-MM (JSON), /api/payroll/export-pdf/{property_id}?month=YYYY-MM (PDF), /api/payroll/export/{property_id} (CSV). All use property_id='all' and month='2026-05' for test data. Frontend buttons in Operations Hub > Shifts tab with data-testid='shift-export-payroll-pdf' and 'shift-export-payroll-csv'.",
+  "features_tested": {
+    "GET_payroll_preview": {
+      "returns_200_with_data": "PASS",
+      "rows_have_tr_deduction_fields": "PASS (brut/sgk/issizlik/gelir_vergisi/damga_vergisi/net)",
+      "deduction_math_correct": "PASS (within 1 cent tolerance)",
+      "totals_sum_correctly": "PASS",
+      "custom_rates_override": "PASS (sgk=0.20 reflected in result)",
+      "requires_auth": "PASS (401/403)"
+    },
+    "GET_payroll_export_pdf": {
+      "returns_200_with_valid_data": "PASS",
+      "content_type_is_pdf": "PASS (application/pdf)",
+      "starts_with_magic_header": "PASS (%PDF-)",
+      "has_content_disposition_attachment": "PASS (filename=bordro_*.pdf)",
+      "returns_404_when_no_shifts": "PASS (month=1999-01)",
+      "requires_auth": "PASS (401/403)",
+      "has_reasonable_size": "PASS (>1KB, <1MB)"
+    },
+    "GET_payroll_export_csv_regression": {
+      "csv_export_still_works": "PASS",
+      "content_type_is_csv": "PASS (text/csv)",
+      "has_content_disposition": "PASS",
+      "requires_auth": "PASS (401/403)"
+    },
+    "tr_payroll_deduction_math": {
+      "sgk_rate_14_percent": "PASS",
+      "issizlik_rate_1_percent": "PASS",
+      "gelir_vergisi_15_percent_of_taxbase": "PASS",
+      "damga_vergisi_0759_percent": "PASS"
+    },
+    "data_integrity": {
+      "preview_returns_employee_info": "PASS (staff_id, staff_name, role)",
+      "preview_returns_shift_count_and_hours": "PASS",
+      "totals_include_shift_count": "PASS"
+    },
+    "frontend_ui": {
+      "pdf_button_visible": "PASS (data-testid='shift-export-payroll-pdf')",
+      "pdf_button_text": "PASS ('📄 Bordro PDF (Aylık)')",
+      "pdf_button_title": "PASS ('Aylık TR Bordro PDF (4857/5510 sayılı kanunlara uygun)')",
+      "csv_button_visible": "PASS (data-testid='shift-export-payroll-csv')",
+      "csv_button_text": "PASS ('⬇ Bordro CSV')",
+      "buttons_same_row": "PASS (y positions within 20px)",
+      "pdf_right_of_csv": "PASS",
+      "pdf_button_styling": "PASS (bg-rose-600)",
+      "csv_button_styling": "PASS (bg-amber-500)",
+      "canSeePay_role_check": "PASS (admin/manager only)"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

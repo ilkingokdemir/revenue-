@@ -156,6 +156,11 @@ export default function CheckInKioskPage({ propertyId }) {
                     <div>
                       <p className="text-lg font-semibold text-stone-800">{b.guest_name}</p>
                       <p className="text-sm text-stone-500 mt-0.5">Ref: {b.booking_ref}</p>
+                      {propertyId === "all" && b.property_id && (
+                        <p className="text-xs text-[#1e3a5f] font-medium mt-1" data-testid={`kiosk-booking-prop-${b.booking_id}`}>
+                          🏨 {b.property_id}
+                        </p>
+                      )}
                     </div>
                     {b.registration_status === "completed" ? (
                       <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full">Completed</span>

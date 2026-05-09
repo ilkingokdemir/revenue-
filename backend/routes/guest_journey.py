@@ -296,7 +296,20 @@ def create_guest_journey_router(db, require_roles):
 
     @router.get("/guest-journey/kiosk-info/{property_id}")
     async def kiosk_info(property_id: str):
-        """Public: Get property name and branding for kiosk display"""
+        """Public: Get property name and branding for kiosk display.
+        When property_id='all', returns a generic kiosk header so a single tablet
+        can serve walk-ins across multiple properties (lookup will span all)."""
+        if property_id == "all":
+            # Multi-property mode: pick first property as the default visual brand,
+            # or fall back to a generic name.
+            ts = await db.template_settings.find_one({"property_id": "all"}, {"_id": 0}) or {}
+            if ts.get("hotel_name"):
+                return {"hotel_name": ts["hotel_name"], "logo_url": ts.get("logo_url", "")}
+            first_prop = await db.properties.find_one({}, {"_id": 0, "name": 1})
+            return {
+                "hotel_name": (first_prop or {}).get("name") or "Self Check-In",
+                "logo_url": "",
+            }
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
         ts = await db.template_settings.find_one({"property_id": property_id}, {"_id": 0}) or {}
         hotel_name = ts.get("hotel_name") or (prop or {}).get("name", "Hotel")
@@ -306,11 +319,11 @@ def create_guest_journey_router(db, require_roles):
 
     @router.get("/guest-journey/kiosk-lookup/{property_id}")
     async def kiosk_lookup(property_id: str, q: str = ""):
-        """Public: Look up booking by ref or guest name for kiosk check-in"""
+        """Public: Look up booking by ref or guest name for kiosk check-in.
+        property_id='all' searches across every property."""
         if not q or len(q) < 2:
             return []
         query = {
-            "property_id": property_id,
             "status": {"$in": ["confirmed", "pending", "checked_in"]},
             "$or": [
                 {"booking_ref": {"$regex": q, "$options": "i"}},
@@ -318,6 +331,8 @@ def create_guest_journey_router(db, require_roles):
                 {"guest_email": {"$regex": q, "$options": "i"}},
             ]
         }
+        if property_id != "all":
+            query["property_id"] = property_id
         bookings = await db.bookings.find(query, {"_id": 0}).sort("check_in", 1).to_list(20)
         results = []
         for b in bookings:
@@ -330,6 +345,7 @@ def create_guest_journey_router(db, require_roles):
                 "check_in": b.get("check_in", ""),
                 "check_out": b.get("check_out", ""),
                 "rooms": b.get("rooms", 1),
+                "property_id": b.get("property_id", ""),
                 "registration_token": reg.get("token") if reg else None,
                 "registration_status": reg.get("status") if reg else None,
             })
@@ -352,9 +368,12 @@ def create_guest_journey_router(db, require_roles):
             return {"token": existing["token"], "status": existing.get("status", "pending")}
 
         token = secrets.token_urlsafe(32)
+        # Always store the registration against the booking's REAL property,
+        # never the URL placeholder ("all" for multi-property kiosks).
+        real_prop_id = booking.get("property_id") or property_id
         reg = {
             "id": str(uuid.uuid4()), "booking_id": booking_id,
-            "booking_ref": booking.get("booking_ref", ""), "property_id": property_id,
+            "booking_ref": booking.get("booking_ref", ""), "property_id": real_prop_id,
             "guest_name": booking.get("guest_name", ""), "guest_email": booking.get("guest_email", ""),
             "guest_phone": booking.get("guest_phone", ""), "token": token,
             "status": "pending", "form_data": {}, "id_uploaded": False,

@@ -5,6 +5,13 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-09 (iter 272 — bugfix)
+- **Online Check-in Kiosk `/checkin-kiosk/all` Düzeltildi**
+  - Bug: `kiosk-lookup/all` literal `"property_id":"all"` filtreliyordu; gerçek hiçbir rezervasyon eşleşmiyordu (1581 gerçek rezervasyondan 0).
+  - Fix `guest_journey.py`: `kiosk_info` ve `kiosk_lookup` artık `property_id="all"` parametresinde tüm property'lere bakıyor; `kiosk_register` rezervasyonu booking'in **gerçek** property_id'sine kaydediyor (URL placeholder'ı yerine).
+  - Fix `CheckInKioskPage.js`: `all` modunda her booking sonucunda 🏨 property_id label'ı görünüyor.
+  - Manuel doğrulama: "Smith" arandığında 20 gerçek rezervasyon listeleniyor (önceki davranış: sadece 1 test kaydı).
+
 ### 2026-05-09 (iter 271)
 - **Aylık TR Bordro PDF** (NEW)
   - Backend `workforce_extras.py`: `_aggregate_for_payroll()` ve `_tr_payroll_breakdown()` yardımcıları, `GET /api/payroll/preview/{property_id}` (JSON) + `GET /api/payroll/export-pdf/{property_id}` (PDF) endpoint'leri.

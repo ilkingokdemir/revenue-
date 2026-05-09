@@ -2743,8 +2743,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
         { id: "laundry-settings", icon: TShirt, name: "Laundry settings", testId: "laundry-settings-btn" },
         { id: "ops-quick", icon: Lightning, name: "Quick ops", testId: "ops-quick-btn" },
-        { id: "maintenance", icon: Wrench, name: t("nav.maintenance"), testId: "maintenance-btn" },
-        { id: "ops-v2", icon: Wrench, name: "Maintenance v2", testId: "ops-v2-btn" },
+        { id: "ops-v2", icon: Wrench, name: t("nav.ops_v2"), testId: "ops-v2-btn" },
         { id: "asset-register", icon: Package, name: "Asset register", testId: "asset-register-btn" },
         { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
         { id: "low-stock", icon: Package, name: "Low-stock alerts", testId: "low-stock-btn" },
@@ -3423,11 +3422,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           />
         )}
 
-        {/* Ops v2 — Maintenance workflow + Linen PAR + HK Inspection */}
-        {activeView === "ops-v2" && (
+        {/* Ops — Misafir Talepleri + Bakım İş Emirleri + Çamaşır PAR + HK Denetim */}
+        {(activeView === "ops-v2" || activeView === "maintenance") && (
           <OpsV2Panel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+            properties={properties}
           />
         )}
 
@@ -4281,10 +4281,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           </div>
         )}
 
-        {/* Maintenance */}
-        {activeView === "maintenance" && (
-          <MaintenancePanel properties={properties} activePropertyId={activePropertyId} />
-        )}
+        {/* Maintenance — merged into Operasyon (ops-v2) tab "Misafir Talepleri" */}
 
         {/* Night Audit */}
         {activeView === "night-audit" && (

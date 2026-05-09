@@ -15,7 +15,9 @@ import {
   SealCheck,
   Drop,
   Broom,
+  Headset,
 } from "@phosphor-icons/react";
+import { MaintenancePanel } from "./MaintenancePanel";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -53,25 +55,29 @@ const STATUS_COLORS = {
   verified: "bg-emerald-600 text-white border-emerald-700",
 };
 
-export default function OpsV2Panel({ propertyId, hotelName }) {
-  const [tab, setTab] = useState("maintenance");
+export default function OpsV2Panel({ propertyId, hotelName, properties }) {
+  const [tab, setTab] = useState("requests");
 
   return (
     <div className="p-5 max-w-[1400px] mx-auto" data-testid="ops-v2-panel">
       <div className="mb-5">
         <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-1">
           <Wrench size={12} weight="fill" className="text-orange-500" />
-          <span>Operasyon · v2</span>
+          <span>Operasyon</span>
         </div>
         <h1 className="text-2xl font-semibold text-stone-900">
-          Operasyon Derinliği
+          Operasyon Merkezi
         </h1>
         <p className="text-sm text-stone-500 mt-1 max-w-2xl">
-          Bakım iş-emri akışı, çamaşır PAR takibi ve HK süpervizör denetimi — tek ekranda.
+          Misafir talepleri, bakım iş emirleri, çamaşır PAR ve HK denetimi — tek ekranda.
         </p>
       </div>
 
-      <div className="flex gap-2 mb-5 border-b border-stone-200">
+      <div className="flex gap-2 mb-5 border-b border-stone-200 overflow-x-auto">
+        <TabBtn active={tab === "requests"} onClick={() => setTab("requests")} testId="ops-tab-requests">
+          <Headset size={14} className="inline mr-1.5" />
+          Misafir Talepleri
+        </TabBtn>
         <TabBtn active={tab === "maintenance"} onClick={() => setTab("maintenance")} testId="ops-tab-maintenance">
           <Wrench size={14} className="inline mr-1.5" />
           Bakım İş Emirleri
@@ -86,6 +92,11 @@ export default function OpsV2Panel({ propertyId, hotelName }) {
         </TabBtn>
       </div>
 
+      {tab === "requests" && (
+        <div className="-mx-5">
+          <MaintenancePanel properties={properties} activePropertyId={propertyId} />
+        </div>
+      )}
       {tab === "maintenance" && <MaintenanceTab propertyId={propertyId} />}
       {tab === "linen" && <LinenTab propertyId={propertyId} />}
       {tab === "inspection" && <InspectionTab propertyId={propertyId} />}

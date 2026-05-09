@@ -5,6 +5,14 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-09 (iter 271)
+- **Aylık TR Bordro PDF** (NEW)
+  - Backend `workforce_extras.py`: `_aggregate_for_payroll()` ve `_tr_payroll_breakdown()` yardımcıları, `GET /api/payroll/preview/{property_id}` (JSON) + `GET /api/payroll/export-pdf/{property_id}` (PDF) endpoint'leri.
+  - 4857/5510 sayılı kanunlara uygun kesintiler: SGK %14, İşsizlik %1, Gelir V. %15, Damga %0.759. Custom oranlar query ile override edilebilir.
+  - PDF (reportlab Platypus): Property başlığı, dönem, kesinti politikası dipnotu, personel başına Brüt/SGK/İşsizlik/GV/Damga/Net tablosu, TOPLAM satırı, İşveren+Personel imza alanları, 4857-32/37 yasal not.
+  - Frontend `OperationsHubPanel.js`: Shifts tab'ında yeni `📄 Bordro PDF (Aylık)` butonu (admin/manager only).
+  - **24/24 backend testi geçti + frontend UI %100 doğrulandı** (iteration_271.json).
+
 ### 2026-05-08 (iter 270)
 - **Per-Room-Type Rate Override** (NEW)
   - Backend `rates_grid.py`: `GET /api/rates/grid/{prop}?room_type_id=` filter, override save/submit/delete/release all room-type scoped, response now returns `room_type_id`.
@@ -44,7 +52,6 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - Offline mobile mode (service worker)
 - Backend folder restructure (~220 routes → domain subfolders)
 - Mobile bottom-nav
-- Monthly PDF Bordro generation (TR Labor Law fields + signature areas)
 - WhatsApp Voice inbound webhook completion (Twilio → Whisper → LLM → TTS)
 
 ### P2
@@ -57,7 +64,7 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - PCI-DSS / SOC 2 cert prep
 
 ## Testing Status
-- **220 cumulative backend tests passing** across iterations 262-270
+- **244 cumulative backend tests passing** across iterations 262-271
 
 ## Test Credentials
 Admin: admin@hotelbox.com / HotelAdmin2026!

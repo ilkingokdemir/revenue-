@@ -83,30 +83,58 @@ export default function SectionHub({ section, onSelect, subtitle, tNav, tSection
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {items.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.id}
-              onClick={() => onSelect(item.id)}
-              data-testid={`hub-card-${item.testId}`}
-              className="group bg-white border border-stone-200 hover:border-stone-300 hover:shadow-sm rounded-xl p-4 text-left transition-all flex items-center gap-3"
-            >
-              <div className="w-10 h-10 rounded-lg bg-stone-100 group-hover:bg-stone-900 group-hover:text-white inline-flex items-center justify-center transition-colors shrink-0">
-                {Icon ? <Icon size={18} weight="regular" /> : <span className="text-xs font-mono">?</span>}
+      {(() => {
+        // Group items by divider — each divider starts a new sub-section
+        const groups = [];
+        let current = { label: null, items: [] };
+        items.forEach((it) => {
+          if (it.divider) {
+            if (current.items.length) groups.push(current);
+            current = { label: it.label, items: [] };
+          } else {
+            current.items.push(it);
+          }
+        });
+        if (current.items.length) groups.push(current);
+
+        return groups.map((grp, gi) => (
+          <div key={`grp-${gi}`} className={gi > 0 ? "mt-8" : ""}>
+            {grp.label && (
+              <div className="mb-3 flex items-center gap-2">
+                <h3 className="text-[11px] uppercase tracking-[0.18em] text-stone-600 font-semibold">
+                  {grp.label}
+                </h3>
+                <div className="flex-1 h-px bg-stone-200" />
+                <span className="text-[10px] text-stone-400 font-mono">{grp.items.length}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-stone-900 group-hover:text-stone-900 truncate">
-                  {trItem(item)}
-                </div>
-                <div className="text-[11px] text-stone-400 font-mono truncate">{item.id}</div>
-              </div>
-              <CaretRight size={12} weight="bold" className="text-stone-300 group-hover:text-stone-600 transition-colors shrink-0" />
-            </button>
-          );
-        })}
-      </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {grp.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onSelect(item.id)}
+                    data-testid={`hub-card-${item.testId}`}
+                    className="group bg-white border border-stone-200 hover:border-stone-300 hover:shadow-sm rounded-xl p-4 text-left transition-all flex items-center gap-3"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-stone-100 group-hover:bg-stone-900 group-hover:text-white inline-flex items-center justify-center transition-colors shrink-0">
+                      {Icon ? <Icon size={18} weight="regular" /> : <span className="text-xs font-mono">?</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-stone-900 group-hover:text-stone-900 truncate">
+                        {trItem(item)}
+                      </div>
+                      <div className="text-[11px] text-stone-400 font-mono truncate">{item.id}</div>
+                    </div>
+                    <CaretRight size={12} weight="bold" className="text-stone-300 group-hover:text-stone-600 transition-colors shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ));
+      })()}
 
       {items.length === 0 && (
         <div className="text-center py-12 text-stone-400 text-sm" data-testid="hub-no-results">

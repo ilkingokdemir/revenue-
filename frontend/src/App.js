@@ -46,7 +46,7 @@ import {
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
   KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
-  OpsV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
+  OpsV2Panel, HousekeepingHubPanel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
@@ -2734,22 +2734,22 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       label: "Operations",
       color: "text-stone-500",
       items: [
+        { divider: true, label: "Housekeeping" },
         { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
-        { id: "hk-turnover", icon: Sparkle, name: "Housekeeping board", testId: "hk-turnover-btn" },
-        { id: "hk-route", icon: Broom, name: "Cleaning route", testId: "hk-route-btn" },
-        { id: "cleaning-checklists", icon: Broom, name: "Cleaning checklists", testId: "cleaning-checklists-btn" },
-        { id: "image-ai", icon: Camera, name: "AI cleanliness scoring", testId: "image-ai-btn" },
-        { id: "room-qr", icon: QrCode, name: "Room QR codes", testId: "room-qr-btn" },
-        { id: "laundry", icon: TShirt, name: "Laundry", testId: "laundry-btn" },
-        { id: "laundry-settings", icon: TShirt, name: "Laundry settings", testId: "laundry-settings-btn" },
+
+        { divider: true, label: "Maintenance & Ops" },
         { id: "ops-quick", icon: Lightning, name: "Quick ops", testId: "ops-quick-btn" },
         { id: "ops-v2", icon: Wrench, name: t("nav.ops_v2"), testId: "ops-v2-btn" },
+        { id: "operations-hub", icon: Gear, name: "Operations hub", testId: "operations-hub-btn" },
+
+        { divider: true, label: "Inventory & Assets" },
         { id: "asset-register", icon: Package, name: "Asset register", testId: "asset-register-btn" },
         { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
         { id: "low-stock", icon: Package, name: "Low-stock alerts", testId: "low-stock-btn" },
         { id: "spaces", icon: SquaresFour, name: "Spaces (parking, meet)", testId: "spaces-btn" },
         { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
-        { id: "operations-hub", icon: Gear, name: "Operations hub", testId: "operations-hub-btn" },
+
+        { divider: true, label: "Staff" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
         { id: "staff-ops", icon: Clock, name: "Staff clock-in & tips", testId: "staff-ops-btn" },
@@ -2759,23 +2759,32 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       label: "Revenue & rates",
       color: "text-stone-500",
       items: [
+        { divider: true, label: "Pricing" },
         { id: "my-rates", icon: ChartLine, name: "My Rates (Daily Grid)", testId: "my-rates-btn" },
         { id: "revenue", icon: ChartLine, name: "Revenue management", testId: "revenue-btn" },
         { id: "profit-os", icon: Target, name: "Profit OS", testId: "profit-os-btn" },
         { id: "rate-manager", icon: ChartLine, name: "Rate manager", testId: "rate-manager-btn" },
         ...(user?.role !== "receptionist" ? [{ id: "rate-matrix", icon: Users, name: "Rate matrix", testId: "rate-matrix-btn" }] : []),
+
+        { divider: true, label: "Forecast & Pace" },
         { id: "forecast", icon: ChartLine, name: t("nav.forecast"), testId: "forecast-btn" },
         { id: "forecast-v2", icon: TrendUp, name: "24-month forecast", testId: "forecast-v2-btn" },
         { id: "pace-reports", icon: ChartLine, name: "Pace reports", testId: "pace-reports-btn" },
+
+        { divider: true, label: "AI & Insights" },
         { id: "ai-pricing-v2", icon: Lightning, name: "AI pricing", testId: "ai-pricing-v2-btn" },
         { id: "pricing-explain", icon: Brain, name: "AI pricing explainer", testId: "pricing-explain-btn" },
         { id: "anomaly", icon: Lightning, name: "Anomaly radar", testId: "anomaly-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "AI predictions", testId: "ai-predictions-btn" },
+
+        { divider: true, label: "Channels & Parity" },
         { id: "channel-revenue", icon: Lightning, name: "Open pricing & yield", testId: "channel-revenue-btn" },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity heatmap", testId: "parity-heatmap-btn" },
+        { id: "ota-forecast", icon: TrendUp, name: "OTA stop-sell forecast", testId: "ota-forecast-btn" },
+
+        { divider: true, label: "Tools" },
         { id: "rev-protection", icon: ShieldCheck, name: "Revenue protection", testId: "rev-protection-btn" },
         { id: "rm-lab", icon: ChartLine, name: "RM Lab", testId: "rm-lab-btn" },
-        { id: "ota-forecast", icon: TrendUp, name: "OTA stop-sell forecast", testId: "ota-forecast-btn" },
         { id: "late-checkout-offer", icon: Clock, name: "Late checkout offers", testId: "late-checkout-offer-btn" },
         { id: "site-feasibility", icon: ChartLineUp, name: "Site feasibility & investor", testId: "site-feasibility-btn" },
       ],
@@ -2800,29 +2809,40 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       label: "Finance",
       color: "text-stone-500",
       items: [
+        { divider: true, label: "Accounting" },
         { id: "accounting", icon: Wallet, name: t("nav.accounting"), testId: "accounting-btn" },
         { id: "finance", icon: Wallet, name: "Finance overview", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & loss", testId: "finance-pl-btn" },
         { id: "cash-flow", icon: ChartLine, name: "Cash flow", testId: "cash-flow-btn" },
         { id: "expenses", icon: Receipt, name: "Expenses", testId: "expenses-btn" },
         { id: "payroll", icon: Wallet, name: "Payroll", testId: "payroll-btn" },
+
+        { divider: true, label: "Payments" },
         { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
         { id: "preauth", icon: CreditCard, name: "Pre-auth holds", testId: "preauth-btn" },
         { id: "chargeback", icon: Scales, name: "Chargebacks", testId: "chargeback-btn" },
         { id: "card-vault", icon: CreditCard, name: "Card vault", testId: "card-vault-btn" },
+
+        { divider: true, label: "Deposits" },
         { id: "deposit-policies", icon: ShieldCheck, name: "Deposit policies", testId: "deposit-policies-btn" },
         { id: "deposit-automation", icon: Lightning, name: "Deposit automation", testId: "deposit-automation-btn" },
         { id: "deposit-ledger", icon: Wallet, name: "Deposit ledger", testId: "deposit-ledger-btn" },
+
+        { divider: true, label: "Ledger & Folios" },
         { id: "city-ledger", icon: Wallet, name: "City ledger (AR)", testId: "city-ledger-btn" },
         { id: "commission-recon", icon: Receipt, name: "Commission reconciliation", testId: "commission-recon-btn" },
-        { id: "gift-cards", icon: Tag, name: "Gift cards", testId: "gift-cards-btn" },
-        { id: "currency", icon: CurrencyDollar, name: "Currency / FX", testId: "currency-btn" },
-        { id: "currency-fx", icon: Globe, name: "Multi-currency settings", testId: "currency-fx-btn" },
         { id: "folio-live", icon: Receipt, name: "In-stay folio", testId: "folio-live-btn" },
         { id: "folio-split", icon: Receipt, name: "Folio split-billing", testId: "folio-split-btn" },
         { id: "cash-drawer", icon: Wallet, name: "Cash drawer", testId: "cash-drawer-btn" },
+        { id: "gift-cards", icon: Tag, name: "Gift cards", testId: "gift-cards-btn" },
+        { id: "currency", icon: CurrencyDollar, name: "Currency / FX", testId: "currency-btn" },
+        { id: "currency-fx", icon: Globe, name: "Multi-currency settings", testId: "currency-fx-btn" },
+
+        { divider: true, label: "Night Audit" },
         { id: "night-audit", icon: Moon, name: t("nav.night_audit"), testId: "night-audit-btn" },
         { id: "night-audit-close", icon: Lock, name: "Close day", testId: "night-audit-close-btn" },
+
+        { divider: true, label: "Tax & Compliance" },
         { id: "compliance", icon: ShieldCheck, name: "Compliance", testId: "compliance-btn" },
         { id: "tr-compliance", icon: FileText, name: "TR KBS & e-Invoice", testId: "tr-compliance-btn" },
         { id: "eu-compliance", icon: Globe, name: "EU police reports", testId: "eu-compliance-btn" },
@@ -2837,19 +2857,26 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       label: "Reports",
       color: "text-stone-500",
       items: [
+        { divider: true, label: "Reviews & Sentiment" },
         { id: "reviews", icon: ChatText, name: t("nav.reviews"), testId: "nav-reviews" },
         { id: "review-sentiment", icon: Sparkle, name: "AI sentiment themes", testId: "review-sentiment-btn" },
         { id: "sentiment-heatmap", icon: ChartLineUp, name: "Sentiment heatmap", testId: "sentiment-heatmap-btn" },
+
+        { divider: true, label: "Analytics" },
         { id: "analytics", icon: ChartBar, name: t("nav.analytics"), testId: "analytics-btn" },
-        { id: "templates", icon: FileText, name: t("nav.templates"), testId: "templates-btn" },
-        ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: t("nav.approvals"), testId: "approval-queue-btn" }] : []),
-        { id: "alerts", icon: Bell, name: t("nav.alerts"), testId: "notification-settings-btn" },
         { id: "reports", icon: CalendarBlank, name: t("nav.reports"), testId: "reports-btn" },
         { id: "reports-centre", icon: CalendarBlank, name: "Reports centre", testId: "reports-centre-btn" },
         { id: "scheduled-reports", icon: Envelope, name: "Scheduled reports", testId: "scheduled-reports-btn" },
+
+        { divider: true, label: "Exports & BI" },
         { id: "accounting-export", icon: ChartLine, name: "Accounting export", testId: "accounting-export-btn" },
         { id: "bi-feed", icon: ChartBar, name: "BI feed (Power BI / Tableau)", testId: "bi-feed-btn" },
         { id: "sustainability", icon: ChartLine, name: "Sustainability & ESG", testId: "sustainability-btn" },
+
+        { divider: true, label: "Workflow & Alerts" },
+        { id: "templates", icon: FileText, name: t("nav.templates"), testId: "templates-btn" },
+        ...(user?.role !== "receptionist" ? [{ id: "approvals", icon: ShieldCheck, name: t("nav.approvals"), testId: "approval-queue-btn" }] : []),
+        { id: "alerts", icon: Bell, name: t("nav.alerts"), testId: "notification-settings-btn" },
         { id: "copilot", icon: Sparkle, name: "AI copilot library", testId: "copilot-btn" },
       ],
     },
@@ -3087,7 +3114,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
   };
   const gatedNavigation = menuSections.map(section => ({
     ...section,
-    items: section.items.filter(it => canSeeSidebar(it.testId)),
+    items: section.items.filter(it => it.divider || canSeeSidebar(it.testId)),
   })).filter(section => section.items.length > 0);
 
   // Flatten gated navigation into a Command Palette catalogue
@@ -3243,7 +3270,20 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                     />
                   </button>
                 )}
-                {reallyOpen && section.items.map((item) => (
+                {reallyOpen && section.items.map((item) => {
+                  // Render sub-section dividers (label-only items)
+                  if (item.divider) {
+                    return (
+                      <div
+                        key={`div-${item.label}`}
+                        className="px-4 pt-3 pb-1 text-[9px] uppercase tracking-[0.18em] text-stone-600 font-semibold select-none"
+                        data-testid={`sidebar-divider-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        {item.label}
+                      </div>
+                    );
+                  }
+                  return (
                   <button
                     key={item.id}
                     onClick={() => {
@@ -3263,7 +3303,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                     <item.icon size={16} weight={activeView === item.id ? "fill" : "regular"} />
                     {tNav(item)}
                   </button>
-                ))}
+                  );
+                })}
               </div>
             );
           })}
@@ -3526,19 +3567,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           />
         )}
 
-        {/* Image AI Cleanliness Scoring (HK) */}
-        {activeView === "image-ai" && (
-          <ImageAIPanel
-            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
-          />
-        )}
+        {/* Image AI Cleanliness Scoring — merged into Housekeeping hub */}
 
-        {/* HK Turnover Kanban with AI Auto-Approval */}
-        {activeView === "hk-turnover" && (
-          <HkTurnoverPanel
-            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
-          />
-        )}
+        {/* HK Turnover — merged into Housekeeping hub */}
 
         {/* AI Pricing Explainability */}
         {activeView === "pricing-explain" && (
@@ -3871,19 +3902,35 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <StockManagementPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
-        {/* Housekeeping */}
-        {activeView === "housekeeping" && (
-          <HousekeepingPanel properties={properties} activePropertyId={activePropertyId} />
+        {/* Housekeeping Hub — merged: Rooms · Turnover · Route · Checklists · AI Score · QR · Laundry */}
+        {["housekeeping", "hk-turnover", "hk-route", "cleaning-checklists",
+          "image-ai", "room-qr", "laundry", "laundry-settings"].includes(activeView) && (
+          <HousekeepingHubPanel
+            properties={properties}
+            activePropertyId={activePropertyId}
+            user={user}
+            permissions={permissions}
+            initialTab={{
+              "housekeeping": "rooms",
+              "hk-turnover": "turnover",
+              "hk-route": "route",
+              "cleaning-checklists": "checklists",
+              "image-ai": "ai-score",
+              "room-qr": "qr",
+              "laundry": "laundry",
+              "laundry-settings": "laundry-cfg",
+            }[activeView] || "rooms"}
+          />
         )}
 
-        {activeView === "hk-route" && (
+        {activeView === "hk-route" && false && (
           <HousekeepingRoutePanel
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
           />
         )}
 
-        {activeView === "room-qr" && (
+        {activeView === "room-qr" && false && (
           <RoomQRPanel
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
@@ -3941,7 +3988,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           </div>
         )}
 
-        {activeView === "cleaning-checklists" && (
+        {activeView === "cleaning-checklists" && false && (
           <div className="p-6">
             <CleaningChecklistsPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
@@ -4484,8 +4531,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <div className="p-6"><ComplianceRegister propertyId={activePropertyId} user={user} /></div>
         )}
 
-        {/* Laundry Management */}
-        {activeView === "laundry" && (
+        {/* Laundry Management — merged into Housekeeping hub */}
+        {activeView === "laundry" && false && (
           <div className="p-6"><LaundryManagement propertyId={activePropertyId} user={user} permissions={permissions} /></div>
         )}
 
@@ -4603,7 +4650,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "group-blocks" && <GroupBlocksPanel activePropertyId={activePropertyId} />}
 
         {/* Iter 165.4 — Laundry Settings (Providers + Contracts with Per Piece / Flat Rate / Hybrid pricing) */}
-        {activeView === "laundry-settings" && <LaundrySettingsPanel activePropertyId={activePropertyId} />}
+        {activeView === "laundry-settings" && false && <LaundrySettingsPanel activePropertyId={activePropertyId} />}
 
         {/* Onboarding Wizard */}
         {activeView === "onboarding" && (

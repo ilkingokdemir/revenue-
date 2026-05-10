@@ -33,6 +33,7 @@ export const SentimentHeatmapPanel = L(() => import("./components/dashboard/Sent
 export const SelfCheckInPipelinePanel = L(() => import("./components/dashboard/SelfCheckInPipelinePanel"));
 export const BrandPortalPanel = L(() => import("./components/dashboard/BrandPortalPanel"));
 export const OpsV2Panel = L(() => import("./components/dashboard/OpsV2Panel"));
+export const HousekeepingHubPanel = L(() => import("./components/dashboard/HousekeepingHubPanel"));
 export const ForecastV2Panel = L(() => import("./components/dashboard/ForecastV2Panel"));
 export const AnomalyPanel = L(() => import("./components/dashboard/AnomalyPanel"));
 export const TippingPanel = L(() => import("./components/dashboard/TippingPanel"));

@@ -5,6 +5,16 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-13 (iter 275 — Flexkeeping Automation Suite)
+- **Otomasyon Kuralları** (NEW — Flexkeeping Automation Suite parity)
+  - Backend `automation_rules.py`: event-driven rule engine, TRIGGER_CATALOG (8), ACTION_CATALOG (6), OPERATORS (8). Endpoints under `/api/automation/v2/*` (separate from legacy automation).
+  - Exposed `fire_event(db, event, payload)` for other modules to call. Wired into:
+    - `bookings.py` → fires `booking_created` after every successful booking
+    - `glitch_log.py` → fires `glitch_critical` when severity=critical
+  - Action execution: `create_task` / `create_glitch` / `amenity_request` / `notify_role` / `set_room_status` / `tag_booking`. Template substitution (`{guest_name}` → payload).
+  - Frontend `AutomationRulesPanel.js`: rule cards with last-run status, enable/disable toggle, create modal (trigger + AND-conditions builder + actions builder), runs history modal.
+  - **36/36 backend testi geçti + frontend %100 doğrulandı** (iteration_273.json).
+
 ### 2026-05-13 (iter 274 — Flexkeeping parity)
 - **Glitch Log & Vardiya Devri** (NEW — Flexkeeping-style)
   - Backend `glitch_log.py`: CRUD + acknowledge + handover endpoints. Severity/department/shift enum validation, idempotent ack via `$addToSet`.

@@ -46,7 +46,7 @@ import {
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
   KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
-  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
+  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
@@ -2758,6 +2758,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { divider: true, label: "Quality Assurance" },
         { id: "glitch-log", icon: Warning, name: "Glitch log & devir", testId: "glitch-log-btn" },
         { id: "sops", icon: BookOpen, name: "SOP kütüphanesi", testId: "sops-btn" },
+        { id: "automation-rules", icon: Lightning, name: "Otomasyon kuralları", testId: "automation-rules-btn" },
       ],
     },
     {
@@ -3485,6 +3486,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* SOP Library (Standard Operating Procedures) */}
         {activeView === "sops" && (
           <SopsPanel propertyId={activePropertyId || "all"} user={user} />
+        )}
+
+        {/* Automation Rules (event-driven workflows) */}
+        {activeView === "automation-rules" && (
+          <AutomationRulesPanel propertyId={activePropertyId || "all"} user={user} />
         )}
 
         {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}

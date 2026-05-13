@@ -858,6 +858,11 @@ api_router.include_router(create_glitch_log_router(db, require_roles))
 from routes.sops import create_sops_router
 api_router.include_router(create_sops_router(db, require_roles))
 
+from routes.automation_rules import create_automation_router, fire_event as _fire_event
+api_router.include_router(create_automation_router(db, require_roles))
+# Expose for other modules to import: routes.automation_rules.fire_event
+__all__ = ["_fire_event"]
+
 from routes.group_rooming import create_group_rooming_router
 api_router.include_router(create_group_rooming_router(db, require_roles))
 

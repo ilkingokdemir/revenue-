@@ -1140,6 +1140,23 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         await db.bookings.insert_one(doc)
         doc.pop("_id", None)
 
+        # Fire automation rules (Flexkeeping-style event dispatcher)
+        try:
+            from routes.automation_rules import fire_event
+            asyncio.create_task(fire_event(db, "booking_created", {
+                "property_id": doc.get("property_id"),
+                "booking_ref": doc.get("booking_ref"),
+                "guest_name": doc.get("guest_name", ""),
+                "guest_email": doc.get("guest_email", ""),
+                "room_number": room.get("name", ""),
+                "tags": doc.get("tags", []),
+                "nights": doc.get("nights", 1),
+                "total_price": doc.get("total_price", 0),
+                "source": doc.get("source", "direct"),
+            }))
+        except Exception:
+            pass
+
         # Send confirmation email in background
         prop_doc = await db.properties.find_one({"id": booking_data.property_id}, {"_id": 0})
         prop_name_for_email = prop_doc.get("name", "Hotel") if prop_doc else "Hotel"

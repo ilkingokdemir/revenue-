@@ -114,6 +114,23 @@ def create_glitch_log_router(db, require_roles):
             "acknowledged_by": [],
         }
         await db.glitch_log.insert_one(doc)
+
+        # Fire automation for critical glitches
+        if body.severity == "critical":
+            try:
+                from routes.automation_rules import fire_event
+                import asyncio as _asyncio
+                _asyncio.create_task(fire_event(db, "glitch_critical", {
+                    "property_id": doc.get("property_id"),
+                    "title": doc.get("title"),
+                    "department": doc.get("department"),
+                    "shift": doc.get("shift"),
+                    "related_room": doc.get("related_room", ""),
+                    "related_booking_ref": doc.get("related_booking_ref", ""),
+                }))
+            except Exception:
+                pass
+
         doc.pop("_id", None)
         return doc
 

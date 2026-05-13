@@ -1,0 +1,74 @@
+{
+  "summary": "Completed testing of Guest CRM 360 (Revinate-killer) and Channel Manager v2 (OTA adapter framework) - Iteration 275. All 22 backend API tests passed. Frontend UI verified with all required data-testid attributes present and functional. Turkish UI working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration275_crm_channels_v2.py",
+    "/app/test_reports/pytest/pytest_iteration275_crm_channels_v2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration275_crm_channels_v2.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 tests passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test bookings created for CRM profile testing. Channel sync jobs created during testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "CRM 360 and Channel Manager v2 features fully tested. Both features accessible via sidebar navigation (Guests > Guest CRM 360, Revenue > Channels & Parity > Channel Manager v2). All data-testid attributes verified.",
+  "features_tested": {
+    "crm_360_backend": [
+      "GET /api/crm/profile/{guest_email} - returns 360° view with stats (total_stays, lifetime_value, days_since_last_stay, properties_visited), lifecycle stage, and computed segments",
+      "GET /api/crm/segments - aggregates up to 500 guests, returns counts per segment (champion: 1, repeat: 95, first-time: 404, lapsed: 229)",
+      "GET /api/crm/winback/candidates?days_inactive=N - returns guests sorted by lifetime_value desc",
+      "POST /api/crm/winback/queue - queues emails into guest_campaigns collection (status='queued')",
+      "Role-based access: receptionist can read profile, manager/admin required for segments and winback"
+    ],
+    "crm_360_frontend": [
+      "Panel accessible via Guests > Guest CRM 360 in sidebar",
+      "data-testid='crm-360-panel' present",
+      "8 segment cards with data-testid='crm-seg-{name}' (vip, champion, advocate, repeat, first-time, lapsed, dormant, at-risk)",
+      "Winback section with data-testid='winback-days' dropdown and data-testid='winback-queue-btn' button",
+      "Member list shows 50 guests per segment with name, email, lifetime_value, last_stay",
+      "Turkish UI labels (Misafir Profilleri & Segmentler, Win-Back Kampanya, etc.)"
+    ],
+    "channels_v2_backend": [
+      "GET /api/channels/v2/adapters - lists 6 OTAs (Booking.com, Expedia, Airbnb, Agoda, Hotels.com, Google) with health_7d stats",
+      "POST /api/channels/v2/configure - validates adapter enum, stores credentials per adapter",
+      "POST /api/channels/v2/queue/push - enqueues job with validated adapter + job_type, fires async dispatch",
+      "POST /api/channels/v2/queue/{id}/retry - sets status back to pending and retries",
+      "GET /api/channels/v2/history - shows audit trail with ok/error/ota_ref",
+      "GET /api/channels/v2/health - returns by_adapter success/fail counts and queue (pending, failed)",
+      "Job status transitions: pending → in-flight → completed (or failed/pending with backoff)"
+    ],
+    "channels_v2_frontend": [
+      "Panel accessible via Revenue > Channels & Parity > Channel Manager v2 in sidebar",
+      "data-testid='channels-v2-panel' present",
+      "6 adapter cards with data-testid='adapter-{key}' showing name, protocol, rate_limit, health stats",
+      "3 tabs: OTA Adapterları, Kuyruk, Geçmiş with data-testid='channels-tab-{name}'",
+      "Test Sync buttons with data-testid='adapter-test-{key}' - clicking shows toast 'Test sync kuyruğa eklendi'",
+      "Queue tab shows jobs with status badges (completed/failed/pending/in-flight), retry buttons",
+      "History tab shows audit trail with timestamps, OTA refs, error details",
+      "Health summary showing Kuyrukta: N, Başarısız: N"
+    ]
+  },
+  "mocked_apis": {
+    "channel_manager_v2": "OTA calls are SIMULATED (80% success / 15% transient / 5% permanent). Real adapter SDKs (Booking.com, Expedia EQC, Airbnb) are hot-swappable when API credentials arrive."
+  },
+  "role_access_verified": {
+    "admin": "Full access to all CRM and Channels v2 endpoints",
+    "manager": "Full access to all CRM and Channels v2 endpoints (except configure which is admin-only)",
+    "receptionist": "Can access CRM profile only, denied access to segments, winback, and channels v2"
+  }
+}

@@ -46,7 +46,7 @@ import {
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
   KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
-  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, TeamChatPanel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
+  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, TeamChatPanel, GuestCRM360Panel, ChannelManagerV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
@@ -2707,6 +2707,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       color: "text-stone-500",
       items: [
         { id: "guest-profiles", icon: AddressBook, name: t("nav.guest_profiles"), testId: "guest-profiles-btn" },
+        { id: "crm-360", icon: Users, name: "Guest CRM 360", testId: "crm-360-btn" },
         { id: "guest-journey", icon: SignIn, name: t("nav.guest_journey"), testId: "guest-journey-btn" },
         { id: "guest-rfm", icon: Target, name: "RFM segmentation", testId: "guest-rfm-btn" },
         { id: "guest-prefs", icon: Heart, name: "Guest preferences", testId: "guest-prefs-btn" },
@@ -2785,6 +2786,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "ai-predictions", icon: Sparkle, name: "AI predictions", testId: "ai-predictions-btn" },
 
         { divider: true, label: "Channels & Parity" },
+        { id: "channels-v2", icon: CloudArrowUp, name: "Channel Manager v2", testId: "channels-v2-btn" },
         { id: "channel-revenue", icon: Lightning, name: "Open pricing & yield", testId: "channel-revenue-btn" },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity heatmap", testId: "parity-heatmap-btn" },
         { id: "ota-forecast", icon: TrendUp, name: "OTA stop-sell forecast", testId: "ota-forecast-btn" },
@@ -3510,6 +3512,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             <TeamChatPanel user={user} />
           </div>
         )}
+
+        {/* Guest CRM 360 (Revinate-killer) */}
+        {activeView === "crm-360" && <GuestCRM360Panel user={user} />}
+
+        {/* Channel Manager v2 (production OTA framework) */}
+        {activeView === "channels-v2" && <ChannelManagerV2Panel />}
 
         {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}
         {activeView === "forecast-v2" && (

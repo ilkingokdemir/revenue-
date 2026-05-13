@@ -866,6 +866,12 @@ __all__ = ["_fire_event"]
 from routes.team_chat import create_team_chat_router
 api_router.include_router(create_team_chat_router(db, require_roles))
 
+from routes.crm_360 import create_crm360_router
+api_router.include_router(create_crm360_router(db, require_roles))
+
+from routes.channels_v2 import create_channels_v2_router
+api_router.include_router(create_channels_v2_router(db, require_roles))
+
 from routes.group_rooming import create_group_rooming_router
 api_router.include_router(create_group_rooming_router(db, require_roles))
 

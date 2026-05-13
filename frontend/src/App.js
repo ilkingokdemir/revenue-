@@ -46,7 +46,7 @@ import {
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
   KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
-  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
+  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, TeamChatPanel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
@@ -2751,6 +2751,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
 
         { divider: true, label: "Staff" },
+        { id: "team-chat", icon: ChatText, name: "Team chat", testId: "team-chat-btn" },
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
         { id: "staff-ops", icon: Clock, name: "Staff clock-in & tips", testId: "staff-ops-btn" },
@@ -3491,6 +3492,23 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Automation Rules (event-driven workflows) */}
         {activeView === "automation-rules" && (
           <AutomationRulesPanel propertyId={activePropertyId || "all"} user={user} />
+        )}
+
+        {/* Team Chat (multi-channel internal communication) */}
+        {activeView === "team-chat" && (
+          <div className="p-5 max-w-[1400px] mx-auto">
+            <div className="mb-4">
+              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-1">
+                <ChatText size={12} weight="fill" className="text-blue-500" />
+                <span>Collaboration Suite</span>
+              </div>
+              <h1 className="text-2xl font-semibold text-stone-900">Team Chat</h1>
+              <p className="text-sm text-stone-500 mt-1 max-w-2xl">
+                Departman bazlı kanal sohbeti — vardiyalar arası iletişim, hızlı bildirim ve takip. Real-time polling (4sn).
+              </p>
+            </div>
+            <TeamChatPanel user={user} />
+          </div>
         )}
 
         {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}

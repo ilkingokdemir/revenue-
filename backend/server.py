@@ -863,6 +863,9 @@ api_router.include_router(create_automation_router(db, require_roles))
 # Expose for other modules to import: routes.automation_rules.fire_event
 __all__ = ["_fire_event"]
 
+from routes.team_chat import create_team_chat_router
+api_router.include_router(create_team_chat_router(db, require_roles))
+
 from routes.group_rooming import create_group_rooming_router
 api_router.include_router(create_group_rooming_router(db, require_roles))
 

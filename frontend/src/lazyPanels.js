@@ -37,6 +37,7 @@ export const HousekeepingHubPanel = L(() => import("./components/dashboard/House
 export const GlitchLogPanel = L(() => import("./components/dashboard/GlitchLogPanel"));
 export const SopsPanel = L(() => import("./components/dashboard/SopsPanel"));
 export const AutomationRulesPanel = L(() => import("./components/dashboard/AutomationRulesPanel"));
+export const TeamChatPanel = L(() => import("./components/dashboard/TeamChatPanel"));
 export const ForecastV2Panel = L(() => import("./components/dashboard/ForecastV2Panel"));
 export const AnomalyPanel = L(() => import("./components/dashboard/AnomalyPanel"));
 export const TippingPanel = L(() => import("./components/dashboard/TippingPanel"));

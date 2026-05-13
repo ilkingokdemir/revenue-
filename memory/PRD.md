@@ -5,6 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-13 (iter 276 — Flexkeeping Collaboration Suite)
+- **Internal Team Chat** (NEW — son kalan Flexkeeping suite)
+  - Backend `team_chat.py`: 6 default kanal otomatik seed'leniyor (general, front-office, housekeeping, maintenance, fnb, management). Channel kinds: general/department/property/direct. Role-based visibility (housekeeping rolü sadece HK kanalını görür; admin/manager hepsini).
+  - Mesajlar, read receipts (last_read_at per user), unread counts (own mesajlar sayılmıyor). DM channels: idempotent open-or-create.
+  - 6 endpoint: channels CRUD + messages CRUD + read + unread + dm.
+  - Frontend `TeamChatPanel.js`: Slack-style 3-panel layout (channel list + message stream + composer), avatar bubbles, 4-saniye polling, otomatik scroll-to-bottom, unread badge'leri.
+  - **18/18 backend testi + frontend %100** (iteration_274.json).
+- Sidebar: Operations > Staff altında "Team chat" girdisi.
+
 ### 2026-05-13 (iter 275 — Flexkeeping Automation Suite)
 - **Otomasyon Kuralları** (NEW — Flexkeeping Automation Suite parity)
   - Backend `automation_rules.py`: event-driven rule engine, TRIGGER_CATALOG (8), ACTION_CATALOG (6), OPERATORS (8). Endpoints under `/api/automation/v2/*` (separate from legacy automation).

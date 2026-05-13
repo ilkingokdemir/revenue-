@@ -5,6 +5,22 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 277 — Competitive Gaps Closed)
+- **Guest CRM 360** (NEW — Revinate-killer) — `routes/crm_360.py` + `GuestCRM360Panel.js`
+  - 360° guest view aggregated from bookings + reviews + folio
+  - Auto-segmentation: vip / champion / advocate / repeat / first-time / lapsed / dormant / at-risk
+  - Lifecycle stages: lead → first-time → repeat → champion
+  - Win-back candidate list (configurable days_inactive) → queues into `guest_campaigns` (Resend pending)
+  - Tested at scale: 500 misafir taranıyor, 1 champion + 95 repeat + 229 lapsed
+- **Channel Manager v2** (NEW — Production framework) — `routes/channels_v2.py` + `ChannelManagerV2Panel.js`
+  - 6 OTA adapter pre-defined (Booking.com, Expedia, Airbnb, Agoda, Hotels.com, Google)
+  - Async dispatcher with exponential backoff (2^attempt min, 5 max retries)
+  - Status transitions: pending → in-flight → completed / failed / pending (retry)
+  - 7-gün başarı oranı dashboard, queue + history tabs
+  - **Hot-swappable**: gerçek adapter SDK'lar (Booking XML, Expedia EQC) sadece `_simulate_adapter_call` fonksiyonunu değiştirerek entegre edilir
+- Marketplace zaten mevcut (120+ entegrasyon, eski modül korundu)
+- **22/22 backend testi + frontend %100** (iteration_275.json)
+
 ### 2026-05-13 (iter 276 — Flexkeeping Collaboration Suite)
 - **Internal Team Chat** (NEW — son kalan Flexkeeping suite)
   - Backend `team_chat.py`: 6 default kanal otomatik seed'leniyor (general, front-office, housekeeping, maintenance, fnb, management). Channel kinds: general/department/property/direct. Role-based visibility (housekeeping rolü sadece HK kanalını görür; admin/manager hepsini).

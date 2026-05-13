@@ -46,7 +46,7 @@ import {
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
   KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
-  OpsV2Panel, HousekeepingHubPanel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
+  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
@@ -186,6 +186,7 @@ import {
   SquaresFour,
   CurrencyDollar,
   BookOpen,
+  Warning,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2753,6 +2754,10 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "shift-scheduler", icon: CalendarBlank, name: "Shift scheduler", testId: "shift-scheduler-btn" },
         { id: "staff-performance", icon: Trophy, name: t("nav.staff_performance"), testId: "staff-performance-btn" },
         { id: "staff-ops", icon: Clock, name: "Staff clock-in & tips", testId: "staff-ops-btn" },
+
+        { divider: true, label: "Quality Assurance" },
+        { id: "glitch-log", icon: Warning, name: "Glitch log & devir", testId: "glitch-log-btn" },
+        { id: "sops", icon: BookOpen, name: "SOP kütüphanesi", testId: "sops-btn" },
       ],
     },
     {
@@ -3470,6 +3475,16 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
             properties={properties}
           />
+        )}
+
+        {/* Glitch Log & Shift Handover (Flexkeeping-style) */}
+        {activeView === "glitch-log" && (
+          <GlitchLogPanel propertyId={activePropertyId || "all"} />
+        )}
+
+        {/* SOP Library (Standard Operating Procedures) */}
+        {activeView === "sops" && (
+          <SopsPanel propertyId={activePropertyId || "all"} user={user} />
         )}
 
         {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}

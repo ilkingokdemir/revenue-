@@ -852,6 +852,12 @@ api_router.include_router(create_room_move_router(db, require_roles))
 from routes.lost_found_match import create_lost_found_match_router
 api_router.include_router(create_lost_found_match_router(db, require_roles))
 
+from routes.glitch_log import create_glitch_log_router
+api_router.include_router(create_glitch_log_router(db, require_roles))
+
+from routes.sops import create_sops_router
+api_router.include_router(create_sops_router(db, require_roles))
+
 from routes.group_rooming import create_group_rooming_router
 api_router.include_router(create_group_rooming_router(db, require_roles))
 

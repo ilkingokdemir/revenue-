@@ -34,6 +34,8 @@ export const SelfCheckInPipelinePanel = L(() => import("./components/dashboard/S
 export const BrandPortalPanel = L(() => import("./components/dashboard/BrandPortalPanel"));
 export const OpsV2Panel = L(() => import("./components/dashboard/OpsV2Panel"));
 export const HousekeepingHubPanel = L(() => import("./components/dashboard/HousekeepingHubPanel"));
+export const GlitchLogPanel = L(() => import("./components/dashboard/GlitchLogPanel"));
+export const SopsPanel = L(() => import("./components/dashboard/SopsPanel"));
 export const ForecastV2Panel = L(() => import("./components/dashboard/ForecastV2Panel"));
 export const AnomalyPanel = L(() => import("./components/dashboard/AnomalyPanel"));
 export const TippingPanel = L(() => import("./components/dashboard/TippingPanel"));

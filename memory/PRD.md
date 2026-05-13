@@ -5,6 +5,17 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-13 (iter 274 — Flexkeeping parity)
+- **Glitch Log & Vardiya Devri** (NEW — Flexkeeping-style)
+  - Backend `glitch_log.py`: CRUD + acknowledge + handover endpoints. Severity/department/shift enum validation, idempotent ack via `$addToSet`.
+  - Frontend `GlitchLogPanel.js`: filtered list (status/severity/shift/dept/days), create modal, handover packet modal grouped by severity.
+- **Digital SOPs Library** (NEW — Flexkeeping-style QA Suite)
+  - Backend `sops.py`: CRUD + publish + acknowledge + versioning (steps değişince version+1 ve acks reset).
+  - 9 kategori, role bazlı targeting, draft/published/archived statüleri.
+  - Frontend `SopsPanel.js`: arama, kategori/status filtre, step builder, detail modal (publish/archive/ack).
+- Sidebar: Operations altında yeni "**Quality Assurance**" alt-bölüm.
+- **52/52 backend + frontend %100** (iteration_272.json — note: iteration number reset by testing agent)
+
 ### 2026-05-09 (iter 272 — bugfix)
 - **Online Check-in Kiosk `/checkin-kiosk/all` Düzeltildi**
   - Bug: `kiosk-lookup/all` literal `"property_id":"all"` filtreliyordu; gerçek hiçbir rezervasyon eşleşmiyordu (1581 gerçek rezervasyondan 0).

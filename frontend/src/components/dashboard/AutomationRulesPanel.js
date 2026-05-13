@@ -62,13 +62,42 @@ export default function AutomationRulesPanel({ propertyId = "all", user }) {
             Olay tabanlı iş akışları — örn: <em>"check_in olduğunda + tag 'honeymoon' içeriyorsa → HK'ye amenity siparişi aç"</em>. Tek seferde kur, sonsuza dek çalışsın.
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="px-3 py-1.5 text-xs font-medium text-white bg-stone-900 rounded-lg hover:bg-stone-800 inline-flex items-center gap-1.5"
-          data-testid="automation-create-btn"
-        >
-          <Plus size={14} /> Yeni Kural
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              try {
+                const r = await axios.get(`${API}/suggest`, { withCredentials: true });
+                if (r.data.error) {
+                  toast.error(r.data.error);
+                  return;
+                }
+                const sugs = r.data.suggestions || [];
+                if (sugs.length === 0) {
+                  toast.info("AI önerisi bulunamadı");
+                  return;
+                }
+                if (confirm(`AI ${sugs.length} kural önerdi:\n\n${sugs.map(s => "• " + s.name).join("\n")}\n\nHepsini taslak olarak ekle?`)) {
+                  for (const s of sugs) {
+                    await axios.post(`${API}/rules`, { ...s, enabled: false }, { withCredentials: true });
+                  }
+                  toast.success(`${sugs.length} kural taslak olarak eklendi (devre dışı — incele ve aktifleştir)`);
+                  reload();
+                }
+              } catch (e) { toast.error("AI öneri alınamadı"); }
+            }}
+            className="px-3 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-lg hover:bg-stone-50 inline-flex items-center gap-1.5"
+            data-testid="automation-suggest-btn"
+          >
+            ✨ AI Önerileri Al
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-3 py-1.5 text-xs font-medium text-white bg-stone-900 rounded-lg hover:bg-stone-800 inline-flex items-center gap-1.5"
+            data-testid="automation-create-btn"
+          >
+            <Plus size={14} /> Yeni Kural
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -204,6 +233,8 @@ function CreateRuleModal({ catalog, onClose, onCreated }) {
     notify_role: ["role", "title", "body"],
     set_room_status: ["status"],
     tag_booking: ["tag"],
+    push_to_ota: ["adapters", "job_type"],
+    post_to_chat: ["channel", "body"],
   };
 
   return (

@@ -360,6 +360,21 @@ def create_rates_grid_router(db, require_roles):
 
             pms_synced += 1
             queued += 1
+
+            # Fire automation event for owner rate override
+            try:
+                from routes.automation_rules import fire_event
+                import asyncio as _asyncio
+                _asyncio.create_task(fire_event(db, "rate_override_set", {
+                    "property_id": property_id,
+                    "room_type_id": room_type_id,
+                    "date": d,
+                    "new_rate": float(effective),
+                    "previous_rate": prev_rate,
+                    "ai_rate": ai_at_submit,
+                }))
+            except Exception:
+                pass
         return {"queued": queued, "pms_synced": pms_synced}
 
     @router.get("/rates/grid/history/{property_id}/{date}")

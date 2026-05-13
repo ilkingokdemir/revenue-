@@ -5,6 +5,14 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 278 — Closed-loop Automation + AI Suggest)
+- **`push_to_ota` action** — Automation rules artık Channel Manager v2 kuyruğuna direkt iş gönderiyor. Her tetiklenmede Booking/Expedia/Airbnb'ye fiyat/stok push'ı otomatik. created_by='automation:{rule_id}' ile takip edilebilir.
+- **`post_to_chat` action** — Otomasyon Team Chat'e yazıyor. ⚡ prefixli özel author isim, template substitution destekli. Misafir adı, oda no, fiyat değişimi gibi tüm payload alanları kullanılabilir.
+- **`rate_override_set` trigger** — Owner My Rates grid'de submit-to-pms yapınca otomatik ateşleniyor. Kapalı-çevrim revenue management: tek tıkla → fiyat → OTA + Slack/Chat notify.
+- **AI-Suggested Rules** (NEW) — `GET /api/automation/v2/suggest` endpoint'i son 30 günü analiz edip GPT-4o-mini ile 3-5 kural önerisi sunuyor. Frontend'de "✨ AI Önerileri Al" butonu — onaylanca toplu disabled olarak ekliyor.
+- **Test sonucu**: rate_override_set event → push_to_ota (2 adapter kuyrukta) + post_to_chat (#management'a mesaj) + AI 4 öneri üretti (VIP Booking Alert, Last-Minute Promo, Post-Stay Feedback, Glitch Follow-up).
+- **15/15 backend testi + frontend %100** (iteration_276.json) - sıfır kritik/minör hata.
+
 ### 2026-05-15 (iter 277 — Competitive Gaps Closed)
 - **Guest CRM 360** (NEW — Revinate-killer) — `routes/crm_360.py` + `GuestCRM360Panel.js`
   - 360° guest view aggregated from bookings + reviews + folio

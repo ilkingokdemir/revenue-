@@ -162,6 +162,13 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - **Token segregation**: owner JWT has `type='owner_access'`, cannot read staff endpoints; staff `access` tokens cannot read owner endpoints.
 - Frontend `OwnerSelfServiceApp` (login + KPI cards + monthly table + PDF download per month); admin OwnerPortalPanel got 'PIN oluştur' button.
 
+## Recent Additions (Iter 283, Feb 14 2026) — Carbon Reporting v2 (Green Key / Green Globe)
+- **`GET /api/esg/{property_id}/scope-breakdown?year=YYYY`** — GHG Protocol Scope 1/2/3 emissions split with factors used + months_with_data.
+- **`GET /api/esg/{property_id}/yoy?year=YYYY`** — year-over-year change % for electricity/gas/water/waste.
+- **`POST|GET /api/esg/{property_id}/offset-purchases`** — log and list voluntary carbon offset purchases (provider, tonnes, spend).
+- **`GET /api/esg/{property_id}/report.pdf?year=YYYY`** — A4 annual carbon report PDF (Green Key / Green Globe submission-ready) with headline metrics + Scope breakdown table + YoY change + emission factors disclosure.
+- Frontend `CarbonReportingV2Panel`: KPI cards (gross / offset / net / coverage), 3-color stacked bar for Scope split, YoY table with TrendUp/Down indicators, offset purchase list + add modal, PDF download button.
+
 ## Recent Additions (Iter 281, Feb 14 2026) — MICE → BEO Handoff
 - **`POST /api/meetings/{id}/generate-beo`** — one-click sales-to-ops handoff: creates a draft `banquet_orders` record pre-filled from the meeting (event_name, date, guest_count, venue from first meeting_space line item, menu from F&B items, AV items, beverages auto-extracted from bar-containing labels, 2 contacts: client + sales lead). Idempotent. Only fires on confirmed/invoiced/completed.
 - Meeting record gets stamped with `beo_id` + `beo_generated_at`.

@@ -214,6 +214,14 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 296 (Backend Refactoring Sprint 2 — Batch 1: AI + Security + Finance) — 18 files moved, all smoke-tested 200 OK
+- **Moved to `routes/ai/`** (2 files): `ai_predictions.py`, `agents_b2b.py`
+- **Created `routes/security/`** subpackage (2 files): `audit_trail.py`, `gdpr.py`
+- **Created `routes/finance_ext/`** subpackage (14 files): `accounting`, `accounting_advanced`, `accounting_export`, `bank_reconciliation`, `cashflow`, `deposit_automation`, `deposit_ledger`, `deposit_policies`, `finance`, `finance_pl`, `payments`, `tax_config`, `tax_presets`, `tax_reports_v2`
+- **Import path fixes**: 15 server.py imports + 2 cross-route imports in `walkin.py` (which uses `tax_config._calculate_taxes`)
+- **Verification**: Backend boots clean, `/api/finance/dashboard/{pid}`, `/api/audit-trail`, `/api/agents/{pid}`, `/api/ai-predictions/cancel-risk/{pid}`, `/api/deposit-policies/?property_id=...`, `/api/finance/adjustment-categories` all return 200 OK. Zero regression.
+- **Remaining**: ~214 flat route files still pending migration (see `REORGANIZATION_PLAN.md`).
+
 ### Iter 295 (Auto-Seed Competitors for All Properties) — 45 inserted
 - **Yapılan**: `/app/backend/scripts/seed_competitors_all.py` one-shot script — her aktif property için `discover_nearby_hotels()` ile Booking.com'dan en yakın 15 candidate çekti, deduplicate + self-filter sonrası en iyi 5'i `market_competitors`'a kaydetti.
 - **Sonuç**: 9 property × 5 competitor = **45 gerçek otel kaydı** (Holiday Inn London Kensington, Locke at Broken Wharf, STG Hotel Oxford Street, The Megaro King's Cross, Zedwell Piccadilly, vb. — gerçek Booking.com URL + stars + review_score).

@@ -39,14 +39,14 @@ from routes.guest_app import create_guest_app_router
 from routes.smart_locks import create_smart_locks_router
 from routes.setup_wizard import create_setup_wizard_router
 from routes.stock import create_stock_router
-from routes.accounting import create_accounting_router
-from routes.accounting_advanced import create_accounting_advanced_router
-from routes.bank_reconciliation import create_bank_reconciliation_router
+from routes.finance_ext.accounting import create_accounting_router
+from routes.finance_ext.accounting_advanced import create_accounting_advanced_router
+from routes.finance_ext.bank_reconciliation import create_bank_reconciliation_router
 from routes.enhanced_features import create_enhanced_features_router
 from routes.pos import create_pos_router
 from routes.pos_advanced import create_pos_advanced_router
 from routes.pos_ai import create_pos_ai_router
-from routes.payments import create_payments_router
+from routes.finance_ext.payments import create_payments_router
 from routes.terminal import create_terminal_router
 from routes.auth_routes import create_auth_router
 from routes.connections import create_connections_router
@@ -64,7 +64,7 @@ from routes.shifts import create_shifts_router, create_shifts_v2_router
 from routes.rates_grid import create_rates_grid_router
 from routes.workforce_extras import create_workforce_extras_router
 from routes.notifications import create_notifications_router
-from routes.finance import create_finance_router
+from routes.finance_ext.finance import create_finance_router
 from routes.my_tasks import create_my_tasks_router
 from routes.lost_found import create_lost_found_router
 from routes.events import create_events_router
@@ -94,7 +94,7 @@ from routes.upsell_engine import create_upsell_router
 from routes.rate_scraper import create_rate_scraper_router
 from routes.enhanced_dashboard import create_enhanced_dashboard_router
 from routes.reports_hub import create_reports_hub_router
-from routes.finance_pl import create_finance_pl_router
+from routes.finance_ext.finance_pl import create_finance_pl_router
 from routes.shift_scheduler import create_shift_scheduler_router
 from routes.pass_over import create_pass_over_router
 from routes.compliance import create_compliance_router
@@ -127,11 +127,11 @@ from routes.lock_sdk import create_lock_sdk_router
 from routes.recipe_cogs import create_recipe_cogs_router
 from routes.voice_concierge import create_voice_concierge_router
 from routes.whatsapp_voice import create_whatsapp_voice_router
-from routes.ai_predictions import create_ai_predictions_router
+from routes.ai.ai_predictions import create_ai_predictions_router
 from routes.laundry import create_laundry_router
 from routes.payroll import create_payroll_router
 from routes.expenses import create_expenses_router
-from routes.cashflow import create_cashflow_router
+from routes.finance_ext.cashflow import create_cashflow_router
 from routes.marketplace import create_marketplace_router
 from routes.arrivals import create_arrivals_router
 from routes.contracts import create_contracts_router
@@ -633,7 +633,7 @@ roles_router = create_roles_router(db, require_roles, get_current_user)
 api_router.include_router(roles_router)
 imports_router = create_imports_router(db, require_roles, get_current_user)
 api_router.include_router(imports_router)
-from routes.audit_trail import create_audit_trail_router
+from routes.security.audit_trail import create_audit_trail_router
 audit_trail_router = create_audit_trail_router(db)
 api_router.include_router(audit_trail_router)
 from routes.collisions import create_collisions_router
@@ -648,10 +648,10 @@ api_router.include_router(oos_router)
 from routes.city_ledger import create_city_ledger_router
 city_ledger_router = create_city_ledger_router(db, resend)
 api_router.include_router(city_ledger_router)
-from routes.tax_config import create_tax_config_router
+from routes.finance_ext.tax_config import create_tax_config_router
 tax_config_router = create_tax_config_router(db)
 api_router.include_router(tax_config_router)
-from routes.deposit_policies import create_deposit_policies_router
+from routes.finance_ext.deposit_policies import create_deposit_policies_router
 deposit_policies_router = create_deposit_policies_router(db)
 api_router.include_router(deposit_policies_router)
 from routes.unified_inbox import create_unified_inbox_router
@@ -674,7 +674,7 @@ nightly_recap_router = create_nightly_recap_router(db, require_roles)
 api_router.include_router(nightly_recap_router)
 concierge_topics_router = create_concierge_topics_router(db, require_roles)
 api_router.include_router(concierge_topics_router)
-from routes.accounting_export import create_accounting_export_router
+from routes.finance_ext.accounting_export import create_accounting_export_router
 accounting_export_router = create_accounting_export_router(db, require_roles)
 api_router.include_router(accounting_export_router)
 from routes.currency_fx import create_currency_fx_router
@@ -686,7 +686,7 @@ api_router.include_router(rate_structure_router)
 from routes.groups import create_groups_router
 groups_router = create_groups_router(db)
 api_router.include_router(groups_router)
-from routes.gdpr import create_gdpr_router
+from routes.security.gdpr import create_gdpr_router
 gdpr_router = create_gdpr_router(db)
 api_router.include_router(gdpr_router)
 from routes.og_images import create_og_router
@@ -703,7 +703,7 @@ api_router.include_router(demo_seeder_router)
 from routes.night_audit_close import create_night_audit_close_router
 api_router.include_router(create_night_audit_close_router(db, require_roles))
 
-from routes.deposit_ledger import create_deposit_ledger_router
+from routes.finance_ext.deposit_ledger import create_deposit_ledger_router
 api_router.include_router(create_deposit_ledger_router(db, require_roles))
 
 from routes.commission_recon import create_commission_recon_router
@@ -740,7 +740,7 @@ from routes.card_vault import create_card_vault_router
 api_router.include_router(create_card_vault_router(db, require_roles))
 
 # Iter 158 — Deposit Automation (bridges deposit_policies + card_vault + folio_items)
-from routes.deposit_automation import create_deposit_automation_router
+from routes.finance_ext.deposit_automation import create_deposit_automation_router
 deposit_auto_router = create_deposit_automation_router(db, require_roles)
 api_router.include_router(deposit_auto_router)
 
@@ -831,7 +831,7 @@ api_router.include_router(create_service_recovery_router(db, require_roles))
 from routes.room_qr import create_room_qr_router
 api_router.include_router(create_room_qr_router(db, require_roles))
 
-from routes.tax_presets import create_tax_presets_router
+from routes.finance_ext.tax_presets import create_tax_presets_router
 api_router.include_router(create_tax_presets_router(db, require_roles))
 
 from routes.walkin import create_walkin_router
@@ -893,7 +893,7 @@ api_router.include_router(create_spaces_router(db, require_roles))
 from routes.extras_v1 import create_extras_router
 api_router.include_router(create_extras_router(db, require_roles))
 
-from routes.agents_b2b import create_agents_router
+from routes.ai.agents_b2b import create_agents_router
 api_router.include_router(create_agents_router(db, require_roles))
 
 from routes.extras_v2 import create_extras_v2_router
@@ -973,7 +973,7 @@ api_router.include_router(create_cancel_insurance_router(db, require_roles))
 from routes.group_rooming_wiz import create_group_rooming_router
 api_router.include_router(create_group_rooming_router(db, require_roles))
 
-from routes.tax_reports_v2 import create_tax_reports_router
+from routes.finance_ext.tax_reports_v2 import create_tax_reports_router
 api_router.include_router(create_tax_reports_router(db, require_roles))
 
 from routes.ci_slots import create_ci_slots_router

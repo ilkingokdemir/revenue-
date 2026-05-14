@@ -83,7 +83,7 @@ def create_walkin_router(db, require_roles):
 
             taxes_added, taxes_included, applied = 0.0, 0.0, []
             if tax_profile and base_rate > 0:
-                from routes.tax_config import _calculate_taxes
+                from routes.finance_ext.tax_config import _calculate_taxes
                 breakdown = _calculate_taxes(tax_profile, base_total, nights, guests, "", "room")
                 taxes_added = breakdown["taxes_added"]
                 taxes_included = breakdown["taxes_included"]
@@ -150,7 +150,7 @@ def create_walkin_router(db, require_roles):
         taxes_added = 0.0
         applied: List[Dict] = []
         if tax_profile:
-            from routes.tax_config import _calculate_taxes
+            from routes.finance_ext.tax_config import _calculate_taxes
             breakdown = _calculate_taxes(tax_profile, base_total, nights, guests_count, "", "room")
             taxes_added = breakdown["taxes_added"]
             applied = breakdown["applied"]

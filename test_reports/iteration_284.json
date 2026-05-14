@@ -1,0 +1,208 @@
+{
+  "summary": "Completed testing of Iteration 284 - TÜRSAB Agency Portal, AI Web Concierge, AI Review Agent. All 44 backend tests passed (100%). Frontend UI tests verified: Agency login screen loads with Turkish UI, admin dashboard shows 3 new sidebar entries (Acenta portalı TÜRSAB, AI Web Concierge, AI Yorum Yanıt Ajanı), all 3 admin panels load correctly with property selectors and Turkish UI, agency portal login flow works end-to-end with 4 tabs (dashboard, contracts, book, bookings).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration284_agency_concierge_review.py",
+    "/app/test_reports/pytest/pytest_iteration284_agency_concierge_review.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration284_agency_concierge_review.py"
+  ],
+  "success_rate": {
+    "backend": "100% (44/44 passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "test_agency": "test-fe-agency@example.com / PIN: 397173"
+  },
+  "seed_data_creation": "Created test agencies via backend tests (TEST_Agency_* prefix), test contracts with stay_pay and early_bird promotions, test bookings with AG prefix",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 284 fully tested. Three new modules added: (1) TÜRSAB Agency Portal at /agency route with self-service login via email+PIN, dashboard, contracts, quote, booking creation. Admin manages agencies at /api/agencies and contracts at /api/agency-contracts. (2) AI Web Concierge at /api/web-concierge/* with public chat endpoint and admin KB management. (3) AI Review Agent at /api/review-agent/* with config, draft, publish, batch-draft, queue endpoints. All use Turkish UI. Token segregation verified: agency tokens cannot access staff endpoints and vice versa. 7-yat-6-öde promotion correctly calculates pay_nights=6 for 7-night stays.",
+  "features_tested": {
+    "tursab_agency_portal": {
+      "admin_crud": {
+        "endpoints": [
+          "POST /api/agencies (create with name+email)",
+          "GET /api/agencies (list)",
+          "GET /api/agencies/{id} (detail)",
+          "PATCH /api/agencies/{id} (update)",
+          "POST /api/agencies/{id}/set-credentials (generate 6-digit PIN)"
+        ],
+        "verified": [
+          "Agency creation with required fields",
+          "Duplicate email rejection (409)",
+          "Missing fields rejection (400)",
+          "PIN generation returns 6-digit numeric PIN",
+          "Password hash not exposed in responses"
+        ]
+      },
+      "contract_crud": {
+        "endpoints": [
+          "POST /api/agency-contracts (create)",
+          "GET /api/agency-contracts?agency_id=&property_id= (list with filters)",
+          "PATCH /api/agency-contracts/{id} (update)",
+          "DELETE /api/agency-contracts/{id} (delete)"
+        ],
+        "verified": [
+          "Contract creation with required fields",
+          "stay_pay promotion: {type:'stay_pay', stay:7, pay:6}",
+          "early_bird promotion: {type:'early_bird', days_ahead:30, discount_percent:10}",
+          "Filter by agency_id and property_id"
+        ]
+      },
+      "agency_self_service": {
+        "endpoints": [
+          "POST /api/agency-auth/login (email+PIN)",
+          "GET /api/agency-auth/me (profile)",
+          "GET /api/agency-auth/dashboard?year=YYYY (monthly breakdown)",
+          "GET /api/agency-auth/contracts (enriched list)",
+          "POST /api/agency-auth/quote (price calculation)",
+          "POST /api/agency-auth/book (create booking)",
+          "GET /api/agency-auth/bookings (list)"
+        ],
+        "verified": [
+          "Login returns access_token with type='agency_access'",
+          "Invalid PIN returns 401",
+          "Dashboard returns 12 months with revenue/commission",
+          "Contracts enriched with property_name, room_type_name, valid_now",
+          "Quote calculates pay_nights correctly for stay_pay promo (7 nights → 6 pay_nights)",
+          "total_gross = contract_rate * pay_nights",
+          "commission_amount = total_gross * commission_percent / 100",
+          "Booking ref starts with 'AG'",
+          "Booking stored with source='agency', agency_id, commission_amount"
+        ]
+      },
+      "token_segregation": {
+        "verified": [
+          "Agency token rejected on /api/auth/me (staff endpoint)",
+          "Staff token rejected on /api/agency-auth/me (agency endpoint)"
+        ]
+      }
+    },
+    "ai_web_concierge": {
+      "public_endpoints": {
+        "endpoints": [
+          "GET /api/web-concierge/widget-config/{property_id} (no auth)",
+          "POST /api/web-concierge/chat (no auth)"
+        ],
+        "verified": [
+          "Widget config auto-creates record for new property",
+          "Returns property_name, primary_color, welcome_message, agent_name",
+          "Chat returns reply, session_id, suggested_actions",
+          "Session persistence: multiple messages in same session",
+          "Fallback works when LLM unavailable (KB keyword match)"
+        ]
+      },
+      "admin_endpoints": {
+        "endpoints": [
+          "GET /api/web-concierge/knowledge/{property_id}",
+          "POST /api/web-concierge/knowledge/{property_id}",
+          "PATCH /api/web-concierge/knowledge/{kb_id}",
+          "DELETE /api/web-concierge/knowledge/{kb_id}",
+          "GET /api/web-concierge/sessions/{property_id}",
+          "GET /api/web-concierge/session/{session_id}",
+          "POST /api/web-concierge/config/{property_id}"
+        ],
+        "verified": [
+          "KB CRUD: create, update, delete Q&A items",
+          "Sessions list with message_count, first_user_message",
+          "Session detail returns full transcript",
+          "Config update for widget appearance"
+        ]
+      }
+    },
+    "ai_review_agent": {
+      "endpoints": [
+        "GET /api/review-agent/config/{property_id}",
+        "POST /api/review-agent/config/{property_id}",
+        "POST /api/review-agent/draft/{review_id}",
+        "POST /api/review-agent/publish/{review_id}",
+        "POST /api/review-agent/batch-draft/{property_id}",
+        "GET /api/review-agent/queue/{property_id}"
+      ],
+      "verified": [
+        "Config returns auto_respond_enabled, min/max_rating_for_auto, tone, sign_off, require_review_before_publish",
+        "Config update works",
+        "Batch draft generates drafts for un-responded reviews",
+        "Queue returns pending drafts"
+      ]
+    },
+    "frontend_ui": {
+      "agency_login_screen": {
+        "route": "/agency",
+        "verified": [
+          "data-testid='agency-login-screen' present",
+          "Email input (data-testid='agency-login-email')",
+          "PIN input (data-testid='agency-login-pin')",
+          "Submit button (data-testid='agency-login-submit')",
+          "Turkish UI: 'Acenta Portalı', 'TÜRSAB', 'PIN', 'Giriş Yap'"
+        ]
+      },
+      "agency_portal_app": {
+        "verified": [
+          "data-testid='agency-portal-app' after login",
+          "4 tabs: Pano, Kontratlarım, Rezervasyon Oluştur, Rezervasyonlarım",
+          "Dashboard shows 2026 performance with monthly breakdown",
+          "Logout button (data-testid='agency-logout')"
+        ]
+      },
+      "admin_sidebar_entries": {
+        "verified": [
+          "Acenta portalı (TÜRSAB) (data-testid='agency-portal-btn')",
+          "AI Web Concierge (data-testid='web-concierge-btn')",
+          "AI Yorum Yanıt Ajanı (data-testid='review-agent-btn')"
+        ]
+      },
+      "agency_portal_admin_panel": {
+        "verified": [
+          "data-testid='agency-portal-admin-panel' loads",
+          "Agencies table with TÜRSAB No, E-posta, Şehir, Komisyon, Login, PIN columns",
+          "Acenta Ekle button (data-testid='agency-add-btn')",
+          "Kontratlar tab"
+        ]
+      },
+      "web_concierge_admin_panel": {
+        "verified": [
+          "data-testid='web-concierge-admin-panel' loads",
+          "Property selector (data-testid='webc-property-select')",
+          "4 tabs: Yapılandırma, Bilgi Tabanı, Oturumlar, Embed Kodu",
+          "Config form with Ajan Adı, Mülk Adı, Birincil Renk, Karşılama Mesajı"
+        ]
+      },
+      "review_agent_panel": {
+        "verified": [
+          "data-testid='review-agent-panel' loads",
+          "Property selector (data-testid='ra-property-select')",
+          "Auto-respond toggle (data-testid='ra-auto-toggle')",
+          "Tone selector (data-testid='ra-tone-select')",
+          "Batch Taslak Üret button (data-testid='ra-batch-btn')",
+          "Bekleyen Taslaklar queue section"
+        ]
+      }
+    },
+    "regression_tests": {
+      "verified": [
+        "GET /api/owners works (iter 282)",
+        "GET /api/esg/{property_id}/dashboard works (iter 283)",
+        "GET /api/properties works",
+        "GET /api/room-types works"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "LLM (GPT-4o-mini via emergentintegrations) is real. Both web-concierge and review-agent gracefully fall back to keyword KB match / template responses when LLM unavailable."
+  }
+}

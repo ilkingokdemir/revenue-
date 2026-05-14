@@ -130,6 +130,11 @@ export const MeetingsSalesPanel = L(() => import("./components/dashboard/Meeting
 export const FnbPosHubPanel = L(() => import("./components/dashboard/FnbPosHubPanel"));
 export const CarbonReportingV2Panel = L(() => import("./components/dashboard/CarbonReportingV2Panel"));
 
+// ---------- COMPETITOR PARITY v6 (Iter 284 - TÜRSAB + AI Web Concierge + Review Agent) ----------
+export const AgencyPortalAdminPanel = L(() => import("./components/dashboard/AgencyPortalAdminPanel"));
+export const WebConciergeAdminPanel = L(() => import("./components/dashboard/WebConciergeAdminPanel"));
+export const ReviewAgentPanel = L(() => import("./components/dashboard/ReviewAgentPanel"));
+
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");
 export const IntegrationsMarketplace = N(() => import("./components/dashboard/IntegrationsMarketplace"), "IntegrationsMarketplace");

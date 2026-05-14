@@ -1026,6 +1026,18 @@ api_router.include_router(create_fnb_pos_router(db, require_roles))
 from routes.owner_self_service import create_owner_auth_router
 api_router.include_router(create_owner_auth_router(db, require_roles))
 
+# ===== TÜRSAB Agency Portal (Iter 284) =====
+from routes.agency_portal import create_agency_portal_router
+api_router.include_router(create_agency_portal_router(db, require_roles))
+
+# ===== AI 24/7 Web Concierge (Iter 284 - Eviivo parity) =====
+from routes.web_concierge import create_web_concierge_router
+api_router.include_router(create_web_concierge_router(db, require_roles))
+
+# ===== AI Review Agent (Iter 284 - Lighthouse parity) =====
+from routes.review_agent import create_review_agent_router
+api_router.include_router(create_review_agent_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

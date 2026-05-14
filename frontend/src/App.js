@@ -13,6 +13,7 @@ import SelfCheckInPage from "./SelfCheckInPage";
 import SelfCheckInV2Page from "./SelfCheckInV2Page";
 import TipPage from "./TipPage";
 import OwnerSelfServiceApp from "./components/owner/OwnerSelfServiceApp";
+import AgencyPortalApp from "./components/agency/AgencyPortalApp";
 import GuestPortalV2Page from "./GuestPortalV2Page";
 import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
@@ -72,6 +73,7 @@ import {
   BookingEngineV2Panel, OwnerPortalPanel, SpaActivitiesPanel, LoyaltyTiersPanel,
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
+  AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
@@ -2928,6 +2930,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "public-api", icon: Code, name: "Developer portal", testId: "public-api-btn" },
         { id: "partner-webhooks", icon: PlugsConnected, name: "Partner webhooks & API keys", testId: "partner-webhooks-btn" },
         { id: "owner-portal", icon: Buildings, name: "Sahip / yatırımcı portalı", testId: "owner-portal-btn" },
+        { id: "agency-portal", icon: Briefcase, name: "Acenta portalı (TÜRSAB)", testId: "agency-portal-btn" },
+        { id: "web-concierge", icon: ChatText, name: "AI Web Concierge", testId: "web-concierge-btn" },
+        { id: "review-agent", icon: Star, name: "AI Yorum Yanıt Ajanı", testId: "review-agent-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
@@ -3539,6 +3544,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <BookingEngineV2Panel propertyId={activePropertyId || "all"} />
         )}
         {activeView === "owner-portal" && <OwnerPortalPanel />}
+        {activeView === "agency-portal" && <AgencyPortalAdminPanel />}
+        {activeView === "web-concierge" && <WebConciergeAdminPanel />}
+        {activeView === "review-agent" && <ReviewAgentPanel />}
         {activeView === "spa-activities" && (
           <SpaActivitiesPanel propertyId={activePropertyId || "all"} />
         )}
@@ -4908,6 +4916,9 @@ function MainApp() {
 function App() {
   if (window.location.pathname === "/owner" || window.location.pathname.startsWith("/owner/")) {
     return <OwnerSelfServiceApp />;
+  }
+  if (window.location.pathname === "/agency" || window.location.pathname.startsWith("/agency/")) {
+    return <AgencyPortalApp />;
   }
   if (window.location.pathname === "/widget") {
     return <ReviewWidget />;

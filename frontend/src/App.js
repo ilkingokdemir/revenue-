@@ -70,6 +70,7 @@ import {
   CancelInsurancePanel, GroupRoomingWizPanel, TaxReportsV2Panel, CISlotsPanel, Tier1DashboardPanel,
   BookingEngineV2Panel, OwnerPortalPanel, SpaActivitiesPanel, LoyaltyTiersPanel,
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
+  MeetingsSalesPanel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
@@ -2817,6 +2818,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "events", icon: CalendarBlank, name: "Events & rooms", testId: "events-btn" },
         { id: "conference-sc", icon: Briefcase, name: "Conference S&C", testId: "conference-sc-btn" },
         { id: "banquet-orders", icon: CalendarBlank, name: "Banquet event orders", testId: "banquet-orders-btn" },
+        { id: "meetings-sales", icon: Briefcase, name: "Meeting & Events sales", testId: "meetings-sales-btn" },
         { id: "timeslots", icon: Sparkle, name: "Spa & activity slots", testId: "timeslots-btn" },
         { id: "spa-activities", icon: Sparkle, name: "Spa & aktivite rezervasyon", testId: "spa-activities-btn" },
       ],
@@ -3550,6 +3552,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         )}
         {activeView === "partner-webhooks" && <PartnerWebhooksPanel />}
         {activeView === "automation-analytics" && <AutomationAnalyticsPanel />}
+        {activeView === "meetings-sales" && (
+          <MeetingsSalesPanel propertyId={activePropertyId || "all"} />
+        )}
 
         {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}
         {activeView === "forecast-v2" && (

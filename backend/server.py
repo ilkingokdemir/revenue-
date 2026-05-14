@@ -1014,6 +1014,10 @@ api_router.include_router(create_webhooks_api_keys_router(db, require_roles))
 from routes.automation_analytics import create_automation_analytics_router
 api_router.include_router(create_automation_analytics_router(db, require_roles))
 
+# ===== Meeting & Events Sales (MICE pipeline) =====
+from routes.meetings_sales import create_meetings_router
+api_router.include_router(create_meetings_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

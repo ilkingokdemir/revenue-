@@ -14,11 +14,14 @@ Endpoints:
   GET   /api/owners/{owner_id}/units             — units assigned
   POST  /api/owners/{owner_id}/units             — assign units (rooms)
   GET   /api/owners/{owner_id}/statement         — monthly statement
+  GET   /api/owners/{owner_id}/statement.pdf     — monthly statement PDF
   GET   /api/owners/{owner_id}/performance       — YTD performance dashboard
 """
 from datetime import datetime, timezone
+import io
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 
@@ -140,5 +143,118 @@ def create_owner_portal_router(db, require_roles):
             "nights": sum(m["nights"] for m in months),
         }
         return {"owner_id": owner_id, "year": year, "months": months, "total": total}
+
+    @router.get("/{owner_id}/statement.pdf")
+    async def get_statement_pdf(owner_id: str, month: str = "",
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Generate a printable monthly statement PDF for the owner."""
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+
+        st = await get_statement(owner_id, month)
+        owner = await db.unit_owners.find_one({"id": owner_id}, {"_id": 0})
+        period = st["month"]
+
+        buf = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buf, pagesize=A4,
+            leftMargin=18 * mm, rightMargin=18 * mm,
+            topMargin=18 * mm, bottomMargin=18 * mm,
+            title=f"Owner Statement {period} — {st['owner_name']}",
+        )
+        styles = getSampleStyleSheet()
+        h1 = ParagraphStyle("h1", parent=styles["Heading1"],
+                            fontSize=16, leading=18, textColor=colors.HexColor("#0c0a09"))
+        small = ParagraphStyle("small", parent=styles["Normal"],
+                               fontSize=9, leading=11, textColor=colors.HexColor("#525252"))
+        muted = ParagraphStyle("muted", parent=styles["Normal"],
+                               fontSize=8, textColor=colors.HexColor("#737373"))
+        story = []
+
+        story.append(Paragraph("OWNER DISTRIBUTION STATEMENT", h1))
+        story.append(Paragraph(
+            f"<b>{st['owner_name']}</b> · {owner.get('company','') or '—'} · {owner.get('email','')}", small))
+        story.append(Paragraph(
+            f"Period: <b>{period}</b> · Units: <b>{st['unit_count']}</b> · "
+            f"Issued: {datetime.now(timezone.utc).strftime('%d %b %Y %H:%M')} UTC · "
+            f"By: {current_user.get('name', '-')}", small))
+        story.append(Spacer(1, 6 * mm))
+
+        # Summary table
+        summary = [
+            ["Description", "Amount (£)"],
+            ["Gross Revenue (all units)", f"{st['gross_revenue']:.2f}"],
+            ["Owner Share (Gross)", f"{st['owner_share_gross']:.2f}"],
+            [f"Less: Management Fee ({st['management_fee_percent']}%)", f"-{st['management_fee']:.2f}"],
+            ["Less: Operating Costs (est. 12%)", f"-{st['operating_costs_est']:.2f}"],
+            ["NET DISTRIBUTION", f"{st['net_distribution']:.2f}"],
+        ]
+        tbl = Table(summary, colWidths=[110 * mm, 50 * mm])
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0c0a09")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#dcfce7")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+            ("FONTSIZE", (0, -1), (-1, -1), 11),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#a8a29e")),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(tbl)
+        story.append(Spacer(1, 6 * mm))
+
+        # Performance metrics
+        story.append(Paragraph(
+            f"<b>Performance:</b> {st['bookings_count']} reservations · "
+            f"{st['nights_sold']} room-nights sold", small))
+        story.append(Spacer(1, 6 * mm))
+
+        # Bookings detail
+        if st["bookings"]:
+            story.append(Paragraph("<b>Reservations contributing to this period:</b>", small))
+            story.append(Spacer(1, 2 * mm))
+            detail = [["Ref", "Check-in", "Check-out", "Nights", "Total (£)"]]
+            for b in st["bookings"][:30]:
+                detail.append([
+                    b.get("booking_ref", "—"),
+                    b.get("check_in", ""),
+                    b.get("check_out", ""),
+                    str(b.get("nights", 1)),
+                    f"{float(b.get('total_price', 0)):.2f}",
+                ])
+            dtbl = Table(detail, colWidths=[34*mm, 30*mm, 30*mm, 20*mm, 30*mm])
+            dtbl.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f5f5f4")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("ALIGN", (3, 1), (-1, -1), "RIGHT"),
+                ("GRID", (0, 0), (-1, -1), 0.2, colors.HexColor("#d6d3d1")),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1),
+                 [colors.white, colors.HexColor("#fafaf9")]),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ]))
+            story.append(dtbl)
+
+        story.append(Spacer(1, 10 * mm))
+        story.append(Paragraph(
+            "Operating costs above are estimated at 12% of unit-revenue for indicative reporting only. "
+            "Final reconciliation will be issued with the year-end audited accounts. "
+            "Please contact the management office for any queries regarding this statement.",
+            muted))
+
+        doc.build(story)
+        buf.seek(0)
+        filename = f"owner_statement_{owner_id[:8]}_{period}.pdf"
+        return StreamingResponse(
+            iter([buf.getvalue()]),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
+        )
 
     return router

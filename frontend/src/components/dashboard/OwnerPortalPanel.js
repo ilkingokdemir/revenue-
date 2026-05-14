@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Buildings, Plus, X, ChartLine } from "@phosphor-icons/react";
+import { Buildings, Plus, X, ChartLine, FilePdf } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/owners`;
 
@@ -87,8 +87,17 @@ export default function OwnerPortalPanel() {
             <h3 className="text-sm font-semibold inline-flex items-center gap-1.5">
               <ChartLine size={14} /> Aylık Ekstre
             </h3>
-            <input type="month" value={month} onChange={e => { setMonth(e.target.value); if (selected) loadStatement(selected); }}
-                   className="text-xs px-2 py-1 border border-stone-300 rounded" data-testid="owner-month" />
+            <div className="flex items-center gap-2">
+              <input type="month" value={month} onChange={e => { setMonth(e.target.value); if (selected) loadStatement(selected); }}
+                     className="text-xs px-2 py-1 border border-stone-300 rounded" data-testid="owner-month" />
+              {selected && (
+                <a href={`${API}/${selected}/statement.pdf?month=${month}`} target="_blank" rel="noreferrer"
+                   data-testid="owner-pdf-btn"
+                   className="text-xs px-2 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded inline-flex items-center gap-1 hover:bg-rose-100">
+                  <FilePdf size={12} /> PDF
+                </a>
+              )}
+            </div>
           </div>
           {!statement && <div className="text-center py-12 text-stone-400 text-sm">Sol taraftan bir sahip seçin.</div>}
           {statement && (

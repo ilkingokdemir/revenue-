@@ -12,6 +12,7 @@ import ReviewCollectionPage from "./ReviewCollectionPage";
 import SelfCheckInPage from "./SelfCheckInPage";
 import SelfCheckInV2Page from "./SelfCheckInV2Page";
 import TipPage from "./TipPage";
+import OwnerSelfServiceApp from "./components/owner/OwnerSelfServiceApp";
 import GuestPortalV2Page from "./GuestPortalV2Page";
 import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
@@ -4899,6 +4900,9 @@ function MainApp() {
 }
 
 function App() {
+  if (window.location.pathname === "/owner" || window.location.pathname.startsWith("/owner/")) {
+    return <OwnerSelfServiceApp />;
+  }
   if (window.location.pathname === "/widget") {
     return <ReviewWidget />;
   }

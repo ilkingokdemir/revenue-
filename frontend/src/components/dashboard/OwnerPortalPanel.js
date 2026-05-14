@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Buildings, Plus, X, ChartLine, FilePdf } from "@phosphor-icons/react";
+import { Buildings, Plus, X, ChartLine, FilePdf, Key } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/owners`;
 
@@ -40,6 +40,17 @@ export default function OwnerPortalPanel() {
       const r = await axios.get(`${API}/${ownerId}/statement?month=${month}`, { withCredentials: true });
       setStatement(r.data);
     } catch (e) { toast.error("Ekstre yüklenemedi"); }
+  }
+
+  async function resetPin(ownerId) {
+    if (!window.confirm("Bu sahip için yeni bir self-service PIN oluşturulsun mu?")) return;
+    try {
+      const r = await axios.post(`${API}/${ownerId}/set-credentials`, { generate: true }, { withCredentials: true });
+      window.prompt("✅ PIN oluşturuldu. Sahibe güvenli kanal üzerinden iletin (bir daha gösterilmeyecek):", r.data.pin);
+      toast.success("PIN oluşturuldu");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "PIN oluşturulamadı");
+    }
   }
 
   return (
@@ -91,11 +102,18 @@ export default function OwnerPortalPanel() {
               <input type="month" value={month} onChange={e => { setMonth(e.target.value); if (selected) loadStatement(selected); }}
                      className="text-xs px-2 py-1 border border-stone-300 rounded" data-testid="owner-month" />
               {selected && (
-                <a href={`${API}/${selected}/statement.pdf?month=${month}`} target="_blank" rel="noreferrer"
-                   data-testid="owner-pdf-btn"
-                   className="text-xs px-2 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded inline-flex items-center gap-1 hover:bg-rose-100">
-                  <FilePdf size={12} /> PDF
-                </a>
+                <>
+                  <button onClick={() => resetPin(selected)}
+                          data-testid="owner-reset-pin"
+                          className="text-xs px-2 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded inline-flex items-center gap-1 hover:bg-amber-100">
+                    <Key size={12} /> PIN oluştur
+                  </button>
+                  <a href={`${API}/${selected}/statement.pdf?month=${month}`} target="_blank" rel="noreferrer"
+                     data-testid="owner-pdf-btn"
+                     className="text-xs px-2 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded inline-flex items-center gap-1 hover:bg-rose-100">
+                    <FilePdf size={12} /> PDF
+                  </a>
+                </>
               )}
             </div>
           </div>

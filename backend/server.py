@@ -1022,6 +1022,10 @@ api_router.include_router(create_meetings_router(db, require_roles))
 from routes.fnb_pos_hub import create_fnb_pos_router
 api_router.include_router(create_fnb_pos_router(db, require_roles))
 
+# ===== Owner Self-Service Login (Iter 282) =====
+from routes.owner_self_service import create_owner_auth_router
+api_router.include_router(create_owner_auth_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

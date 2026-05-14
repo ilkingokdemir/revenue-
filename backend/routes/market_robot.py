@@ -1912,6 +1912,51 @@ def create_market_robot_router(db, require_roles, resend=None):
         ).sort("scanned_at", -1).to_list(50)
         return {"logs": logs}
 
+    @router.post("/revenue/market-robot/auto-bootstrap")
+    async def auto_bootstrap(
+        current_user: dict = Depends(require_roles("admin", "manager"))
+    ):
+        """Enable auto-scan for every property that currently has no config or has
+        enabled=None / missing interval. Idempotent: safe to call repeatedly."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        properties = await db.properties.find({}, {"_id": 0}).to_list(500)
+        fixed, seeded = 0, 0
+        for p in properties:
+            pid = p.get("id")
+            if not pid or pid in ("all", "default"):
+                continue
+            existing = await db.market_robot_config.find_one({"property_id": pid}, {"_id": 0})
+            if existing:
+                patch = {}
+                if existing.get("enabled") is None:
+                    patch["enabled"] = True
+                if existing.get("scan_interval_minutes") is None:
+                    patch["scan_interval_minutes"] = 60
+                if not existing.get("city"):
+                    patch["city"] = p.get("city") or "London"
+                if not existing.get("language"):
+                    patch["language"] = "en-gb"
+                if patch:
+                    patch["updated_at"] = now_iso
+                    patch["updated_by"] = current_user.get("name", "auto-bootstrap")
+                    await db.market_robot_config.update_one({"property_id": pid}, {"$set": patch})
+                    fixed += 1
+            else:
+                await db.market_robot_config.insert_one({
+                    "property_id": pid,
+                    "enabled": True,
+                    "scan_interval_minutes": 60,
+                    "city": p.get("city") or "London",
+                    "language": "en-gb",
+                    "auto_pricing": False,
+                    "days_ahead": 365,
+                    "total_scans": 0,
+                    "created_at": now_iso,
+                    "created_by": current_user.get("name", "auto-bootstrap"),
+                })
+                seeded += 1
+        return {"fixed": fixed, "seeded": seeded, "checked_at": now_iso}
+
     # ==================== OCCUPANCY & PICKUP + RECENT BOOKINGS ====================
 
     @router.get("/revenue/market-robot/{property_id}/occupancy-pickup")
@@ -4184,8 +4229,48 @@ Date range: {date_from} to {date_to}."""
             await scanner.resume_if_active()
         except Exception as e:
             logger.warning(f"Smart Scanner resume skipped: {e}")
+        _bootstrap_tick = 0
         while True:
             try:
+                # === Auto-bootstrap missing configs every 10 loops (~10 min) ===
+                # Ensures new properties auto-enable continuous scanning without admin action.
+                _bootstrap_tick += 1
+                if _bootstrap_tick % 10 == 1:
+                    try:
+                        now_iso = datetime.now(timezone.utc).isoformat()
+                        props_list = await db.properties.find({}, {"_id": 0}).to_list(500)
+                        for pp in props_list:
+                            pid_ = pp.get("id")
+                            if not pid_ or pid_ in ("all", "default"):
+                                continue
+                            existing_ = await db.market_robot_config.find_one({"property_id": pid_}, {"_id": 0})
+                            if existing_ is None:
+                                await db.market_robot_config.insert_one({
+                                    "property_id": pid_,
+                                    "enabled": True,
+                                    "scan_interval_minutes": 60,
+                                    "city": pp.get("city") or "London",
+                                    "language": "en-gb",
+                                    "auto_pricing": False,
+                                    "days_ahead": 365,
+                                    "total_scans": 0,
+                                    "created_at": now_iso,
+                                    "created_by": "auto-bootstrap-loop",
+                                })
+                                logger.info(f"🌱 Auto-bootstrapped market_robot_config for {pid_}")
+                            elif existing_.get("enabled") is None or existing_.get("scan_interval_minutes") is None:
+                                await db.market_robot_config.update_one(
+                                    {"property_id": pid_},
+                                    {"$set": {
+                                        "enabled": True if existing_.get("enabled") is None else existing_.get("enabled"),
+                                        "scan_interval_minutes": existing_.get("scan_interval_minutes") or 60,
+                                        "updated_at": now_iso,
+                                        "updated_by": "auto-bootstrap-loop",
+                                    }},
+                                )
+                                logger.info(f"🌱 Auto-bootstrap repaired config for {pid_}")
+                    except Exception as e:
+                        logger.warning(f"Auto-bootstrap tick error: {e}")
                 # === City scans ===
                 configs = await db.market_robot_config.find({"enabled": True}, {"_id": 0}).to_list(500)
                 now = datetime.now(timezone.utc)

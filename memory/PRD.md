@@ -214,6 +214,13 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 292 (Market Robot Continuous Scan Bug Fix) — 4/4 pass (curl)
+- **Root cause**: 5 property'nin `market_robot_config.enabled` alanı **None** (False değil, eksik) — auto-scan loop `{"enabled": True}` filtresi kullandığından bu kayıtları atlıyordu. Sonuç: aldgate-flats + camden-suites taranıyordu (en son 18:52), diğerleri 24 Nisan'da takılıydı. Loop kodu aslında doğru çalışıyordu, sadece konfig eksikti.
+- **Fix 1 - Backfill**: One-shot script — 5 property fix + 1 seed → tüm aktif property'ler artık enabled=True, interval=60dk, city/language default'larla.
+- **Fix 2 - Auto-bootstrap loop**: `auto_scan_loop` her 10 cycle'da (~10dk) `db.properties`'i taraması ekleniyor. Config'i olmayan veya enabled=None olan property'leri otomatik enable ediyor. Yeni property eklendiğinde admin müdahalesine gerek yok.
+- **Fix 3 - Admin endpoint**: `POST /api/revenue/market-robot/auto-bootstrap` — idempotent fix komutu, manuel tetikleme için.
+- **Verification**: Loglarda `🛰️ Auto city-scan triggered for whitechapel-grand` (en uzun süredir taranmayan) gözüktü. Health endpoint kontratıyla uyumlu olan `MarketRobotHealthWidget` artık doğru "stale/healthy/disabled" renkleri gösteriyor. Auth segregation (recep → 403) doğrulandı.
+
 ### Iter 291 (Backend Refactoring Sprint 1) — 57/57 pass
 - **Domain subpackage migration başladı**: 14 Iter 277-290 modülü 6 domain alt-klasörüne taşındı (`distribution/`, `ai/`, `marketing/`, `revenue_ext/`, `hotel_ops/`, `platform_ext/`). `server.py` import'ları güncellendi.
 - **Naming-conflict çözümü**: Legacy flat dosyalar (revenue.py, operations.py, finance.py) ile çakışan klasör adları `revenue_ext/`, `hotel_ops/` olarak yeniden adlandırıldı. Legacy modüller bozulmadı.

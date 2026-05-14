@@ -126,6 +126,48 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Testing Status
 - **244 cumulative backend tests passing** across iterations 262-271
+- **Iter 277 (Feb 2026)**: Competitor Parity Sprint v3 — 32/32 backend + 8/8 frontend panels passed.
+
+## Recent Additions (Iter 277, Feb 14 2026) — Competitor Parity v3
+8 new modules added in a single sprint:
+- **Booking Engine v2** (`/api/booking-engine/*`): packages, upsells, abandoned cart tracking + recovery emails, A/B testing.
+- **Owner / Investor Portal** (`/api/owners/*`): REIT/condo-hotel owner profiles, unit assignments, monthly statements (gross → mgmt fee → opex → net distribution), YTD performance.
+- **Spa & Activities Booking** (`/api/spa/*`): services, providers, auto-allocate therapist when slot is free, daily schedule view grouped by provider.
+- **Loyalty Tiers** (`/api/loyalty-tiers/*`): Silver/Gold/Platinum with configurable thresholds (min_stays + min_spend), auto-compute member tier from booking history.
+- **Budget vs Actual** (`/api/budget/*`): monthly budget input, variance vs actual revenue/nights/ADR, year-over-year compare.
+- **Compset Auto-Discovery** (`/api/compset/*`): per-property competitive set, auto-discover from MOCK pool (real OTA Insight integration P2), per-competitor rate snapshots.
+- **Partner Webhooks & API Keys** (`/api/partner/*`): public webhook subscriptions (event catalog), test ping logging, delivery audit log, scoped API keys (returns secret once).
+- **Automation Analytics** (`/api/automation/v2/analytics/*`): per-rule ROI dashboard — runs/success-rate/hours saved, per-rule deep-dive series.
+
+Frontend: 8 new lazy-loaded panels wired into sidebar across Reservations / Operations / Revenue / Finance / Guests / System sections. All panels Turkish UI, English `data-testid` attributes.
+
+## Backlog (P0 → P2)
+
+### P0
+- Real channel push from rate_sync_queue → Booking.com/Expedia (needs OTA credentials)
+- Twilio API key flow (real WhatsApp/SMS)
+- Resend API key flow (real email)
+- Native push notifications (Capacitor + FCM/APNs keys)
+
+### P1
+- AI Status per-day toggle (SENTINEL/MANUAL/auto-revert)
+- Scheduled re-run of insights (nightly cron) + push notifications
+- Offline mobile mode (service worker)
+- Backend folder restructure (~245 routes → domain subfolders)
+- Mobile bottom-nav
+- WhatsApp Voice inbound webhook completion (Twilio → Whisper → LLM → TTS)
+- Meeting & Events Sales Module (Tier-1 banquet/wedding ROI)
+- F&B POS Integration Hub (Simphony, Lightspeed, Square adapters)
+
+### P2
+- Demand Radar (event/holiday correlation)
+- A/B testing methodology
+- Carbon Reporting v2
+- Marketplace v1
+- OTA XML syncing
+- PCI-DSS / SOC 2 cert prep
+- Real OTA Insight / Lighthouse compset rate scanner (replace MOCK pool)
+- Real HTTP webhook dispatcher with retries/HMAC signing (replace test-only logging)
 
 ## Test Credentials
 Admin: admin@hotelbox.com / HotelAdmin2026!

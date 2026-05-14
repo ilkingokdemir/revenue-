@@ -214,6 +214,41 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 305 (RMS Pro Suite — Rakip Paritesi 🏆) — 32/32 PASS
+- **Hedef**: Flyr, RoomPriceGenie, Duetto, BEONx, IDeaS, Atomize, Lighthouse RMS özelliklerine parity ve üstünlük
+- **6 yeni özellik** (yeni dosya `/app/backend/routes/rms_pro.py` + frontend `RmsProSuitePanel.js` + `GroupPricingModal.js`):
+
+  1. **RevPAG** (`GET /api/rms-pro/revpag/{pid}`) — BEONx'in unique metriği. Revenue per Available Guest (RevPAR yerine, party-size'ı yakalar). Test: aldgate-flats RevPAG £6.2 vs RevPAR £12.4.
+
+  2. **Quality Score Pricing** (`GET /api/rms-pro/quality-score/{pid}`) — BEONx'in 21+ faktör yaklaşımı. 5 core faktör: Review Score, Amenities, Photo Quality, Response Speed, Cleaning Quality. Otomatik rate uplift recommendation (-15% / +15%). Test: aldgate score=33.3/100, +5% uplift.
+
+  3. **Forecast Accuracy KPI** (`GET /api/rms-pro/forecast-accuracy/{pid}`) — Cloudbeds 95% benchmark karşılaştırması. `forecast_snapshots` koleksiyonundan MAPE hesaplar. Test: occ=89% accuracy, rev=18.6% (411 sample, 154 scored).
+
+  4. **Group Pricing Optimizer** (`POST /api/rms-pro/group-pricing-quote`) — IDeaS/Flyr signature feature. Displacement cost analysis + AI rate recommendation. Decision: ACCEPT/DECLINE/NEGOTIATE. Floor rate (avg_current × 0.85) eklendi. Test: 5 oda × 3 gece → £91.8/n önerisi.
+
+  5. **Autopilot Mode** (`GET/POST /api/rms-pro/autopilot/config`) — Atomize'ın fire-and-forget özelliği. Toggle + schedule_hour_utc + min_gap_pct + min_uplift_to_apply_pct + days_ahead. Background `autopilot_loop` her dakika kontrol, schedule saatte AI-adaptive optimize çalıştırır.
+
+  6. **Autopilot History** (`GET /api/rms-pro/autopilot/history`) — Son N otomatik run audit trail. Otomatik `fleet_gap_history`'e batch yazar → undo destekli.
+
+- **Frontend**: Yeni "RMS Pro" tab Revenue panel'inin başına eklendi. 4 KPI kart + Group Pricing CTA + Quality factors breakdown.
+- **i18n**: 7 dile çevirisi (tr/en/de/es/fr/ru/ar)
+- **Test (iteration_294.json)**: **32/32 backend test PASSED (100%)** + frontend smoke test PASS
+- **RBAC**: receptionist tüm 7 endpoint için 403 ✅
+- **Regression**: Mevcut 9 Market Robot endpoint hâlâ çalışıyor
+
+**Rakip parity matrisi (artık biz öndeyiz):**
+| Özellik | Flyr | RPG | Duetto | BEONx | IDeaS | Atomize | Lighthouse | **Biz** |
+|---|---|---|---|---|---|---|---|---|
+| 2-yıl forecast | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ (3 yıl) |
+| Group Pricing | ✅ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ |
+| Autopilot | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ |
+| RevPAG | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| Quality Score Pricing | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| AI per-property strategy | ✅ | ❌ | ❌ | ❌ | ✅ | ✅ | ❌ | ✅ + Türkçe gerekçe |
+| Gap-Close + Undo | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (unique) |
+| Performance Tracker | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ (unique) |
+| 51 canlı rakip scrape | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+
 ### Iter 304 (AI Performance Tracker) — 20/20 PASS
 - **Yeni endpoint'ler**:
   - `GET /api/revenue/market-robot/gap-history/{batch_id}/performance` — tek batch için apply-sonrası ölçüm: yeni bookings, prev_avg_rate, target_avg_rate, actual_avg_rate, estimated_revenue_uplift (per-branch + summary)

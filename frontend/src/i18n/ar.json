@@ -414,5 +414,6 @@
   "ui.hub_label": "Hub",
   "nav.self_checkin_auto": "Auto pre-arrival trigger",
   "nav.lock_sdk": "Hardware lock SDK",
-  "nav.recipe_cogs": "Recipe COGS & modifiers"
+  "nav.recipe_cogs": "Recipe COGS & modifiers",
+  "rev.tab.rms_pro": "جناح RMS برو"
 }

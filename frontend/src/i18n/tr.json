@@ -483,5 +483,6 @@
   "ui.hub_label": "Merkez",
   "nav.self_checkin_auto": "Otomatik varış öncesi self check-in",
   "nav.lock_sdk": "Donanım kilit SDK",
-  "nav.recipe_cogs": "Reçete COGS ve modifier"
+  "nav.recipe_cogs": "Reçete COGS ve modifier",
+  "rev.tab.rms_pro": "RMS Pro · Rakip Paritesi"
 }

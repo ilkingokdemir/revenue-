@@ -214,6 +214,18 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 304 (AI Performance Tracker) — 20/20 PASS
+- **Yeni endpoint'ler**:
+  - `GET /api/revenue/market-robot/gap-history/{batch_id}/performance` — tek batch için apply-sonrası ölçüm: yeni bookings, prev_avg_rate, target_avg_rate, actual_avg_rate, estimated_revenue_uplift (per-branch + summary)
+  - `GET /api/revenue/market-robot/gap-history/performance-summary?limit=N` — rolling N batch özet: total_batches, total_bookings_after, total_revenue_uplift, by_strategy breakdown (hangi strateji daha çok uplift sağladı?)
+- **Yeni component**: `GapPerformanceMiniWidget.js` — kompakt 3-KPI strip (Yeni Rez. + En İyi Strateji + Avg Uplift/Rez.) + strategy breakdown listesi. FleetCompetitorPulseCard içine "Son işlem geri al" satırının altına entegre.
+- **Test (iteration_293.json)**: **20/20 backend test PASSED (100%)** — AI Fleet Optimize, Performance Summary, Batch Performance, Fleet Close Gap (4 strateji), Gap History, Undo + 6 RBAC test
+- **E2E live**:
+  - Performance summary: 2 batch, 3 booking, £-0.02 uplift (henüz çok yeni)
+  - Per-batch (d0650e66 ai-adaptive): 8 şube, 33 override, 3 booking sonrası, £-25.35 estimated
+  - RBAC: receptionist tüm 6 endpoint için 403 ✅
+- **Etki**: "AI gerçekten iyi mi?" sorusu artık veriyle yanıtlanıyor. Strategy karşılaştırması yapılabilir (ai-adaptive vs half vs full). Revenue manager hangi yaklaşımın daha çok para getirdiğini gözle görür.
+
 ### Iter 303 (AI-Adaptive Fleet Optimization) — production verified ⚡
 - **Yeni endpoint**: `POST /api/revenue/market-robot/ai-fleet-optimize` — GPT-4o-mini her şube için en uygun stratejiyi öner + uygula
   - Pre-flight: her property için snapshot topla (market_avg, our_avg, vs_pct, comp_count, future_bookings_in_window, last_7d_booking_pace)

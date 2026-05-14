@@ -1027,59 +1027,59 @@ from routes.owner_self_service import create_owner_auth_router
 api_router.include_router(create_owner_auth_router(db, require_roles))
 
 # ===== TÜRSAB Agency Portal (Iter 284) =====
-from routes.agency_portal import create_agency_portal_router
+from routes.distribution.agency_portal import create_agency_portal_router
 api_router.include_router(create_agency_portal_router(db, require_roles))
 
 # ===== AI 24/7 Web Concierge (Iter 284 - Eviivo parity) =====
-from routes.web_concierge import create_web_concierge_router
+from routes.ai.web_concierge import create_web_concierge_router
 api_router.include_router(create_web_concierge_router(db, require_roles))
 
 # ===== AI Review Agent (Iter 284 - Lighthouse parity) =====
-from routes.review_agent import create_review_agent_router
+from routes.ai.review_agent import create_review_agent_router
 api_router.include_router(create_review_agent_router(db, require_roles))
 
 # ===== Duetto Open Pricing (Iter 285 - segment×channel×room matrix) =====
-from routes.open_pricing import create_open_pricing_router
+from routes.revenue_ext.open_pricing import create_open_pricing_router
 api_router.include_router(create_open_pricing_router(db, require_roles))
 
 # ===== Beach POS (Iter 285 - Elektra TR niche) =====
-from routes.beach_pos import create_beach_pos_router
+from routes.hotel_ops.beach_pos import create_beach_pos_router
 api_router.include_router(create_beach_pos_router(db, require_roles))
 
 # ===== Public Event Listings + ROX Personalization (Iter 285 - Tripleseat parity) =====
-from routes.public_events import create_public_events_router
+from routes.distribution.public_events import create_public_events_router
 api_router.include_router(create_public_events_router(db, require_roles))
 
 # ===== Agentic AI Loops (Iter 286 - Mews 2026 parity) =====
-from routes.agents import create_agents_router
+from routes.ai.agents import create_agents_router
 api_router.include_router(create_agents_router(db, require_roles))
 
 # ===== Vacation Rental dedicated view (Iter 286 - Eviivo/Lighthouse parity) =====
-from routes.vacation_rental import create_vacation_rental_router
+from routes.hotel_ops.vacation_rental import create_vacation_rental_router
 api_router.include_router(create_vacation_rental_router(db, require_roles))
 
 # ===== Public Developer Portal (Iter 287 - Mews Marketplace v2 parity) =====
-from routes.dev_portal import create_dev_portal_router
+from routes.platform_ext.dev_portal import create_dev_portal_router
 api_router.include_router(create_dev_portal_router(db, require_roles))
 
 # ===== Wholesaler / Net Rate Network (Iter 287 - Cloudbeds Hotel Trader parity) =====
-from routes.wholesaler import create_wholesaler_router
+from routes.distribution.wholesaler import create_wholesaler_router
 api_router.include_router(create_wholesaler_router(db, require_roles))
 
 # ===== Lead Funnel Bridge + Lighthouse Adapter (Iter 287) =====
-from routes.lead_funnel import create_lead_funnel_router
+from routes.marketing.lead_funnel import create_lead_funnel_router
 api_router.include_router(create_lead_funnel_router(db, require_roles))
 
 # ===== Marketing Video Generator (Iter 288 - Sora 2 integration) =====
-from routes.marketing_videos import create_marketing_videos_router
+from routes.marketing.marketing_videos import create_marketing_videos_router
 api_router.include_router(create_marketing_videos_router(db, require_roles))
 
 # ===== Brand Voice Studio (Iter 289 - centralized tone-of-voice service) =====
-from routes.brand_voice import create_brand_voice_router
+from routes.ai.brand_voice import create_brand_voice_router
 api_router.include_router(create_brand_voice_router(db, require_roles))
 
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
-from routes.booking_com import create_booking_com_router
+from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))
 
 app.include_router(api_router)

@@ -1,0 +1,84 @@
+{
+  "summary": "Completed testing of Iteration 291 - Backend Refactoring Sprint. All 14 moved route files work correctly after reorganization. Backend: 57/57 tests passed (100%). REORGANIZATION_PLAN.md exists and documents the full migration roadmap.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration291_refactoring.py",
+    "/app/test_reports/pytest/pytest_iteration291_refactoring.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration291_refactoring.py"
+  ],
+  "success_rate": {
+    "backend": "100% (57/57 passed)",
+    "frontend": "N/A (backend only testing requested)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "None - used existing seed data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 291 fully tested. This was a STRUCTURAL refactor - no new features. 14 route files were moved from /app/backend/routes/ root into 6 domain subpackages: distribution/ (4 files: agency_portal.py, booking_com.py, public_events.py, wholesaler.py), ai/ (4 files: agents.py, brand_voice.py, review_agent.py, web_concierge.py), marketing/ (2 files: lead_funnel.py, marketing_videos.py), revenue_ext/ (1 file: open_pricing.py), hotel_ops/ (2 files: beach_pos.py, vacation_rental.py), platform_ext/ (1 file: dev_portal.py). Naming conflicts resolved: revenue_ext/ instead of revenue/ (legacy revenue.py exists), hotel_ops/ instead of operations/ (legacy operations.py exists). REORGANIZATION_PLAN.md created documenting full 247-file migration roadmap for remaining ~230 files. All legacy endpoints still work - backwards compatibility confirmed.",
+  "features_tested": {
+    "moved_endpoints_verified": {
+      "distribution/agency_portal.py": ["GET /api/agencies", "GET /api/agency-auth/me (401 expected)", "GET /api/agency-contracts"],
+      "distribution/booking_com.py": ["GET /api/booking-com/status", "POST /api/booking-com/validate-payload"],
+      "distribution/public_events.py": ["GET /api/public-events", "GET /api/mice-rox/catalog"],
+      "distribution/wholesaler.py": ["GET /api/wholesaler/providers", "GET /api/wholesaler/connections"],
+      "ai/web_concierge.py": ["GET /api/web-concierge/widget-config/{property_id}", "POST /api/web-concierge/chat"],
+      "ai/review_agent.py": ["GET /api/review-agent/config/{property_id}"],
+      "ai/agents.py": ["GET /api/agents"],
+      "ai/brand_voice.py": ["GET /api/brand-voice/purposes", "GET /api/brand-voice/profile/{property_id}"],
+      "marketing/lead_funnel.py": ["GET /api/lead-funnel/leads", "GET /api/lighthouse-adapter/status"],
+      "marketing/marketing_videos.py": ["GET /api/marketing-videos/sizes"],
+      "revenue_ext/open_pricing.py": ["GET /api/open-pricing/segments", "GET /api/open-pricing/channels"],
+      "hotel_ops/beach_pos.py": ["GET /api/beach-pos/menu/{property_id}", "GET /api/beach-pos/sunbeds/{property_id}"],
+      "hotel_ops/vacation_rental.py": ["GET /api/vacation-rental/summary"],
+      "platform_ext/dev_portal.py": ["GET /api/dev-portal/info", "GET /api/dev-portal/admin/apps"]
+    },
+    "legacy_endpoints_verified": [
+      "GET /api/bookings",
+      "GET /api/properties",
+      "GET /api/reviews",
+      "GET /api/audit-trail",
+      "GET /api/sops",
+      "GET /api/notifications",
+      "GET /api/auth/me",
+      "GET /api/room-types",
+      "GET /api/campaigns/list",
+      "GET /api/pos/outlets/list"
+    ],
+    "naming_conflict_resolution_verified": [
+      "Legacy /api/operations/* still works alongside hotel_ops/",
+      "Legacy /api/revenue/* still works alongside revenue_ext/",
+      "/api/open-pricing/* from revenue_ext/ works",
+      "/api/beach-pos/* from hotel_ops/ works",
+      "/api/vacation-rental/* from hotel_ops/ works"
+    ],
+    "reorganization_plan_verified": {
+      "file_exists": true,
+      "path": "/app/backend/routes/REORGANIZATION_PLAN.md",
+      "documents_all_domains": ["distribution/", "ai/", "marketing/", "revenue_ext/", "hotel_ops/", "platform_ext/"],
+      "documents_future_migration": "~230 remaining files mapped to target domains"
+    },
+    "web_concierge_integration_verified": {
+      "turkish_chat_works": true,
+      "endpoint": "POST /api/web-concierge/chat with property_id=aldgate-flats and Turkish message"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "notes": "Refactoring sprint successful. All 14 moved files have working endpoints. No regressions detected in legacy endpoints. The naming conflict resolution (revenue_ext/ and hotel_ops/ instead of revenue/ and operations/) works correctly - both legacy flat files and new subpackages coexist without collision."
+}

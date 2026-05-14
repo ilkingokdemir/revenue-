@@ -683,6 +683,10 @@ api_router.include_router(currency_fx_router)
 from routes.rate_structure import create_rate_structure_router
 rate_structure_router = create_rate_structure_router(db)
 api_router.include_router(rate_structure_router)
+
+from routes.rms_pro import create_rms_pro_router
+rms_pro_router = create_rms_pro_router(db, require_roles)
+api_router.include_router(rms_pro_router)
 from routes.groups import create_groups_router
 groups_router = create_groups_router(db)
 api_router.include_router(groups_router)
@@ -771,6 +775,10 @@ async def _start_scheduler():
     _sca_loop = getattr(self_checkin_auto_router, "auto_trigger_loop", None)
     if _sca_loop:
         _asyncio.create_task(_sca_loop())
+    # RMS Pro Autopilot daily loop (Iter 305)
+    _ap_loop = getattr(rms_pro_router, "autopilot_loop", None)
+    if _ap_loop:
+        _asyncio.create_task(_ap_loop())
 
 # Iter 160 — Channel Manager MVP (restrictions + inbound + parity)
 from routes.channel_restrictions import create_channel_restrictions_router

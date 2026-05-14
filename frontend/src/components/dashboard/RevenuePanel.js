@@ -17,6 +17,7 @@ import { RevenueAICopilot } from "./RevenueAICopilot";
 import { RateCalendarEditable } from "./RateCalendarEditable";
 import { ExportBar } from "./RevenueExports";
 import { MarketRobot } from "./MarketRobot";
+import RmsProSuitePanel from "./RmsProSuitePanel";
 import { DynamicPricingEngine } from "./DynamicPricingEngine";
 import SmartRateControlPanel from "./SmartRateControlPanel";
 import { EventIntelligence } from "./EventIntelligence";
@@ -65,6 +66,7 @@ const NAV_SECTIONS = [
   {
     labelKey: "section.intelligence",
     items: [
+      { id: "rms-pro", labelKey: "rev.tab.rms_pro", icon: Sparkles },
       { id: "market-robot", labelKey: "rev.tab.market_robot", icon: Radar },
       { id: "compset-intel", labelKey: "rev.tab.compset_intel", icon: Trophy },
       { id: "price-alerts", labelKey: "rev.tab.price_alerts", icon: AlertTriangle },
@@ -237,6 +239,7 @@ export const RevenuePanel = ({ properties, activePropertyId }) => {
               {tab === "smart-pricing" && <RevenueSmartPricing propertyId={pid} />}
               {tab === "forecasting" && <RevenueForecasting propertyId={pid} />}
               {tab === "market-robot" && <MarketRobot propertyId={pid} properties={properties} />}
+              {tab === "rms-pro" && <RmsProSuitePanel propertyId={pid} />}
               {tab === "reputation" && <ReputationDashboard propertyId={pid} hotelName={(properties || []).find(p => p.id === pid)?.name || ""} />}
               {tab === "pace" && <PaceReports propertyId={pid} hotelName={(properties || []).find(p => p.id === pid)?.name || ""} />}
               {tab === "compset-intel" && <CompsetIntelligence propertyId={pid} />}

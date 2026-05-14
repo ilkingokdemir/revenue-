@@ -266,3 +266,4 @@ export const SettingsHubPanel = N(() => import("./components/dashboard/SettingsH
 export const BookingEngineAdmin = N(() => import("./components/dashboard/BookingEngineAdmin"), "BookingEngineAdmin");
 export const BookingTimeline = N(() => import("./components/dashboard/BookingTimeline"), "BookingTimeline");
 export const RevenuePanel = N(() => import("./components/dashboard/RevenuePanel"), "RevenuePanel");
+export const RmsProSuitePanel = N(() => import("./components/dashboard/RmsProSuitePanel"), "RmsProSuitePanel");

@@ -3780,6 +3780,202 @@ def create_market_robot_router(db, require_roles, resend=None):
             "branches": per_branch,
         }
 
+    @router.post("/revenue/market-robot/ai-fleet-optimize")
+    async def ai_fleet_optimize(data: Dict = {},
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """AI-adaptive fleet optimization — GPT-4o-mini her şube için en uygun
+        stratejiyi öner (full|half|floor|value), sonra uygula.
+
+        Body:
+          - days: 7..60 (default: 14)
+          - dry_run: bool (default: true) — varsayılan dry, kullanıcı onayıyla apply
+          - min_gap_pct: float (default: 5.0)
+
+        AI'a verilen veri: per-property (market_avg, our_avg, vs_pct, occupancy_30d,
+        recent_bookings_pace, comp_count). AI'dan beklenen: JSON `{property_id: {strategy, reason}}`.
+        """
+        import uuid as _uuid
+        import json as _json
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+        days = max(7, min(int(data.get("days") or 14), 60))
+        dry_run = bool(data.get("dry_run", True))
+        min_gap_pct = float(data.get("min_gap_pct") or 5.0)
+
+        # Build per-property snapshot for AI
+        now = datetime.now(timezone.utc)
+        date_keys = [(now + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+        date_set = set(date_keys)
+        properties = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1, "city": 1}).to_list(500)
+        properties = [p for p in properties if p.get("id") and p["id"] not in ("all", "default")]
+
+        snapshot = []
+        eligible = []
+        for p in properties:
+            pid = p["id"]
+            comps = await db.market_competitors.find({"property_id": pid}, {"_id": 0, "prices": 1}).to_list(50)
+            per_day = {}
+            for c in comps:
+                for row in (c.get("prices") or []):
+                    if not row.get("scraped"):
+                        continue
+                    d = row.get("date")
+                    lp = row.get("lowest_price")
+                    if d and lp and d in date_set:
+                        try:
+                            per_day.setdefault(d, []).append(float(lp))
+                        except Exception:
+                            pass
+            if not per_day:
+                continue
+            market_avgs = [sum(v)/len(v) for v in per_day.values()]
+            market_avg = sum(market_avgs) / len(market_avgs)
+            rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0})
+            base_rate = float((rt or {}).get("base_rate") or 100)
+            vs_pct = ((base_rate - market_avg) / market_avg) * 100 if market_avg else 0
+            if vs_pct > -min_gap_pct:  # not enough gap to optimize
+                continue
+            # Occupancy: count bookings in next N days
+            occ_count = await db.bookings.count_documents({
+                "property_id": pid,
+                "status": {"$ne": "cancelled"},
+                "check_in": {"$lte": date_keys[-1]},
+                "check_out": {"$gt": date_keys[0]},
+            })
+            recent_pace = await db.bookings.count_documents({
+                "property_id": pid,
+                "created_at": {"$gte": (now - timedelta(days=7)).isoformat()},
+            })
+            entry = {
+                "property_id": pid,
+                "name": p.get("name") or pid,
+                "city": p.get("city"),
+                "market_avg": round(market_avg, 2),
+                "our_avg": round(base_rate, 2),
+                "vs_market_pct": round(vs_pct, 1),
+                "comp_count": len(comps),
+                "future_bookings_in_window": occ_count,
+                "last_7d_booking_pace": recent_pace,
+            }
+            snapshot.append(entry)
+            eligible.append(pid)
+
+        if not snapshot:
+            return {"ok": False, "error": "Hiçbir şube AI-optimize için uygun değil (yetersiz gap veya scrape verisi yok)",
+                    "fleet_summary": {"branches_with_apply": 0, "total_days_applied": 0}}
+
+        # Ask AI
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"ai-fleet-optimize-{_uuid.uuid4().hex[:8]}",
+            system_message=(
+                "Sen bir hotel revenue management uzmanısın. Sana her hotel şubesi için "
+                "pazar verilerini vereceğim. Her şube için BIRINI seç: "
+                "'full' (agresif - pazara yetiş, occupancy + pace yüksekse), "
+                "'half' (dengeli - yarıyolda buluş, varsayılan güvenli seçim), "
+                "'value' (hafif iskonto - pace düşükse, alternatif), "
+                "'floor' (çok defensiv - sadece pazar mininumuna). "
+                "ÇIKTI: SADECE valid JSON: "
+                "{\"recommendations\": [{\"property_id\": \"X\", \"strategy\": \"half\", "
+                "\"reason\": \"kısa Türkçe 1 cümle\"}]}"
+            ),
+        ).with_model("openai", "gpt-4o-mini")
+
+        user_msg = UserMessage(text=_json.dumps({"properties": snapshot, "min_gap_pct": min_gap_pct}))
+        try:
+            ai_response = await chat.send_message(user_msg)
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"AI çağrısı başarısız: {str(e)[:120]}")
+
+        # Parse AI response — strip code fences if any
+        clean = ai_response.strip()
+        if clean.startswith("```"):
+            clean = clean.split("```")[1]
+            if clean.startswith("json"):
+                clean = clean[4:]
+            clean = clean.strip().rstrip("`").strip()
+        try:
+            parsed = _json.loads(clean)
+            recs = parsed.get("recommendations", [])
+        except Exception:
+            raise HTTPException(status_code=502, detail=f"AI yanıtı parse edilemedi: {clean[:200]}")
+
+        rec_map = {r["property_id"]: r for r in recs if r.get("property_id") and r.get("strategy") in ("full", "half", "floor", "value")}
+
+        # Apply per-strategy
+        batch_id = None if dry_run else _uuid.uuid4().hex[:16]
+        per_branch = []
+        total_applied = 0
+        total_skipped = 0
+        uplift_weighted_sum = 0.0
+        uplift_days_total = 0
+        for pid in eligible:
+            rec = rec_map.get(pid)
+            if not rec:
+                continue
+            strategy = rec["strategy"]
+            try:
+                result = await _internal_close_gap(
+                    db, pid, strategy=strategy, days=days, dry_run=dry_run,
+                    min_gap_pct=min_gap_pct, source="ai-fleet-optimize",
+                    user_name=current_user.get("name", "ai-fleet-optimize"),
+                    batch_id=batch_id,
+                )
+                name = next((p.get("name") for p in properties if p["id"] == pid), pid)
+                per_branch.append({
+                    "property_id": pid, "property_name": name or pid,
+                    "strategy": strategy, "reason": rec.get("reason", ""),
+                    **result,
+                })
+                total_applied += result.get("applied", 0)
+                total_skipped += result.get("skipped", 0)
+                if result.get("applied"):
+                    uplift_weighted_sum += result.get("avg_uplift_pct", 0) * result["applied"]
+                    uplift_days_total += result["applied"]
+            except Exception as e:
+                per_branch.append({
+                    "property_id": pid, "strategy": strategy,
+                    "applied": 0, "skipped": 0, "error": str(e)[:120],
+                })
+
+        fleet_avg_uplift = round(uplift_weighted_sum / uplift_days_total, 1) if uplift_days_total else 0
+        branches_with_apply = sum(1 for b in per_branch if b.get("applied", 0) > 0)
+
+        if not dry_run and batch_id and total_applied > 0:
+            await db.fleet_gap_history.insert_one({
+                "batch_id": batch_id,
+                "applied_at": now.isoformat(),
+                "applied_by": current_user.get("name", "ai-fleet-optimize"),
+                "strategy": "ai-adaptive",
+                "days": days,
+                "min_gap_pct": min_gap_pct,
+                "branches_with_apply": branches_with_apply,
+                "total_days_applied": total_applied,
+                "fleet_avg_uplift_pct": fleet_avg_uplift,
+                "per_branch": [{"pid": b["property_id"], "name": b.get("property_name") or b["property_id"],
+                                "applied": b.get("applied", 0), "strategy": b.get("strategy")}
+                               for b in per_branch if b.get("applied", 0) > 0],
+                "ai_recommendations": recs,
+                "undone": False,
+            })
+
+        return {
+            "ok": True,
+            "dry_run": dry_run,
+            "batch_id": batch_id,
+            "ai_recommendations": recs,
+            "fleet_summary": {
+                "total_branches": len(properties),
+                "eligible_branches": len(eligible),
+                "branches_with_apply": branches_with_apply,
+                "total_days_applied": total_applied,
+                "total_days_skipped": total_skipped,
+                "fleet_avg_uplift_pct": fleet_avg_uplift,
+            },
+            "branches": per_branch,
+        }
+
     @router.get("/revenue/market-robot/gap-history")
     async def gap_history(limit: int = 10,
                           current_user: dict = Depends(require_roles("admin", "manager"))):

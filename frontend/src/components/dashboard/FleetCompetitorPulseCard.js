@@ -6,10 +6,11 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ReferenceLine, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap, Undo2 } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap, Undo2, Sparkles } from "lucide-react";
 import useLivePolling from "../../hooks/useLivePolling";
 import GapCloseModal from "./GapCloseModal";
 import FleetGapCloseModal from "./FleetGapCloseModal";
+import AiFleetOptimizeModal from "./AiFleetOptimizeModal";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -20,6 +21,7 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
   const [days, setDays] = useState(30);
   const [gapTarget, setGapTarget] = useState(null);  // {property_id, property_name}
   const [fleetGapOpen, setFleetGapOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [lastBatch, setLastBatch] = useState(null);  // {batch_id, applied_at, branches, days, undone}
 
   const loadLastBatch = useCallback(async () => {
@@ -142,15 +144,24 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
 
       {/* Tüm filoda gap kapat — sadece below_market > 0 ise göster */}
       {fs.below_market > 0 && (
-        <button onClick={() => setFleetGapOpen(true)}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-emerald-500/20 hover:from-emerald-500/35 hover:via-cyan-500/35 hover:to-emerald-500/35 border border-cyan-500/40 text-cyan-100 text-sm font-black transition group"
-          data-testid="fleet-gap-cta">
-          <Zap className="w-5 h-5 group-hover:scale-110 transition" />
-          <span>Tüm filoda gap kapat —</span>
-          <span className="text-emerald-200">{fs.below_market} şube</span>
-          <span className="text-stone-400">·</span>
-          <span className="text-cyan-200">{Math.abs(fs.fleet_vs_pct).toFixed(1)}% potansiyel</span>
-        </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          <button onClick={() => setFleetGapOpen(true)}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-emerald-500/20 hover:from-emerald-500/35 hover:via-cyan-500/35 hover:to-emerald-500/35 border border-cyan-500/40 text-cyan-100 text-sm font-black transition group"
+            data-testid="fleet-gap-cta">
+            <Zap className="w-5 h-5 group-hover:scale-110 transition" />
+            <span>Manuel Gap Kapat</span>
+            <span className="text-stone-400 text-xs">·</span>
+            <span className="text-emerald-200">{fs.below_market} şube</span>
+          </button>
+          <button onClick={() => setAiOpen(true)}
+            className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-purple-500/20 via-fuchsia-500/20 to-purple-500/20 hover:from-purple-500/35 hover:via-fuchsia-500/35 hover:to-purple-500/35 border border-fuchsia-500/40 text-fuchsia-100 text-sm font-black transition group"
+            data-testid="ai-optimize-cta">
+            <Sparkles className="w-5 h-5 group-hover:scale-110 transition" />
+            <span>AI Optimize</span>
+            <span className="text-stone-400 text-xs">·</span>
+            <span className="text-fuchsia-200">her şubeye özel strateji</span>
+          </button>
+        </div>
       )}
 
       {/* Son işlem → Geri al */}
@@ -269,6 +280,9 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
       )}
       {fleetGapOpen && (
         <FleetGapCloseModal onClose={() => { setFleetGapOpen(false); load(); loadLastBatch(); }} />
+      )}
+      {aiOpen && (
+        <AiFleetOptimizeModal onClose={() => { setAiOpen(false); load(); loadLastBatch(); }} />
       )}
     </div>
   );

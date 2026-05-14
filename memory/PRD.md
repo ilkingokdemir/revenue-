@@ -214,6 +214,24 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 303 (AI-Adaptive Fleet Optimization) — production verified ⚡
+- **Yeni endpoint**: `POST /api/revenue/market-robot/ai-fleet-optimize` — GPT-4o-mini her şube için en uygun stratejiyi öner + uygula
+  - Pre-flight: her property için snapshot topla (market_avg, our_avg, vs_pct, comp_count, future_bookings_in_window, last_7d_booking_pace)
+  - LLM: GPT-4o-mini via emergentintegrations (Emergent LLM Key), Türkçe gerekçe ile JSON yanıt
+  - Apply: AI'ın per-property strategy önerisini `_internal_close_gap` ile uygular, audit batch_id ile `fleet_gap_history`'e yazar
+- **Yeni component**: `AiFleetOptimizeModal.js` (purple/fuchsia gradient) — Brain icon, AI rec listesi (her şubeye strategy badge + Türkçe gerekçe + uplift), tek tık apply, undo toast
+- **Yeni CTA**: `FleetCompetitorPulseCard`'a 2 sütunlu CTA — sol: "⚡ Manuel Gap Kapat" (statik 4 strateji), sağ: "✨ AI Optimize" (her şubeye özel)
+- **E2E live verified**:
+  - DRY-RUN (14g, ≥5%): 9 şube analiz, +39.6% fleet uplift, AI strateji dağılımı: 5× floor, 2× half, 1× value, 1× value (5.66sn)
+  - APPLY (7g, ≥10%): 8 şube × 33 gün, +45.6% uplift, batch_id `d0650e66fd184453`, 5.24sn
+  - History batch `ai-adaptive` olarak kaydedildi, undo destekli
+  - RBAC: receptionist → 403 ✅
+- **AI tipik gerekçeler** (Türkçe):
+  - "Geçmiş rezervasyon yok, bu nedenle minimum değerle devam edilmeli" → floor
+  - "Gelecek rezervasyonlar var, dengeli bir strateji izlemek avantaj sağlayabilir" → half
+  - "Sınırlı gelecekteki rezervasyonlar ile rekabetçi fiyatlandırma uygundur" → value
+- **Etki**: Statik strateji seçimi (Yarıyolda/Pazara/Floor/Value tek seçenek) → AI ile **her şubeye özel optimum strateji** (yoğun şubeye full, düşük occupancy'e floor, vb.). Revenue manager'ın 5dk'lık analizini tek tıkta yapıyor.
+
 ### Iter 302 (Fleet Gap History + Undo — Safety Net)
 - **Yeni endpoint'ler**:
   - `GET /api/revenue/market-robot/gap-history?limit=N` — son fleet-gap-close batch'leri

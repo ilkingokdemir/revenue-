@@ -1038,6 +1038,18 @@ api_router.include_router(create_web_concierge_router(db, require_roles))
 from routes.review_agent import create_review_agent_router
 api_router.include_router(create_review_agent_router(db, require_roles))
 
+# ===== Duetto Open Pricing (Iter 285 - segment×channel×room matrix) =====
+from routes.open_pricing import create_open_pricing_router
+api_router.include_router(create_open_pricing_router(db, require_roles))
+
+# ===== Beach POS (Iter 285 - Elektra TR niche) =====
+from routes.beach_pos import create_beach_pos_router
+api_router.include_router(create_beach_pos_router(db, require_roles))
+
+# ===== Public Event Listings + ROX Personalization (Iter 285 - Tripleseat parity) =====
+from routes.public_events import create_public_events_router
+api_router.include_router(create_public_events_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

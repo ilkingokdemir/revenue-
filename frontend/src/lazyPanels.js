@@ -135,6 +135,11 @@ export const AgencyPortalAdminPanel = L(() => import("./components/dashboard/Age
 export const WebConciergeAdminPanel = L(() => import("./components/dashboard/WebConciergeAdminPanel"));
 export const ReviewAgentPanel = L(() => import("./components/dashboard/ReviewAgentPanel"));
 
+// ---------- COMPETITOR PARITY v6.1 (Iter 285 - Open Pricing + Beach POS + Public Events) ----------
+export const OpenPricingPanel = L(() => import("./components/dashboard/OpenPricingPanel"));
+export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
+export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
+
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");
 export const IntegrationsMarketplace = N(() => import("./components/dashboard/IntegrationsMarketplace"), "IntegrationsMarketplace");

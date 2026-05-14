@@ -14,6 +14,7 @@ import SelfCheckInV2Page from "./SelfCheckInV2Page";
 import TipPage from "./TipPage";
 import OwnerSelfServiceApp from "./components/owner/OwnerSelfServiceApp";
 import AgencyPortalApp from "./components/agency/AgencyPortalApp";
+import PublicEventPage from "./PublicEventPage";
 import GuestPortalV2Page from "./GuestPortalV2Page";
 import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
@@ -74,6 +75,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
@@ -193,6 +195,9 @@ import {
   CurrencyDollar,
   BookOpen,
   Warning,
+  Stack,
+  Umbrella,
+  Confetti,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2933,6 +2938,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "agency-portal", icon: Briefcase, name: "Acenta portalı (TÜRSAB)", testId: "agency-portal-btn" },
         { id: "web-concierge", icon: ChatText, name: "AI Web Concierge", testId: "web-concierge-btn" },
         { id: "review-agent", icon: Star, name: "AI Yorum Yanıt Ajanı", testId: "review-agent-btn" },
+        { id: "open-pricing", icon: Stack, name: "Open Pricing matrisi", testId: "open-pricing-btn" },
+        { id: "beach-pos", icon: Umbrella, name: "Beach POS (şezlong)", testId: "beach-pos-btn" },
+        { id: "public-events", icon: Confetti, name: "Halka açık etkinlikler", testId: "public-events-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
@@ -3547,6 +3555,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "agency-portal" && <AgencyPortalAdminPanel />}
         {activeView === "web-concierge" && <WebConciergeAdminPanel />}
         {activeView === "review-agent" && <ReviewAgentPanel />}
+        {activeView === "open-pricing" && (
+          <OpenPricingPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "beach-pos" && (
+          <BeachPosPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "public-events" && (
+          <PublicEventsPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
         {activeView === "spa-activities" && (
           <SpaActivitiesPanel propertyId={activePropertyId || "all"} />
         )}
@@ -4919,6 +4936,9 @@ function App() {
   }
   if (window.location.pathname === "/agency" || window.location.pathname.startsWith("/agency/")) {
     return <AgencyPortalApp />;
+  }
+  if (window.location.pathname.startsWith("/events/")) {
+    return <PublicEventPage />;
   }
   if (window.location.pathname === "/widget") {
     return <ReviewWidget />;

@@ -179,10 +179,10 @@
 | Monthly statement (gross → net) | ✅ | ✅ | ✅ | ✅ |
 | **Branded PDF statement** | ✅➕ | ✅ | ✅ | ✅ |
 | YTD performance dashboard | ✅ | ✅ | ✅ | 🟡 |
-| Self-service owner portal login | 🟡 | ✅ | ✅ | ✅ |
+| Self-service owner portal login | ✅ | ✅ | ✅ | ✅ |
 | **Aylık maliyet** | **Dahil** | $89 | $120 | $99 |
 
-**Skor: 9/10.** Self-service owner login eklersek 10/10.
+**Skor: 10/10 — StayNTouch ile eşit.** Tek native TR PMS+Owner Portal.
 
 ---
 
@@ -229,7 +229,7 @@
 | Finance/Compliance (TR) | 10/10 | — | LİDER 🥇 |
 | MICE & Events Sales | 9/10 | Tripleseat 9/10 | EŞİT |
 | F&B POS Integration | 8/10 | Shiji 9/10 | -1 (gerçek SDK) |
-| Owner Reporting | 9/10 | StayNTouch 9/10 | EŞİT |
+| Owner Reporting | 10/10 | StayNTouch 9/10 | LİDER 🥇 |
 | AI / Automation | 10/10 | — | LİDER 🥇 |
 | Pricing değeri | 10/10 | — | LİDER 🥇 |
 | Mobil | 7/10 | Cloudbeds 9/10 | -2 |

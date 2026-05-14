@@ -128,6 +128,7 @@ export const PartnerWebhooksPanel = L(() => import("./components/dashboard/Partn
 export const AutomationAnalyticsPanel = L(() => import("./components/dashboard/AutomationAnalyticsPanel"));
 export const MeetingsSalesPanel = L(() => import("./components/dashboard/MeetingsSalesPanel"));
 export const FnbPosHubPanel = L(() => import("./components/dashboard/FnbPosHubPanel"));
+export const CarbonReportingV2Panel = L(() => import("./components/dashboard/CarbonReportingV2Panel"));
 
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");

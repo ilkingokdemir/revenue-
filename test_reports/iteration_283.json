@@ -1,0 +1,103 @@
+{
+  "summary": "Completed testing of Iteration 283 - Carbon Reporting v2 (Green Key / Green Globe certification-ready). All 28 backend tests passed (100%). Frontend UI tests verified: CarbonReportingV2Panel loads correctly with all components (KPI cards, scope breakdown bar, YoY table, offset list), year selector works, PDF button present, 'Offset Ekle' modal opens and submits successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration283_carbon_v2.py",
+    "/app/test_reports/pytest/pytest_iteration283_carbon_v2.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration283_carbon_v2.py"
+  ],
+  "success_rate": {
+    "backend": "100% (28/28 passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "ESG readings seeded: 2026-01 (kwh=5000, gas_kwh=1500, waste_kg=200), 2026-02 (kwh=4800, gas_kwh=1400, waste_kg=180), 2025-01 (kwh=5500, gas_kwh=1700, waste_kg=220). Offset purchases created via tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Carbon Reporting v2 fully tested. Key endpoints: GET /api/esg/{property_id}/scope-breakdown?year=YYYY (returns scope1/2/3_kg, percentages, factors_used), GET /api/esg/{property_id}/yoy?year=YYYY (returns current/previous year totals and change_pct), POST /api/esg/{property_id}/offset-purchases (requires tonnes_co2e > 0), GET /api/esg/{property_id}/offset-purchases?year=YYYY (returns purchases list with totals), GET /api/esg/{property_id}/report.pdf?year=YYYY (returns valid PDF). Frontend: sidebar item 'Karbon Raporu (GHG Scope 1/2/3)' under REPORTS > EXPORTS & BI section (data-testid='carbon-v2-btn'), panel has data-testid='carbon-v2-panel'. Carbon factors: grid_electricity=0.207, natural_gas=0.184, waste_landfill=0.45.",
+  "features_tested": {
+    "scope_breakdown": {
+      "endpoint": "GET /api/esg/{property_id}/scope-breakdown?year=YYYY",
+      "verified": [
+        "Returns scope1_kg, scope2_kg, scope3_kg, total_kg, total_tonnes",
+        "Returns scope1_pct, scope2_pct, scope3_pct (sum to ~100%)",
+        "Returns factors_used: {grid_electricity: 0.207, natural_gas: 0.184, waste_landfill: 0.45}",
+        "Returns months_with_data count",
+        "Requires authentication (401 without token)"
+      ]
+    },
+    "year_over_year": {
+      "endpoint": "GET /api/esg/{property_id}/yoy?year=YYYY",
+      "verified": [
+        "Returns current and previous year aggregates",
+        "Returns change_pct for kwh, gas_kwh, water_litres, waste_kg",
+        "Invalid year format returns 400",
+        "Requires authentication"
+      ]
+    },
+    "offset_purchases": {
+      "endpoint_post": "POST /api/esg/{property_id}/offset-purchases",
+      "endpoint_get": "GET /api/esg/{property_id}/offset-purchases?year=YYYY",
+      "verified": [
+        "POST creates offset with tonnes_co2e, amount_paid, provider",
+        "POST with tonnes_co2e=0 returns 400",
+        "GET returns purchases list with count, total_tonnes_offset, total_spend",
+        "Requires authentication"
+      ]
+    },
+    "pdf_report": {
+      "endpoint": "GET /api/esg/{property_id}/report.pdf?year=YYYY",
+      "verified": [
+        "Returns application/pdf content type",
+        "PDF starts with %PDF magic bytes",
+        "PDF size > 2KB",
+        "Requires authentication"
+      ]
+    },
+    "regression_existing_esg": {
+      "verified": [
+        "GET /api/esg/{property_id}/dashboard still works",
+        "GET /api/esg/{property_id}/config still works",
+        "GET /api/esg/{property_id}/public-badge still works (no auth)"
+      ]
+    },
+    "regression_iter_277_282": {
+      "verified": [
+        "GET /api/spa/services works",
+        "GET /api/meetings works",
+        "GET /api/fnb-pos/providers works",
+        "GET /api/banquet-orders/{property_id} works",
+        "GET /api/channel-parity/{property_id} works",
+        "GET /api/owners works"
+      ]
+    },
+    "frontend_ui": {
+      "verified": [
+        "Sidebar item 'Karbon Raporu (GHG Scope 1/2/3)' under REPORTS section (data-testid='carbon-v2-btn')",
+        "CarbonReportingV2Panel loads (data-testid='carbon-v2-panel')",
+        "Year selector present (data-testid='carbon-year')",
+        "PDF İndir button present (data-testid='carbon-pdf-btn')",
+        "KPI cards show: Brüt Emisyon, Offset Alındı, Net Emisyon, Offset Kapsamı",
+        "GHG Protocol Scope breakdown bar chart with Scope 1/2/3 percentages",
+        "YoY table shows 2025 → 2026 changes (data-testid='carbon-yoy')",
+        "Offset purchases list (data-testid='carbon-offsets')",
+        "'Offset Ekle' button opens modal (data-testid='carbon-add-offset')",
+        "Modal has tonnes input (data-testid='carbon-offset-tonnes')",
+        "Modal has amount input (data-testid='carbon-offset-amount')",
+        "Modal save button works (data-testid='carbon-offset-save')"
+      ]
+    }
+  }
+}

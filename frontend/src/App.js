@@ -71,7 +71,7 @@ import {
   CancelInsurancePanel, GroupRoomingWizPanel, TaxReportsV2Panel, CISlotsPanel, Tier1DashboardPanel,
   BookingEngineV2Panel, OwnerPortalPanel, SpaActivitiesPanel, LoyaltyTiersPanel,
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
-  MeetingsSalesPanel, FnbPosHubPanel,
+  MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
@@ -2893,6 +2893,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "accounting-export", icon: ChartLine, name: "Accounting export", testId: "accounting-export-btn" },
         { id: "bi-feed", icon: ChartBar, name: "BI feed (Power BI / Tableau)", testId: "bi-feed-btn" },
         { id: "sustainability", icon: ChartLine, name: "Sustainability & ESG", testId: "sustainability-btn" },
+        { id: "carbon-v2", icon: ChartLine, name: "Karbon Raporu (GHG Scope 1/2/3)", testId: "carbon-v2-btn" },
 
         { divider: true, label: "Workflow & Alerts" },
         { id: "templates", icon: FileText, name: t("nav.templates"), testId: "templates-btn" },
@@ -3559,6 +3560,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         )}
         {activeView === "fnb-pos-hub" && (
           <FnbPosHubPanel propertyId={activePropertyId || "all"} />
+        )}
+        {activeView === "carbon-v2" && (
+          <CarbonReportingV2Panel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
         )}
 
         {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}

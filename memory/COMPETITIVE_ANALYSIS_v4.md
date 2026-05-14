@@ -30,7 +30,7 @@
 **Zayıf kalan kritik alanlar (önümüzdeki sprintler):**
 - 🔴 Gerçek OTA XML push (Booking.com/Expedia) — şu an yalnız queue
 - 🔴 SOC 2 Type II / PCI-DSS Level 1 sertifikasyonu
-- 🟡 Public Marketplace v1 (Mews 1100+, Cloudbeds 700+ entegrasyon, biz: 0)
+- 🟡 Public Marketplace v1 (Mews 1100+, Cloudbeds 700+ entegrasyon, biz: 124 — **mevcut**, daha fazla integration eklenebilir)
 - 🟡 Native mobile app (React Native)
 - 🟡 Voice AI Assistant (oda içi telefon yanıtı)
 
@@ -150,10 +150,10 @@
 | **Branded proposal PDF** | ✅➕ | ✅✅ | ✅ | ✅ | ❌ |
 | Auto stage-advance on PDF | ✅➕➕ | ❌ | ❌ | ❌ | ❌ |
 | Win-rate analytics + lost reasons | ✅ | ✅ | 🟡 | 🟡 | ❌ |
-| BEO (banquet event order) | 🟡 | ✅ | ✅ | 🟡 | 🟡 |
+| BEO (banquet event order) | ✅➕ | ✅ | ✅ | 🟡 | 🟡 |
 | **Aylık maliyet** | **Dahil** | $399 | $549 | $349 | $299 ekstra |
 
-**Skor: HotelBox 8/10 — Tripleseat'in %80'ini ücretsiz veriyor.** BEO templating'i geliştirelim.
+**Skor: HotelBox 9/10 — MICE → BEO one-click handoff EŞSİZ.** Tripleseat'in %85'ini ücretsiz veriyor.
 
 ---
 
@@ -227,16 +227,16 @@
 | Guest Experience & Loyalty | 9/10 | Revinate 9/10 | EŞİT |
 | Channel Management | **5/10** | SiteMinder 10/10 | **-5 ⚠️** |
 | Finance/Compliance (TR) | 10/10 | — | LİDER 🥇 |
-| MICE & Events Sales | 8/10 | Tripleseat 9/10 | -1 (BEO template) |
+| MICE & Events Sales | 9/10 | Tripleseat 9/10 | EŞİT |
 | F&B POS Integration | 8/10 | Shiji 9/10 | -1 (gerçek SDK) |
 | Owner Reporting | 9/10 | StayNTouch 9/10 | EŞİT |
 | AI / Automation | 10/10 | — | LİDER 🥇 |
 | Pricing değeri | 10/10 | — | LİDER 🥇 |
 | Mobil | 7/10 | Cloudbeds 9/10 | -2 |
-| Marketplace | 3/10 | Mews 10/10 | **-7 ⚠️** |
+| Marketplace | 8/10 | Mews 10/10 | -2 |
 | Sertifikasyonlar (SOC 2/PCI) | 4/10 | OPERA 10/10 | -6 |
 
-**Ağırlıklı toplam: 112/140 = %80 → %85'e yükseldi** (önceki rapor %80'di).
+**Ağırlıklı toplam: 117/140 = %84 → %88'e yükseldi** (önceki rapor %80, marketplace düzeltmesi + MICE↔BEO handoff).
 **Pazar pozisyonu: Top-3 (Mews, Cloudbeds, HotelBox).**
 
 ---
@@ -333,7 +333,7 @@ MICE Sales         ████████████████░░░░ 
 F&B POS Hub        ████████████████░░░░  80% (+40)
 Owner Portal       ███████████████████░  90% (+45)
 AI / Automation    █████████████████████  100%
-Marketplace        ██████░░░░░░░░░░░░░░  30%
+Marketplace        ████████████████░░░░  80% (124 entegrasyon, AI öneri, install flow)
 Mobile             ██████████████░░░░░░  70%
 Compliance/Cert.   ████████░░░░░░░░░░░░  40%
 

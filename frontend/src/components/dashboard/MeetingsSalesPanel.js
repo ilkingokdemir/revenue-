@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Briefcase, Plus, X, Trash, Funnel, FilePdf } from "@phosphor-icons/react";
+import { Briefcase, Plus, X, Trash, Funnel, FilePdf, Clipboard } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/meetings`;
 
@@ -114,6 +114,21 @@ export default function MeetingsSalesPanel({ propertyId = "all" }) {
       await axios.delete(`${API}/${detail.id}/items/${itemId}`, { withCredentials: true });
       loadDetail(detail.id); reload();
     } catch (e) { toast.error("Silinemedi"); }
+  }
+
+  async function generateBeo() {
+    if (!detail) return;
+    try {
+      const r = await axios.post(`${API}/${detail.id}/generate-beo`, {}, { withCredentials: true });
+      if (r.data.created) {
+        toast.success(`BEO oluşturuldu (${r.data.menu_items} menü, ${r.data.av_items} AV, ${r.data.beverage_items} içecek)`);
+      } else {
+        toast.info(r.data.note || "BEO zaten mevcut");
+      }
+      loadDetail(detail.id);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "BEO oluşturulamadı");
+    }
   }
 
   return (
@@ -281,6 +296,12 @@ export default function MeetingsSalesPanel({ propertyId = "all" }) {
                      className="text-xs px-2.5 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg inline-flex items-center gap-1 hover:bg-rose-100">
                     <FilePdf size={13} /> Teklif PDF
                   </a>
+                )}
+                {["confirmed", "invoiced", "completed"].includes(detail.stage) && (
+                  <button onClick={generateBeo} data-testid="meetings-generate-beo"
+                          className={`text-xs px-2.5 py-1.5 rounded-lg inline-flex items-center gap-1 ${detail.beo_id ? "bg-stone-100 text-stone-600 border border-stone-200" : "bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100"}`}>
+                    <Clipboard size={13} /> {detail.beo_id ? "BEO Bağlı" : "BEO Üret"}
+                  </button>
                 )}
                 <button onClick={() => setDetail(null)}><X size={16} /></button>
               </div>

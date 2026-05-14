@@ -239,6 +239,82 @@ def create_meetings_router(db, require_roles):
         r = await db.meeting_sale_items.delete_one({"id": item_id, "meeting_id": meeting_id})
         return {"deleted": r.deleted_count}
 
+    @router.post("/{meeting_id}/generate-beo")
+    async def generate_beo(meeting_id: str,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        """One-click handoff: turn a confirmed meeting into a draft Banquet Event Order.
+
+        The BEO is pre-filled from the meeting metadata + grouped line items.
+        Returns {beo_id} so the UI can deep-link into the BEO editor.
+        """
+        m = await db.meeting_sales.find_one({"id": meeting_id}, {"_id": 0})
+        if not m:
+            raise HTTPException(404, "Meeting not found")
+        if m.get("stage") not in ("confirmed", "invoiced", "completed"):
+            raise HTTPException(400, "BEO can only be generated for confirmed+ meetings")
+        # Idempotent: don't create if one already exists
+        existing = await db.banquet_orders.find_one({"proposal_id": meeting_id}, {"_id": 0, "id": 1})
+        if existing:
+            return {"beo_id": existing["id"], "created": False, "note": "BEO already exists for this meeting"}
+        items = await db.meeting_sale_items.find({"meeting_id": meeting_id}, {"_id": 0}).to_list(200)
+        # Group items into BEO sections
+        menu_items = [i for i in items if i.get("kind") == "fnb"]
+        bev_items = [i for i in items if i.get("kind") == "fnb" and "bar" in (i.get("label") or "").lower()]
+        av_items = [i for i in items if i.get("kind") == "av_tech"]
+        space_items = [i for i in items if i.get("kind") == "meeting_space"]
+        # Synthesise BEO doc
+        now = datetime.now(timezone.utc).isoformat()
+        beo = {
+            "id": str(uuid.uuid4()),
+            "property_id": m.get("property_id"),
+            "proposal_id": meeting_id,
+            "event_name": m.get("name") or "Event",
+            "event_date": m.get("event_date"),
+            "start_time": "12:00",
+            "end_time": "23:00",
+            "venue_room": space_items[0]["label"] if space_items else "TBD",
+            "guest_count": int(m.get("guests_count") or 0),
+            "setup_style": "banquet",
+            "menu": [
+                {"name": "Main service", "items": [it["label"] for it in menu_items if it not in bev_items],
+                 "notes": None}
+            ] if menu_items else [],
+            "beverages": [{"name": it["label"], "qty": f"{it.get('qty', 1):g} pax", "notes": None}
+                          for it in bev_items],
+            "av": [{"name": it["label"], "qty": int(it.get("qty") or 1), "notes": None}
+                   for it in av_items],
+            "decoration": None,
+            "special_requests": m.get("notes") or None,
+            "billing_instructions": (
+                f"Estimated total: £{sum(i.get('qty', 0) * i.get('unit_price', 0) for i in items):.2f} "
+                f"(see proposal {meeting_id[:8]})"
+            ),
+            "contacts": [
+                {"name": m.get("contact_name") or "Client",
+                 "role": "Client",
+                 "phone": m.get("contact_phone") or None,
+                 "email": m.get("contact_email") or None},
+                {"name": current_user.get("name", "Sales"),
+                 "role": "Sales Lead",
+                 "phone": None, "email": None},
+            ],
+            "status": "draft",
+            "notes": f"Auto-generated from sales meeting {meeting_id[:8]} on {now[:10]}",
+            "created_at": now,
+            "created_by": current_user.get("name", ""),
+            "updated_at": now,
+        }
+        await db.banquet_orders.insert_one(beo)
+        # Stamp the meeting so UI can show "BEO linked"
+        await db.meeting_sales.update_one(
+            {"id": meeting_id},
+            {"$set": {"beo_id": beo["id"], "beo_generated_at": now}}
+        )
+        return {"beo_id": beo["id"], "created": True,
+                "menu_items": len(beo["menu"][0]["items"]) if beo["menu"] else 0,
+                "av_items": len(beo["av"]),
+                "beverage_items": len(beo["beverages"])}
+
     @router.get("/{meeting_id}/proposal.pdf")
     async def proposal_pdf(meeting_id: str,
                            current_user: dict = Depends(require_roles("admin", "manager"))):

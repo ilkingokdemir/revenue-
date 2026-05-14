@@ -1,0 +1,170 @@
+{
+  "summary": "Completed testing of Iteration 287 - Developer Portal (Mews Marketplace v2 parity), Wholesaler Network (Cloudbeds Hotel Trader parity), Lead Funnel Bridge, and Lighthouse Compset Adapter. Backend: 40/40 tests passed (100%). Frontend: All 3 new panels load correctly with Turkish UI, sidebar entries visible, all interactive elements functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration287_dev_portal_wholesaler_lead_funnel.py",
+    "/app/test_reports/pytest/pytest_iteration287_dev_portal_wholesaler.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration287_dev_portal_wholesaler_lead_funnel.py"
+  ],
+  "success_rate": {
+    "backend": "100% (40/40 passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "test_developer": "test_dev_*@example.com / TestDev2026! (created during tests)"
+  },
+  "seed_data_creation": "Created test developer apps (TEST_App_287, TEST_Approve_287, TEST_Suspend_287, etc.) and wholesaler connections during backend tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 287 fully tested. Four new modules added: (1) Developer Portal at /api/dev-portal/* with self-registration, OAuth app creation (hb_* client_id), API key generation (hbk_* prefix), revenue share opt-in, admin approve/suspend. (2) Wholesaler Network at /api/wholesaler/* with 5 providers (hotelbeds, tbo, travelgate, gta, mock), connection CRUD, test/push/dispatch operations. (3) Lead Funnel at /api/lead-funnel/* with concierge session ingestion, lead CRUD, status workflow. (4) Lighthouse Adapter at /api/lighthouse-adapter/* with mock compset data (5 competitors). Frontend panels: DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel. All Turkish UI throughout.",
+  "features_tested": {
+    "developer_portal": {
+      "endpoints": [
+        "GET /api/dev-portal/info (no auth) - returns 10 scopes, rate limits, revenue share program",
+        "POST /api/dev-portal/register - creates developer, returns JWT (type=developer_access, 7d exp)",
+        "POST /api/dev-portal/login - validates credentials",
+        "GET /api/dev-portal/me - returns profile without password_hash",
+        "POST /api/dev-portal/apps - creates OAuth app with hb_* client_id, returns client_secret ONCE",
+        "GET /api/dev-portal/apps - lists apps without secrets",
+        "POST /api/dev-portal/apps/{id}/keys - generates hbk_* API key, returns plaintext ONCE",
+        "GET /api/dev-portal/apps/{id}/keys - lists keys without key_hash",
+        "DELETE /api/dev-portal/apps/{id}/keys/{key_id} - revokes key",
+        "GET /api/dev-portal/apps/{id}/stats - returns usage statistics",
+        "POST /api/dev-portal/apps/{id}/revenue-share/opt-in - enrolls in revenue share",
+        "GET /api/dev-portal/admin/apps (admin) - returns all apps with developer_email/company",
+        "POST /api/dev-portal/admin/apps/{id}/approve (admin) - updates status to approved",
+        "POST /api/dev-portal/admin/apps/{id}/suspend (admin) - updates status to suspended"
+      ],
+      "verified": [
+        "10 scopes available",
+        "Rate limit: 10 req/sec per app",
+        "Revenue share: 10% default",
+        "Sandbox: free",
+        "Duplicate email returns 409",
+        "Short password (<8 chars) returns 400",
+        "Invalid credentials returns 401",
+        "client_id format: hb_*",
+        "API key format: hbk_*"
+      ]
+    },
+    "wholesaler_network": {
+      "endpoints": [
+        "GET /api/wholesaler/providers - returns 5 providers",
+        "POST /api/wholesaler/connections - creates connection",
+        "GET /api/wholesaler/connections - lists connections",
+        "PATCH /api/wholesaler/connections/{id} - updates connection",
+        "DELETE /api/wholesaler/connections/{id} - removes connection",
+        "POST /api/wholesaler/connections/{id}/test - updates status to online",
+        "POST /api/wholesaler/connections/{id}/push - creates queued job",
+        "POST /api/wholesaler/dispatch - polls all active connections",
+        "GET /api/wholesaler/inbound-bookings - lists imported bookings",
+        "GET /api/wholesaler/queue - lists sync jobs"
+      ],
+      "verified": [
+        "5 providers: hotelbeds, tbo, travelgate, gta, mock",
+        "Provider metadata: auth_fields, supports_push, default_commission, partner_count_global",
+        "Unknown provider returns 400",
+        "Push without dates returns 400",
+        "Credentials redacted in responses",
+        "Idempotent inbound booking import (by external_id)"
+      ]
+    },
+    "lead_funnel": {
+      "endpoints": [
+        "POST /api/lead-funnel/ingest-concierge-sessions/{property_id} - scans sessions, creates leads",
+        "GET /api/lead-funnel/leads - lists leads with counts_by_status",
+        "PATCH /api/lead-funnel/leads/{id} - updates status",
+        "POST /api/lead-funnel/leads/{id}/convert - marks as won with booking_id"
+      ],
+      "verified": [
+        "Intent keywords: rezerv, fiyat, müsait, etc.",
+        "Idempotent: same session_id skipped",
+        "Status workflow: new → contacted → qualified → won/lost",
+        "Convert without booking_id returns 400"
+      ]
+    },
+    "lighthouse_adapter": {
+      "endpoints": [
+        "GET /api/lighthouse-adapter/status - returns mock status without API key",
+        "POST /api/lighthouse-adapter/refresh/{property_id} - returns mock snapshot"
+      ],
+      "verified": [
+        "Without LIGHTHOUSE_API_KEY: provider=mock, real_data=false",
+        "5 competitors: Marriott, Hilton, Premier Inn, ibis, Holiday Inn",
+        "market_average calculated",
+        "data_points_sampled ~3B"
+      ]
+    },
+    "frontend_ui": {
+      "sidebar_entries": {
+        "verified": [
+          "Geliştirici portalı (data-testid=dev-portal-btn)",
+          "Wholesaler ağı (data-testid=wholesaler-hub-btn)",
+          "Lead Funnel + Compset (data-testid=lead-funnel-btn)"
+        ]
+      },
+      "dev_portal_admin_panel": {
+        "verified": [
+          "data-testid='dev-portal-admin-panel' loads",
+          "Turkish UI: 'Geliştirici Portalı Yönetimi', 'Mews Marketplace v2 parity'",
+          "5 KPIs: Toplam App, Onay Bekleyen, Onaylı, Askıdaki, Revenue-Share",
+          "Public Portal Bilgisi banner with scope count (10), rate limit, revenue share %",
+          "Apps table with approve/suspend actions"
+        ]
+      },
+      "wholesaler_hub_panel": {
+        "verified": [
+          "data-testid='wholesaler-hub-panel' loads",
+          "Turkish UI: 'Wholesaler / Net Rate Ağı', 'Cloudbeds Hotel Trader parity'",
+          "3 tabs: Bağlantılar, Gelen Rezervasyonlar, Kuyruk",
+          "'Tüm Bağlantıları Tara' button (dispatch)",
+          "'Bağlan' button opens modal with provider dropdown (5 providers)"
+        ]
+      },
+      "lead_funnel_panel": {
+        "verified": [
+          "data-testid='lead-funnel-panel' loads",
+          "Turkish UI: 'Lead Funnel & Compset Hub', 'Web Concierge → CRM Funnel'",
+          "5 KPIs: Yeni, İletişimde, Kalifiye, Kazanıldı, Kaybedildi",
+          "'Concierge'den İçeri Aktar' button",
+          "Lighthouse Compset section with 'mock' status banner",
+          "'Tara' button for Lighthouse refresh"
+        ]
+      }
+    },
+    "regression_tests": {
+      "iter_286": {
+        "verified": [
+          "GET /api/agents works",
+          "GET /api/vacation-rental/summary works"
+        ]
+      },
+      "core": {
+        "verified": [
+          "GET /api/properties works",
+          "GET /api/open-pricing/segments works"
+        ]
+      }
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Wholesaler adapter calls (_simulate_adapter_call) — REPLACE with real SDK when partner keys arrive",
+      "Lighthouse compset (_simulate_lighthouse_call) — REPLACE with real Lighthouse SDK when LIGHTHOUSE_API_KEY env set"
+    ]
+  }
+}

@@ -144,6 +144,11 @@ export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEv
 export const AgentsPanel = L(() => import("./components/dashboard/AgentsPanel"));
 export const VacationRentalPanel = L(() => import("./components/dashboard/VacationRentalPanel"));
 
+// ---------- COMPETITOR PARITY v6.3 (Iter 287 - Dev Portal + Wholesaler + Lead Funnel) ----------
+export const DevPortalAdminPanel = L(() => import("./components/dashboard/DevPortalAdminPanel"));
+export const WholesalerHubPanel = L(() => import("./components/dashboard/WholesalerHubPanel"));
+export const LeadFunnelPanel = L(() => import("./components/dashboard/LeadFunnelPanel"));
+
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");
 export const IntegrationsMarketplace = N(() => import("./components/dashboard/IntegrationsMarketplace"), "IntegrationsMarketplace");

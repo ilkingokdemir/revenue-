@@ -77,6 +77,7 @@ import {
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
   OpenPricingPanel, BeachPosPanel, PublicEventsPanel,
   AgentsPanel, VacationRentalPanel,
+  DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
@@ -199,6 +200,7 @@ import {
   Stack,
   Umbrella,
   Confetti,
+  Funnel,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2944,6 +2946,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "public-events", icon: Confetti, name: "Halka açık etkinlikler", testId: "public-events-btn" },
         { id: "ai-agents", icon: Robot, name: "Otonom AI Agent'lar", testId: "ai-agents-btn" },
         { id: "vacation-rental", icon: House, name: "Vacation Rental (apart)", testId: "vacation-rental-btn" },
+        { id: "dev-portal", icon: Code, name: "Geliştirici portalı", testId: "dev-portal-btn" },
+        { id: "wholesaler-hub", icon: Globe, name: "Wholesaler ağı", testId: "wholesaler-hub-btn" },
+        { id: "lead-funnel", icon: Funnel, name: "Lead Funnel + Compset", testId: "lead-funnel-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
@@ -4825,6 +4830,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Vacation Rental dedicated view — Eviivo/Lighthouse parity (Iter 286) */}
         {activeView === "vacation-rental" && <VacationRentalPanel />}
+
+        {/* Dev Portal / Wholesaler / Lead Funnel — Iter 287 */}
+        {activeView === "dev-portal" && <DevPortalAdminPanel />}
+        {activeView === "wholesaler-hub" && (
+          <WholesalerHubPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
+        {activeView === "lead-funnel" && (
+          <LeadFunnelPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
+        )}
         </Suspense>
       </main>
 

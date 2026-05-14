@@ -1058,6 +1058,18 @@ api_router.include_router(create_agents_router(db, require_roles))
 from routes.vacation_rental import create_vacation_rental_router
 api_router.include_router(create_vacation_rental_router(db, require_roles))
 
+# ===== Public Developer Portal (Iter 287 - Mews Marketplace v2 parity) =====
+from routes.dev_portal import create_dev_portal_router
+api_router.include_router(create_dev_portal_router(db, require_roles))
+
+# ===== Wholesaler / Net Rate Network (Iter 287 - Cloudbeds Hotel Trader parity) =====
+from routes.wholesaler import create_wholesaler_router
+api_router.include_router(create_wholesaler_router(db, require_roles))
+
+# ===== Lead Funnel Bridge + Lighthouse Adapter (Iter 287) =====
+from routes.lead_funnel import create_lead_funnel_router
+api_router.include_router(create_lead_funnel_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

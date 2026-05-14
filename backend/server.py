@@ -1074,6 +1074,10 @@ api_router.include_router(create_lead_funnel_router(db, require_roles))
 from routes.marketing_videos import create_marketing_videos_router
 api_router.include_router(create_marketing_videos_router(db, require_roles))
 
+# ===== Brand Voice Studio (Iter 289 - centralized tone-of-voice service) =====
+from routes.brand_voice import create_brand_voice_router
+api_router.include_router(create_brand_voice_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

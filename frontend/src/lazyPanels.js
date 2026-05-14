@@ -152,6 +152,9 @@ export const LeadFunnelPanel = L(() => import("./components/dashboard/LeadFunnel
 // ---------- COMPETITOR PARITY v6.4 (Iter 288 - Sora 2 marketing videos) ----------
 export const MarketingVideosPanel = L(() => import("./components/dashboard/MarketingVideosPanel"));
 
+// ---------- COMPETITOR PARITY v6.5 (Iter 289 - Brand Voice Studio) ----------
+export const BrandVoicePanel = L(() => import("./components/dashboard/BrandVoicePanel"));
+
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");
 export const IntegrationsMarketplace = N(() => import("./components/dashboard/IntegrationsMarketplace"), "IntegrationsMarketplace");

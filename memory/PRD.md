@@ -214,6 +214,25 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 298 (Fleet-Wide Competitor Pulse + 51 Competitors Live)
+- **Triggered competitor scans** for all 8 remaining properties (5 each) — **51/51 rakip canlı Booking.com verisine geçti**.
+- **New endpoint**: `GET /api/revenue/market-robot/fleet-pulse?days=N` — cross-branch özet:
+  - Per-property: market_avg, our_avg, vs_market_pct, scrape progress
+  - Fleet summary: filo_market_avg, filo_our_avg, filo_vs_pct, above/aligned/below counts
+  - Latency: 224ms (batch rate_overrides fetch ile optimize edildi)
+- **New widget**: `FleetCompetitorPulseCard.js` (cyan-themed):
+  - KPI strip (Filo Pazar / Filo Bizim / vs Pazar % / Dağılım)
+  - Per-branch bar chart (sıralı vs_market_pct, color-coded: amber>5%, emerald<-5%, gri ±5%)
+  - Branch tablo + "Aç" button (per-property drill-down)
+- **MarketRobot.js**: `propertyId === "all"` ise `FleetCompetitorPulseCard`, değilse tekil `CompetitorPricePulseCard` gösterir
+- **Canlı sonuç (14 gün, gerçek Booking.com)**:
+  - Filo Pazar Avg: £148.96 · Filo Bizim: £105.72 · **vs Pazar: -29%**
+  - 9/9 şube pazarın altında (above=0, aligned=0, below=9) → tüm filoda fiyat artırma fırsatı
+  - En büyük gap: Camden Apartments **-53.7%** (£74.20 vs pazar £160.18)
+  - En küçük gap: Aldgate Flats **-18.6%** (£129.51 vs £159.19)
+- **Perf fix**: Hem tekil hem fleet endpoint'i N+1 rate_overrides query problemi vardı. Tek `$in` batch-fetch ile düzeltildi (1 sorgu vs N). Önce timeout oluyordu, şimdi 100-200ms.
+- **Route order fix**: `/fleet/competitor-pulse` path'i `/{property_id}/competitor-pulse` ile çakıştığı için `/fleet-pulse` yapıldı (FastAPI dynamic route match).
+
 ### Iter 297 (Competitor Price Pulse Widget) — live data verified
 - **Backend**: `GET /api/revenue/market-robot/{pid}/competitor-pulse?days=N` — günlük rakip fiyat dağılımı (avg/min/max) + bizim oran karşılaştırması. `market_competitors[].prices[]` array'inden N gün için seriler hesaplar. Summary: market_avg, market_min, market_max, our_avg, vs_market_pct.
 - **Frontend**: `CompetitorPricePulseCard.js` — Recharts ComposedChart, fuchsia-themed:

@@ -3256,14 +3256,18 @@ def create_market_robot_router(db, require_roles, resend=None):
         rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
         base_rate = float((rt or {}).get("base_rate") or 100)
 
+        # Batch fetch overrides (1 query vs N)
+        date_keys = [(now + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+        overrides_list = await db.rate_overrides.find(
+            {"property_id": property_id, "date": {"$in": date_keys}},
+            {"_id": 0, "date": 1, "custom_rate": 1},
+        ).to_list(500)
+        override_map = {o["date"]: o.get("custom_rate") for o in overrides_list if o.get("custom_rate")}
+
         series = []
-        for i in range(days):
-            d = (now + timedelta(days=i)).strftime("%Y-%m-%d")
+        for d in date_keys:
             prices = per_day.get(d) or []
-            override = await db.rate_overrides.find_one(
-                {"property_id": property_id, "date": d}, {"_id": 0}
-            )
-            our_rate = float(override["custom_rate"]) if override and override.get("custom_rate") else base_rate
+            our_rate = float(override_map.get(d, base_rate))
             if prices:
                 series.append({
                     "date": d,
@@ -3307,6 +3311,126 @@ def create_market_robot_router(db, require_roles, resend=None):
             "scanned_competitors": scanned_count,
             "series": series,
             "summary": summary,
+        }
+
+    @router.get("/revenue/market-robot/fleet-pulse")
+    async def fleet_competitor_pulse(days: int = 30,
+                                     current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Cross-branch Competitor Pulse — tüm property'ler için pazar avg + bizim avg.
+        Owner/CEO bakış açısı: "filomun pazara karşı pozisyonu nedir?"
+        """
+        days = max(7, min(int(days), 90))
+        properties = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+        # Pseudo-property'leri atla
+        properties = [p for p in properties if p.get("id") and p["id"] not in ("all", "default")]
+
+        now = datetime.now(timezone.utc)
+        # Tarih anahtarları
+        date_keys = [(now + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+        date_set = set(date_keys)
+
+        branches = []
+        for p in properties:
+            pid = p["id"]
+            comps = await db.market_competitors.find(
+                {"property_id": pid}, {"_id": 0, "prices": 1, "last_scraped": 1}
+            ).to_list(50)
+
+            # Day → list[price]
+            per_day: dict = {}
+            scanned_count = 0
+            for c in comps:
+                if c.get("last_scraped"):
+                    scanned_count += 1
+                for row in (c.get("prices") or []):
+                    if not row.get("scraped"):
+                        continue
+                    d = row.get("date")
+                    lp = row.get("lowest_price")
+                    if not (d and lp and d in date_set):
+                        continue
+                    try:
+                        per_day.setdefault(d, []).append(float(lp))
+                    except Exception:
+                        pass
+
+            # Our base rate
+            rt = await db.room_types.find_one({"property_id": pid}, {"_id": 0})
+            base_rate = float((rt or {}).get("base_rate") or 100)
+
+            # Batch fetch all overrides for this property in date range (1 query vs N)
+            overrides_list = await db.rate_overrides.find(
+                {"property_id": pid, "date": {"$in": date_keys}},
+                {"_id": 0, "date": 1, "custom_rate": 1},
+            ).to_list(500)
+            override_map = {o["date"]: o.get("custom_rate") for o in overrides_list if o.get("custom_rate")}
+            our_rates = {d: float(override_map.get(d, base_rate)) for d in date_keys}
+
+            # Daily collapse
+            market_avgs = []
+            our_avgs = []
+            for d in date_keys:
+                prices = per_day.get(d, [])
+                if prices:
+                    market_avgs.append(sum(prices) / len(prices))
+                    our_avgs.append(our_rates[d])
+
+            if market_avgs:
+                m_avg = sum(market_avgs) / len(market_avgs)
+                o_avg = sum(our_avgs) / len(our_avgs)
+                vs_pct = ((o_avg - m_avg) / m_avg) * 100 if m_avg else 0
+                branches.append({
+                    "property_id": pid,
+                    "property_name": p.get("name") or pid,
+                    "competitor_count": len(comps),
+                    "scanned_competitors": scanned_count,
+                    "market_avg": round(m_avg, 2),
+                    "our_avg": round(o_avg, 2),
+                    "vs_market_pct": round(vs_pct, 1),
+                    "days_with_data": len(market_avgs),
+                })
+            else:
+                branches.append({
+                    "property_id": pid,
+                    "property_name": p.get("name") or pid,
+                    "competitor_count": len(comps),
+                    "scanned_competitors": scanned_count,
+                    "market_avg": None,
+                    "our_avg": round(base_rate, 2),
+                    "vs_market_pct": None,
+                    "days_with_data": 0,
+                })
+
+        # Filo özeti
+        live_branches = [b for b in branches if b["market_avg"] is not None]
+        if live_branches:
+            fleet_market_avg = sum(b["market_avg"] for b in live_branches) / len(live_branches)
+            fleet_our_avg = sum(b["our_avg"] for b in live_branches) / len(live_branches)
+            fleet_vs_pct = ((fleet_our_avg - fleet_market_avg) / fleet_market_avg) * 100 if fleet_market_avg else 0
+            above = sum(1 for b in live_branches if b["vs_market_pct"] > 5)
+            below = sum(1 for b in live_branches if b["vs_market_pct"] < -5)
+            aligned = len(live_branches) - above - below
+            fleet_summary = {
+                "fleet_market_avg": round(fleet_market_avg, 2),
+                "fleet_our_avg": round(fleet_our_avg, 2),
+                "fleet_vs_pct": round(fleet_vs_pct, 1),
+                "above_market": above,
+                "below_market": below,
+                "aligned": aligned,
+                "live_branches": len(live_branches),
+                "total_branches": len(branches),
+            }
+        else:
+            fleet_summary = {
+                "fleet_market_avg": None, "fleet_our_avg": None,
+                "fleet_vs_pct": None, "above_market": 0, "below_market": 0,
+                "aligned": 0, "live_branches": 0, "total_branches": len(branches),
+            }
+
+        return {
+            "days": days,
+            "fleet_summary": fleet_summary,
+            "branches": branches,
         }
 
     # ==================== SMART SCANNER CONTROL ====================

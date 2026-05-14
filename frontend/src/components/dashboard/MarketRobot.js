@@ -15,6 +15,7 @@ import { DemandRadar } from "./DemandRadar";
 import NeighborhoodScanPanel from "./NeighborhoodScanPanel";
 import MarketRobotHealthWidget from "./MarketRobotHealthWidget";
 import CompetitorPricePulseCard from "./CompetitorPricePulseCard";
+import FleetCompetitorPulseCard from "./FleetCompetitorPulseCard";
 import OurBookingLiveCard from "./OurBookingLiveCard";
 import RankingAnalysisCard from "./RankingAnalysisCard";
 import DiscoverCompetitorsModal from "./DiscoverCompetitorsModal";
@@ -361,8 +362,10 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
           {/* Cross-Branch Scanner Health */}
           <MarketRobotHealthWidget />
 
-          {/* Competitor Price Pulse — günlük rakip fiyat dağılımı */}
-          <CompetitorPricePulseCard propertyId={propertyId} />
+          {/* Pazar pulse — propertyId="all" ise filo, değilse tekil */}
+          {propertyId === "all"
+            ? <FleetCompetitorPulseCard />
+            : <CompetitorPricePulseCard propertyId={propertyId} />}
 
           {/* Scan Result Banner */}
           {scanResult && (

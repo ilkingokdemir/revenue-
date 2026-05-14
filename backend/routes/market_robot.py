@@ -26,11 +26,12 @@ async def _internal_close_gap(db, property_id: str, strategy: str = "half",
                               days: int = 14, dry_run: bool = False,
                               min_gap_pct: float = 0.0,
                               source: str = "market-gap-close",
-                              user_name: str = "system") -> dict:
+                              user_name: str = "system",
+                              batch_id: str | None = None) -> dict:
     """Re-usable gap-close logic — used by both /close-gap endpoint and /fleet-close-gap.
 
     Sadece pazarın altındaki günlere yazar. min_gap_pct (default 0) altında olanlar
-    skip edilir (örn. fleet için >2% gap istenirse).
+    skip edilir. batch_id geçerse rate_overrides'a batch_id ile damgalanır (undo için).
     """
     from datetime import datetime, timezone, timedelta
 
@@ -102,16 +103,19 @@ async def _internal_close_gap(db, property_id: str, strategy: str = "half",
             uplift_pct = ((new_rate - our_rate) / our_rate) * 100 if our_rate else 0
             applied += 1
             total_uplift_pct += uplift_pct
+            ctx = {
+                "strategy": strategy,
+                "market_avg": round(market_avg, 2),
+                "market_min": round(market_min, 2),
+                "previous_rate": round(our_rate, 2),
+            }
+            if batch_id:
+                ctx["batch_id"] = batch_id
             upserts.append({
                 "property_id": property_id, "date": d,
                 "custom_rate": new_rate, "source": source,
                 "set_by": user_name, "set_at": now.isoformat(),
-                "context": {
-                    "strategy": strategy,
-                    "market_avg": round(market_avg, 2),
-                    "market_min": round(market_min, 2),
-                    "previous_rate": round(our_rate, 2),
-                },
+                "context": ctx,
             })
 
     if not dry_run and upserts:
@@ -3694,13 +3698,17 @@ def create_market_robot_router(db, require_roles, resend=None):
           - min_gap_pct: float (default: 2.0) — sadece bu pct üstündeki gap'lere uygula
 
         Returns: per-branch sonuç + filo özeti.
+
+        Non-dry-run uygulamalar `fleet_gap_history` koleksiyonuna batch kaydedilir (undo için).
         """
+        import uuid as _uuid
         strategy = (data.get("strategy") or "half").lower()
         if strategy not in ("full", "half", "floor", "value"):
             raise HTTPException(status_code=400, detail="strategy must be full|half|floor|value")
         days = max(7, min(int(data.get("days") or 14), 60))
         dry_run = bool(data.get("dry_run"))
         min_gap_pct = float(data.get("min_gap_pct") or 2.0)
+        batch_id = None if dry_run else _uuid.uuid4().hex[:16]
 
         properties = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
         properties = [p for p in properties if p.get("id") and p["id"] not in ("all", "default")]
@@ -3708,16 +3716,16 @@ def create_market_robot_router(db, require_roles, resend=None):
         per_branch = []
         total_applied = 0
         total_skipped = 0
-        uplift_weighted_sum = 0.0  # uplift * applied days
+        uplift_weighted_sum = 0.0
         uplift_days_total = 0
         for p in properties:
             pid = p["id"]
             try:
-                # Reuse same logic — call internal handler. We replicate the core to avoid recursion.
                 result = await _internal_close_gap(
                     db, pid, strategy=strategy, days=days, dry_run=dry_run,
                     min_gap_pct=min_gap_pct, source="fleet-gap-close",
                     user_name=current_user.get("name", "fleet-gap-close"),
+                    batch_id=batch_id,
                 )
                 per_branch.append({
                     "property_id": pid,
@@ -3739,10 +3747,29 @@ def create_market_robot_router(db, require_roles, resend=None):
 
         fleet_avg_uplift = round(uplift_weighted_sum / uplift_days_total, 1) if uplift_days_total else 0
         branches_with_apply = sum(1 for b in per_branch if b.get("applied", 0) > 0)
+
+        # Record batch for undo (only if anything applied)
+        if not dry_run and batch_id and total_applied > 0:
+            await db.fleet_gap_history.insert_one({
+                "batch_id": batch_id,
+                "applied_at": datetime.now(timezone.utc).isoformat(),
+                "applied_by": current_user.get("name", "fleet-gap-close"),
+                "strategy": strategy,
+                "days": days,
+                "min_gap_pct": min_gap_pct,
+                "branches_with_apply": branches_with_apply,
+                "total_days_applied": total_applied,
+                "fleet_avg_uplift_pct": fleet_avg_uplift,
+                "per_branch": [{"pid": b["property_id"], "name": b["property_name"],
+                                "applied": b.get("applied", 0)} for b in per_branch if b.get("applied", 0) > 0],
+                "undone": False,
+            })
+
         return {
             "ok": True,
             "strategy": strategy,
             "dry_run": dry_run,
+            "batch_id": batch_id,
             "fleet_summary": {
                 "total_branches": len(properties),
                 "branches_with_apply": branches_with_apply,
@@ -3751,6 +3778,44 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "fleet_avg_uplift_pct": fleet_avg_uplift,
             },
             "branches": per_branch,
+        }
+
+    @router.get("/revenue/market-robot/gap-history")
+    async def gap_history(limit: int = 10,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Son fleet-gap-close batch'leri (undo için)."""
+        rows = await db.fleet_gap_history.find({}, {"_id": 0}).sort("applied_at", -1).to_list(min(limit, 50))
+        return {"items": rows}
+
+    @router.post("/revenue/market-robot/gap-history/{batch_id}/undo")
+    async def undo_gap_batch(batch_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Bir fleet-gap-close batch'inin tüm rate_overrides kayıtlarını siler.
+        Override silinince sistem base_rate'e (veya farklı bir override varsa ona) döner.
+        """
+        batch = await db.fleet_gap_history.find_one({"batch_id": batch_id}, {"_id": 0})
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch bulunamadı")
+        if batch.get("undone"):
+            raise HTTPException(status_code=400, detail="Bu batch zaten geri alındı")
+
+        # Delete all rate_overrides with this batch_id in context
+        del_result = await db.rate_overrides.delete_many({"context.batch_id": batch_id})
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.fleet_gap_history.update_one(
+            {"batch_id": batch_id},
+            {"$set": {
+                "undone": True,
+                "undone_at": now_iso,
+                "undone_by": current_user.get("name", "system"),
+                "deleted_count": del_result.deleted_count,
+            }},
+        )
+        return {
+            "ok": True,
+            "batch_id": batch_id,
+            "deleted_overrides": del_result.deleted_count,
         }
 
     # ==================== SMART SCANNER CONTROL ====================

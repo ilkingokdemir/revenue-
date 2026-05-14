@@ -214,6 +214,24 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 302 (Fleet Gap History + Undo — Safety Net)
+- **Yeni endpoint'ler**:
+  - `GET /api/revenue/market-robot/gap-history?limit=N` — son fleet-gap-close batch'leri
+  - `POST /api/revenue/market-robot/gap-history/{batch_id}/undo` — batch'teki tüm rate_overrides'ı sil (override silinince base_rate'e döner)
+- **DB**: Her non-dry-run fleet apply → `fleet_gap_history` koleksiyonuna kayıt:
+  - batch_id (uuid first 16 hex chars), applied_at, applied_by, strategy, days, branches_with_apply, total_days_applied, fleet_avg_uplift_pct, per_branch summary, undone (bool)
+  - rate_overrides'ın `context.batch_id` ile damgalanması → undo `delete_many({"context.batch_id": batch_id})` ile silebilir
+- **Frontend**:
+  - `FleetCompetitorPulseCard`: gradient CTA altında küçük "Son işlem" satırı (pulse dot + strategy + branches × days + uplift + saat + "↶ Geri Al" butonu)
+  - `FleetGapCloseModal` apply sonrası toast'ta inline "↶ Geri Al" action button (12sn boyunca clickable)
+- **E2E live verified**:
+  - Apply (half, 7g, ≥15%): batch_id `c4934e27`, 8 şube × 39 gün, +35.5% uplift
+  - History endpoint listede ✅
+  - Undo → 39 rate_override deleted ✅, undone flag = true
+  - Double undo → 400 (idempotency) ✅
+  - RBAC: receptionist undo/history → 403 ✅
+- **Etki**: "Yanlışlıkla strateji uyguladım, geri alamam" korkusu sona erdi. Tek tık apply + tek tık geri al. Production-safe gap optimization.
+
 ### Iter 301 (PMS Module Regression + Fleet-Wide Gap Close)
 - **PMS smoke test** (121 GET endpoint, 40 PMS dosya): **109 OK · 0 hard bug (500/EXC) · 12 4xx (hepsi prefix-related false positive — channels_v2/booking_engine_v2/crm_360 farklı prefix'lerde register edilmiş)**
 - **Yeni endpoint**: `POST /api/revenue/market-robot/fleet-close-gap` — fleet-wide tek tıkta tüm şubelere strateji uygula

@@ -6,10 +6,11 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ReferenceLine, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap, Undo2 } from "lucide-react";
 import useLivePolling from "../../hooks/useLivePolling";
 import GapCloseModal from "./GapCloseModal";
 import FleetGapCloseModal from "./FleetGapCloseModal";
+import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -19,6 +20,29 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
   const [days, setDays] = useState(30);
   const [gapTarget, setGapTarget] = useState(null);  // {property_id, property_name}
   const [fleetGapOpen, setFleetGapOpen] = useState(false);
+  const [lastBatch, setLastBatch] = useState(null);  // {batch_id, applied_at, branches, days, undone}
+
+  const loadLastBatch = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/revenue/market-robot/gap-history?limit=1`);
+      const latest = data.items?.[0];
+      setLastBatch(latest && !latest.undone ? latest : null);
+    } catch { /* noop */ }
+  }, []);
+
+  useEffect(() => { loadLastBatch(); }, [loadLastBatch]);
+
+  const undoLastBatch = async () => {
+    if (!lastBatch) return;
+    try {
+      const r = await axios.post(`${API}/revenue/market-robot/gap-history/${lastBatch.batch_id}/undo`);
+      toast.success(`${r.data.deleted_overrides} fiyat geri alındı`);
+      setLastBatch(null);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Geri alma başarısız");
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -129,6 +153,28 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
         </button>
       )}
 
+      {/* Son işlem → Geri al */}
+      {lastBatch && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-stone-950/60 border border-stone-800" data-testid="fleet-last-batch">
+          <div className="flex items-center gap-2 text-[11px]">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-stone-400">Son işlem:</span>
+            <span className="text-stone-200 font-bold">
+              {lastBatch.strategy} · {lastBatch.branches_with_apply} şube × {lastBatch.total_days_applied} gün
+            </span>
+            <span className="text-emerald-400">+{lastBatch.fleet_avg_uplift_pct}%</span>
+            <span className="text-stone-500 text-[10px]">
+              {new Date(lastBatch.applied_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+          <button onClick={undoLastBatch}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 text-[10px] font-bold transition"
+            data-testid="fleet-undo-last">
+            <Undo2 className="w-3 h-3" /> Geri Al
+          </button>
+        </div>
+      )}
+
       {/* Per-branch bar chart */}
       {hasData ? (
         <div className="bg-stone-950/30 rounded-xl p-3 border border-stone-800/50">
@@ -222,7 +268,7 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
         />
       )}
       {fleetGapOpen && (
-        <FleetGapCloseModal onClose={() => { setFleetGapOpen(false); load(); }} />
+        <FleetGapCloseModal onClose={() => { setFleetGapOpen(false); load(); loadLastBatch(); }} />
       )}
     </div>
   );

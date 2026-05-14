@@ -50,7 +50,24 @@ export default function FleetGapCloseModal({ onClose }) {
         strategy, days, dry_run: false, min_gap_pct: minGap,
       });
       const fs = data.fleet_summary;
-      toast.success(`${fs.branches_with_apply} şube × ${fs.total_days_applied} gün uygulandı · ort. +${fs.fleet_avg_uplift_pct}% uplift`);
+      const batchId = data.batch_id;
+      toast.success(
+        `${fs.branches_with_apply} şube × ${fs.total_days_applied} gün uygulandı · +${fs.fleet_avg_uplift_pct}% uplift`,
+        {
+          duration: 12000,
+          action: batchId ? {
+            label: "↶ Geri Al",
+            onClick: async () => {
+              try {
+                const r = await axios.post(`${API}/revenue/market-robot/gap-history/${batchId}/undo`);
+                toast.success(`${r.data.deleted_overrides} fiyat geri alındı`);
+              } catch {
+                toast.error("Geri alma başarısız");
+              }
+            }
+          } : undefined,
+        }
+      );
       onClose?.();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Uygulama başarısız");

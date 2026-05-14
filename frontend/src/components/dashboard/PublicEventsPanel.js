@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Confetti, Plus, Globe, EyeSlash, Copy, Trash } from "@phosphor-icons/react";
+import { Confetti, Plus, Globe, EyeSlash, Copy, Trash, FilmReel } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -64,6 +64,13 @@ export default function PublicEventsPanel({ propertyId }) {
       await axios.delete(`${API}/public-events/${id}`, { withCredentials: true });
       reload();
     } catch (e) { toast.error("Silinemedi"); }
+  }
+
+  async function generateVideo(id) {
+    try {
+      await axios.post(`${API}/marketing-videos/from-event/${id}`, {}, { withCredentials: true });
+      toast.success("Video kuyruğa alındı 🎬 'Pazarlama Videoları' panelinden takip edin");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Video oluşturulamadı"); }
   }
 
   function copyUrl(slug) {
@@ -133,6 +140,11 @@ export default function PublicEventsPanel({ propertyId }) {
                       <Globe size={13} />
                     </button>
                   )}
+                  <button onClick={() => generateVideo(e.id)} title="AI Video Üret"
+                          data-testid={`event-video-${e.id}`}
+                          className="p-1 text-fuchsia-600 hover:bg-fuchsia-50 rounded">
+                    <FilmReel size={13} />
+                  </button>
                   <button onClick={() => copyUrl(e.slug)} title="URL Kopyala"
                           className="p-1 text-sky-600 hover:bg-sky-50 rounded">
                     <Copy size={13} />

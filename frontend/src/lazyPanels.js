@@ -149,6 +149,9 @@ export const DevPortalAdminPanel = L(() => import("./components/dashboard/DevPor
 export const WholesalerHubPanel = L(() => import("./components/dashboard/WholesalerHubPanel"));
 export const LeadFunnelPanel = L(() => import("./components/dashboard/LeadFunnelPanel"));
 
+// ---------- COMPETITOR PARITY v6.4 (Iter 288 - Sora 2 marketing videos) ----------
+export const MarketingVideosPanel = L(() => import("./components/dashboard/MarketingVideosPanel"));
+
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");
 export const IntegrationsMarketplace = N(() => import("./components/dashboard/IntegrationsMarketplace"), "IntegrationsMarketplace");

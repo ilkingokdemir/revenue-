@@ -1,0 +1,90 @@
+{
+  "summary": "Completed testing of Iteration 288 - Marketing Videos (Sora 2 Integration). Backend: 31/31 tests passed (100%). Frontend: MarketingVideosPanel loads correctly with Turkish UI, all form elements functional, video generation queues successfully with toast notification.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration288_marketing_videos.py",
+    "/app/test_reports/pytest/pytest_iteration288_marketing_videos.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration288_marketing_videos.py"
+  ],
+  "success_rate": {
+    "backend": "100% (31/31 passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Created test video jobs during backend tests, created test public event 'TEST_Yaz Şefler Akşamı 2026' for from-event testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 288 fully tested. Sora 2 marketing video generation integration working. Key endpoints: GET /api/marketing-videos/sizes (4 sizes, 3 durations, 2 models), POST /api/marketing-videos/generate (creates queued job), GET /api/marketing-videos (list with filtering), GET /api/marketing-videos/{job_id}, POST /api/marketing-videos/from-event/{event_id} (auto-prompt from event metadata). Frontend panel at 'AI Pazarlama Videoları (Sora 2)' in SYSTEM section. Jobs show status badges (Kuyrukta/Üretiliyor/Tamamlandı/Hata). Note: Sora 2 content moderation may reject simple prompts with 'Sora 2 returned empty video' - use detailed cinematic prompts.",
+  "features_tested": {
+    "marketing_videos_backend": {
+      "endpoints": [
+        "GET /api/marketing-videos/sizes - returns 4 sizes, 3 durations (4/8/12), 2 models (sora-2, sora-2-pro), defaults (1024x1792, 8s, sora-2)",
+        "POST /api/marketing-videos/generate - creates job with status='queued', starts background task",
+        "GET /api/marketing-videos - lists jobs with filtering by status and source_type",
+        "GET /api/marketing-videos/{job_id} - returns single job",
+        "POST /api/marketing-videos/from-event/{event_id} - auto-generates cinematic prompt from event metadata"
+      ],
+      "validation_tests": [
+        "Rejects empty prompt with 400",
+        "Rejects whitespace-only prompt with 400",
+        "Rejects invalid size with 400",
+        "Rejects invalid duration with 400",
+        "Rejects invalid model with 400",
+        "Uses defaults when not specified",
+        "Returns 404 for nonexistent job",
+        "Returns 404 for nonexistent event"
+      ],
+      "from_event_tests": [
+        "Creates job with source_type='public_event' and source_id=event_id",
+        "Auto-generates rich cinematic prompt from event title, description, tags, property name/city",
+        "Supports prompt_override to bypass auto-prompt",
+        "Rejects invalid size in body"
+      ]
+    },
+    "marketing_videos_frontend": {
+      "panel_elements": [
+        "data-testid='marketing-videos-panel' loads",
+        "Turkish UI: 'Pazarlama Videosu Üretici', 'SORA 2 · SOCIAL MARKETING'",
+        "Left sidebar: 'Yeni Video' form with prompt textarea, size/duration/model dropdowns, 'Üret' button",
+        "Right side: 'Üretim Geçmişi' job history list with StatusBadge per job",
+        "Status badges: Kuyrukta (queued), Üretiliyor (rendering), Tamamlandı (completed), Hata (failed)",
+        "Event-linked jobs show 'Etkinlik: {title}' badge",
+        "Completed jobs show inline video player + download link"
+      ],
+      "interactions_tested": [
+        "Prompt textarea accepts input",
+        "Generate button disabled without prompt, enabled with prompt",
+        "Generate button click queues job and shows success toast",
+        "Toast message: 'Video kuyruğa alındı — 2-5 dk içinde hazır olacak'"
+      ]
+    },
+    "public_events_panel": {
+      "video_button": "FilmReel icon button with data-testid='event-video-{id}' calls /from-event endpoint (verified via backend tests)"
+    },
+    "regression_tests": {
+      "iter_284": ["agencies endpoint", "web-concierge sessions", "review-agent queue"],
+      "iter_285": ["open-pricing segments", "beach-pos sunbeds", "public-events list"],
+      "iter_286": ["agents list", "vacation-rental summary"],
+      "iter_287": ["dev-portal info", "wholesaler providers", "lead-funnel leads", "lighthouse-adapter status"]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "notes": "Sora 2 integration is REAL (not mocked) via emergentintegrations.llm.openai.video_generation.OpenAIVideoGeneration. Video generation takes 2-5 minutes. Jobs transition: queued → rendering → completed/failed. Failed jobs with 'Sora 2 returned empty video' are due to Sora content moderation rejecting prompts - use more descriptive cinematic prompts."
+}

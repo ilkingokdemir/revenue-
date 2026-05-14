@@ -78,6 +78,7 @@ import {
   OpenPricingPanel, BeachPosPanel, PublicEventsPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
+  MarketingVideosPanel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
@@ -201,6 +202,7 @@ import {
   Umbrella,
   Confetti,
   Funnel,
+  FilmReel,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -2949,6 +2951,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "dev-portal", icon: Code, name: "Geliştirici portalı", testId: "dev-portal-btn" },
         { id: "wholesaler-hub", icon: Globe, name: "Wholesaler ağı", testId: "wholesaler-hub-btn" },
         { id: "lead-funnel", icon: Funnel, name: "Lead Funnel + Compset", testId: "lead-funnel-btn" },
+        { id: "marketing-videos", icon: FilmReel, name: "AI Pazarlama Videoları (Sora 2)", testId: "marketing-videos-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
@@ -4839,6 +4842,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "lead-funnel" && (
           <LeadFunnelPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
         )}
+        {activeView === "marketing-videos" && <MarketingVideosPanel />}
         </Suspense>
       </main>
 

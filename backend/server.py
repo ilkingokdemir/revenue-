@@ -1070,6 +1070,10 @@ api_router.include_router(create_wholesaler_router(db, require_roles))
 from routes.lead_funnel import create_lead_funnel_router
 api_router.include_router(create_lead_funnel_router(db, require_roles))
 
+# ===== Marketing Video Generator (Iter 288 - Sora 2 integration) =====
+from routes.marketing_videos import create_marketing_videos_router
+api_router.include_router(create_marketing_videos_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

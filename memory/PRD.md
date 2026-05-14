@@ -129,7 +129,7 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - **Iter 277 (Feb 2026)**: Competitor Parity Sprint v3 — 32/32 backend + 8/8 frontend panels passed.
 
 ## Recent Additions (Iter 277, Feb 14 2026) — Competitor Parity v3
-8 new modules added in a single sprint:
+8 new modules:
 - **Booking Engine v2** (`/api/booking-engine/*`): packages, upsells, abandoned cart tracking + recovery emails, A/B testing.
 - **Owner / Investor Portal** (`/api/owners/*`): REIT/condo-hotel owner profiles, unit assignments, monthly statements (gross → mgmt fee → opex → net distribution), YTD performance.
 - **Spa & Activities Booking** (`/api/spa/*`): services, providers, auto-allocate therapist when slot is free, daily schedule view grouped by provider.
@@ -139,7 +139,9 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - **Partner Webhooks & API Keys** (`/api/partner/*`): public webhook subscriptions (event catalog), test ping logging, delivery audit log, scoped API keys (returns secret once).
 - **Automation Analytics** (`/api/automation/v2/analytics/*`): per-rule ROI dashboard — runs/success-rate/hours saved, per-rule deep-dive series.
 
-Frontend: 8 new lazy-loaded panels wired into sidebar across Reservations / Operations / Revenue / Finance / Guests / System sections. All panels Turkish UI, English `data-testid` attributes.
+## Recent Additions (Iter 278, Feb 14 2026) — MICE Sales & Owner PDF
+- **Meeting & Events Sales (MICE)** (`/api/meetings/*`): 8-stage pipeline (inquiry → site_visit → proposal_sent → negotiating → confirmed → invoiced → completed / lost), line items (room block, F&B, AV, meeting space, decor), stage_history audit, win-rate analytics & lost-reason aggregation. Kanban + list + analytics UI.
+- **Owner Statement PDF** (`/api/owners/{id}/statement.pdf`): printable monthly statement with summary + booking detail table, reuses reportlab. Download button added to Owner Portal panel.
 
 ## Backlog (P0 → P2)
 

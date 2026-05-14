@@ -143,6 +143,11 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - **Meeting & Events Sales (MICE)** (`/api/meetings/*`): 8-stage pipeline (inquiry → site_visit → proposal_sent → negotiating → confirmed → invoiced → completed / lost), line items (room block, F&B, AV, meeting space, decor), stage_history audit, win-rate analytics & lost-reason aggregation. Kanban + list + analytics UI.
 - **Owner Statement PDF** (`/api/owners/{id}/statement.pdf`): printable monthly statement with summary + booking detail table, reuses reportlab. Download button added to Owner Portal panel.
 
+## Recent Additions (Iter 279, Feb 14 2026) — MICE Proposal PDF
+- **Branded Event Proposal PDF** (`/api/meetings/{id}/proposal.pdf`): client-facing A4 PDF — property header, prepared-for/event-details box, itemised quote grouped by kind, subtotal/VAT(20%)/grand total, T&Cs (deposit/cancellation/final numbers), dual signature block.
+- **Auto stage-advance**: generating the PDF advances stage `inquiry`/`site_visit` → `proposal_sent` and stamps `proposal_sent_at` (no-op if already further along).
+- Frontend: "Teklif PDF" button in MeetingsSalesPanel detail drawer (visible when items exist).
+
 ## Backlog (P0 → P2)
 
 ### P0

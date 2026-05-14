@@ -214,6 +214,16 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 297 (Competitor Price Pulse Widget) — live data verified
+- **Backend**: `GET /api/revenue/market-robot/{pid}/competitor-pulse?days=N` — günlük rakip fiyat dağılımı (avg/min/max) + bizim oran karşılaştırması. `market_competitors[].prices[]` array'inden N gün için seriler hesaplar. Summary: market_avg, market_min, market_max, our_avg, vs_market_pct.
+- **Frontend**: `CompetitorPricePulseCard.js` — Recharts ComposedChart, fuchsia-themed:
+  - KPI strip (Pazar Avg / Bizim Avg / Min / vs Pazar %)
+  - Min-max band (Area) + Rakip avg line (fuchsia) + Bizim oran line (emerald)
+  - 14g/30g/60g toggle, 60sn polling, "Şimdi Tara" CTA boş veri durumunda
+  - MarketRobot dashboard tab'ına bağlandı (`MarketRobot.js`)
+- **Canlı doğrulama (aldgate-flats, 14 gün)**: 5 rakip kayıtlı, 2 tanesi scrape edildi → market_avg=£130.07, market_min=£76, market_max=£207, our_avg=£107.93, **vs_market_pct=-17%** (pazarın altında, fiyat artışı için fırsat).
+- **Etki**: Revenue manager artık tek bakışta "pazar nerede, biz neredeyiz, fiyat artışına alan var mı?" sorusunu yanıtlayabiliyor. 45 seedlenen rakip artık görünür değer üretiyor.
+
 ### Iter 296 (Backend Refactoring Sprint 2 — Batch 1: AI + Security + Finance) — 18 files moved, all smoke-tested 200 OK
 - **Moved to `routes/ai/`** (2 files): `ai_predictions.py`, `agents_b2b.py`
 - **Created `routes/security/`** subpackage (2 files): `audit_trail.py`, `gdpr.py`

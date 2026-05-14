@@ -3218,6 +3218,97 @@ def create_market_robot_router(db, require_roles, resend=None):
             "our_rates": our_rates,
         }
 
+    @router.get("/revenue/market-robot/{property_id}/competitor-pulse")
+    async def competitor_pulse(property_id: str, days: int = 30,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Competitor Price Pulse — günlük rakip fiyat dağılımı (avg/min/max) + bizim oran ile karşılaştırma.
+
+        Veri kaynağı: market_competitors[property_id].prices[]
+        Her rakibin prices array'i: [{date, lowest_price, all_prices, score, scraped}]
+        Bu endpoint günlük olarak gruplayıp tüm rakipler arası avg/min/max çıkarır.
+        """
+        days = max(7, min(int(days), 90))
+        comps = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(50)
+
+        comp_count = len(comps)
+        scanned_count = sum(1 for c in comps if c.get("last_scraped"))
+
+        # Build day → list[price] map
+        per_day: dict = {}
+        for c in comps:
+            for row in (c.get("prices") or []):
+                if not row.get("scraped"):
+                    continue
+                lp = row.get("lowest_price")
+                d = row.get("date")
+                if not (lp and d):
+                    continue
+                try:
+                    p = float(lp)
+                except Exception:
+                    continue
+                per_day.setdefault(d, []).append(p)
+
+        # Bizim base_rate'imizden günlük olarak our_rate map'i
+        now = datetime.now(timezone.utc)
+        rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
+        base_rate = float((rt or {}).get("base_rate") or 100)
+
+        series = []
+        for i in range(days):
+            d = (now + timedelta(days=i)).strftime("%Y-%m-%d")
+            prices = per_day.get(d) or []
+            override = await db.rate_overrides.find_one(
+                {"property_id": property_id, "date": d}, {"_id": 0}
+            )
+            our_rate = float(override["custom_rate"]) if override and override.get("custom_rate") else base_rate
+            if prices:
+                series.append({
+                    "date": d,
+                    "avg": round(sum(prices) / len(prices), 2),
+                    "min": round(min(prices), 2),
+                    "max": round(max(prices), 2),
+                    "our_rate": round(our_rate, 2),
+                    "comp_count": len(prices),
+                })
+            else:
+                series.append({
+                    "date": d, "avg": None, "min": None, "max": None,
+                    "our_rate": round(our_rate, 2), "comp_count": 0,
+                })
+
+        # Summary
+        days_with_data = [s for s in series if s["avg"] is not None]
+        if days_with_data:
+            market_avg = sum(s["avg"] for s in days_with_data) / len(days_with_data)
+            our_avg = sum(s["our_rate"] for s in days_with_data) / len(days_with_data)
+            vs_pct = ((our_avg - market_avg) / market_avg) * 100 if market_avg else 0
+            summary = {
+                "market_avg": round(market_avg, 2),
+                "market_min": round(min(s["min"] for s in days_with_data), 2),
+                "market_max": round(max(s["max"] for s in days_with_data), 2),
+                "our_avg": round(our_avg, 2),
+                "vs_market_pct": round(vs_pct, 1),
+                "days_with_data": len(days_with_data),
+            }
+        else:
+            summary = {
+                "market_avg": None, "market_min": None, "market_max": None,
+                "our_avg": round(base_rate, 2), "vs_market_pct": None,
+                "days_with_data": 0,
+            }
+
+        return {
+            "property_id": property_id,
+            "days": days,
+            "competitor_count": comp_count,
+            "scanned_competitors": scanned_count,
+            "series": series,
+            "summary": summary,
+        }
+
     # ==================== SMART SCANNER CONTROL ====================
 
     async def _auto_apply_pricing(db_ref, property_id):

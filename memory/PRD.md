@@ -162,6 +162,52 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - **Token segregation**: owner JWT has `type='owner_access'`, cannot read staff endpoints; staff `access` tokens cannot read owner endpoints.
 - Frontend `OwnerSelfServiceApp` (login + KPI cards + monthly table + PDF download per month); admin OwnerPortalPanel got 'PIN oluştur' button.
 
+## 🆕 Competitive Sprint v6 (Iter 284-286, Feb 14-15 2026) — 11 MODÜL EKLENDİ
+
+Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 rakip × HotelBox karşılaştırması, 17 eksik tespit edildi. Bu sprint'te P0/P1/P2'den 11'i tamamlandı (108/108 backend + frontend %100 doğrulama).
+
+### Iter 284 (TÜRSAB + AI Web Concierge + AI Review Agent) — 44/44 pass
+- **TÜRSAB Acenta Portalı** (`/agency` public route + `/api/agency-auth/*` + `/api/agencies` + `/api/agency-contracts`): Elektra'nın TR pazarındaki tek silahı kapatıldı. Acenta self-service login (email+PIN), kontrat tarifeleri, dashboard, quote (7-yat-6-öde promosyon doğru hesaplanıyor: 7 gece → 6 ödeme), booking creation, commission tracking. JWT segregation (type='agency_access').
+- **AI 24/7 Web Concierge** (`/api/web-concierge/*`): Eviivo parity. Public chat endpoint (no auth), GPT-4o-mini + per-property KB, auto-seed 5 default Q&A items, session persistence, admin panel ile KB CRUD + session monitoring + embed code preview.
+- **AI Review Agent** (`/api/review-agent/*`): Lighthouse parity. Config (auto_respond + tone + min/max_rating), single + batch draft generation, optional auto-publish for high-rating reviews, pending queue UI.
+
+### Iter 285 (Open Pricing + Beach POS + Public Events) — 35/35 pass
+- **Duetto Open Pricing** (`/api/open-pricing/*`): Multi-dimensional override matrix — segment × channel × room_type × date. 6 segments (transient/corporate/group/package/leisure/government) + 8 channels (direct/booking/expedia/airbnb/agoda/agency/walk_in/phone). Lookup with precedence scoring (100 → 50). Hot-pluggable into yield engine.
+- **Beach POS** (`/api/beach-pos/*`): Elektra TR niş. Şezlong (sunbed) numarasıyla sipariş alma sistemi, bulk-seed sunbeds, 10-item auto-seeded Türkçe beach menu, daily order queue with deliver/cancel, zone totals + grand total. Antalya/Bodrum sahil otelleri için.
+- **Public Event Listings** (`/api/public-events/*` + `/api/mice-rox/*`): Tripleseat Social SEO parity. Public `/events/{slug}` rotası + JSON-LD structured data injection (Schema.org Event), publish/unpublish, ROX hyper-personalization catalog (8 deneyim: sommelier, playlist, live_show, interactive_dining, eatertainment, calligrapher, florist_live, barista_lab).
+
+### Iter 286 (Agentic AI + Vacation Rental) — 29/29 pass
+- **Mews Agentic AI Loops** (`/api/agents/*`): 2026 trendi. 3 pre-seeded autonomous agent (Misafir Memnuniyet, Operasyon Optimize, Revenue Pulse). Plan-execute-approve workflow: find_low_reviews → draft_apology → propose_voucher; find_stale_oos → create_maintenance_ticket → estimate_revenue_loss; find_low_occupancy_dates → draft_promo_rule. LLM-powered executive summary. Approval flow: pending → approved/rejected.
+- **Vacation Rental Suite** (`/api/vacation-rental/*`): Eviivo + Lighthouse parity. Apart-tipi mülklere odaklanmış dedicated UI: KPI roll-up (property_count, unit_count, occupancy%, ADR, RevPAR, booking_count), per-unit performance grid, 14/30-day calendar heatmap. Confirmed: 4 apartment properties, 37 units, £247k yıllık gelir, %15.5 occupancy.
+
+### Closed Gaps Summary
+| # | Eksik | Iter | Durum |
+|--:|---|--:|---|
+| 1 | TÜRSAB Extranet | 284 | ✅ Acenta portalı tam fonksiyonel |
+| 4 | AI 24/7 Web Concierge | 284 | ✅ GPT-4o-mini + KB + sessions |
+| 6 | Mews Agentic AI Loops | 286 | ✅ 3 seed agent + approval flow |
+| 7 | Duetto Open Pricing | 285 | ✅ 4D matrix + precedence lookup |
+| 9 | Tripleseat ROX Personalization | 285 | ✅ 8-experience catalog + meta API |
+| 10 | Social SEO Event Listings | 285 | ✅ /events/{slug} + JSON-LD |
+| 12 | Beach POS (sunbed) | 285 | ✅ Bulk-seed + menu + orders |
+| 13 | TR Agency Promotion Logic | 284 | ✅ stay_pay + early_bird (agency contracts) |
+| 14 | Vacation Rental UI | 286 | ✅ Dedicated panel + calendar |
+| 17 | AI Review Agent | 284 | ✅ Tone-based draft + auto-publish |
+
+### Deferred (External keys / large scope)
+- #2 Booking.com Premier Connectivity (sertifika 8-12 hafta süreç)
+- #3 Lighthouse Real Compset (partner API key bekleyen)
+- #5 Public Developer Portal (3-4 sprint, marketing buy-in gerekli)
+- #8 Wholesaler Network (HotelBeds/TBO — her biri ayrı kontrat)
+- #11 React Native Mobile App (6-8 sprint, büyük scope)
+- #15 Revinate Voice Channel (Twilio Voice key bekleyen)
+- #16 Niche OTA channels (Hotels.com / Mr&Mrs Smith / HotelBeds — kontrat)
+
+### Cumulative Test Stats (Iter 277-286)
+- 273 cumulative backend tests passing (100%)
+- 11 module-iterations testing-agent verified
+- 0 critical, 0 minor, 0 frontend issues across all iterations
+
 ## Recent Additions (Iter 283, Feb 14 2026) — Carbon Reporting v2 (Green Key / Green Globe)
 - **`GET /api/esg/{property_id}/scope-breakdown?year=YYYY`** — GHG Protocol Scope 1/2/3 emissions split with factors used + months_with_data.
 - **`GET /api/esg/{property_id}/yoy?year=YYYY`** — year-over-year change % for electricity/gas/water/waste.

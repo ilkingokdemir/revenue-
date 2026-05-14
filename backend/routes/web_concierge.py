@@ -152,18 +152,37 @@ def create_web_concierge_router(db, require_roles):
         ])
         # Build conversation history (last 8 turns)
         history = sess.get("messages", [])[-16:]
+        # Pull brand voice profile (optional, for tone consistency)
+        bv_profile = await db.brand_voice_profiles.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
         # Try LLM with emergentintegrations; fall back to keyword KB match.
         reply = None
         try:
             from emergentintegrations.llm.chat import LlmChat, UserMessage
             llm_key = os.environ.get("EMERGENT_LLM_KEY")
             if llm_key:
+                # If brand voice profile exists, inject tone+dos+donts so concierge
+                # replies match other communications (review responses, emails, etc.)
+                voice_block = ""
+                if bv_profile:
+                    traits = ", ".join(bv_profile.get("personality_traits", []))
+                    dos = "; ".join(bv_profile.get("dos", []))
+                    donts = "; ".join(bv_profile.get("donts", []))
+                    voice_block = (
+                        f"\n\nMARKA SESİ:\n"
+                        f"- Ton: {bv_profile.get('tone','warm_professional')}\n"
+                        f"- Kişilik: {traits}\n"
+                        f"- Yap: {dos}\n"
+                        f"- Yapma: {donts}\n"
+                    )
                 system_prompt = (
                     f"Sen {cfg.get('property_name', 'Otelimiz')}'in 7/24 dijital "
                     f"concierge asistanısın. Misafirlere kısa, sıcak ve net "
                     f"Türkçe yanıtlar ver. Emin olmadığın bilgileri uydurma — "
                     f"böyle durumlarda rezervasyon ekibine yönlendir. "
-                    f"\n\nMülk Bilgi Tabanı:\n{kb_context}\n\n"
+                    f"\n\nMülk Bilgi Tabanı:\n{kb_context}"
+                    f"{voice_block}\n\n"
                     f"Yanıtların 2-3 cümleyi geçmesin."
                 )
                 chat_client = LlmChat(

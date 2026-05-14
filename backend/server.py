@@ -1078,6 +1078,10 @@ api_router.include_router(create_marketing_videos_router(db, require_roles))
 from routes.brand_voice import create_brand_voice_router
 api_router.include_router(create_brand_voice_router(db, require_roles))
 
+# ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
+from routes.booking_com import create_booking_com_router
+api_router.include_router(create_booking_com_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

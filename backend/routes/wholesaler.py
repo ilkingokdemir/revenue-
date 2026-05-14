@@ -64,6 +64,14 @@ PROVIDERS = [
     {"id": "mock", "label": "Mock Wholesaler (sandbox)",
      "auth_fields": [], "supports_push": True, "supports_pull": True,
      "default_commission": 10, "partner_count_global": 1},
+    {"id": "hotels_com", "label": "Hotels.com (Expedia Group)",
+     "auth_fields": ["api_key", "secret"], "supports_push": True,
+     "supports_pull": True, "default_commission": 18,
+     "partner_count_global": 90000},
+    {"id": "mrandmrs_smith", "label": "Mr & Mrs Smith (boutique)",
+     "auth_fields": ["api_key"], "supports_push": True,
+     "supports_pull": True, "default_commission": 22,
+     "partner_count_global": 1500},
 ]
 
 

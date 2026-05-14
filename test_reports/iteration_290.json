@@ -1,0 +1,85 @@
+{
+  "summary": "Completed testing of Iteration 290 - Booking.com Premier XML Push + Wholesaler Extension + Brand Voice Web Concierge Integration. Backend: 37/37 tests passed (100%). All new features working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration290_booking_com_wholesaler.py",
+    "/app/test_reports/pytest/pytest_iteration290_booking_com_wholesaler.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration290_booking_com_wholesaler.py"
+  ],
+  "success_rate": {
+    "backend": "100% (37/37 passed)",
+    "frontend": "N/A (backend only testing requested)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Brand voice profile seeded for aldgate-flats with playful_friendly tone, push attempts stored in booking_push_attempts collection",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 290 fully tested. Key features: (1) Booking.com Premier XML Push - GET /api/booking-com/status, POST /api/booking-com/config, POST /api/booking-com/validate-payload (rates/availability/restrictions), POST /api/booking-com/push/rates, POST /api/booking-com/push/availability, POST /api/booking-com/push/restrictions, GET /api/booking-com/push-log. XML payloads are OTA-compliant with xmlns='http://www.opentravel.org/OTA/2003/05'. Push is MOCKED until real Booking.com certificate obtained. (2) Wholesaler providers extended to 7: hotelbeds, tbo, travelgate, gta, mock + NEW hotels_com (90000 partners, 18% commission) + mrandmrs_smith (1500 partners, 22% commission). (3) Brand Voice + Web Concierge integration - brand_voice_profiles record auto-injects MARKA SESİ block into web concierge LLM system prompt. Regression tests for iters 284-289 all pass.",
+  "features_tested": {
+    "booking_com_module": {
+      "endpoints": [
+        "GET /api/booking-com/status - returns cert_status, endpoint_configured, credentials_configured, live_mode, hotel_count_mapped",
+        "POST /api/booking-com/config - updates endpoint_url, auth_username, cert_status, hotel_id_mapping, room_id_mapping, rate_plan_mapping. Never stores auth_password in clear (sets auth_password_set=true and hint)",
+        "POST /api/booking-com/validate-payload - validates XML structure for rates/availability/restrictions without sending",
+        "POST /api/booking-com/push/rates - pushes rates, validates daily entries have date+rate, returns attempt with status='ok' and simulated=true",
+        "POST /api/booking-com/push/availability - pushes availability, validates daily entries have date+allotment",
+        "POST /api/booking-com/push/restrictions - pushes restrictions (min_stay/max_stay/cta/ctd)",
+        "GET /api/booking-com/push-log - returns history without verbose xml_payload field, supports kind and property_id filters"
+      ],
+      "xml_validation": [
+        "Rates XML contains OTA_HotelRateAmountNotifRQ with xmlns='http://www.opentravel.org/OTA/2003/05'",
+        "Availability XML contains OTA_HotelAvailNotifRQ with xmlns='http://www.opentravel.org/OTA/2003/05'",
+        "Restrictions XML contains OTA_HotelAvailNotifRQ with RestrictionStatus block"
+      ],
+      "auth_tests": [
+        "Status endpoint requires auth (401)",
+        "Config endpoint requires admin role (401)"
+      ]
+    },
+    "wholesaler_extension": {
+      "providers_count": 7,
+      "providers": ["hotelbeds", "tbo", "travelgate", "gta", "mock", "hotels_com", "mrandmrs_smith"],
+      "new_providers": {
+        "hotels_com": {"partner_count_global": 90000, "default_commission": 18, "supports_push": true, "supports_pull": true},
+        "mrandmrs_smith": {"partner_count_global": 1500, "default_commission": 22, "supports_push": true, "supports_pull": true}
+      }
+    },
+    "brand_voice_web_concierge_integration": {
+      "tests": [
+        "Seed brand voice profile for aldgate-flats with distinctive tone (playful_friendly, traits: eğlenceli/enerjik/genç)",
+        "Web concierge chat with property that has brand_voice_profiles record works (no errors)",
+        "Web concierge chat with property without brand voice profile also works (fallback path)"
+      ],
+      "integration_mechanism": "MARKA SESİ block injected into LLM system prompt with tone, personality traits, dos, donts"
+    },
+    "regression_tests": {
+      "iter_284": ["agencies endpoint", "web-concierge widget-config", "review-agent config"],
+      "iter_285": ["open-pricing matrix", "beach-pos sunbeds", "public-events"],
+      "iter_286": ["agents list", "vacation-rental summary"],
+      "iter_287": ["dev-portal info", "wholesaler connections", "lead-funnel leads"],
+      "iter_288": ["marketing-videos sizes"],
+      "iter_289": ["brand-voice purposes (11)", "brand-voice profile"]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "Booking.com push (_simulate_booking_push) — REPLACE with real HTTPS POST + BasicAuth once endpoint+cert obtained"
+    ]
+  },
+  "notes": "Booking.com module is pre-cert ready. XML payloads are OpenTravel Alliance compliant. Push operations return simulated=true since no real endpoint is configured. Once Booking.com certificate and endpoint URL are obtained, replace _simulate_booking_push with real HTTPS POST + BasicAuth signing. No frontend changes in this iteration."
+}

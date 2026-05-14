@@ -155,6 +155,12 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - **Daily reconciliation**: aggregated totals by outlet & payment_type (`gross_total`, `posted_to_folio_total`, `cash_card_total`).
 - Frontend `FnbPosHubPanel`: 3 tabs (Connections / Receipts / Reconciliation), dynamic credential form per provider, in-row test/sync/delete actions.
 
+## Recent Additions (Iter 281, Feb 14 2026) — MICE → BEO Handoff
+- **`POST /api/meetings/{id}/generate-beo`** — one-click sales-to-ops handoff: creates a draft `banquet_orders` record pre-filled from the meeting (event_name, date, guest_count, venue from first meeting_space line item, menu from F&B items, AV items, beverages auto-extracted from bar-containing labels, 2 contacts: client + sales lead). Idempotent. Only fires on confirmed/invoiced/completed.
+- Meeting record gets stamped with `beo_id` + `beo_generated_at`.
+- Frontend: 'BEO Üret' button in MeetingsSalesPanel detail drawer (visible only past confirmed stage; shows 'BEO Bağlı' once linked).
+- Marketplace re-scored in COMPETITIVE_ANALYSIS_v4.md (3/10 → 8/10) — existing module has 124 integrations + AI recommendations.
+
 ## 🆕 Competitive Analysis v4 (Iter 280, Feb 14 2026)
 See `/app/memory/COMPETITIVE_ANALYSIS_v4.md` — full 14-category benchmark across 21 competitors.
 **Key takeaways:**

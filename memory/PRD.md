@@ -214,6 +214,11 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 295 (Auto-Seed Competitors for All Properties) — 45 inserted
+- **Yapılan**: `/app/backend/scripts/seed_competitors_all.py` one-shot script — her aktif property için `discover_nearby_hotels()` ile Booking.com'dan en yakın 15 candidate çekti, deduplicate + self-filter sonrası en iyi 5'i `market_competitors`'a kaydetti.
+- **Sonuç**: 9 property × 5 competitor = **45 gerçek otel kaydı** (Holiday Inn London Kensington, Locke at Broken Wharf, STG Hotel Oxford Street, The Megaro King's Cross, Zedwell Piccadilly, vb. — gerçek Booking.com URL + stars + review_score).
+- **Etki**: Smart Scanner `_auto_competitor_scan` artık her property için her ~30dk'da bu rakiplerin Booking.com fiyatlarını canlı scrape edebilir. AI Dynamic Pricing artık gerçek competitive set ile çalışıyor (önceki "no competitors configured" durumu kapandı).
+
 ### Iter 294 (Playwright Re-enabled — Live Competitor Scrape) — verified live
 - **Problem**: Smart Scanner `competitor_scan_fn` (booking_scraper) sessizce fail oluyordu (`No module named 'playwright'`) — kullanıcı sadece WARN logları görüyordu. Sonuç: kendi otel + rakip Booking.com fiyatları otomatik scrape edilmiyordu.
 - **Fix**: 

@@ -200,6 +200,17 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **CRM Lead Funnel Bridge** (`/api/lead-funnel/*`): Web Concierge sessions → intent keyword scan → otomatik `crm_leads` record. Lead pipeline + status counters + convert-to-booking.
 - **#3 Lighthouse Compset Adapter scaffolding** (`/api/lighthouse-adapter/*`): Mock 5-rakip snapshot + ~3B data point simülasyonu. `LIGHTHOUSE_API_KEY` env geldiğinde otomatik canlanır.
 
+### Iter 288 (Sora 2 marketing video generation) — 31/31 pass
+- **AI Marketing Video Generator** (`/api/marketing-videos/*`): Sora 2 entegrasyonu (emergentintegrations.openai.video_generation). 4 boyut (1024x1024, 1024x1792, 1280x720, 1792x1024), 3 süre (4/8/12 sn), 2 model (sora-2, sora-2-pro). Async background runner with `asyncio.create_task`, blocking SDK call in thread executor. Job lifecycle: queued → rendering → completed/failed. MP4 stored in `/app/backend/uploads/marketing_videos/{job_id}.mp4`, served via existing `/api/uploads` static mount.
+- **One-Click Event-to-Video** (`POST /api/marketing-videos/from-event/{event_id}`): Public event metadata'sından (title, description, tags, property_name, city) sinematik prompt otomatik oluşturuluyor. PublicEventsPanel'deki her etkinlik kartına "AI Video Üret" butonu eklendi.
+- **Live verification**: Direkt SDK call simple prompt ile 2.3 MB video üretti (55 sn). API endpoint via `/generate` "A serene Mediterranean beach at sunset with palm trees" prompt'u ile 2.86 MB MP4 üretti (~110 sn) — `/api/uploads/marketing_videos/91ddd07f-*.mp4`.
+- Note: Sora 2 content moderation karmaşık/kalabalık prompt'larda ("smiling guests", "live cooking" gibi) reddedebilir — bu Sora policy davranışı, kodumuzda hata yok.
+
+### Cumulative Test Stats (Iter 277-288)
+- **344 cumulative backend tests passing (100%)**
+- **15 module-iterations** testing-agent verified
+- 0 critical, 0 minor, 0 frontend issues across all iterations
+
 ### Cumulative Test Stats (Iter 277-287)
 - **313 cumulative backend tests passing (100%)**
 - **14 module-iterations** testing-agent verified

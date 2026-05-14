@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Briefcase, Plus, X, Trash, Funnel } from "@phosphor-icons/react";
+import { Briefcase, Plus, X, Trash, Funnel, FilePdf } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/meetings`;
 
@@ -274,7 +274,16 @@ export default function MeetingsSalesPanel({ propertyId = "all" }) {
                 <h3 className="text-base font-semibold">{detail.name}</h3>
                 <div className="text-xs text-stone-500">{detail.event_date} · {detail.guests_count} kişi</div>
               </div>
-              <button onClick={() => setDetail(null)}><X size={16} /></button>
+              <div className="flex items-center gap-2">
+                {(detail.items || []).length > 0 && (
+                  <a href={`${API}/${detail.id}/proposal.pdf`} target="_blank" rel="noreferrer"
+                     data-testid="meetings-proposal-pdf"
+                     className="text-xs px-2.5 py-1.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg inline-flex items-center gap-1 hover:bg-rose-100">
+                    <FilePdf size={13} /> Teklif PDF
+                  </a>
+                )}
+                <button onClick={() => setDetail(null)}><X size={16} /></button>
+              </div>
             </div>
             <div className="p-5 space-y-4">
               <div>

@@ -68,6 +68,8 @@ import {
   LoyaltyAutoPanel, LateCheckoutOfferPanel, OTAStopSellForecastPanel,
   MsgTemplatesPanel, BirthdayPanel, LowStockPanel, RebookPanel, StayExtPanel, LongStayPanel,
   CancelInsurancePanel, GroupRoomingWizPanel, TaxReportsV2Panel, CISlotsPanel, Tier1DashboardPanel,
+  BookingEngineV2Panel, OwnerPortalPanel, SpaActivitiesPanel, LoyaltyTiersPanel,
+  BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
@@ -2685,6 +2687,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "collisions", icon: ShieldCheck, name: "Collisions", testId: "collisions-btn" },
         { id: "booking", icon: Bed, name: t("nav.booking"), testId: "booking-engine-btn" },
         { id: "booking-engine-admin", icon: Globe, name: "Booking engine setup", testId: "booking-engine-admin-btn" },
+        { id: "booking-engine-v2", icon: Package, name: "Booking engine v2 (paket & upsell)", testId: "booking-engine-v2-btn" },
         { id: "rate-structure", icon: Tag, name: "Rate plans", testId: "rate-structure-btn" },
         { id: "promo-codes", icon: Tag, name: t("nav.promo_codes"), testId: "promo-codes-btn" },
         { id: "add-ons", icon: Package, name: t("nav.add_ons"), testId: "add-ons-btn" },
@@ -2714,6 +2717,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "guest-portal-v2", icon: Users, name: "Guest self-modify", testId: "guest-portal-v2-btn" },
         { id: "loyalty", icon: Crown, name: t("nav.loyalty"), testId: "loyalty-btn" },
         { id: "loyalty-tier", icon: Trophy, name: "Tier engine", testId: "loyalty-tier-btn" },
+        { id: "loyalty-tiers-v2", icon: Crown, name: "Sadakat seviyeleri (Silver/Gold/Plat)", testId: "loyalty-tiers-v2-btn" },
         { id: "loyalty-v2", icon: Crown, name: "Loyalty referrals & packages", testId: "loyalty-v2-btn" },
         { id: "loyalty-auto", icon: Crown, name: "Loyalty auto-tier", testId: "loyalty-auto-btn" },
         { id: "birthday", icon: Sparkle, name: "Birthday discounts", testId: "birthday-btn" },
@@ -2790,12 +2794,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "channel-revenue", icon: Lightning, name: "Open pricing & yield", testId: "channel-revenue-btn" },
         { id: "parity-heatmap", icon: CalendarBlank, name: "Parity heatmap", testId: "parity-heatmap-btn" },
         { id: "ota-forecast", icon: TrendUp, name: "OTA stop-sell forecast", testId: "ota-forecast-btn" },
+        { id: "compset", icon: Target, name: "Compset yönetimi", testId: "compset-btn" },
 
         { divider: true, label: "Tools" },
         { id: "rev-protection", icon: ShieldCheck, name: "Revenue protection", testId: "rev-protection-btn" },
         { id: "rm-lab", icon: ChartLine, name: "RM Lab", testId: "rm-lab-btn" },
         { id: "late-checkout-offer", icon: Clock, name: "Late checkout offers", testId: "late-checkout-offer-btn" },
         { id: "site-feasibility", icon: ChartLineUp, name: "Site feasibility & investor", testId: "site-feasibility-btn" },
+        { id: "automation-analytics", icon: ChartBar, name: "Otomasyon analitiği", testId: "automation-analytics-btn" },
       ],
     },
     {
@@ -2812,6 +2818,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "conference-sc", icon: Briefcase, name: "Conference S&C", testId: "conference-sc-btn" },
         { id: "banquet-orders", icon: CalendarBlank, name: "Banquet event orders", testId: "banquet-orders-btn" },
         { id: "timeslots", icon: Sparkle, name: "Spa & activity slots", testId: "timeslots-btn" },
+        { id: "spa-activities", icon: Sparkle, name: "Spa & aktivite rezervasyon", testId: "spa-activities-btn" },
       ],
     },
     {
@@ -2823,6 +2830,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "finance", icon: Wallet, name: "Finance overview", testId: "finance-btn" },
         { id: "finance-pl", icon: ChartLine, name: "Profit & loss", testId: "finance-pl-btn" },
         { id: "cash-flow", icon: ChartLine, name: "Cash flow", testId: "cash-flow-btn" },
+        { id: "budget-actual", icon: ChartBar, name: "Bütçe vs Gerçekleşen", testId: "budget-actual-btn" },
         { id: "expenses", icon: Receipt, name: "Expenses", testId: "expenses-btn" },
         { id: "payroll", icon: Wallet, name: "Payroll", testId: "payroll-btn" },
 
@@ -2913,6 +2921,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "api", icon: Key, name: t("nav.api"), testId: "api-connection-btn" },
         { id: "webhooks", icon: Code, name: t("nav.webhooks"), testId: "webhooks-btn" },
         { id: "public-api", icon: Code, name: "Developer portal", testId: "public-api-btn" },
+        { id: "partner-webhooks", icon: PlugsConnected, name: "Partner webhooks & API keys", testId: "partner-webhooks-btn" },
+        { id: "owner-portal", icon: Buildings, name: "Sahip / yatırımcı portalı", testId: "owner-portal-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
@@ -3518,6 +3528,28 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Channel Manager v2 (production OTA framework) */}
         {activeView === "channels-v2" && <ChannelManagerV2Panel />}
+
+        {/* ===== Competitor Parity v3 (Iter 277) ===== */}
+        {activeView === "booking-engine-v2" && (
+          <BookingEngineV2Panel propertyId={activePropertyId || "all"} />
+        )}
+        {activeView === "owner-portal" && <OwnerPortalPanel />}
+        {activeView === "spa-activities" && (
+          <SpaActivitiesPanel propertyId={activePropertyId || "all"} />
+        )}
+        {activeView === "loyalty-tiers-v2" && <LoyaltyTiersPanel />}
+        {activeView === "budget-actual" && (
+          <BudgetActualPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+        {activeView === "compset" && (
+          <CompsetPanel
+            propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+          />
+        )}
+        {activeView === "partner-webhooks" && <PartnerWebhooksPanel />}
+        {activeView === "automation-analytics" && <AutomationAnalyticsPanel />}
 
         {/* Forecast v2 — 24-month horizon + Demand Calendar + Pickup Curve */}
         {activeView === "forecast-v2" && (

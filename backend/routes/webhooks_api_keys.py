@@ -1,16 +1,19 @@
 """
 Public Webhooks & API Key Management — partner ecosystem hooks.
 
-Endpoints:
-  GET    /api/webhooks/subscriptions             — list webhook subscriptions
-  POST   /api/webhooks/subscriptions             — create subscription
-  DELETE /api/webhooks/subscriptions/{id}        — delete
-  POST   /api/webhooks/test/{id}                 — send test ping
-  GET    /api/webhooks/deliveries                — recent deliveries (audit log)
+Mounted under `/partner` to avoid collision with the per-property webhook
+subscriptions in revenue_protection.py (which use `/webhooks/{property_id}`).
 
-  GET    /api/api-keys                           — list API keys
-  POST   /api/api-keys                           — create API key (returns secret once)
-  DELETE /api/api-keys/{id}                      — revoke
+Endpoints:
+  GET    /api/partner/webhooks                     — list webhook subscriptions
+  POST   /api/partner/webhooks                     — create subscription
+  DELETE /api/partner/webhooks/{id}                — delete
+  POST   /api/partner/webhooks/{id}/test           — send test ping
+  GET    /api/partner/webhooks/deliveries          — recent deliveries (audit log)
+
+  GET    /api/partner/api-keys                     — list API keys
+  POST   /api/partner/api-keys                     — create API key (returns secret once)
+  DELETE /api/partner/api-keys/{id}                — revoke
 """
 from datetime import datetime, timezone
 import hashlib
@@ -27,16 +30,16 @@ WEBHOOK_EVENTS = [
 
 
 def create_webhooks_api_keys_router(db, require_roles):
-    router = APIRouter()
+    router = APIRouter(prefix="/partner")
 
     # ============== WEBHOOKS ==============
-    @router.get("/webhooks/subscriptions")
+    @router.get("/webhooks")
     async def list_subs(_: dict = Depends(require_roles("admin"))):
-        subs = await db.webhook_subscriptions.find({}, {"_id": 0, "secret": 0}) \
+        subs = await db.partner_webhook_subscriptions.find({}, {"_id": 0, "secret": 0}) \
                                               .sort("created_at", -1).to_list(100)
         return {"subscriptions": subs, "events_catalog": WEBHOOK_EVENTS}
 
-    @router.post("/webhooks/subscriptions")
+    @router.post("/webhooks")
     async def create_sub(body: dict,
                          current_user: dict = Depends(require_roles("admin"))):
         url = body.get("url")
@@ -56,24 +59,24 @@ def create_webhooks_api_keys_router(db, require_roles):
             "created_at": datetime.now(timezone.utc).isoformat(),
             "success_count": 0, "failure_count": 0,
         }
-        await db.webhook_subscriptions.insert_one(doc)
+        await db.partner_webhook_subscriptions.insert_one(doc)
         # Return the secret ONCE (not stored cleartext after this)
         return {**{k: v for k, v in doc.items() if k != "_id"}, "secret": secret,
                 "note": "Save this secret — won't be shown again"}
 
-    @router.delete("/webhooks/subscriptions/{sub_id}")
+    @router.delete("/webhooks/{sub_id}")
     async def delete_sub(sub_id: str, _: dict = Depends(require_roles("admin"))):
-        r = await db.webhook_subscriptions.delete_one({"id": sub_id})
+        r = await db.partner_webhook_subscriptions.delete_one({"id": sub_id})
         return {"deleted": r.deleted_count}
 
-    @router.post("/webhooks/test/{sub_id}")
+    @router.post("/webhooks/{sub_id}/test")
     async def test_ping(sub_id: str, _: dict = Depends(require_roles("admin"))):
-        sub = await db.webhook_subscriptions.find_one({"id": sub_id}, {"_id": 0})
+        sub = await db.partner_webhook_subscriptions.find_one({"id": sub_id}, {"_id": 0})
         if not sub:
             raise HTTPException(404, "Subscription not found")
         # Log a test delivery (real HTTP call would go via httpx with retries)
         now = datetime.now(timezone.utc).isoformat()
-        await db.webhook_deliveries.insert_one({
+        await db.partner_webhook_deliveries.insert_one({
             "id": str(uuid.uuid4()), "subscription_id": sub_id,
             "event": "test.ping", "url": sub["url"],
             "status_code": 200, "ok": True,
@@ -87,7 +90,7 @@ def create_webhooks_api_keys_router(db, require_roles):
         q: dict = {}
         if subscription_id:
             q["subscription_id"] = subscription_id
-        items = await db.webhook_deliveries.find(q, {"_id": 0}) \
+        items = await db.partner_webhook_deliveries.find(q, {"_id": 0}) \
                                             .sort("created_at", -1) \
                                             .to_list(min(limit, 500))
         return {"deliveries": items, "count": len(items)}
@@ -95,7 +98,7 @@ def create_webhooks_api_keys_router(db, require_roles):
     # ============== API KEYS ==============
     @router.get("/api-keys")
     async def list_keys(_: dict = Depends(require_roles("admin"))):
-        keys = await db.api_keys.find({}, {"_id": 0, "secret_hash": 0}) \
+        keys = await db.partner_api_keys.find({}, {"_id": 0, "secret_hash": 0}) \
                                  .sort("created_at", -1).to_list(100)
         return {"api_keys": keys}
 
@@ -116,13 +119,13 @@ def create_webhooks_api_keys_router(db, require_roles):
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_used_at": None,
         }
-        await db.api_keys.insert_one(doc)
+        await db.partner_api_keys.insert_one(doc)
         return {**{k: v for k, v in doc.items() if k not in ("_id", "secret_hash")},
                 "secret": secret, "note": "Save this key — won't be shown again"}
 
     @router.delete("/api-keys/{key_id}")
     async def revoke_key(key_id: str, _: dict = Depends(require_roles("admin"))):
-        r = await db.api_keys.delete_one({"id": key_id})
+        r = await db.partner_api_keys.delete_one({"id": key_id})
         return {"revoked": r.deleted_count}
 
     return router

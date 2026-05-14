@@ -983,6 +983,37 @@ api_router.include_router(create_ci_slots_router(db, require_roles))
 from routes.tier1_dashboard import create_tier1_dashboard_router
 api_router.include_router(create_tier1_dashboard_router(db, require_roles))
 
+# ===== Competitor Parity v3 (Booking Engine v2, Groups, Owner Portal, Spa, Loyalty Tiers,
+#                              Budget vs Actual, Compset, Webhooks & API keys, Automation Analytics) =====
+from routes.booking_engine_v2 import create_booking_engine_v2_router
+api_router.include_router(create_booking_engine_v2_router(db, require_roles))
+
+# Note: Group Bookings module already exists at routes/group_blocks.py
+# (used by GroupBlocksPanel). The newer routes/group_bookings.py is a
+# parallel implementation kept on disk for reference but NOT registered
+# to avoid path collisions at /group-blocks.
+
+from routes.owner_portal import create_owner_portal_router
+api_router.include_router(create_owner_portal_router(db, require_roles))
+
+from routes.spa_activities import create_spa_router
+api_router.include_router(create_spa_router(db, require_roles))
+
+from routes.loyalty_tiers import create_loyalty_tiers_router
+api_router.include_router(create_loyalty_tiers_router(db, require_roles))
+
+from routes.budget_actual import create_budget_router
+api_router.include_router(create_budget_router(db, require_roles))
+
+from routes.compset import create_compset_router
+api_router.include_router(create_compset_router(db, require_roles))
+
+from routes.webhooks_api_keys import create_webhooks_api_keys_router
+api_router.include_router(create_webhooks_api_keys_router(db, require_roles))
+
+from routes.automation_analytics import create_automation_analytics_router
+api_router.include_router(create_automation_analytics_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

@@ -46,8 +46,8 @@ class RoomingEntry(BaseModel):
     special_requests: str = ""
 
 
-def create_groups_router(db, require_roles):
-    router = APIRouter(prefix="/groups")
+def create_group_blocks_router(db, require_roles):
+    router = APIRouter(prefix="/group-blocks")
 
     @router.get("")
     async def list_groups(property_id: str = "", status: str = "",

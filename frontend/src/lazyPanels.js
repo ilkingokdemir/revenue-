@@ -117,6 +117,16 @@ export const TaxReportsV2Panel = L(() => import("./components/dashboard/TaxRepor
 export const CISlotsPanel = L(() => import("./components/dashboard/CISlotsPanel"));
 export const Tier1DashboardPanel = L(() => import("./components/dashboard/Tier1DashboardPanel"));
 
+// ---------- COMPETITOR PARITY v3 (Iter 277) ----------
+export const BookingEngineV2Panel = L(() => import("./components/dashboard/BookingEngineV2Panel"));
+export const OwnerPortalPanel = L(() => import("./components/dashboard/OwnerPortalPanel"));
+export const SpaActivitiesPanel = L(() => import("./components/dashboard/SpaActivitiesPanel"));
+export const LoyaltyTiersPanel = L(() => import("./components/dashboard/LoyaltyTiersPanel"));
+export const BudgetActualPanel = L(() => import("./components/dashboard/BudgetActualPanel"));
+export const CompsetPanel = L(() => import("./components/dashboard/CompsetPanel"));
+export const PartnerWebhooksPanel = L(() => import("./components/dashboard/PartnerWebhooksPanel"));
+export const AutomationAnalyticsPanel = L(() => import("./components/dashboard/AutomationAnalyticsPanel"));
+
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");
 export const IntegrationsMarketplace = N(() => import("./components/dashboard/IntegrationsMarketplace"), "IntegrationsMarketplace");

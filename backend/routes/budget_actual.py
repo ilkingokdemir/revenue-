@@ -14,43 +14,8 @@ from fastapi import APIRouter, Depends
 def create_budget_router(db, require_roles):
     router = APIRouter(prefix="/budget")
 
-    @router.get("/{property_id}/{year}")
-    async def get_budget(property_id: str, year: str,
-                         _: dict = Depends(require_roles("admin", "manager"))):
-        rows = await db.budget_monthly.find(
-            {"property_id": property_id, "year": year},
-            {"_id": 0}
-        ).sort("month", 1).to_list(20)
-        # Fill missing months
-        existing = {r["month"]: r for r in rows}
-        full = []
-        for m in range(1, 13):
-            month_key = f"{m:02d}"
-            row = existing.get(month_key, {
-                "property_id": property_id, "year": year, "month": month_key,
-                "revenue_budget": 0, "rooms_budget": 0, "adr_budget": 0,
-                "expense_budget": 0, "noi_budget": 0,
-            })
-            full.append(row)
-        return {"property_id": property_id, "year": year, "rows": full}
-
-    @router.put("/{property_id}/{year}")
-    async def update_budget(property_id: str, year: str, body: dict,
-                            current_user: dict = Depends(require_roles("admin", "manager"))):
-        """body: {rows: [{month: '01', revenue_budget: 50000, ...}, ...]}"""
-        rows = body.get("rows") or []
-        now = datetime.now(timezone.utc).isoformat()
-        for row in rows:
-            month = row.get("month")
-            if not month:
-                continue
-            await db.budget_monthly.update_one(
-                {"property_id": property_id, "year": year, "month": month},
-                {"$set": {**row, "property_id": property_id, "year": year, "month": month,
-                          "updated_by": current_user.get("name", ""), "updated_at": now}},
-                upsert=True,
-            )
-        return {"updated": len(rows)}
+    # NOTE: More specific routes (variance, yoy) must be defined BEFORE the generic /{property_id}/{year}
+    # to avoid FastAPI matching "variance" or "yoy" as the year parameter.
 
     @router.get("/{property_id}/variance")
     async def get_variance(property_id: str, year: str = "",
@@ -125,5 +90,44 @@ def create_budget_router(db, require_roles):
                 "delta_pct": round((this_rev - last_rev) / max(1, last_rev) * 100, 1) if last_rev else 0,
             })
         return {"property_id": property_id, "this_year": this_year, "last_year": last_year, "rows": rows}
+
+    # Generic routes with path parameters must come AFTER specific routes
+    @router.get("/{property_id}/{year}")
+    async def get_budget(property_id: str, year: str,
+                         _: dict = Depends(require_roles("admin", "manager"))):
+        rows = await db.budget_monthly.find(
+            {"property_id": property_id, "year": year},
+            {"_id": 0}
+        ).sort("month", 1).to_list(20)
+        # Fill missing months
+        existing = {r["month"]: r for r in rows}
+        full = []
+        for m in range(1, 13):
+            month_key = f"{m:02d}"
+            row = existing.get(month_key, {
+                "property_id": property_id, "year": year, "month": month_key,
+                "revenue_budget": 0, "rooms_budget": 0, "adr_budget": 0,
+                "expense_budget": 0, "noi_budget": 0,
+            })
+            full.append(row)
+        return {"property_id": property_id, "year": year, "rows": full}
+
+    @router.put("/{property_id}/{year}")
+    async def update_budget(property_id: str, year: str, body: dict,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """body: {rows: [{month: '01', revenue_budget: 50000, ...}, ...]}"""
+        rows = body.get("rows") or []
+        now = datetime.now(timezone.utc).isoformat()
+        for row in rows:
+            month = row.get("month")
+            if not month:
+                continue
+            await db.budget_monthly.update_one(
+                {"property_id": property_id, "year": year, "month": month},
+                {"$set": {**row, "property_id": property_id, "year": year, "month": month,
+                          "updated_by": current_user.get("name", ""), "updated_at": now}},
+                upsert=True,
+            )
+        return {"updated": len(rows)}
 
     return router

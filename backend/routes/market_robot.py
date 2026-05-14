@@ -3433,6 +3433,148 @@ def create_market_robot_router(db, require_roles, resend=None):
             "branches": branches,
         }
 
+    @router.post("/revenue/market-robot/{property_id}/close-gap")
+    async def close_market_gap(property_id: str, data: Dict = {},
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Pazara karşı fiyat gap'ini kapatmak için günlük rate_overrides yazar.
+
+        Body:
+          - strategy: "full" | "half" | "floor" | "value"  (default: "half")
+              full   → yeni fiyat = market_avg
+              half   → gap'in %50'sini kapat (our + (market_avg - our) * 0.5)
+              floor  → market_min (defensiv minimum)
+              value  → market_avg * 0.95 (hafif iskonto)
+          - days: 7..60 (default: 14) — gelecek N gün için uygula
+          - dry_run: bool (default: false) — sadece preview döndür
+          - source: str (default: "market-gap-close")
+
+        Yalnızca pazar ortalamasının ALTINDA olduğumuz günlere yazar. Üstte olduğumuz günleri
+        es geçer (yanlışlıkla fiyat düşürmemek için).
+        """
+        strategy = (data.get("strategy") or "half").lower()
+        if strategy not in ("full", "half", "floor", "value"):
+            raise HTTPException(status_code=400, detail="strategy must be full|half|floor|value")
+        days = max(7, min(int(data.get("days") or 14), 60))
+        dry_run = bool(data.get("dry_run"))
+        source = (data.get("source") or "market-gap-close")[:50]
+
+        # Build per-day competitor data
+        comps = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0, "prices": 1}
+        ).to_list(50)
+        per_day: dict = {}
+        for c in comps:
+            for row in (c.get("prices") or []):
+                if not row.get("scraped"):
+                    continue
+                d = row.get("date")
+                lp = row.get("lowest_price")
+                if not (d and lp):
+                    continue
+                try:
+                    per_day.setdefault(d, []).append(float(lp))
+                except Exception:
+                    pass
+
+        if not per_day:
+            return {"ok": False, "error": "Henüz rakip fiyatı yok — önce competitor scan çalıştır.",
+                    "applied": 0, "skipped": 0, "preview": []}
+
+        now = datetime.now(timezone.utc)
+        date_keys = [(now + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+
+        # Current rates (with overrides batch fetch)
+        rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
+        base_rate = float((rt or {}).get("base_rate") or 100)
+        existing_ov = await db.rate_overrides.find(
+            {"property_id": property_id, "date": {"$in": date_keys}},
+            {"_id": 0, "date": 1, "custom_rate": 1},
+        ).to_list(500)
+        ov_map = {o["date"]: o.get("custom_rate") for o in existing_ov if o.get("custom_rate")}
+
+        preview = []
+        applied = 0
+        skipped = 0
+        total_uplift_pct = 0.0
+        upserts = []
+        for d in date_keys:
+            prices = per_day.get(d) or []
+            if not prices:
+                skipped += 1
+                continue
+            market_avg = sum(prices) / len(prices)
+            market_min = min(prices)
+            our_rate = float(ov_map.get(d, base_rate))
+
+            # Sadece pazar avg'ın altındaysak kapat
+            if our_rate >= market_avg:
+                skipped += 1
+                continue
+
+            if strategy == "full":
+                new_rate = market_avg
+            elif strategy == "half":
+                new_rate = our_rate + (market_avg - our_rate) * 0.5
+            elif strategy == "floor":
+                new_rate = max(our_rate, market_min)
+            else:  # value
+                new_rate = market_avg * 0.95
+
+            # Pazarın üstüne çıkmasın (full hariç)
+            if strategy != "full":
+                new_rate = min(new_rate, market_avg)
+            # Mevcut oranımızın altına düşmesin (defensiv)
+            new_rate = max(new_rate, our_rate)
+            new_rate = round(new_rate, 2)
+
+            uplift_pct = ((new_rate - our_rate) / our_rate) * 100 if our_rate else 0
+            preview.append({
+                "date": d,
+                "our_rate": round(our_rate, 2),
+                "market_avg": round(market_avg, 2),
+                "market_min": round(market_min, 2),
+                "new_rate": new_rate,
+                "uplift_pct": round(uplift_pct, 1),
+            })
+
+            if new_rate > our_rate:
+                applied += 1
+                total_uplift_pct += uplift_pct
+                upserts.append({
+                    "property_id": property_id,
+                    "date": d,
+                    "custom_rate": new_rate,
+                    "source": source,
+                    "set_by": current_user.get("name", "gap-close"),
+                    "set_at": now.isoformat(),
+                    "context": {
+                        "strategy": strategy,
+                        "market_avg": round(market_avg, 2),
+                        "market_min": round(market_min, 2),
+                        "previous_rate": round(our_rate, 2),
+                    },
+                })
+
+        if not dry_run and upserts:
+            for u in upserts:
+                await db.rate_overrides.update_one(
+                    {"property_id": property_id, "date": u["date"]},
+                    {"$set": u},
+                    upsert=True,
+                )
+
+        avg_uplift = round(total_uplift_pct / applied, 1) if applied else 0
+        return {
+            "ok": True,
+            "strategy": strategy,
+            "dry_run": dry_run,
+            "applied": applied,
+            "skipped": skipped,
+            "days_evaluated": days,
+            "avg_uplift_pct": avg_uplift,
+            "preview": preview[:30],
+        }
+
     # ==================== SMART SCANNER CONTROL ====================
 
     async def _auto_apply_pricing(db_ref, property_id):

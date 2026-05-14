@@ -214,6 +214,28 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 299 (Tek-Tık Gap Kapatma — Market Action Layer)
+- **Yeni endpoint**: `POST /api/revenue/market-robot/{pid}/close-gap` — 4 stratejili otomatik fiyat artırıcı:
+  - `full` → pazar avg'e yetiş (en agresif)
+  - `half` → gap'in %50'sini kapat (önerilen)
+  - `floor` → pazar minimumuna yetiş (defensiv)
+  - `value` → market_avg × 0.95 (slight discount, value pos)
+  - Body: `{strategy, days, dry_run, source}`. Sadece pazarın altındaki günlere yazar. `rate_overrides`'a upsert + audit context (previous_rate, market_avg, strategy).
+- **Yeni component**: `GapCloseModal.js` — 4-buton strateji seçici + days picker + auto-dry-run preview tablosu + onay butonu. Side-by-side karşılaştırma (Bizim → Yeni, %uplift, pazar avg).
+- **Bağlantılar**:
+  - `FleetCompetitorPulseCard`: branch tablosunda pazarın altındaki şubeler için "⚡ Gap" butonu (-2% altı tetikler)
+  - `CompetitorPricePulseCard`: KPI strip altında full-width gradient CTA — "Pazar gap'ini kapat — X% potansiyel uplift"
+- **E2E canlı doğrulama (ryam-suites, half, 7 gün)**:
+  - Before: £100 vs market £146 → **-31.7%**
+  - Applied: 6 gün uygulandı, avg **+34.3% uplift**, rate_overrides DB'sine yazıldı
+  - After: £129.37 vs market £157 → **-17.7%** (gap %14 daha kapandı, hedef üzere)
+- **4 strateji test (aldgate-flats, 7 gün dry-run)**:
+  - full: 6/7 günde +48.6% avg uplift
+  - half: 6/7 günde +24.3%
+  - value: 6/7 günde +41.2%
+  - floor: 4/7 günde +23.5%
+- **RBAC**: receptionist → 403 ✅
+
 ### Iter 298 (Fleet-Wide Competitor Pulse + 51 Competitors Live)
 - **Triggered competitor scans** for all 8 remaining properties (5 each) — **51/51 rakip canlı Booking.com verisine geçti**.
 - **New endpoint**: `GET /api/revenue/market-robot/fleet-pulse?days=N` — cross-branch özet:

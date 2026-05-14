@@ -6,8 +6,9 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ReferenceLine, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap } from "lucide-react";
 import useLivePolling from "../../hooks/useLivePolling";
+import GapCloseModal from "./GapCloseModal";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -15,6 +16,7 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [days, setDays] = useState(30);
+  const [gapTarget, setGapTarget] = useState(null);  // {property_id, property_name}
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,13 +174,23 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
                       {pct === null ? "—" : `${pct > 0 ? "+" : ""}${pct}%`}
                     </td>
                     <td className="text-right pr-3 pl-2">
-                      {onSelectProperty && (
-                        <button onClick={() => onSelectProperty(b.property_id)}
-                          className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-[10px] font-bold transition"
-                          data-testid={`fleet-detail-${b.property_id}`}>
-                          Aç <ArrowRight className="w-3 h-3" />
-                        </button>
-                      )}
+                      <div className="inline-flex items-center gap-1">
+                        {pct !== null && pct < -2 && (
+                          <button onClick={() => setGapTarget({ property_id: b.property_id, property_name: b.property_name })}
+                            className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-black transition"
+                            data-testid={`fleet-gap-${b.property_id}`}
+                            title="Pazar gap'ini kapat">
+                            <Zap className="w-3 h-3" /> Gap
+                          </button>
+                        )}
+                        {onSelectProperty && (
+                          <button onClick={() => onSelectProperty(b.property_id)}
+                            className="inline-flex items-center gap-0.5 px-2 py-1 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 text-[10px] font-bold transition"
+                            data-testid={`fleet-detail-${b.property_id}`}>
+                            Aç <ArrowRight className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -186,6 +198,13 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
             </tbody>
           </table>
         </div>
+      )}
+      {gapTarget && (
+        <GapCloseModal
+          propertyId={gapTarget.property_id}
+          propertyName={gapTarget.property_name}
+          onClose={() => { setGapTarget(null); load(); }}
+        />
       )}
     </div>
   );

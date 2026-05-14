@@ -10,8 +10,9 @@ import {
   ComposedChart, Line, Area, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer,
   ReferenceLine, CartesianGrid,
 } from "recharts";
-import { TrendingUp, TrendingDown, RefreshCw, Loader2, Activity, Play } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, Loader2, Activity, Play, Zap } from "lucide-react";
 import useLivePolling from "../../hooks/useLivePolling";
+import GapCloseModal from "./GapCloseModal";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -20,6 +21,7 @@ export default function CompetitorPricePulseCard({ propertyId }) {
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [days, setDays] = useState(30);
+  const [gapOpen, setGapOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!propertyId || propertyId === "all") {
@@ -142,6 +144,16 @@ export default function CompetitorPricePulseCard({ propertyId }) {
         </div>
       </div>
 
+      {/* Pazara karşı altımızda ise → Gap Kapat CTA */}
+      {isBelow && vsPct !== null && vsPct < -2 && (
+        <button onClick={() => setGapOpen(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 hover:from-emerald-500/30 hover:to-cyan-500/30 border border-emerald-500/40 text-emerald-200 text-xs font-black transition"
+          data-testid="pulse-gap-close-cta">
+          <Zap className="w-4 h-4" />
+          Pazar gap'ini kapat — {Math.abs(vsPct).toFixed(1)}% potansiyel uplift
+        </button>
+      )}
+
       {/* Chart */}
       {hasData ? (
         <div className="bg-stone-950/30 rounded-xl p-3 border border-stone-800/50">
@@ -180,6 +192,13 @@ export default function CompetitorPricePulseCard({ propertyId }) {
             </button>
           )}
         </div>
+      )}
+      {gapOpen && (
+        <GapCloseModal
+          propertyId={propertyId}
+          propertyName={null}
+          onClose={() => { setGapOpen(false); load(); }}
+        />
       )}
     </div>
   );

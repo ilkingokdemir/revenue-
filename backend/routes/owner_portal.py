@@ -1,0 +1,144 @@
+"""
+Owner Portal — for REIT / fractional / condo-hotel owners to see unit performance.
+
+Each owner is linked to one or more rooms. Statements are auto-generated monthly:
+  - Revenue from their unit(s)
+  - Operating costs allocated
+  - Management fee deducted
+  - Net distribution amount
+
+Endpoints:
+  GET   /api/owners                              — list owners (admin)
+  POST  /api/owners                              — create owner profile
+  GET   /api/owners/{owner_id}                   — owner detail
+  GET   /api/owners/{owner_id}/units             — units assigned
+  POST  /api/owners/{owner_id}/units             — assign units (rooms)
+  GET   /api/owners/{owner_id}/statement         — monthly statement
+  GET   /api/owners/{owner_id}/performance       — YTD performance dashboard
+"""
+from datetime import datetime, timezone
+import uuid
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+
+class OwnerIn(BaseModel):
+    name: str
+    email: str
+    phone: str = ""
+    company: str = ""
+    management_fee_percent: float = 25.0
+    notes: str = ""
+
+
+def create_owner_portal_router(db, require_roles):
+    router = APIRouter(prefix="/owners")
+
+    @router.get("")
+    async def list_owners(_: dict = Depends(require_roles("admin", "manager"))):
+        owners = await db.unit_owners.find({}, {"_id": 0}).sort("name", 1).to_list(200)
+        for o in owners:
+            o["unit_count"] = await db.unit_assignments.count_documents({"owner_id": o["id"]})
+        return {"owners": owners, "count": len(owners)}
+
+    @router.post("")
+    async def create_owner(body: OwnerIn,
+                           current_user: dict = Depends(require_roles("admin"))):
+        now = datetime.now(timezone.utc).isoformat()
+        doc = {"id": str(uuid.uuid4()), **body.dict(),
+               "created_by": current_user.get("name", ""), "created_at": now}
+        await db.unit_owners.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.get("/{owner_id}")
+    async def get_owner(owner_id: str,
+                        _: dict = Depends(require_roles("admin", "manager"))):
+        o = await db.unit_owners.find_one({"id": owner_id}, {"_id": 0})
+        if not o:
+            raise HTTPException(404, "Owner not found")
+        units = await db.unit_assignments.find({"owner_id": owner_id}, {"_id": 0}).to_list(100)
+        o["units"] = units
+        return o
+
+    @router.post("/{owner_id}/units")
+    async def assign_units(owner_id: str, body: dict,
+                           current_user: dict = Depends(require_roles("admin"))):
+        """body: {room_ids: [...], property_id: 'default', share_percent: 100}"""
+        room_ids = body.get("room_ids") or []
+        if not room_ids:
+            raise HTTPException(400, "room_ids required")
+        now = datetime.now(timezone.utc).isoformat()
+        docs = [{"id": str(uuid.uuid4()), "owner_id": owner_id, "room_id": rid,
+                 "property_id": body.get("property_id", ""),
+                 "share_percent": float(body.get("share_percent", 100)),
+                 "assigned_by": current_user.get("name", ""), "assigned_at": now}
+                for rid in room_ids]
+        await db.unit_assignments.insert_many(docs)
+        return {"assigned": len(docs)}
+
+    @router.get("/{owner_id}/statement")
+    async def get_statement(owner_id: str, month: str = "",
+                            _: dict = Depends(require_roles("admin", "manager"))):
+        """Generate a monthly statement (YYYY-MM)."""
+        if not month:
+            month = datetime.now(timezone.utc).strftime("%Y-%m")
+        owner = await db.unit_owners.find_one({"id": owner_id}, {"_id": 0})
+        if not owner:
+            raise HTTPException(404, "Owner not found")
+        units = await db.unit_assignments.find({"owner_id": owner_id}, {"_id": 0}).to_list(100)
+        room_ids = [u["room_id"] for u in units]
+        bookings = await db.bookings.find({
+            "room_id": {"$in": room_ids},
+            "check_in": {"$regex": f"^{month}"},
+            "status": {"$in": ["confirmed", "checked_in", "checked_out", "completed"]},
+        }, {"_id": 0}).to_list(500)
+        gross_revenue = sum(float(b.get("total_price", 0)) for b in bookings)
+        nights = sum(int(b.get("nights", 1)) for b in bookings)
+        # Apply share_percent
+        if units:
+            avg_share = sum(u.get("share_percent", 100) for u in units) / len(units) / 100.0
+        else:
+            avg_share = 1.0
+        owner_share_gross = round(gross_revenue * avg_share, 2)
+        mgmt_fee = round(owner_share_gross * owner.get("management_fee_percent", 25) / 100, 2)
+        # Estimated operating costs (housekeeping, utilities) — simplified 12% of revenue
+        opex = round(owner_share_gross * 0.12, 2)
+        net_distribution = round(owner_share_gross - mgmt_fee - opex, 2)
+        return {
+            "owner_id": owner_id, "owner_name": owner["name"], "month": month,
+            "unit_count": len(units),
+            "bookings_count": len(bookings),
+            "nights_sold": nights,
+            "gross_revenue": round(gross_revenue, 2),
+            "owner_share_gross": owner_share_gross,
+            "management_fee_percent": owner.get("management_fee_percent", 25),
+            "management_fee": mgmt_fee,
+            "operating_costs_est": opex,
+            "net_distribution": net_distribution,
+            "bookings": [{k: b.get(k) for k in ["booking_ref", "check_in",
+                                                 "check_out", "total_price", "nights"]} for b in bookings[:50]],
+        }
+
+    @router.get("/{owner_id}/performance")
+    async def get_performance(owner_id: str, year: str = "",
+                              _: dict = Depends(require_roles("admin", "manager"))):
+        if not year:
+            year = datetime.now(timezone.utc).strftime("%Y")
+        owner = await db.unit_owners.find_one({"id": owner_id}, {"_id": 0})
+        if not owner:
+            raise HTTPException(404, "Owner not found")
+        months = [{"month": f"{year}-{m:02d}"} for m in range(1, 13)]
+        for mo in months:
+            st = await get_statement(owner_id, mo["month"])
+            mo["revenue"] = st["gross_revenue"]
+            mo["net"] = st["net_distribution"]
+            mo["nights"] = st["nights_sold"]
+        total = {
+            "revenue": sum(m["revenue"] for m in months),
+            "net": sum(m["net"] for m in months),
+            "nights": sum(m["nights"] for m in months),
+        }
+        return {"owner_id": owner_id, "year": year, "months": months, "total": total}
+
+    return router

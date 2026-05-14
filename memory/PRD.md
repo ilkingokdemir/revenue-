@@ -168,13 +168,19 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - Frontend: 'BEO Üret' button in MeetingsSalesPanel detail drawer (visible only past confirmed stage; shows 'BEO Bağlı' once linked).
 - Marketplace re-scored in COMPETITIVE_ANALYSIS_v4.md (3/10 → 8/10) — existing module has 124 integrations + AI recommendations.
 
+## 🆕 Competitive Analysis v5 (Iter 282, Feb 14 2026) — FULL CODEBASE AUDIT
+See `/app/memory/COMPETITIVE_ANALYSIS_v5_FULL_AUDIT.md` — comprehensive audit across all 232 backend modules + 234 frontend panels + 1,847 API endpoints + 432 collections, benchmarked against 27 competitors in 14 categories.
+**Real numbers:**
+- 232 backend route files (Python), 182,753 LOC total
+- 234 frontend panels (.js), 104,042 LOC total
+- 1,847 REST endpoints, 432 MongoDB collections
+- **Overall maturity: 89.3%** (Iter 277 → 280 → 282 trajectory: 80% → 85% → 89%)
+- **6 categories at absolute market leadership**: Finance/TR, AI/Automation, Pricing, Loyalty, Owner Portal, F&B/MICE
+- **4 categories at parity**: PMS Core, Operations, Revenue Mgmt, CRM
+- **3 critical gaps**: Channel push (5/10), Mobile native (7/10), SOC 2 cert (6/10)
+
 ## 🆕 Competitive Analysis v4 (Iter 280, Feb 14 2026)
-See `/app/memory/COMPETITIVE_ANALYSIS_v4.md` — full 14-category benchmark across 21 competitors.
-**Key takeaways:**
-- Overall maturity: 80% → **85%** (+5 pp after iter 277-280 sprints)
-- Top-3 market position alongside Mews & Cloudbeds
-- Modules brought to parity / leadership: MICE Sales, F&B POS Hub, Owner Portal+PDF, Booking Engine v2, Loyalty Tiers v2, Compset, Budget vs Actual, Partner Webhooks/API Keys, Automation Analytics
-- **Critical remaining gaps**: real OTA XML push (Booking.com/Expedia), Public Marketplace, SOC 2 Type II, native mobile app
+See `/app/memory/COMPETITIVE_ANALYSIS_v4.md` — superseded by v5.
 
 ## Backlog (P0 → P2)
 

@@ -214,6 +214,11 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 293 (Market Robot Per-Property Parallel Scan) — verified live
+- **Problem**: Global `SCRAPE_RUNNING` flag bottleneck — 7 stale property'nin her birinin 365-günlük taraması ~15dk sürdüğü için tüm filo'nun "Nisan'dan çıkması" 2+ saat alıyordu (sıra ile).
+- **Fix**: `SCRAPE_RUNNING` (bool) → `SCRAPE_LOCKS: dict[property_id, bool]`, aynısı geo için. `_do_scan` per-property lock kullanıyor; `auto_scan_loop` artık her due property için `asyncio.create_task(_safe_do_scan(...))` ile **paralel** task başlatıyor. `_safe_do_scan` / `_safe_do_geo_scan` exception swallowing helpers ile bir property'nin hatası diğerlerini etkilemiyor.
+- **Live verified** (loglar): tek cycle'da 7 property paralel başladı (`aldgate-flats`, `camden-suites`, `city-gate`, `whitechapel-hotel`, `city-rooms`, `london-suites`, `ryam-suites`). 1+ dakika sonra yeni cycle aynı property'leri duplicate olarak tetiklemedi (lock çalışıyor). `whitechapel-grand` Nisan→Mayıs'a güncellendi.
+
 ### Iter 292 (Market Robot Continuous Scan Bug Fix) — 4/4 pass (curl)
 - **Root cause**: 5 property'nin `market_robot_config.enabled` alanı **None** (False değil, eksik) — auto-scan loop `{"enabled": True}` filtresi kullandığından bu kayıtları atlıyordu. Sonuç: aldgate-flats + camden-suites taranıyordu (en son 18:52), diğerleri 24 Nisan'da takılıydı. Loop kodu aslında doğru çalışıyordu, sadece konfig eksikti.
 - **Fix 1 - Backfill**: One-shot script — 5 property fix + 1 seed → tüm aktif property'ler artık enabled=True, interval=60dk, city/language default'larla.

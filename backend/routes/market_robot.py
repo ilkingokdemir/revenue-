@@ -14,8 +14,12 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-SCRAPE_RUNNING = False
-SCRAPE_RUNNING_GEO = False  # independent lock so geo scans can run in parallel with city scans
+SCRAPE_RUNNING = False  # legacy global flag (kept for backward compat, NOT used for new per-property lock)
+SCRAPE_RUNNING_GEO = False  # legacy global flag
+# Per-property concurrency locks — allows every property to scan independently in parallel.
+# Key: property_id, Value: True if a scan is in flight for that property.
+SCRAPE_LOCKS: dict = {}
+SCRAPE_LOCKS_GEO: dict = {}
 
 
 def _count_booking_cards(html_text: str) -> int:
@@ -1566,18 +1570,20 @@ def create_market_robot_router(db, require_roles, resend=None):
         Supports two modes:
           - city (default): whole-city scan via text (e.g. "London")
           - geo: radius scan around a postcode/address/coordinates
-        """
-        global SCRAPE_RUNNING, SCRAPE_RUNNING_GEO
 
+        Concurrency: uses PER-PROPERTY locks (SCRAPE_LOCKS / SCRAPE_LOCKS_GEO) so
+        every property can scan independently in parallel. A property cannot
+        double-scan itself, but unrelated properties never block each other.
+        """
         config = await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
         mode = (data.get("mode") or "city").lower()
         is_geo = mode == "geo"
 
-        # Independent locks → city + geo can scan in parallel
-        if is_geo and SCRAPE_RUNNING_GEO:
-            return {"error": "Geo scan already in progress", "status": "busy"}
-        if not is_geo and SCRAPE_RUNNING:
-            return {"error": "City scan already in progress", "status": "busy"}
+        # Per-property locks → unrelated properties scan in parallel
+        if is_geo and SCRAPE_LOCKS_GEO.get(property_id):
+            return {"error": f"Geo scan already in progress for {property_id}", "status": "busy"}
+        if not is_geo and SCRAPE_LOCKS.get(property_id):
+            return {"error": f"City scan already in progress for {property_id}", "status": "busy"}
 
         # Resolve scan location
         if is_geo:
@@ -1608,9 +1614,9 @@ def create_market_robot_router(db, require_roles, resend=None):
         )
 
         if is_geo:
-            SCRAPE_RUNNING_GEO = True
+            SCRAPE_LOCKS_GEO[property_id] = True
         else:
-            SCRAPE_RUNNING = True
+            SCRAPE_LOCKS[property_id] = True
         now = datetime.now(timezone.utc)
         scan_id = str(uuid.uuid4())[:8]
         snapshots = []
@@ -1757,9 +1763,9 @@ def create_market_robot_router(db, require_roles, resend=None):
 
         finally:
             if is_geo:
-                SCRAPE_RUNNING_GEO = False
+                SCRAPE_LOCKS_GEO.pop(property_id, None)
             else:
-                SCRAPE_RUNNING = False
+                SCRAPE_LOCKS.pop(property_id, None)
 
         return {
             "scan_id": scan_id,
@@ -4220,6 +4226,33 @@ Date range: {date_from} to {date_to}."""
             },
         }
 
+    async def _safe_do_scan(pid: str, payload: Dict, label: str = "city"):
+        """Background-friendly wrapper around _do_scan. Logs errors but never raises
+        so a single failing property cannot crash the auto-scan loop."""
+        try:
+            await _do_scan(pid, payload)
+        except Exception as e:
+            logger.exception(f"Auto {label}-scan task failed for {pid}: {e}")
+
+    async def _safe_do_geo_scan(pid: str, cfg: Dict):
+        """Geo wrapper that also stamps last_scan/total_scans on success."""
+        try:
+            await _do_scan(pid, {
+                "mode": "geo",
+                "location": cfg.get("location") or "",
+                "latitude": cfg.get("latitude"),
+                "longitude": cfg.get("longitude"),
+                "radius_km": float(cfg.get("radius_km") or 3.2),
+                "days_ahead": int(cfg.get("days_ahead") or 30),
+            })
+            await db.market_robot_geo_config.update_one(
+                {"property_id": pid},
+                {"$set": {"last_scan": datetime.now(timezone.utc).isoformat()},
+                 "$inc": {"total_scans": 1}},
+            )
+        except Exception as e:
+            logger.exception(f"Auto geo-scan task failed for {pid}: {e}")
+
     async def auto_scan_loop():
         """Background loop: every 60s check enabled market-robot configs and trigger due scans.
         Handles BOTH city scans (market_robot_config) AND geo scans (market_robot_geo_config) in parallel."""
@@ -4271,7 +4304,7 @@ Date range: {date_from} to {date_to}."""
                                 logger.info(f"🌱 Auto-bootstrap repaired config for {pid_}")
                     except Exception as e:
                         logger.warning(f"Auto-bootstrap tick error: {e}")
-                # === City scans ===
+                # === City scans (parallel per-property) ===
                 configs = await db.market_robot_config.find({"enabled": True}, {"_id": 0}).to_list(500)
                 now = datetime.now(timezone.utc)
                 for cfg in configs:
@@ -4287,14 +4320,12 @@ Date range: {date_from} to {date_to}."""
                             due = (now - last_dt) >= timedelta(minutes=interval)
                         except Exception:
                             due = True
-                    if due and not SCRAPE_RUNNING:
-                        logger.info(f"🛰️ Auto city-scan triggered for {pid}")
-                        try:
-                            await _do_scan(pid, {})
-                        except Exception as e:
-                            logger.exception(f"Auto city-scan failed for {pid}: {e}")
+                    # Per-property lock check — different properties scan in parallel
+                    if due and not SCRAPE_LOCKS.get(pid):
+                        logger.info(f"🛰️ Auto city-scan triggered for {pid} (parallel)")
+                        asyncio.create_task(_safe_do_scan(pid, {}, label="city"))
 
-                # === Geo scans (neighborhood, parallel with city) ===
+                # === Geo scans (parallel per-property, also parallel with city) ===
                 geo_configs = await db.market_robot_geo_config.find({"enabled": True}, {"_id": 0}).to_list(500)
                 for cfg in geo_configs:
                     pid = cfg.get("property_id")
@@ -4310,25 +4341,9 @@ Date range: {date_from} to {date_to}."""
                             due = (now - last_dt) >= timedelta(minutes=interval)
                         except Exception:
                             due = True
-                    if due and not SCRAPE_RUNNING_GEO:
-                        logger.info(f"🛰️ Auto geo-scan triggered for {pid} @ {loc}")
-                        try:
-                            await _do_scan(pid, {
-                                "mode": "geo",
-                                "location": loc,
-                                "latitude": cfg.get("latitude"),
-                                "longitude": cfg.get("longitude"),
-                                "radius_km": float(cfg.get("radius_km") or 3.2),
-                                "days_ahead": int(cfg.get("days_ahead") or 30),
-                            })
-                            # Update geo config last_scan / total_scans
-                            await db.market_robot_geo_config.update_one(
-                                {"property_id": pid},
-                                {"$set": {"last_scan": datetime.now(timezone.utc).isoformat()},
-                                 "$inc": {"total_scans": 1}},
-                            )
-                        except Exception as e:
-                            logger.exception(f"Auto geo-scan failed for {pid}: {e}")
+                    if due and not SCRAPE_LOCKS_GEO.get(pid):
+                        logger.info(f"🛰️ Auto geo-scan triggered for {pid} @ {loc} (parallel)")
+                        asyncio.create_task(_safe_do_geo_scan(pid, cfg))
 
                 # === Smart Scanner watchdog — check all properties (multi-instance) ===
                 try:

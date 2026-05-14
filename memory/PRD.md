@@ -206,6 +206,19 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Live verification**: Direkt SDK call simple prompt ile 2.3 MB video üretti (55 sn). API endpoint via `/generate` "A serene Mediterranean beach at sunset with palm trees" prompt'u ile 2.86 MB MP4 üretti (~110 sn) — `/api/uploads/marketing_videos/91ddd07f-*.mp4`.
 - Note: Sora 2 content moderation karmaşık/kalabalık prompt'larda ("smiling guests", "live cooking" gibi) reddedebilir — bu Sora policy davranışı, kodumuzda hata yok.
 
+### Iter 289 (Brand Voice Studio) — 32/32 pass
+- **AI Brand Voice Studio** (`/api/brand-voice/*`): Merkezi tone-of-voice yönetimi. Profil (tone, personality_traits, dos/donts, sample_sentences, sign_off) + 11 purpose template (email_confirmation/pre_arrival/post_stay/win_back, review_response_pos/neg, social_caption, video_prompt, web_concierge_reply, guest_apology, voucher_offer). Generate + Preview + History endpointleri. GPT-4o-mini via EMERGENT_LLM_KEY. **Live verified**: balayı yıldönümü pre-arrival email'i warm_luxury tonunda kişisel ve doğru üretildi.
+
+### Iter 290 (Booking.com XML + Niche OTA + Brand Voice integration) — 37/37 pass
+- **Booking.com Premier XML push prototype** (`/api/booking-com/*`): Sertifika gelmeden önce kullanıma hazır. OTA_HotelRateAmountNotifRQ + OTA_HotelAvailNotifRQ XML üretici (rates/availability/restrictions). xmlns='http://www.opentravel.org/OTA/2003/05', Version 2.0, EchoToken. Push attempts audit trail (booking_push_attempts). Hot-swap `_simulate_booking_push` → gerçek HTTPS POST + BasicAuth (sertifika gelince).
+- **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
+- **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
+
+### Cumulative Test Stats (Iter 277-290)
+- **413 cumulative backend tests passing (100%)**
+- **17 module-iterations** testing-agent verified
+- 0 critical, 0 minor, 0 frontend issues across all iterations
+
 ### Cumulative Test Stats (Iter 277-288)
 - **344 cumulative backend tests passing (100%)**
 - **15 module-iterations** testing-agent verified

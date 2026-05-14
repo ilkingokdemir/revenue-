@@ -3983,6 +3983,203 @@ def create_market_robot_router(db, require_roles, resend=None):
         rows = await db.fleet_gap_history.find({}, {"_id": 0}).sort("applied_at", -1).to_list(min(limit, 50))
         return {"items": rows}
 
+    @router.get("/revenue/market-robot/gap-history/{batch_id}/performance")
+    async def gap_batch_performance(batch_id: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Bir gap-close batch'inin apply sonrası performansını ölçer.
+
+        Karşılaştırma:
+          - Apply edilen tarihlerde alınan booking sayısı (since apply_at)
+          - O tarihlerdeki ortalama actual ADR (booking.total_price / nights)
+          - Hedeflenen ortalama rate vs gerçek alınan rate
+          - Tahmini revenue uplift (applied_days * (actual_avg - prev_avg))
+        """
+        batch = await db.fleet_gap_history.find_one({"batch_id": batch_id}, {"_id": 0})
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch bulunamadı")
+
+        applied_at = batch.get("applied_at")
+        per_branch_meta = batch.get("per_branch", [])
+
+        # rate_overrides — batch'in tarihlerini topla
+        overrides = await db.rate_overrides.find(
+            {"context.batch_id": batch_id}, {"_id": 0},
+        ).to_list(5000)
+        if not overrides and batch.get("undone"):
+            return {
+                "ok": True,
+                "batch_id": batch_id,
+                "undone": True,
+                "message": "Bu batch geri alınmış — performans ölçülmez",
+            }
+
+        # Group by property_id
+        by_pid: dict = {}
+        for o in overrides:
+            by_pid.setdefault(o["property_id"], []).append(o)
+
+        per_branch_perf = []
+        total_bookings_after = 0
+        total_revenue_uplift = 0.0
+        for pid, rows in by_pid.items():
+            target_dates = [r["date"] for r in rows]
+            new_rates = {r["date"]: r["custom_rate"] for r in rows}
+            prev_rates = {r["date"]: (r.get("context") or {}).get("previous_rate", 0) for r in rows}
+
+            # Bookings made AFTER apply for these dates
+            bookings = await db.bookings.find({
+                "property_id": pid,
+                "status": {"$ne": "cancelled"},
+                "created_at": {"$gte": applied_at},
+                "check_in": {"$in": target_dates},  # arrival on a target date
+            }, {"_id": 0, "check_in": 1, "check_out": 1, "total_price": 1, "rate": 1}).to_list(500)
+
+            n_after = len(bookings)
+
+            # Actual avg rate from bookings
+            actuals = []
+            for b in bookings:
+                try:
+                    ci = b.get("check_in")
+                    co = b.get("check_out")
+                    if ci and co:
+                        nights = (datetime.fromisoformat(co) - datetime.fromisoformat(ci)).days or 1
+                    else:
+                        nights = 1
+                    total = float(b.get("total_price") or 0)
+                    if total and nights:
+                        actuals.append(total / nights)
+                except Exception:
+                    pass
+
+            actual_avg = round(sum(actuals) / len(actuals), 2) if actuals else None
+            target_avg = round(sum(new_rates.values()) / len(new_rates), 2) if new_rates else None
+            prev_avg = round(sum(prev_rates.values()) / len(prev_rates), 2) if prev_rates else 0
+
+            revenue_uplift = 0.0
+            if actual_avg and prev_avg and n_after:
+                revenue_uplift = round((actual_avg - prev_avg) * n_after, 2)
+
+            meta = next((m for m in per_branch_meta if m.get("pid") == pid), {})
+            per_branch_perf.append({
+                "property_id": pid,
+                "property_name": meta.get("name") or pid,
+                "strategy_applied": meta.get("strategy") or batch.get("strategy"),
+                "applied_days": len(rows),
+                "bookings_after_apply": n_after,
+                "prev_avg_rate": prev_avg,
+                "target_avg_rate": target_avg,
+                "actual_avg_rate": actual_avg,
+                "estimated_revenue_uplift": revenue_uplift,
+            })
+            total_bookings_after += n_after
+            total_revenue_uplift += revenue_uplift
+
+        # Per-batch summary
+        days_elapsed = 0
+        try:
+            elapsed = datetime.now(timezone.utc) - datetime.fromisoformat(applied_at.replace("Z", "+00:00"))
+            days_elapsed = round(elapsed.total_seconds() / 86400, 1)
+        except Exception:
+            pass
+
+        return {
+            "ok": True,
+            "batch_id": batch_id,
+            "applied_at": applied_at,
+            "days_elapsed": days_elapsed,
+            "strategy": batch.get("strategy"),
+            "summary": {
+                "branches_in_batch": len(per_branch_perf),
+                "total_overrides_active": len(overrides),
+                "total_bookings_after_apply": total_bookings_after,
+                "estimated_total_revenue_uplift": round(total_revenue_uplift, 2),
+            },
+            "branches": per_branch_perf,
+        }
+
+    @router.get("/revenue/market-robot/gap-history/performance-summary")
+    async def gap_performance_summary(limit: int = 10,
+                                      current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Son N batch'in performansını rolling olarak özetler.
+        Strategy bazında: hangi strateji ne kadar revenue uplift sağladı?
+        """
+        batches = await db.fleet_gap_history.find({"undone": False}, {"_id": 0}).sort("applied_at", -1).to_list(min(limit, 30))
+        per_strategy: dict = {}
+        all_summary = {
+            "total_batches": len(batches),
+            "total_bookings_after": 0,
+            "total_revenue_uplift": 0.0,
+        }
+        for b in batches:
+            bid = b.get("batch_id")
+            overrides = await db.rate_overrides.find(
+                {"context.batch_id": bid}, {"_id": 0, "property_id": 1, "date": 1, "context": 1, "custom_rate": 1},
+            ).to_list(2000)
+            if not overrides:
+                continue
+
+            target_dates_by_pid: dict = {}
+            prev_by_pair: dict = {}
+            new_by_pair: dict = {}
+            for o in overrides:
+                target_dates_by_pid.setdefault(o["property_id"], []).append(o["date"])
+                key = (o["property_id"], o["date"])
+                prev_by_pair[key] = (o.get("context") or {}).get("previous_rate", 0)
+                new_by_pair[key] = o["custom_rate"]
+
+            applied_at = b.get("applied_at")
+            for pid, dates in target_dates_by_pid.items():
+                bookings = await db.bookings.find({
+                    "property_id": pid,
+                    "status": {"$ne": "cancelled"},
+                    "created_at": {"$gte": applied_at},
+                    "check_in": {"$in": dates},
+                }, {"_id": 0, "check_in": 1, "check_out": 1, "total_price": 1}).to_list(500)
+                if not bookings:
+                    continue
+                for bk in bookings:
+                    try:
+                        ci = bk.get("check_in")
+                        co = bk.get("check_out")
+                        nights = max(1, (datetime.fromisoformat(co) - datetime.fromisoformat(ci)).days) if (ci and co) else 1
+                        actual = float(bk.get("total_price") or 0) / nights
+                        prev_r = prev_by_pair.get((pid, ci), 0)
+                        if actual and prev_r:
+                            uplift = (actual - prev_r)
+                            strat = b.get("strategy") or "unknown"
+                            ps = per_strategy.setdefault(strat, {
+                                "strategy": strat, "bookings": 0,
+                                "revenue_uplift": 0.0, "batches": set(),
+                            })
+                            ps["bookings"] += 1
+                            ps["revenue_uplift"] += uplift
+                            ps["batches"].add(bid)
+                            all_summary["total_bookings_after"] += 1
+                            all_summary["total_revenue_uplift"] += uplift
+                    except Exception:
+                        pass
+
+        by_strat = []
+        for s in per_strategy.values():
+            by_strat.append({
+                "strategy": s["strategy"],
+                "batches": len(s["batches"]),
+                "bookings": s["bookings"],
+                "revenue_uplift": round(s["revenue_uplift"], 2),
+                "avg_uplift_per_booking": round(s["revenue_uplift"] / s["bookings"], 2) if s["bookings"] else 0,
+            })
+        by_strat.sort(key=lambda x: x["revenue_uplift"], reverse=True)
+
+        return {
+            "ok": True,
+            "summary": {
+                **all_summary,
+                "total_revenue_uplift": round(all_summary["total_revenue_uplift"], 2),
+            },
+            "by_strategy": by_strat,
+        }
+
     @router.post("/revenue/market-robot/gap-history/{batch_id}/undo")
     async def undo_gap_batch(batch_id: str,
                              current_user: dict = Depends(require_roles("admin", "manager"))):

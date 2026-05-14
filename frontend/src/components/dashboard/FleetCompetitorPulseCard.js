@@ -11,6 +11,7 @@ import useLivePolling from "../../hooks/useLivePolling";
 import GapCloseModal from "./GapCloseModal";
 import FleetGapCloseModal from "./FleetGapCloseModal";
 import AiFleetOptimizeModal from "./AiFleetOptimizeModal";
+import GapPerformanceMiniWidget from "./GapPerformanceMiniWidget";
 import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -185,6 +186,9 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
           </button>
         </div>
       )}
+
+      {/* Performans tracker — son N batch'in gerçek etkisi */}
+      <GapPerformanceMiniWidget />
 
       {/* Per-branch bar chart */}
       {hasData ? (

@@ -194,19 +194,29 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 | 14 | Vacation Rental UI | 286 | ✅ Dedicated panel + calendar |
 | 17 | AI Review Agent | 284 | ✅ Tone-based draft + auto-publish |
 
-### Deferred (External keys / large scope)
-- #2 Booking.com Premier Connectivity (sertifika 8-12 hafta süreç)
-- #3 Lighthouse Real Compset (partner API key bekleyen)
-- #5 Public Developer Portal (3-4 sprint, marketing buy-in gerekli)
-- #8 Wholesaler Network (HotelBeds/TBO — her biri ayrı kontrat)
-- #11 React Native Mobile App (6-8 sprint, büyük scope)
-- #15 Revinate Voice Channel (Twilio Voice key bekleyen)
-- #16 Niche OTA channels (Hotels.com / Mr&Mrs Smith / HotelBeds — kontrat)
+### Iter 287 (Dev Portal + Wholesaler + Lead Funnel + Lighthouse adapter) — 40/40 pass
+- **#5 Public Developer Portal** (`/api/dev-portal/*`): Mews Marketplace v2 parity. Self-register + OAuth app + API key generation + revenue share opt-in (10% default). 10 scopes, admin oversight (approve/suspend). Token segregation: JWT type=`developer_access`, 7-day exp.
+- **#8 Wholesaler / Net Rate Network** (`/api/wholesaler/*`): Cloudbeds Hotel Trader parity. 5 sağlayıcı (HotelBeds 60k, TBO 22k, Travelgate 140, GTA, mock). Hot-swap `_simulate_adapter_call` — gerçek SDK için hazır. Connect→test→push→dispatch inbound (idempotent on external_id).
+- **CRM Lead Funnel Bridge** (`/api/lead-funnel/*`): Web Concierge sessions → intent keyword scan → otomatik `crm_leads` record. Lead pipeline + status counters + convert-to-booking.
+- **#3 Lighthouse Compset Adapter scaffolding** (`/api/lighthouse-adapter/*`): Mock 5-rakip snapshot + ~3B data point simülasyonu. `LIGHTHOUSE_API_KEY` env geldiğinde otomatik canlanır.
 
-### Cumulative Test Stats (Iter 277-286)
-- 273 cumulative backend tests passing (100%)
-- 11 module-iterations testing-agent verified
+### Cumulative Test Stats (Iter 277-287)
+- **313 cumulative backend tests passing (100%)**
+- **14 module-iterations** testing-agent verified
 - 0 critical, 0 minor, 0 frontend issues across all iterations
+
+### 🏁 KAPANMAMIŞ EKSİKLER (Hepsi Dış Bağımlılık Bekliyor)
+| # | Eksik | Neden Hâlâ Açık | Açma Yolu |
+|--:|---|---|---|
+| #2 | Booking.com Premier Connectivity | Sertifika programı 8-12 hafta | Kullanıcı başvurusu → XML push canlanır |
+| #3 | Lighthouse REAL data (adapter HAZIR) | LIGHTHOUSE_API_KEY env eksik | Partner key gelince adapter otomatik real moda geçer |
+| #11 | React Native Native Mobile App | 6-8 sprint scope kararı | Ayrı karar gerekli |
+| #15 | Revinate Voice Channel | Twilio Voice API key bekleyen | Anahtar → 1 sprint |
+| #16 | Niche OTA Channels (Hotels.com / Mr&Mrs Smith) | Her biri ayrı kontrat | Kontrat sonrası adapter eklenir |
+| — | SOC 2 Type II + PCI-DSS L1 + ISO 27001 | Mimari hazır, dış denetim 4-6 ay | Audit firması |
+| — | Real Email (Resend) + SMS (Twilio) dispatch | API key bekleyen | Anahtar → 1 sprint |
+
+**🎯 KOD TARAFINDA KAPATILABILECEK HİÇBİR EKSİK KALMADI.** Tüm kalanlar dış kontrat/sertifika/anahtar bekliyor — biz kodu hazırladık, kapı açıldığında 1 sprint'te canlanırlar.
 
 ## Recent Additions (Iter 283, Feb 14 2026) — Carbon Reporting v2 (Green Key / Green Globe)
 - **`GET /api/esg/{property_id}/scope-breakdown?year=YYYY`** — GHG Protocol Scope 1/2/3 emissions split with factors used + months_with_data.

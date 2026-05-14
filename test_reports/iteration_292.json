@@ -1,0 +1,60 @@
+{
+  "summary": "Completed Revenue Management Module Full Regression Test (Iteration 292). Backend: 73/73 tests passed (100%). All Revenue Management endpoints working correctly including new Market Robot features (competitor-pulse, fleet-pulse, close-gap). Frontend loads correctly but sidebar navigation requires complex interaction patterns.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Sidebar Navigation",
+        "issues": ["Sidebar sections (Revenue & rates) are collapsed by default and require specific click patterns to expand. The data-testid attributes exist but the collapsible sections need to be expanded first before submenu items become clickable."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration292_revenue_management_full.py",
+    "/app/test_reports/pytest/pytest_iteration292_revenue_management.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration292_revenue_management_full.py"
+  ],
+  "success_rate": {
+    "backend": "100% (73/73 passed)",
+    "frontend": "Dashboard loads correctly, login works"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "receptionist": "testrecep@hotelbox.com / Test2026!"
+  },
+  "seed_data_creation": "None - used existing seed data (51 competitors across 9 properties)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 292 Revenue Management full regression test completed. All 73 backend API tests passed. Tested endpoints include: Revenue dashboard (6 endpoints), Revenue intelligence (3 endpoints), Competitors/compset (5 endpoints), Parity/overbooking/distribution (5 endpoints), Rate scraper/approvals (6 endpoints), Revenue analytics (3 endpoints), Rates grid (6 endpoints), Forecast (5 endpoints), Pricing explain (4 endpoints), Market Robot core (6 endpoints), Market Robot new features (9 endpoints including competitor-pulse, fleet-pulse, close-gap with 4 strategies), Channel revenue/OTA (3 endpoints), Logbook/loyalty/parity-defender (4 endpoints), RBAC tests (3 endpoints - receptionist correctly gets 403), Market Robot additional (5 endpoints). The recently fixed bug (round(None) crash in loyalty_logbook_forecast.py:217) is confirmed fixed - GET /api/forecast/occupancy/{property_id} returns 200. Frontend dashboard loads correctly with Turkish UI. Sidebar navigation uses collapsible sections.",
+  "features_tested": {
+    "revenue_dashboard": ["GET /api/revenue/dashboard/{pid}", "GET /api/revenue/dashboard-enhanced/{pid}", "GET /api/revenue/forecasting/{pid}", "GET /api/revenue/segments/{pid}", "GET /api/revenue/setup-wizard/{pid}", "GET /api/revenue/smart-pricing/{pid}"],
+    "revenue_intelligence": ["GET /api/revenue/intelligence/{pid}/forecast", "GET /api/revenue/intelligence/{pid}/booking-pace", "GET /api/revenue/intelligence/{pid}/recommendations"],
+    "competitors_compset": ["GET /api/revenue/competitors/{pid}", "GET /api/revenue/compset-intel/{pid}", "GET /api/revenue/demand-radar/{pid}", "GET /api/revenue/playbooks/{pid}", "GET /api/revenue/experiments/{pid}"],
+    "parity_overbooking": ["GET /api/revenue/parity/{pid}", "GET /api/revenue/overbooking/{pid}", "GET /api/revenue/profit-os/{pid}", "GET /api/revenue/distribution/{pid}", "GET /api/revenue/rate-calendar/{pid}"],
+    "rate_scraper_approvals": ["GET /api/revenue/rate-scraper/{pid}", "GET /api/revenue/approvals/{pid}", "GET /api/revenue/historical-pricing/{pid}", "GET /api/revenue/pricing-strategy/{pid}", "GET /api/revenue/pricing-strategy-full/{pid}", "GET /api/revenue/action-center/{pid}"],
+    "revenue_analytics": ["GET /api/revenue/analytics/budget/{pid}", "GET /api/revenue/analytics/performance/{pid}", "GET /api/revenue/analytics/pickup/{pid}"],
+    "rates_grid": ["GET /api/rates/grid/{pid}", "GET /api/rates/grid/insights/{pid}", "GET /api/rates/grid/explain/{pid}/{date}", "GET /api/rates/winloss/{pid}", "GET /api/rate-manager/plans/{pid}", "GET /api/rate-manager/seasons/{pid}"],
+    "forecast": ["GET /api/forecast/occupancy/{pid} (FIXED - round(None) crash)", "GET /api/forecast/accuracy/{pid}", "GET /api/forecast/pace/{pid}", "GET /api/forecast-v2/demand-calendar/{pid}", "GET /api/forecast-v2/horizon/{pid}"],
+    "pricing_explain": ["GET /api/pricing/explain/dashboard/{pid}", "GET /api/pricing/explain/history/{pid}", "GET /api/pricing/auto-apply/rules/{pid}", "GET /api/smart-rate-control/{pid}/calendar"],
+    "market_robot_core": ["GET /api/revenue/market-robot/{pid}/config", "GET /api/revenue/market-robot/{pid}/supply", "GET /api/revenue/market-robot/{pid}/logs", "GET /api/revenue/market-robot/{pid}/adjustments", "GET /api/revenue/market-robot/{pid}/competitors", "GET /api/revenue/market-robot/{pid}/competitor-prices"],
+    "market_robot_new_features": ["GET /api/revenue/market-robot/{pid}/competitor-pulse?days=14", "GET /api/revenue/market-robot/fleet-pulse?days=14", "POST /api/revenue/market-robot/{pid}/close-gap (strategy=full, dry_run=true)", "POST /api/revenue/market-robot/{pid}/close-gap (strategy=half, dry_run=true)", "POST /api/revenue/market-robot/{pid}/close-gap (strategy=floor, dry_run=true)", "POST /api/revenue/market-robot/{pid}/close-gap (strategy=value, dry_run=true)", "GET /api/revenue/market-robot/health", "POST /api/revenue/market-robot/{pid}/competitors/scan", "POST /api/revenue/market-robot/auto-bootstrap"],
+    "channel_revenue_ota": ["GET /api/channel-revenue/channels/{pid}", "GET /api/channel-revenue/rules/{pid}", "GET /api/ota-forecast/{pid}"],
+    "logbook_loyalty_parity": ["GET /api/logbook/entries/{pid}", "GET /api/loyalty/leaderboard/{pid}", "GET /api/parity-defender/{pid}/config", "GET /api/parity-defender/{pid}/recommendation"],
+    "rbac_tests": ["POST /api/revenue/market-robot/{pid}/close-gap returns 403 for receptionist", "POST /api/revenue/market-robot/auto-bootstrap returns 403 for receptionist", "POST /api/revenue/market-robot/{pid}/competitors/scan returns 403 for receptionist"],
+    "market_robot_additional": ["GET /api/revenue/market-robot/{pid}/demand-dashboard", "GET /api/revenue/market-robot/{pid}/performance", "GET /api/revenue/market-robot/{pid}/action-feed", "GET /api/revenue/market-robot/{pid}/ranking", "GET /api/revenue/market-robot/{pid}/market-pulse"]
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  },
+  "notes": "All Revenue Management endpoints return 200 status codes. The recently fixed bug (round(None) crash in loyalty_logbook_forecast.py line 217) is confirmed fixed. RBAC tests confirm receptionist role correctly receives 403 Forbidden on admin-only endpoints (close-gap, auto-bootstrap, competitors/scan). Market Robot new features (competitor-pulse, fleet-pulse, close-gap with 4 strategies) all working correctly. 51 competitors are seeded across 9 properties with real Booking.com scrape data."
+}

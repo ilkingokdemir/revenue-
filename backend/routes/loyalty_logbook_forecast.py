@@ -214,7 +214,7 @@ def create_loyalty_router(db, require_roles):
                     {"$group": {"_id": None, "avg_rate": {"$avg": "$total_price"}, "total": {"$sum": "$total_price"}}},
                 ]
                 async for doc in db.bookings.aggregate(pipeline):
-                    avg_rate = round(doc.get("avg_rate", 0), 2)
+                    avg_rate = round(doc.get("avg_rate") or 0, 2)
 
             forecast.append({
                 "date": target_date,

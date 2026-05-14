@@ -214,6 +214,17 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 291 (Backend Refactoring Sprint 1) — 57/57 pass
+- **Domain subpackage migration başladı**: 14 Iter 277-290 modülü 6 domain alt-klasörüne taşındı (`distribution/`, `ai/`, `marketing/`, `revenue_ext/`, `hotel_ops/`, `platform_ext/`). `server.py` import'ları güncellendi.
+- **Naming-conflict çözümü**: Legacy flat dosyalar (revenue.py, operations.py, finance.py) ile çakışan klasör adları `revenue_ext/`, `hotel_ops/` olarak yeniden adlandırıldı. Legacy modüller bozulmadı.
+- **`/app/backend/routes/REORGANIZATION_PLAN.md`**: Kalan ~230 dosya için tam migration yol haritası dokümante edildi. 10 domain klasörüne mapping (pms/, revenue_ext/, distribution/, finance_ext/, guests/, hotel_ops/, marketing/, security/, integrations/, ai/, platform_ext/), template komutlar, naming-conflict patterns.
+- **57 endpoint test**: 14 taşınan modülün tüm endpointleri 200 OK + legacy modüllerin (bookings, properties, guests, finance, audit_trail, vb.) tüm endpointleri çalışıyor.
+
+### Cumulative Test Stats (Iter 277-291)
+- **470 cumulative backend tests passing (100%)**
+- **18 module-iterations** testing-agent verified
+- 0 critical, 0 minor, 0 frontend issues across all iterations
+
 ### Cumulative Test Stats (Iter 277-290)
 - **413 cumulative backend tests passing (100%)**
 - **17 module-iterations** testing-agent verified

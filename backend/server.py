@@ -1018,6 +1018,10 @@ api_router.include_router(create_automation_analytics_router(db, require_roles))
 from routes.meetings_sales import create_meetings_router
 api_router.include_router(create_meetings_router(db, require_roles))
 
+# ===== F&B POS Integration Hub (Simphony / Lightspeed / Square / Toast) =====
+from routes.fnb_pos_hub import create_fnb_pos_router
+api_router.include_router(create_fnb_pos_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

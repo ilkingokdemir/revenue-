@@ -9,6 +9,7 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, Refere
 import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap } from "lucide-react";
 import useLivePolling from "../../hooks/useLivePolling";
 import GapCloseModal from "./GapCloseModal";
+import FleetGapCloseModal from "./FleetGapCloseModal";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -17,6 +18,7 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
   const [loading, setLoading] = useState(false);
   const [days, setDays] = useState(30);
   const [gapTarget, setGapTarget] = useState(null);  // {property_id, property_name}
+  const [fleetGapOpen, setFleetGapOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,6 +116,19 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
         </div>
       </div>
 
+      {/* Tüm filoda gap kapat — sadece below_market > 0 ise göster */}
+      {fs.below_market > 0 && (
+        <button onClick={() => setFleetGapOpen(true)}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-emerald-500/20 hover:from-emerald-500/35 hover:via-cyan-500/35 hover:to-emerald-500/35 border border-cyan-500/40 text-cyan-100 text-sm font-black transition group"
+          data-testid="fleet-gap-cta">
+          <Zap className="w-5 h-5 group-hover:scale-110 transition" />
+          <span>Tüm filoda gap kapat —</span>
+          <span className="text-emerald-200">{fs.below_market} şube</span>
+          <span className="text-stone-400">·</span>
+          <span className="text-cyan-200">{Math.abs(fs.fleet_vs_pct).toFixed(1)}% potansiyel</span>
+        </button>
+      )}
+
       {/* Per-branch bar chart */}
       {hasData ? (
         <div className="bg-stone-950/30 rounded-xl p-3 border border-stone-800/50">
@@ -205,6 +220,9 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
           propertyName={gapTarget.property_name}
           onClose={() => { setGapTarget(null); load(); }}
         />
+      )}
+      {fleetGapOpen && (
+        <FleetGapCloseModal onClose={() => { setFleetGapOpen(false); load(); }} />
       )}
     </div>
   );

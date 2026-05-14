@@ -22,6 +22,113 @@ SCRAPE_LOCKS: dict = {}
 SCRAPE_LOCKS_GEO: dict = {}
 
 
+async def _internal_close_gap(db, property_id: str, strategy: str = "half",
+                              days: int = 14, dry_run: bool = False,
+                              min_gap_pct: float = 0.0,
+                              source: str = "market-gap-close",
+                              user_name: str = "system") -> dict:
+    """Re-usable gap-close logic — used by both /close-gap endpoint and /fleet-close-gap.
+
+    Sadece pazarın altındaki günlere yazar. min_gap_pct (default 0) altında olanlar
+    skip edilir (örn. fleet için >2% gap istenirse).
+    """
+    from datetime import datetime, timezone, timedelta
+
+    comps = await db.market_competitors.find(
+        {"property_id": property_id}, {"_id": 0, "prices": 1}
+    ).to_list(50)
+    per_day: dict = {}
+    for c in comps:
+        for row in (c.get("prices") or []):
+            if not row.get("scraped"):
+                continue
+            d = row.get("date")
+            lp = row.get("lowest_price")
+            if not (d and lp):
+                continue
+            try:
+                per_day.setdefault(d, []).append(float(lp))
+            except Exception:
+                pass
+
+    if not per_day:
+        return {"applied": 0, "skipped": 0, "avg_uplift_pct": 0,
+                "days_evaluated": days, "reason": "no_competitor_data"}
+
+    now = datetime.now(timezone.utc)
+    date_keys = [(now + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(days)]
+
+    rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
+    base_rate = float((rt or {}).get("base_rate") or 100)
+    existing_ov = await db.rate_overrides.find(
+        {"property_id": property_id, "date": {"$in": date_keys}},
+        {"_id": 0, "date": 1, "custom_rate": 1},
+    ).to_list(500)
+    ov_map = {o["date"]: o.get("custom_rate") for o in existing_ov if o.get("custom_rate")}
+
+    applied = 0
+    skipped = 0
+    total_uplift_pct = 0.0
+    upserts = []
+    for d in date_keys:
+        prices = per_day.get(d) or []
+        if not prices:
+            skipped += 1
+            continue
+        market_avg = sum(prices) / len(prices)
+        market_min = min(prices)
+        our_rate = float(ov_map.get(d, base_rate))
+
+        gap_pct = ((market_avg - our_rate) / market_avg) * 100 if market_avg else 0
+        if gap_pct < min_gap_pct or our_rate >= market_avg:
+            skipped += 1
+            continue
+
+        if strategy == "full":
+            new_rate = market_avg
+        elif strategy == "half":
+            new_rate = our_rate + (market_avg - our_rate) * 0.5
+        elif strategy == "floor":
+            new_rate = max(our_rate, market_min)
+        else:  # value
+            new_rate = market_avg * 0.95
+
+        if strategy != "full":
+            new_rate = min(new_rate, market_avg)
+        new_rate = max(new_rate, our_rate)
+        new_rate = round(new_rate, 2)
+
+        if new_rate > our_rate:
+            uplift_pct = ((new_rate - our_rate) / our_rate) * 100 if our_rate else 0
+            applied += 1
+            total_uplift_pct += uplift_pct
+            upserts.append({
+                "property_id": property_id, "date": d,
+                "custom_rate": new_rate, "source": source,
+                "set_by": user_name, "set_at": now.isoformat(),
+                "context": {
+                    "strategy": strategy,
+                    "market_avg": round(market_avg, 2),
+                    "market_min": round(market_min, 2),
+                    "previous_rate": round(our_rate, 2),
+                },
+            })
+
+    if not dry_run and upserts:
+        for u in upserts:
+            await db.rate_overrides.update_one(
+                {"property_id": property_id, "date": u["date"]},
+                {"$set": u}, upsert=True,
+            )
+
+    return {
+        "applied": applied,
+        "skipped": skipped,
+        "days_evaluated": days,
+        "avg_uplift_pct": round(total_uplift_pct / applied, 1) if applied else 0,
+    }
+
+
 def _count_booking_cards(html_text: str) -> int:
     """Count actual property cards rendered in Booking.com search HTML.
     Booking wraps each result with data-testid attributes — these respect
@@ -3573,6 +3680,77 @@ def create_market_robot_router(db, require_roles, resend=None):
             "days_evaluated": days,
             "avg_uplift_pct": avg_uplift,
             "preview": preview[:30],
+        }
+
+    @router.post("/revenue/market-robot/fleet-close-gap")
+    async def fleet_close_gap(data: Dict = {},
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Fleet-wide gap-close — pazara karşı altta olan TÜM property'lere aynı stratejiyi uygular.
+
+        Body:
+          - strategy: "full" | "half" | "floor" | "value" (default: "half")
+          - days: 7..60 (default: 14)
+          - dry_run: bool (default: false)
+          - min_gap_pct: float (default: 2.0) — sadece bu pct üstündeki gap'lere uygula
+
+        Returns: per-branch sonuç + filo özeti.
+        """
+        strategy = (data.get("strategy") or "half").lower()
+        if strategy not in ("full", "half", "floor", "value"):
+            raise HTTPException(status_code=400, detail="strategy must be full|half|floor|value")
+        days = max(7, min(int(data.get("days") or 14), 60))
+        dry_run = bool(data.get("dry_run"))
+        min_gap_pct = float(data.get("min_gap_pct") or 2.0)
+
+        properties = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(500)
+        properties = [p for p in properties if p.get("id") and p["id"] not in ("all", "default")]
+
+        per_branch = []
+        total_applied = 0
+        total_skipped = 0
+        uplift_weighted_sum = 0.0  # uplift * applied days
+        uplift_days_total = 0
+        for p in properties:
+            pid = p["id"]
+            try:
+                # Reuse same logic — call internal handler. We replicate the core to avoid recursion.
+                result = await _internal_close_gap(
+                    db, pid, strategy=strategy, days=days, dry_run=dry_run,
+                    min_gap_pct=min_gap_pct, source="fleet-gap-close",
+                    user_name=current_user.get("name", "fleet-gap-close"),
+                )
+                per_branch.append({
+                    "property_id": pid,
+                    "property_name": p.get("name") or pid,
+                    **result,
+                })
+                total_applied += result.get("applied", 0)
+                total_skipped += result.get("skipped", 0)
+                if result.get("applied"):
+                    uplift_weighted_sum += result.get("avg_uplift_pct", 0) * result["applied"]
+                    uplift_days_total += result["applied"]
+            except Exception as e:
+                per_branch.append({
+                    "property_id": pid,
+                    "property_name": p.get("name") or pid,
+                    "applied": 0, "skipped": 0, "avg_uplift_pct": 0,
+                    "error": str(e)[:120],
+                })
+
+        fleet_avg_uplift = round(uplift_weighted_sum / uplift_days_total, 1) if uplift_days_total else 0
+        branches_with_apply = sum(1 for b in per_branch if b.get("applied", 0) > 0)
+        return {
+            "ok": True,
+            "strategy": strategy,
+            "dry_run": dry_run,
+            "fleet_summary": {
+                "total_branches": len(properties),
+                "branches_with_apply": branches_with_apply,
+                "total_days_applied": total_applied,
+                "total_days_skipped": total_skipped,
+                "fleet_avg_uplift_pct": fleet_avg_uplift,
+            },
+            "branches": per_branch,
         }
 
     # ==================== SMART SCANNER CONTROL ====================

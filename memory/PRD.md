@@ -214,6 +214,20 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 301 (PMS Module Regression + Fleet-Wide Gap Close)
+- **PMS smoke test** (121 GET endpoint, 40 PMS dosya): **109 OK · 0 hard bug (500/EXC) · 12 4xx (hepsi prefix-related false positive — channels_v2/booking_engine_v2/crm_360 farklı prefix'lerde register edilmiş)**
+- **Yeni endpoint**: `POST /api/revenue/market-robot/fleet-close-gap` — fleet-wide tek tıkta tüm şubelere strateji uygula
+  - Body: `{strategy, days, dry_run, min_gap_pct}`. `_internal_close_gap` helper'ı reuse eder (DRY).
+  - Returns: per-branch sonuç + fleet summary (branches_with_apply, total_days_applied, fleet_avg_uplift_pct)
+- **Yeni component**: `FleetGapCloseModal.js` (cyan/emerald gradient) — strateji + days + min_gap_pct selektörleri, auto dry-run preview tablosu, tek tık apply
+- **Yeni CTA**: `FleetCompetitorPulseCard` KPI strip'in altında büyük gradient buton — "⚡ Tüm filoda gap kapat — N şube · X% potansiyel" (sadece below_market > 0 ise görünür)
+- **E2E live test**:
+  - Dry-run (half, 14g, min_gap≥5%): **9/9 şube, 98 gün, +28.6% fleet uplift**
+  - Camden Apartments: 14/14 gün, +59% uplift (en büyük fırsat)
+  - Apply (value, 7g, min_gap≥10%, NOT dry-run): **54 rate_override DB'ye yazıldı**, fleet +55.7% uplift
+- **RBAC**: receptionist → 403 ✅
+- **Sonuç**: Filomuzdaki 9 şubeyi pazara hizalama süresi **tek tıkla ~5 saniye** (önceden 9 ayrı modal/işlem)
+
 ### Iter 300 (Revenue Management Full Regression — 73/73 PASS 🏆)
 - **Trigger**: Kullanıcı "Revenue Management modülünün tamamını incele, bug varsa düzelt, piyasanın en iyisi olsun" dedi.
 - **Pre-flight smoke test** (78 GET endpoint, `/app/backend/scripts/rm_smoke_test.py`): 77 OK, **1 hard bug bulundu**:

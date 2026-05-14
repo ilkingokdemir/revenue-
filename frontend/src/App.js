@@ -76,6 +76,7 @@ import {
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
   OpenPricingPanel, BeachPosPanel, PublicEventsPanel,
+  AgentsPanel, VacationRentalPanel,
   CampaignsPanel, GuestAppPanel, SmartLocksPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
@@ -2941,6 +2942,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "open-pricing", icon: Stack, name: "Open Pricing matrisi", testId: "open-pricing-btn" },
         { id: "beach-pos", icon: Umbrella, name: "Beach POS (şezlong)", testId: "beach-pos-btn" },
         { id: "public-events", icon: Confetti, name: "Halka açık etkinlikler", testId: "public-events-btn" },
+        { id: "ai-agents", icon: Robot, name: "Otonom AI Agent'lar", testId: "ai-agents-btn" },
+        { id: "vacation-rental", icon: House, name: "Vacation Rental (apart)", testId: "vacation-rental-btn" },
         { id: "guide", icon: ArrowSquareOut, name: t("nav.guide"), testId: "integration-guide-btn" },
         { id: "mapping", icon: Buildings, name: t("nav.mapping"), testId: "property-mapping-btn" },
         { id: "branding", icon: Palette, name: t("nav.branding"), testId: "branding-btn" },
@@ -4816,6 +4819,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "profit-os" && (
           <div className="p-6"><ProfitOSPanel user={user} propertyId={activePropertyId} /></div>
         )}
+
+        {/* Agentic AI Loops — Mews 2026 parity (Iter 286) */}
+        {activeView === "ai-agents" && <AgentsPanel />}
+
+        {/* Vacation Rental dedicated view — Eviivo/Lighthouse parity (Iter 286) */}
+        {activeView === "vacation-rental" && <VacationRentalPanel />}
         </Suspense>
       </main>
 

@@ -140,6 +140,10 @@ export const OpenPricingPanel = L(() => import("./components/dashboard/OpenPrici
 export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
 export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
 
+// ---------- COMPETITOR PARITY v6.2 (Iter 286 - Agentic AI + Vacation Rental) ----------
+export const AgentsPanel = L(() => import("./components/dashboard/AgentsPanel"));
+export const VacationRentalPanel = L(() => import("./components/dashboard/VacationRentalPanel"));
+
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");
 export const IntegrationsMarketplace = N(() => import("./components/dashboard/IntegrationsMarketplace"), "IntegrationsMarketplace");

@@ -1050,6 +1050,14 @@ api_router.include_router(create_beach_pos_router(db, require_roles))
 from routes.public_events import create_public_events_router
 api_router.include_router(create_public_events_router(db, require_roles))
 
+# ===== Agentic AI Loops (Iter 286 - Mews 2026 parity) =====
+from routes.agents import create_agents_router
+api_router.include_router(create_agents_router(db, require_roles))
+
+# ===== Vacation Rental dedicated view (Iter 286 - Eviivo/Lighthouse parity) =====
+from routes.vacation_rental import create_vacation_rental_router
+api_router.include_router(create_vacation_rental_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

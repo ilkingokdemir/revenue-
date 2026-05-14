@@ -1,0 +1,139 @@
+{
+  "summary": "Completed testing of Iteration 286 - Agentic AI (Mews 2026 parity) and Vacation Rental dedicated view (Eviivo+Lighthouse parity). All 29 backend tests passed (100%). Frontend UI tests verified: 2 new sidebar entries present (Otonom AI Agent'lar, Vacation Rental apart), both panels load correctly with Turkish UI. Fixed 2 issues: (1) vacation_rental.py calendar endpoint KeyError on room_id, (2) App.js missing activeView entries for ai-agents and vacation-rental.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration286_agents_vacation_rental.py",
+    "/app/test_reports/pytest/pytest_iteration286_agents_vacation_rental.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/routes/vacation_rental.py",
+    "/app/frontend/src/App.js",
+    "/app/backend/tests/test_iteration286_agents_vacation_rental.py"
+  ],
+  "success_rate": {
+    "backend": "100% (29/29 passed)",
+    "frontend": "100% (all UI elements verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Created test agents via backend tests (TEST_Custom_Agent_286 prefix)",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 286 fully tested. Two new modules added: (1) Agentic AI at /api/agents/* with auto-seeding of 3 agents (Misafir Memnuniyet, Operasyon Optimize, Revenue Pulse), agent CRUD, run execution with tool chains, approve/reject workflow. (2) Vacation Rental at /api/vacation-rental/* with summary KPIs, units list, and calendar grid for apartment-type properties. Frontend panels: AgentsPanel (data-testid=agents-panel), VacationRentalPanel (data-testid=vacation-rental-panel). All Turkish UI throughout.",
+  "features_tested": {
+    "agentic_ai": {
+      "endpoints": [
+        "GET /api/agents (auto-seeds 3 agents on first call)",
+        "POST /api/agents (creates custom agent, validates name+mission required)",
+        "PATCH /api/agents/{id} (updates allowed fields)",
+        "POST /api/agents/{id}/run (triggers execution, returns run with actions_taken, results, status)",
+        "GET /api/agents/{id}/runs (returns history)",
+        "GET /api/agents/runs/{run_id} (run detail)",
+        "POST /api/agents/runs/{run_id}/approve (flips status to approved)",
+        "POST /api/agents/runs/{run_id}/reject (with reason)"
+      ],
+      "verified": [
+        "3 seeded agents: Misafir Memnuniyet Agent, Operasyon Optimize Agent, Revenue Pulse Agent",
+        "Each agent has correct tools: Revenue Pulse → find_low_occupancy_dates + draft_promo_rule; Guest Recovery → find_low_reviews + draft_apology + propose_voucher; Ops → find_stale_oos + create_maintenance_ticket + estimate_revenue_loss",
+        "Custom agent creation with validation",
+        "Agent run execution with tool chain",
+        "Approve/reject workflow for pending_approval runs",
+        "total_runs increments after each run"
+      ]
+    },
+    "vacation_rental": {
+      "endpoints": [
+        "GET /api/vacation-rental/summary?year=YYYY (returns properties filtered by property_type='apartment' + KPIs)",
+        "GET /api/vacation-rental/units?days=30 (returns rooms with bookings array and booked_nights)",
+        "GET /api/vacation-rental/calendar?date=YYYY-MM-DD&days=14 (returns rooms grid with cells: date, status, guest_name)"
+      ],
+      "verified": [
+        "4 apartment properties: aldgate-flats, camden-suites, london-suites, ryam-suites",
+        "37 total units across apartment properties",
+        "KPIs: property_count, unit_count, total_revenue, total_nights, occupancy_percent, adr, revpar, booking_count",
+        "Calendar grid with booked/free status per date per room"
+      ]
+    },
+    "frontend_ui": {
+      "sidebar_entries": {
+        "verified": [
+          "Otonom AI Agent'lar (data-testid=ai-agents-btn)",
+          "Vacation Rental (apart) (data-testid=vacation-rental-btn)"
+        ]
+      },
+      "agents_panel": {
+        "verified": [
+          "data-testid='agents-panel' loads",
+          "Turkish UI: 'Otonom AI Agent'lar', 'Mews Agentic AI 2026'",
+          "5 agent cards displayed (3 seeded + 2 test)",
+          "Run buttons (data-testid=agent-run-{id})",
+          "History buttons (data-testid=agent-history-{id})",
+          "Run detail panel with status, actions taken",
+          "Approve/reject buttons for pending_approval runs"
+        ]
+      },
+      "vacation_rental_panel": {
+        "verified": [
+          "data-testid='vacation-rental-panel' loads",
+          "Turkish UI: 'Apart & Kısa-Dönem Kiralama', 'Vacation Rental Suite'",
+          "7 KPI cards: Mülk Sayısı (4), Birim Sayısı (37), Toplam Gelir, Doluluk, ADR, RevPAR, Rezervasyon",
+          "VR Mülk Listesi section with 4 apartment properties",
+          "Calendar table (data-testid=vr-calendar-table) with 14-day grid",
+          "Year selector (data-testid=vr-year-select)",
+          "Days selector (data-testid=vr-days-select)"
+        ]
+      }
+    },
+    "regression_tests": {
+      "iter_284": {
+        "verified": [
+          "GET /api/agencies works",
+          "GET /api/web-concierge/widget-config/{property_id} works",
+          "GET /api/review-agent/config/{property_id} works"
+        ]
+      },
+      "iter_285": {
+        "verified": [
+          "GET /api/open-pricing/segments works (6 segments)",
+          "GET /api/open-pricing/channels works (8 channels)",
+          "GET /api/beach-pos/menu/{property_id} works",
+          "GET /api/public-events works"
+        ]
+      },
+      "core": {
+        "verified": [
+          "GET /api/properties works",
+          "GET /api/room-types works",
+          "GET /api/owners works"
+        ]
+      }
+    }
+  },
+  "bugs_fixed": [
+    {
+      "file": "/app/backend/routes/vacation_rental.py",
+      "issue": "KeyError: 'room_id' in calendar endpoint when bookings don't have room_id field",
+      "fix": "Changed b['room_id'] to b.get('room_id') for safe access"
+    },
+    {
+      "file": "/app/frontend/src/App.js",
+      "issue": "Missing activeView entries for ai-agents and vacation-rental panels",
+      "fix": "Added {activeView === 'ai-agents' && <AgentsPanel />} and {activeView === 'vacation-rental' && <VacationRentalPanel />}"
+    }
+  ],
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All APIs are real implementations. LLM (GPT-4o-mini via emergentintegrations) is real for agent executive summaries."
+  }
+}

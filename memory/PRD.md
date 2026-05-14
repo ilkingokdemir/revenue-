@@ -148,6 +148,21 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 - **Auto stage-advance**: generating the PDF advances stage `inquiry`/`site_visit` → `proposal_sent` and stamps `proposal_sent_at` (no-op if already further along).
 - Frontend: "Teklif PDF" button in MeetingsSalesPanel detail drawer (visible when items exist).
 
+## Recent Additions (Iter 280, Feb 14 2026) — F&B POS Integration Hub
+- **`/api/fnb-pos/*`** — adapter-pattern POS integration hub. 4 production providers (Simphony, Lightspeed, Square, Toast) + mock provider. All currently route to mock adapter pending real SDK keys.
+- Connection CRUD with redacted credentials, ping-test (status auto-update), incremental receipt sync (de-dup by external_id), receipt listing with posted-filter.
+- **Post-to-folio**: moves a POS receipt charge into `folio_charges` linked by booking_id/booking_ref/room_number. Receipts marked posted_to_folio.
+- **Daily reconciliation**: aggregated totals by outlet & payment_type (`gross_total`, `posted_to_folio_total`, `cash_card_total`).
+- Frontend `FnbPosHubPanel`: 3 tabs (Connections / Receipts / Reconciliation), dynamic credential form per provider, in-row test/sync/delete actions.
+
+## 🆕 Competitive Analysis v4 (Iter 280, Feb 14 2026)
+See `/app/memory/COMPETITIVE_ANALYSIS_v4.md` — full 14-category benchmark across 21 competitors.
+**Key takeaways:**
+- Overall maturity: 80% → **85%** (+5 pp after iter 277-280 sprints)
+- Top-3 market position alongside Mews & Cloudbeds
+- Modules brought to parity / leadership: MICE Sales, F&B POS Hub, Owner Portal+PDF, Booking Engine v2, Loyalty Tiers v2, Compset, Budget vs Actual, Partner Webhooks/API Keys, Automation Analytics
+- **Critical remaining gaps**: real OTA XML push (Booking.com/Expedia), Public Marketplace, SOC 2 Type II, native mobile app
+
 ## Backlog (P0 → P2)
 
 ### P0

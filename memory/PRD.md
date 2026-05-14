@@ -214,6 +214,15 @@ Detaylı eksik analizi: `/app/memory/COMPETITIVE_DEEP_DIVE_v6_GAPS.md` — 11 ra
 - **Niche OTA providers**: Wholesaler module'e Hotels.com (90k partner, %18 komisyon) + Mr&Mrs Smith (1.5k boutique, %22 komisyon) eklendi. Hot-swap pattern (Iter 287 ile aynı).
 - **Brand Voice ↔ Web Concierge** entegrasyonu: Web concierge chat reply'leri artık property'nin brand voice profile'ından ton+kişilik+dos/donts enjekte ediyor. Tüm misafir iletişimi (email + review response + web chat + voucher) artık aynı sesle konuşuyor.
 
+### Iter 294 (Playwright Re-enabled — Live Competitor Scrape) — verified live
+- **Problem**: Smart Scanner `competitor_scan_fn` (booking_scraper) sessizce fail oluyordu (`No module named 'playwright'`) — kullanıcı sadece WARN logları görüyordu. Sonuç: kendi otel + rakip Booking.com fiyatları otomatik scrape edilmiyordu.
+- **Fix**: 
+  - `pip install playwright==1.59.0` (+ `pyee==13.0.1`, `greenlet==3.5.0`) eklendi requirements.txt'ye
+  - `playwright install chromium` → headless Chromium + Chrome Headless Shell `/pw-browsers/` altına kuruldu (~290MB)
+  - `booking_scraper.py` zaten `PLAYWRIGHT_BROWSERS_PATH=/pw-browsers` env'i doğru set ediyordu
+- **Canlı doğrulama**: The Savoy URL'ini scrape ettim → `Scraped: True`, `Hotel: The Savoy`, `Price: 752.0`, `Score: 9.4` (gerçek Booking.com verisi).
+- **Etki**: Smart Scanner artık her ~30dk'da kendi otel Booking.com fiyatını ve rakip fiyatlarını canlı çekiyor. AI Dynamic Pricing (otomatik yeniden fiyatlama) artık gerçek competitive verilerle çalışıyor.
+
 ### Iter 293 (Market Robot Per-Property Parallel Scan) — verified live
 - **Problem**: Global `SCRAPE_RUNNING` flag bottleneck — 7 stale property'nin her birinin 365-günlük taraması ~15dk sürdüğü için tüm filo'nun "Nisan'dan çıkması" 2+ saat alıyordu (sıra ile).
 - **Fix**: `SCRAPE_RUNNING` (bool) → `SCRAPE_LOCKS: dict[property_id, bool]`, aynısı geo için. `_do_scan` per-property lock kullanıyor; `auto_scan_loop` artık her due property için `asyncio.create_task(_safe_do_scan(...))` ile **paralel** task başlatıyor. `_safe_do_scan` / `_safe_do_geo_scan` exception swallowing helpers ile bir property'nin hatası diğerlerini etkilemiyor.

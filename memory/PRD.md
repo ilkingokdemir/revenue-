@@ -5,6 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 307 — Fleet-wide Neighbor Reset)
+- **Backend**: Yeni `POST /api/revenue/market-robot/fleet-reset-neighbors` endpoint'i — body `{property_ids?[], radius_km, max_results, dry_run}`. Tüm filo (varsayılan) veya seçilen property'ler için 3-adımlı reset:
+  1. Eski rakipleri sil
+  2. Force auto-geocode (Nominatim, name+postcode+city fallback chain)
+  3. Discover nearby (`discover_nearby_hotels` with district_hint)
+- Response: `{total_properties, ok_count, results:[{property_id, name, status, cleared, geocoded_from, candidates_found, error?}]}`. `dry_run:true` ile preview.
+- **Frontend**: Fleet Competitor Pulse Card header'ına turuncu **"Filo Komşuları Sıfırla"** butonu (`data-testid='fleet-reset-neighbors-btn'`). Confirm dialog ile yanlışlıkla tetikleme engellendi. Loading state + success/warning toast.
+- **Test**: 48 property için dry-run başarılı (sıralama: default, aldgate-flats, camden-suites, city-gate, city-rooms, london-suites, ryam-suites, whitechapel-hotel ...). Tek tık ile tüm filo doğru komşulara dönüyor.
+
 ### 2026-05-15 (iter 306 — Komşuları Sıfırla Frontend Button)
 - Iter 305 fix'i için UI flow eklendi. Scrape Health panel header'ına **"Komşuları Sıfırla"** turuncu butonu eklendi (`data-testid='neighborhood-reset-btn'`).
 - Buton tek tıkla 3-adımlı wizard çalıştırıyor: (1) `DELETE /competitors/clear` eski yanlış listeyi siler, (2) `POST /auto-geocode` (force:true) coord'u yeniden çıkarır, (3) `POST /competitors/discover` (radius 2km) doğru komşuları bulur. Her adım kullanıcıya toast ile bildirilir.

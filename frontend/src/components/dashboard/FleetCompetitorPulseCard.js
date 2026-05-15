@@ -24,6 +24,31 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
   const [fleetGapOpen, setFleetGapOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [lastBatch, setLastBatch] = useState(null);  // {batch_id, applied_at, branches, days, undone}
+  const [fleetResetting, setFleetResetting] = useState(false);
+
+  const runFleetReset = async () => {
+    if (!window.confirm(
+      "Tüm filo için: her property'nin eski rakiplerini sileceğim, auto-geocode edeceğim ve " +
+      "gerçek komşuları yeniden bulacağım. 48 property için 2-4 dakika sürebilir. Devam?"
+    )) return;
+    setFleetResetting(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/fleet-reset-neighbors`,
+        { radius_km: 2.0, max_results: 15 });
+      const okN = data.ok_count || 0;
+      const tot = data.total_properties || 0;
+      const failed = (data.results || []).filter(r => r.status !== "ok").length;
+      if (okN === tot) {
+        toast.success(`Filo sıfırlandı: ${okN}/${tot} property başarılı`);
+      } else {
+        toast.warning(`${okN}/${tot} başarılı, ${failed} hata. Detay için F12 → Network`);
+      }
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Filo sıfırlama başarısız");
+    }
+    setFleetResetting(false);
+  };
 
   const loadLastBatch = useCallback(async () => {
     try {
@@ -110,6 +135,13 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs text-stone-300 disabled:opacity-50"
             data-testid="fleet-refresh">
             {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          </button>
+          <button onClick={runFleetReset} disabled={fleetResetting}
+            title="Tüm filo için: eski rakipleri sil + auto-geocode + gerçek komşuları yeniden bul"
+            data-testid="fleet-reset-neighbors-btn"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition ${fleetResetting ? "bg-orange-500/15 border-orange-500/40 text-orange-300 cursor-wait" : "bg-stone-800 border-orange-500/30 text-orange-300 hover:bg-orange-500/15"}`}>
+            {fleetResetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            {fleetResetting ? "Sıfırlanıyor..." : "Filo Komşuları Sıfırla"}
           </button>
         </div>
       </div>

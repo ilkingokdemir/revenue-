@@ -3402,6 +3402,131 @@ def create_market_robot_router(db, require_roles, resend=None):
             "message": f"{deleted.deleted_count} rakip silindi. /discover ile yeniden bul.",
         }
 
+    @router.post("/revenue/market-robot/fleet-reset-neighbors")
+    async def fleet_reset_neighbors(
+        data: Dict = {},
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Fleet-wide: for EVERY property, run the same 3-step reset that the
+        single-property UI button does — clear all competitors, force-geocode,
+        re-discover with radius. Returns per-property results.
+
+        Body (optional):
+          - property_ids: [] — restrict to specific IDs (default: ALL active)
+          - radius_km: 2.0 (default)
+          - max_results: 15 (default)
+          - dry_run: false — when true, only reports what would happen
+        """
+        from utils.booking_scraper import discover_nearby_hotels, geocode_address, _extract_district_hint
+
+        radius_km = max(0.5, min(float((data or {}).get("radius_km") or 2.0), 10.0))
+        max_results = max(5, min(int((data or {}).get("max_results") or 15), 50))
+        dry_run = bool((data or {}).get("dry_run"))
+        target_ids = (data or {}).get("property_ids") or []
+
+        prop_query: Dict = {"is_active": {"$ne": False}}
+        if target_ids:
+            prop_query["id"] = {"$in": list(target_ids)}
+        props = await db.properties.find(
+            prop_query,
+            {"_id": 0, "id": 1, "name": 1, "city": 1, "postcode": 1, "address": 1,
+             "latitude": 1, "longitude": 1, "currency": 1, "geocoded_display_name": 1},
+        ).to_list(200)
+
+        results = []
+        for prop in props:
+            pid = prop.get("id")
+            if not pid:
+                continue
+            entry = {"property_id": pid, "name": prop.get("name"), "city": prop.get("city")}
+            if dry_run:
+                entry["status"] = "would_reset"
+                results.append(entry)
+                continue
+            try:
+                # 1) Clear existing
+                prev_comps = await db.market_competitors.find(
+                    {"property_id": pid}, {"_id": 0, "id": 1}
+                ).to_list(200)
+                prev_count = len(prev_comps)
+                if prev_count:
+                    await db.market_competitors.delete_many({"property_id": pid})
+                    await db.market_supply.delete_many({"property_id": pid})
+
+                # 2) Force geocode
+                name = (prop.get("name") or "").strip()
+                city = (prop.get("city") or "").strip()
+                postcode = (prop.get("postcode") or "").strip()
+                address = (prop.get("address") or "").strip()
+                candidates_q = []
+                if address:
+                    candidates_q.append(" ".join([x for x in [address, postcode, city] if x]))
+                if name and city:
+                    candidates_q.append(f"{name} {city}")
+                if postcode and city:
+                    candidates_q.append(f"{postcode} {city}")
+                if name:
+                    candidates_q.append(name)
+                seen = set()
+                ordered_q = []
+                for q in candidates_q:
+                    qn = q.strip()
+                    if qn and qn.lower() not in seen:
+                        seen.add(qn.lower())
+                        ordered_q.append(qn)
+
+                geo_ok = False
+                latitude = None
+                longitude = None
+                display = ""
+                for q in ordered_q:
+                    geo = await geocode_address(q)
+                    if geo:
+                        latitude, longitude, display = geo
+                        await db.properties.update_one(
+                            {"id": pid},
+                            {"$set": {
+                                "latitude": latitude, "longitude": longitude,
+                                "geocoded_from": q, "geocoded_display_name": display,
+                                "geocoded_at": datetime.now(timezone.utc).isoformat(),
+                            }},
+                        )
+                        geo_ok = True
+                        break
+
+                if not geo_ok:
+                    entry["status"] = "geocode_failed"
+                    entry["cleared"] = prev_count
+                    results.append(entry)
+                    continue
+
+                # 3) Discover nearby
+                district_hint = _extract_district_hint(display, postcode, city) if display else ""
+                cands = await discover_nearby_hotels(
+                    postcode=postcode, city=city, latitude=latitude, longitude=longitude,
+                    property_type="any", max_results=max_results, radius_km=radius_km,
+                    language="en-gb", currency=(prop.get("currency") or "GBP"),
+                    district_hint=district_hint,
+                )
+                entry["status"] = "ok"
+                entry["cleared"] = prev_count
+                entry["geocoded_from"] = display[:80] if display else ""
+                entry["candidates_found"] = len(cands)
+            except Exception as e:
+                entry["status"] = "error"
+                entry["error"] = str(e)[:160]
+            results.append(entry)
+
+        ok_count = sum(1 for r in results if r.get("status") == "ok")
+        return {
+            "ok": True,
+            "total_properties": len(props),
+            "ok_count": ok_count,
+            "dry_run": dry_run,
+            "results": results,
+            "message": f"Fleet reset: {ok_count}/{len(props)} property işlendi. radius={radius_km}km, max={max_results}.",
+        }
+
     @router.post("/revenue/market-robot/{property_id}/competitors/bulk-add")
     async def bulk_add_competitors(
         property_id: str, data: Dict,

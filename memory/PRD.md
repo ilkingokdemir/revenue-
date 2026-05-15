@@ -5,6 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 295 — PMS Pro Module: AI Operations Suite)
+- **PMS Pro** (`routes/pms_pro.py` + `PmsProPanel.js`) — Next-gen module to leapfrog Mews/Cloudbeds/Pace/Apaleo:
+  1. **Smart Room Assignment** (`POST /api/pms-pro/smart-assign`) — AI scoring engine: room-type match (+20), floor preference (+15), quiet (+10), accessibility (+20), maintenance (-30), past complaints (-5/each). Returns best room + alternatives.
+  2. **AI Operations Concierge** (`POST /api/pms-pro/ai-concierge`) — Turkish natural-language PMS queries. Rule-based intent classifier (arrivals/departures/vip/maintenance/housekeeping) → DB query → GPT-4o-mini Turkish summary via Emergent LLM Key.
+  3. **Guest Journey Orchestrator** (`GET/POST/PATCH/DELETE /api/pms-pro/journey-rules`) — Full CRUD for trigger→action automation rules. 9 triggers (booking_confirmed, pre_arrival_24h/1h, checked_in, mid_stay, pre_checkout_2h, checked_out, no_show, late_checkout_requested), 8 actions (send_email/sms/push, create_task, send_qr_key, offer_upsell, trigger_housekeeping, notify_manager).
+  4. **Operations Anomaly Alerts** (`GET /api/pms-pro/anomalies/{pid}`) — Real-time scan for VIP arrivals, no-show risk, stale maintenance (>2d), housekeeping backlog (>5 rooms), and blocked arrivals (maintenance on today's arrival rooms).
+- Frontend: 4-tab panel under **Operations → PMS Pro (AI ops)** with full data-testid coverage, Turkish localization.
+- **Test sonucu**: 26/26 backend tests + frontend 100% (iteration_295.json) — sıfır kritik/minör hata.
+
 ### 2026-05-15 (iter 278 — Closed-loop Automation + AI Suggest)
 - **`push_to_ota` action** — Automation rules artık Channel Manager v2 kuyruğuna direkt iş gönderiyor. Her tetiklenmede Booking/Expedia/Airbnb'ye fiyat/stok push'ı otomatik. created_by='automation:{rule_id}' ile takip edilebilir.
 - **`post_to_chat` action** — Otomasyon Team Chat'e yazıyor. ⚡ prefixli özel author isim, template substitution destekli. Misafir adı, oda no, fiyat değişimi gibi tüm payload alanları kullanılabilir.

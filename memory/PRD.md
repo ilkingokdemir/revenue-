@@ -5,6 +5,12 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 297 — AI-Powered Journey Rule Suggestions)
+- **`GET /api/pms-pro/journey-rules/suggest`** — Analyses last 30 days operations (bookings, VIP cadence, no-shows, late-checkouts, negative reviews, open complaints, stale maintenance) and calls **GPT-5.2 via Emergent LLM Key** to generate 3-5 actionable Turkish journey rules with rationales. Validates trigger/action against enum, filters duplicate names.
+- **`POST /api/pms-pro/journey-rules/suggest/accept`** — Bulk-creates selected suggestions as **disabled** rules (review-first safety) with `ai_suggested=true` + `ai_rationale` traceable fields.
+- **Frontend**: "✨ AI öner" button on Journey Rules tab → opens suggestion cards with checkboxes (pre-selected). Each card shows name, rationale, trigger→action chips, priority, template preview. "Seçilileri kabul et" bulk-creates; "İptal" clears.
+- **Test**: 16/16 backend + frontend 100% (iteration_297.json) — sıfır kritik/minör hata.
+
 ### 2026-05-15 (iter 296 — Journey Rules Execution Engine)
 - **Journey Engine** (`pms_pro.py` extended) — 60s background `journey_engine_loop` task scans enabled rules and fires matching bookings exactly once per (rule, booking) pair.
 - **9 triggers** computed in real-time: `booking_confirmed` (last 70s created), `pre_arrival_24h` (check_in tomorrow), `pre_arrival_1h` (today after 12:00), `checked_in`, `mid_stay` (midpoint date), `pre_checkout_2h` (check_out today), `checked_out`, `no_show` (yesterday + never checked in), `late_checkout_requested`.

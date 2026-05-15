@@ -5,6 +5,19 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 311 — Fleet-wide Geo Validation + Auto-Repair Job)
+- **Backend** — new endpoint `POST /api/revenue/market-robot/fleet-validate-geo` (`market_robot.py`):
+  - Iterates active properties (or `property_ids[]` filter), reverse-geocodes each stored lat/lon via Nominatim, compares actual `country_code` against `COUNTRY_MAP_FV[property.country]` (UK/US/TR/FR/DE/ES/IT/NL/CH/AT/BE/PT/IE/GR supported).
+  - Status taxonomy: `ok` · `flagged` (country_mismatch | city_mismatch) · `fixed` · `unfixable` · `skipped` (no_coordinates | no_country_on_property) · `unknown` (reverse_geocode_failed).
+  - `fix=true` repair path: forward-geocode with `countrycodes` bias using candidate chain (address+postcode+city → postcode+city → name+city → bare name w/ country bias), city-mismatch rejection, persist with `geo_validated_at` timestamp.
+  - Body: `{property_ids?[], dry_run=true, fix=false, sleep_s=1.1}` — `sleep_s` clamped 0.5–3.0 to respect Nominatim free-tier 1 req/s policy.
+  - Response: `{ok, total_properties, ok_count, flagged_count, fixed_count, skipped_count, results[]}` with full per-property before/after diff.
+- **Backend helper** — new `utils.booking_scraper.reverse_geocode(lat, lon)` → `{country_code, country, city, state, display_name}` via Nominatim `/reverse` endpoint.
+- **Frontend** (`FleetCompetitorPulseCard.js`): Two new header buttons:
+  - 🌐 **"Koordinatları Doğrula"** (`fleet-validate-geo-btn`, cyan) — runs `fix=true`, confirm dialog, toast summary `"Geo doğrulama: N property düzeltildi · M zaten OK · K atlandı"`.
+  - 🌐 **"Dry"** (`fleet-validate-geo-dryrun-btn`, hidden on mobile) — runs report-only.
+- **E2E test (iter 302)**: 15/15 backend tests PASSED (100%) — auth (401/403/200), dry-run structure, property_ids filter, edge cases (no_coords/no_country), **Boston→London repair** (corrupted camden-suites to 42.34,-71.08 → endpoint returned `status=fixed` with London 51.55,-0.13 ✅), reverse_geocode helper (London→gb, Boston→us), regression: /auto-geocode + /competitors/discover + /fleet-reset-neighbors all still pass.
+
 ### 2026-05-15 (iter 310 — Geocoding Country Bias Fix — Camden→Boston bug)
 - **Root cause**: Nominatim free-text geocode hit `Camden, NJ, USA` for the query "Camden Apartments" (no country/city qualifier). Property was persisted with lat=42.337, lon=-71.081 (Boston) instead of London.
 - **Backend** (`market_robot.py` `/competitors/discover` & `/auto-geocode`):

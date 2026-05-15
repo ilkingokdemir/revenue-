@@ -5,6 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 304 — Standardized Chart Legends Across Dashboard)
+- **Yeni reusable component**: `/app/frontend/src/components/dashboard/ChartLegend.js` — items prop'u alır (color/label/kind), dark/light tema desteği, dense mode, data-testid'ler. Üç swatch tipi: solid box, line, dashed.
+- **4 grafiğe Türkçe lejant uygulandı**:
+  1. **PaceReports STLY chart**: "Bu Yıl (cyan çizgi)" + "Geçen Yıl (amber dashed)" — duplicate eski legend kaldırıldı.
+  2. **BookingPace cumulative chart**: "Bu Yıl (TY) — kümülatif rezv." + "Geçen Yıl (LY)" — İngilizce legend Türkçeye çevrildi.
+  3. **ParityHeatmapPanel**: 4-renkli prominent Türkçe legend grid üstünde (eski sade legend grid altından kaldırıldı). Eşik bilgileri: "Düşük fiyatlı — Fırsat (rakipten %5+ ucuz)", "Pariteli (±5%)", "Yüksek fiyatlı (rakipten %5+ pahalı)", "Rakip verisi yok".
+  4. **SentimentHeatmapPanel Günlük Trend**: "Pozitif puan (≥0)" + "Negatif puan (<0)" + tooltip iyileştirildi.
+- Tüm legend'lar `data-testid='chart-legend'` veya component-spesifik testid içeriyor.
+
 ### 2026-05-15 (iter 303 — Demand Radar Renk Lejantı Bug Fix)
 - **BUG (user-reported)**: "90-Day Forward View" grafiğinde bar renkleri (kırmızı/teal/koyu-teal) açıklamasız — kullanıcı kırmızının neyi ifade ettiğini anlamadı.
 - **Root cause**: Legend sadece "Pazar Talep" yazıyor + yeşil dot gösteriyordu (bar kodunda yeşil hiç kullanılmıyor). 3 ayrı bar renginin ve cyan doluluk çizgisinin/dashed trend çizgisinin anlamı hiç belirtilmemişti.

@@ -8,6 +8,7 @@ import {
   ArrowsClockwise,
   Warning,
 } from "@phosphor-icons/react";
+import ChartLegend from "./ChartLegend";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -226,12 +227,20 @@ export default function SentimentHeatmapPanel({ propertyId, hotelName }) {
           {data.trend?.length > 0 && (
             <div className="p-4 rounded-xl bg-white border border-stone-200">
               <h3 className="text-sm font-semibold text-stone-900 mb-3">Günlük Trend</h3>
-              <div className="flex items-end gap-1 h-24">
+              <ChartLegend
+                dark={false}
+                testId="sentiment-trend-legend"
+                items={[
+                  { color: "#34d399", label: "Pozitif puan (yorum ≥0)", testId: "legend-sentiment-pos" },
+                  { color: "#fb7185", label: "Negatif puan (yorum <0)", testId: "legend-sentiment-neg" },
+                ]}
+              />
+              <div className="flex items-end gap-1 h-24 mt-3">
                 {data.trend.map((d) => {
                   const h = Math.max(8, Math.abs(d.avg) * 12);
                   const color = d.avg >= 0 ? "bg-emerald-400" : "bg-rose-400";
                   return (
-                    <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.date}: ${d.avg} (${d.count})`}>
+                    <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.date}: ortalama puan ${d.avg} · ${d.count} yorum`}>
                       <div className={`w-full ${color} rounded-t`} style={{ height: `${h}px` }} />
                       <div className="text-[8px] text-stone-400">{d.date.slice(5)}</div>
                     </div>

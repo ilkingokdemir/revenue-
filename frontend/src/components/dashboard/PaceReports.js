@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
 import axios from "axios";
 import { Loader2, TrendingUp, Calendar, PoundSterling, BarChart3, ArrowUp, ArrowDown } from "lucide-react";
+import ChartLegend from "./ChartLegend";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
@@ -91,6 +92,13 @@ export default function PaceReports({ propertyId, hotelName = "" }) {
             {ahead ? "AHEAD" : "BEHIND"} {Math.abs(stlyDelta)} oda · {ahead ? "+" : ""}{stlyDeltaPct}%
           </div>
         </div>
+        <ChartLegend
+          testId="pace-stly-legend"
+          items={[
+            { color: "#22d3ee", label: `Bu Yıl (${totals.ty_total_rooms} oda)`, kind: "line", testId: "legend-ty" },
+            { color: "#f59e0b", label: `Geçen Yıl (${totals.ly_total_rooms} oda)`, kind: "dashed", testId: "legend-ly" },
+          ]}
+        />
         {stlyChart && (
           <svg viewBox={`0 0 ${stlyChart.W} ${stlyChart.H}`} className="w-full" data-testid="pace-stly-chart">
             {/* grid */}
@@ -112,10 +120,6 @@ export default function PaceReports({ propertyId, hotelName = "" }) {
             <text x={stlyChart.pad.l - 4} y={stlyChart.pad.t + 4} textAnchor="end" fontSize="8" fill="#9ca3af">{Math.round(stlyChart.maxV)}</text>
           </svg>
         )}
-        <div className="flex items-center gap-4 mt-2 text-[10px]">
-          <span className="flex items-center gap-1.5"><span className="w-4 h-[2px] bg-cyan-400" /> Bu Yıl ({totals.ty_total_rooms} oda)</span>
-          <span className="flex items-center gap-1.5"><span className="w-4 h-[2px]" style={{ background: "repeating-linear-gradient(90deg,#f59e0b 0,#f59e0b 4px,transparent 4px,transparent 7px)" }} /> Geçen Yıl ({totals.ly_total_rooms} oda)</span>
-        </div>
       </div>
 
       {/* Pickup Cards */}

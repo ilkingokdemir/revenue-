@@ -19,10 +19,10 @@ const CLASS_BG = {
   no_data:     "bg-stone-700/20 hover:bg-stone-700/35 border-stone-700",
 };
 const CLASS_LABEL = {
-  underpriced: "Underpriced — opportunity",
-  parity:      "On parity",
-  overpriced:  "Overpriced — losing share",
-  no_data:     "No competitor data",
+  underpriced: "Düşük fiyatlı — Fırsat (rakipten %5+ ucuz)",
+  parity:      "Pariteli (rakiple ±5%)",
+  overpriced:  "Yüksek fiyatlı — Pazar payı kaybı (rakipten %5+ pahalı)",
+  no_data:     "Rakip verisi yok",
 };
 
 export default function ParityHeatmapPanel({ propertyId, hotelName = "" }) {
@@ -105,7 +105,16 @@ export default function ParityHeatmapPanel({ propertyId, hotelName = "" }) {
       {/* Grid */}
       {cells.length > 0 && (
         <div className="bg-stone-900/40 border border-stone-800 rounded-2xl p-4" data-testid="parity-grid">
-          <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] text-stone-500 font-bold uppercase mb-1">
+          <ChartLegend
+            testId="parity-legend"
+            items={[
+              { color: "#f59e0b", label: CLASS_LABEL.underpriced, testId: "legend-underpriced" },
+              { color: "#10b981", label: CLASS_LABEL.parity, testId: "legend-parity" },
+              { color: "#f43f5e", label: CLASS_LABEL.overpriced, testId: "legend-overpriced" },
+              { color: "#57534e", label: CLASS_LABEL.no_data, testId: "legend-no-data" },
+            ]}
+          />
+          <div className="grid grid-cols-7 gap-1.5 text-center text-[10px] text-stone-500 font-bold uppercase mb-1 mt-3">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => <div key={d}>{d}</div>)}
           </div>
           {/* Pad to first Mon (0=Mon) */}
@@ -140,14 +149,6 @@ export default function ParityHeatmapPanel({ propertyId, hotelName = "" }) {
               </div>
             ));
           })()}
-          {/* Legend */}
-          <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-stone-400">
-            {Object.entries(CLASS_LABEL).map(([k, v]) => (
-              <div key={k} className="flex items-center gap-1.5">
-                <span className={`w-3 h-3 rounded ${CLASS_BG[k].split(" ")[0]} border ${CLASS_BG[k].split(" ").pop()}`} />{v}
-              </div>
-            ))}
-          </div>
         </div>
       )}
 

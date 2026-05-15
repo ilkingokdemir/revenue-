@@ -3,6 +3,7 @@ import axios from "axios";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Zap, AlertTriangle, CheckCircle, RefreshCw, ArrowUpRight, ArrowDownRight, Minus, Activity } from "lucide-react";
 import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
+import ChartLegend from "./ChartLegend";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
@@ -80,11 +81,14 @@ export const BookingPace = ({ propertyId }) => {
 
       {/* Chart */}
       <div className="bg-stone-900 border border-stone-700 rounded-2xl p-5">
-        <div className="flex items-center gap-4 mb-3 text-[10px] text-stone-400">
-          <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-cyan-400 inline-block" /> This Year</span>
-          <span className="flex items-center gap-1"><span className="w-4 h-0.5 bg-stone-500 inline-block border-dashed" /> Last Year</span>
-        </div>
-        <div className="overflow-x-auto">
+        <ChartLegend
+          testId="bookingpace-legend"
+          items={[
+            { color: "#06b6d4", label: "Bu Yıl (TY) — kümülatif rezv.", kind: "line", testId: "legend-bp-ty" },
+            { color: "#6b7280", label: "Geçen Yıl (LY)", kind: "dashed", testId: "legend-bp-ly" },
+          ]}
+        />
+        <div className="overflow-x-auto mt-3">
           <svg viewBox={`0 0 ${cW} ${cH}`} className="w-full" style={{ minWidth: "600px" }}>
             {[0, 0.25, 0.5, 0.75, 1].map(f => { const y = pT + (1 - f) * iH; return <g key={f}><line x1={pL} x2={cW - pR} y1={y} y2={y} stroke="#374151" strokeWidth="0.5" /><text x={pL - 5} y={y + 4} textAnchor="end" className="text-[7px]" fill="#6b7280">{Math.round(maxB * f)}</text></g>; })}
             <path d={lyLine} fill="none" stroke="#6b7280" strokeWidth="1.5" strokeDasharray="4 4" />

@@ -5,6 +5,18 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 308 — 0-Click Auto-Add Discovered Neighbors)
+- **Backend**:
+  - `POST /competitors/discover` artık `auto_add:true` + `auto_add_top:N` (default 5, max 15) flag'lerini destekliyor. Discovered candidate'ler top-N olarak `market_competitors` collection'a anında ekleniyor (race-safe upsert by booking_url). `last_source='auto_reset_autoadd'` audit alanı.
+  - `POST /fleet-reset-neighbors` aynı flag'leri destekliyor + total `auto_added` count'unu response'ta dönüyor.
+- **Frontend**:
+  - `resetNeighbors()` (Scrape Health panel) artık adım 3'te `auto_add:true,auto_add_top:5` gönderiyor. Toast `"3/3: 15 komşu bulundu, 5 otomatik rakip olarak eklendi"` gösteriyor.
+  - `runFleetReset()` (Fleet Pulse Card) aynı şekilde. Final toast: `"Filo sıfırlandı: 48/48 property · 240 rakip auto-eklendi"`.
+- **Test** (aldgate-flats):
+  - 15 candidate bulundu, top 5 auto-added: Widegate Residential, Room Home Stay, Liverpool Street I Your Apartment, Amazing 2 bedroom apartments Liverpool Street, Imperial liverpool street apartments.
+  - DB'de `last_source='auto_reset_autoadd'` ile saklandı.
+- **Note**: Playwright browser reinstalled (/pw-browsers/chromium_headless_shell-1217).
+
 ### 2026-05-15 (iter 307 — Fleet-wide Neighbor Reset)
 - **Backend**: Yeni `POST /api/revenue/market-robot/fleet-reset-neighbors` endpoint'i — body `{property_ids?[], radius_km, max_results, dry_run}`. Tüm filo (varsayılan) veya seçilen property'ler için 3-adımlı reset:
   1. Eski rakipleri sil

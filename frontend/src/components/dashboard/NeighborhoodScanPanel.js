@@ -237,10 +237,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         toast.warning(`2/3: Geocode atlandı (${geo.data.error || "no_match"})`);
       }
 
-      // Step 3: re-discover with proper neighborhood radius
+      // Step 3: re-discover with proper neighborhood radius + auto-add top 5
       const disc = await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors/discover`,
-        { radius_km: 2.0, max_results: 15 });
-      toast.success(`3/3: ${disc.data.total} doğru komşu bulundu. Listeyi inceleyip ekleyebilirsin.`);
+        { radius_km: 2.0, max_results: 15, auto_add: true, auto_add_top: 5 });
+      const added = disc.data.auto_added || 0;
+      toast.success(`3/3: ${disc.data.total} komşu bulundu, ${added} otomatik rakip olarak eklendi.`);
       loadAll();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Sıfırlama başarısız");

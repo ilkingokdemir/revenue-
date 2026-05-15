@@ -3275,9 +3275,48 @@ def create_market_robot_router(db, require_roles, resend=None):
             )
             c["is_self"] = bool(url and our_url and url == our_url)
 
+        # Optional auto-add for 0-click reset flows
+        auto_added = 0
+        if bool(data.get("auto_add")):
+            auto_add_top = max(1, min(int(data.get("auto_add_top") or 5), 15))
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for cand in candidates[:auto_add_top]:
+                if cand.get("is_self"):
+                    continue
+                url2 = (cand.get("booking_url") or "").rstrip("/").split("?")[0]
+                name2 = (cand.get("name") or "").strip()
+                if not url2 or not name2:
+                    continue
+                exists = await db.market_competitors.find_one(
+                    {"property_id": property_id, "booking_url": url2}, {"_id": 0, "id": 1},
+                )
+                if exists:
+                    continue
+                hid = str(cand.get("booking_hotel_id") or cand.get("hotel_id") or "")
+                slug_m = re.search(r"/hotel/[a-z]{2}/([a-z0-9-]+)\.", url2)
+                slug = slug_m.group(1) if slug_m else name2.lower().replace(" ", "-")[:40]
+                await db.market_competitors.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "property_id": property_id,
+                    "name": name2,
+                    "booking_url": url2,
+                    "slug": slug,
+                    "booking_hotel_id": hid or None,
+                    "stars": cand.get("stars"),
+                    "review_score": cand.get("review_score"),
+                    "prices": [], "score": None, "last_scraped": None,
+                    "last_source": "auto_reset_autoadd",
+                    "last_validation": {"ok": True, "checked_at": now_iso,
+                                        "hotel_name": name2, "hotel_id": hid or None},
+                    "created_at": now_iso,
+                    "created_by": "auto_reset_autoadd",
+                })
+                auto_added += 1
+
         return {
             "candidates": candidates,
             "total": len(candidates),
+            "auto_added": auto_added,
             "search_used": {
                 "postcode": postcode, "city": city,
                 "property_type": property_type, "currency": currency,
@@ -3416,12 +3455,17 @@ def create_market_robot_router(db, require_roles, resend=None):
           - radius_km: 2.0 (default)
           - max_results: 15 (default)
           - dry_run: false — when true, only reports what would happen
+          - auto_add: false — when true, top `auto_add_top` discovered candidates
+            are immediately inserted as competitors for each property (0-click).
+          - auto_add_top: 5 — how many top-ranked candidates to auto-add.
         """
         from utils.booking_scraper import discover_nearby_hotels, geocode_address, _extract_district_hint
 
         radius_km = max(0.5, min(float((data or {}).get("radius_km") or 2.0), 10.0))
         max_results = max(5, min(int((data or {}).get("max_results") or 15), 50))
         dry_run = bool((data or {}).get("dry_run"))
+        auto_add = bool((data or {}).get("auto_add"))
+        auto_add_top = max(1, min(int((data or {}).get("auto_add_top") or 5), 15))
         target_ids = (data or {}).get("property_ids") or []
 
         prop_query: Dict = {"is_active": {"$ne": False}}
@@ -3512,19 +3556,67 @@ def create_market_robot_router(db, require_roles, resend=None):
                 entry["cleared"] = prev_count
                 entry["geocoded_from"] = display[:80] if display else ""
                 entry["candidates_found"] = len(cands)
+
+                # 4) Auto-add top candidates as competitors (when requested)
+                if auto_add and cands:
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    added_ct = 0
+                    for cand in cands[:auto_add_top]:
+                        url = (cand.get("booking_url") or "").rstrip("/").split("?")[0]
+                        name_c = (cand.get("name") or "").strip()
+                        hid = str(cand.get("booking_hotel_id") or cand.get("hotel_id") or "")
+                        if not url or not name_c:
+                            continue
+                        slug_m = re.search(r"/hotel/[a-z]{2}/([a-z0-9-]+)\.", url)
+                        slug = slug_m.group(1) if slug_m else name_c.lower().replace(" ", "-")[:40]
+                        # Skip if already exists (race-safe upsert by booking_url)
+                        existing = await db.market_competitors.find_one(
+                            {"property_id": pid, "booking_url": url}, {"_id": 0, "id": 1}
+                        )
+                        if existing:
+                            continue
+                        await db.market_competitors.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "property_id": pid,
+                            "name": name_c,
+                            "booking_url": url,
+                            "slug": slug,
+                            "booking_hotel_id": hid or None,
+                            "stars": cand.get("stars"),
+                            "review_score": cand.get("review_score"),
+                            "prices": [],
+                            "score": None,
+                            "last_scraped": None,
+                            "last_source": "fleet_reset_autoadd",
+                            "last_validation": {
+                                "ok": True, "checked_at": now_iso,
+                                "hotel_name": name_c, "hotel_id": hid or None,
+                            },
+                            "created_at": now_iso,
+                            "created_by": "fleet_reset_autoadd",
+                        })
+                        added_ct += 1
+                    entry["auto_added"] = added_ct
             except Exception as e:
                 entry["status"] = "error"
                 entry["error"] = str(e)[:160]
             results.append(entry)
 
         ok_count = sum(1 for r in results if r.get("status") == "ok")
+        total_added = sum(r.get("auto_added", 0) or 0 for r in results)
         return {
             "ok": True,
             "total_properties": len(props),
             "ok_count": ok_count,
+            "auto_added": total_added,
+            "auto_add": auto_add,
             "dry_run": dry_run,
             "results": results,
-            "message": f"Fleet reset: {ok_count}/{len(props)} property işlendi. radius={radius_km}km, max={max_results}.",
+            "message": (
+                f"Fleet reset: {ok_count}/{len(props)} property işlendi. "
+                f"radius={radius_km}km, max={max_results}."
+                + (f" Auto-added {total_added} competitors (top {auto_add_top}/property)." if auto_add else "")
+            ),
         }
 
     @router.post("/revenue/market-robot/{property_id}/competitors/bulk-add")

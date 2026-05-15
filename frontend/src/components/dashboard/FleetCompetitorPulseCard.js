@@ -28,20 +28,22 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
 
   const runFleetReset = async () => {
     if (!window.confirm(
-      "Tüm filo için: her property'nin eski rakiplerini sileceğim, auto-geocode edeceğim ve " +
-      "gerçek komşuları yeniden bulacağım. 48 property için 2-4 dakika sürebilir. Devam?"
+      "Tüm filo için: her property'nin eski rakiplerini sileceğim, auto-geocode edeceğim, " +
+      "gerçek komşuları bulup top 5'i otomatik rakip olarak ekleyeceğim. " +
+      "48 property için 2-4 dakika sürebilir. Devam?"
     )) return;
     setFleetResetting(true);
     try {
       const { data } = await axios.post(`${API}/revenue/market-robot/fleet-reset-neighbors`,
-        { radius_km: 2.0, max_results: 15 });
+        { radius_km: 2.0, max_results: 15, auto_add: true, auto_add_top: 5 });
       const okN = data.ok_count || 0;
       const tot = data.total_properties || 0;
+      const added = data.auto_added || 0;
       const failed = (data.results || []).filter(r => r.status !== "ok").length;
       if (okN === tot) {
-        toast.success(`Filo sıfırlandı: ${okN}/${tot} property başarılı`);
+        toast.success(`Filo sıfırlandı: ${okN}/${tot} property · ${added} rakip auto-eklendi`);
       } else {
-        toast.warning(`${okN}/${tot} başarılı, ${failed} hata. Detay için F12 → Network`);
+        toast.warning(`${okN}/${tot} başarılı (${added} auto-eklendi), ${failed} hata.`);
       }
       load();
     } catch (e) {

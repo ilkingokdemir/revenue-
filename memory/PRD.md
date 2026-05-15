@@ -5,6 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 303 — Demand Radar Renk Lejantı Bug Fix)
+- **BUG (user-reported)**: "90-Day Forward View" grafiğinde bar renkleri (kırmızı/teal/koyu-teal) açıklamasız — kullanıcı kırmızının neyi ifade ettiğini anlamadı.
+- **Root cause**: Legend sadece "Pazar Talep" yazıyor + yeşil dot gösteriyordu (bar kodunda yeşil hiç kullanılmıyor). 3 ayrı bar renginin ve cyan doluluk çizgisinin/dashed trend çizgisinin anlamı hiç belirtilmemişti.
+- **Fix**: 
+  - Yeni Türkçe renk lejantı eklendi (bg-stone-800 panel'inde, prominent yerde): 🔴 Yüksek talep/Event günü (≥70%), 🟢 Orta talep (40-69%), 🟢 Düşük talep (<40%), Cyan çizgi: BİZ doluluğumuz, Dashed: 7-gün trend.
+  - Başlık Türkçeye çevrildi: "Pazar Ne Kadar Yoğun?"
+  - Her bar artık SVG `<title>` tooltip içeriyor: tarih + tier + talep % + bizim doluluk % + event adı (varsa).
+  - data-testid'ler: `demand-chart-legend`, `legend-bar-high/med/low`, `legend-our-occ`, `legend-trend`.
+
 ### 2026-05-15 (iter 302 — Distance-Weighted Scoring)
 - **Distance tier formula**: 0-30km=100%, 31-60=80%, 61-100=60%, 101-150=40%, 151-200=25%, >200=15%. Primary city events her zaman %100.
 - **Helpers**: `_distance_weight(km)` ve `_city_weight_for(city, config)` — event'in city'sine göre weight hesaplar.

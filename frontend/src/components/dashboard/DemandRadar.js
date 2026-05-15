@@ -132,22 +132,38 @@ export const DemandRadar = ({ propertyId }) => {
         <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
           <div>
             <p className="text-[10px] text-stone-500 uppercase">{days}-Day Forward View</p>
-            <h3 className="text-sm font-bold text-white">How Busy Is the Market?</h3>
-            <p className="text-[10px] text-stone-500">Market demand score — higher means busier, fewer rooms available</p>
-          </div>
-          <div className="flex items-center gap-3 text-[10px] text-stone-400">
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Pazar Talep</span>
-            <span className="flex items-center gap-1.5 pl-3 border-l border-stone-700">
-              <span className="w-3 h-[2px] bg-cyan-400" />
-              <span className="text-cyan-200 font-semibold">BİZ · Doluluk</span>
-            </span>
+            <h3 className="text-sm font-bold text-white">Pazar Ne Kadar Yoğun?</h3>
+            <p className="text-[10px] text-stone-500">Pazar talep skoru — yüksek = daha yoğun, daha az oda boşta</p>
           </div>
         </div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3 text-[10px] text-stone-400">
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-teal-500" /> Demand</span>
-            <span className="flex items-center gap-1"><span className="w-4 h-0 border-t border-dashed border-teal-300" /> 7d trend</span>
-          </div>
+        {/* Color legend — explains what each bar color means */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-stone-300 mb-3 px-2 py-1.5 bg-stone-800/50 rounded-lg border border-stone-700"
+             data-testid="demand-chart-legend">
+          <span className="text-stone-400 font-semibold">Lejant:</span>
+          <span className="flex items-center gap-1.5" title="Talep ≥70% veya event günü"
+                data-testid="legend-bar-high">
+            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#ef4444" }} />
+            <span>Yüksek talep / Event günü (≥70%)</span>
+          </span>
+          <span className="flex items-center gap-1.5" title="Talep 40-69%"
+                data-testid="legend-bar-med">
+            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#14b8a6" }} />
+            <span>Orta talep (40-69%)</span>
+          </span>
+          <span className="flex items-center gap-1.5" title="Talep <40%"
+                data-testid="legend-bar-low">
+            <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#0d9488" }} />
+            <span>Düşük talep (&lt;40%)</span>
+          </span>
+          <span className="flex items-center gap-1.5 pl-3 border-l border-stone-700"
+                data-testid="legend-our-occ">
+            <span className="w-4 h-[2px]" style={{ backgroundColor: "#22d3ee" }} />
+            <span className="text-cyan-300 font-medium">BİZ · Doluluğumuz</span>
+          </span>
+          <span className="flex items-center gap-1.5" data-testid="legend-trend">
+            <span className="w-4 h-0 border-t border-dashed" style={{ borderColor: "#5eead4" }} />
+            <span>7-gün ortalama (trend)</span>
+          </span>
         </div>
         <div className="relative overflow-x-auto">
           {/* Y-axis labels as HTML (more reliable than SVG text for Tailwind projects) */}
@@ -171,8 +187,15 @@ export const DemandRadar = ({ propertyId }) => {
             {demandDays.map((d, i) => {
               const h = ((d.demand || 0) / 100) * iH;
               const isEvent = d.event;
-              const color = isEvent ? "#ef4444" : (d.demand || 0) >= 70 ? "#ef4444" : (d.demand || 0) >= 40 ? "#14b8a6" : "#0d9488";
-              return <rect key={i} x={sx(i) - barW / 2} y={pT + iH - h} width={barW} height={h} fill={color} rx="1" opacity="0.85" />;
+              const demandVal = d.demand || 0;
+              const color = isEvent ? "#ef4444" : demandVal >= 70 ? "#ef4444" : demandVal >= 40 ? "#14b8a6" : "#0d9488";
+              const tier = isEvent ? "Event günü" : demandVal >= 70 ? "Yüksek talep" : demandVal >= 40 ? "Orta talep" : "Düşük talep";
+              const tooltip = `${d.date}: ${tier} · Talep ${demandVal}%${d.occupancy != null ? ` · Bizim doluluğumuz ${d.occupancy}%` : ""}${isEvent && d.event_name ? ` · 🎫 ${d.event_name}` : ""}`;
+              return (
+                <rect key={i} x={sx(i) - barW / 2} y={pT + iH - h} width={barW} height={h} fill={color} rx="1" opacity="0.85">
+                  <title>{tooltip}</title>
+                </rect>
+              );
             })}
             {/* === BIZ: Occupancy overlay — cyan horizontal markers + labels === */}
             {demandDays.map((d, i) => {

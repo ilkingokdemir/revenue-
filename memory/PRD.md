@@ -5,6 +5,18 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 299 — Şehir Değiştir Wizard 🏙️)
+- **`POST /revenue/events/{pid}/change-city`** — Tek tık property city migration:
+  1. `market_robot_config.city` güncellenir + `previous_city` audit alanı
+  2. Property'nin tüm `market_events` silinir
+  3. Optional: `rate_overrides` where `set_by='event-intelligence'` silinir (eski event-driven fiyat boost'ları temizlenir)
+  4. Optional: Yeni şehir için 365-gün AI scan **arka planda fire-and-forget** olarak başlatılır (response bloklamaz)
+  5. `event_city_migrations` collection'a tam audit doc yazılır
+- **`GET /revenue/events/{pid}/migrations`** — Migration geçmişi (from_city, to_city, deleted counts, migrated_by, scan_status)
+- **Validation**: `new_city` zorunlu (400), aynı şehir (`no_change` early return), RBAC admin/manager
+- **Frontend**: "🏙️ Şehir değiştir" butonu Event Intelligence panel'inde. Modal'da: şehir input + auto_scan checkbox + clear_overrides checkbox + confirm dialog + uyarı banner. Submit sonrası migration log + page refresh.
+- **Test sonucu**: 26/26 backend + frontend 100% (iteration_299.json) — sıfır kritik/minör hata.
+
 ### 2026-05-15 (iter 298 — Event Intelligence City Filter Bug Fix)
 - **BUG**: Aldgate Flats için London event aratınca Zürih sonucu çıkıyordu — `market_events` collection'da property_id aynı olduğu için farklı şehir scan'lerinden gelen stale veriler karışıyordu.
 - **Fix 1**: `GET /revenue/events/{pid}` artık property'nin **configured city**'sine göre filtreliyor (case-insensitive + whitespace-tolerant regex). Foreign-city legacy veri otomatik gizleniyor.

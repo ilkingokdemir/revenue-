@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import {
   MapPin, Radar, Loader2, Clock, Building2, TrendingUp, Timer,
-  PoundSterling, Activity, ToggleLeft, ToggleRight, Save, Zap,
+  PoundSterling, Activity, ToggleLeft, ToggleRight, Save, Zap, RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "../../i18n";
@@ -212,6 +212,40 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       toast.error(e?.response?.data?.detail || "Scan failed");
     }
     setScanning(false);
+  };
+
+  // Reset wizard: clears all competitors + auto-geocodes property + re-discovers
+  // proper neighbors. Used when the auto-discovery picked the wrong area
+  // (e.g. Kensington shown for an Aldgate property).
+  const [resetting, setResetting] = useState(false);
+  const resetNeighbors = async () => {
+    if (!window.confirm(
+      "Tüm mevcut rakipleri sileceğim, property'yi otomatik geocode'layacağım ve " +
+      "gerçek komşuları yeniden bulacağım. Bu işlem 30-60 saniye sürebilir. Devam?"
+    )) return;
+    setResetting(true);
+    try {
+      // Step 1: clear bad competitors
+      const clr = await axios.delete(`${API}/revenue/market-robot/${propertyId}/competitors/clear`);
+      toast.info(`1/3: ${clr.data.deleted} eski rakip silindi`);
+
+      // Step 2: force auto-geocode (in case property has no lat/lon or wrong ones)
+      const geo = await axios.post(`${API}/revenue/market-robot/${propertyId}/auto-geocode`, { force: true });
+      if (geo.data.ok) {
+        toast.info(`2/3: Geocode tamam → ${geo.data.geocoded_from || "ok"}`);
+      } else {
+        toast.warning(`2/3: Geocode atlandı (${geo.data.error || "no_match"})`);
+      }
+
+      // Step 3: re-discover with proper neighborhood radius
+      const disc = await axios.post(`${API}/revenue/market-robot/${propertyId}/competitors/discover`,
+        { radius_km: 2.0, max_results: 15 });
+      toast.success(`3/3: ${disc.data.total} doğru komşu bulundu. Listeyi inceleyip ekleyebilirsin.`);
+      loadAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Sıfırlama başarısız");
+    }
+    setResetting(false);
   };
 
   const saveAutoCfg = async () => {
@@ -732,8 +766,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                       title={healCfg?.enabled
                         ? t("ns.health.auto_on_title", { n: healCfg.interval_minutes || 60 })
                         : t("ns.health.auto_off_title")}
-                    >
-                      {healCfg?.enabled ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
+                    >                      {healCfg?.enabled ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
                       <span className="tabular-nums">{healCfg?.enabled ? t("ns.health.auto_on") : t("ns.health.auto_off")}</span>
                     </button>
                     {healCfg?.enabled && (
@@ -753,6 +786,21 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                         <option value={1440}>24h</option>
                       </select>
                     )}
+                    {/* Wrong neighborhood? Reset & re-discover */}
+                    <button
+                      onClick={resetNeighbors}
+                      disabled={resetting}
+                      data-testid="neighborhood-reset-btn"
+                      title="Yanlış komşular? Tümünü sil + auto-geocode + gerçek komşuları yeniden bul."
+                      className={`ml-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all ${
+                        resetting
+                          ? "bg-orange-500/10 border-orange-500/30 text-orange-300 cursor-wait"
+                          : "bg-stone-800 border-stone-600 text-orange-300 hover:bg-orange-500/15 hover:border-orange-400"
+                      }`}
+                    >
+                      {resetting ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      {resetting ? "Sıfırlanıyor..." : "Komşuları Sıfırla"}
+                    </button>
                   </>
                 );
               })()}

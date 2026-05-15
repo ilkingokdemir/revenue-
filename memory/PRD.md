@@ -5,6 +5,12 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 306 — Komşuları Sıfırla Frontend Button)
+- Iter 305 fix'i için UI flow eklendi. Scrape Health panel header'ına **"Komşuları Sıfırla"** turuncu butonu eklendi (`data-testid='neighborhood-reset-btn'`).
+- Buton tek tıkla 3-adımlı wizard çalıştırıyor: (1) `DELETE /competitors/clear` eski yanlış listeyi siler, (2) `POST /auto-geocode` (force:true) coord'u yeniden çıkarır, (3) `POST /competitors/discover` (radius 2km) doğru komşuları bulur. Her adım kullanıcıya toast ile bildirilir.
+- Confirm dialog ile yanlışlıkla tetikleme engellendi. Çalışırken `Loader2` spinner ve "Sıfırlanıyor..." metni.
+- Frontend compile başarılı, lint clean. Aldgate-flats için artık UI'dan tek tık ile yanlış Kensington/Piccadilly rakipleri silinip gerçek Aldgate komşuları (Widegate, Liverpool Street, Bishopsgate, Spitalfields) listelenebiliyor.
+
 ### 2026-05-15 (iter 305 — Neighborhood Competitor Discovery Bug Fix)
 - **BUG (user-reported)**: Aldgate Flats için neighborhood competitor olarak Kensington/Piccadilly/Oxford St gibi 5-10km uzaktaki hotel'ler geliyordu — gerçek komşular değil.
 - **Root cause**: Property'de lat/lon yoktu, Booking.com search `ss=Aldgate+Flats+London` ile yapılıyordu → Booking generic London featured hotel'lerini döndürüyordu.

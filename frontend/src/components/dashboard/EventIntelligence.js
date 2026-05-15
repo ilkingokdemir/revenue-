@@ -72,6 +72,18 @@ export const EventIntelligence = ({ propertyId }) => {
   const [migrateForm, setMigrateForm] = useState({ new_city: "", auto_scan: true, clear_event_overrides: true });
   const [migrating, setMigrating] = useState(false);
 
+  // Migration history timeline
+  const [migrations, setMigrations] = useState([]);
+  const [showMigrationHistory, setShowMigrationHistory] = useState(false);
+
+  const loadMigrations = async () => {
+    try {
+      const { data } = await axios.get(`${API}/revenue/events/${propertyId}/migrations`);
+      setMigrations(data.items || []);
+    } catch { /* silent */ }
+  };
+  useEffect(() => { if (propertyId) loadMigrations(); }, [propertyId]);
+
   const runMigration = async () => {
     const target = (migrateForm.new_city || "").trim();
     if (!target) { toast.warning("Yeni şehir adı gerekli"); return; }
@@ -218,6 +230,45 @@ export const EventIntelligence = ({ propertyId }) => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Migration History Timeline */}
+      {migrations.length > 0 && (
+        <div className="rounded-xl border border-stone-200 bg-white" data-testid="event-migration-history">
+          <button onClick={() => setShowMigrationHistory((v) => !v)}
+                  data-testid="event-migration-history-toggle"
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-stone-50 rounded-xl">
+            <span className="text-sm font-semibold text-stone-700 flex items-center gap-2">
+              🏛️ Şehir değişim geçmişi
+              <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-xs">{migrations.length}</span>
+            </span>
+            <span className="text-stone-400 text-xs">{showMigrationHistory ? "Gizle ▲" : "Göster ▼"}</span>
+          </button>
+          {showMigrationHistory && (
+            <div className="px-4 pb-4">
+              <ol className="relative border-l-2 border-violet-200 ml-3 space-y-3 pt-2">
+                {migrations.map((m) => (
+                  <li key={m.id} className="ml-4" data-testid={`event-migration-${m.id}`}>
+                    <div className="absolute -left-2 w-4 h-4 bg-violet-500 rounded-full border-2 border-white shadow" />
+                    <div className="text-xs text-stone-400 mb-0.5">
+                      {new Date(m.migrated_at).toLocaleString("tr-TR")} · {m.migrated_by || "—"}
+                    </div>
+                    <div className="text-sm font-medium text-stone-800">
+                      <span className="text-stone-500">{m.from_city}</span>
+                      <span className="mx-2 text-violet-500">→</span>
+                      <span className="text-violet-700">{m.to_city}</span>
+                    </div>
+                    <div className="text-xs text-stone-500 mt-0.5">
+                      {m.deleted_events} event silindi
+                      {(m.deleted_event_overrides ?? 0) > 0 && ` · ${m.deleted_event_overrides} fiyat override silindi`}
+                      {m.auto_scan_triggered && ` · auto-scan ${typeof m.scan_events_stored === "number" ? `tamamlandı (${m.scan_events_stored} yeni event)` : "tetiklendi"}`}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
         </div>
       )}
 

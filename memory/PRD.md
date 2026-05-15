@@ -5,6 +5,10 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 300 — Migration History Timeline)
+- **Frontend**: Event Intelligence panel'inde "🏛️ Şehir değişim geçmişi" collapsible timeline eklendi. `GET /api/revenue/events/{pid}/migrations` çağrılır (mevcut endpoint), her migration için: tarih + kullanıcı, `from → to` city, silinen event/override sayıları, auto-scan durumu/sonuç. Property değişince auto-reload. Migration tamamlanınca timeline otomatik refresh. data-testid: `event-migration-history`, `event-migration-history-toggle`, `event-migration-{id}`.
+- Test: Endpoint zaten Iter 299'da 26/26 PASS olmuştu; bu sadece UI eklemesi. Lint clean.
+
 ### 2026-05-15 (iter 299 — Şehir Değiştir Wizard 🏙️)
 - **`POST /revenue/events/{pid}/change-city`** — Tek tık property city migration:
   1. `market_robot_config.city` güncellenir + `previous_city` audit alanı

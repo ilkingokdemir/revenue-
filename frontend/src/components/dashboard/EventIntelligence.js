@@ -82,17 +82,39 @@ export const EventIntelligence = ({ propertyId }) => {
 
   // Secondary city management
   const [newSecondaryCity, setNewSecondaryCity] = useState("");
+  const [newSecondaryDistance, setNewSecondaryDistance] = useState("");
   const [addingSecondary, setAddingSecondary] = useState(false);
+  const [secondaryDistances, setSecondaryDistances] = useState({});
+  const [editingDistance, setEditingDistance] = useState(null); // city name
+  const [editingDistanceValue, setEditingDistanceValue] = useState("");
+
+  const loadSecondaries = async () => {
+    if (!propertyId) return;
+    try {
+      const { data } = await axios.get(`${API}/revenue/events/${propertyId}/secondary-cities`);
+      const map = {};
+      (data.secondaries || []).forEach((s) => { map[s.city] = s; });
+      setSecondaryDistances(map);
+    } catch { /* silent */ }
+  };
+  useEffect(() => { if (propertyId) loadSecondaries(); }, [propertyId, secondaryCities.length]);
 
   const addSecondary = async () => {
     const c = (newSecondaryCity || "").trim();
     if (!c) { toast.warning("Şehir adı gerekli"); return; }
+    const body = { city: c };
+    if (newSecondaryDistance) {
+      const d = parseFloat(newSecondaryDistance);
+      if (!isNaN(d) && d >= 0 && d <= 1000) body.distance_km = d;
+    }
     setAddingSecondary(true);
     try {
-      await axios.post(`${API}/revenue/events/${propertyId}/secondary-cities`, { city: c });
-      toast.success(`'${c}' takibe alındı`);
+      const { data } = await axios.post(`${API}/revenue/events/${propertyId}/secondary-cities`, body);
+      toast.success(`'${c}' takibe alındı${data.weight_pct ? ` (${data.weight_pct}% boost)` : ""}`);
       setNewSecondaryCity("");
+      setNewSecondaryDistance("");
       load();
+      loadSecondaries();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Eklenemedi");
     }
@@ -105,8 +127,23 @@ export const EventIntelligence = ({ propertyId }) => {
       const { data } = await axios.delete(`${API}/revenue/events/${propertyId}/secondary-cities/${encodeURIComponent(c)}`);
       toast.success(data.message);
       load();
+      loadSecondaries();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Silinemedi");
+    }
+  };
+
+  const saveDistance = async (c) => {
+    const d = parseFloat(editingDistanceValue);
+    if (isNaN(d) || d < 0 || d > 1000) { toast.error("Mesafe 0-1000 km arasında olmalı"); return; }
+    try {
+      const { data } = await axios.patch(`${API}/revenue/events/${propertyId}/secondary-cities/${encodeURIComponent(c)}`, { distance_km: d });
+      toast.success(`'${c}' mesafesi ${data.distance_km}km, ağırlık ${data.weight_pct}%`);
+      setEditingDistance(null);
+      setEditingDistanceValue("");
+      loadSecondaries();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Güncellenemedi");
     }
   };
 
@@ -180,17 +217,47 @@ export const EventIntelligence = ({ propertyId }) => {
                   {perCityCounts[propertyCity] !== undefined && <span className="ml-1 text-stone-500">({perCityCounts[propertyCity]})</span>}
                 </span>
               )}
-              {secondaryCities.map((c) => (
-                <span key={c} className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 font-medium border border-violet-200"
-                      data-testid={`event-secondary-city-${c}`}>
-                  ➕ {c}
-                  {perCityCounts[c] !== undefined && <span className="text-violet-500">({perCityCounts[c]})</span>}
-                  <button onClick={() => removeSecondary(c)}
-                          title={`'${c}' takibini durdur`}
-                          data-testid={`event-remove-secondary-${c}`}
-                          className="ml-0.5 hover:text-red-600">✕</button>
-                </span>
-              ))}
+              {secondaryCities.map((c) => {
+                const info = secondaryDistances[c] || {};
+                const dist = info.distance_km;
+                const weightPct = info.weight_pct ?? 60;
+                const isEditing = editingDistance === c;
+                return (
+                  <span key={c} className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 font-medium border border-violet-200"
+                        data-testid={`event-secondary-city-${c}`}>
+                    ➕ {c}
+                    {perCityCounts[c] !== undefined && <span className="text-violet-500">({perCityCounts[c]})</span>}
+                    {isEditing ? (
+                      <>
+                        <input type="number" min="0" max="1000" autoFocus
+                               value={editingDistanceValue}
+                               onChange={(e) => setEditingDistanceValue(e.target.value)}
+                               onKeyDown={(e) => e.key === "Enter" && saveDistance(c)}
+                               placeholder="km"
+                               data-testid={`event-distance-input-${c}`}
+                               className="w-14 text-xs px-1 py-0 border border-violet-300 rounded focus:outline-none" />
+                        <button onClick={() => saveDistance(c)} className="text-violet-700 hover:text-violet-900"
+                                data-testid={`event-distance-save-${c}`}>✓</button>
+                        <button onClick={() => { setEditingDistance(null); setEditingDistanceValue(""); }}
+                                className="text-stone-400 hover:text-stone-600">⋯</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => { setEditingDistance(c); setEditingDistanceValue(dist != null ? String(dist) : ""); }}
+                                title="Mesafeyi düzenle"
+                                data-testid={`event-distance-edit-${c}`}
+                                className="text-xs text-violet-600 hover:text-violet-800 underline-offset-2 hover:underline">
+                          {dist != null ? `${dist}km` : "uzaklık?"} · {weightPct}%
+                        </button>
+                      </>
+                    )}
+                    <button onClick={() => removeSecondary(c)}
+                            title={`'${c}' takibini durdur`}
+                            data-testid={`event-remove-secondary-${c}`}
+                            className="ml-0.5 hover:text-red-600">✕</button>
+                  </span>
+                );
+              })}
               {secondaryCities.length < 5 && (
                 <span className="ml-1 inline-flex items-center gap-1">
                   <input value={newSecondaryCity}
@@ -199,6 +266,13 @@ export const EventIntelligence = ({ propertyId }) => {
                          placeholder="+ ek şehir..."
                          data-testid="event-secondary-city-input"
                          className="text-xs px-2 py-0.5 border border-stone-200 rounded-full w-28 focus:border-violet-400 focus:outline-none" />
+                  <input value={newSecondaryDistance}
+                         onChange={(e) => setNewSecondaryDistance(e.target.value)}
+                         onKeyDown={(e) => e.key === "Enter" && !addingSecondary && addSecondary()}
+                         placeholder="km"
+                         type="number" min="0" max="1000"
+                         data-testid="event-secondary-distance-input"
+                         className="text-xs px-2 py-0.5 border border-stone-200 rounded-full w-14 focus:border-violet-400 focus:outline-none" />
                   {newSecondaryCity.trim() && (
                     <button onClick={addSecondary} disabled={addingSecondary}
                             data-testid="event-secondary-city-add"

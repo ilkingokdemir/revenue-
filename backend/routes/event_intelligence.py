@@ -52,6 +52,58 @@ def _get_tracked_cities(config: Dict) -> List[str]:
     return out
 
 
+def _distance_weight(distance_km: float) -> float:
+    """Convert a distance (km) to a spillover-demand weight (0.0-1.0).
+
+    Tiered formula (calibrated for hotel-spillover travel patterns):
+      0–30 km   → 100%  (treated like local — day-trippers stay over)
+      31–60 km  → 80%
+      61–100 km → 60%
+      101–150 km → 40%
+      151–200 km → 25%
+      >200 km   → 15%   (minimum floor — only super-events spill that far)
+    """
+    if distance_km is None or distance_km <= 0:
+        return 1.0
+    d = float(distance_km)
+    if d <= 30:
+        return 1.0
+    if d <= 60:
+        return 0.80
+    if d <= 100:
+        return 0.60
+    if d <= 150:
+        return 0.40
+    if d <= 200:
+        return 0.25
+    return 0.15
+
+
+def _city_weight_for(event_city: str, config: Dict) -> float:
+    """Return the demand weight for an event based on which tracked city it
+    belongs to relative to the property's primary city.
+    Primary city → 1.0. Secondary city → from distance map. Unknown → 1.0.
+    """
+    if not event_city:
+        return 1.0
+    ec = event_city.strip().lower()
+    primary = (config.get("city") or "").strip().lower()
+    if not ec or ec == primary:
+        return 1.0
+    dist_map = config.get("secondary_cities_distance") or {}
+    if not isinstance(dist_map, dict):
+        return 1.0
+    # Find matching distance entry case-insensitively
+    for k, v in dist_map.items():
+        if isinstance(k, str) and k.strip().lower() == ec:
+            try:
+                return _distance_weight(float(v))
+            except (ValueError, TypeError):
+                return 1.0
+    # Secondary city without recorded distance → assume 60% (moderate spillover)
+    return 0.6
+
+
 # Hotel Demand Score replaces simple attendance-based impact
 # Score 0-100: How likely attendees are to need hotel rooms
 IMPACT_LEVELS = {
@@ -204,9 +256,18 @@ Include known recurring events, sports seasons, touring concerts, etc."""
         return round(base_boost * 0.6)
 
     async def _apply_event_pricing(db, property_id, events):
-        """Apply price boosts for hotel-demand-generating events only."""
+        """Apply price boosts for hotel-demand-generating events only.
+
+        Distance-weighted: primary city events get full boost; secondary city
+        events are weighted down by distance (see _distance_weight).
+        """
         now = datetime.now(timezone.utc)
         applied = 0
+
+        # Load config once for distance weighting
+        cfg = await db.market_robot_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        ) or {}
 
         for event in events:
             hds = int(event.get("hotel_demand_score", 0) or 0)
@@ -218,6 +279,13 @@ Include known recurring events, sports seasons, touring concerts, etc."""
                 continue
 
             boost = _get_price_boost(impact, hds)
+            if boost <= 0:
+                continue
+
+            # Distance weighting: how much spillover this city has
+            ev_city = event.get("city", "")
+            weight = _city_weight_for(ev_city, cfg)
+            boost = max(0, round(boost * weight))
             if boost <= 0:
                 continue
 
@@ -256,7 +324,9 @@ Include known recurring events, sports seasons, touring concerts, etc."""
                 new_rate = min(new_rate, max_rate)
 
                 visitor = event.get("visitor_origin", "unknown")
-                reason_detail = f"HDS:{hds} | {visitor} | {'+evening' if is_evening else 'daytime'}"
+                weight_pct = round(weight * 100)
+                city_tag = f"@{ev_city}({weight_pct}%)" if ev_city and weight < 1.0 else ""
+                reason_detail = f"HDS:{hds} | {visitor} | {'+evening' if is_evening else 'daytime'} {city_tag}".strip()
 
                 await db.rate_overrides.update_one(
                     {"property_id": property_id, "date": ds, "room_type_id": ""},
@@ -316,6 +386,7 @@ Include known recurring events, sports seasons, touring concerts, etc."""
             "secondary_cities": secondary,
             "tracked_cities": tracked,
             "per_city_counts": per_city,
+            "secondary_cities_distance": (config.get("secondary_cities_distance") if isinstance(config.get("secondary_cities_distance"), dict) else {}),
         }
 
     @router.post("/revenue/events/{property_id}/scan")
@@ -518,15 +589,51 @@ Include known recurring events, sports seasons, touring concerts, etc."""
             {"property_id": property_id}, {"_id": 0}
         ) or {}
         tracked = _get_tracked_cities(cfg)
-        return {"primary": tracked[0] if tracked else "", "secondary_cities": tracked[1:]}
+        dist_map = cfg.get("secondary_cities_distance") or {}
+        if not isinstance(dist_map, dict):
+            dist_map = {}
+        # Build enriched list with distance + weight per secondary city
+        secondaries = []
+        for c in tracked[1:]:
+            dist_km = None
+            for k, v in dist_map.items():
+                if isinstance(k, str) and k.strip().lower() == c.lower():
+                    try:
+                        dist_km = float(v)
+                    except (ValueError, TypeError):
+                        dist_km = None
+                    break
+            weight = _distance_weight(dist_km) if dist_km is not None else 0.6
+            secondaries.append({
+                "city": c,
+                "distance_km": dist_km,
+                "weight": round(weight, 2),
+                "weight_pct": round(weight * 100),
+            })
+        return {
+            "primary": tracked[0] if tracked else "",
+            "secondary_cities": tracked[1:],
+            "secondaries": secondaries,
+        }
 
     @router.post("/revenue/events/{property_id}/secondary-cities")
     async def add_secondary_city(property_id: str, data: Dict,
                                  current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Body: {city: "Brighton"} — add a secondary city to track."""
+        """Body: {city: 'Brighton', distance_km?: 80} — add a secondary city
+        to track. distance_km is optional but recommended: it controls how
+        much weight events in that city carry vs primary city events.
+        """
         new_city = ((data or {}).get("city") or "").strip()
         if not new_city:
             raise HTTPException(400, "city required")
+        distance_km = (data or {}).get("distance_km")
+        if distance_km is not None:
+            try:
+                distance_km = float(distance_km)
+            except (ValueError, TypeError):
+                raise HTTPException(400, "distance_km must be numeric")
+            if distance_km < 0 or distance_km > 1000:
+                raise HTTPException(400, "distance_km must be 0-1000")
 
         cfg = await db.market_robot_config.find_one(
             {"property_id": property_id}, {"_id": 0}
@@ -543,21 +650,80 @@ Include known recurring events, sports seasons, touring concerts, etc."""
             raise HTTPException(400, "En fazla 5 secondary şehir takip edilebilir")
 
         secondaries.append(new_city)
+        dist_map = cfg.get("secondary_cities_distance") or {}
+        if not isinstance(dist_map, dict):
+            dist_map = {}
+        if distance_km is not None:
+            dist_map[new_city] = distance_km
+
         await db.market_robot_config.update_one(
             {"property_id": property_id},
             {"$set": {
                 "property_id": property_id,
                 "secondary_cities": secondaries,
+                "secondary_cities_distance": dist_map,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             }},
             upsert=True,
         )
-        return {"ok": True, "primary": primary, "secondary_cities": secondaries}
+        return {
+            "ok": True,
+            "primary": primary,
+            "secondary_cities": secondaries,
+            "distance_km": distance_km,
+            "weight_pct": round(_distance_weight(distance_km) * 100) if distance_km is not None else None,
+        }
+
+    @router.patch("/revenue/events/{property_id}/secondary-cities/{city_name}")
+    async def update_secondary_city_distance(property_id: str, city_name: str, data: Dict,
+                                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Body: {distance_km: 90} — update the distance for an existing secondary city."""
+        target = (city_name or "").strip()
+        if not target:
+            raise HTTPException(400, "city_name required")
+        try:
+            dist = float((data or {}).get("distance_km"))
+        except (ValueError, TypeError):
+            raise HTTPException(400, "distance_km must be numeric")
+        if dist < 0 or dist > 1000:
+            raise HTTPException(400, "distance_km must be 0-1000")
+
+        cfg = await db.market_robot_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        ) or {}
+        secondaries = cfg.get("secondary_cities") or []
+        if not isinstance(secondaries, list):
+            secondaries = []
+        # Confirm target is actually a secondary
+        if not any((s or "").strip().lower() == target.lower() for s in secondaries):
+            raise HTTPException(404, f"'{target}' secondary listesinde değil")
+        dist_map = cfg.get("secondary_cities_distance") or {}
+        if not isinstance(dist_map, dict):
+            dist_map = {}
+        # Remove old keys case-insensitively
+        dist_map = {k: v for k, v in dist_map.items() if not (isinstance(k, str) and k.strip().lower() == target.lower())}
+        dist_map[target] = dist
+
+        await db.market_robot_config.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "secondary_cities_distance": dist_map,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        weight = _distance_weight(dist)
+        return {
+            "ok": True,
+            "city": target,
+            "distance_km": dist,
+            "weight": round(weight, 2),
+            "weight_pct": round(weight * 100),
+        }
 
     @router.delete("/revenue/events/{property_id}/secondary-cities/{city_name}")
     async def remove_secondary_city(property_id: str, city_name: str,
                                     current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Remove a secondary city AND clean up its stored events."""
+        """Remove a secondary city AND clean up its stored events + distance entry."""
         target = (city_name or "").strip()
         if not target:
             raise HTTPException(400, "city_name required")
@@ -572,10 +738,20 @@ Include known recurring events, sports seasons, touring concerts, etc."""
         if len(new_list) == len(secondaries):
             raise HTTPException(404, f"'{target}' secondary listesinde değil")
 
+        # Also clean distance map
+        dist_map = cfg.get("secondary_cities_distance") or {}
+        if isinstance(dist_map, dict):
+            dist_map = {k: v for k, v in dist_map.items() if not (isinstance(k, str) and k.strip().lower() == target.lower())}
+        else:
+            dist_map = {}
+
         await db.market_robot_config.update_one(
             {"property_id": property_id},
-            {"$set": {"secondary_cities": new_list,
-                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+            {"$set": {
+                "secondary_cities": new_list,
+                "secondary_cities_distance": dist_map,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
         )
 
         # Clean up events for the removed city

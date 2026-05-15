@@ -5,6 +5,19 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 301 — Multi-City Scan Support)
+- **Primary + up to 5 secondary cities**: Her property için `market_robot_config.secondary_cities[]` array desteği eklendi.
+- **3 yeni endpoint**:
+  - `GET /api/revenue/events/{pid}/secondary-cities` — `{primary, secondary_cities[]}`
+  - `POST /api/revenue/events/{pid}/secondary-cities` Body `{city}` — ekle (validations: 400 missing/same-as-primary/duplicate/≥5)
+  - `DELETE /api/revenue/events/{pid}/secondary-cities/{city}` — listeden kaldır + o şehrin event'lerini sil
+- **Paralel scan**: `POST /scan` artık `asyncio.gather` ile tüm tracked city'lerde paralel çalışır. Response'da `tracked_cities[]` + `per_city: [{city, found, stored}]` breakdown.
+- **GET /events**: `secondary_cities`, `tracked_cities`, `per_city_counts` field'ları döndürüyor. Multi-city regex ile case-insensitive filter.
+- **Cleanup-foreign**: Artık tracked city listesinde olmayan tüm event'leri siler (primary + secondary korunur).
+- **Market Robot overlays** (`year-dashboard`, `supply`): event filter'ları tüm tracked city'leri içerecek şekilde güncellendi.
+- **Frontend**: Header'da primary city pill (📍) + secondary city chips (➕ City × removeBtn) + inline "Ekle" input. Her chip per_city event count'unu gösteriyor.
+- **Test**: 26/26 backend + frontend 100% PASS (iteration_300.json). Sıfır kritik/minör hata.
+
 ### 2026-05-15 (iter 300 — Migration History Timeline)
 - **Frontend**: Event Intelligence panel'inde "🏛️ Şehir değişim geçmişi" collapsible timeline eklendi. `GET /api/revenue/events/{pid}/migrations` çağrılır (mevcut endpoint), her migration için: tarih + kullanıcı, `from → to` city, silinen event/override sayıları, auto-scan durumu/sonuç. Property değişince auto-reload. Migration tamamlanınca timeline otomatik refresh. data-testid: `event-migration-history`, `event-migration-history-toggle`, `event-migration-{id}`.
 - Test: Endpoint zaten Iter 299'da 26/26 PASS olmuştu; bu sadece UI eklemesi. Lint clean.

@@ -19,9 +19,14 @@ export const EventIntelligence = ({ propertyId }) => {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", date: "", end_date: "", venue: "", category: "concert", estimated_attendance: 50000, description: "" });
   const [scanResult, setScanResult] = useState(null);
+  const [propertyCity, setPropertyCity] = useState("");
 
   const load = () => {
-    axios.get(`${API}/revenue/events/${propertyId}`).then(r => { setEvents(r.data.events || []); setCounts(r.data.counts || {}); }).catch(() => {});
+    axios.get(`${API}/revenue/events/${propertyId}`).then(r => {
+      setEvents(r.data.events || []);
+      setCounts(r.data.counts || {});
+      setPropertyCity(r.data.city || "");
+    }).catch(() => {});
   };
   useEffect(() => { load(); }, [propertyId]);
 
@@ -31,7 +36,8 @@ export const EventIntelligence = ({ propertyId }) => {
     try {
       const { data } = await axios.post(`${API}/revenue/events/${propertyId}/scan`, { days_ahead: 365, auto_price: true });
       setScanResult(data);
-      toast.success(`Found ${data.events_found} events, ${data.prices_adjusted} prices adjusted`);
+      const cleared = data.foreign_city_cleared ? ` · ${data.foreign_city_cleared} farklı şehir temizlendi` : "";
+      toast.success(`${data.city || ""}: ${data.events_found} event bulundu, ${data.prices_adjusted} fiyat ayarlandı${cleared}`);
       load();
     } catch { toast.error("Scan failed"); }
     setScanning(false);
@@ -47,6 +53,18 @@ export const EventIntelligence = ({ propertyId }) => {
       load();
     } catch { toast.error("Full rescan failed"); }
     setScanning(false);
+  };
+
+  const cleanupForeign = async () => {
+    try {
+      const { data } = await axios.post(`${API}/revenue/events/${propertyId}/cleanup-foreign`, {});
+      if (data.deleted > 0) {
+        toast.success(`${data.deleted} farklı şehir event'i silindi (${(data.foreign_cities_removed || []).join(", ")})`);
+      } else {
+        toast.info(`Tüm event'ler ${data.city} şehrinde, temizlenecek bir şey yok.`);
+      }
+      load();
+    } catch { toast.error("Cleanup failed"); }
   };
 
   const addManual = async () => {
@@ -82,12 +100,25 @@ export const EventIntelligence = ({ propertyId }) => {
           </div>
           <div>
             <h2 className="text-lg font-bold text-stone-800">Event Intelligence</h2>
-            <p className="text-xs text-stone-400">AI-powered event detection for demand-based pricing</p>
+            <p className="text-xs text-stone-400">
+              AI-powered event detection for demand-based pricing
+              {propertyCity && (
+                <span className="ml-2 px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 font-medium" data-testid="event-current-city">
+                  📍 {propertyCity}
+                </span>
+              )}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-1.5 border border-stone-200 text-stone-600 px-3 py-2 rounded-xl text-sm font-medium hover:bg-stone-50" data-testid="event-add-manual">
             <Plus className="w-4 h-4" />Add Event
+          </button>
+          <button onClick={cleanupForeign}
+            className="flex items-center gap-1.5 border border-stone-200 text-stone-600 px-3 py-2 rounded-xl text-sm font-medium hover:bg-stone-50"
+            title="Farklı şehre ait stale event'leri sil"
+            data-testid="event-cleanup-foreign">
+            <Trash2 className="w-4 h-4" />Cleanup
           </button>
           <button onClick={rescanFullYear} disabled={scanning}
             className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50" data-testid="event-rescan-full">

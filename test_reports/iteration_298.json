@@ -1,0 +1,70 @@
+{
+  "summary": "Iteration 298 - Event Intelligence City Filter Bug Fix Testing. Backend tests: 19/19 PASSED. Frontend code verification: All required data-testid attributes present. Bug fix verified: Events are now filtered by property's configured city (case-insensitive), cleanup-foreign endpoint works correctly, scan/rescan endpoints ignore body.city override.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest_tests/test_iteration298_event_city_filter.py",
+    "/app/test_reports/pytest/pytest_iteration298_event_city_filter.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All data-testid attributes correctly implemented: event-intelligence, event-current-city, event-cleanup-foreign, event-scan, event-rescan-full, event-add-manual",
+    "Case-insensitive city matching implemented via regex in market_robot.py (lines 1914-1917, 2257)",
+    "_city_filter() helper function added in event_intelligence.py for consistent city filtering"
+  ],
+  "updated_files": [
+    "/app/test_reports/pytest_tests/test_iteration298_event_city_filter.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 tests passed)",
+    "frontend": "Code verification passed - all data-testid attributes present"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "receptionist": "testrecep@hotelbox.com / Test2026!"
+  },
+  "seed_data_creation": "None - used existing 'default' and 'aldgate-flats' properties",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Event Intelligence city filter bug fix verified. Backend endpoints tested: GET /api/revenue/events/{property_id} (returns city field, filters by configured city), POST /api/revenue/events/{property_id}/cleanup-foreign (RBAC: admin/manager only, returns ok/city/deleted/foreign_cities_removed), Market Robot supply and demand-dashboard endpoints filter events by city. Regression tests for Smart-assign, AI Concierge, Journey Rules, Anomaly Alerts all passed.",
+  "tests_executed": {
+    "event_city_filter": {
+      "test_get_events_returns_city_field": "PASSED",
+      "test_get_events_filters_by_configured_city": "PASSED",
+      "test_case_insensitive_city_match_zurich": "PASSED",
+      "test_seed_event_with_different_case_and_whitespace": "PASSED"
+    },
+    "cleanup_foreign_endpoint": {
+      "test_cleanup_foreign_endpoint_exists": "PASSED",
+      "test_cleanup_foreign_rbac_admin_allowed": "PASSED",
+      "test_cleanup_foreign_rbac_receptionist_denied": "PASSED",
+      "test_cleanup_foreign_unauthenticated_denied": "PASSED"
+    },
+    "scan_ignores_body_city": {
+      "test_scan_ignores_city_override": "PASSED",
+      "test_scan_response_includes_foreign_city_cleared": "PASSED"
+    },
+    "market_robot_supply_overlay": {
+      "test_supply_endpoint_filters_events_by_city": "PASSED",
+      "test_demand_dashboard_filters_events_by_city": "PASSED"
+    },
+    "regression_tests": {
+      "test_smart_assign_still_works": "PASSED",
+      "test_ai_concierge_still_works": "PASSED",
+      "test_journey_rules_list_still_works": "PASSED",
+      "test_journey_engine_run_once_still_works": "PASSED",
+      "test_anomalies_endpoint_still_works": "PASSED"
+    },
+    "frontend_data_testids": {
+      "test_event_current_city_testid_in_code": "PASSED",
+      "test_event_cleanup_foreign_testid_in_code": "PASSED"
+    }
+  }
+}

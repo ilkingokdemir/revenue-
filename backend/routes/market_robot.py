@@ -1909,9 +1909,12 @@ def create_market_robot_router(db, require_roles, resend=None):
         ]
         snapshots = await db.market_supply.aggregate(pipeline).to_list(100)
 
-        # Load events and create date map
+        # Load events and create date map (filter by current configured city to
+        # prevent cross-city leakage from legacy scans; case-insensitive match)
+        cfg_city_overlay = (cfg.get("city") or "London").strip()
+        _city_pattern = "^\\s*" + re.escape(cfg_city_overlay) + "\\s*$"
         events_list = await db.market_events.find(
-            {"property_id": property_id}, {"_id": 0}
+            {"property_id": property_id, "city": {"$regex": _city_pattern, "$options": "i"}}, {"_id": 0}
         ).to_list(200)
         event_map = {}
         for ev in events_list:
@@ -2252,10 +2255,20 @@ def create_market_robot_router(db, require_roles, resend=None):
             if ov["date"] not in override_map:
                 override_map[ov["date"]] = ov
 
-        # Get events
-        events = await db.market_events.find(
-            {"property_id": property_id}, {"_id": 0}
-        ).to_list(500)
+        # Get events (filter by property's configured city to prevent
+        # cross-city leakage; case-insensitive match). For property_id="all"
+        # we keep no city filter since each property has its own city.
+        if property_id != "all":
+            _cfg = await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+            _city = (_cfg.get("city") or "London").strip()
+            _city_pat = "^\\s*" + re.escape(_city) + "\\s*$"
+            events = await db.market_events.find(
+                {"property_id": property_id, "city": {"$regex": _city_pat, "$options": "i"}}, {"_id": 0}
+            ).to_list(500)
+        else:
+            events = await db.market_events.find(
+                {"property_id": property_id}, {"_id": 0}
+            ).to_list(500)
         event_map = {}
         for ev in events:
             ev_date = ev.get("date", "")

@@ -15,6 +15,17 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+
+def _city_filter(city: str) -> Dict:
+    """Build a case-insensitive, whitespace-tolerant MongoDB filter for city.
+    Matches: 'London', 'london', ' London ', ' london ' all equivalently.
+    """
+    if not city:
+        return {"$regex": "^\\s*$"}
+    pattern = "^\\s*" + re.escape(city.strip()) + "\\s*$"
+    return {"$regex": pattern, "$options": "i"}
+
+
 # Hotel Demand Score replaces simple attendance-based impact
 # Score 0-100: How likely attendees are to need hotel rooms
 IMPACT_LEVELS = {
@@ -135,7 +146,7 @@ Include known recurring events, sports seasons, touring concerts, etc."""
                 filtered = [e for e in events if int(e.get("hotel_demand_score", 0) or 0) >= 15]
                 logger.info(f"Event AI: {len(events)} total, {len(filtered)} with HDS >= 15")
                 return filtered
-            logger.warning(f"Event AI: No JSON array found in response")
+            logger.warning("Event AI: No JSON array found in response")
             return []
         except Exception as e:
             logger.error(f"AI event analysis failed: {e}")
@@ -244,8 +255,15 @@ Include known recurring events, sports seasons, touring concerts, etc."""
     @router.get("/revenue/events/{property_id}")
     async def get_events(property_id: str,
                          current_user: dict = Depends(require_roles("admin", "manager"))):
-        events = await db.market_events.find(
+        # Property's configured city is the single source of truth.
+        # Filter out any legacy/stale events stored under a different city.
+        config = await db.market_robot_config.find_one(
             {"property_id": property_id}, {"_id": 0}
+        ) or {}
+        config_city = (config.get("city") or "London").strip()
+
+        events = await db.market_events.find(
+            {"property_id": property_id, "city": _city_filter(config_city)}, {"_id": 0}
         ).sort("date", 1).to_list(300)
 
         counts = {"critical": 0, "high": 0, "moderate": 0, "low": 0, "minimal": 0}
@@ -260,19 +278,30 @@ Include known recurring events, sports seasons, touring concerts, etc."""
         counts["small"] = counts.get("low", 0)
         counts["total"] = len(events)
 
-        return {"events": events, "counts": counts}
+        return {"events": events, "counts": counts, "city": config_city}
 
     @router.post("/revenue/events/{property_id}/scan")
     async def scan_events(property_id: str, data: Dict = {},
                           current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Smart scan: only events that drive hotel bookings."""
+        """Smart scan: only events that drive hotel bookings.
+        City is ALWAYS the property's configured city (single source of truth).
+        Any pre-existing events stored under a different city for this property
+        are removed first to prevent cross-city leakage.
+        """
         config = await db.market_robot_config.find_one(
             {"property_id": property_id}, {"_id": 0}
         ) or {}
-        city = data.get("city") or config.get("city", "London")
+        # Force config city — ignore any city override from request body.
+        city = (config.get("city") or "London").strip()
         days_ahead = int(data.get("days_ahead", 365))
         auto_price = data.get("auto_price", True)
         now = datetime.now(timezone.utc)
+
+        # Clean up foreign-city events first (prevents Zurich leaking into London)
+        foreign_cleanup = await db.market_events.delete_many({
+            "property_id": property_id,
+            "city": {"$not": _city_filter(city)},
+        })
 
         raw_text = await _search_events_web(city, days_ahead)
         events = await _analyze_events_with_ai(city, raw_text, days_ahead)
@@ -331,10 +360,11 @@ Include known recurring events, sports seasons, touring concerts, etc."""
             "events_found": len(events),
             "events_stored": stored,
             "events_skipped": skipped,
+            "foreign_city_cleared": foreign_cleanup.deleted_count,
             "prices_adjusted": prices_adjusted,
             "city": city,
             "days_scanned": days_ahead,
-            "message": f"Smart scan: {stored} hotel-demand events stored from {len(events)} detected. {skipped} low-impact skipped. {prices_adjusted} rate adjustments applied.",
+            "message": f"Smart scan: {city} için {stored} hotel-demand event saklandı (toplam {len(events)} bulundu). {foreign_cleanup.deleted_count} farklı şehir event'i temizlendi. {skipped} düşük etkili atlandı. {prices_adjusted} fiyat ayarlandı.",
         }
 
     @router.post("/revenue/events/{property_id}/add")
@@ -394,29 +424,51 @@ Include known recurring events, sports seasons, touring concerts, etc."""
         await db.market_events.delete_one({"id": event_id})
         return {"message": "Event removed"}
 
-    @router.post("/revenue/events/{property_id}/rescan-full")
-    async def rescan_full_year(property_id: str, data: Dict = {},
-                               current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Clear old events without HDS and do a fresh 365-day smart scan."""
+    @router.post("/revenue/events/{property_id}/cleanup-foreign")
+    async def cleanup_foreign_city_events(property_id: str,
+                                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Remove any events stored under this property that belong to a city
+        OTHER than the property's currently configured city. Fixes cross-city
+        leakage from legacy scans without doing a full re-scan.
+        """
         config = await db.market_robot_config.find_one(
             {"property_id": property_id}, {"_id": 0}
         ) or {}
-        city = data.get("city") or config.get("city", "London")
+        city = (config.get("city") or "London").strip()
+
+        # Show distinct foreign cities before delete (audit trail)
+        all_cities = await db.market_events.distinct("city", {"property_id": property_id})
+        foreign_cities = [c for c in all_cities if c and c != city]
+
+        result = await db.market_events.delete_many({
+            "property_id": property_id,
+            "city": {"$not": _city_filter(city)},
+        })
+        return {
+            "ok": True,
+            "city": city,
+            "deleted": result.deleted_count,
+            "foreign_cities_removed": foreign_cities,
+            "message": f"{result.deleted_count} farklı şehir event'i silindi. Geçerli şehir: {city}.",
+        }
+
+    @router.post("/revenue/events/{property_id}/rescan-full")
+    async def rescan_full_year(property_id: str, data: Dict = {},
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Clear all old events and do a fresh 365-day smart scan.
+        City is ALWAYS the property's configured city (single source of truth).
+        """
+        config = await db.market_robot_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        ) or {}
+        # Force config city — ignore any city override from request body.
+        city = (config.get("city") or "London").strip()
         now = datetime.now(timezone.utc)
 
-        # Remove old events without HDS scores
-        old_deleted = await db.market_events.delete_many({
-            "property_id": property_id,
-            "hotel_demand_score": {"$exists": False}
-        })
-        deleted_count = old_deleted.deleted_count
-
-        # Also remove events with HDS of 0 (old format mapped)
-        old_zero = await db.market_events.delete_many({
-            "property_id": property_id,
-            "hotel_demand_score": 0
-        })
-        deleted_count += old_zero.deleted_count
+        # Remove ALL events for this property — including foreign-city leaks
+        # (this is rescan-full, full reset is the intent)
+        cleared = await db.market_events.delete_many({"property_id": property_id})
+        deleted_count = cleared.deleted_count
 
         # Now do fresh 365-day scan
         raw_text = await _search_events_web(city, 365)

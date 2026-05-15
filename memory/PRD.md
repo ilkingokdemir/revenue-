@@ -5,6 +5,16 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 296 — Journey Rules Execution Engine)
+- **Journey Engine** (`pms_pro.py` extended) — 60s background `journey_engine_loop` task scans enabled rules and fires matching bookings exactly once per (rule, booking) pair.
+- **9 triggers** computed in real-time: `booking_confirmed` (last 70s created), `pre_arrival_24h` (check_in tomorrow), `pre_arrival_1h` (today after 12:00), `checked_in`, `mid_stay` (midpoint date), `pre_checkout_2h` (check_out today), `checked_out`, `no_show` (yesterday + never checked in), `late_checkout_requested`.
+- **8 actions** with real side-effects: `send_email`/`send_sms`/`send_app_push` → outbound queues, `create_task` → `staff_tasks`, `send_qr_key` → typed email, `offer_upsell` → `upsell_offers`, `trigger_housekeeping` → `housekeeping_tasks` (priority=high), `notify_manager` → `team_chat` (#management).
+- **Template substitution**: `{{guest_name}}`, `{{check_in}}`, `{{assigned_room}}` etc. from booking fields.
+- **Idempotency**: `journey_fires` collection composite key prevents double-fire; `fires_count` + `last_fired_at` on rule.
+- **3 new endpoints**: `GET /journey-fires`, `POST /journey-engine/run-once` (admin/manager), `POST /journey-rules/{id}/test-fire` (manual bypass-idempotency).
+- **Frontend**: Journey Rules tab adds "Şimdi çalıştır" button, "Geçmiş" toggle (fires history table), `fires_count` column, `last_fired_at` display.
+- **Test sonucu**: 22/22 backend + frontend 100% (iteration_296.json) — sıfır kritik/minör hata.
+
 ### 2026-05-15 (iter 295 — PMS Pro Module: AI Operations Suite)
 - **PMS Pro** (`routes/pms_pro.py` + `PmsProPanel.js`) — Next-gen module to leapfrog Mews/Cloudbeds/Pace/Apaleo:
   1. **Smart Room Assignment** (`POST /api/pms-pro/smart-assign`) — AI scoring engine: room-type match (+20), floor preference (+15), quiet (+10), accessibility (+20), maintenance (-30), past complaints (-5/each). Returns best room + alternatives.

@@ -3692,6 +3692,211 @@ def create_market_robot_router(db, require_roles, resend=None):
             ),
         }
 
+    @router.post("/revenue/market-robot/fleet-validate-geo")
+    async def fleet_validate_geo(
+        data: Dict = {},
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Fleet-wide coordinate sanity check + auto-repair.
+
+        For every active property with lat/lon stored, reverse-geocode the
+        coordinates via Nominatim and check whether the resulting country code
+        matches the property's `country` field. If it doesn't (e.g. UK property
+        landed on US lat/lon — the Camden→Boston bug), the property is flagged
+        and — when `fix=true` — re-geocoded using the country-biased forward
+        path. Always returns a per-property report.
+
+        Body (optional):
+          - property_ids: [] — restrict to specific IDs (default: ALL active)
+          - dry_run: true (default) — only report; do not write
+          - fix: false (default) — when true, re-geocode flagged properties
+          - sleep_s: 1.1 — Nominatim free policy enforces 1 req/sec.
+        """
+        from utils.booking_scraper import (
+            reverse_geocode, geocode_address,
+        )
+
+        target_ids = (data or {}).get("property_ids") or []
+        dry_run = bool((data or {}).get("dry_run", True))
+        fix = bool((data or {}).get("fix", False))
+        sleep_s = float((data or {}).get("sleep_s") or 1.1)
+        sleep_s = max(0.5, min(sleep_s, 3.0))
+
+        COUNTRY_MAP_FV = {
+            "UK": "gb", "GB": "gb", "ENGLAND": "gb", "UNITED KINGDOM": "gb",
+            "US": "us", "USA": "us", "UNITED STATES": "us",
+            "TR": "tr", "TURKEY": "tr", "TÜRKIYE": "tr", "TURKIYE": "tr",
+            "FR": "fr", "FRANCE": "fr", "DE": "de", "GERMANY": "de",
+            "ES": "es", "SPAIN": "es", "IT": "it", "ITALY": "it",
+            "NL": "nl", "NETHERLANDS": "nl", "CH": "ch", "SWITZERLAND": "ch",
+            "AT": "at", "AUSTRIA": "at", "BE": "be", "BELGIUM": "be",
+            "PT": "pt", "PORTUGAL": "pt", "IE": "ie", "IRELAND": "ie",
+            "GR": "gr", "GREECE": "gr",
+        }
+
+        prop_query: Dict = {"is_active": {"$ne": False}}
+        if target_ids:
+            prop_query["id"] = {"$in": target_ids}
+        props = await db.properties.find(
+            prop_query,
+            {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1,
+             "postcode": 1, "address": 1, "latitude": 1, "longitude": 1,
+             "geocoded_display_name": 1},
+        ).to_list(500)
+
+        ok_count = 0
+        flagged_count = 0
+        fixed_count = 0
+        skipped_count = 0
+        results = []
+
+        for prop in props:
+            pid = prop.get("id")
+            pname = prop.get("name") or pid
+            lat = prop.get("latitude")
+            lon = prop.get("longitude")
+            city = (prop.get("city") or "").strip()
+            country_raw = (prop.get("country") or "").strip().upper()
+            expected_cc = COUNTRY_MAP_FV.get(country_raw, country_raw.lower()[:2] if country_raw else "")
+
+            entry = {
+                "property_id": pid,
+                "name": pname,
+                "city": city,
+                "country": country_raw,
+                "expected_country_code": expected_cc,
+                "before": {"latitude": lat, "longitude": lon,
+                           "display": prop.get("geocoded_display_name")},
+                "status": "skipped",
+                "reason": None,
+            }
+
+            if not (lat and lon):
+                entry["reason"] = "no_coordinates"
+                skipped_count += 1
+                results.append(entry)
+                continue
+            if not expected_cc:
+                entry["reason"] = "no_country_on_property"
+                skipped_count += 1
+                results.append(entry)
+                continue
+
+            # Reverse geocode current coords — confirm where they actually land.
+            rev = await reverse_geocode(lat, lon)
+            await asyncio.sleep(sleep_s)
+            if not rev:
+                entry["status"] = "unknown"
+                entry["reason"] = "reverse_geocode_failed"
+                skipped_count += 1
+                results.append(entry)
+                continue
+
+            actual_cc = (rev.get("country_code") or "").lower()
+            actual_city = (rev.get("city") or "").lower()
+            entry["actual_country_code"] = actual_cc
+            entry["actual_city"] = rev.get("city")
+            entry["actual_display"] = rev.get("display_name")
+
+            country_match = (actual_cc == expected_cc)
+            city_match = True
+            if city and actual_city:
+                # forgiving: city contained in either direction
+                cl = city.lower()
+                city_match = (cl in actual_city) or (actual_city in cl)
+
+            if country_match and city_match:
+                entry["status"] = "ok"
+                entry["reason"] = "country_and_city_match"
+                ok_count += 1
+                results.append(entry)
+                continue
+
+            # Mismatch — flag.
+            entry["status"] = "flagged"
+            entry["reason"] = (
+                "country_mismatch" if not country_match
+                else "city_mismatch"
+            )
+            flagged_count += 1
+
+            if dry_run or not fix:
+                results.append(entry)
+                continue
+
+            # Repair path: forward-geocode with country bias and persist.
+            name = (prop.get("name") or "").strip()
+            postcode = (prop.get("postcode") or "").strip()
+            address = (prop.get("address") or "").strip()
+
+            candidates_q = []
+            if address:
+                candidates_q.append(" ".join([x for x in [address, postcode, city] if x]))
+            if postcode and city:
+                candidates_q.append(f"{postcode} {city}")
+            if name and city:
+                candidates_q.append(f"{name} {city}")
+            if name and expected_cc:
+                candidates_q.append(name)
+
+            seen = set()
+            ordered_q = []
+            for q in candidates_q:
+                qn = (q or "").strip()
+                if qn and qn.lower() not in seen:
+                    seen.add(qn.lower())
+                    ordered_q.append(qn)
+
+            repaired = False
+            for q in ordered_q:
+                geo = await geocode_address(q, country_code=expected_cc)
+                await asyncio.sleep(sleep_s)
+                if not geo:
+                    continue
+                new_lat, new_lon, new_display = geo
+                # Sanity: display must include the property's city
+                if city and city.lower() not in (new_display or "").lower():
+                    continue
+                await db.properties.update_one(
+                    {"id": pid},
+                    {"$set": {
+                        "latitude": new_lat, "longitude": new_lon,
+                        "geocoded_from": q,
+                        "geocoded_display_name": new_display,
+                        "geocoded_at": datetime.now(timezone.utc).isoformat(),
+                        "geo_validated_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+                entry["status"] = "fixed"
+                entry["after"] = {"latitude": new_lat, "longitude": new_lon,
+                                  "display": new_display, "geocoded_from": q}
+                fixed_count += 1
+                repaired = True
+                break
+
+            if not repaired:
+                entry["status"] = "unfixable"
+                entry["reason"] = "no_geocode_match_with_country_bias"
+
+            results.append(entry)
+
+        return {
+            "ok": True,
+            "total_properties": len(props),
+            "ok_count": ok_count,
+            "flagged_count": flagged_count,
+            "fixed_count": fixed_count,
+            "skipped_count": skipped_count,
+            "dry_run": dry_run,
+            "fix": fix,
+            "results": results,
+            "message": (
+                f"Geo validate: {ok_count} OK · {flagged_count} flag · "
+                f"{fixed_count} fixed · {skipped_count} skipped "
+                f"({'DRY-RUN' if dry_run else 'LIVE'})."
+            ),
+        }
+
     @router.post("/revenue/market-robot/{property_id}/competitors/bulk-add")
     async def bulk_add_competitors(
         property_id: str, data: Dict,

@@ -563,6 +563,41 @@ async def geocode_address(
         return None
 
 
+async def reverse_geocode(
+    latitude: float,
+    longitude: float,
+    *,
+    timeout_s: float = 8.0,
+) -> Optional[Dict]:
+    """Reverse-geocode a lat/lon to its administrative address via Nominatim.
+
+    Returns a dict with keys: country_code (alpha-2 lowercase), country, city,
+    state, display_name — or None on failure.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as client:
+            r = await client.get(
+                "https://nominatim.openstreetmap.org/reverse",
+                params={"lat": latitude, "lon": longitude,
+                        "format": "json", "addressdetails": 1, "zoom": 10},
+                headers={"User-Agent": "HotelBox/1.0 (admin@hotelbox.com)"},
+            )
+            r.raise_for_status()
+            data = r.json() or {}
+            addr = data.get("address") or {}
+            return {
+                "country_code": (addr.get("country_code") or "").lower(),
+                "country": addr.get("country") or "",
+                "city": addr.get("city") or addr.get("town") or addr.get("village")
+                        or addr.get("municipality") or addr.get("suburb") or "",
+                "state": addr.get("state") or "",
+                "display_name": data.get("display_name") or "",
+            }
+    except Exception as e:
+        logger.warning(f"reverse_geocode failed for ({latitude},{longitude}): {e}")
+        return None
+
+
 def _extract_district_hint(display_name: str, postcode: str = "", city: str = "") -> str:
     """From a Nominatim display_name string, extract a useful Booking.com
     search hint — typically the neighborhood/district name. Fallback: postcode → city.

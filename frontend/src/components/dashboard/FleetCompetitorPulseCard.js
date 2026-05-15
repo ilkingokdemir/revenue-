@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ReferenceLine, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap, Undo2, Sparkles } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap, Undo2, Sparkles, MapPinned } from "lucide-react";
 import useLivePolling from "../../hooks/useLivePolling";
 import GapCloseModal from "./GapCloseModal";
 import FleetGapCloseModal from "./FleetGapCloseModal";
@@ -25,6 +25,38 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [lastBatch, setLastBatch] = useState(null);  // {batch_id, applied_at, branches, days, undone}
   const [fleetResetting, setFleetResetting] = useState(false);
+  const [geoValidating, setGeoValidating] = useState(false);
+
+  const runGeoValidate = async (fix = false) => {
+    const label = fix ? "Auto-fix" : "Dry-run";
+    if (fix && !window.confirm(
+      "Tüm filo için: koordinatları reverse-geocode edip ülke/şehir eşleşmesini kontrol edeceğim. " +
+      "Yanlış olanları (ör. Camden→Boston bug'ı) ülke-bias forward geocode ile otomatik düzelteceğim. " +
+      "Nominatim rate-limit nedeniyle 48 property için 2-3 dakika sürebilir. Devam?"
+    )) return;
+    setGeoValidating(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/fleet-validate-geo`,
+        { dry_run: !fix, fix });
+      const ok = data.ok_count || 0;
+      const flag = data.flagged_count || 0;
+      const fixed = data.fixed_count || 0;
+      const skip = data.skipped_count || 0;
+      if (fix) {
+        if (fixed > 0) toast.success(`Geo doğrulama: ${fixed} property düzeltildi · ${ok} zaten OK · ${skip} atlandı.`);
+        else if (flag === 0) toast.success(`Geo doğrulama: ${ok} property OK, hiçbir uyuşmazlık yok 🎯`);
+        else toast.warning(`${flag} uyuşmazlık tespit edildi ama düzeltilemedi (manuel adres girin).`);
+      } else {
+        if (flag > 0) toast.warning(`Dry-run: ${flag} property koordinatı yanlış ülkede! Fix=true ile düzelt.`);
+        else toast.success(`Dry-run: ${ok} property OK · ${skip} atlandı · sıfır uyuşmazlık ✅`);
+      }
+      console.log("[GeoValidate]", data);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Geo doğrulama başarısız");
+    }
+    setGeoValidating(false);
+  };
 
   const runFleetReset = async () => {
     if (!window.confirm(
@@ -144,6 +176,19 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
             className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition ${fleetResetting ? "bg-orange-500/15 border-orange-500/40 text-orange-300 cursor-wait" : "bg-stone-800 border-orange-500/30 text-orange-300 hover:bg-orange-500/15"}`}>
             {fleetResetting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             {fleetResetting ? "Sıfırlanıyor..." : "Filo Komşuları Sıfırla"}
+          </button>
+          <button onClick={() => runGeoValidate(true)} disabled={geoValidating}
+            title="Reverse-geocode ile koordinat-ülke uyumunu doğrula ve yanlış olanları otomatik düzelt (Camden→Boston bug koruyucu)"
+            data-testid="fleet-validate-geo-btn"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition ${geoValidating ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-300 cursor-wait" : "bg-stone-800 border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/15"}`}>
+            {geoValidating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MapPinned className="w-3.5 h-3.5" />}
+            {geoValidating ? "Doğrulanıyor..." : "Koordinatları Doğrula"}
+          </button>
+          <button onClick={() => runGeoValidate(false)} disabled={geoValidating}
+            title="Sadece rapor — hiçbir property güncellenmez. Önce ne çıkacağını gör."
+            data-testid="fleet-validate-geo-dryrun-btn"
+            className="hidden md:flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold bg-stone-800 hover:bg-stone-700 text-stone-400 border border-stone-700">
+            Dry
           </button>
         </div>
       </div>

@@ -5,6 +5,19 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 305 — Neighborhood Competitor Discovery Bug Fix)
+- **BUG (user-reported)**: Aldgate Flats için neighborhood competitor olarak Kensington/Piccadilly/Oxford St gibi 5-10km uzaktaki hotel'ler geliyordu — gerçek komşular değil.
+- **Root cause**: Property'de lat/lon yoktu, Booking.com search `ss=Aldgate+Flats+London` ile yapılıyordu → Booking generic London featured hotel'lerini döndürüyordu.
+- **Fix**:
+  1. `geocode_address(query)` helper — Nominatim (free, key-less) auto-geocode.
+  2. `_extract_district_hint()` helper — geocode display_name'den district name çıkarır (Bishopsgate, Aldgate, vb.).
+  3. `discover_nearby_hotels()` lat/lon mevcutsa: `ss=<district_hint>` + `latitude/longitude` + `order=distance_from_search` Booking pattern'i kullanıyor.
+  4. Discovery endpoint property'de coord yoksa otomatik geocode + DB'ye persist eder.
+  5. Yeni endpoint `POST /market-robot/{pid}/auto-geocode` — sadece koordinat çıkarımı (force flag ile yeniden).
+  6. Yeni endpoint `DELETE /market-robot/{pid}/competitors/clear` — yanlış listeyi toplu temizler.
+- **Sonuç**: Aldgate Flats için doğrulandı → Widegate Residential, Liverpool Street apartments, Bishopsgate, Spitalfields. Hepsi 500m-1km civarı. Kensington/Piccadilly çöp listesi gitti.
+- Property `geocoded_from`, `geocoded_display_name`, `geocoded_at` audit alanları da kaydediliyor.
+
 ### 2026-05-15 (iter 304 — Standardized Chart Legends Across Dashboard)
 - **Yeni reusable component**: `/app/frontend/src/components/dashboard/ChartLegend.js` — items prop'u alır (color/label/kind), dark/light tema desteği, dense mode, data-testid'ler. Üç swatch tipi: solid box, line, dashed.
 - **4 grafiğe Türkçe lejant uygulandı**:

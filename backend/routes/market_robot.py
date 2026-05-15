@@ -3154,12 +3154,12 @@ def create_market_robot_router(db, require_roles, resend=None):
         the subset they want to import. Respects the existing competitor list so rows
         already added are shown greyed out (not silently duplicated).
         """
-        from utils.booking_scraper import discover_nearby_hotels
+        from utils.booking_scraper import discover_nearby_hotels, geocode_address, _extract_district_hint
 
         prop = await db.properties.find_one(
             {"id": property_id},
             {"_id": 0, "postcode": 1, "city": 1, "currency": 1, "country": 1,
-             "latitude": 1, "longitude": 1, "booking_url": 1, "name": 1},
+             "latitude": 1, "longitude": 1, "booking_url": 1, "name": 1, "address": 1},
         )
         if not prop:
             raise HTTPException(status_code=404, detail="Property not found")
@@ -3172,8 +3172,73 @@ def create_market_robot_router(db, require_roles, resend=None):
         max_results = max(5, min(int(data.get("max_results") or 20), 50))
         currency = (data.get("currency") or prop.get("currency") or "GBP").upper()
         language = (data.get("language") or "en-gb").lower()
+        radius_km = float(data.get("radius_km") or 2.5)
+        radius_km = max(0.5, min(radius_km, 10.0))
 
-        if not postcode and not city and not (prop.get("latitude") and prop.get("longitude")):
+        latitude = prop.get("latitude")
+        longitude = prop.get("longitude")
+
+        # AUTO-GEOCODE: If the property has no coords yet, derive them from
+        # the property name + postcode + city via Nominatim. Persist the
+        # result so subsequent runs hit the cache. This is the difference
+        # between getting actual neighbors vs city-wide featured listings.
+        geocode_used = None
+        if not (latitude and longitude):
+            address = (prop.get("address") or "").strip()
+            name = (prop.get("name") or "").strip()
+            # Try most-specific → least-specific search strings.
+            # NOTE: Nominatim is sensitive to commas — try BOTH joined and
+            # comma-separated variants because "Aldgate Flats, London"
+            # returns null while "Aldgate Flats London" resolves correctly.
+            candidates_q = []
+            if address:
+                candidates_q.append(" ".join([x for x in [address, postcode, city] if x]))
+                candidates_q.append(", ".join([x for x in [address, postcode, city] if x]))
+            if name and city:
+                candidates_q.append(f"{name} {city}")
+                candidates_q.append(f"{name}, {city}")
+            if postcode and city:
+                candidates_q.append(f"{postcode} {city}")
+                candidates_q.append(f"{postcode}, {city}")
+            if name:
+                candidates_q.append(name)
+            elif postcode:
+                candidates_q.append(postcode)
+
+            # De-duplicate while preserving order
+            seen_q = set()
+            ordered_q = []
+            for q in candidates_q:
+                qn = q.strip()
+                if qn and qn.lower() not in seen_q:
+                    seen_q.add(qn.lower())
+                    ordered_q.append(qn)
+
+            for q in ordered_q:
+                geo = await geocode_address(q)
+                if geo:
+                    latitude, longitude, display = geo
+                    geocode_used = {"query": q, "display": display, "lat": latitude, "lng": longitude}
+                    await db.properties.update_one(
+                        {"id": property_id},
+                        {"$set": {
+                            "latitude": latitude, "longitude": longitude,
+                            "geocoded_from": q,
+                            "geocoded_display_name": display,
+                            "geocoded_at": datetime.now(timezone.utc).isoformat(),
+                        }},
+                    )
+                    logger.info(f"🗺️ Auto-geocoded '{property_id}' from '{q}' → ({latitude}, {longitude})")
+                    break
+
+        # Build a district hint from the geocode display name (or stored)
+        if not geocode_used:
+            stored_display = prop.get("geocoded_display_name") or ""
+        else:
+            stored_display = geocode_used["display"]
+        district_hint = _extract_district_hint(stored_display, postcode, city) if stored_display else ""
+
+        if not postcode and not city and not (latitude and longitude):
             raise HTTPException(
                 status_code=400,
                 detail="Property has no postcode/city/coordinates. Set them under 'Fix Branch Location' first.",
@@ -3182,12 +3247,14 @@ def create_market_robot_router(db, require_roles, resend=None):
         candidates = await discover_nearby_hotels(
             postcode=postcode,
             city=city,
-            latitude=prop.get("latitude"),
-            longitude=prop.get("longitude"),
+            latitude=latitude,
+            longitude=longitude,
             property_type=property_type,
             max_results=max_results,
+            radius_km=radius_km,
             language=language,
             currency=currency,
+            district_hint=district_hint,
         )
 
         # Flag candidates already imported so the UI can disable their checkbox.
@@ -3215,7 +3282,124 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "postcode": postcode, "city": city,
                 "property_type": property_type, "currency": currency,
                 "language": language, "max_results": max_results,
+                "latitude": latitude, "longitude": longitude,
+                "radius_km": radius_km,
+                "geocode_used": geocode_used,
+                "district_hint": district_hint,
             },
+        }
+
+    @router.post("/revenue/market-robot/{property_id}/auto-geocode")
+    async def auto_geocode_property(
+        property_id: str, data: Dict = {},
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Run only the Nominatim auto-geocode step and persist the result on
+        the property doc. Useful when the user wants to seed coordinates first
+        and only afterwards run /discover with a custom radius.
+
+        Body (optional): {force: true} — re-geocode even if lat/lon already set.
+        """
+        from utils.booking_scraper import geocode_address
+
+        prop = await db.properties.find_one(
+            {"id": property_id}, {"_id": 0, "name": 1, "city": 1, "postcode": 1, "address": 1,
+                                  "latitude": 1, "longitude": 1},
+        )
+        if not prop:
+            raise HTTPException(status_code=404, detail="Property not found")
+
+        force = bool((data or {}).get("force"))
+        if (prop.get("latitude") and prop.get("longitude")) and not force:
+            return {
+                "ok": True,
+                "skipped": True,
+                "latitude": prop["latitude"], "longitude": prop["longitude"],
+                "message": "Property zaten geocode'lu. force:true ile yeniden çalıştır.",
+            }
+
+        name = (prop.get("name") or "").strip()
+        city = (prop.get("city") or "").strip()
+        postcode = (prop.get("postcode") or "").strip()
+        address = (prop.get("address") or "").strip()
+        custom_query = ((data or {}).get("query") or "").strip()
+
+        candidates_q = []
+        if custom_query:
+            candidates_q.append(custom_query)
+        if address:
+            candidates_q.append(" ".join([x for x in [address, postcode, city] if x]))
+            candidates_q.append(", ".join([x for x in [address, postcode, city] if x]))
+        if name and city:
+            candidates_q.append(f"{name} {city}")
+            candidates_q.append(f"{name}, {city}")
+        if postcode and city:
+            candidates_q.append(f"{postcode} {city}")
+        if name:
+            candidates_q.append(name)
+        elif postcode:
+            candidates_q.append(postcode)
+        seen = set()
+        ordered_q = []
+        for q in candidates_q:
+            qn = q.strip()
+            if qn and qn.lower() not in seen:
+                seen.add(qn.lower())
+                ordered_q.append(qn)
+
+        if not ordered_q:
+            raise HTTPException(400, "Property has no name/postcode/address — cannot geocode")
+
+        attempts = []
+        for q in ordered_q:
+            geo = await geocode_address(q)
+            attempts.append({"query": q, "found": bool(geo)})
+            if geo:
+                lat, lng, display = geo
+                await db.properties.update_one(
+                    {"id": property_id},
+                    {"$set": {
+                        "latitude": lat, "longitude": lng,
+                        "geocoded_from": q,
+                        "geocoded_at": datetime.now(timezone.utc).isoformat(),
+                    }},
+                )
+                return {
+                    "ok": True,
+                    "latitude": lat, "longitude": lng,
+                    "geocoded_from": q,
+                    "display_name": display,
+                    "attempts": attempts,
+                }
+        return {"ok": False, "error": "no_match", "attempts": attempts,
+                "message": "Hiçbir geocode adayı eşleşmedi. Manuel lat/lng girin."}
+
+    @router.delete("/revenue/market-robot/{property_id}/competitors/clear")
+    async def clear_all_competitors(
+        property_id: str,
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Wipe ALL competitors for this property. Useful after a wrong-neighborhood
+        auto-discovery — admin can clear and re-run discover with proper radius.
+        Also drops dependent supply/validation/log rows tagged to those competitors.
+        """
+        comps = await db.market_competitors.find(
+            {"property_id": property_id}, {"_id": 0, "id": 1, "name": 1},
+        ).to_list(100)
+        comp_ids = [c["id"] for c in comps]
+        names = [c.get("name", "") for c in comps]
+
+        deleted = await db.market_competitors.delete_many({"property_id": property_id})
+        # Best-effort cleanup of orphaned data
+        await db.market_supply.delete_many({"property_id": property_id})
+        if comp_ids:
+            await db.competitor_validation.delete_many({"competitor_id": {"$in": comp_ids}})
+
+        return {
+            "ok": True,
+            "deleted": deleted.deleted_count,
+            "names": names,
+            "message": f"{deleted.deleted_count} rakip silindi. /discover ile yeniden bul.",
         }
 
     @router.post("/revenue/market-robot/{property_id}/competitors/bulk-add")

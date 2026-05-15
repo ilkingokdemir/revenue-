@@ -34,6 +34,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+import httpx
+
 # Ensure Playwright finds its browsers when backend runs under supervisor (where
 # ~/.cache/ms-playwright doesn't exist but /pw-browsers does)
 os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "/pw-browsers")
@@ -519,6 +521,77 @@ async def validate_booking_url(url: str, *, currency: Optional[str] = None) -> d
 
 
 
+async def geocode_address(query: str, *, timeout_s: float = 8.0) -> Optional[Tuple[float, float, str]]:
+    """Geocode a free-text address/postcode/place via OpenStreetMap Nominatim.
+
+    Returns (latitude, longitude, display_name) or None on failure.
+    Free, no API key required. Usage policy: max 1 req/sec — caller responsible
+    for rate-limiting if calling in tight loops.
+    """
+    q = (query or "").strip()
+    if not q:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as client:
+            r = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": q, "format": "json", "limit": 1, "addressdetails": 1},
+                headers={"User-Agent": "HotelBox/1.0 (admin@hotelbox.com)"},
+            )
+            r.raise_for_status()
+            arr = r.json()
+            if not arr:
+                return None
+            top = arr[0]
+            lat = float(top.get("lat"))
+            lon = float(top.get("lon"))
+            display = top.get("display_name", q)
+            return (lat, lon, display)
+    except Exception as e:
+        logger.warning(f"geocode_address failed for '{q}': {e}")
+        return None
+
+
+def _extract_district_hint(display_name: str, postcode: str = "", city: str = "") -> str:
+    """From a Nominatim display_name string, extract a useful Booking.com
+    search hint — typically the neighborhood/district name. Fallback: postcode → city.
+
+    Example display_name:
+      'City of London Flats, 20, Widegate Street, Broadgate, Bishopsgate,
+       City of London, Greater London, England, E1 7HP, United Kingdom'
+
+    We want something like 'Bishopsgate, London' or 'E1, London' which
+    Booking.com resolves to a narrow geographic district.
+    """
+    if not display_name:
+        return f"{postcode}, {city}".strip(", ") or city
+    parts = [p.strip() for p in display_name.split(",") if p.strip()]
+    # Drop common "noise" tokens
+    noise = {"united kingdom", "england", "scotland", "wales", "northern ireland",
+             "greater london", "city of london"}
+    # Heuristic: take the first part that isn't a number, isn't noise, isn't the
+    # property name, and is at least 3 chars
+    district = None
+    for p in parts[1:-2]:  # skip name (parts[0]) and country/region
+        pl = p.lower()
+        if pl in noise:
+            continue
+        if any(ch.isdigit() for ch in p):  # likely a postcode or number
+            continue
+        if len(p) >= 3:
+            district = p
+            break
+    if district:
+        suffix = f", {city}" if city and city.lower() not in district.lower() else ""
+        return f"{district}{suffix}"
+    # Fallback: postcode + city
+    if postcode and city:
+        # Use just the outward code for UK (first half), e.g. "E1 7HP" → "E1"
+        outward = postcode.split()[0] if " " in postcode else postcode[:3].rstrip()
+        return f"{outward}, {city}"
+    return city or postcode or display_name.split(",")[-1]
+
+
 async def discover_nearby_hotels(
     *,
     postcode: str = "",
@@ -531,6 +604,7 @@ async def discover_nearby_hotels(
     language: str = "en-gb",
     currency: str = "GBP",
     timeout_ms: int = 30000,
+    district_hint: str = "",
 ) -> List[Dict]:
     """Discover competitor candidates near a location by scraping Booking.com search.
 
@@ -553,6 +627,13 @@ async def discover_nearby_hotels(
         logger.warning("discover_nearby_hotels: no location info")
         return []
 
+    # When we have coords (most accurate), use the district hint (e.g.
+    # "Aldgate, London" or "E1, London") instead of the property name so
+    # Booking auto-resolves to a TIGHT geographic area instead of city-wide.
+    if latitude is not None and longitude is not None and district_hint:
+        search_term = district_hint
+    elif latitude is not None and longitude is not None and city_clean:
+        search_term = city_clean
     ss = search_term.replace(" ", "+").replace(",", "%2C")
     # Booking.com accommodation type filters (ht_id values)
     nflt_map = {
@@ -595,6 +676,14 @@ async def discover_nearby_hotels(
     lookup_key = (city_clean or pc_clean).split(",")[0].strip().lower()
     dest = CITY_DEST_IDS.get(lookup_key)
 
+    # Coordinate-based search (FAR more accurate for "actual neighbors"):
+    # Booking.com supports latitude/longitude + nflt=distance%3D<meters> to
+    # restrict results to a real geographic radius. This avoids the trap of
+    # generic city-wide featured listings (Kensington shown to an Aldgate
+    # property, etc.). Default radius: 2500m (~2.5 km walking neighborhood).
+    use_coords = latitude is not None and longitude is not None
+    _ = max(500, min(int((radius_km or 2.5) * 1000), 10000))  # reserved for future map URL pattern
+
     qs_parts = [
         f"ss={ss}",
         f"checkin={checkin}",
@@ -604,14 +693,29 @@ async def discover_nearby_hotels(
         "group_children=0",
         f"selected_currency={currency.upper()}",
     ]
-    if dest:
-        # Include both dest_id and dest_type so Booking treats this as a real city query.
+
+    nflt_parts = []
+    if nflt:
+        # nflt is e.g. "nflt=ht_id%3D201" — extract value
+        nflt_parts.append(nflt.split("=", 1)[1])
+
+    if use_coords:
+        # Booking.com works best with a DISTRICT-level ss text (resolved
+        # automatically). Don't add dest_id (that locks to city center) —
+        # let ss carry the geographic narrowing. Add latitude/longitude as
+        # secondary hints so distance sort works.
+        qs_parts.append(f"latitude={latitude:.6f}")
+        qs_parts.append(f"longitude={longitude:.6f}")
+        qs_parts.append("order=distance_from_search")
+    elif dest:
         qs_parts.insert(0, f"dest_id={dest[0]}")
         qs_parts.insert(1, f"dest_type={dest[1]}")
     else:
         qs_parts.append("dest_type=city")
-    if nflt:
-        qs_parts.append(nflt)
+
+    if nflt_parts:
+        qs_parts.append("nflt=" + "%3B".join(nflt_parts))
+
     url = f"https://www.booking.com/searchresults.{language}.html?{'&'.join(qs_parts)}"
 
     browser = await _get_browser()

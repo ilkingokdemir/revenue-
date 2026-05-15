@@ -6,7 +6,7 @@ international vs local, team quality, and event category.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
-from typing import Dict
+from typing import Dict, List
 import uuid
 import re
 import os
@@ -24,6 +24,32 @@ def _city_filter(city: str) -> Dict:
         return {"$regex": "^\\s*$"}
     pattern = "^\\s*" + re.escape(city.strip()) + "\\s*$"
     return {"$regex": pattern, "$options": "i"}
+
+
+def _multi_city_filter(cities: List[str]) -> Dict:
+    """Build a case-insensitive filter matching ANY of the given cities."""
+    valid = [c.strip() for c in cities if c and c.strip()]
+    if not valid:
+        return {"$regex": "^\\s*$"}  # matches nothing useful
+    pattern = "^\\s*(" + "|".join(re.escape(c) for c in valid) + ")\\s*$"
+    return {"$regex": pattern, "$options": "i"}
+
+
+def _get_tracked_cities(config: Dict) -> List[str]:
+    """Return primary + secondary cities for a property as a clean list."""
+    primary = (config.get("city") or "London").strip()
+    secondaries = config.get("secondary_cities") or []
+    if not isinstance(secondaries, list):
+        secondaries = []
+    secondaries = [str(c).strip() for c in secondaries if c and str(c).strip()]
+    # De-duplicate (case-insensitive) and exclude primary
+    out = [primary]
+    seen = {primary.lower()}
+    for s in secondaries:
+        if s.lower() not in seen:
+            out.append(s)
+            seen.add(s.lower())
+    return out
 
 
 # Hotel Demand Score replaces simple attendance-based impact
@@ -255,21 +281,26 @@ Include known recurring events, sports seasons, touring concerts, etc."""
     @router.get("/revenue/events/{property_id}")
     async def get_events(property_id: str,
                          current_user: dict = Depends(require_roles("admin", "manager"))):
-        # Property's configured city is the single source of truth.
-        # Filter out any legacy/stale events stored under a different city.
+        # Property's configured city + optional secondary cities are tracked.
+        # Filter out any legacy/stale events stored under non-tracked cities.
         config = await db.market_robot_config.find_one(
             {"property_id": property_id}, {"_id": 0}
         ) or {}
-        config_city = (config.get("city") or "London").strip()
+        tracked = _get_tracked_cities(config)
+        primary = tracked[0]
+        secondary = tracked[1:]
 
         events = await db.market_events.find(
-            {"property_id": property_id, "city": _city_filter(config_city)}, {"_id": 0}
-        ).sort("date", 1).to_list(300)
+            {"property_id": property_id, "city": _multi_city_filter(tracked)}, {"_id": 0}
+        ).sort("date", 1).to_list(500)
 
         counts = {"critical": 0, "high": 0, "moderate": 0, "low": 0, "minimal": 0}
+        per_city: Dict = {}
         for e in events:
             imp = LEGACY_MAP.get(e.get("impact", ""), e.get("impact", "minimal"))
             counts[imp] = counts.get(imp, 0) + 1
+            c_key = (e.get("city") or "").strip() or "?"
+            per_city[c_key] = per_city.get(c_key, 0) + 1
 
         # Backward compat
         counts["mega"] = counts.get("critical", 0)
@@ -278,93 +309,121 @@ Include known recurring events, sports seasons, touring concerts, etc."""
         counts["small"] = counts.get("low", 0)
         counts["total"] = len(events)
 
-        return {"events": events, "counts": counts, "city": config_city}
+        return {
+            "events": events,
+            "counts": counts,
+            "city": primary,
+            "secondary_cities": secondary,
+            "tracked_cities": tracked,
+            "per_city_counts": per_city,
+        }
 
     @router.post("/revenue/events/{property_id}/scan")
     async def scan_events(property_id: str, data: Dict = {},
                           current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Smart scan: only events that drive hotel bookings.
-        City is ALWAYS the property's configured city (single source of truth).
-        Any pre-existing events stored under a different city for this property
-        are removed first to prevent cross-city leakage.
+        """Smart scan across ALL tracked cities (primary + secondary).
+        Scans run in parallel per city. Foreign-city events are auto-cleaned.
         """
+        import asyncio as _asyncio
         config = await db.market_robot_config.find_one(
             {"property_id": property_id}, {"_id": 0}
         ) or {}
-        # Force config city — ignore any city override from request body.
-        city = (config.get("city") or "London").strip()
+        tracked = _get_tracked_cities(config)  # primary + secondaries
         days_ahead = int(data.get("days_ahead", 365))
         auto_price = data.get("auto_price", True)
         now = datetime.now(timezone.utc)
 
-        # Clean up foreign-city events first (prevents Zurich leaking into London)
+        # Clean up foreign-city events first (everything not in tracked list)
         foreign_cleanup = await db.market_events.delete_many({
             "property_id": property_id,
-            "city": {"$not": _city_filter(city)},
+            "city": {"$not": _multi_city_filter(tracked)},
         })
 
-        raw_text = await _search_events_web(city, days_ahead)
-        events = await _analyze_events_with_ai(city, raw_text, days_ahead)
-
-        stored = 0
-        for event in events:
-            event_date = event.get("date", "")
-            if not event_date:
-                continue
+        async def _scan_city(city: str):
             try:
-                ed = datetime.strptime(event_date, "%Y-%m-%d")
-                now_naive = now.replace(tzinfo=None)
-                if ed.date() < now_naive.date() or ed > now_naive + timedelta(days=days_ahead):
+                raw = await _search_events_web(city, days_ahead)
+                evs = await _analyze_events_with_ai(city, raw, days_ahead)
+            except Exception as e:
+                logger.exception(f"Scan failed for {city}: {e}")
+                return city, [], 0
+            stored_n = 0
+            for event in evs:
+                ed_str = event.get("date", "")
+                if not ed_str:
                     continue
-            except (ValueError, TypeError):
-                continue
+                try:
+                    ed = datetime.strptime(ed_str, "%Y-%m-%d")
+                    now_naive = now.replace(tzinfo=None)
+                    if ed.date() < now_naive.date() or ed > now_naive + timedelta(days=days_ahead):
+                        continue
+                except (ValueError, TypeError):
+                    continue
+                hds = int(event.get("hotel_demand_score", 0) or 0)
+                impact = event.get("impact") or _get_impact_from_hds(hds)
+                impact = LEGACY_MAP.get(impact, impact)
+                doc = {
+                    "id": str(uuid.uuid4())[:8],
+                    "property_id": property_id,
+                    "city": city,
+                    "name": event.get("name", "Unknown Event"),
+                    "date": ed_str,
+                    "end_date": event.get("end_date", ed_str),
+                    "venue": event.get("venue", ""),
+                    "category": event.get("category", "other"),
+                    "estimated_attendance": int(event.get("estimated_attendance", 0) or 0),
+                    "hotel_demand_score": hds,
+                    "visitor_origin": event.get("visitor_origin", "unknown"),
+                    "is_evening": event.get("is_evening", True),
+                    "is_multi_day": event.get("is_multi_day", False),
+                    "estimated_hotel_nights": int(event.get("estimated_hotel_nights", 0) or 0),
+                    "reasoning": event.get("reasoning", ""),
+                    "impact": impact,
+                    "description": event.get("description", ""),
+                    "confidence": event.get("confidence", "medium"),
+                    "scanned_at": now.isoformat(),
+                }
+                await db.market_events.update_one(
+                    {"property_id": property_id, "city": city, "name": doc["name"], "date": doc["date"]},
+                    {"$set": doc}, upsert=True
+                )
+                stored_n += 1
+            return city, evs, stored_n
 
-            hds = int(event.get("hotel_demand_score", 0) or 0)
-            impact = event.get("impact") or _get_impact_from_hds(hds)
-            impact = LEGACY_MAP.get(impact, impact)
+        # Run all city scans in parallel
+        results = await _asyncio.gather(*[_scan_city(c) for c in tracked])
 
-            doc = {
-                "id": str(uuid.uuid4())[:8],
-                "property_id": property_id,
-                "city": city,
-                "name": event.get("name", "Unknown Event"),
-                "date": event_date,
-                "end_date": event.get("end_date", event_date),
-                "venue": event.get("venue", ""),
-                "category": event.get("category", "other"),
-                "estimated_attendance": int(event.get("estimated_attendance", 0) or 0),
-                "hotel_demand_score": hds,
-                "visitor_origin": event.get("visitor_origin", "unknown"),
-                "is_evening": event.get("is_evening", True),
-                "is_multi_day": event.get("is_multi_day", False),
-                "estimated_hotel_nights": int(event.get("estimated_hotel_nights", 0) or 0),
-                "reasoning": event.get("reasoning", ""),
-                "impact": impact,
-                "description": event.get("description", ""),
-                "confidence": event.get("confidence", "medium"),
-                "scanned_at": now.isoformat(),
-            }
-            await db.market_events.update_one(
-                {"property_id": property_id, "name": doc["name"], "date": doc["date"]},
-                {"$set": doc}, upsert=True
-            )
-            stored += 1
+        per_city_stats = []
+        all_events = []
+        total_stored = 0
+        total_found = 0
+        for (c, evs, stored_n) in results:
+            per_city_stats.append({"city": c, "found": len(evs), "stored": stored_n})
+            total_found += len(evs)
+            total_stored += stored_n
+            all_events.extend(evs)
 
         prices_adjusted = 0
-        if auto_price and stored > 0:
-            prices_adjusted = await _apply_event_pricing(db, property_id, events)
+        if auto_price and total_stored > 0:
+            prices_adjusted = await _apply_event_pricing(db, property_id, all_events)
 
-        skipped = len(events) - stored if len(events) > stored else 0
+        skipped = max(0, total_found - total_stored)
 
         return {
-            "events_found": len(events),
-            "events_stored": stored,
+            "events_found": total_found,
+            "events_stored": total_stored,
             "events_skipped": skipped,
             "foreign_city_cleared": foreign_cleanup.deleted_count,
             "prices_adjusted": prices_adjusted,
-            "city": city,
+            "city": tracked[0] if tracked else "",
+            "tracked_cities": tracked,
+            "per_city": per_city_stats,
             "days_scanned": days_ahead,
-            "message": f"Smart scan: {city} için {stored} hotel-demand event saklandı (toplam {len(events)} bulundu). {foreign_cleanup.deleted_count} farklı şehir event'i temizlendi. {skipped} düşük etkili atlandı. {prices_adjusted} fiyat ayarlandı.",
+            "message": (
+                f"Smart scan: {len(tracked)} şehir paralel tarandı ({', '.join(tracked)}). "
+                f"{total_stored} event saklandı (toplam {total_found} bulundu). "
+                f"{foreign_cleanup.deleted_count} farklı şehir temizlendi. "
+                f"{prices_adjusted} fiyat ayarlandı."
+            ),
         }
 
     @router.post("/revenue/events/{property_id}/add")
@@ -427,29 +486,108 @@ Include known recurring events, sports seasons, touring concerts, etc."""
     @router.post("/revenue/events/{property_id}/cleanup-foreign")
     async def cleanup_foreign_city_events(property_id: str,
                                           current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Remove any events stored under this property that belong to a city
-        OTHER than the property's currently configured city. Fixes cross-city
-        leakage from legacy scans without doing a full re-scan.
+        """Remove events stored under this property whose city is NOT in the
+        tracked-cities list (primary + secondary). Fixes cross-city leakage
+        from legacy scans without doing a full re-scan.
         """
         config = await db.market_robot_config.find_one(
             {"property_id": property_id}, {"_id": 0}
         ) or {}
-        city = (config.get("city") or "London").strip()
+        tracked = _get_tracked_cities(config)
+        tracked_lower = {c.lower() for c in tracked}
 
-        # Show distinct foreign cities before delete (audit trail)
         all_cities = await db.market_events.distinct("city", {"property_id": property_id})
-        foreign_cities = [c for c in all_cities if c and c != city]
+        foreign_cities = [c for c in all_cities if c and c.strip().lower() not in tracked_lower]
 
         result = await db.market_events.delete_many({
             "property_id": property_id,
-            "city": {"$not": _city_filter(city)},
+            "city": {"$not": _multi_city_filter(tracked)},
         })
         return {
             "ok": True,
-            "city": city,
+            "tracked_cities": tracked,
             "deleted": result.deleted_count,
             "foreign_cities_removed": foreign_cities,
-            "message": f"{result.deleted_count} farklı şehir event'i silindi. Geçerli şehir: {city}.",
+            "message": f"{result.deleted_count} farklı şehir event'i silindi. Takip edilen şehirler: {', '.join(tracked)}.",
+        }
+
+    @router.get("/revenue/events/{property_id}/secondary-cities")
+    async def list_secondary_cities(property_id: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        cfg = await db.market_robot_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        ) or {}
+        tracked = _get_tracked_cities(cfg)
+        return {"primary": tracked[0] if tracked else "", "secondary_cities": tracked[1:]}
+
+    @router.post("/revenue/events/{property_id}/secondary-cities")
+    async def add_secondary_city(property_id: str, data: Dict,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Body: {city: "Brighton"} — add a secondary city to track."""
+        new_city = ((data or {}).get("city") or "").strip()
+        if not new_city:
+            raise HTTPException(400, "city required")
+
+        cfg = await db.market_robot_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        ) or {}
+        primary = (cfg.get("city") or "London").strip()
+        if new_city.lower() == primary.lower():
+            raise HTTPException(400, f"'{new_city}' zaten primary şehir")
+        secondaries = cfg.get("secondary_cities") or []
+        if not isinstance(secondaries, list):
+            secondaries = []
+        if any((s or "").strip().lower() == new_city.lower() for s in secondaries):
+            raise HTTPException(400, f"'{new_city}' zaten secondary listesinde")
+        if len(secondaries) >= 5:
+            raise HTTPException(400, "En fazla 5 secondary şehir takip edilebilir")
+
+        secondaries.append(new_city)
+        await db.market_robot_config.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "property_id": property_id,
+                "secondary_cities": secondaries,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }},
+            upsert=True,
+        )
+        return {"ok": True, "primary": primary, "secondary_cities": secondaries}
+
+    @router.delete("/revenue/events/{property_id}/secondary-cities/{city_name}")
+    async def remove_secondary_city(property_id: str, city_name: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Remove a secondary city AND clean up its stored events."""
+        target = (city_name or "").strip()
+        if not target:
+            raise HTTPException(400, "city_name required")
+
+        cfg = await db.market_robot_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        ) or {}
+        secondaries = cfg.get("secondary_cities") or []
+        if not isinstance(secondaries, list):
+            secondaries = []
+        new_list = [s for s in secondaries if (s or "").strip().lower() != target.lower()]
+        if len(new_list) == len(secondaries):
+            raise HTTPException(404, f"'{target}' secondary listesinde değil")
+
+        await db.market_robot_config.update_one(
+            {"property_id": property_id},
+            {"$set": {"secondary_cities": new_list,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+
+        # Clean up events for the removed city
+        del_result = await db.market_events.delete_many({
+            "property_id": property_id,
+            "city": _city_filter(target),
+        })
+        return {
+            "ok": True,
+            "secondary_cities": new_list,
+            "deleted_events": del_result.deleted_count,
+            "message": f"'{target}' secondary listesinden kaldırıldı, {del_result.deleted_count} event silindi.",
         }
 
     @router.post("/revenue/events/{property_id}/change-city")

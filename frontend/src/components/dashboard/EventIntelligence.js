@@ -20,12 +20,16 @@ export const EventIntelligence = ({ propertyId }) => {
   const [form, setForm] = useState({ name: "", date: "", end_date: "", venue: "", category: "concert", estimated_attendance: 50000, description: "" });
   const [scanResult, setScanResult] = useState(null);
   const [propertyCity, setPropertyCity] = useState("");
+  const [secondaryCities, setSecondaryCities] = useState([]);
+  const [perCityCounts, setPerCityCounts] = useState({});
 
   const load = () => {
     axios.get(`${API}/revenue/events/${propertyId}`).then(r => {
       setEvents(r.data.events || []);
       setCounts(r.data.counts || {});
       setPropertyCity(r.data.city || "");
+      setSecondaryCities(r.data.secondary_cities || []);
+      setPerCityCounts(r.data.per_city_counts || {});
     }).catch(() => {});
   };
   useEffect(() => { load(); }, [propertyId]);
@@ -75,6 +79,36 @@ export const EventIntelligence = ({ propertyId }) => {
   // Migration history timeline
   const [migrations, setMigrations] = useState([]);
   const [showMigrationHistory, setShowMigrationHistory] = useState(false);
+
+  // Secondary city management
+  const [newSecondaryCity, setNewSecondaryCity] = useState("");
+  const [addingSecondary, setAddingSecondary] = useState(false);
+
+  const addSecondary = async () => {
+    const c = (newSecondaryCity || "").trim();
+    if (!c) { toast.warning("Şehir adı gerekli"); return; }
+    setAddingSecondary(true);
+    try {
+      await axios.post(`${API}/revenue/events/${propertyId}/secondary-cities`, { city: c });
+      toast.success(`'${c}' takibe alındı`);
+      setNewSecondaryCity("");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Eklenemedi");
+    }
+    setAddingSecondary(false);
+  };
+
+  const removeSecondary = async (c) => {
+    if (!window.confirm(`'${c}' takipten çıkarılsın ve event'leri silinsin mi?`)) return;
+    try {
+      const { data } = await axios.delete(`${API}/revenue/events/${propertyId}/secondary-cities/${encodeURIComponent(c)}`);
+      toast.success(data.message);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Silinemedi");
+    }
+  };
 
   const loadMigrations = async () => {
     try {
@@ -143,6 +177,35 @@ export const EventIntelligence = ({ propertyId }) => {
               {propertyCity && (
                 <span className="ml-2 px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 font-medium" data-testid="event-current-city">
                   📍 {propertyCity}
+                  {perCityCounts[propertyCity] !== undefined && <span className="ml-1 text-stone-500">({perCityCounts[propertyCity]})</span>}
+                </span>
+              )}
+              {secondaryCities.map((c) => (
+                <span key={c} className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 font-medium border border-violet-200"
+                      data-testid={`event-secondary-city-${c}`}>
+                  ➕ {c}
+                  {perCityCounts[c] !== undefined && <span className="text-violet-500">({perCityCounts[c]})</span>}
+                  <button onClick={() => removeSecondary(c)}
+                          title={`'${c}' takibini durdur`}
+                          data-testid={`event-remove-secondary-${c}`}
+                          className="ml-0.5 hover:text-red-600">✕</button>
+                </span>
+              ))}
+              {secondaryCities.length < 5 && (
+                <span className="ml-1 inline-flex items-center gap-1">
+                  <input value={newSecondaryCity}
+                         onChange={(e) => setNewSecondaryCity(e.target.value)}
+                         onKeyDown={(e) => e.key === "Enter" && !addingSecondary && addSecondary()}
+                         placeholder="+ ek şehir..."
+                         data-testid="event-secondary-city-input"
+                         className="text-xs px-2 py-0.5 border border-stone-200 rounded-full w-28 focus:border-violet-400 focus:outline-none" />
+                  {newSecondaryCity.trim() && (
+                    <button onClick={addSecondary} disabled={addingSecondary}
+                            data-testid="event-secondary-city-add"
+                            className="px-2 py-0.5 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-xs disabled:opacity-60">
+                      Ekle
+                    </button>
+                  )}
                 </span>
               )}
             </p>

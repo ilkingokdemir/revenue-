@@ -1909,13 +1909,16 @@ def create_market_robot_router(db, require_roles, resend=None):
         ]
         snapshots = await db.market_supply.aggregate(pipeline).to_list(100)
 
-        # Load events and create date map (filter by current configured city to
-        # prevent cross-city leakage from legacy scans; case-insensitive match)
-        cfg_city_overlay = (cfg.get("city") or "London").strip()
-        _city_pattern = "^\\s*" + re.escape(cfg_city_overlay) + "\\s*$"
+        # Load events and create date map (filter by ALL tracked cities —
+        # primary + secondary — case-insensitive to prevent cross-city leakage)
+        _primary = (cfg.get("city") or "London").strip()
+        _sec = cfg.get("secondary_cities") or []
+        _sec = [str(c).strip() for c in (_sec if isinstance(_sec, list) else []) if c and str(c).strip()]
+        _tracked = [_primary] + [s for s in _sec if s.lower() != _primary.lower()]
+        _city_pattern = "^\\s*(" + "|".join(re.escape(c) for c in _tracked) + ")\\s*$"
         events_list = await db.market_events.find(
             {"property_id": property_id, "city": {"$regex": _city_pattern, "$options": "i"}}, {"_id": 0}
-        ).to_list(200)
+        ).to_list(500)
         event_map = {}
         for ev in events_list:
             ev_date = ev.get("date", "")
@@ -2255,13 +2258,15 @@ def create_market_robot_router(db, require_roles, resend=None):
             if ov["date"] not in override_map:
                 override_map[ov["date"]] = ov
 
-        # Get events (filter by property's configured city to prevent
-        # cross-city leakage; case-insensitive match). For property_id="all"
-        # we keep no city filter since each property has its own city.
+        # Get events (filter by ALL tracked cities — primary + secondary —
+        # case-insensitive). For property_id="all" we keep no city filter.
         if property_id != "all":
             _cfg = await db.market_robot_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
             _city = (_cfg.get("city") or "London").strip()
-            _city_pat = "^\\s*" + re.escape(_city) + "\\s*$"
+            _sec = _cfg.get("secondary_cities") or []
+            _sec = [str(c).strip() for c in (_sec if isinstance(_sec, list) else []) if c and str(c).strip()]
+            _tracked = [_city] + [s for s in _sec if s.lower() != _city.lower()]
+            _city_pat = "^\\s*(" + "|".join(re.escape(c) for c in _tracked) + ")\\s*$"
             events = await db.market_events.find(
                 {"property_id": property_id, "city": {"$regex": _city_pat, "$options": "i"}}, {"_id": 0}
             ).to_list(500)

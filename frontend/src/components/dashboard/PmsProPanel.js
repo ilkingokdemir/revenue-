@@ -292,15 +292,22 @@ const ACTIONS = [
 
 function JourneyRulesTab({ pid }) {
   const [rules, setRules] = useState([]);
+  const [fires, setFires] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [running, setRunning] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [form, setForm] = useState({ name: "", trigger: "pre_arrival_24h", action: "send_email", template: "", priority: 100 });
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get(`${API}/pms-pro/journey-rules`, { params: { property_id: pid } });
-      setRules(data.items || []);
+      const [r, h] = await Promise.all([
+        axios.get(`${API}/pms-pro/journey-rules`, { params: { property_id: pid } }),
+        axios.get(`${API}/pms-pro/journey-fires`, { params: { property_id: pid, limit: 50 } }),
+      ]);
+      setRules(r.data.items || []);
+      setFires(h.data.items || []);
     } catch { toast.error("Kurallar yüklenemedi"); }
     setLoading(false);
   }, [pid]);
@@ -329,11 +336,31 @@ function JourneyRulesTab({ pid }) {
     catch { toast.error("Silinemedi"); }
   };
 
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      const { data } = await axios.post(`${API}/pms-pro/journey-engine/run-once`);
+      toast.success(`Engine çalıştı: ${data.fires} aksiyon · ${data.rules_processed} kural`);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Engine hata"); }
+    setRunning(false);
+  };
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-stone-600">Tetikleyici → aksiyon. Misafir yolculuğunun her adımı için otomasyon.</p>
-        <div className="flex gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-sm text-stone-600">
+          Tetikleyici → aksiyon. Engine her 60sn'de çalışır ve eşleşen rezervasyonlara aksiyon uygular.
+        </p>
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setShowHistory((v) => !v)} data-testid="journey-history-toggle"
+                  className="px-3 py-1.5 text-xs rounded-lg border border-stone-200 hover:bg-stone-50">
+            {showHistory ? "Kuralları göster" : `Geçmiş (${fires.length})`}
+          </button>
+          <button onClick={runNow} disabled={running} data-testid="journey-run-now-btn"
+                  className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 disabled:opacity-60">
+            {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />} Şimdi çalıştır
+          </button>
           <button onClick={load} data-testid="journey-rules-refresh"
                   className="px-3 py-1.5 text-xs rounded-lg border border-stone-200 hover:bg-stone-50 flex items-center gap-1">
             <RefreshCw className="w-3 h-3" /> Yenile
@@ -368,7 +395,8 @@ function JourneyRulesTab({ pid }) {
             </select>
           </div>
           <textarea value={form.template} onChange={(e) => setForm({ ...form, template: e.target.value })}
-                    placeholder="Şablon / mesaj içeriği..." rows={2}
+                    placeholder="Şablon / mesaj içeriği... {{guest_name}}, {{check_in}}, {{assigned_room}} desteklenir"
+                    rows={2}
                     className="w-full px-3 py-2 border border-stone-200 rounded text-sm" />
           <div className="flex justify-end gap-2">
             <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs rounded border border-stone-200">İptal</button>
@@ -378,51 +406,100 @@ function JourneyRulesTab({ pid }) {
         </div>
       )}
 
-      <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-        {loading && <div className="p-4 text-sm text-stone-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Yükleniyor...</div>}
-        {!loading && rules.length === 0 && (
-          <div className="p-6 text-sm text-stone-400 text-center" data-testid="journey-rules-empty">
-            Henüz kural yok. Bir tane oluştur ve guest journey'yi otomatikleştir.
-          </div>
-        )}
-        {!loading && rules.length > 0 && (
-          <table className="w-full text-sm">
-            <thead className="bg-stone-50 text-xs uppercase text-stone-500">
-              <tr>
-                <th className="text-left px-3 py-2">Kural</th>
-                <th className="text-left px-3 py-2">Trigger</th>
-                <th className="text-left px-3 py-2">Action</th>
-                <th className="text-center px-3 py-2">Önc.</th>
-                <th className="text-center px-3 py-2">Durum</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rules.map((r) => (
-                <tr key={r.id} className="border-t border-stone-100" data-testid={`journey-rule-row-${r.id}`}>
-                  <td className="px-3 py-2 font-medium text-stone-800">{r.name}</td>
-                  <td className="px-3 py-2 text-stone-600">{r.trigger}</td>
-                  <td className="px-3 py-2 text-stone-600">{r.action}</td>
-                  <td className="px-3 py-2 text-center">{r.priority}</td>
-                  <td className="px-3 py-2 text-center">
-                    <button onClick={() => toggle(r.id)} data-testid={`journey-rule-toggle-${r.id}`}>
-                      {r.enabled
-                        ? <ToggleRight className="w-5 h-5 text-emerald-600 inline" />
-                        : <ToggleLeft  className="w-5 h-5 text-stone-400 inline" />}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <button onClick={() => del(r.id)} data-testid={`journey-rule-delete-${r.id}`}
-                            className="text-stone-400 hover:text-red-600">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
+      {showHistory ? (
+        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden" data-testid="journey-fires-history">
+          {fires.length === 0 && (
+            <div className="p-6 text-sm text-stone-400 text-center">Henüz tetiklenme yok.</div>
+          )}
+          {fires.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-xs uppercase text-stone-500">
+                <tr>
+                  <th className="text-left px-3 py-2">Zaman</th>
+                  <th className="text-left px-3 py-2">Kural</th>
+                  <th className="text-left px-3 py-2">Trigger</th>
+                  <th className="text-left px-3 py-2">Action</th>
+                  <th className="text-left px-3 py-2">Misafir</th>
+                  <th className="text-center px-3 py-2">Durum</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </thead>
+              <tbody>
+                {fires.map((f) => (
+                  <tr key={f.id} className="border-t border-stone-100" data-testid={`journey-fire-row-${f.id}`}>
+                    <td className="px-3 py-2 text-stone-500 text-xs">{new Date(f.fired_at).toLocaleString("tr-TR")}</td>
+                    <td className="px-3 py-2 font-medium">{f.rule_name}</td>
+                    <td className="px-3 py-2 text-stone-600 text-xs">{f.trigger}</td>
+                    <td className="px-3 py-2 text-stone-600 text-xs">{f.action}</td>
+                    <td className="px-3 py-2">{f.guest_name || "—"}</td>
+                    <td className="px-3 py-2 text-center">
+                      {f.ok
+                        ? <span className="text-emerald-600 text-xs">✓ OK</span>
+                        : <span className="text-red-600 text-xs" title={f.reason}>✗ {f.reason?.slice(0, 20)}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
+          {loading && <div className="p-4 text-sm text-stone-400 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Yükleniyor...</div>}
+          {!loading && rules.length === 0 && (
+            <div className="p-6 text-sm text-stone-400 text-center" data-testid="journey-rules-empty">
+              Henüz kural yok. Bir tane oluştur ve guest journey'yi otomatikleştir.
+            </div>
+          )}
+          {!loading && rules.length > 0 && (
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-xs uppercase text-stone-500">
+                <tr>
+                  <th className="text-left px-3 py-2">Kural</th>
+                  <th className="text-left px-3 py-2">Trigger</th>
+                  <th className="text-left px-3 py-2">Action</th>
+                  <th className="text-center px-3 py-2">Önc.</th>
+                  <th className="text-center px-3 py-2">Tetiklenme</th>
+                  <th className="text-center px-3 py-2">Durum</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rules.map((r) => (
+                  <tr key={r.id} className="border-t border-stone-100" data-testid={`journey-rule-row-${r.id}`}>
+                    <td className="px-3 py-2 font-medium text-stone-800">
+                      {r.name}
+                      {r.last_fired_at && (
+                        <div className="text-[10px] text-stone-400">Son: {new Date(r.last_fired_at).toLocaleString("tr-TR")}</div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-stone-600">{r.trigger}</td>
+                    <td className="px-3 py-2 text-stone-600">{r.action}</td>
+                    <td className="px-3 py-2 text-center">{r.priority}</td>
+                    <td className="px-3 py-2 text-center">
+                      <span className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 text-xs">
+                        {r.fires_count || 0}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <button onClick={() => toggle(r.id)} data-testid={`journey-rule-toggle-${r.id}`}>
+                        {r.enabled
+                          ? <ToggleRight className="w-5 h-5 text-emerald-600 inline" />
+                          : <ToggleLeft  className="w-5 h-5 text-stone-400 inline" />}
+                      </button>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button onClick={() => del(r.id)} data-testid={`journey-rule-delete-${r.id}`}
+                              className="text-stone-400 hover:text-red-600">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   );
 }

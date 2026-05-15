@@ -1,0 +1,83 @@
+{
+  "summary": "Iteration 296 - Journey Rules Execution Engine Tests Complete. Backend: 22/22 tests passed (100%). Frontend: All Journey Rules tab features working correctly including 'Şimdi çalıştır' button, history toggle, rule CRUD, fires_count column, and last_fired_at display.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration296_journey_engine.py",
+    "/app/test_reports/pytest/pytest_iteration296_journey_engine.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_iteration296_journey_engine.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 passed)",
+    "frontend": "100% - All Journey Rules features working"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "receptionist": "testrecep@hotelbox.com / Test2026!"
+  },
+  "seed_data_creation": "None - used existing bookings for test-fire. Test rules (TEST_*) were created and cleaned up during testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 296 Journey Rules Execution Engine tests completed. All 22 backend API tests passed. Tested features: (1) Background loop: journey_engine_loop starts at app startup - verified via logs showing '🎯 Journey Engine loop started'. (2) POST /api/pms-pro/journey-engine/run-once - admin/manager only, returns {ok, rules_processed, fires}. Receptionist gets 403. (3) GET /api/pms-pro/journey-fires - paginated list of fires with rule_name, trigger, action, guest_name, ok, fired_at. Supports property_id and limit params. (4) POST /api/pms-pro/journey-rules/{rule_id}/test-fire - manual fire against a booking, bypasses idempotency (manual=True flag), inserts side-effect into correct collection. (5) Action execution verified: notify_manager→team_chat, create_task→staff_tasks, trigger_housekeeping→housekeeping_tasks with priority=high. (6) Idempotency: Running engine twice does not double-fire same (rule, booking) pair. Manual test-fire can fire same pair multiple times. (7) RBAC: receptionist gets 403 on /journey-engine/run-once and /journey-rules/{id}/test-fire. (8) Regression: All Iter 295 PMS Pro endpoints (smart-assign, ai-concierge, journey-rules CRUD, anomalies) still pass. Frontend: Journey Rules tab shows 'Şimdi çalıştır' button (data-testid='journey-run-now-btn') that triggers engine and shows toast 'Engine çalıştı: N aksiyon · M kural'. 'Geçmiş' toggle (data-testid='journey-history-toggle') shows fires history table with columns: ZAMAN, KURAL, TRIGGER, ACTION, MİSAFİR, DURUM. Rules table has 'Tetiklenme' column showing fires_count. last_fired_at displayed below rule name when set.",
+  "features_tested": {
+    "journey_engine_run_once": [
+      "POST /api/pms-pro/journey-engine/run-once - admin success",
+      "POST /api/pms-pro/journey-engine/run-once - receptionist gets 403",
+      "POST /api/pms-pro/journey-engine/run-once - unauthenticated gets 401"
+    ],
+    "journey_fires": [
+      "GET /api/pms-pro/journey-fires - list fires",
+      "GET /api/pms-pro/journey-fires - filter by property_id",
+      "GET /api/pms-pro/journey-fires - limit parameter works",
+      "GET /api/pms-pro/journey-fires - fire record structure valid"
+    ],
+    "test_fire": [
+      "POST /api/pms-pro/journey-rules/{id}/test-fire - success",
+      "POST /api/pms-pro/journey-rules/{id}/test-fire - missing booking_id returns 400",
+      "POST /api/pms-pro/journey-rules/{id}/test-fire - nonexistent rule returns 404",
+      "POST /api/pms-pro/journey-rules/{id}/test-fire - nonexistent booking returns 404",
+      "POST /api/pms-pro/journey-rules/{id}/test-fire - receptionist gets 403"
+    ],
+    "action_side_effects": [
+      "notify_manager action creates doc in team_chat with channel=management, source=journey_rule",
+      "create_task action creates doc in staff_tasks",
+      "trigger_housekeeping action creates doc in housekeeping_tasks with priority=high"
+    ],
+    "idempotency": [
+      "Engine run twice does not double-fire same (rule, booking) pair",
+      "Manual test-fire bypasses idempotency (can fire same pair multiple times)"
+    ],
+    "regression_iter295": [
+      "POST /api/pms-pro/smart-assign - still works",
+      "POST /api/pms-pro/ai-concierge - still works",
+      "Journey rules CRUD - still works",
+      "GET /api/pms-pro/anomalies/{property_id} - still works"
+    ],
+    "frontend_tests": [
+      "PMS Pro panel accessible via OPERATIONS > PMS Pro (AI ops)",
+      "Journey Rules tab renders with correct data-testid attributes",
+      "'Şimdi çalıştır' button triggers engine and shows toast",
+      "'Geçmiş' toggle shows fires history table",
+      "Add rule form works (name, trigger, action, template, priority)",
+      "Rules table has 'Tetiklenme' (fires_count) column",
+      "last_fired_at displayed below rule name when set"
+    ]
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": [],
+    "note": "Email/SMS queues are insert-only (no actual sending) - this is by design. Side-effect collections: team_chat, staff_tasks, housekeeping_tasks, outbound_email_queue, outbound_sms_queue, web_push_queue, upsell_offers."
+  },
+  "notes": "All Journey Rules Execution Engine features working correctly. Background loop runs every 60s. Engine processes enabled rules, matches bookings against triggers (booking_confirmed, pre_arrival_24h, pre_arrival_1h, checked_in, mid_stay, pre_checkout_2h, checked_out, no_show, late_checkout_requested), and fires actions exactly once per (rule, booking) pair. Manual test-fire bypasses idempotency for testing purposes. UI is fully localized in Turkish."
+}

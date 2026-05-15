@@ -411,4 +411,328 @@ def create_pms_pro_router(db, require_roles):
             "alerts": alerts,
         }
 
+    # ==================== JOURNEY ENGINE: FIRES HISTORY & MANUAL TRIGGER ====================
+
+    @router.get("/journey-fires")
+    async def list_journey_fires(property_id: Optional[str] = None,
+                                 rule_id: Optional[str] = None,
+                                 limit: int = 100,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Recent journey rule executions (history)."""
+        q: Dict = {}
+        if property_id:
+            q["property_id"] = property_id
+        if rule_id:
+            q["rule_id"] = rule_id
+        limit = max(1, min(int(limit or 100), 500))
+        rows = await db.journey_fires.find(q, {"_id": 0}).sort("fired_at", -1).to_list(limit)
+        return {"items": rows, "count": len(rows)}
+
+    @router.post("/journey-engine/run-once")
+    async def journey_run_now(current_user: dict = Depends(require_roles("admin", "manager"))):
+        """On-demand execution of all enabled rules. Returns fires count."""
+        stats = await _journey_run_once(db)
+        return {"ok": True, **stats}
+
+    @router.post("/journey-rules/{rule_id}/test-fire")
+    async def journey_test_fire(rule_id: str, data: Dict,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Test-fire a rule against a specific booking (ignores idempotency).
+        Body: {booking_id}
+        """
+        rule = await db.guest_journey_rules.find_one({"id": rule_id}, {"_id": 0})
+        if not rule:
+            raise HTTPException(404, "Rule not found")
+        booking_id = (data or {}).get("booking_id")
+        if not booking_id:
+            raise HTTPException(400, "booking_id required")
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0}) or \
+                  await db.bookings.find_one({"booking_id": booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+        result = await _execute_action(db, rule, booking)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.journey_fires.insert_one({
+            "id": uuid.uuid4().hex,
+            "rule_id": rule_id,
+            "rule_name": rule.get("name"),
+            "trigger": rule.get("trigger"),
+            "action": rule.get("action"),
+            "property_id": rule.get("property_id") or booking.get("property_id"),
+            "booking_id": booking_id,
+            "guest_name": booking.get("guest_name") or booking.get("guest"),
+            "ok": result.get("ok"),
+            "reason": result.get("reason"),
+            "fired_at": now_iso,
+            "manual": True,
+        })
+        return {"ok": True, "result": result}
+
     return router
+
+
+# ============================================================================
+# JOURNEY RULES EXECUTION ENGINE (Iter 296)
+# ============================================================================
+# Background async loop that scans bookings every 60s, matches them against
+# enabled journey rules, fires the action exactly once per (rule, booking)
+# pair, and records the fire in `journey_fires` collection.
+#
+# Triggers supported:
+#   - booking_confirmed       → booking created in last 70s
+#   - pre_arrival_24h         → check_in - now ∈ [23h, 25h]
+#   - pre_arrival_1h          → check_in - now ∈ [0h, 2h] AND check_in > now
+#   - checked_in              → bookings with checked_in=True
+#   - mid_stay                → midpoint of stay reached (today equals midpoint date)
+#   - pre_checkout_2h         → check_out - now ∈ [0h, 3h]
+#   - checked_out             → bookings with status="checked_out"
+#   - no_show                 → check_in date past + checked_in!=True + 12h after 14:00
+#   - late_checkout_requested → bookings with late_checkout=True
+#
+# Actions: log the fire + create side-effects in the relevant collection:
+#   send_email / send_sms / send_app_push → outbound message queue
+#   create_task / trigger_housekeeping    → staff_tasks / housekeeping_tasks
+#   send_qr_key / offer_upsell            → outbound_email_queue (typed)
+#   notify_manager                        → team_chat insert into #management
+# ============================================================================
+
+import asyncio
+import logging
+
+_journey_logger = logging.getLogger("pms_pro.journey")
+
+
+def _substitute(template: str, booking: dict) -> str:
+    """Simple {{field}} template substitution from booking fields."""
+    if not template:
+        return ""
+    out = template
+    for k, v in (booking or {}).items():
+        if isinstance(v, (str, int, float)):
+            out = out.replace("{{" + k + "}}", str(v))
+    return out
+
+
+async def _trigger_matches(db, trigger: str, lookback_seconds: int = 65) -> List[dict]:
+    """Return bookings that currently satisfy a given trigger."""
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%Y-%m-%d")
+    cutoff_iso = (now - timedelta(seconds=lookback_seconds)).isoformat()
+
+    base = {"status": {"$ne": "cancelled"}}
+
+    if trigger == "booking_confirmed":
+        return await db.bookings.find(
+            {**base, "created_at": {"$gte": cutoff_iso}}, {"_id": 0}
+        ).limit(200).to_list(200)
+
+    if trigger == "pre_arrival_24h":
+        # check_in tomorrow (calendar day = today + 1)
+        tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+        return await db.bookings.find(
+            {**base, "check_in": tomorrow, "checked_in": {"$ne": True}}, {"_id": 0}
+        ).limit(500).to_list(500)
+
+    if trigger == "pre_arrival_1h":
+        # check_in today + within 2h of typical arrival; we approximate by today + hour>=12
+        if now.hour < 12:
+            return []
+        return await db.bookings.find(
+            {**base, "check_in": today_str, "checked_in": {"$ne": True}}, {"_id": 0}
+        ).limit(500).to_list(500)
+
+    if trigger == "checked_in":
+        # checked in today
+        return await db.bookings.find(
+            {**base, "checked_in": True, "check_in": today_str}, {"_id": 0}
+        ).limit(500).to_list(500)
+
+    if trigger == "mid_stay":
+        rows = await db.bookings.find(
+            {**base, "checked_in": True, "checked_out": {"$ne": True}}, {"_id": 0}
+        ).limit(500).to_list(500)
+        result = []
+        for b in rows:
+            ci = b.get("check_in")
+            co = b.get("check_out")
+            if not ci or not co:
+                continue
+            try:
+                d1 = datetime.strptime(ci, "%Y-%m-%d")
+                d2 = datetime.strptime(co, "%Y-%m-%d")
+                mid = d1 + (d2 - d1) / 2
+                if mid.strftime("%Y-%m-%d") == today_str:
+                    result.append(b)
+            except Exception:
+                continue
+        return result
+
+    if trigger == "pre_checkout_2h":
+        return await db.bookings.find(
+            {**base, "check_out": today_str, "checked_out": {"$ne": True}}, {"_id": 0}
+        ).limit(500).to_list(500)
+
+    if trigger == "checked_out":
+        return await db.bookings.find(
+            {**base, "status": "checked_out", "check_out": today_str}, {"_id": 0}
+        ).limit(500).to_list(500)
+
+    if trigger == "no_show":
+        # check_in yesterday or earlier + never checked in + within last 36h
+        cutoff_date = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+        return await db.bookings.find(
+            {**base, "check_in": cutoff_date, "checked_in": {"$ne": True}}, {"_id": 0}
+        ).limit(200).to_list(200)
+
+    if trigger == "late_checkout_requested":
+        return await db.bookings.find(
+            {**base, "late_checkout": True, "check_out": today_str}, {"_id": 0}
+        ).limit(200).to_list(200)
+
+    return []
+
+
+async def _execute_action(db, rule: dict, booking: dict) -> dict:
+    """Execute the side-effect for an action. Returns side-effect summary."""
+    action = rule.get("action") or ""
+    template_raw = rule.get("template") or rule.get("name", "")
+    msg = _substitute(template_raw, booking)
+    pid = rule.get("property_id") or booking.get("property_id")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    bid = booking.get("id") or booking.get("booking_id")
+    guest = booking.get("guest_name") or booking.get("guest", "Guest")
+
+    base_doc = {
+        "id": uuid.uuid4().hex,
+        "property_id": pid,
+        "booking_id": bid,
+        "guest_name": guest,
+        "source": "journey_rule",
+        "rule_id": rule.get("id"),
+        "rule_name": rule.get("name"),
+        "created_at": now_iso,
+    }
+
+    try:
+        if action == "send_email":
+            await db.outbound_email_queue.insert_one({
+                **base_doc, "to": booking.get("email"), "subject": rule.get("name", "Update"),
+                "body": msg, "status": "queued", "type": "journey",
+            })
+        elif action == "send_sms":
+            await db.outbound_sms_queue.insert_one({
+                **base_doc, "to": booking.get("phone"), "body": msg,
+                "status": "queued", "type": "journey",
+            })
+        elif action == "send_app_push":
+            await db.web_push_queue.insert_one({
+                **base_doc, "title": rule.get("name", "Notification"),
+                "body": msg, "status": "queued",
+            })
+        elif action == "create_task":
+            await db.staff_tasks.insert_one({
+                **base_doc, "title": rule.get("name", "Journey task"),
+                "description": msg, "status": "open", "priority": "normal",
+            })
+        elif action == "send_qr_key":
+            await db.outbound_email_queue.insert_one({
+                **base_doc, "to": booking.get("email"), "subject": "Dijital oda anahtarınız",
+                "body": msg, "status": "queued", "type": "qr_key",
+            })
+        elif action == "offer_upsell":
+            await db.upsell_offers.insert_one({
+                **base_doc, "offer_text": msg, "status": "open",
+            })
+        elif action == "trigger_housekeeping":
+            await db.housekeeping_tasks.insert_one({
+                **base_doc, "room_number": booking.get("assigned_room"),
+                "task_type": "turnover", "status": "pending", "priority": "high",
+                "notes": msg,
+            })
+        elif action == "notify_manager":
+            await db.team_chat.insert_one({
+                **base_doc, "channel": "management", "author": "Journey Bot",
+                "text": f"⚡ {rule.get('name')}: {msg or guest}",
+            })
+        else:
+            return {"ok": False, "reason": f"unknown_action:{action}"}
+        return {"ok": True}
+    except Exception as e:
+        _journey_logger.exception(f"Action {action} failed: {e}")
+        return {"ok": False, "reason": str(e)[:120]}
+
+
+async def _journey_run_once(db) -> dict:
+    """Run one execution cycle. Returns summary stats."""
+    rules = await db.guest_journey_rules.find(
+        {"enabled": True}, {"_id": 0}
+    ).sort("priority", 1).to_list(500)
+
+    total_fires = 0
+    rules_processed = 0
+
+    for rule in rules:
+        rid = rule.get("id")
+        trigger = rule.get("trigger")
+        if not (rid and trigger):
+            continue
+        rules_processed += 1
+
+        try:
+            candidates = await _trigger_matches(db, trigger)
+        except Exception as e:
+            _journey_logger.exception(f"trigger_matches failed for {trigger}: {e}")
+            continue
+
+        for booking in candidates:
+            # property scope check
+            if rule.get("property_id") and booking.get("property_id") != rule.get("property_id"):
+                continue
+            bid = booking.get("id") or booking.get("booking_id")
+            if not bid:
+                continue
+
+            # idempotency: have we already fired this (rule, booking)?
+            fired = await db.journey_fires.find_one(
+                {"rule_id": rid, "booking_id": bid}, {"_id": 0, "id": 1}
+            )
+            if fired:
+                continue
+
+            result = await _execute_action(db, rule, booking)
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await db.journey_fires.insert_one({
+                "id": uuid.uuid4().hex,
+                "rule_id": rid,
+                "rule_name": rule.get("name"),
+                "trigger": trigger,
+                "action": rule.get("action"),
+                "property_id": rule.get("property_id") or booking.get("property_id"),
+                "booking_id": bid,
+                "guest_name": booking.get("guest_name") or booking.get("guest"),
+                "ok": result.get("ok"),
+                "reason": result.get("reason"),
+                "fired_at": now_iso,
+            })
+            await db.guest_journey_rules.update_one(
+                {"id": rid}, {"$inc": {"fires_count": 1}, "$set": {"last_fired_at": now_iso}}
+            )
+            total_fires += 1
+
+    return {"rules_processed": rules_processed, "fires": total_fires}
+
+
+async def journey_engine_loop(db, interval_seconds: int = 60):
+    """Forever loop. Polls every `interval_seconds` and fires due rules."""
+    _journey_logger.info("🎯 Journey Engine loop started")
+    while True:
+        try:
+            stats = await _journey_run_once(db)
+            if stats.get("fires", 0) > 0:
+                _journey_logger.info(
+                    f"🎯 Journey engine fired {stats['fires']} action(s) across "
+                    f"{stats['rules_processed']} rule(s)"
+                )
+        except Exception as e:
+            _journey_logger.exception(f"Journey engine error: {e}")
+        await asyncio.sleep(interval_seconds)

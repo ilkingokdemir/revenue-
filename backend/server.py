@@ -1091,8 +1091,13 @@ from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))
 
 # ===== PMS Pro (Iter 295) — Smart Assign / AI Concierge / Journey Rules / Anomaly Alerts =====
-from routes.pms_pro import create_pms_pro_router
+from routes.pms_pro import create_pms_pro_router, journey_engine_loop as _journey_engine_loop
 api_router.include_router(create_pms_pro_router(db, require_roles))
+
+@app.on_event("startup")
+async def _start_journey_engine():
+    import asyncio as _asyncio
+    _asyncio.create_task(_journey_engine_loop(db, interval_seconds=60))
 
 app.include_router(api_router)
 

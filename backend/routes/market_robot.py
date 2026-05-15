@@ -3159,14 +3159,36 @@ def create_market_robot_router(db, require_roles, resend=None):
         prop = await db.properties.find_one(
             {"id": property_id},
             {"_id": 0, "postcode": 1, "city": 1, "currency": 1, "country": 1,
-             "latitude": 1, "longitude": 1, "booking_url": 1, "name": 1, "address": 1},
+             "latitude": 1, "longitude": 1, "booking_url": 1, "name": 1, "address": 1,
+             "property_type": 1, "type": 1, "geocoded_display_name": 1},
         )
         if not prop:
             raise HTTPException(status_code=404, detail="Property not found")
 
+        # Smart property-type filter: if the request didn't specify a type, infer
+        # one from the property's own `property_type` field. apartment-only
+        # properties don't want hotels as competitors and vice versa.
+        TYPE_MAP = {
+            "apartment": "apartments",
+            "apartments": "apartments",
+            "aparthotel": "aparthotels",
+            "aparthotels": "aparthotels",
+            "serviced_apartment": "apartments",
+            "hotel": "hotels",
+            "hotels": "hotels",
+            "guest_house": "hotels",
+            "guesthouse": "hotels",
+            "bnb": "hotels",
+            "b&b": "hotels",
+        }
+        raw_prop_type = (prop.get("property_type") or prop.get("type") or "").lower().strip()
+        inferred = TYPE_MAP.get(raw_prop_type, "any")
+
         postcode = (data.get("postcode") or prop.get("postcode") or "").strip()
         city = (data.get("city") or prop.get("city") or "").strip()
-        property_type = (data.get("property_type") or "any").lower()
+        # Request body may explicitly override the inferred type; otherwise
+        # use the inferred filter (or "any" if we couldn't classify).
+        property_type = (data.get("property_type") or inferred or "any").lower()
         if property_type not in ("any", "apartments", "hotels", "aparthotels"):
             property_type = "any"
         max_results = max(5, min(int(data.get("max_results") or 20), 50))
@@ -3474,8 +3496,18 @@ def create_market_robot_router(db, require_roles, resend=None):
         props = await db.properties.find(
             prop_query,
             {"_id": 0, "id": 1, "name": 1, "city": 1, "postcode": 1, "address": 1,
-             "latitude": 1, "longitude": 1, "currency": 1, "geocoded_display_name": 1},
+             "latitude": 1, "longitude": 1, "currency": 1, "geocoded_display_name": 1,
+             "property_type": 1, "type": 1},
         ).to_list(200)
+
+        TYPE_MAP = {
+            "apartment": "apartments", "apartments": "apartments",
+            "aparthotel": "aparthotels", "aparthotels": "aparthotels",
+            "serviced_apartment": "apartments",
+            "hotel": "hotels", "hotels": "hotels",
+            "guest_house": "hotels", "guesthouse": "hotels",
+            "bnb": "hotels", "b&b": "hotels",
+        }
 
         results = []
         for prop in props:
@@ -3544,11 +3576,13 @@ def create_market_robot_router(db, require_roles, resend=None):
                     results.append(entry)
                     continue
 
-                # 3) Discover nearby
+                # 3) Discover nearby — use inferred property type filter
+                raw_type = (prop.get("property_type") or prop.get("type") or "").lower().strip()
+                inf_type = TYPE_MAP.get(raw_type, "any")
                 district_hint = _extract_district_hint(display, postcode, city) if display else ""
                 cands = await discover_nearby_hotels(
                     postcode=postcode, city=city, latitude=latitude, longitude=longitude,
-                    property_type="any", max_results=max_results, radius_km=radius_km,
+                    property_type=inf_type, max_results=max_results, radius_km=radius_km,
                     language="en-gb", currency=(prop.get("currency") or "GBP"),
                     district_hint=district_hint,
                 )
@@ -3556,6 +3590,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 entry["cleared"] = prev_count
                 entry["geocoded_from"] = display[:80] if display else ""
                 entry["candidates_found"] = len(cands)
+                entry["property_type_filter"] = inf_type
 
                 # 4) Auto-add top candidates as competitors (when requested)
                 if auto_add and cands:

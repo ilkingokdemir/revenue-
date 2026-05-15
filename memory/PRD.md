@@ -5,6 +5,18 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 309 — Smart Property-Type Filter)
+- **Backend** (`market_robot.py`): TYPE_MAP eklendi — property doc'undaki `property_type` / `type` alanından Booking.com filter type'ına otomatik inference:
+  - `apartment`, `serviced_apartment` → `apartments` filter
+  - `aparthotel` → `aparthotels` filter
+  - `hotel`, `guest_house`, `bnb`, `b&b` → `hotels` filter
+  - bilinmeyen → `any` (önceki davranış)
+- Hem `POST /competitors/discover` hem `POST /fleet-reset-neighbors` artık property doc'undan auto-infer ediyor. Request body'de explicit `property_type` override hâlâ destekleniyor.
+- Fleet-reset response'unda her property için `property_type_filter` field'ı dönüyor (audit).
+- **E2E test**:
+  - `aldgate-flats` (apartment) → filter=`apartments`, sonuçlar Widegate Residential, Liverpool Street Apartment, Wilde Aparthotels, Petticoat Accommodations gibi hep apartment/aparthotel. Hotel'ler (Devonshire Square, Bull & Hide) artık YOK.
+  - `city-rooms` (hotel) → filter=`hotels`, sonuçlar GreenHouse Capsules, YHA Thameside, St Christopher's Inn gibi hep hotel/hostel. Apartment yok.
+
 ### 2026-05-15 (iter 308 — 0-Click Auto-Add Discovered Neighbors)
 - **Backend**:
   - `POST /competitors/discover` artık `auto_add:true` + `auto_add_top:N` (default 5, max 15) flag'lerini destekliyor. Discovered candidate'ler top-N olarak `market_competitors` collection'a anında ekleniyor (race-safe upsert by booking_url). `last_source='auto_reset_autoadd'` audit alanı.

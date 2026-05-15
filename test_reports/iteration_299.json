@@ -1,0 +1,88 @@
+{
+  "summary": "Iteration 299 - City Migration Wizard ('Şehir Değiştir') Feature Testing. Backend: 26/26 tests PASSED. Frontend: All modal elements verified working (city input, auto_scan checkbox, clear_overrides checkbox, submit/cancel buttons). Full migration flow tested successfully.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/pytest_tests/test_iteration299_city_migration.py",
+    "/app/test_reports/pytest/pytest_iteration299_city_migration.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "All data-testid attributes correctly implemented: event-change-city-btn, event-migrate-modal, event-migrate-city-input, event-migrate-autoscan, event-migrate-clear-overrides, event-migrate-submit, event-migrate-cancel",
+    "POST /api/revenue/events/{pid}/change-city validation working: 400 for missing/empty new_city, {ok:false, error:'no_change'} for same city",
+    "RBAC correctly enforced: admin/manager allowed, receptionist gets 403",
+    "Migration audit log correctly written to event_city_migrations collection with all required fields",
+    "auto_scan=false returns 'skipped', auto_scan=true returns 'triggered_async' (fire-and-forget background task)"
+  ],
+  "updated_files": [
+    "/app/test_reports/pytest_tests/test_iteration299_city_migration.py"
+  ],
+  "success_rate": {
+    "backend": "100% (26/26 tests passed)",
+    "frontend": "100% - All modal elements verified"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!",
+    "receptionist": "testrecep@hotelbox.com / Test2026!"
+  },
+  "seed_data_creation": "Test properties created with prefix 'test-mig-*', 'test-same-city-*', 'test-case-*', 'test-full-mig-*', 'test-autoscan-*', 'test-audit-*' for migration testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "City Migration Wizard feature fully tested. Key endpoints: POST /api/revenue/events/{pid}/change-city (body: {new_city, auto_scan, clear_event_overrides}), GET /api/revenue/events/{pid}/migrations. Frontend modal accessible via Revenue Management > Market Robot > Event Intelligence tab > '🏙️ Şehir değiştir' button. Use auto_scan:false in tests to avoid slow GPT calls. Regression tests for cleanup-foreign, scan, rescan-full, add/delete events all passed.",
+  "tests_executed": {
+    "change_city_validation": {
+      "test_change_city_missing_new_city_returns_400": "PASSED",
+      "test_change_city_empty_new_city_returns_400": "PASSED",
+      "test_change_city_whitespace_only_returns_400": "PASSED"
+    },
+    "same_city_no_change": {
+      "test_change_city_same_city_returns_no_change": "PASSED",
+      "test_change_city_same_city_case_insensitive": "PASSED"
+    },
+    "full_migration_flow": {
+      "test_change_city_full_migration_flow": "PASSED",
+      "test_change_city_with_auto_scan_triggered": "PASSED"
+    },
+    "migrations_history": {
+      "test_migrations_endpoint_exists": "PASSED",
+      "test_migrations_returns_audit_log": "PASSED"
+    },
+    "rbac": {
+      "test_change_city_admin_allowed": "PASSED",
+      "test_change_city_receptionist_denied": "PASSED",
+      "test_change_city_unauthenticated_denied": "PASSED",
+      "test_migrations_admin_allowed": "PASSED",
+      "test_migrations_receptionist_denied": "PASSED",
+      "test_migrations_unauthenticated_denied": "PASSED"
+    },
+    "regression": {
+      "test_get_events_still_works": "PASSED",
+      "test_cleanup_foreign_still_works": "PASSED",
+      "test_add_event_still_works": "PASSED",
+      "test_delete_event_still_works": "PASSED"
+    },
+    "frontend_data_testids": {
+      "test_event_change_city_btn_testid": "PASSED",
+      "test_event_migrate_modal_testid": "PASSED",
+      "test_event_migrate_city_input_testid": "PASSED",
+      "test_event_migrate_autoscan_testid": "PASSED",
+      "test_event_migrate_clear_overrides_testid": "PASSED",
+      "test_event_migrate_submit_testid": "PASSED",
+      "test_event_migrate_cancel_testid": "PASSED"
+    },
+    "frontend_ui_verification": {
+      "modal_opens_on_button_click": "PASSED",
+      "city_input_fillable": "PASSED",
+      "checkboxes_present_and_checked_by_default": "PASSED",
+      "submit_and_cancel_buttons_present": "PASSED",
+      "modal_closes_on_cancel": "PASSED"
+    }
+  }
+}

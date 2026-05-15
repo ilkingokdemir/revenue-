@@ -67,6 +67,32 @@ export const EventIntelligence = ({ propertyId }) => {
     } catch { toast.error("Cleanup failed"); }
   };
 
+  // City migration wizard
+  const [showMigrate, setShowMigrate] = useState(false);
+  const [migrateForm, setMigrateForm] = useState({ new_city: "", auto_scan: true, clear_event_overrides: true });
+  const [migrating, setMigrating] = useState(false);
+
+  const runMigration = async () => {
+    const target = (migrateForm.new_city || "").trim();
+    if (!target) { toast.warning("Yeni şehir adı gerekli"); return; }
+    if (!window.confirm(`${propertyCity || "(mevcut)"} → ${target}\n\nBu işlem ${propertyCity} şehrine ait tüm event'leri ve event-driven fiyat override'larını silecek${migrateForm.auto_scan ? " ve yeni şehir için fresh scan başlatacak" : ""}. Devam edilsin mi?`)) return;
+    setMigrating(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/events/${propertyId}/change-city`, migrateForm);
+      if (data.ok) {
+        toast.success(data.message);
+        setShowMigrate(false);
+        setMigrateForm({ new_city: "", auto_scan: true, clear_event_overrides: true });
+        load();
+      } else {
+        toast.warning(data.message || "Migration başarısız");
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Migration failed");
+    }
+    setMigrating(false);
+  };
+
   const addManual = async () => {
     if (!form.name || !form.date) { toast.error("Name and date required"); return; }
     try {
@@ -120,6 +146,12 @@ export const EventIntelligence = ({ propertyId }) => {
             data-testid="event-cleanup-foreign">
             <Trash2 className="w-4 h-4" />Cleanup
           </button>
+          <button onClick={() => setShowMigrate(true)}
+            className="flex items-center gap-1.5 border border-violet-200 text-violet-700 bg-violet-50 px-3 py-2 rounded-xl text-sm font-medium hover:bg-violet-100"
+            title="Property'nin şehrini değiştir (tek tık taşıma)"
+            data-testid="event-change-city-btn">
+            🏙️ Şehir değiştir
+          </button>
           <button onClick={rescanFullYear} disabled={scanning}
             className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50" data-testid="event-rescan-full">
             {scanning ? <Search className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -132,6 +164,62 @@ export const EventIntelligence = ({ propertyId }) => {
           </button>
         </div>
       </div>
+
+      {/* City Migration Wizard */}
+      {showMigrate && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+             onClick={(e) => { if (e.target === e.currentTarget) setShowMigrate(false); }}
+             data-testid="event-migrate-modal">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
+            <div>
+              <div className="text-2xl">🏙️</div>
+              <h3 className="text-lg font-bold text-stone-800 mt-1">Şehir Değiştir</h3>
+              <p className="text-sm text-stone-500 mt-1">
+                Property'nin event-tracking şehrini değiştir. Mevcut şehir: <strong>{propertyCity || "(belirlenmemiş)"}</strong>
+              </p>
+            </div>
+            <div className="space-y-3">
+              <label className="block">
+                <span className="text-xs font-medium text-stone-700">Yeni şehir adı</span>
+                <input type="text" autoFocus
+                       value={migrateForm.new_city}
+                       onChange={(e) => setMigrateForm({ ...migrateForm, new_city: e.target.value })}
+                       placeholder="Örn: Paris, Madrid, Istanbul, Tokyo..."
+                       data-testid="event-migrate-city-input"
+                       className="mt-1 w-full px-3 py-2 border border-stone-200 rounded-lg text-sm" />
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={migrateForm.auto_scan}
+                       onChange={(e) => setMigrateForm({ ...migrateForm, auto_scan: e.target.checked })}
+                       data-testid="event-migrate-autoscan" />
+                <span className="text-sm text-stone-700">Yeni şehir için 365-gün otomatik AI scan başlat (önerilir)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={migrateForm.clear_event_overrides}
+                       onChange={(e) => setMigrateForm({ ...migrateForm, clear_event_overrides: e.target.checked })}
+                       data-testid="event-migrate-clear-overrides" />
+                <span className="text-sm text-stone-700">Eski şehre ait event-driven fiyat override'larını sil</span>
+              </label>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+              ⚠️ Bu işlem geri alınamaz. Mevcut şehrin tüm event'leri silinir. Migration log'lara kaydedilir.
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => setShowMigrate(false)} disabled={migrating}
+                      className="px-4 py-2 rounded-lg border border-stone-200 text-sm hover:bg-stone-50 disabled:opacity-60"
+                      data-testid="event-migrate-cancel">
+                İptal
+              </button>
+              <button onClick={runMigration} disabled={migrating || !migrateForm.new_city.trim()}
+                      className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium flex items-center gap-2 disabled:opacity-60"
+                      data-testid="event-migrate-submit">
+                {migrating ? <Search className="w-4 h-4 animate-spin" /> : <span>🏙️</span>}
+                Migrate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scan Result */}
       {scanResult && (

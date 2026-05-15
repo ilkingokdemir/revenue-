@@ -4,7 +4,7 @@ Only tracks events that ACTUALLY drive hotel bookings (out-of-town visitors).
 Uses a Hotel Demand Score (HDS) based on: visitor origin, event time, duration,
 international vs local, team quality, and event category.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import uuid
@@ -451,6 +451,158 @@ Include known recurring events, sports seasons, touring concerts, etc."""
             "foreign_cities_removed": foreign_cities,
             "message": f"{result.deleted_count} farklı şehir event'i silindi. Geçerli şehir: {city}.",
         }
+
+    @router.post("/revenue/events/{property_id}/change-city")
+    async def change_city_wizard(property_id: str, data: Dict,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """🏙️ One-click city migration wizard.
+
+        Body: {new_city, auto_scan: true, clear_event_overrides: true}
+
+        Steps: (1) update config city, (2) delete all events for property,
+        (3) delete event-driven rate overrides, (4) optional async fresh scan,
+        (5) audit log in event_city_migrations.
+        """
+        new_city = ((data or {}).get("new_city") or "").strip()
+        if not new_city:
+            raise HTTPException(400, "new_city required")
+        auto_scan = bool((data or {}).get("auto_scan", True))
+        clear_overrides = bool((data or {}).get("clear_event_overrides", True))
+
+        prev_config = await db.market_robot_config.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        ) or {}
+        old_city = (prev_config.get("city") or "").strip() or "(none)"
+
+        if old_city.lower() == new_city.lower():
+            return {
+                "ok": False,
+                "error": "no_change",
+                "message": f"Şehir zaten {new_city} — değişiklik yok.",
+            }
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        await db.market_robot_config.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "property_id": property_id,
+                "city": new_city,
+                "updated_at": now_iso,
+                "updated_by": current_user.get("name", ""),
+                "previous_city": old_city,
+            }},
+            upsert=True,
+        )
+
+        deleted_events = await db.market_events.delete_many({"property_id": property_id})
+
+        deleted_overrides = 0
+        if clear_overrides:
+            r_del = await db.rate_overrides.delete_many({
+                "property_id": property_id,
+                "set_by": "event-intelligence",
+            })
+            deleted_overrides = r_del.deleted_count
+
+        await db.event_city_migrations.insert_one({
+            "id": uuid.uuid4().hex,
+            "property_id": property_id,
+            "from_city": old_city,
+            "to_city": new_city,
+            "deleted_events": deleted_events.deleted_count,
+            "deleted_event_overrides": deleted_overrides,
+            "migrated_at": now_iso,
+            "migrated_by": current_user.get("name", ""),
+            "auto_scan_triggered": auto_scan,
+        })
+
+        scan_status = "skipped"
+        if auto_scan:
+            async def _bg_scan():
+                try:
+                    raw = await _search_events_web(new_city, 365)
+                    evs = await _analyze_events_with_ai(new_city, raw, 365)
+                    n_now = datetime.now(timezone.utc)
+                    stored = 0
+                    for ev in evs:
+                        ed_str = ev.get("date", "")
+                        if not ed_str:
+                            continue
+                        try:
+                            ed = datetime.strptime(ed_str, "%Y-%m-%d")
+                            n_naive = n_now.replace(tzinfo=None)
+                            if ed.date() < n_naive.date() or ed > n_naive + timedelta(days=365):
+                                continue
+                        except (ValueError, TypeError):
+                            continue
+                        hds = int(ev.get("hotel_demand_score", 0) or 0)
+                        impact = ev.get("impact") or _get_impact_from_hds(hds)
+                        impact = LEGACY_MAP.get(impact, impact)
+                        doc = {
+                            "id": str(uuid.uuid4())[:8],
+                            "property_id": property_id,
+                            "city": new_city,
+                            "name": ev.get("name", "Unknown Event"),
+                            "date": ed_str,
+                            "end_date": ev.get("end_date", ed_str),
+                            "venue": ev.get("venue", ""),
+                            "category": ev.get("category", "other"),
+                            "estimated_attendance": int(ev.get("estimated_attendance", 0) or 0),
+                            "hotel_demand_score": hds,
+                            "visitor_origin": ev.get("visitor_origin", "unknown"),
+                            "is_evening": ev.get("is_evening", True),
+                            "is_multi_day": ev.get("is_multi_day", False),
+                            "estimated_hotel_nights": int(ev.get("estimated_hotel_nights", 0) or 0),
+                            "reasoning": ev.get("reasoning", ""),
+                            "impact": impact,
+                            "description": ev.get("description", ""),
+                            "confidence": ev.get("confidence", "medium"),
+                            "scanned_at": n_now.isoformat(),
+                            "via_migration": True,
+                        }
+                        await db.market_events.update_one(
+                            {"property_id": property_id, "name": doc["name"], "date": doc["date"]},
+                            {"$set": doc}, upsert=True,
+                        )
+                        stored += 1
+                    if stored > 0:
+                        await _apply_event_pricing(db, property_id, evs)
+                    await db.event_city_migrations.update_one(
+                        {"property_id": property_id, "to_city": new_city, "migrated_at": now_iso},
+                        {"$set": {"scan_completed_at": datetime.now(timezone.utc).isoformat(),
+                                  "scan_events_stored": stored}},
+                    )
+                    logger.info(f"🏙️ City migration scan complete: {property_id} → {new_city}: {stored} events")
+                except Exception as e:
+                    logger.exception(f"City migration bg scan failed: {e}")
+
+            import asyncio as _asyncio
+            _asyncio.create_task(_bg_scan())
+            scan_status = "triggered_async"
+
+        return {
+            "ok": True,
+            "from_city": old_city,
+            "to_city": new_city,
+            "deleted_events": deleted_events.deleted_count,
+            "deleted_event_overrides": deleted_overrides,
+            "auto_scan": scan_status,
+            "message": (
+                f"🏙️ Şehir değiştirildi: {old_city} → {new_city}. "
+                f"{deleted_events.deleted_count} eski event ve {deleted_overrides} fiyat override silindi. "
+                f"{'Yeni şehir için 365-gün scan arka planda başlatıldı.' if auto_scan else 'Auto-scan atlandı.'}"
+            ),
+        }
+
+    @router.get("/revenue/events/{property_id}/migrations")
+    async def list_migrations(property_id: str,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Past city-change migrations for this property."""
+        rows = await db.event_city_migrations.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("migrated_at", -1).to_list(50)
+        return {"items": rows, "count": len(rows)}
 
     @router.post("/revenue/events/{property_id}/rescan-full")
     async def rescan_full_year(property_id: str, data: Dict = {},

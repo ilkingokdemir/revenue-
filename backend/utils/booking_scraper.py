@@ -521,21 +521,32 @@ async def validate_booking_url(url: str, *, currency: Optional[str] = None) -> d
 
 
 
-async def geocode_address(query: str, *, timeout_s: float = 8.0) -> Optional[Tuple[float, float, str]]:
+async def geocode_address(
+    query: str,
+    *,
+    country_code: str = "",
+    timeout_s: float = 8.0,
+) -> Optional[Tuple[float, float, str]]:
     """Geocode a free-text address/postcode/place via OpenStreetMap Nominatim.
 
     Returns (latitude, longitude, display_name) or None on failure.
-    Free, no API key required. Usage policy: max 1 req/sec — caller responsible
-    for rate-limiting if calling in tight loops.
+    Free, no API key required.
+
+    Args:
+      country_code: ISO 3166-1 alpha-2 (e.g. "gb", "us", "tr") — strongly
+        recommended to prevent "Camden, London" being resolved to "Camden, Boston USA".
     """
     q = (query or "").strip()
     if not q:
         return None
+    params: Dict = {"q": q, "format": "json", "limit": 1, "addressdetails": 1}
+    if country_code:
+        params["countrycodes"] = country_code.lower().strip()
     try:
         async with httpx.AsyncClient(timeout=timeout_s) as client:
             r = await client.get(
                 "https://nominatim.openstreetmap.org/search",
-                params={"q": q, "format": "json", "limit": 1, "addressdetails": 1},
+                params=params,
                 headers={"User-Agent": "HotelBox/1.0 (admin@hotelbox.com)"},
             )
             r.raise_for_status()

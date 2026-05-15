@@ -3208,10 +3208,16 @@ def create_market_robot_router(db, require_roles, resend=None):
         if not (latitude and longitude):
             address = (prop.get("address") or "").strip()
             name = (prop.get("name") or "").strip()
-            # Try most-specific → least-specific search strings.
-            # NOTE: Nominatim is sensitive to commas — try BOTH joined and
-            # comma-separated variants because "Aldgate Flats, London"
-            # returns null while "Aldgate Flats London" resolves correctly.
+            country_raw = (prop.get("country") or "").strip().upper()
+            COUNTRY_MAP = {"UK": "gb", "GB": "gb", "ENGLAND": "gb", "UNITED KINGDOM": "gb",
+                           "US": "us", "USA": "us", "UNITED STATES": "us",
+                           "TR": "tr", "TURKEY": "tr", "TÜRKIYE": "tr",
+                           "FR": "fr", "FRANCE": "fr", "DE": "de", "GERMANY": "de",
+                           "ES": "es", "SPAIN": "es", "IT": "it", "ITALY": "it",
+                           "NL": "nl", "NETHERLANDS": "nl"}
+            country_code = COUNTRY_MAP.get(country_raw, country_raw.lower()[:2] if country_raw else "")
+            # Build queries: name MUST always have city/postcode suffix so we don't
+            # ambiguously hit "Camden Apartments" → Boston, USA.
             candidates_q = []
             if address:
                 candidates_q.append(" ".join([x for x in [address, postcode, city] if x]))
@@ -3222,12 +3228,12 @@ def create_market_robot_router(db, require_roles, resend=None):
             if postcode and city:
                 candidates_q.append(f"{postcode} {city}")
                 candidates_q.append(f"{postcode}, {city}")
-            if name:
+            # Bare-name fallback ONLY when we have country_code to bias the search.
+            # Without country_code, "Camden Apartments" alone is dangerous.
+            if name and country_code:
                 candidates_q.append(name)
             elif postcode:
                 candidates_q.append(postcode)
-
-            # De-duplicate while preserving order
             seen_q = set()
             ordered_q = []
             for q in candidates_q:
@@ -3237,9 +3243,17 @@ def create_market_robot_router(db, require_roles, resend=None):
                     ordered_q.append(qn)
 
             for q in ordered_q:
-                geo = await geocode_address(q)
+                geo = await geocode_address(q, country_code=country_code)
                 if geo:
                     latitude, longitude, display = geo
+                    # Sanity check: if we have a city name, the geocode display
+                    # MUST contain it case-insensitively. Prevents Camden→Boston.
+                    if city and city.lower() not in display.lower():
+                        logger.warning(
+                            f"⚠️ Geocode rejected — city mismatch: '{q}' → '{display}' "
+                            f"(expected city '{city}')"
+                        )
+                        continue
                     geocode_used = {"query": q, "display": display, "lat": latitude, "lng": longitude}
                     await db.properties.update_one(
                         {"id": property_id},
@@ -3365,7 +3379,7 @@ def create_market_robot_router(db, require_roles, resend=None):
 
         prop = await db.properties.find_one(
             {"id": property_id}, {"_id": 0, "name": 1, "city": 1, "postcode": 1, "address": 1,
-                                  "latitude": 1, "longitude": 1},
+                                  "latitude": 1, "longitude": 1, "country": 1},
         )
         if not prop:
             raise HTTPException(status_code=404, detail="Property not found")
@@ -3384,6 +3398,14 @@ def create_market_robot_router(db, require_roles, resend=None):
         postcode = (prop.get("postcode") or "").strip()
         address = (prop.get("address") or "").strip()
         custom_query = ((data or {}).get("query") or "").strip()
+        country_raw = (prop.get("country") or "").strip().upper()
+        COUNTRY_MAP_AG = {"UK": "gb", "GB": "gb", "ENGLAND": "gb", "UNITED KINGDOM": "gb",
+                          "US": "us", "USA": "us", "UNITED STATES": "us",
+                          "TR": "tr", "TURKEY": "tr", "TÜRKIYE": "tr",
+                          "FR": "fr", "FRANCE": "fr", "DE": "de", "GERMANY": "de",
+                          "ES": "es", "SPAIN": "es", "IT": "it", "ITALY": "it",
+                          "NL": "nl", "NETHERLANDS": "nl"}
+        country_code = COUNTRY_MAP_AG.get(country_raw, country_raw.lower()[:2] if country_raw else "")
 
         candidates_q = []
         if custom_query:
@@ -3396,7 +3418,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             candidates_q.append(f"{name}, {city}")
         if postcode and city:
             candidates_q.append(f"{postcode} {city}")
-        if name:
+        if name and country_code:
             candidates_q.append(name)
         elif postcode:
             candidates_q.append(postcode)
@@ -3413,15 +3435,19 @@ def create_market_robot_router(db, require_roles, resend=None):
 
         attempts = []
         for q in ordered_q:
-            geo = await geocode_address(q)
+            geo = await geocode_address(q, country_code=country_code)
             attempts.append({"query": q, "found": bool(geo)})
             if geo:
                 lat, lng, display = geo
+                if city and city.lower() not in display.lower():
+                    attempts[-1]["rejected"] = "city_mismatch"
+                    continue
                 await db.properties.update_one(
                     {"id": property_id},
                     {"$set": {
                         "latitude": lat, "longitude": lng,
                         "geocoded_from": q,
+                        "geocoded_display_name": display,
                         "geocoded_at": datetime.now(timezone.utc).isoformat(),
                     }},
                 )
@@ -3529,11 +3555,19 @@ def create_market_robot_router(db, require_roles, resend=None):
                     await db.market_competitors.delete_many({"property_id": pid})
                     await db.market_supply.delete_many({"property_id": pid})
 
-                # 2) Force geocode
+                # 2) Force geocode (country-aware + city-validated)
                 name = (prop.get("name") or "").strip()
                 city = (prop.get("city") or "").strip()
                 postcode = (prop.get("postcode") or "").strip()
                 address = (prop.get("address") or "").strip()
+                country_raw = (prop.get("country") or "").strip().upper()
+                COUNTRY_MAP_FR = {"UK": "gb", "GB": "gb", "ENGLAND": "gb", "UNITED KINGDOM": "gb",
+                                  "US": "us", "USA": "us", "UNITED STATES": "us",
+                                  "TR": "tr", "TURKEY": "tr", "TÜRKIYE": "tr",
+                                  "FR": "fr", "FRANCE": "fr", "DE": "de", "GERMANY": "de",
+                                  "ES": "es", "SPAIN": "es", "IT": "it", "ITALY": "it",
+                                  "NL": "nl", "NETHERLANDS": "nl"}
+                country_code = COUNTRY_MAP_FR.get(country_raw, country_raw.lower()[:2] if country_raw else "")
                 candidates_q = []
                 if address:
                     candidates_q.append(" ".join([x for x in [address, postcode, city] if x]))
@@ -3541,7 +3575,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                     candidates_q.append(f"{name} {city}")
                 if postcode and city:
                     candidates_q.append(f"{postcode} {city}")
-                if name:
+                if name and country_code:
                     candidates_q.append(name)
                 seen = set()
                 ordered_q = []
@@ -3556,9 +3590,13 @@ def create_market_robot_router(db, require_roles, resend=None):
                 longitude = None
                 display = ""
                 for q in ordered_q:
-                    geo = await geocode_address(q)
+                    geo = await geocode_address(q, country_code=country_code)
                     if geo:
-                        latitude, longitude, display = geo
+                        cand_lat, cand_lon, cand_display = geo
+                        # City sanity check — reject if city mismatch
+                        if city and city.lower() not in cand_display.lower():
+                            continue
+                        latitude, longitude, display = cand_lat, cand_lon, cand_display
                         await db.properties.update_one(
                             {"id": pid},
                             {"$set": {

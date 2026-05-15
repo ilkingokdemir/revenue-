@@ -5,6 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 298 — Event Intelligence City Filter Bug Fix)
+- **BUG**: Aldgate Flats için London event aratınca Zürih sonucu çıkıyordu — `market_events` collection'da property_id aynı olduğu için farklı şehir scan'lerinden gelen stale veriler karışıyordu.
+- **Fix 1**: `GET /revenue/events/{pid}` artık property'nin **configured city**'sine göre filtreliyor (case-insensitive + whitespace-tolerant regex). Foreign-city legacy veri otomatik gizleniyor.
+- **Fix 2**: `POST /revenue/events/{pid}/scan` ve `rescan-full` body'deki `city` override'ını **artık reddediyor** — daima config city kullanıyor. Scan öncesi foreign-city event'ler otomatik temizleniyor.
+- **Fix 3**: Market Robot supply overlay (`/supply`) ve `year-dashboard` event overlay'leri de case-insensitive city filter uyguluyor.
+- **New endpoint**: `POST /revenue/events/{pid}/cleanup-foreign` — stale farklı-şehir event'lerini siler. Frontend'de "Cleanup" butonu eklendi. Header'da `📍 <City>` badge'i gösteriliyor.
+- **Aldgate Flats temizliği**: 13 Zurich event'i silindi → 27 London-only kaldı. `default` property için case-insensitive matching `"zurich "` ↔ `"Zurich"` doğru çalışıyor.
+- **Test sonucu**: 19/19 backend PASS (iteration_298.json) — sıfır kritik/minör hata.
+
 ### 2026-05-15 (iter 297 — AI-Powered Journey Rule Suggestions)
 - **`GET /api/pms-pro/journey-rules/suggest`** — Analyses last 30 days operations (bookings, VIP cadence, no-shows, late-checkouts, negative reviews, open complaints, stale maintenance) and calls **GPT-5.2 via Emergent LLM Key** to generate 3-5 actionable Turkish journey rules with rationales. Validates trigger/action against enum, filters duplicate names.
 - **`POST /api/pms-pro/journey-rules/suggest/accept`** — Bulk-creates selected suggestions as **disabled** rules (review-first safety) with `ai_suggested=true` + `ai_rationale` traceable fields.

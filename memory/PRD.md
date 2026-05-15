@@ -5,6 +5,18 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 302 — Distance-Weighted Scoring)
+- **Distance tier formula**: 0-30km=100%, 31-60=80%, 61-100=60%, 101-150=40%, 151-200=25%, >200=15%. Primary city events her zaman %100.
+- **Helpers**: `_distance_weight(km)` ve `_city_weight_for(city, config)` — event'in city'sine göre weight hesaplar.
+- **`_apply_event_pricing` güncellendi**: Her event için weight uygulanır, `boost = boost × weight`. Rate override reason'da `@<City>(<pct>%)` tag'i görünür (sadece weight<1.0 olduğunda).
+- **`POST /secondary-cities`** body'sine optional `distance_km` alanı eklendi. Validation: numeric + 0-1000 range.
+- **Yeni `PATCH /secondary-cities/{city}`** Body `{distance_km}` — mevcut secondary'nin mesafesini güncelle. 404 (not in list), 400 (bad number).
+- **`GET /secondary-cities`** artık `secondaries: [{city, distance_km, weight, weight_pct}]` döndürüyor.
+- **`GET /events`**: response'a `secondary_cities_distance: {city: km}` map'i eklendi.
+- **`DELETE /secondary-cities/{city}`**: distance map'inden de temizliyor.
+- **Frontend**: Her secondary chip'inde `{km}km · {pct}%` clickable text — tıklanınca inline numeric input açılıyor (save/cancel). Add formunda artık "km" mesafe inputu var.
+- **Test**: 29/29 backend PASS (iteration_301.json). Tier'lar, validation, pricing weight'i, RBAC, frontend data-testid'ler doğrulandı.
+
 ### 2026-05-15 (iter 301 — Multi-City Scan Support)
 - **Primary + up to 5 secondary cities**: Her property için `market_robot_config.secondary_cities[]` array desteği eklendi.
 - **3 yeni endpoint**:

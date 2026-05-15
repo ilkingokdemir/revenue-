@@ -5,6 +5,19 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 310 — Geocoding Country Bias Fix — Camden→Boston bug)
+- **Root cause**: Nominatim free-text geocode hit `Camden, NJ, USA` for the query "Camden Apartments" (no country/city qualifier). Property was persisted with lat=42.337, lon=-71.081 (Boston) instead of London.
+- **Backend** (`market_robot.py` `/competitors/discover` & `/auto-geocode`):
+  - Built a `COUNTRY_MAP` translating `country` field (UK/GB/ENGLAND/UNITED KINGDOM/US/USA/TR/TURKEY/FR/DE/ES/IT/NL) to ISO 3166-1 alpha-2 codes.
+  - Geocode candidate queries now ALWAYS append city + postcode when available; bare-name fallback only fires when `country_code` is set.
+  - Each `geocode_address` call passes `country_code=` → Nominatim `countrycodes` param, hard-bounding results.
+  - Added **city-mismatch rejection**: if `display_name` doesn't contain `prop.city` case-insensitively, the result is discarded and we move to the next candidate query.
+- **Data fix**: `camden-suites` had `address=""` and stale Boston lat/lon. Set `address="284 Camden Rd"`, `postcode="N7 0BJ"`, cleared bad coords.
+- **E2E test**:
+  - `POST /auto-geocode {"force":true}` → `lat=51.5490966, lon=-0.1287947`, display `"Camden Road, Tufnell Park, London Borough of Islington, Greater London, England, N7 0HR, United Kingdom"` ✅
+  - `POST /competitors/discover {"max_results":8,"radius_km":2}` → 8/8 candidates are London-area apartments (Camden, Islington, North London, Kings Cross) with `district_hint="Tufnell Park, London"` ✅
+  - Bug repro confirmed: `geocode_address("Camden")` alone → New Jersey, USA; `geocode_address("Camden", country_code="gb")` → London Borough of Camden ✅
+
 ### 2026-05-15 (iter 309 — Smart Property-Type Filter)
 - **Backend** (`market_robot.py`): TYPE_MAP eklendi — property doc'undaki `property_type` / `type` alanından Booking.com filter type'ına otomatik inference:
   - `apartment`, `serviced_apartment` → `apartments` filter

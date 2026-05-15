@@ -75,7 +75,6 @@ def create_pms_pro_router(db, require_roles):
         occupied_set = {b["assigned_room"] for b in occupied if b.get("assigned_room")}
 
         # Active maintenance
-        thirty_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
         maintenance = await db.maintenance_tickets.find({
             "property_id": pid,
             "status": {"$in": ["open", "in_progress"]},

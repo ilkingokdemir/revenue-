@@ -1090,6 +1090,10 @@ api_router.include_router(create_brand_voice_router(db, require_roles))
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))
 
+# ===== PMS Pro (Iter 295) — Smart Assign / AI Concierge / Journey Rules / Anomaly Alerts =====
+from routes.pms_pro import create_pms_pro_router
+api_router.include_router(create_pms_pro_router(db, require_roles))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

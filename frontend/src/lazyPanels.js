@@ -94,6 +94,7 @@ export const PreAuthPanel = L(() => import("./components/dashboard/PreAuthPanel"
 export const ChargebackPanel = L(() => import("./components/dashboard/ChargebackPanel"));
 export const WebPushPanel = L(() => import("./components/dashboard/WebPushPanel"));
 export const PmsCrsSyncPanel = L(() => import("./components/dashboard/PmsCrsSyncPanel"));
+export const PmsProPanel = L(() => import("./components/dashboard/PmsProPanel"));
 export const PublicApiPortalPanel = L(() => import("./components/dashboard/PublicApiPortalPanel"));
 export const MidStaySurveyPanel = L(() => import("./components/dashboard/MidStaySurveyPanel"));
 export const FolioLivePanel = L(() => import("./components/dashboard/FolioLivePanel"));

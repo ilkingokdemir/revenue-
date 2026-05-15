@@ -66,7 +66,7 @@ import {
   CleaningChecklistsPanel, AttributionPanel, GroupRoomingImportPanel, OpsQuickActionsPanel,
   TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, MultiPropertyRollupPanel,
   CurrencyPanel, AgentsB2BPanel, SecurityOwnerPanel, PreAuthPanel, ChargebackPanel,
-  WebPushPanel, PmsCrsSyncPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
+  WebPushPanel, PmsCrsSyncPanel, PmsProPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
   ABTestPanel, PreArrivalDripPanel, MenuEngineeringPanel, SRVoucherPanel, FolioSplitPanel,
   LoyaltyAutoPanel, LateCheckoutOfferPanel, OTAStopSellForecastPanel,
   MsgTemplatesPanel, BirthdayPanel, LowStockPanel, RebookPanel, StayExtPanel, LongStayPanel,
@@ -2762,6 +2762,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "ops-quick", icon: Lightning, name: "Quick ops", testId: "ops-quick-btn" },
         { id: "ops-v2", icon: Wrench, name: t("nav.ops_v2"), testId: "ops-v2-btn" },
         { id: "operations-hub", icon: Gear, name: "Operations hub", testId: "operations-hub-btn" },
+        { id: "pms-pro", icon: Sparkle, name: "PMS Pro (AI ops)", testId: "pms-pro-btn" },
 
         { divider: true, label: "Inventory & Assets" },
         { id: "asset-register", icon: Package, name: "Asset register", testId: "asset-register-btn" },
@@ -3014,6 +3015,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "chargeback-btn":         "operations_reception_view",
     "web-push-btn":           "operations_reception_view",
     "pms-crs-btn":            "operations_reception_view",
+    "pms-pro-btn":            "operations_reception_view",
     "public-api-btn":         "operations_reception_view",
     "mid-stay-btn":           "operations_reception_view",
     "folio-live-btn":         "operations_reception_view",
@@ -4257,6 +4259,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "pms-crs" && (
           <div className="p-6">
             <PmsCrsSyncPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "pms-pro" && (
+          <div className="p-6">
+            <PmsProPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />

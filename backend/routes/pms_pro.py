@@ -412,7 +412,6 @@ def create_pms_pro_router(db, require_roles):
         }
 
     # ==================== JOURNEY ENGINE: FIRES HISTORY & MANUAL TRIGGER ====================
-
     @router.get("/journey-fires")
     async def list_journey_fires(property_id: Optional[str] = None,
                                  rule_id: Optional[str] = None,
@@ -467,6 +466,162 @@ def create_pms_pro_router(db, require_roles):
             "manual": True,
         })
         return {"ok": True, "result": result}
+
+    # ==================== AI RULE SUGGESTIONS (Iter 297) ====================
+
+    @router.get("/journey-rules/suggest")
+    async def suggest_journey_rules(property_id: str = "",
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """AI-suggested journey rules — analyses last 30 days of operations
+        (no-show, late checkout, VIP arrival cadence, complaints, reviews) and
+        proposes 3-5 actionable journey rules using GPT-5.2 via Emergent LLM Key.
+        Returns: {suggestions: [...], stats: {...}}
+        """
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        if not api_key:
+            return {"suggestions": [], "error": "EMERGENT_LLM_KEY not configured", "stats": {}}
+
+        since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        prop_q: Dict = {} if not property_id or property_id == "all" else {"property_id": property_id}
+
+        # Build activity snapshot
+        stats = {
+            "total_bookings_30d": await db.bookings.count_documents(
+                {**prop_q, "created_at": {"$gte": since}}),
+            "vip_bookings_30d": await db.bookings.count_documents(
+                {**prop_q, "vip": True, "created_at": {"$gte": since}}),
+            "no_shows_30d": await db.bookings.count_documents(
+                {**prop_q, "status": "no_show", "created_at": {"$gte": since}}),
+            "late_checkout_30d": await db.bookings.count_documents(
+                {**prop_q, "late_checkout": True, "created_at": {"$gte": since}}),
+            "negative_reviews_30d": await db.reviews.count_documents(
+                {**prop_q, "rating": {"$lte": 3}, "created_at": {"$gte": since}}) if "reviews" in await db.list_collection_names() else 0,
+            "open_complaints_30d": await db.complaints.count_documents(
+                {**prop_q, "created_at": {"$gte": since}}) if "complaints" in await db.list_collection_names() else 0,
+            "stale_maintenance": await db.maintenance_tickets.count_documents(
+                {**prop_q, "status": {"$in": ["open", "in_progress"]}}),
+            "existing_journey_rules": await db.guest_journey_rules.count_documents(prop_q),
+        }
+
+        existing_names = await db.guest_journey_rules.distinct("name", prop_q)
+
+        triggers = [
+            "booking_confirmed", "pre_arrival_24h", "pre_arrival_1h", "checked_in",
+            "mid_stay", "pre_checkout_2h", "checked_out", "no_show", "late_checkout_requested",
+        ]
+        actions = [
+            "send_email", "send_sms", "send_app_push", "create_task",
+            "send_qr_key", "offer_upsell", "trigger_housekeeping", "notify_manager",
+        ]
+
+        prompt = f"""Sen bir otel guest-journey otomasyon uzmanısın. Aşağıdaki 30 günlük operasyon verisi
+ve mevcut kuralları inceleyerek bu otelin gerçekten ihtiyaç duyduğu 3–5 yeni journey kuralı öner.
+
+30 GÜNLÜK İSTATİSTİKLER:
+{stats}
+
+MEVCUT KURAL ADLARI (tekrarlama):
+{existing_names[:30]}
+
+KULLANILABİLİR TRIGGERS:
+{triggers}
+
+KULLANILABİLİR ACTIONS:
+{actions}
+
+KURALLAR:
+- Sadece geçerli JSON array dön (markdown veya açıklama yok).
+- Her öneri: {{"name": "...", "rationale": "neden ihtiyacı var (Türkçe, 1 cümle)",
+  "trigger": "<triggers'tan biri>", "action": "<actions'tan biri>",
+  "template": "mesaj/şablon (Türkçe, {{{{guest_name}}}} gibi yer tutucular kullanabilir)",
+  "priority": 1-200 arası bir sayı}}
+- VIP, no-show, late-checkout gibi sayılar yüksekse o pattern'e yönelik kural öner.
+- Mevcut kural adları ile aynı isimde kural önerme.
+"""
+
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"journey-suggest-{uuid.uuid4().hex[:6]}",
+                system_message="Sen bir otel otomasyon uzmanısın. Sadece geçerli JSON döndür.",
+            ).with_model("openai", "gpt-5.2")
+            text = await chat.send_message(UserMessage(text=prompt))
+            text = (str(text) or "").strip()
+            if text.startswith("```"):
+                parts = text.split("```")
+                if len(parts) >= 2:
+                    text = parts[1]
+                    if text.startswith("json"):
+                        text = text[4:].strip()
+
+            try:
+                suggestions = _json.loads(text)
+            except Exception:
+                import re as _re
+                m = _re.search(r"\[.*\]", text, _re.DOTALL)
+                suggestions = _json.loads(m.group(0)) if m else []
+
+            valid = []
+            for s in (suggestions if isinstance(suggestions, list) else []):
+                if not isinstance(s, dict):
+                    continue
+                if s.get("trigger") not in triggers:
+                    continue
+                if s.get("action") not in actions:
+                    continue
+                if not s.get("name"):
+                    continue
+                if s["name"] in existing_names:
+                    continue
+                valid.append({
+                    "name": str(s["name"])[:120],
+                    "rationale": str(s.get("rationale") or "")[:240],
+                    "trigger": s["trigger"],
+                    "action": s["action"],
+                    "template": str(s.get("template") or "")[:500],
+                    "priority": int(s.get("priority") or 100),
+                })
+            return {"suggestions": valid[:5], "stats": stats}
+        except Exception as e:
+            return {"suggestions": [], "error": str(e)[:200], "stats": stats}
+
+    @router.post("/journey-rules/suggest/accept")
+    async def accept_journey_suggestions(data: Dict,
+                                         current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Bulk-create suggested rules as DISABLED so admin can review before turning on.
+        Body: {property_id, suggestions: [{name, trigger, action, template, priority, rationale}]}
+        """
+        pid = (data or {}).get("property_id")
+        suggestions = (data or {}).get("suggestions") or []
+        if not isinstance(suggestions, list) or not suggestions:
+            raise HTTPException(400, "suggestions[] required")
+        created = []
+        now_iso = datetime.now(timezone.utc).isoformat()
+        for s in suggestions:
+            if not isinstance(s, dict) or not s.get("name"):
+                continue
+            rule = {
+                "id": uuid.uuid4().hex,
+                "property_id": pid,
+                "name": str(s.get("name"))[:120],
+                "trigger": s.get("trigger"),
+                "action": s.get("action"),
+                "template": str(s.get("template") or "")[:500],
+                "when_minutes": int(s.get("when_minutes") or 0),
+                "priority": int(s.get("priority") or 100),
+                "enabled": False,  # disabled by default — review first
+                "ai_suggested": True,
+                "ai_rationale": str(s.get("rationale") or "")[:240],
+                "created_at": now_iso,
+                "created_by": current_user.get("name", "ai-suggest"),
+                "fires_count": 0,
+            }
+            await db.guest_journey_rules.insert_one(rule)
+            rule.pop("_id", None)
+            created.append(rule)
+        return {"ok": True, "created": len(created), "rules": created}
 
     return router
 

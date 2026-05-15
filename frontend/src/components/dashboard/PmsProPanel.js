@@ -12,7 +12,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Loader2, Sparkles, MessageSquare, Workflow, AlertTriangle,
-  Send, Trash2, ToggleLeft, ToggleRight, Plus, RefreshCw, Bot,
+  Send, Trash2, ToggleLeft, ToggleRight, Plus, RefreshCw, Bot, Wand2, Check,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -299,6 +299,13 @@ function JourneyRulesTab({ pid }) {
   const [showHistory, setShowHistory] = useState(false);
   const [form, setForm] = useState({ name: "", trigger: "pre_arrival_24h", action: "send_email", template: "", priority: 100 });
 
+  // AI suggestions state
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [selected, setSelected] = useState({});  // {index: bool}
+  const [suggestStats, setSuggestStats] = useState(null);
+  const [accepting, setAccepting] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -346,6 +353,48 @@ function JourneyRulesTab({ pid }) {
     setRunning(false);
   };
 
+  const fetchSuggestions = async () => {
+    setSuggesting(true);
+    setSuggestions([]);
+    setSelected({});
+    setSuggestStats(null);
+    try {
+      const { data } = await axios.get(`${API}/pms-pro/journey-rules/suggest`, { params: { property_id: pid } });
+      const list = data.suggestions || [];
+      setSuggestions(list);
+      setSuggestStats(data.stats || null);
+      if (list.length === 0) {
+        toast.info(data.error ? `AI: ${data.error}` : "Şu an önerilecek yeni kural yok.");
+      } else {
+        // Pre-select all
+        const sel = {};
+        list.forEach((_, i) => { sel[i] = true; });
+        setSelected(sel);
+        toast.success(`${list.length} öneri hazır — incele ve kabul et`);
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Öneri alınamadı");
+    }
+    setSuggesting(false);
+  };
+
+  const acceptSuggestions = async () => {
+    const chosen = suggestions.filter((_, i) => selected[i]);
+    if (chosen.length === 0) { toast.warning("Hiç kural seçili değil"); return; }
+    setAccepting(true);
+    try {
+      const { data } = await axios.post(`${API}/pms-pro/journey-rules/suggest/accept`,
+        { property_id: pid, suggestions: chosen });
+      toast.success(`${data.created} kural pasif olarak eklendi. İncele ve aç.`);
+      setSuggestions([]);
+      setSelected({});
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Kabul edilemedi");
+    }
+    setAccepting(false);
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -353,6 +402,10 @@ function JourneyRulesTab({ pid }) {
           Tetikleyici → aksiyon. Engine her 60sn'de çalışır ve eşleşen rezervasyonlara aksiyon uygular.
         </p>
         <div className="flex gap-2 flex-wrap">
+          <button onClick={fetchSuggestions} disabled={suggesting} data-testid="journey-ai-suggest-btn"
+                  className="px-3 py-1.5 text-xs rounded-lg bg-violet-600 hover:bg-violet-700 text-white flex items-center gap-1 disabled:opacity-60">
+            {suggesting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />} ✨ AI öner
+          </button>
           <button onClick={() => setShowHistory((v) => !v)} data-testid="journey-history-toggle"
                   className="px-3 py-1.5 text-xs rounded-lg border border-stone-200 hover:bg-stone-50">
             {showHistory ? "Kuralları göster" : `Geçmiş (${fires.length})`}
@@ -402,6 +455,55 @@ function JourneyRulesTab({ pid }) {
             <button onClick={() => setShowForm(false)} className="px-3 py-1.5 text-xs rounded border border-stone-200">İptal</button>
             <button onClick={create} data-testid="journey-rule-save"
                     className="px-3 py-1.5 text-xs rounded bg-violet-600 text-white">Kaydet</button>
+          </div>
+        </div>
+      )}
+
+      {suggestions.length > 0 && (
+        <div className="rounded-xl border border-violet-300 bg-gradient-to-br from-violet-50 to-fuchsia-50 p-4 space-y-3"
+             data-testid="journey-ai-suggestions">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <Wand2 className="w-4 h-4 text-violet-600" />
+              <h4 className="font-semibold text-stone-800">AI Önerileri</h4>
+              <span className="text-xs text-stone-500">
+                {suggestions.length} öneri{suggestStats ? ` · son 30 gün: ${suggestStats.total_bookings_30d} rezv · ${suggestStats.vip_bookings_30d} VIP · ${suggestStats.no_shows_30d} no-show` : ""}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setSuggestions([]); setSelected({}); }}
+                      data-testid="journey-ai-cancel"
+                      className="px-3 py-1.5 text-xs rounded border border-stone-300 bg-white hover:bg-stone-50">İptal</button>
+              <button onClick={acceptSuggestions} disabled={accepting}
+                      data-testid="journey-ai-accept-btn"
+                      className="px-3 py-1.5 text-xs rounded bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 disabled:opacity-60">
+                {accepting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                Seçilileri kabul et (pasif olarak)
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {suggestions.map((s, i) => (
+              <label key={i} className="flex gap-3 p-3 rounded-lg bg-white border border-stone-200 cursor-pointer hover:border-violet-300"
+                     data-testid={`journey-ai-suggestion-${i}`}>
+                <input type="checkbox" checked={!!selected[i]}
+                       onChange={(e) => setSelected({ ...selected, [i]: e.target.checked })}
+                       className="mt-1" />
+                <div className="flex-1">
+                  <div className="font-medium text-stone-800">{s.name}</div>
+                  <div className="text-xs text-violet-700 italic mt-0.5">{s.rationale}</div>
+                  <div className="text-xs text-stone-500 mt-1">
+                    <span className="font-mono px-1.5 py-0.5 bg-stone-100 rounded">{s.trigger}</span>
+                    {" → "}
+                    <span className="font-mono px-1.5 py-0.5 bg-stone-100 rounded">{s.action}</span>
+                    <span className="ml-2 text-stone-400">öncelik {s.priority}</span>
+                  </div>
+                  {s.template && (
+                    <div className="text-xs text-stone-600 mt-1 italic line-clamp-2">"{s.template}"</div>
+                  )}
+                </div>
+              </label>
+            ))}
           </div>
         </div>
       )}

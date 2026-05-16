@@ -5,6 +5,18 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 318 — Honest Reality Check: Booking.com Unit-Count NOT Reliably Scrapable)
+- **User request**: "reviewlerde kac oda li bir hotel oldugunu bulman yanlis booking.comda oda sayilari yaziyor ordan scrap yapman gerek"
+- **Investigation result**: Booking.com **detail pages no longer expose room/apartment count via direct URLs**. Findings:
+  - Direct `/hotel/<cc>/<slug>.html` URLs return a **"Page not found"** HTML shell when accessed without an authenticated search-flow session — even with `?checkin=&checkout=` params.
+  - The static HTML (537KB) contains NO JSON-LD `numberOfRooms`, NO `b_room_count`, NO `hotel_room_count` field. The only structured data is the date-picker months.
+  - First attempt's "988 / 690 / 10" values were **false-positives** from regex matching area-wide listings ("988 apartments in London") on fallback 404 pages.
+- **Honest Outcome**:
+  - Kept `_fetch_property_unit_count()` infrastructure (JSON-LD only, no regex) for the day Booking.com restores the schema.
+  - Defaulted `min_unit_count=0` and `fetch_unit_counts=false` so the unreliable path never runs by default.
+  - **review_count (yorum sayısı) remains the best available proxy** for property size — kept iter 317's filter as the primary mechanism. Properties with 100+ reviews are reliably multi-unit (5+ apartment/room) operations.
+- **Take-away for the user**: We can't directly read "oda sayısı" from Booking.com — they removed that public schema. The 20+ yorum filter is the closest legit signal we have. Best practice: combine with the per-row 👁 Test button (anlık fiyat) to manually validate each candidate.
+
 ### 2026-05-15 (iter 317 — Min-Review Filter: Sadece 5+ Daireli Yerler)
 - **User feedback**: "cevredeki 1 iki dairesi olan kucuk yerler olcu olmuyor en az 5 daire/oda ve yukarisi olan yerleri sirala"
 - **Backend** (`booking_scraper.py` + `market_robot.py`):

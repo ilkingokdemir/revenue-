@@ -668,6 +668,80 @@ def _is_single_room_listing(name: str) -> bool:
     return bool(_SINGLE_ROOM_REGEX.search(name))
 
 
+async def _fetch_property_unit_count(ctx, booking_url: str, timeout_ms: int = 15000) -> Optional[int]:
+    """Attempt to fetch room/apartment count from a Booking.com property page.
+
+    LIMITATION: Booking.com no longer serves a usable property-detail HTML
+    response for direct `/hotel/<cc>/<slug>.html` URLs — they return a generic
+    "page not found" shell unless you arrive via an authenticated search
+    flow with a valid checkin/checkout context. As a result, `numberOfRooms`
+    is rarely (if ever) extractable from the static HTML.
+
+    We still try, in case Booking.com restores the schema in the future:
+      1. Parse `<script type="application/ld+json">` blocks for
+         `numberOfRooms` from any Hotel/LodgingBusiness schema.
+      2. Search the raw HTML for `numberOfRooms` JSON keys (occasionally
+         buried in inline JS state).
+
+    Returns the int unit count, or None if not extractable. Callers should
+    treat None as "unknown" — DO NOT auto-exclude.
+    """
+    if not booking_url:
+        return None
+    page = None
+    try:
+        page = await ctx.new_page()
+        try:
+            await page.goto(booking_url, wait_until="domcontentloaded", timeout=timeout_ms)
+        except Exception:
+            return None
+        try:
+            ld_count = await page.evaluate(
+                """
+                () => {
+                    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                    for (const s of scripts) {
+                        try {
+                            const data = JSON.parse(s.textContent);
+                            const stack = Array.isArray(data) ? [...data] : [data];
+                            while (stack.length) {
+                                const it = stack.pop();
+                                if (!it || typeof it !== 'object') continue;
+                                if (it.numberOfRooms !== undefined && it.numberOfRooms !== null) {
+                                    const v = parseInt(it.numberOfRooms);
+                                    if (!isNaN(v) && v > 0 && v < 5000) return v;
+                                }
+                                if (Array.isArray(it['@graph'])) stack.push(...it['@graph']);
+                            }
+                        } catch (e) {}
+                    }
+                    return null;
+                }
+                """
+            )
+            if isinstance(ld_count, int) and ld_count > 0:
+                return ld_count
+        except Exception as e:
+            logger.debug("JSON-LD parse failed for %s: %s", booking_url, e)
+        # Raw-HTML fallback (rare but free)
+        try:
+            html = await page.content()
+            m = re.search(r'"numberOfRooms"\s*:\s*(\d{1,4})', html)
+            if m:
+                v = int(m.group(1))
+                if 0 < v < 5000:
+                    return v
+        except Exception:
+            pass
+        return None
+    finally:
+        if page:
+            try:
+                await page.close()
+            except Exception:
+                pass
+
+
 
 async def discover_nearby_hotels(
     *,
@@ -684,6 +758,8 @@ async def discover_nearby_hotels(
     district_hint: str = "",
     exclude_single_room: bool = True,
     min_review_count: int = 20,
+    min_unit_count: int = 0,
+    fetch_unit_counts: bool = False,
 ) -> List[Dict]:
     """Discover competitor candidates near a location by scraping Booking.com search.
 
@@ -1039,12 +1115,55 @@ async def discover_nearby_hotels(
                 "discover_nearby_hotels: filtered %d tiny operations (review_count < %d)",
                 excluded_tiny, min_review_count,
             )
-        # Sort: prefer properties with many reviews (proxy for "size"),
-        # then by review_score. None review_count → put at bottom.
+        # --- Fetch real unit/room count per candidate (slow, opt-in) ---
+        # When fetch_unit_counts=True, we visit each candidate's property page
+        # in parallel (max 4 concurrent) and try to extract numberOfRooms from
+        # JSON-LD or fallback regex. Result stored in `unit_count`.
+        if fetch_unit_counts and deduped:
+            sem = asyncio.Semaphore(4)
+
+            async def _fill_unit_count(item):
+                async with sem:
+                    try:
+                        n = await _fetch_property_unit_count(ctx, item.get("booking_url"))
+                        item["unit_count"] = n
+                    except Exception as e:
+                        logger.debug("unit_count fetch failed for %s: %s", item.get("name"), e)
+                        item["unit_count"] = None
+
+            await asyncio.gather(*[_fill_unit_count(d) for d in deduped])
+
+            # Apply min_unit_count filter AFTER fetch
+            if min_unit_count > 0:
+                kept = []
+                excluded_small = 0
+                for d in deduped:
+                    uc = d.get("unit_count")
+                    if uc is None:
+                        # If we couldn't determine — keep it (let user decide).
+                        d["unit_size_known"] = False
+                        kept.append(d)
+                    elif uc < min_unit_count:
+                        excluded_small += 1
+                        continue
+                    else:
+                        d["unit_size_known"] = True
+                        kept.append(d)
+                if excluded_small:
+                    logger.info(
+                        "discover_nearby_hotels: filtered %d small operations (unit_count < %d)",
+                        excluded_small, min_unit_count,
+                    )
+                deduped = kept
+        # Sort: prefer larger operations first (when known), then more reviews,
+        # then higher review_score. Properties with unknown unit_count come last.
         def _sort_key(d):
+            uc = d.get("unit_count")
             rc = d.get("review_count")
             rs = d.get("review_score") or 0.0
-            return (-(rc or -1), -rs)
+            # Unknown unit_count → push to bottom by giving -1 (sort descending = lowest)
+            uc_key = -(uc or 0) if uc and uc > 0 else 0
+            return (uc_key, -(rc or -1), -rs)
         deduped.sort(key=_sort_key)
         return deduped
     except Exception as e:

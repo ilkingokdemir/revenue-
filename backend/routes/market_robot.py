@@ -3205,6 +3205,20 @@ def create_market_robot_router(db, require_roles, resend=None):
         # multi-property operations. Set to 0 to disable.
         min_review_count = int(data.get("min_review_count", 20))
         min_review_count = max(0, min(min_review_count, 500))
+        # NEW: real unit/room count filter — attempts to read numberOfRooms
+        # from each candidate's Booking.com property page (JSON-LD). NOTE:
+        # Booking.com currently returns "page not found" shells for direct
+        # /hotel/<cc>/<slug>.html URLs, so numberOfRooms is rarely
+        # extractable. When set > 0, we still try — but candidates with
+        # unknown room counts are KEPT (so we don't accidentally hide every
+        # legit listing). The review_count threshold (above) is the more
+        # reliable size proxy in practice. Default 0 (disabled).
+        min_unit_count = int(data.get("min_unit_count", 0))
+        min_unit_count = max(0, min(min_unit_count, 500))
+        # Detail-page fetch toggle. False by default (slow, ~5-8s per
+        # candidate × 15 candidates = 60-120s extra latency, all for an
+        # uncertain payoff right now).
+        fetch_unit_counts = bool(data.get("fetch_unit_counts", False))
 
         latitude = prop.get("latitude")
         longitude = prop.get("longitude")
@@ -3302,6 +3316,8 @@ def create_market_robot_router(db, require_roles, resend=None):
             district_hint=district_hint,
             exclude_single_room=exclude_single_room,
             min_review_count=min_review_count,
+            min_unit_count=min_unit_count,
+            fetch_unit_counts=fetch_unit_counts,
         )
 
         # Flag candidates already imported so the UI can disable their checkbox.
@@ -3374,6 +3390,8 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "district_hint": district_hint,
                 "exclude_single_room": exclude_single_room,
                 "min_review_count": min_review_count,
+                "min_unit_count": min_unit_count,
+                "fetch_unit_counts": fetch_unit_counts,
             },
         }
 

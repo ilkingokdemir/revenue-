@@ -3200,6 +3200,11 @@ def create_market_robot_router(db, require_roles, resend=None):
         # A "1 Bedroom Flat" or "Studio Apartment" is NOT a meaningful pricing
         # benchmark for a multi-room PMS-managed property.
         exclude_single_room = bool(data.get("exclude_single_room", True))
+        # Minimum review count: filter out "tiny operations" (single-flat
+        # owner-operated places with very few reviews). 20 default ≈ 5+ unit
+        # multi-property operations. Set to 0 to disable.
+        min_review_count = int(data.get("min_review_count", 20))
+        min_review_count = max(0, min(min_review_count, 500))
 
         latitude = prop.get("latitude")
         longitude = prop.get("longitude")
@@ -3296,6 +3301,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             currency=currency,
             district_hint=district_hint,
             exclude_single_room=exclude_single_room,
+            min_review_count=min_review_count,
         )
 
         # Flag candidates already imported so the UI can disable their checkbox.
@@ -3367,6 +3373,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "geocode_used": geocode_used,
                 "district_hint": district_hint,
                 "exclude_single_room": exclude_single_room,
+                "min_review_count": min_review_count,
             },
         }
 
@@ -3522,6 +3529,7 @@ def create_market_robot_router(db, require_roles, resend=None):
         auto_add_top = max(1, min(int((data or {}).get("auto_add_top") or 5), 15))
         target_ids = (data or {}).get("property_ids") or []
         exclude_single_room = bool((data or {}).get("exclude_single_room", True))
+        min_review_count = max(0, min(int((data or {}).get("min_review_count") or 20), 500))
 
         prop_query: Dict = {"is_active": {"$ne": False}}
         if target_ids:
@@ -3631,6 +3639,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                     language="en-gb", currency=(prop.get("currency") or "GBP"),
                     district_hint=district_hint,
                     exclude_single_room=exclude_single_room,
+                    min_review_count=min_review_count,
                 )
                 entry["status"] = "ok"
                 entry["cleared"] = prev_count

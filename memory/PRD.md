@@ -5,6 +5,32 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 317 — Min-Review Filter: Sadece 5+ Daireli Yerler)
+- **User feedback**: "cevredeki 1 iki dairesi olan kucuk yerler olcu olmuyor en az 5 daire/oda ve yukarisi olan yerleri sirala"
+- **Backend** (`booking_scraper.py` + `market_robot.py`):
+  - JS extractor `review_count` çıkarmaya başladı — kartın tüm metnini regex ile tarar: `(\d+,?\d*)\s*(reviews|yorum|opiniones|avis|recensione|Bewertungen|...)` — çoklu dil.
+  - Yeni param: `min_review_count` (default `20`, max `500`). Multi-unit operasyonların proxy'si — Booking.com'da 20+ yorumu olan property tipik 5+ daire/oda işletir.
+  - Threshold > 0 iken `review_count is None` olanları da hariç tut (brand-new tiny listings tipik).
+  - Sort: `(review_count DESC, review_score DESC)` — büyük operasyonlar en üstte.
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - "🔍 15 Rakip Bul" butonu altına **"Min. yorum"** dropdown'u eklendi (`min-review-count-select`):
+    - `0` · hepsi (filtresiz)
+    - `10` · küçük dahil
+    - `20` · 5+ daire ⭐ (default)
+    - `50` · sadece büyükler
+    - `100` · ünlü zincirler
+  - Her aday satırına **renkli yorum-sayısı chip**'i eklendi:
+    - 100+ yorum → yeşil emerald
+    - 30-99 → cyan
+    - 10-29 → amber
+    - <10 → kırmızı rose
+    - 1000+ → "1.2k yorum" gösterimi
+- **Live test results**:
+  - `camden-suites` (default min=20): 13 → **2** kaldı: `Camden Apartments` (923 yorum), `Camden I Your Apartment` (73 yorum) ✅
+  - `aldgate-flats`: 13/13 hepsi gerçek operasyon (Widegate 1982, 196 Bishopsgate 1418, Aldgate Flats 1375, Wilde Aparthotels 811, Bob W 368...). Hepsi 36+ yorum.
+  - min=0 ile 13 aday görüldü: 7 küçük (2-11 yorum) + 6 hiç yorumsuz — hepsi single-flat operasyonlar, filtre doğrulu.
+- **Lint**: backend + frontend temiz ✅
+
 ### 2026-05-15 (iter 316 — Per-Row "Test" Mini-Button on Candidates)
 - **User feedback**: "UYGULA" — adaylar üzerinde test URL butonu eklemesi onaylandı (iter 315 finish'inde önerilen).
 - **Frontend** (`NeighborhoodScanPanel.js`): Her aday satırına 👁 **Test** mini-butonu eklendi (sky-mavi).

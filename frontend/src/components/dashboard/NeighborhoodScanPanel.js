@@ -71,6 +71,9 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [candidates, setCandidates] = useState([]);       // array of candidate dicts
   const [picked, setPicked] = useState({});                // { [booking_url]: bool }
   const [bulkAdding, setBulkAdding] = useState(false);
+  // Minimum reviews threshold — proxy for "5+ unit" properties. Default 20
+  // typically corresponds to multi-flat operations, not single-flat hosts.
+  const [minReviewCount, setMinReviewCount] = useState(20);
   // Per-row "Test URL" — anlık Booking.com scrape ile gerçek satıştaki fiyatı göster
   const [testingUrl, setTestingUrl] = useState(null);  // booking_url currently being tested
   const [testResults, setTestResults] = useState({});  // { [booking_url]: {ok, price, currency, hotel_name, error} }
@@ -122,6 +125,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           max_results: 15,
           auto_add: false,
           exclude_single_room: true,
+          min_review_count: Number(minReviewCount) || 0,
         }
       );
       const cands = data?.candidates || [];
@@ -801,16 +805,34 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 Önce <strong className="text-cyan-300">otomatik 15 aday</strong> bul → istediklerini seç & ekle. Yetmezse <strong className="text-emerald-300">manuel</strong> URL ile ekle.
               </p>
             </div>
-            <button
-              onClick={runAutoDiscoverCompetitors}
-              disabled={autoDiscovering}
-              className="shrink-0 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:brightness-110 text-black font-black rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-cyan-500/30"
-              data-testid="auto-discover-competitors-btn"
-              title="Booking.com'da yakın 15 komşuyu bul ve liste halinde göster — sen seç & ekle"
-            >
-              {autoDiscovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {autoDiscovering ? "Tarıyor (15 aday)..." : "🔍 15 Rakip Bul"}
-            </button>
+            <div className="shrink-0 flex flex-col items-end gap-2">
+              <button
+                onClick={runAutoDiscoverCompetitors}
+                disabled={autoDiscovering}
+                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:brightness-110 text-black font-black rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-cyan-500/30"
+                data-testid="auto-discover-competitors-btn"
+                title="Booking.com'da yakın 15 komşuyu bul ve liste halinde göster — sen seç & ekle"
+              >
+                {autoDiscovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {autoDiscovering ? "Tarıyor (15 aday)..." : "🔍 15 Rakip Bul"}
+              </button>
+              <label className="flex items-center gap-1.5 text-[10px] text-stone-400 select-none">
+                <span>Min. yorum:</span>
+                <select
+                  value={minReviewCount}
+                  onChange={e => setMinReviewCount(Number(e.target.value))}
+                  data-testid="min-review-count-select"
+                  className="bg-stone-950 border border-stone-700 rounded px-1.5 py-0.5 text-stone-200 font-bold"
+                  disabled={autoDiscovering}
+                >
+                  <option value={0}>0 · hepsi</option>
+                  <option value={10}>10 · küçük dahil</option>
+                  <option value={20}>20 · 5+ daire ⭐</option>
+                  <option value={50}>50 · sadece büyükler</option>
+                  <option value={100}>100 · ünlü zincirler</option>
+                </select>
+              </label>
+            </div>
           </div>
 
           {/* Candidate list — user picks which to add */}
@@ -879,6 +901,19 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                           {c.is_single_room && <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-black uppercase">1 ODA</span>}
                           {c.stars && <span className="text-[9px] text-amber-400">{"★".repeat(c.stars)}</span>}
                           {c.review_score && <span className="text-[10px] text-stone-400">{c.review_score.toFixed(1)}/10</span>}
+                          {c.review_count !== null && c.review_count !== undefined && (
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                                c.review_count >= 100 ? "bg-emerald-500/20 text-emerald-300"
+                                : c.review_count >= 30 ? "bg-cyan-500/20 text-cyan-300"
+                                : c.review_count >= 10 ? "bg-amber-500/20 text-amber-300"
+                                : "bg-rose-500/15 text-rose-300"
+                              }`}
+                              title={c.review_count >= 30 ? "Çok yorum → büyük operasyon (5+ daire)" : "Az yorum → muhtemelen küçük operasyon"}
+                            >
+                              {c.review_count >= 1000 ? `${(c.review_count / 1000).toFixed(1)}k` : c.review_count} yorum
+                            </span>
+                          )}
                           {testResults[c.booking_url] && (
                             testResults[c.booking_url].ok ? (
                               <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold" data-testid={`candidate-test-result-${idx}`}>

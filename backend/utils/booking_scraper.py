@@ -683,6 +683,7 @@ async def discover_nearby_hotels(
     timeout_ms: int = 30000,
     district_hint: str = "",
     exclude_single_room: bool = True,
+    min_review_count: int = 20,
 ) -> List[Dict]:
     """Discover competitor candidates near a location by scraping Booking.com search.
 
@@ -931,7 +932,22 @@ async def discover_nearby_hotels(
                     const address = distEl ? distEl.textContent.trim() : '';
                     const scoreEl = c.querySelector('[data-testid="review-score"]');
                     let review_score = null;
-                    if (scoreEl) { const m = scoreEl.textContent.match(/(\\d+\\.\\d+)/); if (m) review_score = parseFloat(m[1]); }
+                    let review_count = null;
+                    if (scoreEl) {
+                        const m = scoreEl.textContent.match(/(\\d+\\.\\d+)/);
+                        if (m) review_score = parseFloat(m[1]);
+                    }
+                    // review_count: search the whole card for "1,234 reviews" / "1234 yorum"
+                    // patterns. Booking.com places this near the score but on a sibling
+                    // element so we widen the search to the whole card text.
+                    {
+                        const cardText = (c.textContent || '').replace(/\\s+/g, ' ');
+                        const cm = cardText.match(/([\\d,]+)\\s*(reviews|yorum|opiniones|avis|recensione|recensioni|Bewertungen|recenzij|reseñas|opinii|opinie|μέσοι όροι)/i);
+                        if (cm) {
+                            const v = parseInt(cm[1].replace(/,/g, ''));
+                            if (!isNaN(v)) review_count = v;
+                        }
+                    }
                     const starsEl = c.querySelector('[data-testid="rating-stars"]') || c.querySelector('[aria-label*="star"]');
                     let stars = null;
                     if (starsEl) {
@@ -942,7 +958,7 @@ async def discover_nearby_hotels(
                     }
                     const typeEl = c.querySelector('[data-testid="property-type-badge"]');
                     const prop_type = typeEl ? typeEl.textContent.trim() : '';
-                    out.push({ hotel_id, name, slug, booking_url: cleanUrl, stars, review_score, address, property_type: prop_type });
+                    out.push({ hotel_id, name, slug, booking_url: cleanUrl, stars, review_score, review_count, address, property_type: prop_type });
                 }
                 return out;
             }
@@ -970,7 +986,7 @@ async def discover_nearby_hotels(
                         "name": slug.replace("-", " ").title(),
                         "slug": slug,
                         "booking_url": booking_url,
-                        "stars": None, "review_score": None,
+                        "stars": None, "review_score": None, "review_count": None,
                         "address": "", "property_type": "",
                     })
                     if len(fallback) >= max_results:
@@ -988,6 +1004,7 @@ async def discover_nearby_hotels(
         seen = set()
         deduped = []
         excluded_single_room = 0
+        excluded_tiny = 0
         for r in results:
             key = r.get("slug") or r.get("booking_url", "")
             if not key or key in seen:
@@ -997,13 +1014,38 @@ async def discover_nearby_hotels(
             if exclude_single_room and r["is_single_room"]:
                 excluded_single_room += 1
                 continue
+            # Filter "tiny operations" — properties with very few reviews are
+            # likely single-flat owner-operated listings, not multi-unit
+            # operations meaningful for pricing benchmark.
+            # When min_review_count > 0: also exclude listings where we
+            # couldn't extract review_count (None) — typically brand-new
+            # listings that are by definition tiny single-unit ops.
+            rc = r.get("review_count")
+            if min_review_count > 0:
+                if rc is None or (isinstance(rc, int) and rc < min_review_count):
+                    excluded_tiny += 1
+                    r["is_tiny"] = True
+                    continue
+            r["is_tiny"] = False
             seen.add(key)
             deduped.append(r)
         if excluded_single_room:
             logger.info(
-                "discover_nearby_hotels: filtered %d single-room listings (exclude_single_room=True)",
+                "discover_nearby_hotels: filtered %d single-room listings",
                 excluded_single_room,
             )
+        if excluded_tiny:
+            logger.info(
+                "discover_nearby_hotels: filtered %d tiny operations (review_count < %d)",
+                excluded_tiny, min_review_count,
+            )
+        # Sort: prefer properties with many reviews (proxy for "size"),
+        # then by review_score. None review_count → put at bottom.
+        def _sort_key(d):
+            rc = d.get("review_count")
+            rs = d.get("review_score") or 0.0
+            return (-(rc or -1), -rs)
+        deduped.sort(key=_sort_key)
         return deduped
     except Exception as e:
         logger.warning("discover_nearby_hotels failed: %s", e)

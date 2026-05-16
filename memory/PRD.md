@@ -5,6 +5,18 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 313 — Single-Room Filter + Manuel Rakip Ekleme — User Bug Fix)
+- **Bug raporu**: Auto-discovery "Designers 1-bedroom Flat", "Camden Town Modern 1Bedroom Flat", "King Size Bed" gibi tek-odalı/studio mülkleri rakip olarak ekliyordu — bunlar multi-room PMS için anlamlı fiyat benchmark'ı değil. Ayrıca user, Neighborhood Scan panelinden manuel rakip ekleyemiyordu.
+- **Backend fix**:
+  - Yeni regex helper `utils.booking_scraper._is_single_room_listing(name)` — pattern: `1[-\s]?bed(room)?`, `one[-\s]?bed`, `studio`, `single[-\s]?room`, `king/queen[-\s]?size[-\s]?bed`.
+  - `discover_nearby_hotels()` yeni param `exclude_single_room=True` (default). Her result `is_single_room: bool` flag'i taşır; True ise filtre dışında bırakılır.
+  - `/competitors/discover` ve `/fleet-reset-neighbors` body'lerine `exclude_single_room` (default True) eklendi; `search_used.exclude_single_room` echo'lanır.
+- **Frontend fix**:
+  - `NeighborhoodScanPanel.js`: Yeni "Manuel Rakip Ekle" mini-form (yeşil `+` butonu) Neighborhood Scan paneline eklendi. Property "all" seçili değilse görünür. URL+isim girdisi, Booking.com URL doğrulama, Enter ile submit. `data-testid=manual-competitor-add/manual-comp-name/manual-comp-url/manual-comp-add-btn`.
+  - `DiscoverCompetitorsModal.js`: Yeni checkbox `discover-exclude-single-room` (default checked) — kullanıcı isterse tek-odalı filtreyi kapatabilir.
+- **E2E test (iter 304)**: 39/39 PASSED (100%) — 17/17 unit tests for the regex, 12 API tests (discover + fleet-reset + manual add + delete), RBAC (admin/manager/receptionist), 4 regression tests for /auto-geocode, /fleet-validate-geo, /fleet-classify-property-types, /competitors GET.
+- **Live verification**: `camden-suites` discover ON → 10 multi-room candidates (Camden Apartments, Smart & Bright Apartment, Premium House Camden Town, Bright 3 Room Flat...). OFF → 12 results, 2 flagged is_single_room=true (Designers 1-bedroom Flat, Camden Town Modern 1Bedroom Flat). Quality fix verified ✅.
+
 ### 2026-05-15 (iter 312 — AI Property-Type Inference via GPT-4o-mini)
 - **Backend** — new endpoint `POST /api/revenue/market-robot/fleet-classify-property-types`:
   - For each active property (or `property_ids[]` filter), sends `{name, city, country, address, current_label}` to GPT-4o-mini via `emergentintegrations.LlmChat` and asks for `{type, confidence, reasoning}` JSON.

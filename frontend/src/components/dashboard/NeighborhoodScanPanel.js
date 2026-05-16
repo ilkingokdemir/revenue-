@@ -11,7 +11,7 @@ import axios from "axios";
 import {
   MapPin, Radar, Loader2, Clock, Building2, TrendingUp, Timer,
   PoundSterling, Activity, ToggleLeft, ToggleRight, Save, Zap, RefreshCw,
-  Plus, Sparkles, Trash2,
+  Plus, Sparkles, Trash2, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "../../i18n";
@@ -71,6 +71,40 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [candidates, setCandidates] = useState([]);       // array of candidate dicts
   const [picked, setPicked] = useState({});                // { [booking_url]: bool }
   const [bulkAdding, setBulkAdding] = useState(false);
+  // Per-row "Test URL" — anlık Booking.com scrape ile gerçek satıştaki fiyatı göster
+  const [testingUrl, setTestingUrl] = useState(null);  // booking_url currently being tested
+  const [testResults, setTestResults] = useState({});  // { [booking_url]: {ok, price, currency, hotel_name, error} }
+
+  const testCandidateUrl = async (cand) => {
+    const url = cand.booking_url;
+    setTestingUrl(url);
+    try {
+      const { data } = await axios.post(
+        `${API}/revenue/market-robot/validate-booking-url`,
+        { booking_url: url, currency: summary?.property_currency || "GBP" }
+      );
+      setTestResults(prev => ({
+        ...prev,
+        [url]: {
+          ok: !!data?.hotel_id,
+          price: data?.sample_price,
+          currency: data?.currency,
+          hotel_name: data?.hotel_name,
+          error: data?.error,
+        },
+      }));
+      if (data?.hotel_id) {
+        const priceStr = data.sample_price ? `${data.currency} ${data.sample_price.toFixed(0)}` : "fiyat yok";
+        toast.success(`✓ ${data.hotel_name?.slice(0, 40) || "OK"} · ${priceStr}`);
+      } else {
+        toast.error(`✗ Test başarısız: ${data?.error || "URL doğrulanamadı"}`);
+      }
+    } catch (e) {
+      setTestResults(prev => ({ ...prev, [url]: { ok: false, error: "network" } }));
+      toast.error("Test isteği başarısız");
+    }
+    setTestingUrl(null);
+  };
 
   const runAutoDiscoverCompetitors = async () => {
     if (propertyId === "all") {
@@ -845,9 +879,32 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                           {c.is_single_room && <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-black uppercase">1 ODA</span>}
                           {c.stars && <span className="text-[9px] text-amber-400">{"★".repeat(c.stars)}</span>}
                           {c.review_score && <span className="text-[10px] text-stone-400">{c.review_score.toFixed(1)}/10</span>}
+                          {testResults[c.booking_url] && (
+                            testResults[c.booking_url].ok ? (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold" data-testid={`candidate-test-result-${idx}`}>
+                                ✓ {testResults[c.booking_url].currency || ""} {testResults[c.booking_url].price ? testResults[c.booking_url].price.toFixed(0) : "—"}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold" data-testid={`candidate-test-result-${idx}`}>
+                                ✗ {testResults[c.booking_url].error?.slice(0, 25) || "Test başarısız"}
+                              </span>
+                            )
+                          )}
                         </div>
                         <div className="text-[10px] text-stone-500 font-mono truncate">{c.booking_url}</div>
                       </div>
+                      <button
+                        onClick={() => testCandidateUrl(c)}
+                        disabled={testingUrl === c.booking_url}
+                        className="shrink-0 px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 text-[10px] font-bold border border-sky-500/30 disabled:opacity-50 flex items-center gap-1"
+                        title="Booking.com'da test scrape yap — gerçek satıştaki fiyatı gör"
+                        data-testid={`candidate-test-${idx}`}
+                      >
+                        {testingUrl === c.booking_url
+                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                          : <Eye className="w-3 h-3" />}
+                        {testingUrl === c.booking_url ? "Test…" : "Test"}
+                      </button>
                       <button
                         onClick={() => removeFromList(c.booking_url)}
                         className="shrink-0 p-1 rounded hover:bg-rose-500/15 text-stone-500 hover:text-rose-300 transition"

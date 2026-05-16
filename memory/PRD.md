@@ -5,6 +5,20 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 316 — Per-Row "Test" Mini-Button on Candidates)
+- **User feedback**: "UYGULA" — adaylar üzerinde test URL butonu eklemesi onaylandı (iter 315 finish'inde önerilen).
+- **Frontend** (`NeighborhoodScanPanel.js`): Her aday satırına 👁 **Test** mini-butonu eklendi (sky-mavi).
+  - Click → `POST /api/revenue/market-robot/validate-booking-url` çağırır.
+  - Loading state: `Loader2` spin + "Test…" yazı.
+  - Sonuç inline chip olarak ad satırında görünür:
+    - Başarılı: `✓ GBP 68` (mavi chip)
+    - Başarısız: `✗ <error>` (kırmızı chip)
+  - Toast da gönderir: `✓ Camden Apartments · GBP 68` veya `✗ Test başarısız: <reason>`.
+- **State**: `testingUrl` (currently testing), `testResults` ({ url → {ok, price, currency, hotel_name, error} }).
+- **Backend**: Mevcut `/validate-booking-url` endpoint kullanılıyor (değişiklik yok).
+- **Live test (curl)**: `https://www.booking.com/hotel/gb/camden-apartments-london.html` → `{ok:true, hotel_id:5634249, hotel_name:"Camden Apartments", sample_price:68.0, currency:"GBP"}` ✅. Frontend chip aynı veriyi gösterecek.
+- **Infra note**: Playwright Chromium tekrar kayboldu → 3. kez kuruldu. (Recurring — production'da supervisor startup hook olmalı.)
+
 ### 2026-05-15 (iter 315 — 15-Aday Listesi · User Picks & Adds)
 - **User feedback**: "RAKIPLERI BULSUN 15 TANE BEN EKLEYIP KALDIRIYIM" — istek: 15 aday bul, listede göster, ben checkbox ile seçeyim, "Seçilenleri Ekle" diyeyim.
 - **Frontend** (`NeighborhoodScanPanel.js`):

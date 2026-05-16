@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell, ReferenceLine, CartesianGrid } from "recharts";
-import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap, Undo2, Sparkles, MapPinned } from "lucide-react";
+import { TrendingUp, TrendingDown, RefreshCw, Loader2, Building2, ArrowRight, Zap, Undo2, Sparkles, MapPinned, Brain } from "lucide-react";
 import useLivePolling from "../../hooks/useLivePolling";
 import GapCloseModal from "./GapCloseModal";
 import FleetGapCloseModal from "./FleetGapCloseModal";
@@ -26,6 +26,37 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
   const [lastBatch, setLastBatch] = useState(null);  // {batch_id, applied_at, branches, days, undone}
   const [fleetResetting, setFleetResetting] = useState(false);
   const [geoValidating, setGeoValidating] = useState(false);
+  const [aiClassifying, setAiClassifying] = useState(false);
+
+  const runAiClassify = async (apply = false) => {
+    if (apply && !window.confirm(
+      "GPT-4o-mini ile her property'nin adına bakıp doğru property_type'ı çıkaracağım " +
+      "(ör: 'Camden Apartments' → apartment, 'City Gate Guest House' → guesthouse). " +
+      "Yalnızca AI'nın %70+ güvenli olduğu değişiklikler uygulanır. 48 property için ~1 dk sürer. Devam?"
+    )) return;
+    setAiClassifying(true);
+    try {
+      const { data } = await axios.post(`${API}/revenue/market-robot/fleet-classify-property-types`,
+        { dry_run: !apply });
+      const upd = data.updated_count || 0;
+      const would = data.would_update_count || 0;
+      const unchanged = data.unchanged_count || 0;
+      const low = data.low_confidence_count || 0;
+      const skip = data.skipped_count || 0;
+      if (apply) {
+        if (upd > 0) toast.success(`AI sınıflandırma: ${upd} property güncellendi · ${unchanged} doğrulandı · ${low} düşük güven · ${skip} atlandı.`);
+        else toast.success(`AI sınıflandırma: ${unchanged} property zaten doğru etiketli, değişiklik yok 🎯`);
+      } else {
+        if (would > 0) toast.warning(`Dry-run: ${would} property için yeniden sınıflandırma önerildi. Apply=true ile uygula.`);
+        else toast.success(`Dry-run: ${unchanged} property OK · sıfır değişiklik gerekiyor ✅`);
+      }
+      console.log("[AI Classify]", data);
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "AI sınıflandırma başarısız");
+    }
+    setAiClassifying(false);
+  };
 
   const runGeoValidate = async (fix = false) => {
     const label = fix ? "Auto-fix" : "Dry-run";
@@ -187,6 +218,19 @@ export default function FleetCompetitorPulseCard({ onSelectProperty }) {
           <button onClick={() => runGeoValidate(false)} disabled={geoValidating}
             title="Sadece rapor — hiçbir property güncellenmez. Önce ne çıkacağını gör."
             data-testid="fleet-validate-geo-dryrun-btn"
+            className="hidden md:flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold bg-stone-800 hover:bg-stone-700 text-stone-400 border border-stone-700">
+            Dry
+          </button>
+          <button onClick={() => runAiClassify(true)} disabled={aiClassifying}
+            title="GPT-4o-mini ile her property'nin doğru property_type'ını (hotel/apartment/guesthouse) AI ile tespit et ve yüksek güvenli olanları güncelle"
+            data-testid="fleet-ai-classify-btn"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition ${aiClassifying ? "bg-violet-500/15 border-violet-500/40 text-violet-300 cursor-wait" : "bg-stone-800 border-violet-500/30 text-violet-300 hover:bg-violet-500/15"}`}>
+            {aiClassifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+            {aiClassifying ? "Sınıflandırılıyor..." : "AI Tip Sınıflandır"}
+          </button>
+          <button onClick={() => runAiClassify(false)} disabled={aiClassifying}
+            title="AI önerisi — yalnızca rapor"
+            data-testid="fleet-ai-classify-dryrun-btn"
             className="hidden md:flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-bold bg-stone-800 hover:bg-stone-700 text-stone-400 border border-stone-700">
             Dry
           </button>

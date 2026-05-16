@@ -3897,6 +3897,206 @@ def create_market_robot_router(db, require_roles, resend=None):
             ),
         }
 
+    @router.post("/revenue/market-robot/fleet-classify-property-types")
+    async def fleet_classify_property_types(
+        data: Dict = {},
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Fleet-wide AI Property-Type Inference.
+
+        Uses GPT-4o-mini to re-classify each property's `property_type`
+        based on its name (e.g. "Camden Apartments" → apartment,
+        "City Gate Guest House" → guesthouse, "Whitechapel Grand" → hotel).
+
+        Booking.com filter implications:
+          - apartment / serviced_apartment → "apartments" filter
+          - aparthotel                     → "aparthotels" filter
+          - hotel / guesthouse / bnb / b&b → "hotels" filter
+
+        Body (optional):
+          - property_ids: [] — restrict to specific IDs
+          - dry_run: true (default) — only return preview, no writes
+          - only_missing: false — when true, only classify properties whose
+            current `property_type` is null/empty/missing
+          - confidence_threshold: 0.7 — only persist when AI confidence >= this
+          - model: "gpt-4o-mini" (default; supports any Emergent-LLM model)
+        """
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+        except ImportError:
+            raise HTTPException(500, "emergentintegrations not installed")
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(500, "EMERGENT_LLM_KEY not configured")
+
+        target_ids = (data or {}).get("property_ids") or []
+        dry_run = bool((data or {}).get("dry_run", True))
+        only_missing = bool((data or {}).get("only_missing", False))
+        conf_thr = float((data or {}).get("confidence_threshold") or 0.7)
+        conf_thr = max(0.0, min(conf_thr, 1.0))
+        model = (data or {}).get("model") or "gpt-4o-mini"
+
+        prop_query: Dict = {"is_active": {"$ne": False}}
+        if target_ids:
+            prop_query["id"] = {"$in": target_ids}
+        if only_missing:
+            prop_query["$or"] = [
+                {"property_type": {"$exists": False}},
+                {"property_type": None},
+                {"property_type": ""},
+            ]
+        props = await db.properties.find(
+            prop_query,
+            {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1,
+             "property_type": 1, "address": 1},
+        ).to_list(500)
+
+        valid_types = {"hotel", "apartment", "serviced_apartment",
+                       "aparthotel", "guesthouse", "bnb", "hostel"}
+
+        results = []
+        updated_count = 0
+        unchanged_count = 0
+        skipped_count = 0
+        low_confidence_count = 0
+
+        # NOTE: we issue one LlmChat per property (separate session) so each
+        # classification is independent and reproducible. This is cheap with
+        # gpt-4o-mini and avoids context bleed.
+        SYSTEM_PROMPT = (
+            "You are a hospitality classification expert. Given a property's "
+            "name, city, country and address, classify the lodging type. "
+            "Return ONLY compact JSON, no markdown, with EXACTLY these keys: "
+            '{"type": "<one of: hotel | apartment | serviced_apartment | aparthotel | guesthouse | bnb | hostel>", '
+            '"confidence": <float 0..1>, '
+            '"reasoning": "<one short sentence>"}. '
+            "Heuristics: names containing 'Apartments', 'Flats', 'Studios', "
+            "'Suites' (without 'Hotel') usually mean apartment. 'Guest House', "
+            "'B&B' → guesthouse/bnb. 'Hostel' → hostel. 'Aparthotel' or "
+            "'Apartment Hotel' → aparthotel. Default to hotel only when name "
+            "explicitly contains 'Hotel', 'Inn', 'Grand', 'Plaza', 'Resort'."
+        )
+
+        for prop in props:
+            pid = prop.get("id")
+            pname = (prop.get("name") or "").strip()
+            current = (prop.get("property_type") or "").lower().strip()
+
+            entry = {
+                "property_id": pid,
+                "name": pname,
+                "current_type": current or None,
+                "city": prop.get("city"),
+                "status": "skipped",
+                "reason": None,
+            }
+
+            if not pname:
+                entry["reason"] = "no_name"
+                skipped_count += 1
+                results.append(entry)
+                continue
+
+            user_prompt = (
+                f"Property:\n"
+                f"  name: {pname}\n"
+                f"  city: {prop.get('city') or '-'}\n"
+                f"  country: {prop.get('country') or '-'}\n"
+                f"  address: {prop.get('address') or '-'}\n"
+                f"  current_label: {current or 'null'}\n\n"
+                f"Return JSON only."
+            )
+
+            try:
+                chat = LlmChat(
+                    api_key=api_key,
+                    session_id=f"classify-{pid}-{uuid.uuid4().hex[:8]}",
+                    system_message=SYSTEM_PROMPT,
+                ).with_model("openai", model)
+                reply = await chat.send_message(UserMessage(text=user_prompt))
+                raw = (reply or "").strip()
+                # Tolerate ```json fences
+                if raw.startswith("```"):
+                    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
+                import json as _json
+                parsed = _json.loads(raw)
+                pred_type = (parsed.get("type") or "").lower().strip()
+                conf = float(parsed.get("confidence") or 0.0)
+                reasoning = (parsed.get("reasoning") or "")[:200]
+            except Exception as e:
+                entry["status"] = "error"
+                entry["reason"] = f"llm_error: {str(e)[:120]}"
+                skipped_count += 1
+                results.append(entry)
+                continue
+
+            entry["predicted_type"] = pred_type
+            entry["confidence"] = round(conf, 3)
+            entry["reasoning"] = reasoning
+
+            if pred_type not in valid_types:
+                entry["status"] = "skipped"
+                entry["reason"] = f"invalid_type: {pred_type}"
+                skipped_count += 1
+                results.append(entry)
+                continue
+
+            if conf < conf_thr:
+                entry["status"] = "low_confidence"
+                entry["reason"] = f"conf {conf:.2f} < threshold {conf_thr:.2f}"
+                low_confidence_count += 1
+                results.append(entry)
+                continue
+
+            if pred_type == current:
+                entry["status"] = "unchanged"
+                entry["reason"] = "ai_confirmed_current_label"
+                unchanged_count += 1
+                results.append(entry)
+                continue
+
+            # High-confidence change.
+            entry["status"] = "would_update" if dry_run else "updated"
+            entry["reason"] = (
+                f"reclassified from '{current or 'null'}' to '{pred_type}'"
+            )
+            if not dry_run:
+                await db.properties.update_one(
+                    {"id": pid},
+                    {"$set": {
+                        "property_type": pred_type,
+                        "property_type_classified_by": "ai-gpt-4o-mini",
+                        "property_type_classified_at": datetime.now(timezone.utc).isoformat(),
+                        "property_type_classification_confidence": round(conf, 3),
+                        "property_type_classification_reason": reasoning,
+                    }},
+                )
+                updated_count += 1
+            results.append(entry)
+
+        return {
+            "ok": True,
+            "total_properties": len(props),
+            "updated_count": updated_count,
+            "would_update_count": sum(1 for r in results if r["status"] == "would_update"),
+            "unchanged_count": unchanged_count,
+            "low_confidence_count": low_confidence_count,
+            "skipped_count": skipped_count,
+            "dry_run": dry_run,
+            "only_missing": only_missing,
+            "confidence_threshold": conf_thr,
+            "model": model,
+            "results": results,
+            "message": (
+                f"AI classify: {updated_count} updated · "
+                f"{sum(1 for r in results if r['status'] == 'would_update')} would_update · "
+                f"{unchanged_count} unchanged · {low_confidence_count} low_conf · "
+                f"{skipped_count} skip "
+                f"({'DRY-RUN' if dry_run else 'LIVE'})."
+            ),
+        }
+
     @router.post("/revenue/market-robot/{property_id}/competitors/bulk-add")
     async def bulk_add_competitors(
         property_id: str, data: Dict,

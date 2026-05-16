@@ -39,6 +39,9 @@ export default function DiscoverCompetitorsModal({ propertyId, open, onClose, on
   const [city, setCity] = useState("");
   const [propertyType, setPropertyType] = useState("any");
   const [maxResults, setMaxResults] = useState(20);
+  // Default ON: filter out 1-bedroom / studio / single-room listings — these
+  // aren't meaningful pricing benchmarks for multi-room PMS properties.
+  const [excludeSingleRoom, setExcludeSingleRoom] = useState(true);
   // Manual-add row — admin can type a Booking.com URL and hit "+ Add Manual"
   const [manualName, setManualName] = useState("");
   const [manualUrl, setManualUrl] = useState("");
@@ -70,7 +73,8 @@ export default function DiscoverCompetitorsModal({ propertyId, open, onClose, on
     try {
       const { data } = await axios.post(
         `${API}/revenue/market-robot/${propertyId}/competitors/discover`,
-        { postcode, city, property_type: propertyType, max_results: Number(maxResults) },
+        { postcode, city, property_type: propertyType, max_results: Number(maxResults),
+          exclude_single_room: excludeSingleRoom },
       );
       const cands = data?.candidates || [];
       setCandidates(cands);
@@ -90,7 +94,7 @@ export default function DiscoverCompetitorsModal({ propertyId, open, onClose, on
       toast.error(e?.response?.data?.detail || "Discovery failed");
     }
     setLoading(false);
-  }, [propertyId, postcode, city, propertyType, maxResults]);
+  }, [propertyId, postcode, city, propertyType, maxResults, excludeSingleRoom]);
 
   const toggle = (url) => setSelected(p => ({ ...p, [url]: !p[url] }));
 
@@ -206,6 +210,19 @@ export default function DiscoverCompetitorsModal({ propertyId, open, onClose, on
               {loading ? "Taranıyor…" : "Tara · Discover"}
             </button>
           </div>
+          {/* Single-room filter toggle — default ON */}
+          <label className="flex items-center gap-2 text-xs text-stone-300 cursor-pointer select-none"
+                 data-testid="discover-exclude-single-room-label">
+            <input type="checkbox"
+                   checked={excludeSingleRoom}
+                   onChange={(e) => setExcludeSingleRoom(e.target.checked)}
+                   data-testid="discover-exclude-single-room"
+                   className="accent-emerald-500 w-3.5 h-3.5" />
+            <span>
+              <strong className="text-emerald-300">1 odalı / studio mülkleri filtrele</strong>
+              <span className="text-stone-500"> · "1 Bedroom Flat", "Studio Apartment", "King Size Bed" gibi tek-odalı listeleri hariç tut (fiyatlandırma benchmark'ı değil).</span>
+            </span>
+          </label>
           {searchUsed && (
             <p className="text-[10px] text-stone-500 italic">
               Kullanılan sorgu: {searchUsed.postcode || "—"} · {searchUsed.city || "—"} · {searchUsed.property_type} · {searchUsed.currency}

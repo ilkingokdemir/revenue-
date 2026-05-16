@@ -638,6 +638,37 @@ def _extract_district_hint(display_name: str, postcode: str = "", city: str = ""
     return city or postcode or display_name.split(",")[-1]
 
 
+# Single-room / studio listing detector — these are not pricing benchmarks for a
+# multi-room PMS property; e.g. "1 Bedroom Flat", "Studio Apartment", "Cosy King
+# Size Bed", "Single Room", "Designers 1-bedroom Flat", etc. Used by
+# discover_nearby_hotels to filter out noise from Booking.com search results.
+_SINGLE_ROOM_REGEX = re.compile(
+    r"\b("
+    r"1[\s-]?bed(room)?s?|"           # "1 Bed", "1-bed", "1 Bedroom"
+    r"one[\s-]?bed(room)?s?|"         # "One Bed", "One-Bedroom"
+    r"studio[\s-]?(apartment|flat)?|"  # "Studio", "Studio Apartment", "Studio Flat"
+    r"single[\s-]?(room|bed)|"        # "Single Room", "Single Bed"
+    r"king[\s-]?size[\s-]?bed|"       # "King Size Bed" — single bedroom marker
+    r"queen[\s-]?size[\s-]?bed"       # "Queen Size Bed"
+    r")\b",
+    re.I,
+)
+
+
+def _is_single_room_listing(name: str) -> bool:
+    """Heuristic: does the listing name suggest a single-room/studio unit?
+
+    Used to filter out Booking.com search results that aren't meaningful price
+    benchmarks for a multi-room PMS-managed property. Returns True when the
+    name matches patterns like "1 Bedroom Flat", "Studio", "King Size Bed",
+    "Single Room", etc.
+    """
+    if not name:
+        return False
+    return bool(_SINGLE_ROOM_REGEX.search(name))
+
+
+
 async def discover_nearby_hotels(
     *,
     postcode: str = "",
@@ -651,13 +682,19 @@ async def discover_nearby_hotels(
     currency: str = "GBP",
     timeout_ms: int = 30000,
     district_hint: str = "",
+    exclude_single_room: bool = True,
 ) -> List[Dict]:
     """Discover competitor candidates near a location by scraping Booking.com search.
 
     Admins use this to generate a list of nearby hotels with the same property type
     (apartment/hotel/aparthotel), then pick which to add as competitors via the UI.
     Returns a list of dicts with hotel_id, name, slug, booking_url, stars, review_score,
-    address, and property_type. Never raises — returns [] on failure.
+    address, property_type, and is_single_room (bool). Never raises — returns [] on failure.
+
+    When `exclude_single_room=True` (default), candidates whose name suggests a
+    single-room listing (e.g. "1 Bedroom Flat", "Studio", "King Size Bed") are
+    filtered out — these are not meaningful pricing benchmarks for a multi-room
+    PMS-managed property.
     """
     # Build the search string smartly. Booking.com chokes on duplicate words like
     # "Zurich, Zurich" (returns featured global hotels). De-dupe + clean.
@@ -950,11 +987,23 @@ async def discover_nearby_hotels(
         )
         seen = set()
         deduped = []
+        excluded_single_room = 0
         for r in results:
             key = r.get("slug") or r.get("booking_url", "")
-            if key and key not in seen:
-                seen.add(key)
-                deduped.append(r)
+            if not key or key in seen:
+                continue
+            # Flag single-room/studio listings — optionally filter them out.
+            r["is_single_room"] = _is_single_room_listing(r.get("name", ""))
+            if exclude_single_room and r["is_single_room"]:
+                excluded_single_room += 1
+                continue
+            seen.add(key)
+            deduped.append(r)
+        if excluded_single_room:
+            logger.info(
+                "discover_nearby_hotels: filtered %d single-room listings (exclude_single_room=True)",
+                excluded_single_room,
+            )
         return deduped
     except Exception as e:
         logger.warning("discover_nearby_hotels failed: %s", e)

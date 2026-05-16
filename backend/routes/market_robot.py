@@ -3196,6 +3196,10 @@ def create_market_robot_router(db, require_roles, resend=None):
         language = (data.get("language") or "en-gb").lower()
         radius_km = float(data.get("radius_km") or 2.5)
         radius_km = max(0.5, min(radius_km, 10.0))
+        # Default ON: exclude single-room/studio listings from auto-discovery.
+        # A "1 Bedroom Flat" or "Studio Apartment" is NOT a meaningful pricing
+        # benchmark for a multi-room PMS-managed property.
+        exclude_single_room = bool(data.get("exclude_single_room", True))
 
         latitude = prop.get("latitude")
         longitude = prop.get("longitude")
@@ -3291,6 +3295,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             language=language,
             currency=currency,
             district_hint=district_hint,
+            exclude_single_room=exclude_single_room,
         )
 
         # Flag candidates already imported so the UI can disable their checkbox.
@@ -3361,6 +3366,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "radius_km": radius_km,
                 "geocode_used": geocode_used,
                 "district_hint": district_hint,
+                "exclude_single_room": exclude_single_room,
             },
         }
 
@@ -3515,6 +3521,7 @@ def create_market_robot_router(db, require_roles, resend=None):
         auto_add = bool((data or {}).get("auto_add"))
         auto_add_top = max(1, min(int((data or {}).get("auto_add_top") or 5), 15))
         target_ids = (data or {}).get("property_ids") or []
+        exclude_single_room = bool((data or {}).get("exclude_single_room", True))
 
         prop_query: Dict = {"is_active": {"$ne": False}}
         if target_ids:
@@ -3623,6 +3630,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                     property_type=inf_type, max_results=max_results, radius_km=radius_km,
                     language="en-gb", currency=(prop.get("currency") or "GBP"),
                     district_hint=district_hint,
+                    exclude_single_room=exclude_single_room,
                 )
                 entry["status"] = "ok"
                 entry["cleared"] = prev_count

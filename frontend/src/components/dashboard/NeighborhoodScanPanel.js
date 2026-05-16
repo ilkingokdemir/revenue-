@@ -11,6 +11,7 @@ import axios from "axios";
 import {
   MapPin, Radar, Loader2, Clock, Building2, TrendingUp, Timer,
   PoundSterling, Activity, ToggleLeft, ToggleRight, Save, Zap, RefreshCw,
+  Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "../../i18n";
@@ -60,6 +61,41 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [fixPostcode, setFixPostcode] = useState("");
   const [fixing, setFixing] = useState(false);
   const [propInfo, setPropInfo] = useState({ city: "", currency: "" });
+  // Manual competitor add (small form, no full URL validation)
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualName, setManualName] = useState("");
+  const [manualAdding, setManualAdding] = useState(false);
+
+  const addManualCompetitor = async () => {
+    const url = (manualUrl || "").trim();
+    if (!url) { toast.error("Booking.com URL gerekli"); return; }
+    if (!/booking\.com\/hotel\//i.test(url)) {
+      toast.error("Geçerli bir Booking.com /hotel/ URL'si yapıştırın");
+      return;
+    }
+    if (propertyId === "all") {
+      toast.error("Önce yukarıdan tek bir şube seçin");
+      return;
+    }
+    setManualAdding(true);
+    try {
+      const { data } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/competitors`,
+        { booking_url: url, name: manualName.trim() }
+      );
+      if (data?.error === "invalid_booking_url") {
+        toast.error("Booking.com URL'si doğrulanamadı. Linki kontrol edin.");
+      } else {
+        toast.success(`Rakip eklendi: ${data?.name || manualName || "yeni"} — sonraki tarama bunu da çekecek`);
+        setManualUrl("");
+        setManualName("");
+        loadAll();
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Rakip ekleme başarısız");
+    }
+    setManualAdding(false);
+  };
 
   // Hydrate location fields whenever the branch (propertyId) or backend cfg changes.
   // Bug before: `!location` guarded this, so once any branch set location, subsequent
@@ -630,6 +666,55 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           <p className="text-[11px] text-stone-500 flex items-center gap-1.5"><Timer className="w-3 h-3" /> Last auto-scan: <span className="text-emerald-300 font-semibold">{new Date(autoCfg.last_scan).toLocaleString()}</span> · Total: <span className="text-emerald-300 font-semibold">{autoCfg.total_scans || 0}</span></p>
         )}
       </div>
+
+      {/* Manual competitor add — bypasses auto-discovery noise */}
+      {propertyId !== "all" && (
+        <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="manual-competitor-add">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h4 className="text-sm font-bold text-stone-100 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-emerald-400" />
+                Manuel Rakip Ekle
+              </h4>
+              <p className="text-[11px] text-stone-500 mt-0.5">
+                Auto-discovery'nin atladığı (veya tek-odalı diye filtrelediği) bir rakibi
+                Booking.com URL'si ile kendin ekle. Bir sonraki taramada fiyatları çekilir.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={manualName}
+              onChange={e => setManualName(e.target.value)}
+              placeholder="Otel adı (opsiyonel)"
+              className="w-full sm:w-48 px-3 py-2 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              data-testid="manual-comp-name"
+              disabled={manualAdding}
+            />
+            <input
+              value={manualUrl}
+              onChange={e => setManualUrl(e.target.value)}
+              placeholder="https://www.booking.com/hotel/gb/the-barkston.html"
+              className="flex-1 min-w-[260px] px-3 py-2 text-sm font-mono bg-stone-950 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              data-testid="manual-comp-url"
+              disabled={manualAdding}
+              onKeyDown={e => { if (e.key === "Enter") addManualCompetitor(); }}
+            />
+            <button
+              onClick={addManualCompetitor}
+              disabled={manualAdding || !manualUrl}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              data-testid="manual-comp-add-btn"
+            >
+              {manualAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {manualAdding ? "Ekleniyor..." : "+ Rakip Ekle"}
+            </button>
+          </div>
+          <p className="text-[10px] text-stone-500 mt-2">
+            ✓ URL Booking.com tarafından doğrulanır. ✓ Bir sonraki "Scan Now" taramasında bu rakip de fiyatları çekilecek.
+          </p>
+        </div>
+      )}
 
       {/* Last scan result */}
       {lastResult && (

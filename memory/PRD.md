@@ -5,6 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 314 — Two-Tier Competitor Flow: Auto-Discover → Manuel)
+- **User feedback**: "neden otomotik rakipler bulmayi kaldirdin once yazilim bulsun scan yapip eger yetmezse manuel kendiside girsin" — istek: önce otomatik rakip bul-ekle, sonra manuel.
+- **Frontend** (`NeighborhoodScanPanel.js`): Manuel-only formu **iki-aşamalı "Rakipler" paneline** dönüştürüldü:
+  1. **🤖 Otomatik Rakip Bul & Ekle** (cyan gradient button, `auto-discover-competitors-btn`) — tek tıkta `/competitors/discover` çağırır, `auto_add:true, auto_add_top:5, exclude_single_room:true` payload'u ile top 5 komşuyu otomatik rakip yapar. Sonuç bandı (cyan kart) bulunan aday sayısı + eklenen rakip sayısı + ilk 5 adın önizlemesini gösterir.
+  2. **+ Manuel Ekle** (alt bölüm) — auto-discovery'nin kaçırdıklarını URL ile elle eklemek için. Tek-odalı filtre auto path'inde varsayılan açık.
+- **Backend (zaten mevcut)**: `/competitors/discover` endpoint'i `auto_add:true,auto_add_top:N` ile çağrıldığında top N adayı `market_competitors`'a otomatik insert ediyor (`last_source='auto_reset_autoadd'` audit).
+- **Infrastructure fix**: Playwright Chromium binary headless_shell tekrar kayboldu (recurring bug iter 312'den) — `playwright install chromium` ile yeniden indirildi (291 MB).
+- **Live verification**: `aldgate-flats` üzerinde test → 19 aday Booking.com'dan, 3 yeni rakip otomatik eklendi (Premier Suites Liverpool Street 2 Bed Apartment, 196 Bishopsgate, Wilde Aparthotels London Liverpool Street). 2 zaten ekli. `exclude_single_room=True` aktif. ✅
+
 ### 2026-05-15 (iter 313 — Single-Room Filter + Manuel Rakip Ekleme — User Bug Fix)
 - **Bug raporu**: Auto-discovery "Designers 1-bedroom Flat", "Camden Town Modern 1Bedroom Flat", "King Size Bed" gibi tek-odalı/studio mülkleri rakip olarak ekliyordu — bunlar multi-room PMS için anlamlı fiyat benchmark'ı değil. Ayrıca user, Neighborhood Scan panelinden manuel rakip ekleyemiyordu.
 - **Backend fix**:

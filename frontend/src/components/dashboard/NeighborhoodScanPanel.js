@@ -11,7 +11,7 @@ import axios from "axios";
 import {
   MapPin, Radar, Loader2, Clock, Building2, TrendingUp, Timer,
   PoundSterling, Activity, ToggleLeft, ToggleRight, Save, Zap, RefreshCw,
-  Plus,
+  Plus, Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "../../i18n";
@@ -65,6 +65,49 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [manualUrl, setManualUrl] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualAdding, setManualAdding] = useState(false);
+  // Auto-discover competitors directly from this panel — 1-click "scan & add top N"
+  const [autoDiscovering, setAutoDiscovering] = useState(false);
+  const [discoveryResult, setDiscoveryResult] = useState(null);  // { added, total, candidates }
+
+  const runAutoDiscoverCompetitors = async () => {
+    if (propertyId === "all") {
+      toast.error("Önce yukarıdan tek bir şube seçin");
+      return;
+    }
+    setAutoDiscovering(true);
+    setDiscoveryResult(null);
+    try {
+      const { data } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/competitors/discover`,
+        {
+          // Tighter radius for "neighbors" than the geo-supply scan radius
+          radius_km: Math.max(0.5, Math.min(parseFloat(radiusKm) || 2.5, 5.0)),
+          max_results: 20,
+          auto_add: true,
+          auto_add_top: 5,
+          exclude_single_room: true,
+        }
+      );
+      const added = data?.auto_added || 0;
+      const total = (data?.candidates || []).length;
+      setDiscoveryResult({
+        added,
+        total,
+        candidates: (data?.candidates || []).slice(0, 10),
+      });
+      if (added > 0) {
+        toast.success(`✅ ${added} rakip otomatik eklendi (${total} aday bulundu) · Şimdi "Scan Now" ile fiyatlarını çek`);
+      } else if (total > 0) {
+        toast.warning(`${total} aday bulundu ama hepsi zaten eklenmiş veya size benziyor. Manuel olarak ekleyebilirsiniz.`);
+      } else {
+        toast.warning("Hiç rakip bulunamadı — yarıçapı arttırın veya manuel olarak ekleyin.");
+      }
+      loadAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Otomatik discovery başarısız");
+    }
+    setAutoDiscovering(false);
+  };
 
   const addManualCompetitor = async () => {
     const url = (manualUrl || "").trim();
@@ -667,52 +710,83 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         )}
       </div>
 
-      {/* Manual competitor add — bypasses auto-discovery noise */}
+      {/* Competitor discovery — auto + manual, two-tier flow */}
       {propertyId !== "all" && (
-        <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="manual-competitor-add">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div>
+        <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5 space-y-4" data-testid="competitor-discovery-section">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0 flex-1">
               <h4 className="text-sm font-bold text-stone-100 flex items-center gap-2">
-                <Plus className="w-4 h-4 text-emerald-400" />
-                Manuel Rakip Ekle
+                <Building2 className="w-4 h-4 text-cyan-400" />
+                Rakipler · Competitors
               </h4>
               <p className="text-[11px] text-stone-500 mt-0.5">
-                Auto-discovery'nin atladığı (veya tek-odalı diye filtrelediği) bir rakibi
-                Booking.com URL'si ile kendin ekle. Bir sonraki taramada fiyatları çekilir.
+                Önce <strong className="text-cyan-300">otomatik</strong> Booking.com taraması yapın — yetmezse <strong className="text-emerald-300">manuel</strong> ekleyin. Bir sonraki "Scan Now" taramasında bu rakiplerin fiyatları çekilir.
               </p>
             </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <input
-              value={manualName}
-              onChange={e => setManualName(e.target.value)}
-              placeholder="Otel adı (opsiyonel)"
-              className="w-full sm:w-48 px-3 py-2 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              data-testid="manual-comp-name"
-              disabled={manualAdding}
-            />
-            <input
-              value={manualUrl}
-              onChange={e => setManualUrl(e.target.value)}
-              placeholder="https://www.booking.com/hotel/gb/the-barkston.html"
-              className="flex-1 min-w-[260px] px-3 py-2 text-sm font-mono bg-stone-950 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              data-testid="manual-comp-url"
-              disabled={manualAdding}
-              onKeyDown={e => { if (e.key === "Enter") addManualCompetitor(); }}
-            />
             <button
-              onClick={addManualCompetitor}
-              disabled={manualAdding || !manualUrl}
-              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              data-testid="manual-comp-add-btn"
+              onClick={runAutoDiscoverCompetitors}
+              disabled={autoDiscovering}
+              className="shrink-0 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:brightness-110 text-black font-black rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-cyan-500/30"
+              data-testid="auto-discover-competitors-btn"
+              title="Booking.com'da yakın komşuları bul ve top 5'i otomatik rakip olarak ekle"
             >
-              {manualAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              {manualAdding ? "Ekleniyor..." : "+ Rakip Ekle"}
+              {autoDiscovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {autoDiscovering ? "Tarıyor..." : "🤖 Otomatik Rakip Bul & Ekle"}
             </button>
           </div>
-          <p className="text-[10px] text-stone-500 mt-2">
-            ✓ URL Booking.com tarafından doğrulanır. ✓ Bir sonraki "Scan Now" taramasında bu rakip de fiyatları çekilecek.
-          </p>
+
+          {/* Auto-discovery result summary */}
+          {discoveryResult && (
+            <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-3" data-testid="discovery-result">
+              <p className="text-xs text-cyan-200">
+                <strong>{discoveryResult.added}</strong> rakip otomatik eklendi ·
+                <strong className="ml-1">{discoveryResult.total}</strong> aday Booking.com'dan bulundu.
+                {discoveryResult.candidates.length > 0 && (
+                  <span className="text-stone-400"> Önizleme: {discoveryResult.candidates.slice(0, 5).map(c => c.name).join(", ")}{discoveryResult.candidates.length > 5 ? "…" : ""}</span>
+                )}
+              </p>
+            </div>
+          )}
+
+          {/* Manual add — fallback for missing ones */}
+          <div className="pt-3 border-t border-stone-800" data-testid="manual-competitor-add">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <Plus className="w-4 h-4 text-emerald-400" />
+              <h5 className="text-xs font-bold text-stone-200 uppercase tracking-wider">Manuel Ekle · Manual Add</h5>
+              <span className="text-[10px] text-stone-500 italic">Otomatik bulamadıklarını sen ekle</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={manualName}
+                onChange={e => setManualName(e.target.value)}
+                placeholder="Otel adı (opsiyonel)"
+                className="w-full sm:w-48 px-3 py-2 text-sm bg-stone-950 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                data-testid="manual-comp-name"
+                disabled={manualAdding}
+              />
+              <input
+                value={manualUrl}
+                onChange={e => setManualUrl(e.target.value)}
+                placeholder="https://www.booking.com/hotel/gb/the-barkston.html"
+                className="flex-1 min-w-[260px] px-3 py-2 text-sm font-mono bg-stone-950 border border-stone-700 rounded-lg text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                data-testid="manual-comp-url"
+                disabled={manualAdding}
+                onKeyDown={e => { if (e.key === "Enter") addManualCompetitor(); }}
+              />
+              <button
+                onClick={addManualCompetitor}
+                disabled={manualAdding || !manualUrl}
+                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                data-testid="manual-comp-add-btn"
+              >
+                {manualAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {manualAdding ? "Ekleniyor..." : "+ Manuel Ekle"}
+              </button>
+            </div>
+            <p className="text-[10px] text-stone-500 mt-2">
+              ✓ Tek-odalı / studio mülkler otomatik filtrelenir. ✓ URL Booking.com'da doğrulanır. ✓ Bir sonraki tarama bu rakibi de çeker.
+            </p>
+          </div>
         </div>
       )}
 

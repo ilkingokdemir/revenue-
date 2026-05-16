@@ -5,6 +5,15 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 315 — 15-Aday Listesi · User Picks & Adds)
+- **User feedback**: "RAKIPLERI BULSUN 15 TANE BEN EKLEYIP KALDIRIYIM" — istek: 15 aday bul, listede göster, ben checkbox ile seçeyim, "Seçilenleri Ekle" diyeyim.
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - 🔍 **"15 Rakip Bul"** butonu (cyan gradient) — `auto_add:false, max_results:15, exclude_single_room:true` ile aday listesi getirir, otomatik ekleme YOK.
+  - **Aday tablosu**: Her satırda checkbox, ad, yıldız (★), review skoru (X.X/10), `BU SİZSİNİZ` / `EKLENDİ` / `1 ODA` badge'leri, ve `🗑` ile listeden çıkar butonu. Max 96px scroll'lu liste.
+  - **Toplu seçim kontrolleri**: "Hepsini seç" / "Hiçbirini" / "Seçilenleri Ekle (N)" — son düğme `POST /competitors/bulk-add` çağırır. Ekleme sonrası satır gri-out olur, badge `EKLENDİ` görünür.
+  - Otomatik ön-seçim: zaten eklenmemiş ve kendisi olmayan tüm adaylar default checked.
+- **Backend**: Mevcut endpoint'ler (discover with `auto_add:false`, bulk-add) değişmeden kullanılıyor; bulk-add test edildi → 2 rakip ekleme 200 OK, dup-skip de çalışıyor.
+
 ### 2026-05-15 (iter 314 — Two-Tier Competitor Flow: Auto-Discover → Manuel)
 - **User feedback**: "neden otomotik rakipler bulmayi kaldirdin once yazilim bulsun scan yapip eger yetmezse manuel kendiside girsin" — istek: önce otomatik rakip bul-ekle, sonra manuel.
 - **Frontend** (`NeighborhoodScanPanel.js`): Manuel-only formu **iki-aşamalı "Rakipler" paneline** dönüştürüldü:

@@ -11,7 +11,7 @@ import axios from "axios";
 import {
   MapPin, Radar, Loader2, Clock, Building2, TrendingUp, Timer,
   PoundSterling, Activity, ToggleLeft, ToggleRight, Save, Zap, RefreshCw,
-  Plus, Sparkles,
+  Plus, Sparkles, Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslation } from "../../i18n";
@@ -65,9 +65,12 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [manualUrl, setManualUrl] = useState("");
   const [manualName, setManualName] = useState("");
   const [manualAdding, setManualAdding] = useState(false);
-  // Auto-discover competitors directly from this panel — 1-click "scan & add top N"
+  // Auto-discover competitors — finds candidates but does NOT auto-add.
+  // User picks which ones to add via checkbox + "Seçilenleri Ekle" button.
   const [autoDiscovering, setAutoDiscovering] = useState(false);
-  const [discoveryResult, setDiscoveryResult] = useState(null);  // { added, total, candidates }
+  const [candidates, setCandidates] = useState([]);       // array of candidate dicts
+  const [picked, setPicked] = useState({});                // { [booking_url]: bool }
+  const [bulkAdding, setBulkAdding] = useState(false);
 
   const runAutoDiscoverCompetitors = async () => {
     if (propertyId === "all") {
@@ -75,38 +78,79 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       return;
     }
     setAutoDiscovering(true);
-    setDiscoveryResult(null);
+    setCandidates([]);
+    setPicked({});
     try {
       const { data } = await axios.post(
         `${API}/revenue/market-robot/${propertyId}/competitors/discover`,
         {
-          // Tighter radius for "neighbors" than the geo-supply scan radius
           radius_km: Math.max(0.5, Math.min(parseFloat(radiusKm) || 2.5, 5.0)),
-          max_results: 20,
-          auto_add: true,
-          auto_add_top: 5,
+          max_results: 15,
+          auto_add: false,
           exclude_single_room: true,
         }
       );
-      const added = data?.auto_added || 0;
-      const total = (data?.candidates || []).length;
-      setDiscoveryResult({
-        added,
-        total,
-        candidates: (data?.candidates || []).slice(0, 10),
+      const cands = data?.candidates || [];
+      setCandidates(cands);
+      // Auto-tick everything that isn't already added and isn't us
+      const pick = {};
+      cands.forEach(c => {
+        if (!c.already_added && !c.is_self) pick[c.booking_url] = true;
       });
-      if (added > 0) {
-        toast.success(`✅ ${added} rakip otomatik eklendi (${total} aday bulundu) · Şimdi "Scan Now" ile fiyatlarını çek`);
-      } else if (total > 0) {
-        toast.warning(`${total} aday bulundu ama hepsi zaten eklenmiş veya size benziyor. Manuel olarak ekleyebilirsiniz.`);
+      setPicked(pick);
+      if (cands.length === 0) {
+        toast.warning("Hiç aday bulunamadı — yarıçapı arttırın veya manuel ekleyin.");
       } else {
-        toast.warning("Hiç rakip bulunamadı — yarıçapı arttırın veya manuel olarak ekleyin.");
+        const fresh = Object.keys(pick).length;
+        toast.success(`${cands.length} aday bulundu · ${fresh} taze (eklenmeye hazır). Seçimini yap ve "Seçilenleri Ekle" tıkla.`);
       }
-      loadAll();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Otomatik discovery başarısız");
     }
     setAutoDiscovering(false);
+  };
+
+  const togglePick = (url) => setPicked(p => ({ ...p, [url]: !p[url] }));
+
+  const removeFromList = (url) => {
+    setCandidates(prev => prev.filter(c => c.booking_url !== url));
+    setPicked(prev => { const n = { ...prev }; delete n[url]; return n; });
+  };
+
+  const addSelectedCandidates = async () => {
+    const selectedUrls = Object.keys(picked).filter(k => picked[k]);
+    if (selectedUrls.length === 0) {
+      toast.error("Önce eklemek istediğin rakipleri seç");
+      return;
+    }
+    const toAdd = candidates.filter(c => selectedUrls.includes(c.booking_url));
+    setBulkAdding(true);
+    try {
+      const { data } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/competitors/bulk-add`,
+        { candidates: toAdd.map(c => ({
+            name: c.name,
+            booking_url: c.booking_url,
+            booking_hotel_id: c.hotel_id || c.booking_hotel_id || null,
+            stars: c.stars,
+            review_score: c.review_score,
+          })) }
+      );
+      const added = data?.added || 0;
+      const skipped = data?.skipped || 0;
+      if (added > 0) {
+        toast.success(`✅ ${added} rakip eklendi${skipped ? ` · ${skipped} dup atlandı` : ""}. "Scan Now" ile fiyatlarını çek.`);
+        // Mark added items so user sees the chip
+        setCandidates(prev => prev.map(c => selectedUrls.includes(c.booking_url) ? { ...c, already_added: true } : c));
+        setPicked({});
+        loadAll();
+      } else {
+        toast.warning("Hiçbiri eklenmedi (muhtemelen hepsi zaten ekli).");
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Bulk ekleme başarısız");
+    }
+    setBulkAdding(false);
   };
 
   const addManualCompetitor = async () => {
@@ -720,7 +764,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 Rakipler · Competitors
               </h4>
               <p className="text-[11px] text-stone-500 mt-0.5">
-                Önce <strong className="text-cyan-300">otomatik</strong> Booking.com taraması yapın — yetmezse <strong className="text-emerald-300">manuel</strong> ekleyin. Bir sonraki "Scan Now" taramasında bu rakiplerin fiyatları çekilir.
+                Önce <strong className="text-cyan-300">otomatik 15 aday</strong> bul → istediklerini seç & ekle. Yetmezse <strong className="text-emerald-300">manuel</strong> URL ile ekle.
               </p>
             </div>
             <button
@@ -728,23 +772,94 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               disabled={autoDiscovering}
               className="shrink-0 px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 hover:brightness-110 text-black font-black rounded-xl text-sm flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-cyan-500/30"
               data-testid="auto-discover-competitors-btn"
-              title="Booking.com'da yakın komşuları bul ve top 5'i otomatik rakip olarak ekle"
+              title="Booking.com'da yakın 15 komşuyu bul ve liste halinde göster — sen seç & ekle"
             >
               {autoDiscovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {autoDiscovering ? "Tarıyor..." : "🤖 Otomatik Rakip Bul & Ekle"}
+              {autoDiscovering ? "Tarıyor (15 aday)..." : "🔍 15 Rakip Bul"}
             </button>
           </div>
 
-          {/* Auto-discovery result summary */}
-          {discoveryResult && (
-            <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-3" data-testid="discovery-result">
-              <p className="text-xs text-cyan-200">
-                <strong>{discoveryResult.added}</strong> rakip otomatik eklendi ·
-                <strong className="ml-1">{discoveryResult.total}</strong> aday Booking.com'dan bulundu.
-                {discoveryResult.candidates.length > 0 && (
-                  <span className="text-stone-400"> Önizleme: {discoveryResult.candidates.slice(0, 5).map(c => c.name).join(", ")}{discoveryResult.candidates.length > 5 ? "…" : ""}</span>
-                )}
-              </p>
+          {/* Candidate list — user picks which to add */}
+          {candidates.length > 0 && (
+            <div className="space-y-2" data-testid="candidate-list">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-xs text-cyan-200">
+                  <strong>{candidates.length}</strong> aday Booking.com'dan bulundu ·
+                  <strong className="ml-1 text-emerald-300">{Object.keys(picked).filter(k => picked[k]).length}</strong> seçili
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const allPick = {};
+                      candidates.forEach(c => { if (!c.already_added && !c.is_self) allPick[c.booking_url] = true; });
+                      setPicked(allPick);
+                    }}
+                    className="text-[10px] font-bold px-2 py-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700"
+                    data-testid="pick-all-btn"
+                  >Hepsini seç</button>
+                  <button
+                    onClick={() => setPicked({})}
+                    className="text-[10px] font-bold px-2 py-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700"
+                    data-testid="pick-none-btn"
+                  >Hiçbirini</button>
+                  <button
+                    onClick={addSelectedCandidates}
+                    disabled={bulkAdding || Object.keys(picked).filter(k => picked[k]).length === 0}
+                    className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                    data-testid="add-selected-candidates-btn"
+                  >
+                    {bulkAdding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    Seçilenleri Ekle ({Object.keys(picked).filter(k => picked[k]).length})
+                  </button>
+                </div>
+              </div>
+              <div className="max-h-96 overflow-y-auto space-y-1.5 pr-1">
+                {candidates.map((c, idx) => {
+                  const isPicked = !!picked[c.booking_url];
+                  const isOurs = c.is_self;
+                  const isAdded = c.already_added;
+                  return (
+                    <div
+                      key={c.booking_url || idx}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition ${
+                        isAdded ? "bg-stone-900/30 border-stone-800 opacity-50"
+                        : isOurs ? "bg-amber-500/5 border-amber-500/20"
+                        : isPicked ? "bg-cyan-500/10 border-cyan-500/40"
+                        : "bg-stone-950/50 border-stone-800 hover:border-stone-700"
+                      }`}
+                      data-testid={`candidate-row-${idx}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isPicked}
+                        onChange={() => togglePick(c.booking_url)}
+                        disabled={isAdded || isOurs}
+                        className="accent-cyan-500 w-4 h-4 shrink-0 disabled:opacity-30"
+                        data-testid={`candidate-check-${idx}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-stone-100 truncate">{c.name}</span>
+                          {isOurs && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-black uppercase">BU SİZSİNİZ</span>}
+                          {isAdded && <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-black uppercase">EKLENDİ</span>}
+                          {c.is_single_room && <span className="text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-black uppercase">1 ODA</span>}
+                          {c.stars && <span className="text-[9px] text-amber-400">{"★".repeat(c.stars)}</span>}
+                          {c.review_score && <span className="text-[10px] text-stone-400">{c.review_score.toFixed(1)}/10</span>}
+                        </div>
+                        <div className="text-[10px] text-stone-500 font-mono truncate">{c.booking_url}</div>
+                      </div>
+                      <button
+                        onClick={() => removeFromList(c.booking_url)}
+                        className="shrink-0 p-1 rounded hover:bg-rose-500/15 text-stone-500 hover:text-rose-300 transition"
+                        title="Bu adayı listeden çıkar"
+                        data-testid={`candidate-remove-${idx}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 

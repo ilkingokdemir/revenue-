@@ -5,6 +5,21 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 312 — AI Property-Type Inference via GPT-4o-mini)
+- **Backend** — new endpoint `POST /api/revenue/market-robot/fleet-classify-property-types`:
+  - For each active property (or `property_ids[]` filter), sends `{name, city, country, address, current_label}` to GPT-4o-mini via `emergentintegrations.LlmChat` and asks for `{type, confidence, reasoning}` JSON.
+  - Valid types: `hotel`, `apartment`, `serviced_apartment`, `aparthotel`, `guesthouse`, `bnb`, `hostel`. All already mapped in TYPE_MAP for Booking.com discover filter.
+  - Status taxonomy: `unchanged` · `would_update` (dry-run) · `updated` (live) · `low_confidence` · `skipped` (no_name/invalid_type) · `error` (llm_error).
+  - Live mode persists 4 audit fields: `property_type_classified_by='ai-gpt-4o-mini'`, `property_type_classified_at` (ISO), `property_type_classification_confidence` (0..1), `property_type_classification_reason` (≤200 chars).
+  - Body: `{property_ids?[], dry_run=true, only_missing=false, confidence_threshold=0.7, model="gpt-4o-mini"}`.
+  - Tolerates markdown-fenced JSON responses (strips ```json```).
+- **Frontend** (`FleetCompetitorPulseCard.js`): Two new buttons:
+  - 🧠 **"AI Tip Sınıflandır"** (`fleet-ai-classify-btn`, violet) — runs LIVE classification, confirm dialog, summary toast.
+  - 🧠 **"Dry"** (`fleet-ai-classify-dryrun-btn`, hidden on mobile) — preview only.
+- **E2E spot-check (manual)**: 10 property dry-run → `Camden Apartments`→apartment (0.9), `Aldgate Flats`→apartment (0.9), `City Gate Guest House`→guesthouse (0.95, RECLASSIFIED), `Vilenza Hotel`→hotel (0.9), `Whitechapel Grand`→hotel (0.9). LIVE apply on `city-gate` → DB now stores `property_type=guesthouse` with full audit trail ✅.
+- **E2E test (iter 303)**: 23/23 backend tests PASSED (100%) — RBAC (401/403/200), dry-run structure, 5/5 AI accuracy spot-checks, LIVE persistence with all 4 audit fields, confidence_threshold parameter (0.99 vs 0.5), only_missing filter, property_ids filter, model parameter, regressions (auto-geocode + fleet-validate-geo + fleet-reset-neighbors).
+- **Infrastructure**: Re-installed Playwright Chromium (v1217) to fix recurring browser-missing 500s.
+
 ### 2026-05-15 (iter 311 — Fleet-wide Geo Validation + Auto-Repair Job)
 - **Backend** — new endpoint `POST /api/revenue/market-robot/fleet-validate-geo` (`market_robot.py`):
   - Iterates active properties (or `property_ids[]` filter), reverse-geocodes each stored lat/lon via Nominatim, compares actual `country_code` against `COUNTRY_MAP_FV[property.country]` (UK/US/TR/FR/DE/ES/IT/NL/CH/AT/BE/PT/IE/GR supported).

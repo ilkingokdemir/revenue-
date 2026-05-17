@@ -32,13 +32,20 @@ def create_scheduler_router(db, require_roles, job_handlers: Dict[str, Callable[
     @router.put("/scheduler/config/{property_id}/{job}")
     async def update_config(property_id: str, job: str, data: Dict,
                             current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Body: {enabled: bool, cron_hour: 0-23, cron_minute: 0-59, notes?}"""
+        """Body: {enabled: bool, cron_hour: 0-23, cron_minute: 0-59,
+        cron_dow?: 0-6|null  (0=Monday, 6=Sunday; null/missing = every day),
+        notes?}"""
         if job not in job_handlers:
             raise HTTPException(status_code=400, detail=f"Unknown job: {job}")
         hour = int(data.get("cron_hour", 2))
         minute = int(data.get("cron_minute", 0))
         if not (0 <= hour <= 23) or not (0 <= minute <= 59):
             raise HTTPException(status_code=400, detail="cron_hour 0-23, cron_minute 0-59")
+        cron_dow = data.get("cron_dow")
+        if cron_dow is not None:
+            cron_dow = int(cron_dow)
+            if not (0 <= cron_dow <= 6):
+                raise HTTPException(status_code=400, detail="cron_dow 0-6 (0=Mon, 6=Sun)")
 
         await db.scheduler_config.update_one(
             {"property_id": property_id, "job": job},
@@ -48,6 +55,7 @@ def create_scheduler_router(db, require_roles, job_handlers: Dict[str, Callable[
                 "enabled": bool(data.get("enabled", False)),
                 "cron_hour": hour,
                 "cron_minute": minute,
+                "cron_dow": cron_dow,
                 "notes": (data.get("notes") or "").strip(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "updated_by": current_user.get("name", ""),
@@ -92,6 +100,10 @@ async def scheduler_loop(db, job_handlers: Dict[str, Callable[[str], Awaitable[d
             for cfg in configs:
                 job = cfg.get("job")
                 if job not in job_handlers:
+                    continue
+                # Day-of-week gate (weekly cron). None/missing → every day.
+                cron_dow = cfg.get("cron_dow")
+                if cron_dow is not None and int(cron_dow) != now.weekday():
                     continue
                 cron_time = cfg.get("cron_hour", 2) * 60 + cfg.get("cron_minute", 0)
                 now_mins = now.hour * 60 + now.minute

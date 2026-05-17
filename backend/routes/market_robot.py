@@ -252,6 +252,115 @@ def _price_stats(prices):
     }
 
 
+async def fleet_geo_validate_worker(db, *, fix: bool = True, sleep_s: float = 1.1) -> dict:
+    """Standalone fleet-wide coordinate validation + auto-repair (iter 320).
+
+    Importable from server.py to register as a weekly cron job. Implements
+    the same logic as POST /api/revenue/market-robot/fleet-validate-geo but
+    with no FastAPI deps. Returns the summary dict used in scheduler_history.
+    """
+    from utils.booking_scraper import reverse_geocode, geocode_address
+
+    COUNTRY_MAP_FV = {
+        "UK": "gb", "GB": "gb", "ENGLAND": "gb", "UNITED KINGDOM": "gb",
+        "US": "us", "USA": "us", "UNITED STATES": "us",
+        "TR": "tr", "TURKEY": "tr", "TÜRKIYE": "tr", "TURKIYE": "tr",
+        "FR": "fr", "FRANCE": "fr", "DE": "de", "GERMANY": "de",
+        "ES": "es", "SPAIN": "es", "IT": "it", "ITALY": "it",
+        "NL": "nl", "NETHERLANDS": "nl", "CH": "ch", "SWITZERLAND": "ch",
+        "AT": "at", "AUSTRIA": "at", "BE": "be", "BELGIUM": "be",
+        "PT": "pt", "PORTUGAL": "pt", "IE": "ie", "IRELAND": "ie",
+        "GR": "gr", "GREECE": "gr",
+    }
+    sleep_s = max(0.5, min(sleep_s, 3.0))
+    props = await db.properties.find(
+        {"is_active": {"$ne": False}},
+        {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1,
+         "postcode": 1, "address": 1, "latitude": 1, "longitude": 1},
+    ).to_list(500)
+
+    ok_ct = flagged_ct = fixed_ct = skipped_ct = 0
+    flagged_names: list = []
+    fixed_names: list = []
+
+    for prop in props:
+        pid = prop.get("id")
+        lat, lon = prop.get("latitude"), prop.get("longitude")
+        city = (prop.get("city") or "").strip()
+        country_raw = (prop.get("country") or "").strip().upper()
+        expected_cc = COUNTRY_MAP_FV.get(country_raw, country_raw.lower()[:2] if country_raw else "")
+        if not (lat and lon) or not expected_cc:
+            skipped_ct += 1
+            continue
+        rev = await reverse_geocode(lat, lon)
+        await asyncio.sleep(sleep_s)
+        if not rev:
+            skipped_ct += 1
+            continue
+        actual_cc = (rev.get("country_code") or "").lower()
+        if actual_cc == expected_cc:
+            ok_ct += 1
+            continue
+        flagged_ct += 1
+        flagged_names.append(prop.get("name", pid))
+        if not fix:
+            continue
+        # Repair: forward-geocode with country bias.
+        addr = (prop.get("address") or "").strip()
+        pc = (prop.get("postcode") or "").strip()
+        nm = (prop.get("name") or "").strip()
+        candidates_q = []
+        if addr:
+            candidates_q.append(" ".join([x for x in [addr, pc, city] if x]))
+        if pc and city:
+            candidates_q.append(f"{pc} {city}")
+        if nm and city:
+            candidates_q.append(f"{nm} {city}")
+        if nm and expected_cc:
+            candidates_q.append(nm)
+        seen, ordered_q = set(), []
+        for q in candidates_q:
+            qn = (q or "").strip()
+            if qn and qn.lower() not in seen:
+                seen.add(qn.lower())
+                ordered_q.append(qn)
+        for q in ordered_q:
+            geo = await geocode_address(q, country_code=expected_cc)
+            await asyncio.sleep(sleep_s)
+            if not geo:
+                continue
+            new_lat, new_lon, new_display = geo
+            if city and city.lower() not in (new_display or "").lower():
+                continue
+            await db.properties.update_one(
+                {"id": pid},
+                {"$set": {
+                    "latitude": new_lat, "longitude": new_lon,
+                    "geocoded_from": q,
+                    "geocoded_display_name": new_display,
+                    "geocoded_at": datetime.now(timezone.utc).isoformat(),
+                    "geo_validated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            fixed_ct += 1
+            fixed_names.append(prop.get("name", pid))
+            break
+
+    return {
+        "ok": True,
+        "total_properties": len(props),
+        "ok_count": ok_ct,
+        "flagged_count": flagged_ct,
+        "fixed_count": fixed_ct,
+        "skipped_count": skipped_ct,
+        "flagged": flagged_names[:10],
+        "fixed": fixed_names[:10],
+        "fix": fix,
+        "ran_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+
 def create_market_robot_router(db, require_roles, resend=None):
     router = APIRouter()
 

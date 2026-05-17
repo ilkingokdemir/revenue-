@@ -818,6 +818,15 @@ async def _job_nightly_dry_publish(property_id: str) -> dict:
 
 JOB_HANDLERS["nightly_dry_publish"] = _job_nightly_dry_publish
 
+# Iter 320 — Weekly fleet-wide geo-validate (Camden→Boston bug auto-repair).
+from routes.market_robot import fleet_geo_validate_worker
+
+async def _job_fleet_geo_validate(property_id: str) -> dict:
+    # property_id is always "" for fleet-wide jobs.
+    return await fleet_geo_validate_worker(db, fix=True)
+
+JOB_HANDLERS["fleet_geo_validate"] = _job_fleet_geo_validate
+
 # Iter 164 — Inventory Allocations (pooled / dedicated / capped per channel×room)
 from routes.inventory_allocations import create_inventory_allocations_router
 api_router.include_router(create_inventory_allocations_router(db, require_roles))
@@ -1271,6 +1280,26 @@ async def startup_event():
         {"$set": {"currency": "GBP"}}
     )
     logger.info("Admin user seeded and indexes created")
+
+    # Iter 320 — Seed weekly geo-validate cron (every Monday 03:00 UTC).
+    # Idempotent: upsert + don't override user changes if already exists.
+    try:
+        existing = await db.scheduler_config.find_one({"property_id": "", "job": "fleet_geo_validate"}, {"_id": 0})
+        if not existing:
+            await db.scheduler_config.insert_one({
+                "property_id": "",
+                "job": "fleet_geo_validate",
+                "enabled": True,
+                "cron_hour": 3,
+                "cron_minute": 0,
+                "cron_dow": 0,  # 0 = Monday (Python weekday())
+                "notes": "Haftalık fleet-wide koordinat doğrulama + otomatik onarım (Camden→Boston bug koruyucu)",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": "system",
+            })
+            logger.info("Scheduler: seeded fleet_geo_validate weekly cron (Mon 03:00 UTC)")
+    except Exception as e:
+        logger.warning("fleet_geo_validate cron seed failed: %s", e)
 
     # Ensure Playwright Chromium binary exists — it disappears between pod
     # restarts on this environment. Install ASYNC in background so startup

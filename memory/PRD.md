@@ -5,6 +5,23 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-17 (iter 320 — Weekly Geo-Validate Cron · Auto-Detect Camden→Boston Regressions)
+- **Scope**: Otomatik haftalık fleet-wide koordinat doğrulama cron'u eklendi. Pazartesi 03:00 UTC'de tüm property'leri tarar, ülke uyuşmazlığı varsa otomatik düzeltir.
+- **Backend** (`routes/scheduler.py`):
+  - `cron_dow` field eklendi (0=Pazartesi, 6=Pazar, null=her gün). Mevcut günlük job'lar etkilenmedi.
+  - `scheduler_loop` weekly trigger gate'i: `cron_dow != now.weekday() → skip`.
+- **Backend** (`routes/market_robot.py`):
+  - Module-level `fleet_geo_validate_worker(db, fix=True)` helper — endpoint logic'inin FastAPI-bağımsız versiyonu. Reverse-geocode + country-bias forward repair. Audit fields persist edilir.
+- **Backend** (`server.py`):
+  - JOB_HANDLERS'a `fleet_geo_validate` kaydedildi.
+  - Startup'ta `scheduler_config` idempotent seed: `{property_id:"", job:"fleet_geo_validate", enabled:true, cron_hour:3, cron_minute:0, cron_dow:0}` — Pazartesi 03:00 UTC.
+- **API**: Mevcut `/api/scheduler/config`, `/api/scheduler/history`, `/api/scheduler/trigger/{property_id}/{job}` endpoint'leri yeni job'u destekler.
+- **Live verification**:
+  - Cron config seeded: `{enabled:true, cron_dow:0, cron_hour:3}` ✅
+  - Manual trigger `POST /api/scheduler/trigger/all/fleet_geo_validate` → `{ok:true, total:49, ok_count:3, flagged_count:0, fixed_count:0, skipped:46}` (3 property koordinatlı ve OK; 46 koordinatsız) ✅
+  - `scheduler_history` row eklendi, `result` JSON full snapshot içeriyor ✅
+- **Etki**: "Camden Apartments → Boston" tarzı bir bug bir daha olursa Pazartesi sabahı otomatik fixle düzelir, admin'in manuel müdahalesi gerekmez. `scheduler_history` koleksiyonunda tam audit izi.
+
 ### 2026-05-15 (iter 319 — Residential Proxy Support · Booking.com Anti-Bot Bypass)
 - **User insight**: "farkli vpn ile girip fotolarini cekmen gerek yoksa blocklar" — doğru tespit. Booking.com cloud/datacenter IP'lerini agresif blocklar.
 - **Backend** (`booking_scraper.py`):

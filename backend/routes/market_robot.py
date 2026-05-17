@@ -5884,6 +5884,42 @@ Date range: {date_from} to {date_to}."""
             "note": "Rankings computed from scraped Booking.com data of our hotel + competitors. No opaque search algorithm involved.",
         }
 
+    @router.get("/revenue/market-robot/proxy-status")
+    async def proxy_status(current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Booking.com scraper proxy configuration status.
+
+        Reports whether a residential/rotating proxy is configured via the
+        BOOKING_PROXY_URL environment variable. When unset, the scraper uses
+        the pod's own IP — which Booking.com aggressively blocks for property
+        detail pages (and rate-limits for search results). Setting a proxy
+        from a provider like Bright Data / Smartproxy / IPRoyal / Oxylabs is
+        the only reliable way to bypass these blocks.
+        """
+        from utils.booking_scraper import _booking_proxy_config
+        cfg = _booking_proxy_config()
+        return {
+            "configured": cfg is not None,
+            "server": cfg.get("server") if cfg else None,
+            "has_auth": bool(cfg and cfg.get("username")) if cfg else False,
+            "env_var": "BOOKING_PROXY_URL",
+            "providers": [
+                {"name": "Bright Data", "url": "https://brightdata.com/proxy-types/residential-proxies",
+                 "note": "Endüstri standardı, residential IPs"},
+                {"name": "Smartproxy", "url": "https://smartproxy.com/proxies/residential-proxies",
+                 "note": "Daha uygun fiyat, residential"},
+                {"name": "IPRoyal", "url": "https://iproyal.com/residential-proxies/",
+                 "note": "Pay-as-you-go, başlangıç için ideal"},
+                {"name": "Oxylabs", "url": "https://oxylabs.io/products/residential-proxy-pool",
+                 "note": "Enterprise tier"},
+            ],
+            "example_url_format": "http://user:pass@residential.proxy.com:8080",
+            "warning": (
+                "Booking.com cloud/datacenter IP'leri agresif blocklar — "
+                "property detail page'lerini ve sık scrape'i engelliyor. "
+                "Residential proxy ile bypass edilir."
+            ) if cfg is None else None,
+        }
+
     @router.get("/revenue/market-robot/health")
     async def scanner_health(current_user: dict = Depends(require_roles("admin", "manager"))):
         """Cross-branch health dashboard. Returns every scanner's current status + 24h restart count."""

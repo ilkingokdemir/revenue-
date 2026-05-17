@@ -52,6 +52,43 @@ _lock = asyncio.Lock()
 _HOTEL_ID_CACHE: Dict[str, str] = {}
 
 
+def _booking_proxy_config() -> Optional[Dict]:
+    """Returns Playwright proxy config dict if BOOKING_PROXY_URL is set, else None.
+
+    Booking.com aggressively blocks/rate-limits scraping from cloud/datacenter
+    IPs. To work around this, set BOOKING_PROXY_URL to a residential or
+    rotating-proxy endpoint (Bright Data, Smartproxy, IPRoyal, Oxylabs, etc.).
+
+    Format (one of):
+      - http://user:pass@host:port
+      - https://user:pass@host:port
+      - http://host:port            (no auth)
+      - socks5://user:pass@host:port
+
+    Each new browser context will route ALL Booking.com traffic through it.
+    When the env var is unset, scraping uses the pod's own IP (which works
+    for search results but typically gets blocked for property-detail pages).
+    """
+    url = os.environ.get("BOOKING_PROXY_URL", "").strip()
+    if not url:
+        return None
+    try:
+        from urllib.parse import urlparse
+        u = urlparse(url)
+        if not u.hostname:
+            logger.warning("BOOKING_PROXY_URL has no host: %s", url)
+            return None
+        cfg = {"server": f"{u.scheme}://{u.hostname}:{u.port or 80}"}
+        if u.username:
+            cfg["username"] = u.username
+        if u.password:
+            cfg["password"] = u.password
+        return cfg
+    except Exception as e:
+        logger.warning("BOOKING_PROXY_URL parse failed: %s — %s", url, e)
+        return None
+
+
 async def _get_browser() -> Browser:
     """Returns the shared headless Chromium. Lazy-launched on first use."""
     global _browser, _pw
@@ -59,15 +96,24 @@ async def _get_browser() -> Browser:
         async with _lock:
             if _browser is None or not _browser.is_connected():
                 _pw = await async_playwright().start()
-                _browser = await _pw.chromium.launch(
-                    headless=True,
-                    args=[
+                launch_kwargs = {
+                    "headless": True,
+                    "args": [
                         "--no-sandbox",
                         "--disable-blink-features=AutomationControlled",
                         "--disable-dev-shm-usage",
                         "--disable-gpu",
                     ],
-                )
+                }
+                # Browser-level proxy applies to all contexts unless overridden
+                proxy = _booking_proxy_config()
+                if proxy:
+                    launch_kwargs["proxy"] = proxy
+                    logger.info(
+                        "Booking scraper: routing via proxy server=%s (auth=%s)",
+                        proxy.get("server"), bool(proxy.get("username")),
+                    )
+                _browser = await _pw.chromium.launch(**launch_kwargs)
                 logger.info("Booking scraper: headless Chromium launched")
     return _browser
 

@@ -5,6 +5,27 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-15 (iter 319 — Residential Proxy Support · Booking.com Anti-Bot Bypass)
+- **User insight**: "farkli vpn ile girip fotolarini cekmen gerek yoksa blocklar" — doğru tespit. Booking.com cloud/datacenter IP'lerini agresif blocklar.
+- **Backend** (`booking_scraper.py`):
+  - Yeni `_booking_proxy_config()` helper — `BOOKING_PROXY_URL` env var'ından `http(s)/socks5://user:pass@host:port` formatını parse eder, Playwright proxy config'ine çevirir.
+  - `_get_browser()` artık launch-time'da proxy uygular: env var set ise tüm Chromium contexts otomatik routing.
+  - Auth (user:pass) destekli, socks5 destekli.
+- **Backend** (`market_robot.py`):
+  - Yeni endpoint `GET /api/revenue/market-robot/proxy-status` — proxy yapılandırma durumunu döndürür: `{configured, server, has_auth, env_var, providers[], example_url_format, warning}`.
+  - Provider listesi: Bright Data, Smartproxy, IPRoyal, Oxylabs (direkt linklerle).
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - Component mount'ta `/proxy-status` çağrılır.
+  - **Proxy yokken**: kırmızı amber uyarı banner (`proxy-warning-banner`) — Booking.com'un blockladığını açıklar, 4 provider'a tıklanabilir link verir, env var formatını gösterir.
+  - **Proxy aktifken**: yeşil emerald onay banner (`proxy-ok-banner`) — proxy server'ı maskelenmiş gösterir, "auth" badge'i.
+- **Setup süreci (user'a anlatılacak)**:
+  1. Bright Data/Smartproxy/IPRoyal'den residential proxy aboneliği al
+  2. Proxy URL'sini paylaş (örn `http://user-12345:pass@gw.residential.bright.com:22225`)
+  3. Admin `.env`'e `BOOKING_PROXY_URL=...` ekler → backend restart
+  4. Banner yeşile döner, tüm Booking.com scrape'leri residential IP'lerden çıkar
+  5. "Page not found" hatası kaybolur, oda sayısı/JSON-LD verisi gelmeye başlar (Booking.com property detail HTML'ini açar)
+- **API doğrulama**: `proxy-status` 200 OK döndürüyor, `configured:false` doğru, 4 provider listede, warning Turkish.
+
 ### 2026-05-15 (iter 318 — Honest Reality Check: Booking.com Unit-Count NOT Reliably Scrapable)
 - **User request**: "reviewlerde kac oda li bir hotel oldugunu bulman yanlis booking.comda oda sayilari yaziyor ordan scrap yapman gerek"
 - **Investigation result**: Booking.com **detail pages no longer expose room/apartment count via direct URLs**. Findings:

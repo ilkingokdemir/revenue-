@@ -74,6 +74,16 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // Minimum reviews threshold — proxy for "5+ unit" properties. Default 20
   // typically corresponds to multi-flat operations, not single-flat hosts.
   const [minReviewCount, setMinReviewCount] = useState(20);
+  // Booking.com proxy status (residential proxy bypass)
+  const [proxyStatus, setProxyStatus] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    axios.get(`${API}/revenue/market-robot/proxy-status`)
+      .then(r => { if (!cancelled) setProxyStatus(r.data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
   // Per-row "Test URL" — anlık Booking.com scrape ile gerçek satıştaki fiyatı göster
   const [testingUrl, setTestingUrl] = useState(null);  // booking_url currently being tested
   const [testResults, setTestResults] = useState({});  // { [booking_url]: {ok, price, currency, hotel_name, error} }
@@ -795,6 +805,33 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       {/* Competitor discovery — auto + manual, two-tier flow */}
       {propertyId !== "all" && (
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5 space-y-4" data-testid="competitor-discovery-section">
+          {/* Proxy / VPN status banner — Booking.com blocks cloud IPs */}
+          {proxyStatus && !proxyStatus.configured && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-[11px] text-amber-200" data-testid="proxy-warning-banner">
+              <div className="font-bold text-amber-300 mb-1">⚠️ Residential Proxy yapılandırılmamış</div>
+              <div className="text-amber-100/80">
+                Booking.com cloud IP'leri agresif blocklar — özellikle detail-page scrape'lerini.
+                Kalıcı çözüm: residential proxy servisi (
+                {(proxyStatus.providers || []).slice(0, 3).map((p, i) => (
+                  <span key={p.name}>
+                    {i > 0 && " · "}
+                    <a href={p.url} target="_blank" rel="noopener noreferrer"
+                       className="text-amber-300 underline hover:text-amber-200">{p.name}</a>
+                  </span>
+                ))}
+                ) abonelik al, URL'i admin'e ver, biz <code className="bg-stone-950 px-1 rounded text-amber-300">BOOKING_PROXY_URL</code> env var'ına ekleyelim.
+                Önerilen format: <code className="bg-stone-950 px-1 rounded text-amber-300">{proxyStatus.example_url_format}</code>
+              </div>
+            </div>
+          )}
+          {proxyStatus && proxyStatus.configured && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2 text-[10px] text-emerald-200 flex items-center gap-2" data-testid="proxy-ok-banner">
+              <span className="text-emerald-300">✓</span>
+              Booking.com proxy aktif:
+              <code className="bg-stone-950 px-1.5 py-0.5 rounded font-mono text-emerald-300">{proxyStatus.server}</code>
+              {proxyStatus.has_auth && <span className="text-stone-400">· auth</span>}
+            </div>
+          )}
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               <h4 className="text-sm font-bold text-stone-100 flex items-center gap-2">

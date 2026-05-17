@@ -5,6 +5,21 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-17 (iter 321 — Playwright Auto-Recovery + chromium-headless-shell Fix)
+- **Bug raporu**: User "calismiyor" dedi — discover, validate-url ve geo-validate hepsi 500 veriyordu. Sebep: Playwright Chromium binary 5+ kez kayboldu, ve önceki auto-install hook'um `playwright install chromium` çalıştırıyordu — oysa Playwright v1.59+ için `chromium-headless-shell` SEPARATE bir paket. `chromium` install ediyor ama `headless_shell` binary'i farklı yere düşüyor.
+- **Backend fix** (`utils/booking_scraper.py`):
+  - `_ensure_chromium_installed(force=False)` helper — startup'ta sessizce, runtime'da launch-failure'da `force=True` ile zorla yeniden indirir.
+  - **DOĞRU komut**: `playwright install chromium-headless-shell` (sadece `chromium` değil).
+  - `_get_browser()` artık `"Executable doesn't exist"` exception yakalandığında otomatik `_ensure_chromium_installed(force=True)` çağırıyor ve launch'ı yeniden deniyor. İlk request bir defa geç gelir (~30-90s download), sonrası anında.
+- **Backend fix** (`server.py`): Startup background task aynı helper'ı kullanıyor — orijinal duplicate kod silindi.
+- **Live verification**:
+  - Binary'leri elle sildim (`rm -rf /pw-browsers/chromium_headless_shell-*`)
+  - Backend restart sonrası ilk request → auto-install çalıştı ✅
+  - `discover camden-suites` → 3 candidate (Camden Apartments 923 yorum) ✅
+  - `discover aldgate-flats` → 10 candidate (hepsi 1300+ yorum) ✅
+  - `validate-booking-url` → `{ok:true, hotel_id:5634249, sample_price:86.0, currency:GBP}` ✅
+- **Etki**: Pod restart/binary kaybı durumlarında manuel `playwright install` artık gerekmez — system self-heals.
+
 ### 2026-05-17 (iter 320 — Weekly Geo-Validate Cron · Auto-Detect Camden→Boston Regressions)
 - **Scope**: Otomatik haftalık fleet-wide koordinat doğrulama cron'u eklendi. Pazartesi 03:00 UTC'de tüm property'leri tarar, ülke uyuşmazlığı varsa otomatik düzeltir.
 - **Backend** (`routes/scheduler.py`):

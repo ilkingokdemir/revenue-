@@ -1302,35 +1302,12 @@ async def startup_event():
         logger.warning("fleet_geo_validate cron seed failed: %s", e)
 
     # Ensure Playwright Chromium binary exists — it disappears between pod
-    # restarts on this environment. Install ASYNC in background so startup
-    # is never blocked.
+    # restarts on this environment. Use the resilient helper from
+    # booking_scraper which has timeout, logging, and idempotent checks.
     async def _ensure_playwright_chromium():
-        import os as _os
-        import shutil as _shutil
         try:
-            from pathlib import Path as _Path
-            base = _Path(_os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/pw-browsers"))
-            # Heuristic: any chromium_headless_shell-*/chrome-linux/headless_shell ?
-            ok = False
-            if base.exists():
-                for d in base.glob("chromium_headless_shell-*/chrome-linux/headless_shell"):
-                    if d.exists():
-                        ok = True
-                        break
-            if ok:
-                return
-            logger.info("Playwright Chromium missing — installing in background...")
-            proc = await asyncio.create_subprocess_exec(
-                "playwright", "install", "chromium",
-                env={**_os.environ, "PLAYWRIGHT_BROWSERS_PATH": str(base)},
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await proc.wait()
-            if proc.returncode == 0:
-                logger.info("Playwright Chromium installed ✓")
-            else:
-                logger.warning("Playwright Chromium install rc=%s", proc.returncode)
+            from utils.booking_scraper import _ensure_chromium_installed
+            await _ensure_chromium_installed()
         except Exception as e:
             logger.warning("Playwright Chromium ensure failed: %s", e)
     asyncio.create_task(_ensure_playwright_chromium())

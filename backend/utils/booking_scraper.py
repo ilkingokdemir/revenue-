@@ -89,13 +89,69 @@ def _booking_proxy_config() -> Optional[Dict]:
         return None
 
 
+async def _ensure_chromium_installed(*, force: bool = False) -> bool:
+    """Block until Playwright Chromium-headless-shell binary exists on disk.
+
+    The /pw-browsers volume keeps disappearing on this environment between
+    pod restarts. We call this at startup AND on Browser-launch failure so
+    that the very first scrape after a restart self-heals instead of 500'ing.
+
+    Args:
+      force: when True, runs `playwright install` even if any headless_shell
+        binary is already present. Use this on Browser-launch failure —
+        playwright might want a specific version that isn't on disk yet.
+    Returns True if install succeeded (or already up to date).
+    """
+    base_str = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/pw-browsers")
+    try:
+        if not force:
+            from pathlib import Path as _P
+            base = _P(base_str)
+            if base.exists():
+                for _ in base.glob("chromium_headless_shell-*/chrome-linux/headless_shell"):
+                    return True
+        logger.warning("Playwright Chromium-headless-shell %s — installing (blocking)...",
+                       "force-refresh" if force else "missing")
+        # IMPORTANT: Playwright v1.59+ requires `chromium-headless-shell` AS A
+        # SEPARATE PACKAGE from `chromium`. Installing just `chromium` (as we
+        # were before) leaves the headless_shell binary missing and every
+        # browser-launch fails with `Executable doesn't exist`.
+        proc = await asyncio.create_subprocess_exec(
+            "playwright", "install", "chromium-headless-shell",
+            env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": base_str},
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=180)
+        except asyncio.TimeoutError:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            logger.error("Playwright install timed out after 180s")
+            return False
+        if proc.returncode == 0:
+            logger.info("Playwright Chromium installed ✓")
+            return True
+        logger.error("Playwright install rc=%s", proc.returncode)
+        return False
+    except Exception as e:
+        logger.error("Playwright install error: %s", e)
+        return False
+
+
 async def _get_browser() -> Browser:
-    """Returns the shared headless Chromium. Lazy-launched on first use."""
+    """Returns the shared headless Chromium. Lazy-launched on first use.
+
+    Self-heals when the binary is missing (re-downloads, then retries).
+    """
     global _browser, _pw
     if _browser is None or not _browser.is_connected():
         async with _lock:
             if _browser is None or not _browser.is_connected():
-                _pw = await async_playwright().start()
+                if _pw is None:
+                    _pw = await async_playwright().start()
                 launch_kwargs = {
                     "headless": True,
                     "args": [
@@ -113,7 +169,17 @@ async def _get_browser() -> Browser:
                         "Booking scraper: routing via proxy server=%s (auth=%s)",
                         proxy.get("server"), bool(proxy.get("username")),
                     )
-                _browser = await _pw.chromium.launch(**launch_kwargs)
+                try:
+                    _browser = await _pw.chromium.launch(**launch_kwargs)
+                except Exception as e:
+                    if "Executable doesn't exist" in str(e):
+                        logger.warning("Chromium binary missing — auto-installing (force)...")
+                        ok = await _ensure_chromium_installed(force=True)
+                        if not ok:
+                            raise
+                        _browser = await _pw.chromium.launch(**launch_kwargs)
+                    else:
+                        raise
                 logger.info("Booking scraper: headless Chromium launched")
     return _browser
 

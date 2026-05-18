@@ -13,6 +13,7 @@ import { PerformanceReport } from "./PerformanceReport";
 import { MarketDemandDashboard } from "./MarketDemandDashboard";
 import { DemandRadar } from "./DemandRadar";
 import NeighborhoodScanPanel from "./NeighborhoodScanPanel";
+import AIClassificationHistoryPanel from "./AIClassificationHistoryPanel";
 import MarketRobotHealthWidget from "./MarketRobotHealthWidget";
 import CompetitorPricePulseCard from "./CompetitorPricePulseCard";
 import FleetCompetitorPulseCard from "./FleetCompetitorPulseCard";
@@ -343,6 +344,7 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
           {id:"events",labelKey:"mr.sub.events"},
           {id:"competitors-tab",labelKey:"mr.sub.competitors"},
           {id:"adjustments",labelKey:"mr.sub.adjustments"},
+          {id:"ai-history",labelKey:"mr.sub.aiHistory"},
           {id:"config",labelKey:"mr.sub.config"},
           {id:"logs",labelKey:"mr.sub.logs"},
         ].map(tab => (
@@ -671,6 +673,7 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
       {subTab === "demand" && <MarketDemandDashboard propertyId={propertyId} hotelName={selectedName} />}
       {subTab === "radar" && <DemandRadar propertyId={propertyId} />}
       {subTab === "neighborhood" && <NeighborhoodScanPanel propertyId={propertyId} />}
+      {subTab === "ai-history" && <AIClassificationHistoryPanel />}
 
       {/* Performance Report Tab */}
       {subTab === "performance" && <PerformanceReport propertyId={propertyId} />}

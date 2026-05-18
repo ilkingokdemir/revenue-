@@ -216,6 +216,7 @@
   "mr.sub.events": "Event-Intelligenz",
   "mr.sub.competitors": "Wettbewerber Hotels",
   "mr.sub.adjustments": "Automatische Anpassungen",
+  "mr.sub.aiHistory": "KI-Verlauf",
   "mr.sub.config": "Konfiguration",
   "mr.sub.logs": "Scan-Protokolle",
   "mr.scan_complete": "Scan abgeschlossen",

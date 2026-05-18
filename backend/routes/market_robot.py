@@ -4214,6 +4214,12 @@ def create_market_robot_router(db, require_roles, resend=None):
                         "property_type_classified_at": datetime.now(timezone.utc).isoformat(),
                         "property_type_classification_confidence": round(conf, 3),
                         "property_type_classification_reason": reasoning,
+                        # Iter 322: preserve previous value for one-click rollback.
+                        "property_type_previous": current or None,
+                        "property_type_previous_reason": (
+                            f"AI re-classified {current or 'null'} → {pred_type} on "
+                            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+                        ),
                     }},
                 )
                 updated_count += 1
@@ -4240,6 +4246,118 @@ def create_market_robot_router(db, require_roles, resend=None):
                 f"({'DRY-RUN' if dry_run else 'LIVE'})."
             ),
         }
+
+    @router.get("/revenue/market-robot/ai-classification-history")
+    async def ai_classification_history(
+        days: int = 30,
+        limit: int = 100,
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """List properties whose `property_type` was set by AI (GPT-4o-mini).
+
+        Returns each entry with: property_id, name, city, current_type,
+        previous_type, confidence, reason, classified_at, classified_by,
+        rollback_available (true if `property_type_previous` is set and
+        differs from current).
+
+        Query params:
+          - days: lookback window (default 30). Set to 0 for ALL time.
+          - limit: max rows (default 100, cap 500).
+        """
+        days = max(0, min(int(days or 0), 365))
+        limit = max(1, min(int(limit or 100), 500))
+
+        q: Dict = {"property_type_classified_by": {"$exists": True}}
+        if days > 0:
+            since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+            q["property_type_classified_at"] = {"$gte": since}
+
+        rows = await db.properties.find(
+            q,
+            {"_id": 0, "id": 1, "name": 1, "city": 1, "country": 1,
+             "property_type": 1, "property_type_previous": 1,
+             "property_type_classified_by": 1,
+             "property_type_classified_at": 1,
+             "property_type_classification_confidence": 1,
+             "property_type_classification_reason": 1},
+        ).sort("property_type_classified_at", -1).limit(limit).to_list(limit)
+
+        out = []
+        for r in rows:
+            current = r.get("property_type") or None
+            previous = r.get("property_type_previous")
+            out.append({
+                "property_id": r.get("id"),
+                "name": r.get("name"),
+                "city": r.get("city"),
+                "country": r.get("country"),
+                "current_type": current,
+                "previous_type": previous,
+                "confidence": r.get("property_type_classification_confidence"),
+                "reason": r.get("property_type_classification_reason") or "",
+                "classified_at": r.get("property_type_classified_at"),
+                "classified_by": r.get("property_type_classified_by"),
+                "rollback_available": bool(previous and previous != current),
+            })
+        return {"total": len(out), "days": days, "items": out}
+
+    @router.post("/revenue/market-robot/{property_id}/ai-classification-rollback")
+    async def ai_classification_rollback(
+        property_id: str,
+        data: Dict = {},
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Roll back an AI-driven property_type change to the saved previous value.
+
+        Body (optional): {target_type?: str} — override target instead of using
+        the saved `property_type_previous`. Useful when admin wants to set a
+        specific value (e.g. "aparthotel") instead of going back to "hotel".
+        """
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
+        if not prop:
+            raise HTTPException(status_code=404, detail="Property not found")
+
+        explicit = (data or {}).get("target_type")
+        if explicit:
+            valid_types = {"hotel", "apartment", "serviced_apartment",
+                           "aparthotel", "guesthouse", "bnb", "hostel"}
+            t = (explicit or "").lower().strip()
+            if t not in valid_types:
+                raise HTTPException(status_code=400,
+                                    detail=f"Invalid target_type. Must be one of {sorted(valid_types)}")
+            target = t
+        else:
+            target = prop.get("property_type_previous")
+            if not target:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No saved previous_type for this property. Pass target_type explicitly.",
+                )
+
+        current = prop.get("property_type")
+        if target == current:
+            return {"ok": True, "no_op": True, "current_type": current,
+                    "message": "Hedef değer mevcut değerle aynı, değişiklik yok."}
+
+        await db.properties.update_one(
+            {"id": property_id},
+            {"$set": {
+                "property_type": target,
+                "property_type_classified_by": f"manual-rollback:{current_user.get('email','admin')}",
+                "property_type_classified_at": datetime.now(timezone.utc).isoformat(),
+                "property_type_classification_confidence": 1.0,
+                "property_type_classification_reason": f"Manual rollback from '{current}' to '{target}'",
+                "property_type_previous": current,
+                "property_type_previous_reason": (
+                    f"Was '{current}' (set by "
+                    f"{prop.get('property_type_classified_by','?')}) — rolled back "
+                    f"{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
+                ),
+            }},
+        )
+        return {"ok": True, "property_id": property_id,
+                "previous_type": current, "current_type": target,
+                "message": f"Property type '{current}' → '{target}'"}
 
     @router.post("/revenue/market-robot/{property_id}/competitors/bulk-add")
     async def bulk_add_competitors(

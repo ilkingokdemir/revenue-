@@ -216,6 +216,7 @@
   "mr.sub.events": "Аналитика событий",
   "mr.sub.competitors": "Отели-конкуренты",
   "mr.sub.adjustments": "Авто-коррекции",
+  "mr.sub.aiHistory": "История ИИ",
   "mr.sub.config": "Настройки",
   "mr.sub.logs": "Журналы сканирования",
   "mr.scan_complete": "Сканирование завершено",

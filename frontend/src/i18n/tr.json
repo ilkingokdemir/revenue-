@@ -218,6 +218,7 @@
   "mr.sub.events": "Etkinlik Zekâsı",
   "mr.sub.competitors": "Rakip Oteller",
   "mr.sub.adjustments": "Otomatik Fiyat Değişimleri",
+  "mr.sub.aiHistory": "AI Geçmiş",
   "mr.sub.config": "Yapılandırma",
   "mr.sub.logs": "Tarama Kayıtları",
   "mr.scan_complete": "Tarama Tamamlandı",

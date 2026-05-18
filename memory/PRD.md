@@ -4,6 +4,16 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 325 — Neighborhood Panel'e "Kendi Otelimizin Linki" + "Manuel Rakip Ekle" üst kısma)
+- **User feedback** (TR): "kendi hotelimizin linklerini ekleyebiliyordum, manuel rakip ekleme vardı — geri getir". Aslında ikisi de duruyordu (Dashboard tab'ında OurBookingLiveCard + Neighborhood'un alt kısmında manual-comp-add) ama Neighborhood paneline gelen kullanıcı görmüyordu.
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - **NEW** "🏨 Kendi Otelimizin Booking.com Linki · Our Hotel URL" inline editor (indigo→fuchsia gradient kart, en üstte). `data-testid=our-booking-url-section` — URL yapıştır, Enter veya **Kaydet** butonu, **Tara** ile manuel scan. Aynı PUT/POST `/our-booking` endpoint'lerini kullanır.
+  - **NEW** "➕ Manuel Rakip Ekle · Add Competitor by URL" prominent kart (emerald border, üstte). `data-testid=manual-comp-add-btn-top` — otel adı + Booking.com URL yapıştır → POST `/competitors`.
+  - Mevcut "Manuel Ekle" alt blok DOKUNULMADI — geriye dönük uyumluluk.
+- **Etki**: Kullanıcı Mahalle/Neighborhood tab'ına girer girmez kendi otelinin URL'ini ve manuel rakip ekleme alanını üstte görür; aşağı kaydırmasına gerek kalmaz.
+
+
+
 ### 2026-05-18 (iter 324 — Auto Vision Enrich · Rakipler Otomatik Oda Sayısı + Fiyat)
 - **User feedback** (TR): "Market Robotta rakiplerin silmişsin istediğim yok orda — rakiplerin gerçek bilgilerini scrape edip al — oda sayıları, fiyatlar". Tek tek butona basmak istemiyor.
 - **Backend** (`routes/market_robot.py`):

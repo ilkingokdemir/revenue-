@@ -3,6 +3,18 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+
+### 2026-05-18 (iter 323 — Vision Scraper Frontend Wiring · 🤖 Per-Row + Bulk + Room Count)
+- **Backend** (`routes/market_robot.py` line 4362): `POST /api/revenue/market-robot/scrape-booking-vision` zaten mevcut — Playwright PNG + GPT-4o-mini Vision ile `room_count`, `price_per_night`, `currency`, `star_rating`, `review_score`, `review_count`, `is_blocked_page` çıkarıyor. Auto-dates (14 gün ileri) ile detail page'lere fiyat geliyor.
+- **Frontend** (`components/dashboard/NeighborhoodScanPanel.js`):
+  - Her aday satırının yanına **🤖 Vision** butonu (violet Sparkles ikonu, `data-testid=candidate-vision-${idx}`) — tek bir adayın ekran görüntüsünden oda sayısı + fiyat çeker.
+  - **🤖 Vision Hepsi** toplu butonu (`data-testid=vision-all-btn`) — tüm adaylar için sırayla Vision çağrısı yapar, ilerleme `5/15` formatında gösterilir.
+  - Sonuç badge'i (violet): `🤖 6 oda · GBP 142 · 4★` formatında inline render. Block durumunda `🤖 Block` rose badge.
+  - Sequential execution (max 1 concurrent) — Booking.com rate-limit'ine saygı.
+- **Backend test (iter 323)**: 5/5 PASSED (100%) — endpoint 11 anahtar dönüyor, screenshot_size_bytes=97025, empty URL → 400, auth korumalı, proxy-status regression OK.
+- **Etki**: Kullanıcı artık HTML scraping'in başarısız olduğu Booking.com property'lerinde bile gerçek oda sayısı + fiyat alabilir. Vision modeli kullanıcının gözüyle sayfayı okuyor.
+
+
 ## Implemented (latest first)
 
 ### 2026-05-18 (iter 323 — Proxy Banner Reality Calibration + Pre-Warm Logic)

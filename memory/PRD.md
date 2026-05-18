@@ -4,6 +4,20 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 324 — Auto Vision Enrich · Rakipler Otomatik Oda Sayısı + Fiyat)
+- **User feedback** (TR): "Market Robotta rakiplerin silmişsin istediğim yok orda — rakiplerin gerçek bilgilerini scrape edip al — oda sayıları, fiyatlar". Tek tek butona basmak istemiyor.
+- **Backend** (`routes/market_robot.py`):
+  - **NEW** `POST /api/revenue/market-robot/{property_id}/competitors/vision-enrich` — BackgroundTask kuyruğa atar, her rakibi tek tek Playwright screenshot + GPT-4o-mini Vision'a sokar. `_vision_extract_one()` reusable helper + `_do_vision_enrich_competitors()` background loop.
+  - **NEW** `GET /api/revenue/market-robot/{property_id}/competitors/vision-status` — poll için: `{status, total, done, enriched, blocked, errors, last_name, started_at, finished_at}`.
+  - **bulk_add_competitors** artık `vision_room_count`, `vision_price`, `vision_currency`, `vision_star_rating`, `vision_review_score`, `vision_review_count` alanlarını candidate'tan alıp DB'ye yazıyor (+ `vision_checked_at`).
+- **Frontend**:
+  - `NeighborhoodScanPanel.js`: "Otomatik Bul" tamamlandıktan SONRA otomatik olarak `visionAllCandidates()` çağrılıyor — kullanıcı tek tıkla 15 adayın oda sayısı + fiyatını paralel görür. `addSelectedCandidates` artık vision verisini bulk-add payload'a koyuyor.
+  - `MarketRobot.js` Competitors tab: yeni "🤖 Vision ile Yenile" butonu (gradient violet→fuchsia) + her competitor card'da `🤖 N oda` (violet) ve `🤖 GBP 142` (fuchsia) rozetleri. Block durumunda `🤖 Block` rose rozet. Background task ilerlemesi buton üzerinde "🤖 6/9" formatında.
+- **Live test (curl)**: aldgate-flats (8 rakip) → 82s'de 8/8 işlendi · 6 enriched (oda sayısı/yıldız/currency) · 2 blocked. Mongo'da `vision_room_count`, `vision_star_rating`, `vision_currency` alanları doldu.
+- **Backend test (iter 324)**: 9/9 PASSED (100%) — vision-enrich endpoint, vision-status polling, bulk-add vision_* persistence, auth korumalı, regression GET /competitors vision_* alanlarını döndürüyor.
+
+
+
 ### 2026-05-18 (iter 323 — Vision Scraper Frontend Wiring · 🤖 Per-Row + Bulk + Room Count)
 - **Backend** (`routes/market_robot.py` line 4362): `POST /api/revenue/market-robot/scrape-booking-vision` zaten mevcut — Playwright PNG + GPT-4o-mini Vision ile `room_count`, `price_per_night`, `currency`, `star_rating`, `review_score`, `review_count`, `is_blocked_page` çıkarıyor. Auto-dates (14 gün ileri) ile detail page'lere fiyat geliyor.
 - **Frontend** (`components/dashboard/NeighborhoodScanPanel.js`):

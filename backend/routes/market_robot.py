@@ -7012,10 +7012,20 @@ Date range: {date_from} to {date_to}."""
 
     async def _safe_do_scan(pid: str, payload: Dict, label: str = "city"):
         """Background-friendly wrapper around _do_scan. Logs errors but never raises
-        so a single failing property cannot crash the auto-scan loop."""
+        so a single failing property cannot crash the auto-scan loop.
+
+        Hot-reload (uvicorn --reload) closes the Mongo client while old tasks
+        are still in flight in the *previous* event loop. Those raise
+        ``Cannot use MongoClient after close``. That is harmless noise — the
+        new process will re-fire the scan — so we demote it to INFO.
+        """
         try:
             await _do_scan(pid, payload)
         except Exception as e:
+            msg = str(e)
+            if "MongoClient after close" in msg or "Event loop is closed" in msg:
+                logger.info(f"Auto {label}-scan {pid} aborted (process recycling) — harmless")
+                return
             logger.exception(f"Auto {label}-scan task failed for {pid}: {e}")
 
     async def _safe_do_geo_scan(pid: str, cfg: Dict):

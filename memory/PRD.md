@@ -4,6 +4,18 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 329 — Bug Hunt: 3 ek bug bulundu ve çözüldü)
+- **Bug 1 (P0)** — Playwright version-aware install eksikti. iter 328'de `--force` flag eklenmişti ama `_ensure_chromium_installed(force=False)` startup yolu hâlâ "herhangi bir headless_shell varsa OK" diyordu. v1208 dir mevcut → "tamam" → ama Playwright runtime v1217 arıyor → 500 döngüsü.
+  - **Fix** (`utils/booking_scraper.py`): `_ensure_chromium_installed` artık `playwright install --dry-run` çıktısını parse edip BEKLENEN versiyon dizinini (örn v1217) çıkarıyor. Sadece o dizin varsa "OK" diyor. Yoksa indirir. rc=0 ama beklenen path yok ise otomatik --force retry.
+  - **Verification**: 4 property × discover (aldgate, london, camden, city-rooms) → 200 + 15-23s, sıfır hata.
+- **Bug 2 (P2)** — `server.py`'de **duplicate** `@app.on_event("shutdown") async def shutdown_db_client(): client.close()` (line 1340 + 1346). F811 lint warning. İkisi de aynı işi yapıyor → istemsiz double-close riski.
+  - **Fix**: Tekini sildim.
+- **Bug 3 (P2)** — `_safe_do_scan` her uvicorn hot-reload sırasında `pymongo.errors.InvalidOperation: Cannot use MongoClient after close` ERROR logluyordu. Hot-reload eski event loop'taki background task'lar kapanmış client'ı kullanıyor — gerçek bug değil, gürültü.
+  - **Fix** (`routes/market_robot.py:_safe_do_scan`): "MongoClient after close" veya "Event loop is closed" mesajları artık `logger.info("...aborted (process recycling) — harmless")` ile loglanıyor, ERROR yok.
+- **Live verification**: Tüm health endpoint'leri (auth, properties, scheduler, our-booking, competitors) 200. Discover suite 4/4 başarılı. Lint ✓.
+
+
+
 ### 2026-05-18 (iter 328 — BUG FIX: Otomatik Rakip Bul 500 hatası · Playwright v1217 binary eksik)
 - **Symptom** (TR): "Otomatik Rakip Bul çalışmıyor" — `POST /competitors/discover` 500 dönüyor, log: `playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at /pw-browsers/chromium_headless_shell-1217/chrome-linux/headless_shell`.
 - **Root cause**: Playwright Python 1.59.0 `chromium-headless-shell v1217` revision'ını bekliyordu (dry-run doğruladı), pod'da yalnızca **v1208** dizini mevcuttu. iter 321'de eklenen auto-recovery hook (`_ensure_chromium_installed(force=True)`) `playwright install chromium-headless-shell` komutunu çalıştırıyordu ama `--force` flag'i yoktu — playwright "bir versiyon zaten var" deyip 1.5s'de rc=0 dönüp gerçekte 107MB v1217 binary'sini indirmiyordu. Sonuç: auto-recovery "Chromium installed ✓" logluyor ama yeni binary asla indirilmiyor → sonsuz 500 döngüsü.

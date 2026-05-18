@@ -1342,8 +1342,3 @@ async def shutdown_db_client():
     client.close()
 
 ("Admin user seeded and indexes created")
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
-

@@ -104,14 +104,49 @@ async def _ensure_chromium_installed(*, force: bool = False) -> bool:
     """
     base_str = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "/pw-browsers")
     try:
-        if not force:
-            from pathlib import Path as _P
+        # Resolve the EXACT revision Playwright wants right now (e.g. v1217),
+        # not just "any older version that happens to be on disk". This
+        # closes the bug where v1208 sat in /pw-browsers and we said "all
+        # good" even though Playwright 1.59 needs v1217.
+        from pathlib import Path as _P
+        expected_dir = None
+        try:
+            dry = await asyncio.create_subprocess_exec(
+                "playwright", "install", "--dry-run", "chromium-headless-shell",
+                env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": base_str},
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            try:
+                stdout, _stderr = await asyncio.wait_for(dry.communicate(), timeout=10)
+            except asyncio.TimeoutError:
+                stdout = b""
+                try:
+                    dry.kill()
+                except Exception:
+                    pass
+            for line in stdout.decode(errors="ignore").splitlines():
+                if "Install location:" in line and "chromium_headless_shell" in line:
+                    expected_dir = line.split("Install location:")[-1].strip()
+                    break
+        except Exception:
+            pass
+
+        if not force and expected_dir:
+            shell = _P(expected_dir) / "chrome-linux" / "headless_shell"
+            if shell.exists():
+                return True
+        elif not force:
+            # Fallback: dry-run failed — accept any version (legacy behaviour).
             base = _P(base_str)
             if base.exists():
                 for _ in base.glob("chromium_headless_shell-*/chrome-linux/headless_shell"):
                     return True
-        logger.warning("Playwright Chromium-headless-shell %s — installing (blocking)...",
-                       "force-refresh" if force else "missing")
+
+        logger.warning(
+            "Playwright Chromium-headless-shell %s — installing (blocking)... target=%s",
+            "force-refresh" if force else "missing", expected_dir or "auto",
+        )
         # IMPORTANT: Playwright v1.59+ requires `chromium-headless-shell` AS A
         # SEPARATE PACKAGE from `chromium`. Installing just `chromium` (as we
         # were before) leaves the headless_shell binary missing and every
@@ -139,6 +174,32 @@ async def _ensure_chromium_installed(*, force: bool = False) -> bool:
             logger.error("Playwright install timed out after 180s")
             return False
         if proc.returncode == 0:
+            # Sanity check the expected dir is actually there now. If not,
+            # something silently failed and we should report rather than lie.
+            if expected_dir:
+                shell = _P(expected_dir) / "chrome-linux" / "headless_shell"
+                if not shell.exists():
+                    logger.error(
+                        "Playwright install rc=0 but %s missing — retrying with --force",
+                        expected_dir,
+                    )
+                    # One retry with --force to nuke any stale cache.
+                    proc2 = await asyncio.create_subprocess_exec(
+                        "playwright", "install", "--force", "chromium-headless-shell",
+                        env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": base_str},
+                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+                    )
+                    try:
+                        await asyncio.wait_for(proc2.wait(), timeout=180)
+                    except asyncio.TimeoutError:
+                        try:
+                            proc2.kill()
+                        except Exception:
+                            pass
+                    if proc2.returncode == 0 and shell.exists():
+                        logger.info("Playwright Chromium installed ✓ (forced retry)")
+                        return True
+                    return False
             logger.info("Playwright Chromium installed ✓")
             return True
         logger.error("Playwright install rc=%s", proc.returncode)

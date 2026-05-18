@@ -5,6 +5,25 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-18 (iter 322 — AI Classification History + Rollback Paneli)
+- **Backend** (`routes/market_robot.py`):
+  - `fleet-classify-property-types` LIVE mode artık `property_type_previous` + `property_type_previous_reason` da kaydediyor (one-click rollback için).
+  - Yeni `GET /api/revenue/market-robot/ai-classification-history?days=N&limit=M` — son N gün içinde AI tarafından `property_type`'ı değiştirilmiş tüm property'leri döndürür. Her satır: current/previous_type, confidence, reason, classified_at, classified_by, rollback_available bool.
+  - Yeni `POST /api/revenue/market-robot/{property_id}/ai-classification-rollback`:
+    - Body `{}` → kaydedilmiş `property_type_previous` kullan
+    - Body `{target_type:"hotel"}` → manuel hedef belirt (7 geçerli tip arasında validation)
+    - No-op detection (target == current → yazma yapmadan dön)
+    - Audit: `classified_by="manual-rollback:<email>"`, confidence=1.0, reason="Manual rollback from X to Y"
+- **Frontend** (`components/dashboard/AIClassificationHistoryPanel.js` — NEW):
+  - Audit tablosu: property, önceki tip, şimdiki tip, confidence renkli (yeşil 90%+, cyan 70%+, amber <70%), gerekçe (line-clamp), zaman, kim (AI/manuel badge).
+  - Filtreleme: Son 7/30/90 gün veya tüm zamanlar dropdown.
+  - **Geri Al butonu** her satırda — modal açar:
+    - Mevcut + kayıtlı önceki tip gösterir
+    - Hedef tip dropdown (7 valid type)
+    - İptal / Uygula
+- **MarketRobot.js**: Yeni "AI Geçmiş" sub-tab eklendi (`market-robot-ai-history`), 7 dilde i18n label (TR/EN/DE/FR/ES/RU/AR).
+- **E2E test (iter 322)**: 20/20 backend test PASSED (100%) — RBAC (admin/manager/receptionist), response yapısı, days/limit param, explicit target, empty body, no-op, bidirectional, 404, invalid type 400, audit fields, fleet-classify previous_type persistence, regresyonlar.
+
 ### 2026-05-17 (iter 321 — Playwright Auto-Recovery + chromium-headless-shell Fix)
 - **Bug raporu**: User "calismiyor" dedi — discover, validate-url ve geo-validate hepsi 500 veriyordu. Sebep: Playwright Chromium binary 5+ kez kayboldu, ve önceki auto-install hook'um `playwright install chromium` çalıştırıyordu — oysa Playwright v1.59+ için `chromium-headless-shell` SEPARATE bir paket. `chromium` install ediyor ama `headless_shell` binary'i farklı yere düşüyor.
 - **Backend fix** (`utils/booking_scraper.py`):

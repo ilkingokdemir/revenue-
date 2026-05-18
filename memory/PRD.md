@@ -4,6 +4,22 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 331 — Neighborhood Scan fail-fix: Background task + polling)
+- **User report** (TR): "neighborhood scan ediyorum fail oluyor".
+- **Root cause**: `POST /scan-geo` 30 günü **sequentially** scrape ediyordu (~150-300s). Kubernetes ingress'in **60s timeout**'unu aştığı için 502 dönüyordu. Frontend toast: "Scan failed".
+- **Fix katmanları**:
+  1. **Parallelism** (`_do_scan`): per-date Booking.com scrapes artık `asyncio.Semaphore(4)` + `asyncio.gather()` ile 4 paralel — sequential'a göre ~3-4× hız kazancı.
+  2. **Background task** (`POST /scan-geo`): endpoint artık `BackgroundTasks` ile fire-and-forget. **8 saniyede** `{scan_id, status:'queued'}` döner. İngress timeout'una takılmaz.
+  3. **NEW polling endpoint** `GET /scan-geo-status`: `{status: idle|queued|running|done|error, result, error, scan_id, started_at, finished_at}`. Frontend her 5s'de poll eder.
+  4. **Frontend** `NeighborhoodScanPanel.runScan()`: artık polling-based — POST sonrası "🛰️ Geo scan başladı, arka planda çalışıyor…" toast'u, polling sonrası "✓ Tarama bitti · 7 gün · E1 7 · 2.5km" success toast'u. Max 5 dakika bekler.
+- **MongoDB**: `market_robot_scan_status` koleksiyonu (per property × kind) progress takibi için kullanılıyor.
+- **Live test** (external URL üzerinden):
+  - POST `/scan-geo` (7 gün, 2.5km) → **8s**'de HTTP 200 `{queued}`
+  - Polling: 8s, 16s, 24s, 32s, 40s, 48s → `done` ile `dates_scanned: 7` döndü.
+  - 30 günlük scan ~3-4 dakika tahmini sürer; frontend 5 dakika max bekler.
+
+
+
 ### 2026-05-18 (iter 330 — Kesin çözüm: Playwright blocking startup + sys.executable subprocess)
 - **User-approved suggestion**: "olur, öneriyi uygula eğer ücretsiz kesin çözüm olacaksa".
 - **Bug katmanı 1** (`server.py`): startup hook `asyncio.create_task(_ensure_playwright_chromium())` ile background'a atılıyordu → uvicorn HTTP'yi hemen kabul ediyor, ilk discover binary indirilmeden geliyor, 500 dönüyordu.

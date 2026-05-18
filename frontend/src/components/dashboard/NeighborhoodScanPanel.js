@@ -537,16 +537,53 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       const payload = { location: location.trim(), radius_km: Number(radiusKm), days_ahead: Number(days) };
       if (latitude && longitude) { payload.latitude = Number(latitude); payload.longitude = Number(longitude); }
       const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/scan-geo`, payload);
-      if (data.status === "busy") { toast.error(data.error || "Another geo scan in progress"); }
-      else {
-        setLastResult(data);
-        toast.success(`Scanned ${data.dates_scanned} dates · ${data.location}`);
-        loadAll();
+      if (data.status === "busy") {
+        toast.error(data.error || "Another geo scan in progress");
+        setScanning(false);
+        return;
       }
+      if (data.status === "error") {
+        toast.error(data.error || "Scan başlatılamadı");
+        setScanning(false);
+        return;
+      }
+      // Fire-and-forget: backend runs in BackgroundTask. Poll /scan-geo-status
+      // until status='done' or 'error' (max 5 min for safety).
+      toast.success(`🛰️ Geo scan başladı (${days} gün, ${radiusKm}km) — arka planda çalışıyor…`);
+      const started = Date.now();
+      const poll = async () => {
+        try {
+          const { data: st } = await axios.get(
+            `${API}/revenue/market-robot/${propertyId}/scan-geo-status`
+          );
+          if (st?.status === "done") {
+            const r = st.result || {};
+            setLastResult(r);
+            toast.success(`✓ Tarama bitti · ${r.dates_scanned || 0} gün · ${r.location || ""}`);
+            loadAll();
+            setScanning(false);
+            return;
+          }
+          if (st?.status === "error") {
+            toast.error(st.error || "Geo scan başarısız");
+            setScanning(false);
+            return;
+          }
+          if (Date.now() - started > 5 * 60 * 1000) {
+            toast.warning("Scan hâlâ sürüyor — sayfayı yenileyince sonuçlar görünecek.");
+            setScanning(false);
+            return;
+          }
+          setTimeout(poll, 5000);
+        } catch {
+          setScanning(false);
+        }
+      };
+      setTimeout(poll, 3000);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Scan failed");
+      setScanning(false);
     }
-    setScanning(false);
   };
 
   // Reset wizard: clears all competitors + auto-geocodes property + re-discovers

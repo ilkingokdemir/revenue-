@@ -1286,13 +1286,84 @@ def create_market_robot_router(db, require_roles, resend=None):
         return await _do_scan(property_id, data or {})
 
     @router.post("/revenue/market-robot/{property_id}/scan-geo")
-    async def run_geo_scan(property_id: str, data: Dict = {},
+    async def run_geo_scan(property_id: str, background_tasks: BackgroundTasks, data: Dict = {},
                            current_user: dict = Depends(require_roles("admin", "manager"))):
         """Run a neighborhood (geo-radius) scan. Body: {location: 'SW1A 1AA', radius_km: 3.2, days_ahead: 30}
-        Runs INDEPENDENTLY from city scans — both can run in parallel."""
+
+        Runs as a BACKGROUND TASK because a 30-day geo scan with Booking.com
+        scrapes takes 60-120s, well over Kubernetes ingress 60s timeout. The
+        endpoint returns immediately with {scan_id, status:'queued'}; clients
+        poll GET /scan-geo-status/{property_id} for progress.
+        """
         data = data or {}
         data["mode"] = "geo"
-        return await _do_scan(property_id, data)
+
+        # Validate location early so caller gets a 200 with a meaningful error
+        # rather than discovering it after the background task starts.
+        if not (data.get("location") or data.get("postcode") or data.get("address")
+                or (data.get("latitude") is not None and data.get("longitude") is not None)):
+            return {
+                "error": "Geo scan requires 'location' (postcode/address) or latitude+longitude",
+                "status": "error",
+            }
+        if SCRAPE_LOCKS_GEO.get(property_id):
+            return {"error": f"Geo scan already in progress for {property_id}", "status": "busy"}
+
+        scan_id = str(uuid.uuid4())[:8]
+        started_at = datetime.now(timezone.utc).isoformat()
+        await db.market_robot_scan_status.update_one(
+            {"property_id": property_id, "kind": "geo"},
+            {"$set": {
+                "property_id": property_id, "kind": "geo",
+                "scan_id": scan_id, "status": "queued",
+                "started_at": started_at,
+                "location": data.get("location") or data.get("postcode") or "",
+                "radius_km": data.get("radius_km"),
+                "days_ahead": data.get("days_ahead"),
+                "result": None, "error": None, "finished_at": None,
+            }},
+            upsert=True,
+        )
+
+        async def _run_in_bg():
+            try:
+                await db.market_robot_scan_status.update_one(
+                    {"property_id": property_id, "kind": "geo"},
+                    {"$set": {"status": "running"}}
+                )
+                result = await _do_scan(property_id, data)
+                await db.market_robot_scan_status.update_one(
+                    {"property_id": property_id, "kind": "geo"},
+                    {"$set": {
+                        "status": "done" if result.get("status") != "error" else "error",
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
+                        "result": result,
+                    }}
+                )
+            except Exception as e:
+                logger.exception("Background geo scan failed for %s: %s", property_id, e)
+                await db.market_robot_scan_status.update_one(
+                    {"property_id": property_id, "kind": "geo"},
+                    {"$set": {
+                        "status": "error",
+                        "finished_at": datetime.now(timezone.utc).isoformat(),
+                        "error": str(e)[:300],
+                    }}
+                )
+
+        background_tasks.add_task(_run_in_bg)
+        return {"scan_id": scan_id, "status": "queued",
+                "message": "Geo scan başladı — durum için /scan-geo-status sorgula."}
+
+    @router.get("/revenue/market-robot/{property_id}/scan-geo-status")
+    async def get_geo_scan_status(property_id: str,
+                                  current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Polling endpoint for the most recent geo scan on this property.
+        Returns {status: 'idle'|'queued'|'running'|'done'|'error', result?, error?, scan_id, started_at, finished_at}."""
+        doc = await db.market_robot_scan_status.find_one(
+            {"property_id": property_id, "kind": "geo"}, {"_id": 0}
+        )
+        return doc or {"property_id": property_id, "kind": "geo", "status": "idle"}
 
     @router.get("/revenue/market-robot/{property_id}/geo-supply")
     async def get_geo_supply_data(property_id: str, days: int = 30,
@@ -2048,26 +2119,28 @@ def create_market_robot_router(db, require_roles, resend=None):
                 scan_dates.append(d)
             scan_dates.sort()
 
-            for d in scan_dates:
+            # Per-date worker — runs in parallel under a Semaphore so we don't
+            # hammer Booking.com or exhaust browser contexts. 4 concurrent
+            # scrapes brings a 30-day scan from ~3min sequential to ~50-80s,
+            # which fits comfortably inside the proxy/ingress 120s timeout.
+            scan_sem = asyncio.Semaphore(4)
+
+            async def _scan_one_date(d):
                 checkin = d.strftime("%Y-%m-%d")
                 checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
-
-                supply = await _scrape_booking_date(
-                    location, checkin, checkout, language,
-                    latitude=latitude, longitude=longitude, radius_km=radius_km,
-                    currency=scan_currency,
-                )
-
-                # Get previous snapshot for this date + same scan type
+                async with scan_sem:
+                    supply = await _scrape_booking_date(
+                        location, checkin, checkout, language,
+                        latitude=latitude, longitude=longitude, radius_km=radius_km,
+                        currency=scan_currency,
+                    )
                 prev = await db.market_supply.find_one(
                     {"property_id": property_id, "date": checkin, "scan_type": "geo" if is_geo else "city"},
                     {"_id": 0},
                     sort=[("scanned_at", -1)]
                 )
-
                 adj_pct, reason = (0, "Geo scan (informational only)") if is_geo else \
                     await _calculate_price_adjustment(db, property_id, checkin, supply, prev)
-
                 snapshot = {
                     "scan_id": scan_id,
                     "property_id": property_id,
@@ -2097,7 +2170,13 @@ def create_market_robot_router(db, require_roles, resend=None):
                 }
                 await db.market_supply.insert_one(snapshot)
                 snapshot.pop("_id", None)
-                snapshots.append(snapshot)
+                return snapshot
+
+            # Fire all dates in parallel (bounded by the Semaphore).
+            snapshots = await asyncio.gather(
+                *[_scan_one_date(d) for d in scan_dates],
+                return_exceptions=False,
+            )
 
             # Auto-pricing (city mode only)
             applied = []

@@ -819,13 +819,19 @@ async def _job_nightly_dry_publish(property_id: str) -> dict:
 JOB_HANDLERS["nightly_dry_publish"] = _job_nightly_dry_publish
 
 # Iter 320 — Weekly fleet-wide geo-validate (Camden→Boston bug auto-repair).
-from routes.market_robot import fleet_geo_validate_worker
+from routes.market_robot import fleet_geo_validate_worker, fleet_vision_enrich_worker
 
 async def _job_fleet_geo_validate(property_id: str) -> dict:
     # property_id is always "" for fleet-wide jobs.
     return await fleet_geo_validate_worker(db, fix=True)
 
 JOB_HANDLERS["fleet_geo_validate"] = _job_fleet_geo_validate
+
+# Iter 326 — Weekly fleet-wide Vision enrich (room counts + prices fresh).
+async def _job_fleet_vision_enrich(property_id: str) -> dict:
+    return await fleet_vision_enrich_worker(db, max_per_property=25)
+
+JOB_HANDLERS["fleet_vision_enrich"] = _job_fleet_vision_enrich
 
 # Iter 164 — Inventory Allocations (pooled / dedicated / capped per channel×room)
 from routes.inventory_allocations import create_inventory_allocations_router
@@ -1300,6 +1306,25 @@ async def startup_event():
             logger.info("Scheduler: seeded fleet_geo_validate weekly cron (Mon 03:00 UTC)")
     except Exception as e:
         logger.warning("fleet_geo_validate cron seed failed: %s", e)
+
+    # Iter 326 — Seed weekly fleet Vision enrich cron (Mon 04:00 UTC, after geo-validate).
+    try:
+        existing_v = await db.scheduler_config.find_one({"property_id": "", "job": "fleet_vision_enrich"}, {"_id": 0})
+        if not existing_v:
+            await db.scheduler_config.insert_one({
+                "property_id": "",
+                "job": "fleet_vision_enrich",
+                "enabled": True,
+                "cron_hour": 4,
+                "cron_minute": 0,
+                "cron_dow": 0,  # Monday
+                "notes": "Haftalık fleet-wide rakip Vision enrich — oda sayıları + fiyatları taze tutar (GPT-4o-mini screenshot OCR)",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": "system",
+            })
+            logger.info("Scheduler: seeded fleet_vision_enrich weekly cron (Mon 04:00 UTC)")
+    except Exception as e:
+        logger.warning("fleet_vision_enrich cron seed failed: %s", e)
 
     # Ensure Playwright Chromium binary exists — it disappears between pod
     # restarts on this environment. Use the resilient helper from

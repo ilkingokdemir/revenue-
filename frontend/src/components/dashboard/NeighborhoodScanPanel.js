@@ -1347,6 +1347,30 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                                 : ""}
                             </span>
                           )}
+                          {/* Peer-size badge — compare against our own property's room count.
+                              Shows e.g. "📈 +18 oda · 2.5× senin boyutun" or "📉 -8 oda · 0.4×". */}
+                          {visionResults[c.booking_url]?.room_count != null && ourSummary?.total_rooms > 0 && (() => {
+                            const ours = ourSummary.total_rooms;
+                            const theirs = visionResults[c.booking_url].room_count;
+                            const diff = theirs - ours;
+                            const mult = ours > 0 ? theirs / ours : 0;
+                            const isBigger = diff > 0;
+                            const isSame = diff === 0;
+                            const tone = isSame
+                              ? "bg-stone-500/15 text-stone-300 border-stone-500/30"
+                              : isBigger
+                              ? "bg-amber-500/15 text-amber-300 border-amber-500/40"
+                              : "bg-emerald-500/15 text-emerald-300 border-emerald-500/40";
+                            return (
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded font-bold border ${tone}`}
+                                title={`Senin otelin ${ours} oda, bu rakip ${theirs} oda — peer-group benchmark için ${isBigger ? "büyük" : isSame ? "denk" : "küçük"} operasyon`}
+                                data-testid={`candidate-peer-size-${idx}`}
+                              >
+                                {isSame ? "⚖ Eşit" : isBigger ? `📈 +${diff} oda · ${mult.toFixed(1)}×` : `📉 ${diff} oda · ${mult.toFixed(1)}×`}
+                              </span>
+                            );
+                          })()}
                           {visionResults[c.booking_url]?.is_blocked_page && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 font-bold" data-testid={`candidate-vision-blocked-${idx}`}>
                               🤖 Block

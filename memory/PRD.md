@@ -4,6 +4,25 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 327 — Weekly Vision Cron + Peer-Size Karşılaştırma Rozeti)
+- **Scope**: İki "next action" maddesi birlikte uygulandı.
+- **Backend** (`routes/market_robot.py`):
+  - **NEW** `_vision_extract_one_module()` — module-scope Vision extractor (önceden router içine gömülüydü, şimdi cron worker da kullanabiliyor).
+  - **NEW** `fleet_vision_enrich_worker(db, max_per_property=25)` — tüm aktif property'lerin rakiplerini sırayla Vision'la zenginleştirir, her property için max 25 (mega-property'ler diğerlerini açlığa sokmasın). Per-property `market_robot_vision_status` doc'unu günceller (`source: "weekly_cron"`).
+  - Return: `{processed, enriched, blocked, errors, properties_done, ran_at}`.
+- **Backend** (`server.py`):
+  - `from routes.market_robot import fleet_vision_enrich_worker` + `JOB_HANDLERS["fleet_vision_enrich"] = _job_fleet_vision_enrich`.
+  - Startup'ta idempotent seed: `scheduler_config` doc'u (Pazartesi 04:00 UTC, geo-validate'tan 1 saat sonra). Log: `"Scheduler: seeded fleet_vision_enrich weekly cron (Mon 04:00 UTC)"`.
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - **NEW** Peer-Size karşılaştırma rozeti her aday satırında — `visionResults[c.booking_url].room_count` + `ourSummary.total_rooms` ile karşılaştırıp:
+    - **📈 +18 oda · 2.5×** (amber) — rakip daha büyük
+    - **⚖ Eşit** (stone) — aynı boyut
+    - **📉 -8 oda · 0.4×** (emerald) — rakip daha küçük
+  - Title tooltip: "Senin otelin X oda, bu rakip Y oda — peer-group benchmark için büyük/eşit/küçük operasyon".
+- **Doğrulama**: GET `/api/scheduler/config` iki cron'u da gösteriyor (geo-validate Mon 03:00 + vision-enrich Mon 04:00). Frontend lint ✓.
+
+
+
 ### 2026-05-18 (iter 326 — Otomatik Discover'ı Prominent Card + Manuel Add Vision Preview)
 - **User feedback** (TR): "rakipleri otomatik çıkarmayı göremiyorum, potansiyel iyileştirmeyi uygula".
 - **Frontend** (`NeighborhoodScanPanel.js`):

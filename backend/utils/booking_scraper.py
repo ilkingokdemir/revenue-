@@ -783,28 +783,39 @@ def _is_single_room_listing(name: str) -> bool:
 async def _fetch_property_unit_count(ctx, booking_url: str, timeout_ms: int = 15000) -> Optional[int]:
     """Attempt to fetch room/apartment count from a Booking.com property page.
 
-    LIMITATION: Booking.com no longer serves a usable property-detail HTML
-    response for direct `/hotel/<cc>/<slug>.html` URLs — they return a generic
-    "page not found" shell unless you arrive via an authenticated search
-    flow with a valid checkin/checkout context. As a result, `numberOfRooms`
-    is rarely (if ever) extractable from the static HTML.
+    LIMITATION: Booking.com only exposes `numberOfRooms` for a small subset of
+    listings (some Hotel-type, almost no Apartment-type). Even when the page
+    opens correctly via session-warmed navigation, the JSON-LD schema usually
+    omits this field. Combined with frequent "Page not found" responses for
+    direct deep links from cloud IPs, this signal is unreliable in practice.
 
-    We still try, in case Booking.com restores the schema in the future:
-      1. Parse `<script type="application/ld+json">` blocks for
-         `numberOfRooms` from any Hotel/LodgingBusiness schema.
-      2. Search the raw HTML for `numberOfRooms` JSON keys (occasionally
-         buried in inline JS state).
+    The function is kept for the day Booking.com restores broader coverage:
+      1. Pre-warm the session by visiting Booking.com homepage (sets anti-bot
+         cookies that real users get implicitly).
+      2. Visit the property detail URL with the warmed session.
+      3. Parse JSON-LD blocks for any `numberOfRooms` field.
 
     Returns the int unit count, or None if not extractable. Callers should
-    treat None as "unknown" — DO NOT auto-exclude.
+    treat None as "unknown" — DO NOT auto-exclude. Use review_count as the
+    primary size proxy instead.
     """
     if not booking_url:
         return None
     page = None
     try:
         page = await ctx.new_page()
+        # Pre-warm: visit homepage so Booking.com sets the anti-bot cookies
+        # a real user would have when arriving at a detail page. Otherwise
+        # most direct deep-links return a "page not found" shell.
+        try:
+            await page.goto("https://www.booking.com/index.en-gb.html",
+                            wait_until="domcontentloaded", timeout=timeout_ms)
+            await page.wait_for_timeout(1200)
+        except Exception:
+            pass  # warm-up best-effort
         try:
             await page.goto(booking_url, wait_until="domcontentloaded", timeout=timeout_ms)
+            await page.wait_for_timeout(800)
         except Exception:
             return None
         try:

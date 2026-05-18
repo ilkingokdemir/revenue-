@@ -5,6 +5,22 @@ High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant 
 
 ## Implemented (latest first)
 
+### 2026-05-18 (iter 323 — Proxy Banner Reality Calibration + Pre-Warm Logic)
+- **User feedback**: "kendin coz proxy service icin ucret odemek istemiyorum" — proxy almadan çözüm istendi.
+- **Findings (live tested)**:
+  - **Hızlı gerçek**: Sistem zaten proxy'siz çalışıyor — `/competitors/discover` (search results), review_count + review_score, anlık fiyat doğrulama (`/validate-booking-url`) hepsi ✓. Live test: camden-suites → 2 multi-unit komşu (3006 + 923 yorum) geldi, proxy YOK.
+  - **Detail-page deep-link bypass denemesi**: Pre-warm (homepage ziyaret) + direct URL kombinasyonu → bazı hotellerde açtı (Camden Apartments) ama çoğunda "Page not found" (Wilde Aparthotels, The Barkston) devam etti. Booking.com bunu tutarlı şekilde engelliyor.
+  - **JSON-LD `numberOfRooms` reality**: Detail page açıldığında bile Booking.com Hotel-type JSON-LD'sinde `numberOfRooms: None`. Apartment-type'larda ise `@type` bile çoğu zaman yok. Bu alan SIK SIK olmadığı için proxy alsak bile yapı bozuk.
+  - **Sonuç**: review_count (yorum sayısı) tek güvenilir size proxy'si — proxy almak detay-sayfa erişimini iyileştirir ama oda sayısı verisi zaten kaynakta yok.
+- **Backend** (`utils/booking_scraper.py`):
+  - `_fetch_property_unit_count()`'a pre-warming logic eklendi (Booking.com homepage → detail page sequence). Best-effort — block olursa sessizce devam eder.
+  - Docstring güncellendi, gerçeği anlatıyor: "Booking.com yalnızca küçük bir alt-küme listede `numberOfRooms` veriyor".
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - Proxy banner amber WARNING → stone-gray INFO seviyesine düşürüldü.
+  - Yeni metin: "Sistem şu anda tüm temel akışlarda proxy'siz çalışıyor: discover ✓, yorum sayıları ✓, anlık fiyat doğrulama ✓. Sadece bazı detail-sayfaları block'lanır, bu durum sizi etkilemez."
+  - Provider linkleri yine var ama "gerekli değil" notu ile.
+- **Etki**: Kullanıcı artık her sayfada kırmızı amber uyarıyla karşılaşmıyor. Gerçek durum şeffafça açıklanıyor: ödemeden de tüm faydalı flow'lar çalışıyor.
+
 ### 2026-05-18 (iter 322 — AI Classification History + Rollback Paneli)
 - **Backend** (`routes/market_robot.py`):
   - `fleet-classify-property-types` LIVE mode artık `property_type_previous` + `property_type_previous_reason` da kaydediyor (one-click rollback için).

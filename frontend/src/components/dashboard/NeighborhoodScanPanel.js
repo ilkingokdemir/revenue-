@@ -805,22 +805,25 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       {/* Competitor discovery — auto + manual, two-tier flow */}
       {propertyId !== "all" && (
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5 space-y-4" data-testid="competitor-discovery-section">
-          {/* Proxy / VPN status banner — Booking.com blocks cloud IPs */}
+          {/* Proxy / VPN info — Booking.com cloud IP'leri detail-pages için zaman zaman blocklar */}
           {proxyStatus && !proxyStatus.configured && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 text-[11px] text-amber-200" data-testid="proxy-warning-banner">
-              <div className="font-bold text-amber-300 mb-1">⚠️ Residential Proxy yapılandırılmamış</div>
-              <div className="text-amber-100/80">
-                Booking.com cloud IP'leri agresif blocklar — özellikle detail-page scrape'lerini.
-                Kalıcı çözüm: residential proxy servisi (
+            <div className="bg-stone-800/60 border border-stone-700 rounded-xl p-3 text-[11px] text-stone-300" data-testid="proxy-warning-banner">
+              <div className="font-bold text-stone-200 mb-1">ℹ️ Booking.com Doğrudan-IP Erişimi (proxy aktif değil)</div>
+              <div className="text-stone-400">
+                Sistem şu anda <strong className="text-emerald-300">tüm temel akışlarda</strong> proxy'siz çalışıyor:
+                rakipler listesi (discover), aday yorum sayıları, anlık fiyat doğrulama (👁 Test) — hepsi ✓.
+                <br />
+                Sadece bazı hotel detail-sayfaları (örn. zincir oteller) Booking.com tarafından zaman zaman block'lanır.
+                Bu durum sizi etkilemez çünkü <strong className="text-emerald-300">discover endpoint search results üzerinden çalışır</strong> ve fiyatları olduğu gibi getirir.
+                <br />
+                İstenirse residential proxy ile %100 detail-sayfa erişimi (
                 {(proxyStatus.providers || []).slice(0, 3).map((p, i) => (
                   <span key={p.name}>
                     {i > 0 && " · "}
                     <a href={p.url} target="_blank" rel="noopener noreferrer"
-                       className="text-amber-300 underline hover:text-amber-200">{p.name}</a>
+                       className="text-cyan-300 underline hover:text-cyan-200">{p.name}</a>
                   </span>
-                ))}
-                ) abonelik al, URL'i admin'e ver, biz <code className="bg-stone-950 px-1 rounded text-amber-300">BOOKING_PROXY_URL</code> env var'ına ekleyelim.
-                Önerilen format: <code className="bg-stone-950 px-1 rounded text-amber-300">{proxyStatus.example_url_format}</code>
+                ))}) sağlanabilir, ama gerekli değil.
               </div>
             </div>
           )}

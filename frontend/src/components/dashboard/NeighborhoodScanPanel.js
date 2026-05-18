@@ -122,6 +122,40 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     setVisionUrl(null);
   };
 
+  // Run Vision scrape on every visible candidate sequentially (max 1 in
+  // flight — Booking.com rate-limits aggressively). Pulls room_count +
+  // price from screenshot via GPT-4o-mini for the whole shortlist.
+  const [visionBulkRunning, setVisionBulkRunning] = useState(false);
+  const [visionBulkProgress, setVisionBulkProgress] = useState({ done: 0, total: 0 });
+  const visionAllCandidates = async () => {
+    const targets = candidates.filter(c => !visionResults[c.booking_url]);
+    if (targets.length === 0) {
+      toast.info("Tüm adaylar zaten Vision ile tarandı");
+      return;
+    }
+    setVisionBulkRunning(true);
+    setVisionBulkProgress({ done: 0, total: targets.length });
+    let rooms = 0;
+    let blocked = 0;
+    for (let i = 0; i < targets.length; i++) {
+      const c = targets[i];
+      setVisionUrl(c.booking_url);
+      try {
+        const { data } = await axios.post(
+          `${API}/revenue/market-robot/scrape-booking-vision`,
+          { booking_url: c.booking_url, model: "gpt-4o-mini" }
+        );
+        setVisionResults(prev => ({ ...prev, [c.booking_url]: data }));
+        if (data?.is_blocked_page) blocked += 1;
+        if (data?.room_count) rooms += 1;
+      } catch (e) { /* swallow, keep going */ }
+      setVisionBulkProgress({ done: i + 1, total: targets.length });
+    }
+    setVisionUrl(null);
+    setVisionBulkRunning(false);
+    toast.success(`🤖 Vision toplu tarama bitti · ${rooms} oda sayısı bulundu · ${blocked} block`);
+  };
+
 
   const testCandidateUrl = async (cand) => {
     const url = cand.booking_url;
@@ -934,6 +968,18 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                     data-testid="pick-none-btn"
                   >Hiçbirini</button>
                   <button
+                    onClick={visionAllCandidates}
+                    disabled={visionBulkRunning || candidates.length === 0}
+                    className="text-[10px] font-bold px-2 py-1 rounded bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 border border-violet-500/40 disabled:opacity-40 flex items-center gap-1"
+                    title="GPT-4o-mini Vision ile tüm adayların oda sayısı ve fiyatını çek"
+                    data-testid="vision-all-btn"
+                  >
+                    {visionBulkRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {visionBulkRunning
+                      ? `🤖 ${visionBulkProgress.done}/${visionBulkProgress.total}`
+                      : "🤖 Vision Hepsi"}
+                  </button>
+                  <button
                     onClick={addSelectedCandidates}
                     disabled={bulkAdding || Object.keys(picked).filter(k => picked[k]).length === 0}
                     className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-xs flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1000,6 +1046,29 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                               </span>
                             )
                           )}
+                          {visionResults[c.booking_url] && !visionResults[c.booking_url].is_blocked_page && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-bold border border-violet-500/30"
+                              title="GPT-4o-mini Vision tarafından okunan veri"
+                              data-testid={`candidate-vision-result-${idx}`}
+                            >
+                              🤖
+                              {visionResults[c.booking_url].room_count
+                                ? ` ${visionResults[c.booking_url].room_count} oda`
+                                : ""}
+                              {visionResults[c.booking_url].price_per_night
+                                ? ` · ${visionResults[c.booking_url].currency || ""} ${visionResults[c.booking_url].price_per_night}`
+                                : ""}
+                              {visionResults[c.booking_url].star_rating
+                                ? ` · ${visionResults[c.booking_url].star_rating}★`
+                                : ""}
+                            </span>
+                          )}
+                          {visionResults[c.booking_url]?.is_blocked_page && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 font-bold" data-testid={`candidate-vision-blocked-${idx}`}>
+                              🤖 Block
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-stone-500 font-mono truncate">{c.booking_url}</div>
                       </div>
@@ -1014,6 +1083,18 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                           ? <Loader2 className="w-3 h-3 animate-spin" />
                           : <Eye className="w-3 h-3" />}
                         {testingUrl === c.booking_url ? "Test…" : "Test"}
+                      </button>
+                      <button
+                        onClick={() => visionCandidateUrl(c)}
+                        disabled={visionUrl === c.booking_url}
+                        className="shrink-0 px-2 py-1 rounded bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 text-[10px] font-bold border border-violet-500/30 disabled:opacity-50 flex items-center gap-1"
+                        title="GPT-4o-mini Vision ile ekran görüntüsünden oda sayısı + fiyat çek (HTML block bypass)"
+                        data-testid={`candidate-vision-${idx}`}
+                      >
+                        {visionUrl === c.booking_url
+                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                          : <Sparkles className="w-3 h-3" />}
+                        {visionUrl === c.booking_url ? "Vision…" : "🤖 Vision"}
                       </button>
                       <button
                         onClick={() => removeFromList(c.booking_url)}

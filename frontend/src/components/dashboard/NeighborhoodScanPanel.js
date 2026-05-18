@@ -87,6 +87,41 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // Per-row "Test URL" — anlık Booking.com scrape ile gerçek satıştaki fiyatı göster
   const [testingUrl, setTestingUrl] = useState(null);  // booking_url currently being tested
   const [testResults, setTestResults] = useState({});  // { [booking_url]: {ok, price, currency, hotel_name, error} }
+  // Vision-based extraction (screenshot → GPT-4o-mini)
+  const [visionUrl, setVisionUrl] = useState(null);
+  const [visionResults, setVisionResults] = useState({});
+
+  const visionCandidateUrl = async (cand) => {
+    const url = cand.booking_url;
+    setVisionUrl(url);
+    try {
+      const { data } = await axios.post(
+        `${API}/revenue/market-robot/scrape-booking-vision`,
+        { booking_url: url, model: "gpt-4o-mini" }
+      );
+      setVisionResults(prev => ({ ...prev, [url]: data }));
+      if (data?.is_blocked_page) {
+        toast.warning(`🤖 Sayfa block edildi (${cand.name}). Vision görmedi.`);
+      } else if (data?.hotel_name) {
+        const bits = [];
+        if (data.hotel_name) bits.push(data.hotel_name.slice(0, 30));
+        if (data.star_rating) bits.push(`${data.star_rating}★`);
+        if (data.review_score) bits.push(`${data.review_score}/10`);
+        if (data.review_count) bits.push(`${data.review_count} yorum`);
+        if (data.room_count) bits.push(`${data.room_count} oda`);
+        if (data.price_per_night) bits.push(`${data.currency || ""} ${data.price_per_night}`);
+        toast.success(`🤖 ${bits.join(" · ")}`);
+      } else if (data?.error) {
+        toast.error(`🤖 Vision hata: ${data.error}`);
+      } else {
+        toast.warning(`🤖 Vision veri çıkaramadı (${cand.name})`);
+      }
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Vision çağrısı başarısız");
+    }
+    setVisionUrl(null);
+  };
+
 
   const testCandidateUrl = async (cand) => {
     const url = cand.booking_url;

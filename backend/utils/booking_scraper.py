@@ -780,6 +780,69 @@ def _is_single_room_listing(name: str) -> bool:
     return bool(_SINGLE_ROOM_REGEX.search(name))
 
 
+async def scrape_booking_screenshot(
+    booking_url: str,
+    *,
+    timeout_ms: int = 20000,
+    full_page: bool = False,
+    pre_warm: bool = True,
+) -> Optional[bytes]:
+    """Take a PNG screenshot of a Booking.com property/search page.
+
+    Returns the raw PNG bytes ready to be sent to a vision model. Uses
+    pre-warming (Booking.com homepage → target URL) to bypass cold
+    deep-link blocking. Never raises — returns None on failure.
+
+    Args:
+      booking_url: target page (detail page OR search result)
+      timeout_ms: per-navigation timeout
+      full_page: when True captures the full scrollable page (heavier)
+      pre_warm: when True, visits Booking.com homepage first so anti-bot
+        cookies are set before navigating to the detail URL.
+    """
+    if not booking_url:
+        return None
+    browser = await _get_browser()
+    ctx = await browser.new_context(
+        user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"),
+        locale="en-GB",
+        viewport={"width": 1366, "height": 900},
+        extra_http_headers={
+            "Accept-Language": "en-GB,en;q=0.9",
+            "sec-ch-ua-platform": '"Windows"',
+        },
+    )
+    try:
+        page = await ctx.new_page()
+        if pre_warm:
+            try:
+                await page.goto("https://www.booking.com/index.en-gb.html",
+                                wait_until="domcontentloaded", timeout=timeout_ms)
+                await page.wait_for_timeout(1200)
+            except Exception:
+                pass
+        try:
+            await page.goto(booking_url, wait_until="domcontentloaded", timeout=timeout_ms)
+        except Exception as e:
+            logger.warning("scrape_booking_screenshot: goto failed %s — %s", booking_url, e)
+            return None
+        await page.wait_for_timeout(2200)
+        try:
+            png = await page.screenshot(type="png", full_page=full_page)
+            return png
+        except Exception as e:
+            logger.warning("scrape_booking_screenshot: shot failed %s — %s", booking_url, e)
+            return None
+    finally:
+        try:
+            await ctx.close()
+        except Exception:
+            pass
+
+
+
 async def _fetch_property_unit_count(ctx, booking_url: str, timeout_ms: int = 15000) -> Optional[int]:
     """Attempt to fetch room/apartment count from a Booking.com property page.
 

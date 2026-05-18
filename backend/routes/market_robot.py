@@ -4359,6 +4359,147 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "previous_type": current, "current_type": target,
                 "message": f"Property type '{current}' → '{target}'"}
 
+    @router.post("/revenue/market-robot/scrape-booking-vision")
+    async def scrape_booking_vision(
+        data: Dict,
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Vision-based extraction from a Booking.com page screenshot.
+
+        Pipeline:
+          1. If a /hotel/<cc>/<slug>.html URL is given, automatically append
+             checkin/checkout query params 14 days out so prices render.
+          2. Playwright screenshots the page (pre-warmed context bypasses
+             cold deep-link blocks).
+          3. PNG bytes → base64 → GPT-4o-mini vision → JSON.
+
+        "Kullanıcının gözüyle bak" approach — works even when JSON-LD is
+        missing or property type is non-standard, because the visual page
+        rendering is the source of truth.
+
+        Body:
+          - booking_url: required, target Booking.com URL
+          - model: optional, default "gpt-4o-mini" (vision-capable)
+          - full_page: optional, capture full scrollable page (default false)
+          - auto_dates: optional bool, when true (default), appends
+            checkin=today+14 / checkout=today+15 to render prices.
+        """
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        except ImportError:
+            raise HTTPException(500, "emergentintegrations not installed")
+        from utils.booking_scraper import scrape_booking_screenshot
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        import base64 as _b64
+        import json as _json
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(500, "EMERGENT_LLM_KEY not configured")
+
+        url = (data or {}).get("booking_url", "").strip()
+        if not url:
+            raise HTTPException(400, "booking_url required")
+        model = (data or {}).get("model") or "gpt-4o-mini"
+        full_page = bool((data or {}).get("full_page", False))
+        auto_dates = bool((data or {}).get("auto_dates", True))
+
+        # Auto-append checkin/checkout dates so prices render. Booking.com
+        # detail pages without dates return a "browse" view with no price.
+        if auto_dates and "/hotel/" in url:
+            ci = (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat()
+            co = (datetime.now(timezone.utc).date() + timedelta(days=15)).isoformat()
+            p = urlparse(url)
+            q = parse_qs(p.query)
+            if "checkin" not in q:
+                q["checkin"] = [ci]
+            if "checkout" not in q:
+                q["checkout"] = [co]
+            if "group_adults" not in q:
+                q["group_adults"] = ["2"]
+            if "no_rooms" not in q:
+                q["no_rooms"] = ["1"]
+            url = urlunparse(p._replace(query=urlencode(q, doseq=True)))
+
+        png = await scrape_booking_screenshot(url, full_page=full_page)
+        if not png:
+            return {
+                "ok": False,
+                "error": "screenshot_failed",
+                "booking_url": url,
+                "message": "Booking.com sayfası açılamadı (block veya timeout).",
+            }
+        png_size = len(png)
+        b64 = _b64.b64encode(png).decode("ascii")
+
+        SYSTEM = (
+            "You are a hospitality data extractor. Given a screenshot of a "
+            "Booking.com hotel/apartment listing page, extract the visible "
+            "facts and return ONLY compact JSON with these keys: "
+            '{"hotel_name": <string|null>, "room_count": <int|null>, '
+            '"price_per_night": <float|null>, "currency": <"GBP"|"USD"|"EUR"|"TRY"|null>, '
+            '"star_rating": <int|null>, "review_score": <float|null>, '
+            '"review_count": <int|null>, "is_blocked_page": <bool>}. '
+            "Rules: "
+            "- room_count: only set if the page explicitly shows 'X rooms', "
+            "'X apartments', 'X units' as part of the property description. "
+            "Do NOT infer from review count, area listings, or recommended "
+            "filters. If unsure, return null. "
+            "- price_per_night: the headline lowest visible price (the "
+            "biggest/most prominent number labeled with a currency, often "
+            "near a 'See availability' or 'Reserve' button). Strip currency "
+            "symbol; just the number. "
+            "- currency: 3-letter code based on the symbol shown (£→GBP, "
+            "$→USD, €→EUR, ₺→TRY). "
+            "- star_rating: 1-5 visible stars; null otherwise. "
+            "- review_score: 0.0-10.0 numeric Booking.com badge (often shown "
+            "as e.g. '7.4' next to 'Good' or 'Very good'). "
+            "- review_count: total reviews shown (e.g. '923 reviews'). "
+            "- is_blocked_page: true if the page shows 'Page not found', a "
+            "404, cookie consent wall blocking content, or generic landing "
+            "with no specific hotel info visible. "
+            "Return ONLY JSON, no markdown fences, no extra text."
+        )
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"booking-vision-{uuid.uuid4().hex[:8]}",
+                system_message=SYSTEM,
+            ).with_model("openai", model)
+            reply = await chat.send_message(UserMessage(
+                text="Extract the facts from this Booking.com screenshot.",
+                file_contents=[ImageContent(image_base64=b64)],
+            ))
+        except Exception as e:
+            return {"ok": False, "error": "vision_call_failed",
+                    "message": str(e)[:200], "booking_url": url,
+                    "screenshot_size_bytes": png_size}
+
+        raw = (reply or "").strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
+        try:
+            parsed = _json.loads(raw)
+        except Exception:
+            return {"ok": False, "error": "parse_failed",
+                    "raw_extraction": raw[:500], "booking_url": url,
+                    "screenshot_size_bytes": png_size}
+
+        return {
+            "ok": True,
+            "booking_url": url,
+            "hotel_name": parsed.get("hotel_name"),
+            "room_count": parsed.get("room_count"),
+            "price_per_night": parsed.get("price_per_night"),
+            "currency": parsed.get("currency"),
+            "star_rating": parsed.get("star_rating"),
+            "review_score": parsed.get("review_score"),
+            "review_count": parsed.get("review_count"),
+            "is_blocked_page": bool(parsed.get("is_blocked_page", False)),
+            "model": model,
+            "screenshot_size_bytes": png_size,
+        }
+
     @router.post("/revenue/market-robot/{property_id}/competitors/bulk-add")
     async def bulk_add_competitors(
         property_id: str, data: Dict,

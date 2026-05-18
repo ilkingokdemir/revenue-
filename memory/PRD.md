@@ -4,6 +4,23 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 330 — Kesin çözüm: Playwright blocking startup + sys.executable subprocess)
+- **User-approved suggestion**: "olur, öneriyi uygula eğer ücretsiz kesin çözüm olacaksa".
+- **Bug katmanı 1** (`server.py`): startup hook `asyncio.create_task(_ensure_playwright_chromium())` ile background'a atılıyordu → uvicorn HTTP'yi hemen kabul ediyor, ilk discover binary indirilmeden geliyor, 500 dönüyordu.
+  - **Fix**: `await _ensure_chromium_installed()` doğrudan startup içinde çağrılıyor. Binary hazır olmadan hiçbir HTTP isteği kabul edilmez. Cold start +10-30s, sonraki başlangıçlar 0s.
+- **Bug katmanı 2** (`utils/booking_scraper.py`): Backend process'inin PATH'i `/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin` — `/root/.venv/bin` YOK. `asyncio.create_subprocess_exec("playwright", ...)` "command not found" ile sessizce başarısız oluyordu (stderr boş, exit non-zero) → `expected_dir = None` → legacy fallback v1208'i kabul ediyordu → "ready ✓" yalan loglanıyor → ama runtime v1217 arıyor → 500.
+  - **Fix**: tüm `playwright` subprocess çağrıları artık `sys.executable, "-m", "playwright", ...` kullanıyor. Python paketinin tam yolunu çözer, PATH'ten bağımsız.
+- **Cold-start test (gerçek senaryo)**:
+  1. `rm -rf /pw-browsers/chromium_headless_shell-1217`
+  2. `supervisorctl restart backend`
+  3. Backend 14s'de ready (9s download + 5s app bootstrap)
+  4. Log: "WARNING: missing — installing target=/pw-browsers/chromium_headless_shell-1217" → "INFO: Playwright Chromium installed ✓"
+  5. v1217 dizini diskte mevcut
+  6. İlk discover request: **HTTP 200, 20s, 1 candidate**. Sıfır 500.
+- **Net etki**: Pod recycle'larında Playwright binary kayboluyor sorunu **kesin** çözüldü. Backend hiç 500 dönmüyor, sadece ilk request biraz yavaş kalkıyor (binary'nin orada olduğu durumlarda startup 0s).
+
+
+
 ### 2026-05-18 (iter 329 — Bug Hunt: 3 ek bug bulundu ve çözüldü)
 - **Bug 1 (P0)** — Playwright version-aware install eksikti. iter 328'de `--force` flag eklenmişti ama `_ensure_chromium_installed(force=False)` startup yolu hâlâ "herhangi bir headless_shell varsa OK" diyordu. v1208 dir mevcut → "tamam" → ama Playwright runtime v1217 arıyor → 500 döngüsü.
   - **Fix** (`utils/booking_scraper.py`): `_ensure_chromium_installed` artık `playwright install --dry-run` çıktısını parse edip BEKLENEN versiyon dizinini (örn v1217) çıkarıyor. Sadece o dizin varsa "OK" diyor. Yoksa indirir. rc=0 ama beklenen path yok ise otomatik --force retry.

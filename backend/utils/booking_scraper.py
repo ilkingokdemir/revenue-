@@ -30,6 +30,7 @@ import asyncio
 import logging
 import os
 import re
+import sys
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -112,7 +113,7 @@ async def _ensure_chromium_installed(*, force: bool = False) -> bool:
         expected_dir = None
         try:
             dry = await asyncio.create_subprocess_exec(
-                "playwright", "install", "--dry-run", "chromium-headless-shell",
+                sys.executable, "-m", "playwright", "install", "--dry-run", "chromium-headless-shell",
                 env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": base_str},
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
@@ -155,9 +156,9 @@ async def _ensure_chromium_installed(*, force: bool = False) -> bool:
         # launch time), pass --force so playwright actually re-downloads —
         # otherwise it short-circuits in ~1s if a stale older-revision dir
         # exists on disk, and we never get the v1217 (or current) binary.
-        install_args = ["playwright", "install", "chromium-headless-shell"]
+        install_args = [sys.executable, "-m", "playwright", "install", "chromium-headless-shell"]
         if force:
-            install_args.insert(2, "--force")
+            install_args.insert(4, "--force")
         proc = await asyncio.create_subprocess_exec(
             *install_args,
             env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": base_str},
@@ -185,7 +186,7 @@ async def _ensure_chromium_installed(*, force: bool = False) -> bool:
                     )
                     # One retry with --force to nuke any stale cache.
                     proc2 = await asyncio.create_subprocess_exec(
-                        "playwright", "install", "--force", "chromium-headless-shell",
+                        sys.executable, "-m", "playwright", "install", "--force", "chromium-headless-shell",
                         env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": base_str},
                         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
                     )

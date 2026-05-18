@@ -1329,13 +1329,22 @@ async def startup_event():
     # Ensure Playwright Chromium binary exists — it disappears between pod
     # restarts on this environment. Use the resilient helper from
     # booking_scraper which has timeout, logging, and idempotent checks.
-    async def _ensure_playwright_chromium():
-        try:
-            from utils.booking_scraper import _ensure_chromium_installed
-            await _ensure_chromium_installed()
-        except Exception as e:
-            logger.warning("Playwright Chromium ensure failed: %s", e)
-    asyncio.create_task(_ensure_playwright_chromium())
+    #
+    # iter 330 (user-approved): we now run this BLOCKING during startup.
+    # Background task was racing the first /competitors/discover request
+    # and producing 500s while the binary downloaded. The trade-off is a
+    # 10-30s one-time delay on cold start when the binary is missing.
+    # Subsequent boots are instant because the version-aware check sees
+    # the correct revision on disk and returns immediately.
+    try:
+        from utils.booking_scraper import _ensure_chromium_installed
+        ok = await _ensure_chromium_installed()
+        if ok:
+            logger.info("Playwright Chromium ready at startup ✓")
+        else:
+            logger.warning("Playwright Chromium ensure returned False — discover may 500")
+    except Exception as e:
+        logger.warning("Playwright Chromium ensure failed: %s", e)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

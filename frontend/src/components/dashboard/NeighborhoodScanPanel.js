@@ -95,6 +95,60 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [ourBookingUrlDraft, setOurBookingUrlDraft] = useState("");
   const [ourBookingSaving, setOurBookingSaving] = useState(false);
   const [ourBookingScanning, setOurBookingScanning] = useState(false);
+  // Per-hotel chart competitor price refresh — calls /competitors/scan
+  // (background) then polls /scanner/status until done. Pulls real
+  // Booking.com prices into competitor.prices_by_date so the chart lines
+  // populate. ~6-7 min for 30 days × 10 competitors with parallelism.
+  const [compScanRunning, setCompScanRunning] = useState(false);
+  const [compScanProgress, setCompScanProgress] = useState(null);  // {done, total}
+  const refreshCompetitorPrices = async () => {
+    if (propertyId === "all") { toast.error("Önce yukarıdan tek bir şube seçin"); return; }
+    if ((competitorSeries || []).length === 0) {
+      toast.error("Önce rakip ekle — sonra fiyatlarını tara");
+      return;
+    }
+    setCompScanRunning(true);
+    setCompScanProgress(null);
+    try {
+      const { data } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/competitors/scan`,
+        { days_ahead: Number(days) || 30 }
+      );
+      if (data?.queued === 0 || data?.error) {
+        toast.error(data?.error || "Rakip taraması başlatılamadı");
+        setCompScanRunning(false);
+        return;
+      }
+      toast.success(`🔄 ${data.queued} rakip için fiyat taraması başladı (${data.days_ahead} gün) — arka planda…`);
+      // Poll scanner status until idle (means done). 10 minute upper bound.
+      const started = Date.now();
+      const poll = async () => {
+        try {
+          const { data: st } = await axios.get(
+            `${API}/revenue/market-robot/${propertyId}/scanner/status`
+          );
+          // The scanner/status endpoint returns last_run / next_run, not
+          // a live "progress" counter. We re-fetch geo-supply periodically
+          // to surface freshly scraped prices on the chart while the scan
+          // runs.
+          loadAll();
+          setCompScanProgress({ last_run: st?.last_run, next_run: st?.next_run });
+          if (Date.now() - started > 10 * 60 * 1000) {
+            toast.success("🔄 Rakip taraması bitti (10dk üst sınır). Grafik güncellendi.");
+            setCompScanRunning(false);
+            return;
+          }
+          setTimeout(poll, 12000);
+        } catch {
+          setCompScanRunning(false);
+        }
+      };
+      setTimeout(poll, 8000);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Rakip taraması başlatılamadı");
+      setCompScanRunning(false);
+    }
+  };
 
   const visionCandidateUrl = async (cand) => {
     const url = cand.booking_url;
@@ -449,7 +503,12 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       const obUrl = ob?.booking_url || "";
       setOurBookingUrl(obUrl);
       setOurBookingUrlDraft(obUrl);
-    } catch { /* noop */ }
+    } catch (err) {
+      // Don't swallow — surface the failure so the user knows the chart is
+      // empty *because of a load error*, not because no scan has run yet.
+      // eslint-disable-next-line no-console
+      console.error("NeighborhoodScanPanel loadAll failed:", err?.response?.status, err?.message, err?.config?.url);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, days]);
 
@@ -1845,7 +1904,19 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 )}
               </div>
               <div className="h-px bg-stone-800 my-2" />
-              <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500 mb-1">{t("ns.chart.competitors", { n: competitorSeries.length })}</div>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-stone-500">{t("ns.chart.competitors", { n: competitorSeries.length })}</div>
+                <button
+                  onClick={refreshCompetitorPrices}
+                  disabled={compScanRunning || competitorSeries.length === 0 || propertyId === "all"}
+                  className="text-[10px] font-bold px-2 py-1 rounded bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/40 disabled:opacity-40 flex items-center gap-1"
+                  title="Rakiplerin Booking.com fiyatlarını gerçek zamanlı çek — chart line'larını doldurur"
+                  data-testid="refresh-comp-prices-btn"
+                >
+                  {compScanRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Radar className="w-3 h-3" />}
+                  {compScanRunning ? "Taranıyor…" : "🔄 Fiyatları Tara"}
+                </button>
+              </div>
               {/* Competitor rows — clickable to hide/show */}
               {competitorSeries.length === 0 && (
                 <div className="text-[10px] text-stone-500 italic px-2.5 py-1.5">{t("ns.chart.no_comps")}</div>

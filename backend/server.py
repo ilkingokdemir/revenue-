@@ -271,6 +271,18 @@ async def seed_admin():
     
     await db.users.create_index("email", unique=True)
     await db.login_attempts.create_index("identifier")
+    # iter 332 — market_supply was indexless and /geo-supply was scanning the
+    # full collection (~10K docs per property) → 25s for a chart load and the
+    # frontend was hitting ingress 60s timeout. Compound indexes drop this
+    # to ~3-6s.
+    try:
+        await db.market_supply.create_index([("property_id", 1), ("scan_type", 1), ("date", 1)])
+        await db.market_supply.create_index([("property_id", 1), ("scan_type", 1), ("scanned_at", -1)])
+        await db.market_supply.create_index([("scan_type", 1), ("date", 1)])
+        await db.market_competitors.create_index([("property_id", 1)])
+        await db.bookings.create_index([("property_id", 1), ("check_in", 1), ("check_out", 1), ("status", 1)])
+    except Exception as e:
+        logger.warning("market_supply index creation failed: %s", e)
 
 
 # ==================== ROUTES ====================

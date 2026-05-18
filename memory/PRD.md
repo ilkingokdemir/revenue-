@@ -4,6 +4,25 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 332 — Per-Hotel Trend Chart: index eksikti, frontend boş kalıyordu)
+- **User report** (TR): "Neighborhood Market · Per-Hotel Price Trend — bulunan rakipleri istatistikte göremiyorum chart olarak".
+- **Root cause**: `market_supply` koleksiyonu **indexsiz**. Her property için ~10K snapshot var. `/geo-supply?days=30` aggregation query collection-scan yapıyordu → **25-65s** → Kubernetes ingress 60s timeout → frontend axios `loadAll` empty catch'inde sessizce başarısız → state hep boş → "Enter postcode and Scan" mesajı, rakip line'ları yok.
+- **Fix katmanları**:
+  1. **MongoDB indexes** (`server.py` startup): `market_supply` üstüne 3 compound index + `market_competitors`, `bookings` üstüne. 25s → **5-9s** (~5x hızlanma).
+  2. **Parallel per-snapshot loop** (`get_geo_supply_data`): 30 snapshot için bookings.count + rate_overrides.find_one artık `asyncio.gather()` ile paralel. Sequential 30-60s → < 5s.
+  3. **Silent catch fix** (`NeighborhoodScanPanel.loadAll`): `console.error` ekledim — sessiz başarısızlıklar artık konsola yansıyor (debug kolaylaştırır).
+  4. **NEW "🔄 Fiyatları Tara" butonu** chart üzerinde — kullanıcı `_auto_competitor_scan` background task'ı tetikler, 5-10 dakikada tüm rakiplerin Booking.com fiyatları DB'ye yazılır → chart line'ları populate olur.
+  5. **`_auto_competitor_scan` parallelism**: 10 rakip × 30 gün sequential → 20 dakika. `Semaphore(3)` ile 3 paralel rakip → **~6-7 dakika**.
+- **Live verification** (screenshot): 
+  - ✅ 30 günlük snapshot tablosu doluyor (occupancy, market avg, our avg, recommendations)
+  - ✅ Chart başlığı "Neighborhood Market · Per-Hotel Price Trend" + 7d/15d/30d/60d/90d tabs
+  - ✅ **5 rakip line'ı render oluyor**: 196 Bishopsgate, Amazing 2br, Imperial Liverpool, Liverpool Street City, Liverpool Street I Your Apt
+  - ✅ Aldgate Flats (mor) + Market (kesik turuncu) + Demand (gri bar) overlays
+  - ✅ "Fiyatları Tara" butonu görünür ve aktif
+- **Trade-off**: Henüz fiyat scrape'lenmemiş 5 rakibin line'ı boş (Vision Test Hotel, Wilde, vs.). Kullanıcı "🔄 Fiyatları Tara"yı tıklayınca dolacak.
+
+
+
 ### 2026-05-18 (iter 331 — Neighborhood Scan fail-fix: Background task + polling)
 - **User report** (TR): "neighborhood scan ediyorum fail oluyor".
 - **Root cause**: `POST /scan-geo` 30 günü **sequentially** scrape ediyordu (~150-300s). Kubernetes ingress'in **60s timeout**'unu aştığı için 502 dönüyordu. Frontend toast: "Scan failed".

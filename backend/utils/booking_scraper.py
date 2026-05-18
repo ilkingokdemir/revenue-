@@ -116,8 +116,15 @@ async def _ensure_chromium_installed(*, force: bool = False) -> bool:
         # SEPARATE PACKAGE from `chromium`. Installing just `chromium` (as we
         # were before) leaves the headless_shell binary missing and every
         # browser-launch fails with `Executable doesn't exist`.
+        # NOTE: When forcing (e.g. after seeing a "missing binary" error at
+        # launch time), pass --force so playwright actually re-downloads —
+        # otherwise it short-circuits in ~1s if a stale older-revision dir
+        # exists on disk, and we never get the v1217 (or current) binary.
+        install_args = ["playwright", "install", "chromium-headless-shell"]
+        if force:
+            install_args.insert(2, "--force")
         proc = await asyncio.create_subprocess_exec(
-            "playwright", "install", "chromium-headless-shell",
+            *install_args,
             env={**os.environ, "PLAYWRIGHT_BROWSERS_PATH": base_str},
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

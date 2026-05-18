@@ -4,6 +4,17 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 328 — BUG FIX: Otomatik Rakip Bul 500 hatası · Playwright v1217 binary eksik)
+- **Symptom** (TR): "Otomatik Rakip Bul çalışmıyor" — `POST /competitors/discover` 500 dönüyor, log: `playwright._impl._errors.Error: BrowserType.launch: Executable doesn't exist at /pw-browsers/chromium_headless_shell-1217/chrome-linux/headless_shell`.
+- **Root cause**: Playwright Python 1.59.0 `chromium-headless-shell v1217` revision'ını bekliyordu (dry-run doğruladı), pod'da yalnızca **v1208** dizini mevcuttu. iter 321'de eklenen auto-recovery hook (`_ensure_chromium_installed(force=True)`) `playwright install chromium-headless-shell` komutunu çalıştırıyordu ama `--force` flag'i yoktu — playwright "bir versiyon zaten var" deyip 1.5s'de rc=0 dönüp gerçekte 107MB v1217 binary'sini indirmiyordu. Sonuç: auto-recovery "Chromium installed ✓" logluyor ama yeni binary asla indirilmiyor → sonsuz 500 döngüsü.
+- **Fix** (`utils/booking_scraper.py`):
+  - `_ensure_chromium_installed(force=True)` artık `playwright install --force chromium-headless-shell` çağırıyor — yeni revision'ı garantili indirir.
+  - Startup yolu (force=False) hâlâ --force kullanmıyor (gereksiz 107MB indirme yapmasın). Sadece auto-recovery (force=True) zorla indirir.
+- **Live test**: aldgate-flats discover 18.3s'de 11 aday + london-suites discover 23.3s'de 4 aday döndü. Hata sıfır.
+- **Manuel kurtarma yapıldı**: `PLAYWRIGHT_BROWSERS_PATH=/pw-browsers playwright install chromium-headless-shell` ile v1217 (147.0.7727.15) indirildi.
+
+
+
 ### 2026-05-18 (iter 327 — Weekly Vision Cron + Peer-Size Karşılaştırma Rozeti)
 - **Scope**: İki "next action" maddesi birlikte uygulandı.
 - **Backend** (`routes/market_robot.py`):

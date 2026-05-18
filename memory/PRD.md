@@ -4,6 +4,16 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-18 (iter 326 — Otomatik Discover'ı Prominent Card + Manuel Add Vision Preview)
+- **User feedback** (TR): "rakipleri otomatik çıkarmayı göremiyorum, potansiyel iyileştirmeyi uygula".
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - **NEW** "🔍 OTOMATIK RAKIP BUL · AUTO-DISCOVER 15 NEIGHBORS" büyük gradient kart (cyan→blue, 2px border, shadow). En üstte üç kart sırası: (1) Kendi Booking.com URL, (2) Manuel Rakip Ekle, (3) Otomatik Rakip Bul. Açıklama: "Booking.com'da kendi otelinin {radius} km yakınındaki 15 adayı bulup listeler. Liste otomatik olarak 🤖 GPT-4o-mini Vision ile zenginleştirilir."
+  - **NEW** Manuel ekleme Vision preview: kullanıcı URL yapıştırınca 1.5s debounce sonra otomatik `scrape-booking-vision` çağrılır → "🤖 Hotel name · N oda · GBP X · 4★ · 8.5/10" inline gösterilir KAYDETMEDEN ÖNCE. Block durumunda kullanıcı uyarılır ama yine de ekleyebilir.
+  - Min. yorum sayısı seçici otomatik discover kartının altında (taşındı).
+- **Etki**: Otomatik discover artık göz alıcı bir CTA. Vision preview yanlış URL eklenmesini sıfıra indirir — kullanıcı kaydetmeden önce "bu doğru otel mi?" diye onaylayabilir.
+
+
+
 ### 2026-05-18 (iter 325 — Neighborhood Panel'e "Kendi Otelimizin Linki" + "Manuel Rakip Ekle" üst kısma)
 - **User feedback** (TR): "kendi hotelimizin linklerini ekleyebiliyordum, manuel rakip ekleme vardı — geri getir". Aslında ikisi de duruyordu (Dashboard tab'ında OurBookingLiveCard + Neighborhood'un alt kısmında manual-comp-add) ama Neighborhood paneline gelen kullanıcı görmüyordu.
 - **Frontend** (`NeighborhoodScanPanel.js`):

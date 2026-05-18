@@ -295,6 +295,30 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     setBulkAdding(false);
   };
 
+  // Vision preview on manual URL paste — debounced auto-call
+  const [manualVisionLoading, setManualVisionLoading] = useState(false);
+  const [manualVisionPreview, setManualVisionPreview] = useState(null);  // {hotel_name, room_count, price_per_night, currency, star_rating, review_score, is_blocked_page}
+  useEffect(() => {
+    const url = (manualUrl || "").trim();
+    setManualVisionPreview(null);
+    if (!url || !/booking\.com\/hotel\//i.test(url)) return;
+    let cancelled = false;
+    const handle = setTimeout(async () => {
+      setManualVisionLoading(true);
+      try {
+        const { data } = await axios.post(
+          `${API}/revenue/market-robot/scrape-booking-vision`,
+          { booking_url: url, model: "gpt-4o-mini" }
+        );
+        if (!cancelled) setManualVisionPreview(data || null);
+      } catch (e) {
+        if (!cancelled) setManualVisionPreview({ error: e?.response?.data?.detail || "vision_failed" });
+      }
+      if (!cancelled) setManualVisionLoading(false);
+    }, 1500);
+    return () => { cancelled = true; clearTimeout(handle); };
+  }, [manualUrl]);
+
   const addManualCompetitor = async () => {
     const url = (manualUrl || "").trim();
     if (!url) { toast.error("Booking.com URL gerekli"); return; }
@@ -1037,9 +1061,100 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 {manualAdding ? "Ekleniyor…" : "+ Manuel Ekle"}
               </button>
             </div>
+            {/* 🤖 Vision preview — auto-fires when URL pasted (1.5s debounce) */}
+            {(manualVisionLoading || manualVisionPreview) && (
+              <div
+                className="mt-2 px-3 py-2 rounded-lg border text-[11px] flex items-center gap-2 flex-wrap"
+                data-testid="manual-vision-preview"
+              >
+                {manualVisionLoading && (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-400" />
+                    <span className="text-violet-300 font-bold">🤖 Vision otelin bilgilerini okuyor…</span>
+                  </>
+                )}
+                {!manualVisionLoading && manualVisionPreview?.is_blocked_page && (
+                  <span className="text-rose-300 font-bold">🤖 Vision sayfayı göremedi (Booking.com block). URL doğru ise yine de ekleyebilirsin.</span>
+                )}
+                {!manualVisionLoading && manualVisionPreview?.error && !manualVisionPreview?.is_blocked_page && (
+                  <span className="text-amber-300">⚠ Vision hatası: {String(manualVisionPreview.error).slice(0, 80)}</span>
+                )}
+                {!manualVisionLoading && manualVisionPreview && !manualVisionPreview.is_blocked_page && !manualVisionPreview.error && (
+                  <>
+                    <span className="text-violet-300 font-bold">🤖</span>
+                    {manualVisionPreview.hotel_name && (
+                      <span className="text-stone-100 font-bold">{manualVisionPreview.hotel_name.slice(0, 50)}</span>
+                    )}
+                    {manualVisionPreview.room_count != null && (
+                      <span className="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 font-bold">{manualVisionPreview.room_count} oda</span>
+                    )}
+                    {manualVisionPreview.price_per_night != null && (
+                      <span className="px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 font-bold">{manualVisionPreview.currency || ""} {Math.round(manualVisionPreview.price_per_night)}</span>
+                    )}
+                    {manualVisionPreview.star_rating != null && (
+                      <span className="text-amber-300 font-bold">{manualVisionPreview.star_rating}★</span>
+                    )}
+                    {manualVisionPreview.review_score != null && (
+                      <span className="text-emerald-300">{manualVisionPreview.review_score}/10</span>
+                    )}
+                    <span className="text-stone-500 italic ml-1">Doğru otel mi? Onaylıyorsan + Manuel Ekle.</span>
+                  </>
+                )}
+              </div>
+            )}
             <p className="text-[10px] text-stone-500 mt-2">
-              ✓ URL Booking.com'da otomatik doğrulanır · ✓ Tek-odalı / studio filtrelenir · ✓ Bir sonraki tarama bu rakibi de çeker.
+              ✓ URL Booking.com'da otomatik doğrulanır · ✓ 🤖 Vision oda sayısı + fiyat önizleme · ✓ Tek-odalı / studio filtrelenir.
             </p>
+          </div>
+
+          {/* 🔍 OTOMATİK RAKIP BUL — prominent CTA kartı */}
+          <div
+            className="bg-gradient-to-br from-cyan-500/15 to-blue-500/15 border-2 border-cyan-500/40 rounded-xl p-4 shadow-lg shadow-cyan-500/10"
+            data-testid="auto-discover-section"
+          >
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <Sparkles className="w-5 h-5 text-cyan-300" />
+                  <h5 className="text-sm font-black text-cyan-100 uppercase tracking-wider">
+                    Otomatik Rakip Bul · Auto-Discover 15 Neighbors
+                  </h5>
+                </div>
+                <p className="text-[11px] text-cyan-200 leading-relaxed">
+                  Booking.com'da kendi otelinin <strong className="text-white">{Math.max(0.5, Math.min(parseFloat(radiusKm) || 2.5, 5.0))} km</strong> yakınındaki 15 adayı bulup listeler.
+                  Liste otomatik olarak <strong className="text-violet-300">🤖 GPT-4o-mini Vision</strong> ile zenginleştirilir:
+                  oda sayıları, fiyatlar, yıldız rating. Sen seç → toplu ekle.
+                </p>
+              </div>
+              <div className="shrink-0 flex flex-col items-end gap-2">
+                <button
+                  onClick={runAutoDiscoverCompetitors}
+                  disabled={autoDiscovering}
+                  className="px-5 py-3 bg-gradient-to-r from-cyan-400 to-blue-500 hover:brightness-110 text-black font-black rounded-xl text-base flex items-center gap-2 disabled:opacity-50 shadow-lg shadow-cyan-500/40"
+                  data-testid="auto-discover-competitors-btn-top"
+                  title="Booking.com'da yakın 15 komşuyu bul ve liste halinde göster — sen seç & ekle"
+                >
+                  {autoDiscovering ? <Loader2 className="w-5 h-5 animate-spin" /> : <Radar className="w-5 h-5" />}
+                  {autoDiscovering ? "Aranıyor (15 aday)…" : "🔍 Otomatik Rakip Bul"}
+                </button>
+                <label className="flex items-center gap-1.5 text-[10px] text-cyan-200 select-none">
+                  <span>Min. yorum:</span>
+                  <select
+                    value={minReviewCount}
+                    onChange={e => setMinReviewCount(Number(e.target.value))}
+                    data-testid="min-review-count-select-top"
+                    className="bg-stone-950 border border-cyan-500/40 rounded px-1.5 py-0.5 text-cyan-100 font-bold"
+                    disabled={autoDiscovering}
+                  >
+                    <option value={0}>0 · hepsi</option>
+                    <option value={10}>10 · küçük dahil</option>
+                    <option value={20}>20 · 5+ daire ⭐</option>
+                    <option value={50}>50 · sadece büyükler</option>
+                    <option value={100}>100 · ünlü zincirler</option>
+                  </select>
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Proxy / VPN info — Booking.com cloud IP'leri detail-pages için zaman zaman blocklar */}

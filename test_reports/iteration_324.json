@@ -1,0 +1,96 @@
+{
+  "summary": "Iteration 324 - Vision Enrich Competitors Backend Tests. All 9 tests PASSED (100%). Tested POST /api/revenue/market-robot/{property_id}/competitors/vision-enrich, GET /competitors/vision-status, POST /competitors/bulk-add with vision_* fields, and auth enforcement.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "note": "Frontend testing skipped per request - backend only testing"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration324_vision_enrich.py",
+    "/app/test_reports/pytest/pytest_iteration324_vision_enrich.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "POST /api/revenue/market-robot/{property_id}/competitors/vision-enrich correctly returns {queued, status, message}",
+    "With property_id=aldgate-flats (has competitors): status='queued', queued=9 (correct)",
+    "With property_id=camden-suites (0 competitors): status='no_competitors', queued=0 (correct)",
+    "GET /api/revenue/market-robot/{property_id}/competitors/vision-status returns status doc with {status, total, done, enriched, blocked, errors, started_at, finished_at}",
+    "Initially returns {status:'idle'} if never run; while running 'running'; once done 'done' (all verified)",
+    "Auth correctly enforced - both endpoints return 401 without Bearer token",
+    "POST /competitors/bulk-add correctly accepts and persists vision_* fields (vision_room_count, vision_price, vision_currency, vision_star_rating, vision_review_score, vision_review_count)",
+    "vision_checked_at is auto-set when vision_* fields are provided in bulk-add",
+    "GET /competitors returns competitors with vision_* fields populated after vision-enrich runs",
+    "Background task runs GPT-4o-mini Vision over Booking.com screenshots and extracts room_count, price, currency, star_rating, review_score, review_count"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration324_vision_enrich.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "Not tested per request"
+  },
+  "test_credentials": {
+    "admin": "admin@hotelbox.com / HotelAdmin2026!"
+  },
+  "seed_data_creation": "Created test competitor 'Vision Test Hotel {uuid}' with vision_* fields via bulk-add endpoint",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Vision enrich endpoints fully tested. Key findings: (1) POST /competitors/vision-enrich correctly queues background task for properties with competitors and returns no_competitors for empty sets, (2) GET /competitors/vision-status correctly tracks progress with status, total, done, enriched, blocked, errors fields, (3) POST /competitors/bulk-add correctly accepts and persists vision_* fields, (4) Vision extraction via GPT-4o-mini is working - competitors show vision_room_count, vision_price, vision_currency, vision_is_blocked, vision_checked_at after enrichment, (5) Some competitors return null for room_count/price when Booking.com page doesn't show explicit room count or price is not visible in screenshot.",
+  "tests_executed": {
+    "auth_tests": {
+      "test_vision_enrich_requires_auth": "PASSED - 401 without token",
+      "test_vision_status_requires_auth": "PASSED - 401 without token"
+    },
+    "vision_enrich_tests": {
+      "test_vision_enrich_with_competitors": "PASSED - aldgate-flats: queued=9, status='queued'",
+      "test_vision_enrich_no_competitors": "PASSED - camden-suites: queued=0, status='no_competitors'"
+    },
+    "vision_status_tests": {
+      "test_vision_status_idle": "PASSED - returns status field correctly",
+      "test_vision_status_after_trigger": "PASSED - shows progress fields (total, done, enriched, blocked, errors, started_at)"
+    },
+    "bulk_add_tests": {
+      "test_bulk_add_with_vision_fields": "PASSED - vision_* fields persisted correctly (vision_room_count=10, vision_price=200, vision_currency='GBP', vision_star_rating=4, vision_review_score=8.5, vision_review_count=150, vision_checked_at set)"
+    },
+    "regression_tests": {
+      "test_competitors_list_returns_vision_fields": "PASSED - GET /competitors returns vision_* fields where populated"
+    },
+    "polling_tests": {
+      "test_poll_vision_status_until_done_or_timeout": "PASSED - polled status until done/timeout, verified progress tracking"
+    }
+  },
+  "response_samples": {
+    "vision_enrich_with_competitors": {
+      "queued": 9,
+      "status": "queued",
+      "message": "9 rakip için Vision tarama arka planda başladı. /competitors/vision-status ile takip et."
+    },
+    "vision_enrich_no_competitors": {
+      "queued": 0,
+      "status": "no_competitors"
+    },
+    "vision_status_running": {
+      "property_id": "aldgate-flats",
+      "status": "running",
+      "total": 9,
+      "done": 6,
+      "enriched": 6,
+      "blocked": 0,
+      "errors": 0,
+      "started_at": "2026-05-18T10:15:56.528099+00:00"
+    },
+    "competitor_with_vision_data": {
+      "name": "Amazing 2 bedroom apartments, Liverpool Street",
+      "vision_room_count": 2,
+      "vision_price": null,
+      "vision_currency": "USD",
+      "vision_is_blocked": false,
+      "vision_checked_at": "2026-05-18T10:16:46.321729+00:00"
+    }
+  }
+}

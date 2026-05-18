@@ -267,6 +267,58 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
     }
   };
 
+  // 🤖 Vision enrich — run GPT-4o-mini Vision on every saved competitor's
+  // Booking.com URL in the background. Pulls room counts + nightly prices
+  // straight from the live page screenshot, bypassing HTML anti-bot.
+  const [visionEnriching, setVisionEnriching] = useState(false);
+  const [visionStatus, setVisionStatus] = useState(null);
+  const visionEnrichAll = async () => {
+    if (propertyId === "all") {
+      toast.error("Önce yukarıdan tek bir şube seçin");
+      return;
+    }
+    if (competitors.length === 0) {
+      toast.error("Önce rakip ekle");
+      return;
+    }
+    setVisionEnriching(true);
+    setVisionStatus(null);
+    try {
+      const { data } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/competitors/vision-enrich`
+      );
+      toast.success(`🤖 ${data.queued} rakip için Vision tarama başladı — oda sayıları + fiyatlar arka planda doluyor.`);
+      const started = Date.now();
+      const poll = async () => {
+        try {
+          const { data: st } = await axios.get(
+            `${API}/revenue/market-robot/${propertyId}/competitors/vision-status`
+          );
+          setVisionStatus(st);
+          if (st?.status === "done") {
+            toast.success(`🤖 Vision bitti · ${st.enriched || 0} zenginleştirildi · ${st.blocked || 0} block · ${st.errors || 0} hata`);
+            loadAll();
+            setVisionEnriching(false);
+            return;
+          }
+          if (Date.now() - started > 10 * 60 * 1000) {
+            setVisionEnriching(false);
+            toast.warning("Vision tarama hâlâ sürüyor — kartlardaki rozetleri kontrol edin.");
+            loadAll();
+            return;
+          }
+          setTimeout(poll, 6000);
+        } catch {
+          setVisionEnriching(false);
+        }
+      };
+      setTimeout(poll, 4000);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Vision enrich başlatılamadı");
+      setVisionEnriching(false);
+    }
+  };
+
   const snapshots = supply?.snapshots || [];
   // Currency inferred from the active scan city
   const currency = useMemo(() => makeCurrencyFormatter(config?.currency || config?.city || ""), [config]);
@@ -711,6 +763,19 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
                 {compRevalidating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                 {compRevalidating ? "Checking..." : "Re-validate URLs"}
               </button>
+              <button onClick={visionEnrichAll} disabled={visionEnriching || competitors.length === 0 || propertyId === "all"}
+                className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:brightness-110 text-white px-3 py-2 rounded-xl text-xs font-bold shadow-md shadow-violet-500/30 disabled:opacity-50"
+                data-testid="market-robot-vision-enrich"
+                title="🤖 GPT-4o-mini Vision ile tüm rakiplerin oda sayısı + fiyatını ekran görüntüsünden çek (anti-bot bypass)">
+                {visionEnriching
+                  ? <RefreshCw className="w-4 h-4 animate-spin" />
+                  : <Bot className="w-4 h-4" />}
+                {visionEnriching
+                  ? (visionStatus?.total
+                      ? `🤖 ${visionStatus.done || 0}/${visionStatus.total}`
+                      : "🤖 Vision…")
+                  : "🤖 Vision ile Yenile"}
+              </button>
               {/* Days-ahead picker — controls how many forward days we scrape per competitor */}
               <div className="flex items-center gap-1 bg-stone-100 border border-stone-300 rounded-xl p-0.5" data-testid="comp-scan-days-picker"
                 title="Kaç günlük scrape yapılsın? (İleriye doğru)">
@@ -842,6 +907,33 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
                         {comp.booking_hotel_id && (
                           <Badge className="bg-stone-100 text-stone-500 text-[10px] font-mono" data-testid={`comp-${comp.id}-id`}>
                             #{comp.booking_hotel_id}
+                          </Badge>
+                        )}
+                        {comp.vision_room_count != null && (
+                          <Badge
+                            className="bg-violet-100 text-violet-700 text-[10px] font-bold border border-violet-200"
+                            data-testid={`comp-${comp.id}-vision-rooms`}
+                            title="GPT-4o-mini Vision tarafından Booking.com ekran görüntüsünden okunan oda sayısı"
+                          >
+                            🤖 {comp.vision_room_count} oda
+                          </Badge>
+                        )}
+                        {comp.vision_price != null && (
+                          <Badge
+                            className="bg-fuchsia-100 text-fuchsia-700 text-[10px] font-bold border border-fuchsia-200"
+                            data-testid={`comp-${comp.id}-vision-price`}
+                            title={`Vision: gece başı ${comp.vision_currency || ""} ${comp.vision_price} · ${comp.vision_checked_at ? new Date(comp.vision_checked_at).toLocaleString("tr-TR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}`}
+                          >
+                            🤖 {comp.vision_currency || ""} {Math.round(comp.vision_price)}
+                          </Badge>
+                        )}
+                        {comp.vision_is_blocked && (
+                          <Badge
+                            className="bg-rose-50 text-rose-600 text-[10px] font-bold border border-rose-200"
+                            data-testid={`comp-${comp.id}-vision-blocked`}
+                            title="Vision sayfayı görüntüleyemedi (Booking.com block)"
+                          >
+                            🤖 Block
                           </Badge>
                         )}
                       </div>

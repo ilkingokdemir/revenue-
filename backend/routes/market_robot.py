@@ -4507,11 +4507,18 @@ def create_market_robot_router(db, require_roles, resend=None):
     ):
         """Import multiple competitors in one call — driven by the Discover modal.
 
-        Body: { "candidates": [ {name, booking_url, booking_hotel_id?, stars?, review_score?} ] }
+        Body: { "candidates": [ {name, booking_url, booking_hotel_id?, stars?, review_score?,
+                                  vision_room_count?, vision_price?, vision_currency?,
+                                  vision_star_rating?, vision_review_score?, vision_review_count?} ] }
 
         Skips duplicates (same booking_url or booking_hotel_id). Auto-generates an id
         and seeds last_validation from the candidate score so the Health Card shows
         a sensible OK tone until the first real scrape lands.
+
+        When vision_* fields are provided (from the auto Vision enrichment in the
+        Discover panel), they are persisted on the competitor row so the Market
+        Robot competitor list shows real Booking.com room counts + prices straight
+        away — no extra button click needed.
         """
         items = data.get("candidates") or []
         if not isinstance(items, list) or not items:
@@ -4542,7 +4549,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 existing_hids.add(hid)
             slug_m = re.search(r"/hotel/[a-z]{2}/([a-z0-9-]+)\.", url)
             slug = slug_m.group(1) if slug_m else name.lower().replace(" ", "-")[:40]
-            to_insert.append({
+            row = {
                 "id": str(uuid.uuid4()),
                 "property_id": property_id,
                 "name": name,
@@ -4561,7 +4568,22 @@ def create_market_robot_router(db, require_roles, resend=None):
                 },
                 "created_at": now_iso,
                 "created_by": "discover_modal",
-            })
+            }
+            # Persist Vision-extracted facts when the Discover panel pre-enriched
+            # this candidate. These are the "ground truth" room count + price
+            # the user saw, so we keep them on the competitor record.
+            vision_keys = (
+                "vision_room_count", "vision_price", "vision_currency",
+                "vision_star_rating", "vision_review_score", "vision_review_count",
+            )
+            v_dict = {}
+            for k in vision_keys:
+                if cand.get(k) is not None:
+                    v_dict[k] = cand[k]
+            if v_dict:
+                v_dict["vision_checked_at"] = now_iso
+                row.update(v_dict)
+            to_insert.append(row)
             added += 1
 
         if to_insert:
@@ -4571,6 +4593,240 @@ def create_market_robot_router(db, require_roles, resend=None):
             "ok": True, "added": added, "skipped": skipped,
             "message": f"{added} rakip eklendi · {skipped} zaten mevcut veya geçersiz — sadede geldik",
         }
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Vision enrich — auto fills room_count + price for every competitor by
+    # screenshotting each Booking.com page and asking GPT-4o-mini Vision.
+    # Solves the "Booking.com blocks our HTML parsers" problem because the
+    # screenshot is rendered through a real headless browser session.
+    # ──────────────────────────────────────────────────────────────────────
+    async def _vision_extract_one(booking_url: str, model: str = "gpt-4o-mini") -> dict:
+        """Reusable single-URL Vision extractor — same logic as
+        scrape_booking_vision endpoint but callable from background tasks
+        and bulk endpoints.
+
+        Returns dict with keys: ok, hotel_name, room_count, price_per_night,
+        currency, star_rating, review_score, review_count, is_blocked_page,
+        screenshot_size_bytes, error.
+        """
+        from utils.booking_scraper import scrape_booking_screenshot
+        from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+        import base64 as _b64
+        import json as _json
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            return {"ok": False, "error": "no_emergent_llm_key"}
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+        except ImportError:
+            return {"ok": False, "error": "emergentintegrations_missing"}
+
+        url = (booking_url or "").strip()
+        if not url:
+            return {"ok": False, "error": "missing_url"}
+
+        # Auto-append checkin/checkout 14 days out for detail pages so prices render
+        if "/hotel/" in url:
+            ci = (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat()
+            co = (datetime.now(timezone.utc).date() + timedelta(days=15)).isoformat()
+            p = urlparse(url)
+            q = parse_qs(p.query)
+            if "checkin" not in q:
+                q["checkin"] = [ci]
+            if "checkout" not in q:
+                q["checkout"] = [co]
+            if "group_adults" not in q:
+                q["group_adults"] = ["2"]
+            if "no_rooms" not in q:
+                q["no_rooms"] = ["1"]
+            url = urlunparse(p._replace(query=urlencode(q, doseq=True)))
+
+        png = await scrape_booking_screenshot(url, full_page=False)
+        if not png:
+            return {"ok": False, "error": "screenshot_failed", "booking_url": url}
+        b64 = _b64.b64encode(png).decode("ascii")
+
+        SYSTEM = (
+            "You are a hospitality data extractor. Given a screenshot of a "
+            "Booking.com hotel/apartment listing page, extract the visible "
+            "facts and return ONLY compact JSON with these keys: "
+            '{"hotel_name": <string|null>, "room_count": <int|null>, '
+            '"price_per_night": <float|null>, "currency": <"GBP"|"USD"|"EUR"|"TRY"|"CHF"|null>, '
+            '"star_rating": <int|null>, "review_score": <float|null>, '
+            '"review_count": <int|null>, "is_blocked_page": <bool>}. '
+            "Rules: "
+            "- room_count: only set if the page explicitly shows 'X rooms', "
+            "'X apartments', 'X units' as part of the property description. "
+            "Do NOT infer from review count. If unsure, return null. "
+            "- price_per_night: headline lowest visible price; strip currency. "
+            "- currency: 3-letter ISO (£→GBP, $→USD, €→EUR, ₺→TRY, CHF→CHF). "
+            "- star_rating: 1-5 visible stars; null otherwise. "
+            "- is_blocked_page: true if the page shows 'Page not found', a "
+            "404, cookie consent wall blocking content, or generic landing. "
+            "Return ONLY JSON, no markdown fences, no extra text."
+        )
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"booking-vision-enrich-{uuid.uuid4().hex[:8]}",
+                system_message=SYSTEM,
+            ).with_model("openai", model)
+            reply = await chat.send_message(UserMessage(
+                text="Extract the facts from this Booking.com screenshot.",
+                file_contents=[ImageContent(image_base64=b64)],
+            ))
+        except Exception as e:
+            return {"ok": False, "error": "vision_call_failed",
+                    "message": str(e)[:200], "screenshot_size_bytes": len(png)}
+
+        raw = (reply or "").strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
+        try:
+            parsed = _json.loads(raw)
+        except Exception:
+            return {"ok": False, "error": "parse_failed",
+                    "raw_extraction": raw[:300],
+                    "screenshot_size_bytes": len(png)}
+        return {
+            "ok": True,
+            "hotel_name": parsed.get("hotel_name"),
+            "room_count": parsed.get("room_count"),
+            "price_per_night": parsed.get("price_per_night"),
+            "currency": parsed.get("currency"),
+            "star_rating": parsed.get("star_rating"),
+            "review_score": parsed.get("review_score"),
+            "review_count": parsed.get("review_count"),
+            "is_blocked_page": bool(parsed.get("is_blocked_page", False)),
+            "screenshot_size_bytes": len(png),
+        }
+
+    async def _do_vision_enrich_competitors(db_ref, property_id: str):
+        """Background: enrich every competitor of property_id with Vision facts.
+
+        Updates each competitor row with vision_room_count, vision_price,
+        vision_currency, vision_star_rating, vision_review_score,
+        vision_review_count, vision_is_blocked, vision_checked_at.
+
+        Sequential to respect Booking.com rate limits. Status tracked in
+        market_robot_vision_status collection so the UI can poll progress.
+        """
+        comps = await db_ref.market_competitors.find(
+            {"property_id": property_id},
+            {"_id": 0, "id": 1, "name": 1, "booking_url": 1},
+        ).to_list(200)
+        total = len(comps)
+        done = 0
+        enriched = 0
+        blocked = 0
+        errors = 0
+        started_at = datetime.now(timezone.utc).isoformat()
+        await db_ref.market_robot_vision_status.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "property_id": property_id, "status": "running",
+                "started_at": started_at, "total": total,
+                "done": 0, "enriched": 0, "blocked": 0, "errors": 0,
+            }},
+            upsert=True,
+        )
+        for c in comps:
+            url = c.get("booking_url") or ""
+            if not url:
+                done += 1
+                errors += 1
+                continue
+            try:
+                out = await _vision_extract_one(url)
+            except Exception as e:
+                logger.warning("Vision enrich failed for %s: %s", c.get("name"), e)
+                out = {"ok": False, "error": str(e)[:120]}
+
+            update_doc = {"vision_checked_at": datetime.now(timezone.utc).isoformat()}
+            if out.get("ok"):
+                if out.get("is_blocked_page"):
+                    blocked += 1
+                    update_doc["vision_is_blocked"] = True
+                else:
+                    update_doc["vision_is_blocked"] = False
+                    if out.get("room_count") is not None:
+                        update_doc["vision_room_count"] = out["room_count"]
+                    if out.get("price_per_night") is not None:
+                        update_doc["vision_price"] = out["price_per_night"]
+                    if out.get("currency"):
+                        update_doc["vision_currency"] = out["currency"]
+                    if out.get("star_rating") is not None:
+                        update_doc["vision_star_rating"] = out["star_rating"]
+                    if out.get("review_score") is not None:
+                        update_doc["vision_review_score"] = out["review_score"]
+                    if out.get("review_count") is not None:
+                        update_doc["vision_review_count"] = out["review_count"]
+                    enriched += 1
+            else:
+                errors += 1
+                update_doc["vision_last_error"] = out.get("error", "unknown")[:120]
+
+            await db_ref.market_competitors.update_one(
+                {"id": c["id"]}, {"$set": update_doc}
+            )
+            done += 1
+            await db_ref.market_robot_vision_status.update_one(
+                {"property_id": property_id},
+                {"$set": {"done": done, "enriched": enriched,
+                          "blocked": blocked, "errors": errors,
+                          "last_name": c.get("name", "")}},
+            )
+        await db_ref.market_robot_vision_status.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "status": "done",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+
+    @router.post("/revenue/market-robot/{property_id}/competitors/vision-enrich")
+    async def vision_enrich_competitors(
+        property_id: str, background_tasks: BackgroundTasks,
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Kick off a background Vision-based enrichment of every competitor.
+
+        For each saved competitor URL we screenshot the Booking.com page and
+        ask GPT-4o-mini Vision for room_count, price, currency, stars and
+        review meta — then persist these as vision_* fields on the row.
+
+        This is the "no-click" path: the user wants real Booking.com data
+        (room counts + prices) without having to push a button per row.
+        Poll GET /competitors/vision-status for progress.
+        """
+        n = await db.market_competitors.count_documents({"property_id": property_id})
+        if n == 0:
+            return {"queued": 0, "status": "no_competitors"}
+        background_tasks.add_task(_do_vision_enrich_competitors, db, property_id)
+        await db.market_robot_vision_status.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "property_id": property_id, "status": "queued",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "total": n, "done": 0, "enriched": 0, "blocked": 0, "errors": 0,
+            }},
+            upsert=True,
+        )
+        return {
+            "queued": n, "status": "queued",
+            "message": f"{n} rakip için Vision tarama arka planda başladı. /competitors/vision-status ile takip et.",
+        }
+
+    @router.get("/revenue/market-robot/{property_id}/competitors/vision-status")
+    async def vision_enrich_status(
+        property_id: str,
+        current_user: dict = Depends(require_roles("admin", "manager")),
+    ):
+        doc = await db.market_robot_vision_status.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
+        return doc or {"property_id": property_id, "status": "idle"}
 
     @router.post("/revenue/market-robot/{property_id}/competitors/scan")
     async def scan_competitors(property_id: str, background_tasks: BackgroundTasks, data: Dict = {},

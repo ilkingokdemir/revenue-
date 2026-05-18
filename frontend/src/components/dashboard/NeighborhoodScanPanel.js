@@ -127,8 +127,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // price from screenshot via GPT-4o-mini for the whole shortlist.
   const [visionBulkRunning, setVisionBulkRunning] = useState(false);
   const [visionBulkProgress, setVisionBulkProgress] = useState({ done: 0, total: 0 });
-  const visionAllCandidates = async () => {
-    const targets = candidates.filter(c => !visionResults[c.booking_url]);
+  const visionAllCandidates = async (candidatesOverride) => {
+    const source = Array.isArray(candidatesOverride) && candidatesOverride.length > 0
+      ? candidatesOverride
+      : candidates;
+    const targets = source.filter(c => !visionResults[c.booking_url]);
     if (targets.length === 0) {
       toast.info("Tüm adaylar zaten Vision ile tarandı");
       return;
@@ -153,7 +156,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     }
     setVisionUrl(null);
     setVisionBulkRunning(false);
-    toast.success(`🤖 Vision toplu tarama bitti · ${rooms} oda sayısı bulundu · ${blocked} block`);
+    toast.success(`🤖 Vision tarama bitti · ${rooms} oda sayısı bulundu · ${blocked} block`);
   };
 
 
@@ -219,7 +222,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
         toast.warning("Hiç aday bulunamadı — yarıçapı arttırın veya manuel ekleyin.");
       } else {
         const fresh = Object.keys(pick).length;
-        toast.success(`${cands.length} aday bulundu · ${fresh} taze (eklenmeye hazır). Seçimini yap ve "Seçilenleri Ekle" tıkla.`);
+        toast.success(`${cands.length} aday bulundu · ${fresh} taze. Vision otomatik başlıyor — oda sayıları + fiyatlar geliyor…`);
+        // AUTO-FIRE Vision enrichment in the background so the user sees real
+        // room counts + prices appear inline without clicking per row. Runs
+        // sequentially to respect Booking.com rate limits.
+        visionAllCandidates(cands);
       }
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Otomatik discovery başarısız");
@@ -245,18 +252,31 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     try {
       const { data } = await axios.post(
         `${API}/revenue/market-robot/${propertyId}/competitors/bulk-add`,
-        { candidates: toAdd.map(c => ({
-            name: c.name,
-            booking_url: c.booking_url,
-            booking_hotel_id: c.hotel_id || c.booking_hotel_id || null,
-            stars: c.stars,
-            review_score: c.review_score,
-          })) }
+        { candidates: toAdd.map(c => {
+            const v = visionResults[c.booking_url] || {};
+            return {
+              name: c.name,
+              booking_url: c.booking_url,
+              booking_hotel_id: c.hotel_id || c.booking_hotel_id || null,
+              stars: c.stars,
+              review_score: c.review_score,
+              // Persist Vision-extracted room count + price so the saved
+              // competitor row already shows real Booking.com data.
+              ...(v && !v.is_blocked_page ? {
+                vision_room_count: v.room_count ?? null,
+                vision_price: v.price_per_night ?? null,
+                vision_currency: v.currency ?? null,
+                vision_star_rating: v.star_rating ?? null,
+                vision_review_score: v.review_score ?? null,
+                vision_review_count: v.review_count ?? null,
+              } : {}),
+            };
+          }) }
       );
       const added = data?.added || 0;
       const skipped = data?.skipped || 0;
       if (added > 0) {
-        toast.success(`✅ ${added} rakip eklendi${skipped ? ` · ${skipped} dup atlandı` : ""}. "Scan Now" ile fiyatlarını çek.`);
+        toast.success(`✅ ${added} rakip eklendi (oda sayıları + Vision fiyatları ile)${skipped ? ` · ${skipped} dup atlandı` : ""}.`);
         // Mark added items so user sees the chip
         setCandidates(prev => prev.map(c => selectedUrls.includes(c.booking_url) ? { ...c, already_added: true } : c));
         setPicked({});

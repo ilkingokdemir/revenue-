@@ -88,7 +88,18 @@ def create_automation_router(db, require_roles, resend):
 
     @router.post("/automation/run/{property_id}")
     async def run_automation(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Manually trigger automation check for a property"""
+        """Manually trigger automation check for a property.
+
+        Cloudbeds parity flags (read off rule doc, default-safe):
+          * multi_reservation_messaging — send per booking even when guest has many
+          * enable_missed_messages — fire for bookings created AFTER schedule passed
+          * send_per_room — fan-out to each room in a multi-room reservation
+          * primary_guest_only — skip secondary guests
+          * schedule_days (list[int 0-6, Mon=0]) — restrict run by weekday
+          * schedule_time ("HH:MM" UTC) — only run when within ±15 min of this time
+          * skip_guests (list[str booking_ref]) — manual skip list
+          * auto_archive — silently archive the log row instead of surfacing in inbox
+        """
         from models import AutomationLog
         rules = await db.automation_rules.find({"property_id": property_id, "enabled": True}, {"_id": 0}).to_list(50)
         if not rules:
@@ -101,14 +112,50 @@ def create_automation_router(db, require_roles, resend):
         total_sent = 0
 
         for rule in rules:
+            # Schedule day-of-week gate
+            sched_days = rule.get("schedule_days") or []
+            if sched_days and now.weekday() not in sched_days:
+                results.append({"rule": rule["name"], "skipped_reason": "weekday not in schedule_days"})
+                continue
+            # Schedule time-of-day gate (±15min window)
+            sched_time = (rule.get("schedule_time") or "").strip()
+            if sched_time and ":" in sched_time:
+                try:
+                    sh, sm = [int(x) for x in sched_time.split(":")]
+                    target_min = sh * 60 + sm
+                    now_min = now.hour * 60 + now.minute
+                    if abs(now_min - target_min) > 15:
+                        results.append({"rule": rule["name"], "skipped_reason": f"outside time window {sched_time}"})
+                        continue
+                except Exception:
+                    pass
+
             trigger = rule["trigger"]
             timing = rule.get("timing_hours", 0)
+            multi_res = bool(rule.get("multi_reservation_messaging", False))
+            missed_msgs = bool(rule.get("enable_missed_messages", False))
+            per_room = bool(rule.get("send_per_room", False))
+            primary_only = bool(rule.get("primary_guest_only", True))
+            skip_list = set(rule.get("skip_guests") or [])
+            auto_archive = bool(rule.get("auto_archive", False))
             sent_for_rule = 0
 
             bookings = []
             if trigger == "pre_arrival":
                 target_date = tomorrow if timing == -24 else today
-                bookings = await db.bookings.find({"property_id": property_id, "check_in": target_date, "status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(200)
+                q = {"property_id": property_id, "check_in": target_date, "status": {"$ne": "cancelled"}}
+                bookings = await db.bookings.find(q, {"_id": 0}).to_list(200)
+                if missed_msgs:
+                    # Bookings created in last 24h whose check_in <= target_date and that have no log yet
+                    yest = (now - timedelta(hours=24)).isoformat()
+                    extra = await db.bookings.find({
+                        "property_id": property_id,
+                        "check_in": {"$lte": target_date},
+                        "status": {"$ne": "cancelled"},
+                        "created_at": {"$gte": yest},
+                    }, {"_id": 0}).to_list(200)
+                    seen = {b.get("booking_ref") for b in bookings}
+                    bookings += [b for b in extra if b.get("booking_ref") not in seen]
             elif trigger == "day_of_arrival":
                 bookings = await db.bookings.find({"property_id": property_id, "check_in": today, "status": {"$ne": "cancelled"}}, {"_id": 0}).to_list(200)
             elif trigger == "during_stay":
@@ -119,10 +166,24 @@ def create_automation_router(db, require_roles, resend):
                 carts = await db.cart_abandonment.find({"property_id": property_id, "recovered": {"$ne": True}}, {"_id": 0}).to_list(50)
                 bookings = [{"guest_name": c.get("guest_name", c.get("email", "Guest")), "guest_email": c.get("email", ""), "booking_ref": "", "check_in": "", "check_out": ""} for c in carts]
 
+            # Multi-reservation: if NOT enabled, dedupe by guest_email (one per guest)
+            if not multi_res:
+                seen_emails = set()
+                deduped = []
+                for b in bookings:
+                    em = (b.get("guest_email") or "").lower()
+                    if em and em in seen_emails:
+                        continue
+                    seen_emails.add(em)
+                    deduped.append(b)
+                bookings = deduped
+
             for booking in bookings:
+                booking_ref = booking.get("booking_ref", "")
+                if booking_ref in skip_list:
+                    continue
                 guest_email = booking.get("guest_email", "")
                 guest_phone = booking.get("guest_phone", "")
-                booking_ref = booking.get("booking_ref", "")
 
                 already_sent = await db.automation_logs.find_one({
                     "rule_id": rule["id"], "booking_ref": booking_ref, "guest_email": guest_email
@@ -130,35 +191,54 @@ def create_automation_router(db, require_roles, resend):
                 if already_sent:
                     continue
 
-                message = fill_template(rule["message_template"], booking, property_id)
-                subject = fill_template(rule.get("subject", ""), booking, property_id) if rule.get("subject") else ""
-                channel = rule["channel"]
-                status = "sent"
+                # Per-room fan-out — create one log per room_assignment when enabled
+                rooms_to_msg = [None]
+                if per_room:
+                    room_assigns = booking.get("room_assignments") or booking.get("rooms") or []
+                    if room_assigns:
+                        rooms_to_msg = room_assigns
 
-                try:
-                    if channel == "email" and guest_email:
-                        sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-                        resend.emails.send({"from": sender, "to": [guest_email], "subject": subject or "Message from Hotel", "html": f"<div style='font-family:sans-serif;max-width:600px;margin:auto;padding:20px;'><p style='white-space:pre-line;'>{message}</p></div>"})
-                    elif channel in ["whatsapp", "sms", "telegram"]:
-                        settings = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
-                        if not settings or not settings.get(f"{channel}_enabled", False):
-                            status = "queued"
-                    elif channel == "internal":
-                        pass
-                except Exception as e:
-                    logger.error(f"Automation send error: {e}")
-                    status = "failed"
+                # Primary-guest only filter — bookings have primary_guest=True/False
+                if primary_only and booking.get("is_secondary_guest"):
+                    continue
 
-                log = AutomationLog(
-                    rule_id=rule["id"], rule_name=rule["name"], property_id=property_id,
-                    guest_name=booking.get("guest_name", ""), guest_email=guest_email,
-                    guest_phone=guest_phone, booking_ref=booking_ref,
-                    channel=channel, message=message[:500], status=status,
-                )
-                ld = log.model_dump()
-                await db.automation_logs.insert_one(ld)
-                sent_for_rule += 1
-                total_sent += 1
+                for room_ctx in rooms_to_msg:
+                    book_for_template = {**booking}
+                    if room_ctx and isinstance(room_ctx, dict):
+                        book_for_template["room_type_id"] = room_ctx.get("room_type_id", booking.get("room_type_id"))
+                        book_for_template["room_number"] = room_ctx.get("room_number", "")
+
+                    message = fill_template(rule["message_template"], book_for_template, property_id)
+                    subject = fill_template(rule.get("subject", ""), book_for_template, property_id) if rule.get("subject") else ""
+                    channel = rule["channel"]
+                    status = "sent"
+
+                    try:
+                        if channel == "email" and guest_email:
+                            sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
+                            resend.emails.send({"from": sender, "to": [guest_email], "subject": subject or "Message from Hotel", "html": f"<div style='font-family:sans-serif;max-width:600px;margin:auto;padding:20px;'><p style='white-space:pre-line;'>{message}</p></div>"})
+                        elif channel in ["whatsapp", "sms", "telegram"]:
+                            settings = await db.channel_settings.find_one({"property_id": property_id}, {"_id": 0})
+                            if not settings or not settings.get(f"{channel}_enabled", False):
+                                status = "queued"
+                        elif channel == "internal":
+                            pass
+                    except Exception as e:
+                        logger.error(f"Automation send error: {e}")
+                        status = "failed"
+
+                    log = AutomationLog(
+                        rule_id=rule["id"], rule_name=rule["name"], property_id=property_id,
+                        guest_name=booking.get("guest_name", ""), guest_email=guest_email,
+                        guest_phone=guest_phone, booking_ref=booking_ref,
+                        channel=channel, message=message[:500], status=status,
+                    )
+                    ld = log.model_dump()
+                    if auto_archive:
+                        ld["archived"] = True
+                    await db.automation_logs.insert_one(ld)
+                    sent_for_rule += 1
+                    total_sent += 1
 
             if sent_for_rule > 0:
                 await db.automation_rules.update_one({"id": rule["id"]}, {"$inc": {"total_sent": sent_for_rule}})
@@ -174,6 +254,44 @@ def create_automation_router(db, require_roles, resend):
             asyncio.create_task(fire_webhooks(db, "automation.failed", {"property_id": property_id, "failed_rules": failed_count}))
 
         return {"message": f"Automation complete. {total_sent} messages sent.", "sent": total_sent, "results": results}
+
+    @router.post("/automation/rules/{rule_id}/duplicate")
+    async def duplicate_automation_rule(rule_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Cloudbeds parity: 'Replicate' rule. Copies an existing rule with a new id and "Copy of" prefix."""
+        import uuid as _uuid
+        src = await db.automation_rules.find_one({"id": rule_id}, {"_id": 0})
+        if not src:
+            raise HTTPException(status_code=404, detail="Rule not found")
+        clone = {**src}
+        clone["id"] = str(_uuid.uuid4())
+        clone["name"] = f"Copy of {clone.get('name','Rule')}"
+        clone["total_sent"] = 0
+        clone["enabled"] = False  # Don't fire by accident
+        clone["created_at"] = datetime.now(timezone.utc).isoformat()
+        await db.automation_rules.insert_one(clone)
+        clone.pop("_id", None)
+        return clone
+
+    @router.post("/automation/rules/{rule_id}/skip-guest")
+    async def skip_guest_for_rule(rule_id: str, data: Dict, current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Add a booking_ref to a rule's skip_guests list — they won't receive this automation."""
+        booking_ref = (data.get("booking_ref") or "").strip()
+        if not booking_ref:
+            raise HTTPException(400, "booking_ref required")
+        await db.automation_rules.update_one(
+            {"id": rule_id},
+            {"$addToSet": {"skip_guests": booking_ref}},
+        )
+        return {"status": "skipped", "booking_ref": booking_ref}
+
+    @router.get("/automation/rules/{rule_id}/history")
+    async def rule_history(rule_id: str, limit: int = 100,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Per-rule activity log."""
+        rows = await db.automation_logs.find(
+            {"rule_id": rule_id}, {"_id": 0}
+        ).sort("created_at", -1).limit(int(limit)).to_list(int(limit))
+        return {"rule_id": rule_id, "count": len(rows), "items": rows}
 
     @router.get("/automation/logs/{property_id}")
     async def automation_logs(property_id: str, limit: int = 50, current_user: dict = Depends(require_roles("admin", "manager"))):

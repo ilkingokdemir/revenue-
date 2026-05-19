@@ -76,6 +76,7 @@ from routes.revenue_copilot import create_revenue_copilot_router
 from routes.revenue_exports import create_revenue_exports_router
 from routes.market_robot import create_market_robot_router
 from routes.ai_pricing_engine import create_ai_pricing_router
+from routes.chatbot_automation import create_chatbot_router
 from routes.dynamic_pricing import create_dynamic_pricing_router
 from routes.event_intelligence import create_event_intelligence_router
 from routes.parity_analysis import create_parity_analysis_router
@@ -528,6 +529,9 @@ api_router.include_router(market_robot_router)
 
 ai_pricing_router = create_ai_pricing_router(db, require_roles)
 api_router.include_router(ai_pricing_router)
+
+chatbot_router = create_chatbot_router(db, require_roles)
+api_router.include_router(chatbot_router)
 
 dynamic_pricing_router = create_dynamic_pricing_router(db, require_roles)
 api_router.include_router(dynamic_pricing_router)

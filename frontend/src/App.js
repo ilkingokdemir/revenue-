@@ -56,7 +56,7 @@ import {
   ImportModulePanel, LegalDocumentsPanel, AnalyticsPanel, ReportsSettings,
   BrandingPanel, SyncLogPanel, PropertyMappingPanel, BookingEnginePanel,
   TemplateGallery, TemplateCustomizer, PromoCodesPanel, AddOnsPanel, PoliciesPanel,
-  MessagingHub, ConciergeAnalyticsPanel, AutomationPanel, ChannelSettingsPanel,
+  MessagingHub, ConciergeAnalyticsPanel, AutomationPanel, ChatbotAutomationPanel, ChannelSettingsPanel,
   DashboardHome, StaffPerformancePanel, GuestProfilesPanel, AdminPanel, HousekeepingPanel,
   NightAuditPanel, LoyaltyPanel, LogbookPanel, ForecastPanel,
   PaceReports, AIPricingV2Panel, ParityHeatmapPanel, MorningBriefPanel, RMLabPanel,
@@ -2746,6 +2746,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "surveys", icon: Star, name: t("nav.surveys"), testId: "surveys-btn" },
         { id: "concierge-analytics", icon: Robot, name: t("nav.concierge"), testId: "concierge-analytics-btn" },
         { id: "automation", icon: Lightning, name: t("nav.automation"), testId: "automation-btn" },
+        { id: "chatbot-automation", icon: Robot, name: "Chatbot motoru", testId: "chatbot-automation-btn" },
         { id: "web-push", icon: Bell, name: "Web push", testId: "web-push-btn" },
         { id: "ab-test", icon: TestTube, name: "A/B testing", testId: "ab-test-btn" },
         { id: "attribution", icon: ChartBar, name: "Source attribution", testId: "attribution-btn" },
@@ -3990,6 +3991,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Automation */}
         {activeView === "automation" && (
           <AutomationPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Chatbot Automation (Cloudbeds Guest Experience parity) */}
+        {activeView === "chatbot-automation" && (
+          <ChatbotAutomationPanel propertyId={activePropertyId} />
         )}
 
         {/* Channel Settings */}

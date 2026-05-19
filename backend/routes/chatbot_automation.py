@@ -1,0 +1,460 @@
+"""
+Chatbot Automation — Cloudbeds Guest Experience parity.
+
+Provides FAQ/intent matching + sentiment/keyword triggers for guest chat. The
+chatbot is a configuration store; matching happens via `POST /test` which can
+be called by Guest Chat / Live Chat front-ends as guest messages arrive.
+
+Collections:
+  - chatbot_settings        per-property settings (enabled, translation, tone)
+  - chatbot_intents         intent → trigger phrases + action
+  - chatbot_keywords        exact-word keyword commands
+  - chatbot_sentiment_acts  sentiment → action mapping
+  - chatbot_content_sources URL/tone for auto-generated FAQs
+  - chatbot_runs            audit log of matches
+
+Auto-generation: `POST /content-sources/generate` calls GPT-4o-mini to scrape
+the user-provided URL and produce 10 FAQ intents in the chosen tone (TR/EN).
+
+Action types match Automated Messages: create_ticket, reply_guest,
+notify_team_chat, send_email, send_sms.
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
+import os
+import re
+import uuid
+import json
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+VALID_ACTIONS = {"create_ticket", "reply_guest", "notify_team_chat", "send_email", "send_sms"}
+VALID_SENTIMENTS = {"any", "positive", "negative", "neutral"}
+VALID_TONES = {"professional", "friendly", "casual", "polished", "humorous"}
+
+DEFAULT_SETTINGS = {
+    "enabled": True,
+    "guest_replies_live_chat": True,
+    "guest_replies_guest_chat": True,
+    "translation_inbound": False,
+    "translation_outbound": False,
+    "default_tone": "friendly",
+    "default_language": "tr",
+    "fallback_message": "Mesajınızı aldık, en kısa sürede ekibimiz yanıtlayacak.",
+    "handoff_keywords": ["agent", "human", "live", "operatör", "insan"],
+}
+
+POSITIVE_WORDS = {"great", "perfect", "love", "amazing", "harika", "mükemmel", "süper", "teşekkür", "thanks", "thank"}
+NEGATIVE_WORDS = {"bad", "terrible", "broken", "kötü", "berbat", "şikayet", "complaint", "refund", "iade"}
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _detect_sentiment(text: str) -> str:
+    t = (text or "").lower()
+    pos = sum(1 for w in POSITIVE_WORDS if w in t)
+    neg = sum(1 for w in NEGATIVE_WORDS if w in t)
+    if neg > pos and neg > 0:
+        return "negative"
+    if pos > 0:
+        return "positive"
+    return "neutral"
+
+
+def _match_intent(text: str, intents: list) -> Optional[dict]:
+    """Score each intent by overlap of trigger phrases. Return best match >= 0.3."""
+    t = (text or "").lower()
+    best = None
+    best_score = 0.0
+    for intent in intents:
+        if not intent.get("enabled", True):
+            continue
+        phrases = intent.get("trigger_phrases") or []
+        if not phrases:
+            continue
+        hits = 0
+        for p in phrases:
+            ps = (p or "").lower().strip()
+            if not ps:
+                continue
+            if ps in t:
+                hits += len(ps.split())
+        # Score = hit-token count / total trigger-token count (capped)
+        total_tokens = sum(len((p or "").split()) for p in phrases) or 1
+        score = hits / total_tokens
+        if score > best_score and score >= 0.3:
+            best_score = score
+            best = {**intent, "_score": round(score, 2)}
+    return best
+
+
+def _match_keyword(text: str, keywords: list) -> Optional[dict]:
+    """Exact word/phrase match on guest text."""
+    t = (text or "").lower()
+    for kw in keywords:
+        if not kw.get("enabled", True):
+            continue
+        cmd = (kw.get("command") or "").lower().strip()
+        if cmd and (cmd == t.strip() or f" {cmd} " in f" {t} "):
+            return kw
+    return None
+
+
+def create_chatbot_router(db, require_roles):
+    router = APIRouter()
+
+    # ───────────────────────── Settings ────────────────────────────
+    @router.get("/chatbot/{property_id}/settings")
+    async def get_settings(property_id: str,
+                            _u: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.chatbot_settings.find_one({"property_id": property_id}, {"_id": 0})
+        if not doc:
+            doc = {"property_id": property_id, **DEFAULT_SETTINGS}
+        for k, v in DEFAULT_SETTINGS.items():
+            doc.setdefault(k, v)
+        return doc
+
+    @router.put("/chatbot/{property_id}/settings")
+    async def put_settings(property_id: str, data: Dict,
+                            _u: dict = Depends(require_roles("admin", "manager"))):
+        tone = (data.get("default_tone") or "friendly").lower()
+        if tone not in VALID_TONES:
+            tone = "friendly"
+        payload = {
+            "property_id": property_id,
+            "enabled": bool(data.get("enabled", True)),
+            "guest_replies_live_chat": bool(data.get("guest_replies_live_chat", True)),
+            "guest_replies_guest_chat": bool(data.get("guest_replies_guest_chat", True)),
+            "translation_inbound": bool(data.get("translation_inbound", False)),
+            "translation_outbound": bool(data.get("translation_outbound", False)),
+            "default_tone": tone,
+            "default_language": (data.get("default_language") or "tr").lower()[:5],
+            "fallback_message": (data.get("fallback_message") or DEFAULT_SETTINGS["fallback_message"])[:500],
+            "handoff_keywords": data.get("handoff_keywords") or DEFAULT_SETTINGS["handoff_keywords"],
+            "updated_at": _now(),
+        }
+        await db.chatbot_settings.update_one(
+            {"property_id": property_id}, {"$set": payload}, upsert=True
+        )
+        return payload
+
+    # ───────────────────────── Intents ─────────────────────────────
+    @router.get("/chatbot/{property_id}/intents")
+    async def list_intents(property_id: str, category: Optional[str] = None,
+                            _u: dict = Depends(require_roles("admin", "manager"))):
+        q = {"property_id": property_id}
+        if category:
+            q["category"] = category
+        docs = await db.chatbot_intents.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+        return {"property_id": property_id, "count": len(docs), "items": docs}
+
+    @router.post("/chatbot/{property_id}/intents")
+    async def create_intent(property_id: str, data: Dict,
+                             _u: dict = Depends(require_roles("admin", "manager"))):
+        name = (data.get("name") or "").strip()
+        phrases = data.get("trigger_phrases") or []
+        action_type = (data.get("action_type") or "reply_guest").lower()
+        if not name or not phrases:
+            raise HTTPException(400, "name and trigger_phrases are required")
+        if action_type not in VALID_ACTIONS:
+            raise HTTPException(400, f"action_type must be one of {VALID_ACTIONS}")
+        sentiment = (data.get("sentiment") or "any").lower()
+        if sentiment not in VALID_SENTIMENTS:
+            sentiment = "any"
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "name": name,
+            "category": (data.get("category") or "custom").strip(),
+            "trigger_phrases": [str(p).strip() for p in phrases if str(p).strip()],
+            "sentiment": sentiment,
+            "action_type": action_type,
+            "reply_text": (data.get("reply_text") or "").strip()[:1000],
+            "reply_buttons": data.get("reply_buttons") or [],
+            "ticket_department": (data.get("ticket_department") or "").strip(),
+            "ticket_title": (data.get("ticket_title") or "").strip(),
+            "team_channel": (data.get("team_channel") or "").strip(),
+            "notify_email": (data.get("notify_email") or "").strip(),
+            "notify_phone": (data.get("notify_phone") or "").strip(),
+            "enabled": bool(data.get("enabled", True)),
+            "created_at": _now(),
+        }
+        await db.chatbot_intents.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.patch("/chatbot/intents/{intent_id}")
+    async def update_intent(intent_id: str, updates: Dict,
+                             _u: dict = Depends(require_roles("admin", "manager"))):
+        updates.pop("_id", None)
+        updates.pop("id", None)
+        updates["updated_at"] = _now()
+        await db.chatbot_intents.update_one({"id": intent_id}, {"$set": updates})
+        doc = await db.chatbot_intents.find_one({"id": intent_id}, {"_id": 0})
+        return doc or {}
+
+    @router.delete("/chatbot/intents/{intent_id}")
+    async def delete_intent(intent_id: str,
+                             _u: dict = Depends(require_roles("admin", "manager"))):
+        await db.chatbot_intents.delete_one({"id": intent_id})
+        return {"status": "deleted"}
+
+    # ───────────────────────── Keywords ────────────────────────────
+    @router.get("/chatbot/{property_id}/keywords")
+    async def list_keywords(property_id: str,
+                             _u: dict = Depends(require_roles("admin", "manager"))):
+        docs = await db.chatbot_keywords.find({"property_id": property_id}, {"_id": 0}).to_list(500)
+        return {"property_id": property_id, "count": len(docs), "items": docs}
+
+    @router.post("/chatbot/{property_id}/keywords")
+    async def create_keyword(property_id: str, data: Dict,
+                              _u: dict = Depends(require_roles("admin", "manager"))):
+        cmd = (data.get("command") or "").strip().lower()
+        if not cmd:
+            raise HTTPException(400, "command is required")
+        action_type = (data.get("action_type") or "reply_guest").lower()
+        if action_type not in VALID_ACTIONS:
+            raise HTTPException(400, f"action_type must be one of {VALID_ACTIONS}")
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "command": cmd,
+            "sentiment": (data.get("sentiment") or "any").lower(),
+            "action_type": action_type,
+            "reply_text": (data.get("reply_text") or "").strip()[:1000],
+            "enabled": bool(data.get("enabled", True)),
+            "created_at": _now(),
+        }
+        await db.chatbot_keywords.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.delete("/chatbot/keywords/{keyword_id}")
+    async def delete_keyword(keyword_id: str,
+                              _u: dict = Depends(require_roles("admin", "manager"))):
+        await db.chatbot_keywords.delete_one({"id": keyword_id})
+        return {"status": "deleted"}
+
+    # ─────────────────────── Sentiment actions ─────────────────────
+    @router.get("/chatbot/{property_id}/sentiment-actions")
+    async def list_sentiment_actions(property_id: str,
+                                      _u: dict = Depends(require_roles("admin", "manager"))):
+        docs = await db.chatbot_sentiment_acts.find({"property_id": property_id}, {"_id": 0}).to_list(20)
+        return {"property_id": property_id, "count": len(docs), "items": docs}
+
+    @router.post("/chatbot/{property_id}/sentiment-actions")
+    async def create_sentiment_action(property_id: str, data: Dict,
+                                       _u: dict = Depends(require_roles("admin", "manager"))):
+        sentiment = (data.get("sentiment") or "negative").lower()
+        if sentiment not in {"positive", "negative"}:
+            raise HTTPException(400, "sentiment must be 'positive' or 'negative'")
+        action_type = (data.get("action_type") or "notify_team_chat").lower()
+        if action_type not in VALID_ACTIONS:
+            raise HTTPException(400, f"action_type must be one of {VALID_ACTIONS}")
+        doc = {
+            "id": str(uuid.uuid4()),
+            "property_id": property_id,
+            "sentiment": sentiment,
+            "action_type": action_type,
+            "reply_text": (data.get("reply_text") or "").strip()[:500],
+            "team_channel": (data.get("team_channel") or "").strip(),
+            "enabled": bool(data.get("enabled", True)),
+            "created_at": _now(),
+        }
+        await db.chatbot_sentiment_acts.insert_one(doc)
+        doc.pop("_id", None)
+        return doc
+
+    @router.delete("/chatbot/sentiment-actions/{action_id}")
+    async def delete_sentiment_action(action_id: str,
+                                       _u: dict = Depends(require_roles("admin", "manager"))):
+        await db.chatbot_sentiment_acts.delete_one({"id": action_id})
+        return {"status": "deleted"}
+
+    # ────────────────────── Content sources / AI ───────────────────
+    @router.post("/chatbot/{property_id}/content-sources/generate")
+    async def generate_from_source(property_id: str, data: Dict,
+                                    _u: dict = Depends(require_roles("admin", "manager"))):
+        """Use GPT-4o-mini to generate 10 FAQ intents in the chosen tone."""
+        url = (data.get("url") or "").strip()
+        tone = (data.get("tone") or "friendly").lower()
+        if tone not in VALID_TONES:
+            tone = "friendly"
+        language = (data.get("language") or "tr").lower()
+        if not url:
+            raise HTTPException(400, "url required (hotel website or TripAdvisor URL)")
+
+        api_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not api_key:
+            raise HTTPException(503, "Emergent LLM key missing — cannot generate")
+
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+        except Exception as e:
+            raise HTTPException(503, f"emergentintegrations not available: {e}")
+
+        prompt = (
+            f"You generate FAQs for hotel guest chatbots.\n"
+            f"Source URL: {url}\n"
+            f"Target language: {language}\n"
+            f"Tone: {tone}\n\n"
+            f"Produce a JSON object: {{\"intents\":[{{\"name\":\"...\","
+            f"\"trigger_phrases\":[\"...\",\"...\"],\"reply_text\":\"...\"}}, ...]}} "
+            f"with 10 most-common hotel guest FAQs (wifi, breakfast, check-in time, "
+            f"parking, late checkout, airport transfer, pets, kids, gym, towels). "
+            f"Each intent must have 3-6 short trigger phrases and a reply in the chosen tone+language. "
+            f"Return ONLY valid JSON, no markdown."
+        )
+        try:
+            chat = LlmChat(
+                api_key=api_key,
+                session_id=f"chatbot-gen-{uuid.uuid4().hex[:8]}",
+                system_message="You are a hospitality chatbot designer. Always return valid JSON.",
+            ).with_model("openai", "gpt-4o-mini")
+            reply = await chat.send_message(UserMessage(text=prompt))
+            raw = (reply or "").strip()
+            start = raw.find("{")
+            end = raw.rfind("}")
+            if start == -1 or end == -1:
+                raise ValueError("no JSON in response")
+            blob = json.loads(raw[start:end + 1])
+            intents = blob.get("intents") or []
+        except Exception as exc:
+            logger.exception("chatbot generate failed: %s", exc)
+            raise HTTPException(502, f"AI generation failed: {exc}")
+
+        created = 0
+        for it in intents[:10]:
+            name = (it.get("name") or "").strip()
+            phrases = it.get("trigger_phrases") or []
+            reply_text = (it.get("reply_text") or "").strip()
+            if not name or not phrases or not reply_text:
+                continue
+            doc = {
+                "id": str(uuid.uuid4()),
+                "property_id": property_id,
+                "name": name,
+                "category": "most_popular",
+                "trigger_phrases": [str(p).strip() for p in phrases if str(p).strip()][:8],
+                "sentiment": "any",
+                "action_type": "reply_guest",
+                "reply_text": reply_text[:1000],
+                "reply_buttons": [],
+                "enabled": True,
+                "source_url": url,
+                "tone": tone,
+                "created_at": _now(),
+                "created_by": "ai-generator",
+            }
+            await db.chatbot_intents.insert_one(doc)
+            created += 1
+
+        await db.chatbot_content_sources.update_one(
+            {"property_id": property_id, "url": url},
+            {"$set": {
+                "property_id": property_id,
+                "url": url,
+                "tone": tone,
+                "language": language,
+                "last_generated_at": _now(),
+                "intents_created": created,
+            }},
+            upsert=True,
+        )
+        return {"created": created, "url": url, "tone": tone}
+
+    @router.get("/chatbot/{property_id}/content-sources")
+    async def list_content_sources(property_id: str,
+                                    _u: dict = Depends(require_roles("admin", "manager"))):
+        docs = await db.chatbot_content_sources.find({"property_id": property_id}, {"_id": 0}).to_list(20)
+        return {"property_id": property_id, "count": len(docs), "items": docs}
+
+    # ───────────────────────── Test / Match ────────────────────────
+    @router.post("/chatbot/{property_id}/test")
+    async def test_chatbot(property_id: str, data: Dict,
+                            _u: dict = Depends(require_roles("admin", "manager"))):
+        """Simulate a guest message → returns the matched intent/keyword/sentiment + action.
+        Also writes a `chatbot_runs` audit row. UIs and Guest Chat front-ends call this on each
+        inbound guest message and execute the returned action."""
+        text = (data.get("text") or "").strip()
+        if not text:
+            raise HTTPException(400, "text required")
+
+        settings = await db.chatbot_settings.find_one({"property_id": property_id}, {"_id": 0}) or DEFAULT_SETTINGS
+        if not settings.get("enabled", True):
+            return {"matched": False, "reason": "chatbot disabled"}
+
+        # Handoff keywords → bail out to human
+        handoff = [k.lower() for k in (settings.get("handoff_keywords") or [])]
+        tl = text.lower()
+        if any(k in tl for k in handoff):
+            run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
+                   "match_type": "handoff", "action_type": None,
+                   "created_at": _now()}
+            await db.chatbot_runs.insert_one(run)
+            run.pop("_id", None)
+            return {"matched": True, "match_type": "handoff",
+                    "reply_text": "Sizi temsilcimize bağlıyorum…", "action_type": "handoff"}
+
+        sentiment = _detect_sentiment(text)
+
+        # 1) Keywords (exact)
+        kws = await db.chatbot_keywords.find({"property_id": property_id, "enabled": True}, {"_id": 0}).to_list(200)
+        kw_match = _match_keyword(text, kws)
+        if kw_match:
+            run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
+                   "match_type": "keyword", "match_id": kw_match["id"],
+                   "action_type": kw_match["action_type"], "sentiment": sentiment,
+                   "created_at": _now()}
+            await db.chatbot_runs.insert_one(run)
+            return {"matched": True, "match_type": "keyword",
+                    "intent": kw_match, "sentiment": sentiment}
+
+        # 2) Intents (phrase overlap)
+        intents = await db.chatbot_intents.find({"property_id": property_id, "enabled": True}, {"_id": 0}).to_list(500)
+        # Sentiment-filter intents
+        eligible = [i for i in intents if i.get("sentiment", "any") in ("any", sentiment)]
+        intent_match = _match_intent(text, eligible)
+        if intent_match:
+            run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
+                   "match_type": "intent", "match_id": intent_match["id"],
+                   "action_type": intent_match["action_type"], "sentiment": sentiment,
+                   "score": intent_match.get("_score"),
+                   "created_at": _now()}
+            await db.chatbot_runs.insert_one(run)
+            return {"matched": True, "match_type": "intent",
+                    "intent": intent_match, "sentiment": sentiment}
+
+        # 3) Sentiment actions (fallback to broad sentiment rule)
+        sent_acts = await db.chatbot_sentiment_acts.find({"property_id": property_id, "enabled": True}, {"_id": 0}).to_list(20)
+        sa = next((s for s in sent_acts if s.get("sentiment") == sentiment), None)
+        if sa:
+            run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
+                   "match_type": "sentiment", "match_id": sa["id"],
+                   "action_type": sa["action_type"], "sentiment": sentiment,
+                   "created_at": _now()}
+            await db.chatbot_runs.insert_one(run)
+            return {"matched": True, "match_type": "sentiment",
+                    "intent": sa, "sentiment": sentiment}
+
+        # No match → fallback
+        run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
+               "match_type": "none", "sentiment": sentiment, "created_at": _now()}
+        await db.chatbot_runs.insert_one(run)
+        return {"matched": False, "match_type": "none", "sentiment": sentiment,
+                "fallback_message": settings.get("fallback_message")}
+
+    @router.get("/chatbot/{property_id}/runs")
+    async def list_runs(property_id: str, limit: int = 100,
+                         _u: dict = Depends(require_roles("admin", "manager"))):
+        limit = max(1, min(500, int(limit)))
+        rows = await db.chatbot_runs.find({"property_id": property_id}, {"_id": 0})\
+            .sort("created_at", -1).limit(limit).to_list(limit)
+        return {"property_id": property_id, "count": len(rows), "items": rows}
+
+    return router

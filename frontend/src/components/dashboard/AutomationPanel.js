@@ -111,9 +111,26 @@ export function AutomationPanel({ properties, activePropertyId: propActiveProper
     setEditRule(rule || {
       property_id: propertyId, name: "", trigger: "pre_arrival", timing_hours: -24,
       channel: "email", subject: "", message_template: "", enabled: true,
+      // Cloudbeds parity defaults
+      schedule_days: [],            // [] = every day (Mon=0..Sun=6)
+      schedule_time: "",            // "" = no time window
+      multi_reservation_messaging: false,
+      enable_missed_messages: false,
+      send_per_room: false,
+      primary_guest_only: true,
+      auto_archive: false,
+      skip_guests: [],
     });
     setPreview("");
     setShowEditor(true);
+  };
+
+  const duplicateRule = async (rule) => {
+    try {
+      await axios.post(`${API}/automation/rules/${rule.id}/duplicate`);
+      toast.success(`"${rule.name}" çoğaltıldı (devre dışı oluşturuldu)`);
+      fetchAll();
+    } catch { toast.error("Çoğaltma başarısız"); }
   };
 
   const saveRule = async () => {
@@ -240,6 +257,9 @@ export function AutomationPanel({ properties, activePropertyId: propActiveProper
                       <Switch checked={rule.enabled} onCheckedChange={() => toggleRule(rule)} data-testid={`toggle-rule-${rule.id}`} />
                       <button onClick={() => openEditor(rule)} className="text-stone-400 hover:text-blue-600 transition-colors p-1" data-testid={`edit-rule-${rule.id}`}>
                         <PencilSimple size={14} />
+                      </button>
+                      <button onClick={() => duplicateRule(rule)} className="text-stone-400 hover:text-violet-600 transition-colors p-1" title="Çoğalt" data-testid={`dup-rule-${rule.id}`}>
+                        <Queue size={14} />
                       </button>
                       <button onClick={() => deleteRule(rule.id)} className="text-stone-400 hover:text-red-500 transition-colors p-1" data-testid={`delete-rule-${rule.id}`}>
                         <Trash size={14} />
@@ -411,6 +431,44 @@ export function AutomationPanel({ properties, activePropertyId: propActiveProper
                   <p className="text-xs text-stone-700 whitespace-pre-line">{preview}</p>
                 </div>
               )}
+
+              {/* Cloudbeds parity: Advanced Schedule & Behavior */}
+              <details className="border border-violet-200 rounded-lg p-3 bg-violet-50/50" data-testid="advanced-schedule">
+                <summary className="text-xs font-bold text-violet-900 cursor-pointer flex items-center gap-1.5">
+                  <Clock size={12} /> Gelişmiş Zamanlama & Davranış (Cloudbeds parity)
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <label className="text-[11px] font-medium text-stone-600">Çalışma Günleri (boş = her gün)</label>
+                    <div className="flex gap-1 mt-1 flex-wrap">
+                      {["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"].map((d, i) => {
+                        const active = (editRule.schedule_days || []).includes(i);
+                        return (
+                          <button key={i} type="button" data-testid={`sched-day-${i}`}
+                            onClick={() => setEditRule(p => ({
+                              ...p,
+                              schedule_days: active
+                                ? (p.schedule_days || []).filter(x => x !== i)
+                                : [...(p.schedule_days || []), i].sort()
+                            }))}
+                            className={`px-2 py-1 rounded text-[11px] font-mono ${active ? "bg-violet-600 text-white" : "bg-white border border-stone-200 text-stone-600"}`}>{d}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-medium text-stone-600">Çalışma Saati (UTC, ±15dk pencere)</label>
+                    <Input type="time" value={editRule.schedule_time || ""} onChange={e => setEditRule(p => ({ ...p, schedule_time: e.target.value }))} className="h-8 text-xs mt-1 w-32" data-testid="sched-time" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="flex items-center gap-2 text-xs text-stone-700"><Switch checked={!!editRule.multi_reservation_messaging} onCheckedChange={v => setEditRule(p => ({ ...p, multi_reservation_messaging: v }))} data-testid="cfg-multi-res" /> Multi-Reservation</label>
+                    <label className="flex items-center gap-2 text-xs text-stone-700"><Switch checked={!!editRule.enable_missed_messages} onCheckedChange={v => setEditRule(p => ({ ...p, enable_missed_messages: v }))} data-testid="cfg-missed" /> Missed Messages</label>
+                    <label className="flex items-center gap-2 text-xs text-stone-700"><Switch checked={!!editRule.send_per_room} onCheckedChange={v => setEditRule(p => ({ ...p, send_per_room: v }))} data-testid="cfg-per-room" /> Per-Room Send</label>
+                    <label className="flex items-center gap-2 text-xs text-stone-700"><Switch checked={!!editRule.primary_guest_only} onCheckedChange={v => setEditRule(p => ({ ...p, primary_guest_only: v }))} data-testid="cfg-primary" /> Sadece Birincil Misafir</label>
+                    <label className="flex items-center gap-2 text-xs text-stone-700"><Switch checked={!!editRule.auto_archive} onCheckedChange={v => setEditRule(p => ({ ...p, auto_archive: v }))} data-testid="cfg-archive" /> Otomatik Arşivle</label>
+                  </div>
+                </div>
+              </details>
 
               {/* Save */}
               <div className="flex justify-end gap-2 pt-2">

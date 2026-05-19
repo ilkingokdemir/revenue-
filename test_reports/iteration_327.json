@@ -1,0 +1,74 @@
+{
+  "summary": "Tested Chatbot Automation module and Automation Parity features (Cloudbeds). Backend: 20/20 tests passed. Frontend: Chatbot panel loads but requires property selection (pre-existing dropdown issue). Automation panel shows rules with duplicate buttons and advanced scheduling section.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ChatbotAutomationPanel",
+        "issue": "Panel shows 'please select a property' message because branch dropdown only shows 'All Branches' - properties not loaded into dropdown",
+        "selector": "[data-testid='chatbot-panel-empty']",
+        "priority": "MEDIUM",
+        "note": "This is a pre-existing issue with the property selector, not specific to chatbot feature"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_chatbot_automation.py",
+    "/app/test_reports/pytest/pytest_iteration327_chatbot_automation.xml"
+  ],
+  "action_items": [
+    "INVESTIGATE: Branch/property dropdown only shows 'All Branches' - individual properties not appearing. This blocks testing of property-specific panels like Chatbot Automation.",
+    "VERIFY: Chatbot panel tabs (settings, intents, keywords, sentiment, sources, runs) once property selection is fixed"
+  ],
+  "critical_code_review_comments": [
+    "ChatbotAutomationPanel.js export was changed from 'export default' to 'export { ChatbotAutomationPanel }' to match lazyPanels.js named export pattern - this fix was applied during testing"
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/dashboard/ChatbotAutomationPanel.js",
+    "/app/backend/tests/test_chatbot_automation.py"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "70% - Automation panel working, Chatbot panel blocked by property selector issue"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test intents, keywords, sentiment actions created and cleaned up during backend tests",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend chatbot automation APIs all working. Frontend ChatbotAutomationPanel export was fixed (named export). The property dropdown in sidebar only shows 'All Branches' - no individual properties appear. This is blocking full UI testing of Chatbot panel. Automation panel works and shows duplicate buttons and advanced scheduling section.",
+  "verified_features": {
+    "backend": [
+      "GET /api/chatbot/{property_id}/settings - returns default config",
+      "PUT /api/chatbot/{property_id}/settings - persists updates",
+      "POST /api/chatbot/{property_id}/intents - creates intent with trigger_phrases",
+      "PATCH /api/chatbot/intents/{id} - updates intent",
+      "DELETE /api/chatbot/intents/{id} - removes intent",
+      "GET /api/chatbot/{property_id}/intents - lists intents",
+      "POST /api/chatbot/{property_id}/keywords - creates keyword",
+      "DELETE /api/chatbot/keywords/{id} - removes keyword",
+      "POST /api/chatbot/{property_id}/sentiment-actions - creates positive/negative actions",
+      "POST /api/chatbot/{property_id}/test - matches intents, handoff keywords, returns fallback",
+      "GET /api/chatbot/{property_id}/runs - returns audit log",
+      "POST /api/chatbot/{property_id}/content-sources/generate - validates URL required",
+      "GET /api/chatbot/{property_id}/content-sources - lists sources",
+      "POST /api/automation/rules/{rule_id}/duplicate - creates 'Copy of' rule with enabled=false",
+      "POST /api/automation/rules/{rule_id}/skip-guest - adds booking_ref to skip list",
+      "GET /api/automation/rules/{rule_id}/history - returns rule logs"
+    ],
+    "frontend": [
+      "Chatbot motoru link visible in GUESTS sidebar section",
+      "ChatbotAutomationPanel loads (shows property selection message)",
+      "Automation panel loads with rules list",
+      "Duplicate buttons (data-testid=dup-rule-{id}) present on rule cards",
+      "Advanced Schedule section (data-testid=advanced-schedule) present in rule form",
+      "Day toggles (Pzt-Paz) for schedule_days",
+      "Time picker for schedule_time",
+      "Switches for: Multi-Reservation, Missed Messages, Per-Room Send, Primary Guest Only, Auto Archive"
+    ]
+  }
+}

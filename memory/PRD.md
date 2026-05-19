@@ -4,6 +4,15 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 339 — inFlightRef double-click guards · NeighborhoodScanPanel)
+- **Continuity from prev fork**: Çift rakip kaydı kök neden 3-katmanlı fix (iter 338) ile çözüldü; bu iter UI tarafında defensive guard ekledi.
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - `useRef({})` `inFlightRef` — `discover`, `bulkAdd`, `manualAdd` action handler'larının başında early-return guard (`if (inFlightRef.current.X) return`), `finally` bloğunda reset.
+  - Hızlı double-click veya tetiklenmiş çift event'lerde duplicate POST gönderimini engeller. Backend unique index ile birlikte 2-katmanlı koruma sağlar.
+- **Verification**: ESLint clean (✅ No issues found), `grep` ile 3 action'da guard pattern doğrulandı, frontend supervisor stabil çalışıyor.
+
+
+
 ### 2026-05-19 (iter 338 — Duplicate Competitor Bug Fix · Race condition + DB unique index)
 - **User report** (TR): "city prime camden iki sefer kayıt edilmiş chart'ta".
 - **Root cause**: 

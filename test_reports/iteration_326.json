@@ -1,0 +1,72 @@
+{
+  "summary": "Market Robot Performance Fixes Verified - All 4 reported issues resolved. Backend tests: 8/8 passed. Frontend tests: All critical flows working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_market_robot_performance.py",
+    "/app/test_reports/pytest/pytest_iteration326_market_robot_perf.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_market_robot_performance.py"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Market Robot performance fixes verified. All 4 issues from Turkish UI report resolved: (1) 90-day occupancy-pickup now returns in 1.44s with 90 daily rows and KPIs, (2) Supply data 90d returns in 6.36s with snapshots, (3) Competitor Hotels tab shows all 10 competitors for aldgate-flats, (4) Auto-Discover uses BackgroundTask polling pattern - completed in ~105s with 8 candidates for camden-suites (>2 as expected after relaxed review_count filter). AI Pricing regression tests passed.",
+  "verified_fixes": {
+    "issue_1_occupancy_pickup_90d": {
+      "status": "FIXED",
+      "before": "Timing out at 30s+",
+      "after": "Returns in 1.44s with 90 daily rows and KPIs (avg_occupancy, peak_occupancy)",
+      "endpoint": "GET /api/revenue/market-robot/aldgate-flats/occupancy-pickup?days=90"
+    },
+    "issue_2_supply_data_90d": {
+      "status": "FIXED",
+      "before": "Timing out",
+      "after": "Returns in 6.36s with 100 snapshots and our_summary block",
+      "endpoint": "GET /api/revenue/market-robot/aldgate-flats/supply?days=90"
+    },
+    "issue_3_competitor_hotels_count": {
+      "status": "FIXED",
+      "before": "Only showing 2 competitors",
+      "after": "Shows all 10 competitors for aldgate-flats",
+      "endpoint": "GET /api/revenue/market-robot/aldgate-flats/competitors"
+    },
+    "issue_4_auto_discover_neighbors": {
+      "status": "FIXED",
+      "before": "Only finding 2 hotels (synchronous, timing out)",
+      "after": "BackgroundTask pattern - POST returns immediately with scan_id, polling returns 8 candidates after ~105s",
+      "endpoints": [
+        "POST /api/revenue/market-robot/camden-suites/competitors/discover",
+        "GET /api/revenue/market-robot/camden-suites/competitors/discover-status"
+      ]
+    }
+  },
+  "regression_tests": {
+    "ai_pricing_config": "PASSED - enabled=True, horizon=30",
+    "ai_pricing_suggestions": "PASSED - 48 suggestions in 9.87s",
+    "all_branches_aggregation": "PASSED - 509 rooms across fleet, returns in 1.52s"
+  },
+  "performance_metrics": {
+    "occupancy_pickup_90d": "1.44s",
+    "occupancy_pickup_all_branches_90d": "1.52s",
+    "supply_90d": "6.36s",
+    "discover_post_response": "4.12s (immediate with scan_id)",
+    "discover_polling_completion": "~105s (8 candidates found)",
+    "ai_pricing_suggestions": "9.87s"
+  }
+}

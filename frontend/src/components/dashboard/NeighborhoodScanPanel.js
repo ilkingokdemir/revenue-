@@ -278,7 +278,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
     setCandidates([]);
     setPicked({});
     try {
-      const { data } = await axios.post(
+      // Kick off the BACKGROUND scan — server returns immediately.
+      // The scrape itself takes 30-70s (Booking.com Playwright), well past
+      // the 60s ingress timeout if we awaited synchronously. We poll for
+      // status every 4s until done/error.
+      await axios.post(
         `${API}/revenue/market-robot/${propertyId}/competitors/discover`,
         {
           radius_km: Math.max(0.5, Math.min(parseFloat(radiusKm) || 2.5, 5.0)),
@@ -286,9 +290,33 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           auto_add: false,
           exclude_single_room: true,
           min_review_count: Number(minReviewCount) || 0,
+          background: true,
         }
       );
-      const cands = data?.candidates || [];
+
+      let cands = [];
+      const startedAt = Date.now();
+      // Max 3 minutes wait — Booking.com cold scrape can take 60-90s on first hit
+      const POLL_MAX_MS = 180000;
+      while (Date.now() - startedAt < POLL_MAX_MS) {
+        await new Promise(r => setTimeout(r, 4000));
+        try {
+          const { data: st } = await axios.get(
+            `${API}/revenue/market-robot/${propertyId}/competitors/discover-status`
+          );
+          if (st?.status === "done") {
+            cands = st?.result?.candidates || [];
+            break;
+          }
+          if (st?.status === "error") {
+            toast.error(`Discover hatası: ${st?.error || "bilinmiyor"}`);
+            break;
+          }
+        } catch (_) {
+          // ignore transient polling errors
+        }
+      }
+
       setCandidates(cands);
       // Auto-tick everything that isn't already added and isn't us
       const pick = {};
@@ -301,9 +329,6 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       } else {
         const fresh = Object.keys(pick).length;
         toast.success(`${cands.length} aday bulundu · ${fresh} taze. Vision otomatik başlıyor — oda sayıları + fiyatlar geliyor…`);
-        // AUTO-FIRE Vision enrichment in the background so the user sees real
-        // room counts + prices appear inline without clicking per row. Runs
-        // sequentially to respect Booking.com rate limits.
         visionAllCandidates(cands);
       }
     } catch (e) {

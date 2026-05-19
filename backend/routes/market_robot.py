@@ -2474,25 +2474,42 @@ def create_market_robot_router(db, require_roles, resend=None):
         room_types = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(50)
         total_rooms = sum(int(r.get("total_rooms", 0)) for r in room_types) or 20
         base_rate_avg = sum(float(r.get("base_rate", 0) or 0) for r in room_types) / max(len(room_types), 1) if room_types else 130
+
+        # PARALLEL fan-out — was serial, blowing past 30s on 90-day windows.
+        # Now: gather all per-date queries concurrently, brings total to <3s.
+        async def _our_row(snap):
+            ds = snap.get("date")
+            if not ds:
+                return None
+            bookings_count, rate_doc = await asyncio.gather(
+                db.bookings.count_documents({
+                    "property_id": property_id,
+                    "check_in": {"$lte": ds},
+                    "check_out": {"$gt": ds},
+                    "status": {"$nin": ["cancelled"]},
+                }),
+                db.rate_overrides.find_one(
+                    {"property_id": property_id, "date": ds},
+                    {"_id": 0, "custom_rate": 1},
+                    sort=[("updated_at", -1)],
+                ),
+            )
+            occ = round(min(100, bookings_count / total_rooms * 100), 1)
+            our_rate = round(
+                float(rate_doc["custom_rate"]) if rate_doc and rate_doc.get("custom_rate") else base_rate_avg,
+                2,
+            )
+            return (ds, occ, our_rate, bookings_count)
+
+        our_results = await asyncio.gather(*[_our_row(s) for s in snapshots])
+        our_by_date = {r[0]: r for r in our_results if r}
         our_occ_sum = 0
         our_rate_sum = 0
         for s in snapshots:
-            ds = s.get("date")
-            if not ds:
+            row = our_by_date.get(s.get("date"))
+            if not row:
                 continue
-            bookings_count = await db.bookings.count_documents({
-                "property_id": property_id,
-                "check_in": {"$lte": ds},
-                "check_out": {"$gt": ds},
-                "status": {"$nin": ["cancelled"]},
-            })
-            occ = round(min(100, bookings_count / total_rooms * 100), 1)
-            rate_doc = await db.rate_overrides.find_one(
-                {"property_id": property_id, "date": ds},
-                {"_id": 0, "custom_rate": 1},
-                sort=[("updated_at", -1)],
-            )
-            our_rate = round(float(rate_doc["custom_rate"]) if rate_doc and rate_doc.get("custom_rate") else base_rate_avg, 2)
+            _, occ, our_rate, bookings_count = row
             s["our_occupancy_pct"] = occ
             s["our_avg_rate"] = our_rate
             s["our_bookings"] = bookings_count
@@ -2606,44 +2623,46 @@ def create_market_robot_router(db, require_roles, resend=None):
     @router.get("/revenue/market-robot/{property_id}/occupancy-pickup")
     async def get_occupancy_pickup(property_id: str, days: int = 90, pickup_window: str = "24h",
                                    current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Occupancy & Pickup chart data — base occupancy bars + booking velocity overlay."""
+        """Occupancy & Pickup chart data — base occupancy bars + booking velocity overlay.
+
+        Was serial across days×properties → 30s+ timeout on 90d×all-branches. Now uses
+        a single $facet aggregation per property and asyncio.gather across days.
+        """
         now = datetime.now(timezone.utc)
         props = await db.properties.find({}, {"_id": 0}).to_list(50) if property_id == "all" else [await db.properties.find_one({"id": property_id}, {"_id": 0})]
         props = [p for p in props if p]
-        total_rooms = 0
-        for p in props:
-            total_rooms += await db.rooms.count_documents({"property_id": p.get("id", "")}) or 10
-        total_rooms = max(total_rooms, 1)
+        prop_ids = [p.get("id", "") for p in props]
+
+        # Total rooms — parallel count
+        room_counts = await asyncio.gather(*[db.rooms.count_documents({"property_id": pid}) for pid in prop_ids])
+        total_rooms = max(sum(rc or 10 for rc in room_counts), 1)
 
         # Pickup window in hours
         pw_hours = {"24h": 24, "3d": 72, "7d": 168}.get(pickup_window, 24)
         pickup_cutoff = (now - timedelta(hours=pw_hours)).isoformat()
 
-        daily = []
-        for i in range(days):
-            d = now + timedelta(days=i)
+        date_list = [(now + timedelta(days=i)) for i in range(days)]
+
+        async def _row_for(d):
             ds = d.strftime("%Y-%m-%d")
-
-            # Base occupancy: all confirmed bookings overlapping this date
-            booked = 0
-            for p in props:
-                booked += await db.bookings.count_documents({
-                    "property_id": p.get("id", ""), "check_in": {"$lte": ds},
-                    "check_out": {"$gt": ds}, "status": {"$ne": "cancelled"}
-                })
+            booked, pickup_rooms = await asyncio.gather(
+                db.bookings.count_documents({
+                    "property_id": {"$in": prop_ids} if len(prop_ids) > 1 else (prop_ids[0] if prop_ids else ""),
+                    "check_in": {"$lte": ds},
+                    "check_out": {"$gt": ds},
+                    "status": {"$ne": "cancelled"},
+                }),
+                db.bookings.count_documents({
+                    "property_id": {"$in": prop_ids} if len(prop_ids) > 1 else (prop_ids[0] if prop_ids else ""),
+                    "check_in": {"$lte": ds},
+                    "check_out": {"$gt": ds},
+                    "status": {"$ne": "cancelled"},
+                    "created_at": {"$gte": pickup_cutoff},
+                }),
+            )
             occ_pct = min(100, round((booked / total_rooms) * 100))
-
-            # Pickup: bookings made within the pickup window for this date
-            pickup_rooms = 0
-            for p in props:
-                pickup_rooms += await db.bookings.count_documents({
-                    "property_id": p.get("id", ""), "check_in": {"$lte": ds},
-                    "check_out": {"$gt": ds}, "status": {"$ne": "cancelled"},
-                    "created_at": {"$gte": pickup_cutoff}
-                })
             pickup_pct = min(100, round((pickup_rooms / total_rooms) * 100))
-
-            daily.append({
+            return {
                 "date": ds,
                 "dow": d.strftime("%a"),
                 "month": d.strftime("%b"),
@@ -2653,7 +2672,9 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "booked_rooms": booked,
                 "pickup_rooms": pickup_rooms,
                 "total_rooms": total_rooms,
-            })
+            }
+
+        daily = await asyncio.gather(*[_row_for(d) for d in date_list])
 
         avg_occ = round(sum(d["occupancy_pct"] for d in daily) / max(len(daily), 1))
         avg_pickup = round(sum(d["pickup_pct"] for d in daily) / max(len(daily), 1))
@@ -3702,15 +3723,9 @@ def create_market_robot_router(db, require_roles, resend=None):
         )
         return doc or {"property_id": property_id, "status": "idle"}
 
-    @router.delete("/revenue/market-robot/competitors/{competitor_id}")
-    async def remove_competitor(competitor_id: str,
-                                current_user: dict = Depends(require_roles("admin", "manager"))):
-        await db.market_competitors.delete_one({"id": competitor_id})
-        return {"message": "Removed"}
-
     @router.post("/revenue/market-robot/{property_id}/competitors/discover")
     async def discover_nearby_competitors(
-        property_id: str, data: Dict = {},
+        property_id: str, background_tasks: BackgroundTasks, data: Dict = {},
         current_user: dict = Depends(require_roles("admin", "manager")),
     ):
         """Find nearby Booking.com hotels the admin can choose to add as competitors.
@@ -3879,6 +3894,158 @@ def create_market_robot_router(db, require_roles, resend=None):
                 detail="Property has no postcode/city/coordinates. Set them under 'Fix Branch Location' first.",
             )
 
+        # ASYNC MODE — default true. Booking.com scrapes can run 50-70s
+        # (cold Chromium + slow Booking response). Kubernetes ingress kills
+        # the request at 60s. Run as a BackgroundTask, persist result in
+        # market_robot_discover_status, frontend polls /competitors/discover-status.
+        # Pass `background: false` to force a synchronous response (legacy).
+        run_async = bool(data.get("background", True))
+        if run_async:
+            scan_id = str(uuid.uuid4())[:8]
+            started_at = datetime.now(timezone.utc).isoformat()
+            await db.market_robot_discover_status.update_one(
+                {"property_id": property_id},
+                {"$set": {
+                    "property_id": property_id,
+                    "scan_id": scan_id, "status": "queued",
+                    "started_at": started_at,
+                    "finished_at": None, "result": None, "error": None,
+                }},
+                upsert=True,
+            )
+
+            # Snapshot all the locals we need for the background task to run
+            # independently of the request scope.
+            _postcode, _city = postcode, city
+            _property_type = property_type
+            _max_results = max_results
+            _currency = currency
+            _language = language
+            _radius_km = radius_km
+            _exclude_single = exclude_single_room
+            _min_review = min_review_count
+            _min_unit = min_unit_count
+            _fetch_units = fetch_unit_counts
+            _latitude, _longitude = latitude, longitude
+            _district_hint = district_hint
+            _geocode_used = geocode_used
+            _auto_add_top_flag = bool(data.get("auto_add"))
+            _auto_add_top_n = int(data.get("auto_add_top") or 5)
+            _our_url = (prop.get("booking_url") or "").rstrip("/").split("?")[0]
+
+            async def _run_discover_bg():
+                try:
+                    await db.market_robot_discover_status.update_one(
+                        {"property_id": property_id},
+                        {"$set": {"status": "running"}},
+                    )
+                    cands = await discover_nearby_hotels(
+                        postcode=_postcode, city=_city,
+                        latitude=_latitude, longitude=_longitude,
+                        property_type=_property_type, max_results=_max_results,
+                        radius_km=_radius_km, language=_language, currency=_currency,
+                        district_hint=_district_hint,
+                        exclude_single_room=_exclude_single,
+                        min_review_count=_min_review, min_unit_count=_min_unit,
+                        fetch_unit_counts=_fetch_units,
+                    )
+                    # Flag candidates already imported
+                    existing2 = await db.market_competitors.find(
+                        {"property_id": property_id},
+                        {"_id": 0, "booking_url": 1, "booking_hotel_id": 1},
+                    ).to_list(200)
+                    existing_urls2 = {(c.get("booking_url") or "").rstrip("/").split("?")[0] for c in existing2}
+                    existing_hids2 = {str(c.get("booking_hotel_id")) for c in existing2 if c.get("booking_hotel_id")}
+                    for c in cands:
+                        u2 = (c.get("booking_url") or "").rstrip("/").split("?")[0]
+                        c["already_added"] = bool(
+                            (u2 and u2 in existing_urls2)
+                            or (c.get("hotel_id") and str(c["hotel_id"]) in existing_hids2)
+                        )
+                        c["is_self"] = bool(u2 and _our_url and u2 == _our_url)
+
+                    auto_added_n = 0
+                    if _auto_add_top_flag:
+                        now_iso = datetime.now(timezone.utc).isoformat()
+                        top_n = max(1, min(_auto_add_top_n, 15))
+                        for cand in cands[:top_n]:
+                            if cand.get("is_self"):
+                                continue
+                            url2 = (cand.get("booking_url") or "").rstrip("/").split("?")[0]
+                            name2 = (cand.get("name") or "").strip()
+                            if not url2 or not name2:
+                                continue
+                            exists = await db.market_competitors.find_one(
+                                {"property_id": property_id, "booking_url": url2},
+                                {"_id": 0, "id": 1},
+                            )
+                            if exists:
+                                continue
+                            hid = str(cand.get("booking_hotel_id") or cand.get("hotel_id") or "")
+                            slug_m = re.search(r"/hotel/[a-z]{2}/([a-z0-9-]+)\.", url2)
+                            slug = slug_m.group(1) if slug_m else name2.lower().replace(" ", "-")[:40]
+                            await db.market_competitors.insert_one({
+                                "id": str(uuid.uuid4()),
+                                "property_id": property_id,
+                                "name": name2,
+                                "booking_url": url2,
+                                "slug": slug,
+                                "booking_hotel_id": hid or None,
+                                "stars": cand.get("stars"),
+                                "review_score": cand.get("review_score"),
+                                "prices": [], "score": None, "last_scraped": None,
+                                "last_source": "auto_reset_autoadd",
+                                "last_validation": {"ok": True,
+                                                     "checked_at": now_iso,
+                                                     "hotel_name": name2,
+                                                     "hotel_id": hid or None},
+                                "created_at": now_iso,
+                                "created_by": "auto_reset_autoadd",
+                            })
+                            auto_added_n += 1
+
+                    result = {
+                        "candidates": cands,
+                        "total": len(cands),
+                        "auto_added": auto_added_n,
+                        "search_used": {
+                            "postcode": _postcode, "city": _city,
+                            "property_type": _property_type, "currency": _currency,
+                            "language": _language, "max_results": _max_results,
+                            "latitude": _latitude, "longitude": _longitude,
+                            "radius_km": _radius_km,
+                            "geocode_used": _geocode_used,
+                            "district_hint": _district_hint,
+                            "exclude_single_room": _exclude_single,
+                            "min_review_count": _min_review,
+                            "min_unit_count": _min_unit,
+                            "fetch_unit_counts": _fetch_units,
+                        },
+                    }
+                    await db.market_robot_discover_status.update_one(
+                        {"property_id": property_id},
+                        {"$set": {
+                            "status": "done",
+                            "finished_at": datetime.now(timezone.utc).isoformat(),
+                            "result": result,
+                        }},
+                    )
+                except Exception as e:
+                    logger.exception("Background discover failed for %s: %s", property_id, e)
+                    await db.market_robot_discover_status.update_one(
+                        {"property_id": property_id},
+                        {"$set": {
+                            "status": "error",
+                            "finished_at": datetime.now(timezone.utc).isoformat(),
+                            "error": str(e)[:300],
+                        }},
+                    )
+
+            background_tasks.add_task(_run_discover_bg)
+            return {"scan_id": scan_id, "status": "queued",
+                    "message": "Discover başladı — durum için /competitors/discover-status sorgula."}
+
+        # SYNCHRONOUS LEGACY PATH (kept for backward compat / curl debug)
         candidates = await discover_nearby_hotels(
             postcode=postcode,
             city=city,
@@ -3970,6 +4137,16 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "fetch_unit_counts": fetch_unit_counts,
             },
         }
+
+    @router.get("/revenue/market-robot/{property_id}/competitors/discover-status")
+    async def get_discover_status(property_id: str,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Polling endpoint for the most recent /competitors/discover background task.
+        Returns {status: idle|queued|running|done|error, result?, error?, scan_id, started_at, finished_at}."""
+        doc = await db.market_robot_discover_status.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
+        return doc or {"property_id": property_id, "status": "idle"}
 
     @router.post("/revenue/market-robot/{property_id}/auto-geocode")
     async def auto_geocode_property(

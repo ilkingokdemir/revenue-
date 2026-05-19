@@ -1009,7 +1009,7 @@ async def discover_nearby_hotels(
     max_results: int = 25,
     language: str = "en-gb",
     currency: str = "GBP",
-    timeout_ms: int = 30000,
+    timeout_ms: int = 45000,
     district_hint: str = "",
     exclude_single_room: bool = True,
     min_review_count: int = 20,
@@ -1146,8 +1146,16 @@ async def discover_nearby_hotels(
         # we have a real dest_id (most cities are pre-mapped above). The homepage flow
         # was problematic (autocomplete clicks racy), so we only fall back to it when
         # the city is NOT in our dest_id table (= no `dest_id=` in qs).
-        await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-        await page.wait_for_timeout(2500)
+        # Use `commit` (only wait for nav commit) — Booking.com lazy-loads cards
+        # via JS later anyway, so waiting for `domcontentloaded` ends up
+        # blocking on tracking/ad pixels and frequently hits the 30s timeout
+        # giving us 0 candidates. `commit` returns in ~1s, then we explicitly
+        # wait_for_selector for the property cards (8s budget, configured below).
+        try:
+            await page.goto(url, wait_until="commit", timeout=timeout_ms)
+        except Exception as nav_e:
+            logger.warning("discover_nearby_hotels: initial nav warning (continuing): %s", nav_e)
+        await page.wait_for_timeout(3500)
 
         # Only kick the homepage fallback if we DON'T have a known dest_id —
         # otherwise we trust the dest_id+dest_type combo Booking already accepted.
@@ -1348,15 +1356,16 @@ async def discover_nearby_hotels(
             # Filter "tiny operations" — properties with very few reviews are
             # likely single-flat owner-operated listings, not multi-unit
             # operations meaningful for pricing benchmark.
-            # When min_review_count > 0: also exclude listings where we
-            # couldn't extract review_count (None) — typically brand-new
-            # listings that are by definition tiny single-unit ops.
+            # Only filter when review_count is KNOWN to be below threshold.
+            # Listings where rc is None (scraper couldn't extract) are KEPT
+            # — let the user decide. Otherwise we lose half the legitimate
+            # apartment-market candidates and the UI shows "Auto-Discover 15
+            # found 2".
             rc = r.get("review_count")
-            if min_review_count > 0:
-                if rc is None or (isinstance(rc, int) and rc < min_review_count):
-                    excluded_tiny += 1
-                    r["is_tiny"] = True
-                    continue
+            if min_review_count > 0 and isinstance(rc, int) and rc < min_review_count:
+                excluded_tiny += 1
+                r["is_tiny"] = True
+                continue
             r["is_tiny"] = False
             seen.add(key)
             deduped.append(r)

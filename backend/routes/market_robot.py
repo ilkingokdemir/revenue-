@@ -560,6 +560,128 @@ async def fleet_vision_enrich_worker(db, *, max_per_property: int = 25) -> dict:
     }
 
 
+async def fleet_competitor_price_scan_worker(
+    db, *, days_ahead: int = 30, max_per_property: int = 25,
+    comp_concurrency: int = 3,
+) -> dict:
+    """Weekly fleet-wide competitor PRICE scrape (Booking.com lowest-rate
+    extraction). Complements `fleet_vision_enrich_worker` which only pulls
+    room counts + headline price from screenshots.
+
+    For every active property:
+      • Pull up to `max_per_property` saved competitors
+      • For each competitor, scrape `days_ahead` days of Booking.com prices
+        (via `scrape_booking_url` + `build_dated_url`) running `comp_concurrency`
+        competitors in parallel under a Semaphore
+      • Persist the per-date `prices` array on the competitor row so the
+        Per-Hotel Price Trend chart populates without any user action
+
+    Sized so a 30-day × 10-competitor fleet refresh fits inside ~7 minutes
+    per property. Runs sequentially across properties to keep memory steady.
+    """
+    from utils.booking_scraper import scrape_booking_url, build_dated_url
+
+    props = await db.properties.find(
+        {"is_active": {"$ne": False}}, {"_id": 0, "id": 1, "currency": 1},
+    ).to_list(500)
+
+    total_scanned = 0
+    total_prices = 0
+    total_properties = 0
+    days_ahead = max(1, min(int(days_ahead), 90))
+
+    for prop in props:
+        pid = prop.get("id")
+        if not pid:
+            continue
+        comps = await db.market_competitors.find(
+            {"property_id": pid}, {"_id": 0},
+        ).limit(max_per_property).to_list(max_per_property)
+        if not comps:
+            continue
+        total_properties += 1
+        target_currency = prop.get("currency") or "GBP"
+        now = datetime.now(timezone.utc)
+        comp_sem = asyncio.Semaphore(comp_concurrency)
+        scanned = [0]
+        prices = [0]
+
+        async def _scan_comp(comp):
+            base_url = comp.get("booking_url", "")
+            if not base_url:
+                return
+            async with comp_sem:
+                comp_prices = []
+                cached_hotel_id = comp.get("booking_hotel_id")
+                resolved_hotel_id = cached_hotel_id
+                resolved_name = comp.get("name", "")
+                last_score = None
+                name_hint = (comp.get("slug") or "").replace("-", " ")[:18]
+                for i in range(days_ahead):
+                    d = now + timedelta(days=i)
+                    checkin = d.strftime("%Y-%m-%d")
+                    checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
+                    url = build_dated_url(base_url, checkin, checkout, target_currency)
+                    try:
+                        result = await scrape_booking_url(
+                            url, timeout_ms=30000,
+                            hotel_id=resolved_hotel_id,
+                            hotel_name_hint=name_hint,
+                        )
+                        if result.get("hotel_id"):
+                            resolved_hotel_id = result["hotel_id"]
+                        if result.get("hotel_name"):
+                            resolved_name = result["hotel_name"]
+                        if result["scraped"]:
+                            comp_prices.append({
+                                "date": checkin,
+                                "lowest_price": result["lowest_price"],
+                                "all_prices": result["all_prices"],
+                                "score": result["score"],
+                                "scraped": True,
+                            })
+                            prices[0] += 1
+                            if result["score"]:
+                                last_score = result["score"]
+                        else:
+                            comp_prices.append({"date": checkin, "lowest_price": None,
+                                                "scraped": False, "error": result.get("error")})
+                    except Exception as e:
+                        logger.warning(f"fleet comp scan failed for {comp.get('name')}: {e}")
+                        comp_prices.append({"date": checkin, "lowest_price": None, "scraped": False})
+                    await asyncio.sleep(1.5)
+                update_fields = {
+                    "prices": comp_prices,
+                    "last_scraped": now.isoformat(),
+                    "last_source": "weekly_cron",
+                }
+                if last_score:
+                    update_fields["review_score"] = last_score
+                if resolved_hotel_id and resolved_hotel_id != cached_hotel_id:
+                    update_fields["booking_hotel_id"] = resolved_hotel_id
+                if resolved_name and resolved_name != comp.get("name", ""):
+                    original = (comp.get("name") or "").strip().lower()
+                    slug_default = (comp.get("slug") or "").replace("-", " ").strip().lower()
+                    if original in ("", slug_default):
+                        update_fields["name"] = resolved_name
+                await db.market_competitors.update_one(
+                    {"id": comp["id"]}, {"$set": update_fields}
+                )
+                scanned[0] += 1
+
+        await asyncio.gather(*[_scan_comp(c) for c in comps])
+        total_scanned += scanned[0]
+        total_prices += prices[0]
+
+    return {
+        "properties_done": total_properties,
+        "competitors_scanned": total_scanned,
+        "prices_found": total_prices,
+        "days_ahead": days_ahead,
+        "ran_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def create_market_robot_router(db, require_roles, resend=None):
     router = APIRouter()
 

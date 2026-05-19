@@ -4,6 +4,20 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 333 — fleet_competitor_price_scan: 3. haftalık cron · chart hep güncel kalır)
+- **User-approved suggestion**: "evet uygula" → fleet'in tamamı için haftalık Booking.com fiyat tarama cron'u eklendi.
+- **Backend**:
+  - **NEW** `fleet_competitor_price_scan_worker(db, days_ahead=30, max_per_property=25, comp_concurrency=3)` (`routes/market_robot.py`): aktif her property için 25 rakibi 3 paralel sürer; her rakip için 30 gün × Booking.com lowest-rate scrape; sonuçları competitor row'larındaki `prices` array'ine yazar.
+  - **NEW** `JOB_HANDLERS["fleet_competitor_price_scan"]` (`server.py`) — scheduler_loop her dakika cron config'i kontrol edip çalıştırıyor.
+  - **Seed**: Pazartesi 05:00 UTC (vision-enrich'ten 1 saat sonra; booking_hotel_id'ler vision tarafından resolve edilmiş olur).
+- **Doğrulama**: `GET /api/scheduler/config` üç haftalık fleet job'u listeliyor:
+  - `fleet_geo_validate` · Mon 03:00 UTC
+  - `fleet_vision_enrich` · Mon 04:00 UTC
+  - `fleet_competitor_price_scan` · Mon 05:00 UTC ✅ YENİ
+- **Etki**: Kullanıcı "🔄 Fiyatları Tara" butonuna BIR DEFA basmadan, her Pazartesi sabah Per-Hotel Price Trend chart'ı kendiliğinden güncelleniyor. Mega-property'ler (>25 rakip) `max_per_property` cap'iyle güvende, Booking.com rate-limit'ine Semaphore(3) ile saygı.
+
+
+
 ### 2026-05-18 (iter 332 — Per-Hotel Trend Chart: index eksikti, frontend boş kalıyordu)
 - **User report** (TR): "Neighborhood Market · Per-Hotel Price Trend — bulunan rakipleri istatistikte göremiyorum chart olarak".
 - **Root cause**: `market_supply` koleksiyonu **indexsiz**. Her property için ~10K snapshot var. `/geo-supply?days=30` aggregation query collection-scan yapıyordu → **25-65s** → Kubernetes ingress 60s timeout → frontend axios `loadAll` empty catch'inde sessizce başarısız → state hep boş → "Enter postcode and Scan" mesajı, rakip line'ları yok.

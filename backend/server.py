@@ -831,7 +831,11 @@ async def _job_nightly_dry_publish(property_id: str) -> dict:
 JOB_HANDLERS["nightly_dry_publish"] = _job_nightly_dry_publish
 
 # Iter 320 — Weekly fleet-wide geo-validate (Camden→Boston bug auto-repair).
-from routes.market_robot import fleet_geo_validate_worker, fleet_vision_enrich_worker
+from routes.market_robot import (
+    fleet_geo_validate_worker,
+    fleet_vision_enrich_worker,
+    fleet_competitor_price_scan_worker,
+)
 
 async def _job_fleet_geo_validate(property_id: str) -> dict:
     # property_id is always "" for fleet-wide jobs.
@@ -844,6 +848,16 @@ async def _job_fleet_vision_enrich(property_id: str) -> dict:
     return await fleet_vision_enrich_worker(db, max_per_property=25)
 
 JOB_HANDLERS["fleet_vision_enrich"] = _job_fleet_vision_enrich
+
+# Iter 333 — Weekly fleet-wide competitor PRICE scrape (Booking.com per-date
+# rates). Keeps the Per-Hotel Price Trend chart populated without any user
+# action. Runs after the Vision enrich so booking_hotel_id is already resolved.
+async def _job_fleet_competitor_price_scan(property_id: str) -> dict:
+    return await fleet_competitor_price_scan_worker(
+        db, days_ahead=30, max_per_property=25, comp_concurrency=3,
+    )
+
+JOB_HANDLERS["fleet_competitor_price_scan"] = _job_fleet_competitor_price_scan
 
 # Iter 164 — Inventory Allocations (pooled / dedicated / capped per channel×room)
 from routes.inventory_allocations import create_inventory_allocations_router
@@ -1337,6 +1351,27 @@ async def startup_event():
             logger.info("Scheduler: seeded fleet_vision_enrich weekly cron (Mon 04:00 UTC)")
     except Exception as e:
         logger.warning("fleet_vision_enrich cron seed failed: %s", e)
+
+    # Iter 333 — Seed weekly fleet competitor PRICE scrape cron (Mon 05:00
+    # UTC, after Vision enrich). Populates per-date prices on every
+    # competitor row so the Per-Hotel Price Trend chart is fresh.
+    try:
+        existing_c = await db.scheduler_config.find_one({"property_id": "", "job": "fleet_competitor_price_scan"}, {"_id": 0})
+        if not existing_c:
+            await db.scheduler_config.insert_one({
+                "property_id": "",
+                "job": "fleet_competitor_price_scan",
+                "enabled": True,
+                "cron_hour": 5,
+                "cron_minute": 0,
+                "cron_dow": 0,  # Monday
+                "notes": "Haftalık fleet-wide rakip 30-günlük Booking.com fiyat taraması — Per-Hotel Price Trend chart'ı otomatik günceller",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": "system",
+            })
+            logger.info("Scheduler: seeded fleet_competitor_price_scan weekly cron (Mon 05:00 UTC)")
+    except Exception as e:
+        logger.warning("fleet_competitor_price_scan cron seed failed: %s", e)
 
     # Ensure Playwright Chromium binary exists — it disappears between pod
     # restarts on this environment. Use the resilient helper from

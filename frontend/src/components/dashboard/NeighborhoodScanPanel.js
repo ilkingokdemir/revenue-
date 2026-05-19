@@ -6,7 +6,7 @@
  *   • Charts: demand bars + price trend (same style as Demand Radar)
  *   • Parallel execution — city scan + geo scan can both run
  */
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import axios from "axios";
 import {
   MapPin, Radar, Loader2, Clock, Building2, TrendingUp, Timer,
@@ -77,6 +77,12 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [candidates, setCandidates] = useState([]);       // array of candidate dicts
   const [picked, setPicked] = useState({});                // { [booking_url]: bool }
   const [bulkAdding, setBulkAdding] = useState(false);
+  // Synchronous re-click guard for action buttons. React state setters are
+  // async, so the disabled={...} prop only kicks in on the NEXT render — a
+  // user double-clicking a button can fire two parallel requests before
+  // `setBulkAdding(true)` actually flips the prop. A ref flag closes that
+  // <100ms window cleanly.
+  const inFlightRef = useRef({});
   // Minimum reviews threshold — proxy for "5+ unit" properties. Default 20
   // typically corresponds to multi-flat operations, not single-flat hosts.
   const [minReviewCount, setMinReviewCount] = useState(20);
@@ -261,8 +267,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   };
 
   const runAutoDiscoverCompetitors = async () => {
+    if (inFlightRef.current.discover) return;
+    inFlightRef.current.discover = true;
     if (propertyId === "all") {
       toast.error("Önce yukarıdan tek bir şube seçin");
+      inFlightRef.current.discover = false;
       return;
     }
     setAutoDiscovering(true);
@@ -301,6 +310,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       toast.error(e?.response?.data?.detail || "Otomatik discovery başarısız");
     }
     setAutoDiscovering(false);
+    inFlightRef.current.discover = false;
   };
 
   const togglePick = (url) => setPicked(p => ({ ...p, [url]: !p[url] }));
@@ -311,9 +321,12 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   };
 
   const addSelectedCandidates = async () => {
+    if (inFlightRef.current.bulkAdd) return;  // suppress double-click race
+    inFlightRef.current.bulkAdd = true;
     const selectedUrls = Object.keys(picked).filter(k => picked[k]);
     if (selectedUrls.length === 0) {
       toast.error("Önce eklemek istediğin rakipleri seç");
+      inFlightRef.current.bulkAdd = false;
       return;
     }
     const toAdd = candidates.filter(c => selectedUrls.includes(c.booking_url));
@@ -357,6 +370,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       toast.error(e?.response?.data?.detail || "Bulk ekleme başarısız");
     }
     setBulkAdding(false);
+    inFlightRef.current.bulkAdd = false;
   };
 
   // Vision preview on manual URL paste — debounced auto-call
@@ -384,6 +398,8 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   }, [manualUrl]);
 
   const addManualCompetitor = async () => {
+    if (inFlightRef.current.manualAdd) return;
+    inFlightRef.current.manualAdd = true;
     const url = (manualUrl || "").trim();
     if (!url) { toast.error("Booking.com URL gerekli"); return; }
     if (!/booking\.com\/hotel\//i.test(url)) {
@@ -412,6 +428,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       toast.error(e?.response?.data?.detail || "Rakip ekleme başarısız");
     }
     setManualAdding(false);
+    inFlightRef.current.manualAdd = false;
   };
 
   // Kendi Booking.com linkimizi inline kaydet — OurBookingLiveCard'daki ile

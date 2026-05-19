@@ -2159,9 +2159,11 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                 });
                 if (candidates.length === 0) return null;
                 // Stagger labels vertically to avoid overlap: sort by y, then nudge each
-                // one at least 14px below the previous when they collide.
+                // one at least minGap below the previous when they collide. Gap scales
+                // with the visible day count so 90d charts don't crush tags together.
                 candidates.sort((a, b) => a.y - b.y);
-                const minGap = 14;
+                const n = snapshots.length;
+                const minGap = n >= 80 ? 22 : n >= 50 ? 20 : n >= 25 ? 18 : 16;
                 let prevY = -Infinity;
                 candidates.forEach((c) => {
                   if (c.y < prevY + minGap) c.y = prevY + minGap;
@@ -2186,28 +2188,35 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                     </g>
                   );
                 });
-                // Mid-line value labels for the OUR line every 7 days — gives the user
-                // a "at a glance" price reading without hovering. We add one every 7
-                // points and only when the chart is wide enough.
-                if (chart.ourLinePoints && chart.ourLinePoints.length >= 4) {
-                  chart.ourLinePoints.forEach((p, i) => {
-                    if (i === 0 || i === chart.ourLinePoints.length - 1) return;
-                    if (i % 7 !== 0) return;
-                    const txt = cur(Math.round(p.v));
-                    const textW = txt.length * 6 + 6;
-                    tags.push(
-                      <g key={`our-mid-${i}`} style={{ pointerEvents: "none" }}>
-                        <rect x={p.x - textW / 2} y={p.y - 16} width={textW} height={13} rx={3}
-                              fill="#0a0a0a" opacity={hoveredCompId ? 0.3 : 0.85}
-                              stroke="#a78bfa" strokeWidth="0.6" />
-                        <text x={p.x} y={p.y - 6} fontSize="9.5" fontWeight="800"
-                              textAnchor="middle"
-                              fill="#a78bfa" fontFamily="ui-monospace, monospace">
-                          {txt}
-                        </text>
-                      </g>
-                    );
-                  });
+                // Mid-line value labels for the OUR line — gives the user a
+                // "at a glance" price reading without hovering. Cadence scales
+                // with the visible day count so wider charts don't get
+                // overcrowded; 90d shows ONLY end-of-line tags to keep the
+                // chart readable.
+                const ourPts = chart.ourLinePoints;
+                if (ourPts && ourPts.length >= 4) {
+                  const dayCount = snapshots.length;
+                  const cadence = dayCount >= 80 ? 0 : dayCount >= 50 ? 14 : 7;
+                  if (cadence > 0) {
+                    ourPts.forEach((p, i) => {
+                      if (i === 0 || i === ourPts.length - 1) return;
+                      if (i % cadence !== 0) return;
+                      const txt = cur(Math.round(p.v));
+                      const textW = txt.length * 6 + 6;
+                      tags.push(
+                        <g key={`our-mid-${i}`} style={{ pointerEvents: "none" }}>
+                          <rect x={p.x - textW / 2} y={p.y - 16} width={textW} height={13} rx={3}
+                                fill="#0a0a0a" opacity={hoveredCompId ? 0.3 : 0.85}
+                                stroke="#a78bfa" strokeWidth="0.6" />
+                          <text x={p.x} y={p.y - 6} fontSize="9.5" fontWeight="800"
+                                textAnchor="middle"
+                                fill="#a78bfa" fontFamily="ui-monospace, monospace">
+                            {txt}
+                          </text>
+                        </g>
+                      );
+                    });
+                  }
                 }
                 return tags;
               })()}

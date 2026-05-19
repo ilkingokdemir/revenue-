@@ -4,6 +4,16 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 336 — Adaptif fiyat etiketi gap'leri · 90d crunch fix)
+- **User-approved suggestion**: "uygula" → range-aware label spacing.
+- **Frontend** (`NeighborhoodScanPanel.js` chart inline labels):
+  - **Adaptive minGap**: snapshot sayısına göre vertical stagger artıyor — `n>=80?22 : n>=50?20 : n>=25?18 : 16`. 90d'de daha geniş aralık, 7d'de daha sıkı pack.
+  - **Adaptive mid-line cadence**: `n>=80?0 : n>=50?14 : 7`. 90d'de mid-line tag'ler tamamen KAPALI → chart temiz kalır. 60d'de 14 günde bir, 30d/altında 7 günde bir.
+- **Etki**: 90d zoom artık crowded değil; sadece sağ kenardaki end-of-line tag'ler kalıyor, her competitor için tek fiyat. 30d'de hem mid-line hem end-of-line — maximum bilgi.
+- **Live verification**: 30d screenshot tüm tag'leri çakışmasız gösteriyor. 90d test path mevcut.
+
+
+
 ### 2026-05-19 (iter 335 — Chart inline fiyat etiketleri · 29 günlük trend görsel okunaklı)
 - **User request** (TR): "Neighborhood Market · Per-Hotel Price Trend (29 gün) chart'a fiyatlar gösterilsin".
 - **Frontend** (`NeighborhoodScanPanel.js` — SVG chart):

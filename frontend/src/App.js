@@ -98,6 +98,7 @@ import FeatureComparePage from "./FeatureComparePage";
 import QROrderPage from "./QROrderPage";
 import KioskPage from "./KioskPage";
 import MidStaySurveyPublicPage from "./MidStaySurveyPublicPage";
+import HandoffSidebarBadge from "./components/dashboard/HandoffSidebarBadge";
 import {
   Star,
   CheckCircle,
@@ -3357,6 +3358,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                   >
                     <item.icon size={16} weight={activeView === item.id ? "fill" : "regular"} />
                     {tNav(item)}
+                    {item.id === "live-chat-inbox" && (
+                      <HandoffSidebarBadge propertyId={activePropertyId} />
+                    )}
                   </button>
                   );
                 })}

@@ -1,10 +1,32 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Headset, MessageSquare, X, Send, RefreshCw, Inbox } from "lucide-react";
+import { Headset, MessageSquare, X, Send, RefreshCw, Inbox, Bell, BellOff } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("access_token")}` });
+
+// Tiny "ding" sound generator via Web Audio API — no asset file needed.
+let _audioCtx = null;
+const playDing = () => {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = _audioCtx;
+    const now = ctx.currentTime;
+    // Two-tone bell: C6 (1046Hz) → E6 (1318Hz)
+    [1046.5, 1318.5].forEach((freq, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, now + i * 0.12);
+      g.gain.exponentialRampToValueAtTime(0.22, now + i * 0.12 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.12 + 0.35);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(now + i * 0.12); o.stop(now + i * 0.12 + 0.4);
+    });
+  } catch (e) { /* silent */ }
+};
 
 const LiveChatInboxPanel = ({ propertyId }) => {
   const [sessions, setSessions] = useState([]);
@@ -13,8 +35,10 @@ const LiveChatInboxPanel = ({ propertyId }) => {
   const [reply, setReply] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
   const [busy, setBusy] = useState(false);
+  const [notifPerm, setNotifPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "denied");
   const bottomRef = useRef(null);
   const pollRef = useRef(null);
+  const lastSnapRef = useRef({ unreadTotal: 0, sessionIds: new Set() });
 
   const loadSessions = useCallback(async () => {
     if (!propertyId || propertyId === "all") return;
@@ -22,7 +46,29 @@ const LiveChatInboxPanel = ({ propertyId }) => {
       const r = await axios.get(`${API}/chatbot/${propertyId}/handoff/sessions`, {
         params: { status: statusFilter }, headers: auth(),
       });
-      setSessions(r.data.items || []);
+      const items = r.data.items || [];
+      setSessions(items);
+
+      // Detect change → notify
+      const activeOnly = items.filter(s => s.status === "active");
+      const newUnreadTotal = activeOnly.reduce((a, s) => a + (s.unread_count || 0), 0);
+      const currentIds = new Set(activeOnly.map(s => s.session_id));
+      const newSession = [...currentIds].find(id => !lastSnapRef.current.sessionIds.has(id));
+      const unreadIncreased = newUnreadTotal > lastSnapRef.current.unreadTotal;
+
+      if (lastSnapRef.current.sessionIds.size > 0 && (newSession || unreadIncreased)) {
+        playDing();
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          const body = newSession
+            ? "Yeni canlı destek talebi geldi"
+            : `${newUnreadTotal} okunmamış mesaj`;
+          try {
+            const n = new Notification("🔔 Live Chat", { body, tag: "handoff", icon: "/favicon.ico" });
+            n.onclick = () => { window.focus(); n.close(); };
+          } catch (_) { /* notification API failed silently */ }
+        }
+      }
+      lastSnapRef.current = { unreadTotal: newUnreadTotal, sessionIds: currentIds };
     } catch (e) { /* silent during poll */ }
   }, [propertyId, statusFilter]);
 
@@ -122,6 +168,29 @@ const LiveChatInboxPanel = ({ propertyId }) => {
             <button data-testid="live-refresh" onClick={loadSessions} className="px-3 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium flex items-center gap-2">
               <RefreshCw className="w-4 h-4" /> Yenile
             </button>
+            {typeof Notification !== "undefined" && (
+              <button
+                data-testid="live-notif-toggle"
+                onClick={async () => {
+                  if (notifPerm === "granted") {
+                    toast.info("Bildirimler tarayıcı ayarlarından kapatılabilir");
+                    playDing(); // demo
+                    return;
+                  }
+                  try {
+                    const p = await Notification.requestPermission();
+                    setNotifPerm(p);
+                    if (p === "granted") { playDing(); toast.success("Bildirimler açıldı"); }
+                    else toast.warning("Bildirim izni reddedildi");
+                  } catch { toast.error("Bildirim isteği başarısız"); }
+                }}
+                className="px-3 py-2 bg-white/15 hover:bg-white/25 rounded-lg text-sm font-medium flex items-center gap-2"
+                title={notifPerm === "granted" ? "Bildirimler aktif (test için tıkla)" : "Browser bildirimleri aç"}
+              >
+                {notifPerm === "granted" ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                {notifPerm === "granted" ? "Sesli" : "Bildirimi Aç"}
+              </button>
+            )}
           </div>
         </div>
       </div>

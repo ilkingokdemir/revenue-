@@ -4,6 +4,20 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 345 — Live Chat resepsiyon bildirim sistemi · Ses + Browser Notif + Sidebar Badge)
+- **User flow**: Tüm handoff'lar resepsiyon tek-inbox'a → resepsiyonun *anında* haberi olmalı.
+- **NEW Component** (`HandoffSidebarBadge.js`, 86 satır): Sidebar'a Live Chat Inbox nav'inin yanına monte edildi. 15s aralıkla background poll, yeni session veya unread artışı tespit edince:
+  - **Ding sesi**: Web Audio API ile iki-tonlu zil (C6→E6, ~600ms, asset file gerektirmez)
+  - **Browser Notification** (Chrome/Edge/Safari): "🔔 Live Chat · Yeni canlı destek talebi"
+  - **Pulsing red badge**: Kırmızı animated bullet, unread count (99+ cap)
+- **LiveChatInboxPanel** güncellemeleri:
+  - Header'a Bell/BellOff toggle butonu (`live-notif-toggle`) — Notification API izin isteme, granted'sa ding demo
+  - `loadSessions` artık snapshot diff yapıyor → yeni handoff'ta aynı ding+notif tetikleniyor (panel açıkken)
+- **Mount**: `HandoffSidebarBadge` doğrudan App.js'e import edildi (lazy değil; her render'da var olmalı). Lint clean.
+- **Tasarım kararı**: WebSocket yerine 15s polling — yeterli, basit, no infrastructure overhead.
+
+
+
 ### 2026-05-19 (iter 344 — Live Handoff Inbox · Real-time guest↔staff chat)
 - **User-approved suggestion**: Widget şimdilik tek-yön → Live Handoff Inbox ekle.
 - **Backend** (`chatbot_automation.py`):

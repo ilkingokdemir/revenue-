@@ -4,6 +4,22 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 337 — Chart Day Drilldown Modal · Tek-tık fiyat override)
+- **User-approved suggestion**: "uygula" → click-to-drilldown action.
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - SVG chart artık `onClick` handler ile o anki hover idx üzerinden açılır + `cursor-pointer`.
+  - **NEW** state: `drilldownIdx`, `drilldownOverride`, `drilldownSaving`.
+  - **NEW** Modal `data-testid=day-drilldown-modal`:
+    - **Header**: tarih (TR locale, "31 Mayıs 2026"), haftanın günü, rakip sayısı + × close.
+    - **Quick stats grid** (4 kart): Biz (violet), Market Avg (amber), Rakipler Avg (sky), Doluluk % (stone).
+    - **Rakip Fiyatları table**: sortlu (yüksek→düşük), her satırda renk-noktası + isim + fiyat + delta rozet (amber = pahalı, emerald = ucuz, +N (±X%) format). Footer'da Min/Max.
+    - **Önerilen Fiyat kartı**: emerald-cyan gradient, rakip avg × 0.97 (defensive pricing) + "Kullan →" tek-tık seed.
+    - **Override input**: number type, current rate ile seed'li, yanında delta rozet (+N ±%), "Fiyatı Uygula" CTA.
+  - **Backend bağlantı**: `PUT /api/revenue/rate-override/{property_id}` mevcut endpoint kullanılıyor (`{date, custom_rate}` body).
+- **Live verification** (screenshot): 31 Mayıs Pazar günü modal açıldı, 3 rakip listeli, Önerilen £145 hesaplandı, override 123 seed'lendi, all interactive controls görünür.
+
+
+
 ### 2026-05-19 (iter 336 — Adaptif fiyat etiketi gap'leri · 90d crunch fix)
 - **User-approved suggestion**: "uygula" → range-aware label spacing.
 - **Frontend** (`NeighborhoodScanPanel.js` chart inline labels):

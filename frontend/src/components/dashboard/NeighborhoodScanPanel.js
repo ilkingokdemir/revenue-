@@ -50,6 +50,12 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   const [hoveredCompId, setHoveredCompId] = useState(null);
   // Hover index on the chart (for the vertical crosshair + date tooltip).
   const [hoverIdx, setHoverIdx] = useState(null);
+  // Day-detail drilldown modal — opens when the user clicks a day on the chart.
+  // Shows all competitor prices for that date, occupancy, demand events
+  // nearby, and a one-click rate-override CTA.
+  const [drilldownIdx, setDrilldownIdx] = useState(null);
+  const [drilldownOverride, setDrilldownOverride] = useState("");
+  const [drilldownSaving, setDrilldownSaving] = useState(false);
   // Auto-Heal flow state
   const [healing, setHealing] = useState(false);
   const [healStatus, setHealStatus] = useState(null);
@@ -2061,7 +2067,7 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               })}
             </div>
 
-            <svg viewBox={`0 0 ${chart.W} ${chart.H}`} className="w-full" style={{ minWidth: `${Math.max(600, snapshots.length * 18)}px` }}
+            <svg viewBox={`0 0 ${chart.W} ${chart.H}`} className="w-full cursor-pointer" style={{ minWidth: `${Math.max(600, snapshots.length * 18)}px` }}
                  onMouseLeave={() => setHoverIdx(null)}
                  onMouseMove={(e) => {
                    const svg = e.currentTarget;
@@ -2072,6 +2078,23 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                    const ratio = Math.max(0, Math.min(1, (vbx - chart.pad.l) / chart.iW));
                    const idx = Math.round(ratio * (snapshots.length - 1));
                    setHoverIdx(idx);
+                 }}
+                 onClick={(e) => {
+                   // Click anywhere on the chart → open drilldown for the
+                   // hovered day. Uses the same idx math as onMouseMove so the
+                   // click target is whatever day the crosshair is on.
+                   const svg = e.currentTarget;
+                   const rect = svg.getBoundingClientRect();
+                   const xPx = e.clientX - rect.left;
+                   const vbx = (xPx / rect.width) * chart.W;
+                   const ratio = Math.max(0, Math.min(1, (vbx - chart.pad.l) / chart.iW));
+                   const idx = Math.round(ratio * (snapshots.length - 1));
+                   if (snapshots[idx]) {
+                     setDrilldownIdx(idx);
+                     // Seed override field with our current rate so the user
+                     // only has to nudge it.
+                     setDrilldownOverride(String(Math.round(snapshots[idx].our_avg_rate || 0)));
+                   }
                  }}>
               {/* Weekend vertical bands — soft, subtle, for temporal anchoring */}
               {snapshots.map((s, i) => {
@@ -2532,6 +2555,186 @@ export default function NeighborhoodScanPanel({ propertyId }) {
           </div>
         </div>
       )}
+
+      {/* === DAY DRILLDOWN MODAL === */}
+      {drilldownIdx !== null && snapshots[drilldownIdx] && (() => {
+        const s = snapshots[drilldownIdx];
+        const dt = new Date(s.date + "T00:00:00");
+        const dowLabel = dt.toLocaleDateString("tr-TR", { weekday: "long" });
+        const ourRate = Math.round(s.our_avg_rate || 0);
+        const market = Math.round(s.avg_price || 0);
+        const overrideNum = Number(drilldownOverride);
+        const overrideDelta = overrideNum && ourRate ? overrideNum - ourRate : 0;
+        const overrideDeltaPct = overrideNum && ourRate ? ((overrideNum - ourRate) / ourRate * 100) : 0;
+        // Collect competitor prices for this date
+        const compRows = [];
+        chart.compLines.forEach((c) => {
+          if (hiddenComps[c.id]) return;
+          const v = competitorSeries.find(cs => cs.id === c.id)?.prices_by_date?.[s.date];
+          if (v) compRows.push({ id: c.id, name: c.name, price: v, colour: c.colour });
+        });
+        compRows.sort((a, b) => b.price - a.price);
+        const compAvg = compRows.length ? compRows.reduce((sum, c) => sum + c.price, 0) / compRows.length : 0;
+        const compMin = compRows.length ? Math.min(...compRows.map(c => c.price)) : 0;
+        const compMax = compRows.length ? Math.max(...compRows.map(c => c.price)) : 0;
+        // Recommended price = clamp competitive avg ± 5%
+        const recommendedPrice = compAvg ? Math.round(compAvg * 0.97) : ourRate;
+        const closeModal = () => { setDrilldownIdx(null); setDrilldownOverride(""); };
+        const applyOverride = async () => {
+          if (!overrideNum || overrideNum <= 0) { toast.error("Geçerli bir fiyat gir"); return; }
+          setDrilldownSaving(true);
+          try {
+            await axios.put(
+              `${API}/revenue/rate-override/${propertyId}`,
+              { date: s.date, custom_rate: overrideNum }
+            );
+            toast.success(`✓ ${s.date} için fiyat ${cur(overrideNum)} olarak güncellendi`);
+            loadAll();
+            closeModal();
+          } catch (e) {
+            toast.error(e?.response?.data?.detail || "Override kaydedilemedi");
+          }
+          setDrilldownSaving(false);
+        };
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={closeModal}
+            data-testid="day-drilldown-modal"
+          >
+            <div
+              className="bg-stone-950 border border-stone-700 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-stone-950 border-b border-stone-800 px-6 py-4 flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-bold text-stone-100">
+                    {dt.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })}
+                  </h3>
+                  <div className="text-xs text-stone-400 mt-0.5">
+                    {dowLabel} · {compRows.length} rakip fiyat datası
+                  </div>
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="text-stone-400 hover:text-stone-100 text-2xl leading-none font-light"
+                  data-testid="drilldown-close-btn"
+                  aria-label="Kapat"
+                >×</button>
+              </div>
+
+              {/* Quick stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-4 border-b border-stone-800">
+                <div className="bg-violet-500/10 border border-violet-500/30 rounded-lg px-3 py-2">
+                  <div className="text-[10px] text-violet-300 font-bold uppercase tracking-wider">Biz</div>
+                  <div className="text-lg font-black text-violet-200 font-mono">{cur(ourRate)}</div>
+                </div>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                  <div className="text-[10px] text-amber-300 font-bold uppercase tracking-wider">Market Avg</div>
+                  <div className="text-lg font-black text-amber-200 font-mono">{cur(market)}</div>
+                </div>
+                <div className="bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2">
+                  <div className="text-[10px] text-sky-300 font-bold uppercase tracking-wider">Rakipler Avg</div>
+                  <div className="text-lg font-black text-sky-200 font-mono">{cur(Math.round(compAvg))}</div>
+                </div>
+                <div className="bg-stone-800/50 border border-stone-700 rounded-lg px-3 py-2">
+                  <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Doluluk</div>
+                  <div className="text-lg font-black text-stone-200 font-mono">%{(100 - (s.available_pct || 0)).toFixed(0)}</div>
+                </div>
+              </div>
+
+              {/* Competitor price table */}
+              <div className="px-4 pt-3 pb-2">
+                <div className="text-xs font-bold text-stone-300 uppercase tracking-wider mb-2">Rakip Fiyatları</div>
+                {compRows.length === 0 ? (
+                  <div className="text-xs text-stone-500 italic py-3">Bu gün için rakip fiyat datası yok — "🔄 Fiyatları Tara"yı çalıştırın.</div>
+                ) : (
+                  <div className="space-y-1 max-h-48 overflow-y-auto pr-1" data-testid="drilldown-comp-table">
+                    {compRows.map((c) => {
+                      const diff = c.price - ourRate;
+                      const pctDiff = ourRate ? (diff / ourRate * 100) : 0;
+                      return (
+                        <div key={c.id} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-stone-800/40">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.colour }} />
+                            <span className="text-xs text-stone-200 truncate">{c.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-sm font-bold text-stone-100 font-mono">{cur(Math.round(c.price))}</span>
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${diff > 0 ? "bg-amber-500/15 text-amber-300" : diff < 0 ? "bg-emerald-500/15 text-emerald-300" : "bg-stone-500/15 text-stone-400"}`}>
+                              {diff > 0 ? "+" : ""}{diff.toFixed(0)} ({pctDiff > 0 ? "+" : ""}{pctDiff.toFixed(1)}%)
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="mt-2 pt-2 border-t border-stone-800 grid grid-cols-2 gap-2 text-[10px] text-stone-400">
+                      <div>Min: <span className="font-mono text-stone-200 font-bold">{cur(Math.round(compMin))}</span></div>
+                      <div>Max: <span className="font-mono text-stone-200 font-bold">{cur(Math.round(compMax))}</span></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Recommendation + Override */}
+              <div className="px-4 pb-4 pt-3 border-t border-stone-800">
+                <div className="bg-gradient-to-br from-emerald-500/10 to-cyan-500/10 border border-emerald-500/30 rounded-xl p-3 mb-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-300" />
+                    <span className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Önerilen Fiyat</span>
+                  </div>
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className="text-2xl font-black text-emerald-300 font-mono">{cur(recommendedPrice)}</span>
+                    <span className="text-[11px] text-stone-400">
+                      Rakip ort'undan -%3 (defensive pricing)
+                    </span>
+                    <button
+                      onClick={() => setDrilldownOverride(String(recommendedPrice))}
+                      className="ml-auto text-[10px] font-bold px-2 py-1 rounded bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-500/40"
+                      data-testid="drilldown-use-recommended-btn"
+                    >
+                      Kullan →
+                    </button>
+                  </div>
+                </div>
+                <label className="block text-xs font-bold text-stone-300 uppercase tracking-wider mb-1.5">
+                  Bu Gün İçin Fiyatı Değiştir
+                </label>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <input
+                    type="number"
+                    min="1"
+                    value={drilldownOverride}
+                    onChange={(e) => setDrilldownOverride(e.target.value)}
+                    className="flex-1 min-w-[140px] px-3 py-2 bg-stone-950 border border-stone-700 rounded-lg text-stone-100 text-base font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder={String(ourRate)}
+                    data-testid="drilldown-override-input"
+                    disabled={drilldownSaving}
+                  />
+                  {overrideDelta !== 0 && (
+                    <span className={`text-xs font-bold ${overrideDelta > 0 ? "text-amber-300" : "text-emerald-300"}`}>
+                      {overrideDelta > 0 ? "+" : ""}{overrideDelta.toFixed(0)} ({overrideDeltaPct > 0 ? "+" : ""}{overrideDeltaPct.toFixed(1)}%)
+                    </span>
+                  )}
+                  <button
+                    onClick={applyOverride}
+                    disabled={drilldownSaving || !overrideNum || overrideNum <= 0 || overrideNum === ourRate}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-sm flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    data-testid="drilldown-apply-override-btn"
+                  >
+                    {drilldownSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {drilldownSaving ? "Kaydediliyor…" : "Fiyatı Uygula"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-stone-500 mt-2 italic">
+                  Bu sadece {dt.toLocaleDateString("tr-TR", { day: "numeric", month: "long" })} için override yapar. Diğer günlere etkisi yok.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

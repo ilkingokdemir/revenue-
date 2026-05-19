@@ -601,6 +601,35 @@ def create_chatbot_router(db, require_roles):
                 "now": _now()}
 
     # ─────────────────── ADMIN handoff inbox ──────────────────────
+    @router.get("/chatbot/all/handoff/sessions")
+    async def list_all_handoff_sessions(status: str = "active",
+                                         current_user: dict = Depends(require_roles("admin", "manager", "superadmin"))):
+        """Multi-property aggregated handoff feed. Returns sessions across ALL properties
+        the user has access to, each row enriched with property_name for the UI badge.
+        Sorted by last_message_at desc."""
+        # Determine accessible properties — admins/superadmins see everything,
+        # managers see only properties they're assigned to.
+        role = current_user.get("role", "")
+        if role in ("admin", "superadmin"):
+            props = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+        else:
+            assigned = current_user.get("property_ids") or ([current_user.get("property_id")] if current_user.get("property_id") else [])
+            props = await db.properties.find({"id": {"$in": assigned}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
+        prop_map = {p["id"]: p.get("name", p["id"]) for p in props}
+        prop_ids = list(prop_map.keys())
+        if not prop_ids:
+            return {"count": 0, "items": [], "properties_count": 0}
+
+        q = {"property_id": {"$in": prop_ids}}
+        if status and status != "all":
+            q["status"] = status
+        rows = await db.chatbot_handoff_sessions.find(q, {"_id": 0})\
+            .sort("last_message_at", -1).limit(500).to_list(500)
+        for r in rows:
+            r["property_name"] = prop_map.get(r.get("property_id"), r.get("property_id"))
+        return {"count": len(rows), "items": rows,
+                "properties_count": len(prop_ids)}
+
     @router.get("/chatbot/{property_id}/handoff/sessions")
     async def list_handoff_sessions(property_id: str, status: str = "active",
                                      _u: dict = Depends(require_roles("admin", "manager"))):

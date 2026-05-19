@@ -36,11 +36,14 @@ const HandoffSidebarBadge = ({ propertyId }) => {
   const [snap, setSnap] = useState({ ids: new Set(), unread: 0 });
 
   useEffect(() => {
-    if (!propertyId || propertyId === "all") { setCount(0); return; }
+    if (!propertyId) { setCount(0); return; }
     let alive = true;
     const tick = async () => {
       try {
-        const r = await axios.get(`${API}/chatbot/${propertyId}/handoff/sessions`, {
+        const url = propertyId === "all"
+          ? `${API}/chatbot/all/handoff/sessions`
+          : `${API}/chatbot/${propertyId}/handoff/sessions`;
+        const r = await axios.get(url, {
           params: { status: "active" }, headers: auth(),
         });
         if (!alive) return;

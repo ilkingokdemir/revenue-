@@ -4,6 +4,22 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 346 — Multi-property aggregated handoff feed · Chain supervisor view)
+- **User**: Chain üstü yönetici tüm otellerin handoff'larını tek queue'da görsün.
+- **NEW Backend endpoint** (`/api/chatbot/all/handoff/sessions?status=active`):
+  - Role-aware filtering: admin/superadmin → tüm property'ler; manager → sadece atandığı property'ler (`current_user.property_ids`).
+  - Her satıra `property_name` enrich edilir.
+  - Tek MongoDB query (`$in` ile), 500 cap, sort by `last_message_at` desc.
+- **Frontend**:
+  - `LiveChatInboxPanel`: `propertyId === "all"` artık desteklenir → aggregated endpoint'i çağırır. Session listesinde **🏨 Property Name** badge'i her satırda. Thread header'a da property badge eklendi. Reply/close çağrıları active.property_id'yi kullanır (cross-property sorunsuz).
+  - `HandoffSidebarBadge`: `propertyId === "all"`'da artık çalışıyor → tüm otellerin unread total'ını sidebar badge'de gösterir.
+  - Header subtitle dynamic: "Tüm otellerden handoff'lar · agregat görünüm" vs tek otel mesajı.
+- **E2E test**: 2 farklı otelde (`aldgate-flats`, `camden-suites`) handoff oluşturuldu → aggregated endpoint 3 active session ve 2 farklı property döndürdü ✓. Lint temiz.
+
+**Cloudbeds chain-management parity**: ~%100 ✅
+
+
+
 ### 2026-05-19 (iter 345 — Live Chat resepsiyon bildirim sistemi · Ses + Browser Notif + Sidebar Badge)
 - **User flow**: Tüm handoff'lar resepsiyon tek-inbox'a → resepsiyonun *anında* haberi olmalı.
 - **NEW Component** (`HandoffSidebarBadge.js`, 86 satır): Sidebar'a Live Chat Inbox nav'inin yanına monte edildi. 15s aralıkla background poll, yeni session veya unread artışı tespit edince:

@@ -41,13 +41,17 @@ const LiveChatInboxPanel = ({ propertyId }) => {
   const lastSnapRef = useRef({ unreadTotal: 0, sessionIds: new Set() });
 
   const loadSessions = useCallback(async () => {
-    if (!propertyId || propertyId === "all") return;
+    if (!propertyId) return;
     try {
-      const r = await axios.get(`${API}/chatbot/${propertyId}/handoff/sessions`, {
-        params: { status: statusFilter }, headers: auth(),
-      });
+      const url = propertyId === "all"
+        ? `${API}/chatbot/all/handoff/sessions`
+        : `${API}/chatbot/${propertyId}/handoff/sessions`;
+      const r = await axios.get(url, { params: { status: statusFilter }, headers: auth() });
       const items = r.data.items || [];
       setSessions(items);
+
+      // Build property_id map for quick lookup when rows have property_name
+      // (already included by backend in /all/ aggregator)
 
       // Detect change → notify
       const activeOnly = items.filter(s => s.status === "active");
@@ -72,18 +76,29 @@ const LiveChatInboxPanel = ({ propertyId }) => {
     } catch (e) { /* silent during poll */ }
   }, [propertyId, statusFilter]);
 
-  const loadThread = useCallback(async (session_id) => {
+  const loadThread = useCallback(async (session_id, property_id_override = null) => {
     if (!session_id) return;
+    const pid = property_id_override || propertyId;
+    if (!pid || pid === "all") {
+      toast.error("Tek bir otelde aç");
+      return;
+    }
     try {
       const r = await axios.get(
-        `${API}/chatbot/${propertyId}/handoff/sessions/${session_id}/messages`,
+        `${API}/chatbot/${pid}/handoff/sessions/${session_id}/messages`,
         { headers: auth() }
       );
       setThread(r.data.messages || []);
-      setActive(r.data.session || { session_id });
+      // Find session row to grab property_name (for header badge in /all/ view)
+      const sessRow = sessions.find(s => s.session_id === session_id);
+      setActive({
+        ...(r.data.session || { session_id }),
+        property_id: pid,
+        property_name: sessRow?.property_name || r.data.session?.property_name,
+      });
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
     } catch (e) { toast.error("Mesajlar yüklenemedi"); }
-  }, [propertyId]);
+  }, [propertyId, sessions]);
 
   // Initial load + 5s sessions poll
   useEffect(() => { loadSessions(); }, [loadSessions]);
@@ -97,30 +112,36 @@ const LiveChatInboxPanel = ({ propertyId }) => {
   useEffect(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     if (!active?.session_id) return;
-    pollRef.current = setInterval(() => loadThread(active.session_id), 4000);
+    const pid = active.property_id || propertyId;
+    if (!pid || pid === "all") return;
+    pollRef.current = setInterval(() => loadThread(active.session_id, pid), 4000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [active?.session_id, loadThread]);
+  }, [active?.session_id, active?.property_id, propertyId, loadThread]);
 
   const sendReply = async () => {
     if (!reply.trim() || !active) return;
+    const pid = active.property_id || propertyId;
+    if (!pid || pid === "all") { toast.error("Otel seçimi gerekli"); return; }
     setBusy(true);
     try {
       await axios.post(
-        `${API}/chatbot/${propertyId}/handoff/sessions/${active.session_id}/reply`,
+        `${API}/chatbot/${pid}/handoff/sessions/${active.session_id}/reply`,
         { text: reply }, { headers: auth() }
       );
       setReply("");
-      await loadThread(active.session_id);
+      await loadThread(active.session_id, pid);
     } catch (e) { toast.error("Gönderilemedi"); }
     setBusy(false);
   };
 
   const closeSession = async () => {
     if (!active) return;
+    const pid = active.property_id || propertyId;
+    if (!pid || pid === "all") { toast.error("Otel seçimi gerekli"); return; }
     if (!window.confirm("Bu görüşmeyi kapatmak istediğine emin misin?")) return;
     try {
       await axios.post(
-        `${API}/chatbot/${propertyId}/handoff/sessions/${active.session_id}/close`,
+        `${API}/chatbot/${pid}/handoff/sessions/${active.session_id}/close`,
         {}, { headers: auth() }
       );
       toast.success("Görüşme kapatıldı");
@@ -129,11 +150,11 @@ const LiveChatInboxPanel = ({ propertyId }) => {
     } catch { toast.error("Kapatılamadı"); }
   };
 
-  if (!propertyId || propertyId === "all") {
+  if (!propertyId) {
     return (
       <div className="bg-white border border-stone-200 rounded-2xl p-6" data-testid="live-chat-empty">
         <div className="flex items-center gap-3"><Headset className="w-6 h-6 text-emerald-600" />
-          <p className="text-stone-600">Live Chat Inbox için lütfen bir otel seçin.</p>
+          <p className="text-stone-600">Live Chat Inbox yükleniyor…</p>
         </div>
       </div>
     );
@@ -154,7 +175,11 @@ const LiveChatInboxPanel = ({ propertyId }) => {
               <span className="text-xs uppercase tracking-widest font-bold opacity-80">Guest Experience · Live Chat</span>
             </div>
             <h2 className="text-2xl font-bold">Canlı Destek Inbox</h2>
-            <p className="text-sm opacity-85 mt-1">Handoff olan misafirleri yanıtla · Gerçek zamanlı</p>
+            <p className="text-sm opacity-85 mt-1">
+              {propertyId === "all"
+                ? "Tüm otellerden handoff'lar · agregat görünüm"
+                : "Handoff olan misafirleri yanıtla · Gerçek zamanlı"}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-right">
@@ -219,15 +244,20 @@ const LiveChatInboxPanel = ({ propertyId }) => {
               </div>
             )}
             {sessions.map((s, idx) => (
-              <button key={s.id} onClick={() => loadThread(s.session_id)}
+              <button key={s.id} onClick={() => loadThread(s.session_id, s.property_id)}
                 data-testid={`live-session-${idx}`}
                 className={`w-full text-left p-3 border-b border-stone-100 hover:bg-stone-50 transition ${active?.session_id === s.session_id ? "bg-emerald-50" : ""}`}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-mono text-stone-500 truncate" title={s.session_id}>{s.session_id.slice(0, 14)}…</span>
+                <div className="flex items-center justify-between mb-1 gap-2">
+                  <span className="text-xs font-mono text-stone-500 truncate flex-1" title={s.session_id}>{s.session_id.slice(0, 14)}…</span>
                   {s.unread_count > 0 && (
-                    <span className="text-[10px] bg-rose-600 text-white px-1.5 py-0.5 rounded-full font-bold">{s.unread_count}</span>
+                    <span className="text-[10px] bg-rose-600 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">{s.unread_count}</span>
                   )}
                 </div>
+                {propertyId === "all" && s.property_name && (
+                  <div className="text-[10px] inline-block px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200 font-semibold mb-1">
+                    🏨 {s.property_name}
+                  </div>
+                )}
                 <div className="text-xs text-stone-700 truncate">{s.last_message_text || "—"}</div>
                 <div className="flex items-center justify-between mt-1">
                   <span className={`text-[10px] px-1.5 py-0.5 rounded ${s.status === "active" ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-500"}`}>{s.status}</span>
@@ -252,7 +282,14 @@ const LiveChatInboxPanel = ({ propertyId }) => {
             <>
               <div className="p-3 border-b border-stone-100 flex items-center justify-between">
                 <div>
-                  <div className="font-mono text-xs text-stone-500 truncate">{active.session_id}</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-xs text-stone-500 truncate">{active.session_id}</span>
+                    {active.property_name && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-200 font-semibold">
+                        🏨 {active.property_name}
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-stone-400">
                     Açıldı: {active.started_at ? new Date(active.started_at).toLocaleString("tr-TR") : "—"}
                     {active.reason && <span> · {active.reason}</span>}

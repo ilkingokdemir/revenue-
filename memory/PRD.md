@@ -4,6 +4,26 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 342 — Cloudbeds Guest Experience parity · Automated Messages + Chatbot Automations)
+- **User request**: Cloudbeds Automated Messages özelliklerinden eksik 7'sini tamamla, ayrıca Chatbot Automations modülünü 0'dan kur (3 article reference).
+- **Backend — Automation parity** (`routes/automation.py`):
+  - `run_automation` artık 7 yeni rule alanını dikkate alıyor: `schedule_days[]` (hafta-içi gate), `schedule_time` (±15dk UTC pencere), `multi_reservation_messaging` (kapalıyken email-bazlı dedupe), `enable_missed_messages` (geç yaratılan rezervasyon catch-up), `send_per_room` (multi-room fan-out), `primary_guest_only`, `auto_archive` (log row'a `archived:true`), `skip_guests[]` (manuel skip listesi).
+  - **3 yeni endpoint**: `POST /automation/rules/{id}/duplicate` (Replicate, "Copy of" prefix + enabled=false), `POST /automation/rules/{id}/skip-guest`, `GET /automation/rules/{id}/history`.
+- **Backend — Chatbot Automations** (NEW `routes/chatbot_automation.py`, ~430 satır):
+  - 7 collection: `chatbot_settings`, `chatbot_intents`, `chatbot_keywords`, `chatbot_sentiment_acts`, `chatbot_content_sources`, `chatbot_runs`.
+  - **15 endpoint**: settings GET/PUT, intents GET/POST/PATCH/DELETE, keywords GET/POST/DELETE, sentiment-actions GET/POST/DELETE, content-sources/generate (GPT-4o-mini), content-sources GET, test (inbound match), runs (audit log).
+  - **Matching engine**: handoff keywords → bypass; keyword exact match → intent phrase-overlap score (≥0.3 threshold); fallback sentiment action (positive/negative); else fallback_message.
+  - **AI auto-generate**: `/content-sources/generate` URL + tone (5 ton seçeneği) → GPT-4o-mini → 10 FAQ intent (wifi, kahvaltı, check-in, parking, late checkout, transfer, pets, kids, gym, towels).
+- **Frontend**:
+  - NEW `ChatbotAutomationPanel.js` (~430 satır): 6 tab (settings, intents, keywords, sentiment, sources, runs) + canlı test widget + AI URL üretici.
+  - `AutomationPanel.js`: rule list'e Duplicate button, editor'e "Gelişmiş Zamanlama & Davranış" collapsible bölümü (7 gün toggle, time picker, 5 switch).
+  - Sidebar'a yeni "Chatbot motoru" nav (`chatbot-automation-btn`).
+- **Testing**: testing_agent_v3_fork iter 327 — Backend 20/20 ✓, Frontend Automation parity ✓, Chatbot panel render ✓ (property selection intentional gate).
+
+**Pre-existing issue (not blocking)**: Property dropdown shows "All Branches" by default — kullanıcı önce tek otel seçmeli; chatbot panel `propertyId='all'` durumunda intentional empty-state gösteriyor.
+
+
+
 ### 2026-05-19 (iter 341 — Market Robot Performance & UX fixes · 4 user-reported issues)
 - **User report (TR)** — 4 sorun raporlandı:
   1. "90 Day Occupancy & Pickup. herhangi bir data yok statistik gorunmuyor"

@@ -56,7 +56,7 @@ import {
   ImportModulePanel, LegalDocumentsPanel, AnalyticsPanel, ReportsSettings,
   BrandingPanel, SyncLogPanel, PropertyMappingPanel, BookingEnginePanel,
   TemplateGallery, TemplateCustomizer, PromoCodesPanel, AddOnsPanel, PoliciesPanel,
-  MessagingHub, ConciergeAnalyticsPanel, AutomationPanel, ChatbotAutomationPanel, ChannelSettingsPanel,
+  MessagingHub, ConciergeAnalyticsPanel, AutomationPanel, ChatbotAutomationPanel, LiveChatInboxPanel, ChannelSettingsPanel,
   DashboardHome, StaffPerformancePanel, GuestProfilesPanel, AdminPanel, HousekeepingPanel,
   NightAuditPanel, LoyaltyPanel, LogbookPanel, ForecastPanel,
   PaceReports, AIPricingV2Panel, ParityHeatmapPanel, MorningBriefPanel, RMLabPanel,
@@ -167,6 +167,7 @@ import {
   Scroll,
   WhatsappLogo,
   Robot,
+  Headset,
   Envelope,
   AddressBook,
   Megaphone,
@@ -2747,6 +2748,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "concierge-analytics", icon: Robot, name: t("nav.concierge"), testId: "concierge-analytics-btn" },
         { id: "automation", icon: Lightning, name: t("nav.automation"), testId: "automation-btn" },
         { id: "chatbot-automation", icon: Robot, name: "Chatbot motoru", testId: "chatbot-automation-btn" },
+        { id: "live-chat-inbox", icon: Headset, name: "Live Chat Inbox", testId: "live-chat-inbox-btn" },
         { id: "web-push", icon: Bell, name: "Web push", testId: "web-push-btn" },
         { id: "ab-test", icon: TestTube, name: "A/B testing", testId: "ab-test-btn" },
         { id: "attribution", icon: ChartBar, name: "Source attribution", testId: "attribution-btn" },
@@ -3996,6 +3998,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Chatbot Automation (Cloudbeds Guest Experience parity) */}
         {activeView === "chatbot-automation" && (
           <ChatbotAutomationPanel propertyId={activePropertyId} />
+        )}
+
+        {/* Live Chat Inbox (handoff sessions) */}
+        {activeView === "live-chat-inbox" && (
+          <LiveChatInboxPanel propertyId={activePropertyId} />
         )}
 
         {/* Channel Settings */}

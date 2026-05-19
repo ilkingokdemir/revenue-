@@ -58,6 +58,10 @@
     localStorage.setItem("chat_widget_session", SESSION_ID);
   }
 
+  let IN_HANDOFF = false;
+  let HANDOFF_SINCE = null;
+  let HANDOFF_POLL_TIMER = null;
+
   const msgsEl = document.getElementById("msgs");
   const inputEl = document.getElementById("input");
   const sendBtn = document.getElementById("send");
@@ -86,6 +90,44 @@
     msgsEl.appendChild(div);
     msgsEl.scrollTop = msgsEl.scrollHeight;
     return div;
+  }
+
+  function setHandoff(on) {
+    IN_HANDOFF = on;
+    if (on) {
+      subEl.textContent = "Canlı destek hattı · temsilciye bağlı";
+      startHandoffPoll();
+    } else {
+      subEl.textContent = "Yardımcı olalım…";
+      stopHandoffPoll();
+    }
+  }
+
+  function startHandoffPoll() {
+    if (HANDOFF_POLL_TIMER) return;
+    if (!HANDOFF_SINCE) HANDOFF_SINCE = new Date().toISOString();
+    HANDOFF_POLL_TIMER = setInterval(async function() {
+      try {
+        const q = new URLSearchParams({ session_id: SESSION_ID, since: HANDOFF_SINCE || "" });
+        const r = await fetch(`${API_BASE}/api/public/chatbot/${PROPERTY_ID}/handoff-messages?${q.toString()}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        (data.messages || []).forEach(function(m) {
+          const cls = m.sender === "staff" ? "bot" : "system";
+          const label = m.sender === "staff" ? (m.sender_name || "Temsilci") : null;
+          addMsg(m.text, cls, label);
+          HANDOFF_SINCE = m.created_at;
+        });
+        if (data.session_status === "closed") {
+          setHandoff(false);
+          addMsg("Görüşme kapatıldı. Yeni soru için mesaj yazın.", "system");
+        }
+      } catch (e) { /* swallow polling errors */ }
+    }, 5000);
+  }
+
+  function stopHandoffPoll() {
+    if (HANDOFF_POLL_TIMER) { clearInterval(HANDOFF_POLL_TIMER); HANDOFF_POLL_TIMER = null; }
   }
 
   async function init() {
@@ -142,7 +184,8 @@
       const data = await r.json();
       const reply = data.reply_text || "Mesajınızı aldık.";
       addMsg(reply, "bot", data.match_type && data.match_type !== "none" ? data.match_type : null);
-      if (data.match_type === "handoff") {
+      if (data.in_handoff && !IN_HANDOFF) {
+        setHandoff(true);
         addMsg("Bir temsilci kısa süre içinde yanıtlayacak.", "system");
       }
     } catch (e) {

@@ -221,6 +221,7 @@ export const MessagingHub = N(() => import("./components/dashboard/MessagingHub"
 export const ConciergeAnalyticsPanel = N(() => import("./components/dashboard/ConciergeAnalyticsPanel"), "ConciergeAnalyticsPanel");
 export const AutomationPanel = N(() => import("./components/dashboard/AutomationPanel"), "AutomationPanel");
 export const ChatbotAutomationPanel = N(() => import("./components/dashboard/ChatbotAutomationPanel"), "ChatbotAutomationPanel");
+export const LiveChatInboxPanel = N(() => import("./components/dashboard/LiveChatInboxPanel"), "LiveChatInboxPanel");
 export const ChannelSettingsPanel = N(() => import("./components/dashboard/ChannelSettingsPanel"), "ChannelSettingsPanel");
 export const DashboardHome = N(() => import("./components/dashboard/DashboardHome"), "DashboardHome");
 export const StaffPerformancePanel = N(() => import("./components/dashboard/StaffPerformancePanel"), "StaffPerformancePanel");

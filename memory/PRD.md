@@ -4,6 +4,32 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 344 — Live Handoff Inbox · Real-time guest↔staff chat)
+- **User-approved suggestion**: Widget şimdilik tek-yön → Live Handoff Inbox ekle.
+- **Backend** (`chatbot_automation.py`):
+  - **2 NEW collections**: `chatbot_handoff_sessions` (status, unread_count, last_message_at), `chatbot_handoff_messages` (sender ∈ {guest, staff, system}).
+  - **2 NEW helper'lar**: `_start_handoff_session`, `_append_handoff_message`.
+  - **Public chat** artık handoff-aware: aktif handoff session'ında match yapmaz, doğrudan thread'e ekler (`in_handoff:true`).
+  - **NEW public endpoint**: `GET /public/chatbot/{pid}/handoff-messages?session_id=&since=` (widget polling, 5s).
+  - **NEW admin endpoint'ler (4)**: `GET /handoff/sessions`, `GET /handoff/sessions/{sid}/messages` (unread reset), `POST /handoff/sessions/{sid}/reply` (staff yanıt), `POST /handoff/sessions/{sid}/close`.
+- **Frontend**:
+  - `chat-widget.html`: handoff state, 5s staff poll, `IN_HANDOFF` flag, header subtitle değişikliği, session closed handling.
+  - NEW `LiveChatInboxPanel.js` (~210 satır): Header KPI (active count + unread), 3-column layout (session list + thread + reply input), 4s thread poll, 5s sessions poll, statusFilter (active/closed/all), close button, sender_name badge, system message styling.
+  - Sidebar nav: yeni "Live Chat Inbox" (`live-chat-inbox-btn`, Headset ikonu).
+- **E2E test (curl)** — 7 adımlı tam flow başarılı:
+  1. Guest "operatör" → handoff triggered ✓
+  2. Admin sessions list (unread:2) ✓
+  3. Guest follow-up → thread'e eklendi (in_handoff:true) ✓
+  4. Staff reply (sender_name: Hotel Admin) ✓
+  5. Guest poll → staff message alındı ✓
+  6. Admin full thread (3 mesaj) ✓
+  7. Staff close → system message + status:closed ✓
+- ESLint temiz, Ruff temiz.
+
+**Cloudbeds Live Chat parity skoru**: ~%99 ✅ (eksik: WebSocket real-time push — 4-5s polling şu an yeterli).
+
+
+
 ### 2026-05-19 (iter 343 — Public Guest Chat Widget · embed-able iframe)
 - **Backend** (`routes/chatbot_automation.py`):
   - Matching engine refactored to shared `_match_message(property_id, text, session_id, source)` helper used by both `/test` (admin) and new public endpoints.

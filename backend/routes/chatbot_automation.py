@@ -20,7 +20,7 @@ Action types match Automated Messages: create_ticket, reply_guest,
 notify_team_chat, send_email, send_sms.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, List, Optional
 import os
 import re
@@ -374,17 +374,13 @@ def create_chatbot_router(db, require_roles):
         docs = await db.chatbot_content_sources.find({"property_id": property_id}, {"_id": 0}).to_list(20)
         return {"property_id": property_id, "count": len(docs), "items": docs}
 
-    # ───────────────────────── Test / Match ────────────────────────
-    @router.post("/chatbot/{property_id}/test")
-    async def test_chatbot(property_id: str, data: Dict,
-                            _u: dict = Depends(require_roles("admin", "manager"))):
-        """Simulate a guest message → returns the matched intent/keyword/sentiment + action.
-        Also writes a `chatbot_runs` audit row. UIs and Guest Chat front-ends call this on each
-        inbound guest message and execute the returned action."""
-        text = (data.get("text") or "").strip()
+    # ───────────────────────── Shared matcher ──────────────────────
+    async def _match_message(property_id: str, text: str, session_id: Optional[str] = None,
+                              source: str = "internal") -> Dict:
+        """Core chatbot matching used by both /test (admin) and /public/.../chat (guest)."""
+        text = (text or "").strip()
         if not text:
-            raise HTTPException(400, "text required")
-
+            return {"matched": False, "reason": "empty text"}
         settings = await db.chatbot_settings.find_one({"property_id": property_id}, {"_id": 0}) or DEFAULT_SETTINGS
         if not settings.get("enabled", True):
             return {"matched": False, "reason": "chatbot disabled"}
@@ -394,10 +390,9 @@ def create_chatbot_router(db, require_roles):
         tl = text.lower()
         if any(k in tl for k in handoff):
             run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
-                   "match_type": "handoff", "action_type": None,
-                   "created_at": _now()}
+                   "match_type": "handoff", "action_type": None, "source": source,
+                   "session_id": session_id, "created_at": _now()}
             await db.chatbot_runs.insert_one(run)
-            run.pop("_id", None)
             return {"matched": True, "match_type": "handoff",
                     "reply_text": "Sizi temsilcimize bağlıyorum…", "action_type": "handoff"}
 
@@ -410,14 +405,15 @@ def create_chatbot_router(db, require_roles):
             run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
                    "match_type": "keyword", "match_id": kw_match["id"],
                    "action_type": kw_match["action_type"], "sentiment": sentiment,
-                   "created_at": _now()}
+                   "source": source, "session_id": session_id, "created_at": _now()}
             await db.chatbot_runs.insert_one(run)
             return {"matched": True, "match_type": "keyword",
+                    "reply_text": kw_match.get("reply_text"),
+                    "action_type": kw_match.get("action_type"),
                     "intent": kw_match, "sentiment": sentiment}
 
         # 2) Intents (phrase overlap)
         intents = await db.chatbot_intents.find({"property_id": property_id, "enabled": True}, {"_id": 0}).to_list(500)
-        # Sentiment-filter intents
         eligible = [i for i in intents if i.get("sentiment", "any") in ("any", sentiment)]
         intent_match = _match_intent(text, eligible)
         if intent_match:
@@ -425,29 +421,98 @@ def create_chatbot_router(db, require_roles):
                    "match_type": "intent", "match_id": intent_match["id"],
                    "action_type": intent_match["action_type"], "sentiment": sentiment,
                    "score": intent_match.get("_score"),
-                   "created_at": _now()}
+                   "source": source, "session_id": session_id, "created_at": _now()}
             await db.chatbot_runs.insert_one(run)
             return {"matched": True, "match_type": "intent",
+                    "reply_text": intent_match.get("reply_text"),
+                    "action_type": intent_match.get("action_type"),
+                    "reply_buttons": intent_match.get("reply_buttons") or [],
                     "intent": intent_match, "sentiment": sentiment}
 
-        # 3) Sentiment actions (fallback to broad sentiment rule)
+        # 3) Sentiment fallback action
         sent_acts = await db.chatbot_sentiment_acts.find({"property_id": property_id, "enabled": True}, {"_id": 0}).to_list(20)
         sa = next((s for s in sent_acts if s.get("sentiment") == sentiment), None)
         if sa:
             run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
                    "match_type": "sentiment", "match_id": sa["id"],
                    "action_type": sa["action_type"], "sentiment": sentiment,
-                   "created_at": _now()}
+                   "source": source, "session_id": session_id, "created_at": _now()}
             await db.chatbot_runs.insert_one(run)
             return {"matched": True, "match_type": "sentiment",
+                    "reply_text": sa.get("reply_text"),
+                    "action_type": sa.get("action_type"),
                     "intent": sa, "sentiment": sentiment}
 
         # No match → fallback
         run = {"id": str(uuid.uuid4()), "property_id": property_id, "text": text,
-               "match_type": "none", "sentiment": sentiment, "created_at": _now()}
+               "match_type": "none", "sentiment": sentiment,
+               "source": source, "session_id": session_id, "created_at": _now()}
         await db.chatbot_runs.insert_one(run)
         return {"matched": False, "match_type": "none", "sentiment": sentiment,
+                "reply_text": settings.get("fallback_message"),
                 "fallback_message": settings.get("fallback_message")}
+
+    # ───────────────────────── Test / Match ────────────────────────
+    @router.post("/chatbot/{property_id}/test")
+    async def test_chatbot(property_id: str, data: Dict,
+                            _u: dict = Depends(require_roles("admin", "manager"))):
+        """Admin-only simulation. UIs call this from settings → live tester."""
+        return await _match_message(property_id, data.get("text", ""), source="admin-test")
+
+    # ──────────────────── PUBLIC widget endpoint ───────────────────
+    @router.get("/public/chatbot/{property_id}/info")
+    async def public_chatbot_info(property_id: str):
+        """Public info for embed widget — name, currency, language, fallback msg."""
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1, "currency": 1})
+        if not prop:
+            raise HTTPException(404, "property not found")
+        settings = await db.chatbot_settings.find_one({"property_id": property_id}, {"_id": 0}) or DEFAULT_SETTINGS
+        if not settings.get("enabled", True):
+            raise HTTPException(403, "chatbot disabled for this property")
+        return {
+            "property_id": property_id,
+            "property_name": prop.get("name", "Hotel"),
+            "language": settings.get("default_language", "tr"),
+            "greeting": "Merhaba! Size nasıl yardımcı olabilirim?",
+            "fallback_message": settings.get("fallback_message"),
+        }
+
+    @router.post("/public/chatbot/{property_id}/chat")
+    async def public_chat(property_id: str, data: Dict):
+        """PUBLIC (no auth) endpoint for the embedded Guest Chat widget. Rate-limited per session.
+
+        Body: { text: str, session_id: str (uuid generated by widget) }
+        Returns: { matched, match_type, reply_text, action_type, sentiment? }
+        """
+        text = (data.get("text") or "").strip()
+        session_id = (data.get("session_id") or "").strip()
+        if not text:
+            raise HTTPException(400, "text required")
+        if not session_id:
+            session_id = str(uuid.uuid4())
+        if len(text) > 1000:
+            raise HTTPException(400, "text too long (max 1000 chars)")
+
+        # Per-session rate limit: 20 messages / 5 minutes
+        five_min_ago = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+        recent_count = await db.chatbot_runs.count_documents({
+            "session_id": session_id, "created_at": {"$gte": five_min_ago},
+        })
+        if recent_count > 20:
+            raise HTTPException(429, "rate limit exceeded — please wait a few minutes")
+
+        result = await _match_message(property_id, text, session_id=session_id, source="widget")
+        # Strip internal-only fields for public response
+        out = {
+            "matched": result.get("matched"),
+            "match_type": result.get("match_type"),
+            "reply_text": result.get("reply_text") or result.get("fallback_message"),
+            "action_type": result.get("action_type"),
+            "sentiment": result.get("sentiment"),
+            "reply_buttons": result.get("reply_buttons") or [],
+            "session_id": session_id,
+        }
+        return out
 
     @router.get("/chatbot/{property_id}/runs")
     async def list_runs(property_id: str, limit: int = 100,

@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/select";
 import {
   Bot, Sparkles, MessageSquare, Hash, Heart, Settings, Trash2,
-  CheckCircle2, Send, RefreshCw, Plus, Play, Globe,
+  CheckCircle2, Send, RefreshCw, Plus, Play, Globe, Code,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -217,6 +217,7 @@ const ChatbotAutomationPanel = ({ propertyId }) => {
         <TabBtn id="keywords" active={tab === "keywords"} onClick={() => setTab("keywords")} icon={Hash} label="Keyword Komutlar" count={keywords.length} />
         <TabBtn id="sentiment" active={tab === "sentiment"} onClick={() => setTab("sentiment")} icon={Heart} label="Sentiment" count={sentActs.length} />
         <TabBtn id="sources" active={tab === "sources"} onClick={() => setTab("sources")} icon={Sparkles} label="AI Kaynaklar" count={sources.length} />
+        <TabBtn id="embed" active={tab === "embed"} onClick={() => setTab("embed")} icon={Code} label="Embed Widget" />
         <TabBtn id="runs" active={tab === "runs"} onClick={() => setTab("runs")} icon={Play} label="Çalışma Geçmişi" count={runs.length} />
       </div>
 
@@ -401,6 +402,11 @@ const ChatbotAutomationPanel = ({ propertyId }) => {
         </div>
       )}
 
+      {/* EMBED */}
+      {tab === "embed" && (
+        <EmbedTab propertyId={propertyId} />
+      )}
+
       {/* RUNS */}
       {tab === "runs" && (
         <div className="bg-white border border-stone-200 rounded-2xl overflow-hidden" data-testid="chatbot-runs">
@@ -442,5 +448,84 @@ const Row = ({ label, desc, children }) => (
     {children}
   </div>
 );
+
+const EmbedTab = ({ propertyId }) => {
+  const widgetBase = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "");
+  const widgetUrl = widgetBase + "/chat-widget.html?property_id=" + propertyId + "&api=" + widgetBase;
+  const floatingSnippet =
+    '<!-- Hotel Guest Chat -->\n' +
+    '<div id="hotel-chat-host" style="position:fixed;bottom:20px;right:20px;z-index:9999;"></div>\n' +
+    '<script>(function(){\n' +
+    '  var host=document.getElementById("hotel-chat-host");\n' +
+    '  var btn=document.createElement("button");\n' +
+    '  btn.style.cssText="all:unset;cursor:pointer;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#6d28d9,#4f46e5);box-shadow:0 10px 30px rgba(109,40,217,0.4);display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;";\n' +
+    '  btn.innerHTML="\\uD83D\\uDCAC";\n' +
+    '  var open=false, frame;\n' +
+    '  btn.onclick=function(){\n' +
+    '    open=!open;\n' +
+    '    if(open){\n' +
+    '      frame=document.createElement("iframe");\n' +
+    '      frame.src=' + JSON.stringify(widgetUrl) + ';\n' +
+    '      frame.style.cssText="position:fixed;bottom:90px;right:20px;width:380px;height:560px;border:0;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,0.18);background:#fff;z-index:9998;";\n' +
+    '      document.body.appendChild(frame);\n' +
+    '    } else if(frame) frame.remove();\n' +
+    '  };\n' +
+    '  host.appendChild(btn);\n' +
+    '})();</script>';
+  const inlineSnippet =
+    '<iframe\n' +
+    '  src="' + widgetUrl + '"\n' +
+    '  style="width:380px;height:560px;border:0;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.12)"\n' +
+    '  title="Guest Chat"\n' +
+    '></iframe>';
+  return (
+    <div className="bg-white border border-stone-200 rounded-2xl p-6 space-y-4" data-testid="chatbot-embed">
+      <div className="flex items-center gap-2">
+        <Code className="w-5 h-5 text-violet-600" />
+        <h3 className="font-bold text-stone-900">Embed Widget Kodu</h3>
+      </div>
+      <p className="text-sm text-stone-600">
+        Aşağıdaki kodu otel web sitenizin <code className="bg-stone-100 px-1 rounded">&lt;/body&gt;</code> etiketinden hemen önce yapıştırın.
+        Misafirler sağ alt köşede chat balonu görecek.
+      </p>
+
+      <div className="p-4 rounded-xl border border-violet-200 bg-violet-50">
+        <h4 className="text-xs font-bold text-violet-900 mb-2">Canlı Önizleme</h4>
+        <iframe
+          data-testid="chatbot-embed-preview"
+          title="Chat Widget Preview"
+          src={widgetUrl}
+          style={{ width: "100%", maxWidth: 380, height: 540, border: 0, borderRadius: 12, background: "#fff" }}
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-semibold text-stone-700 mb-1.5 block">Floating Bubble (önerilen)</label>
+        <pre data-testid="chatbot-embed-snippet" className="bg-stone-900 text-emerald-300 p-3 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">{floatingSnippet}</pre>
+        <button
+          data-testid="chatbot-embed-copy"
+          onClick={() => {
+            navigator.clipboard.writeText(floatingSnippet);
+            toast.success("Kod kopyalandı!");
+          }}
+          className="mt-2 px-3 py-1.5 bg-violet-600 text-white rounded-lg text-xs font-bold"
+        >
+          Kodu Kopyala
+        </button>
+      </div>
+
+      <div>
+        <label className="text-xs font-semibold text-stone-700 mb-1.5 block">Inline iframe (sayfa içine doğrudan)</label>
+        <pre className="bg-stone-900 text-emerald-300 p-3 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap">{inlineSnippet}</pre>
+      </div>
+
+      <div className="text-xs text-stone-500 space-y-1 p-3 bg-stone-50 rounded-lg border border-stone-200">
+        <div>🔓 <b>Public endpoint</b>: <code className="bg-white px-1 rounded">POST /api/public/chatbot/{propertyId}/chat</code></div>
+        <div>⚡ Rate limit: 20 mesaj / 5 dakika (session_id başına)</div>
+        <div>📝 Çalışmalar <b>Çalışma Geçmişi</b> sekmesinde <code className="bg-white px-1 rounded">source: "widget"</code> ile kayıtlı</div>
+      </div>
+    </div>
+  );
+};
 
 export { ChatbotAutomationPanel };

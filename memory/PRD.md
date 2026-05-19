@@ -4,6 +4,27 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 343 — Public Guest Chat Widget · embed-able iframe)
+- **Backend** (`routes/chatbot_automation.py`):
+  - Matching engine refactored to shared `_match_message(property_id, text, session_id, source)` helper used by both `/test` (admin) and new public endpoints.
+  - **2 NEW public endpoints (no auth)**:
+    - `GET /api/public/chatbot/{property_id}/info` — property name, language, greeting, fallback msg
+    - `POST /api/public/chatbot/{property_id}/chat` — body `{text, session_id}` → match + reply
+  - Session-based rate limit (20 msg / 5min per session_id, returns 429).
+  - All widget runs tagged `source: "widget"` in `chatbot_runs` for analytics.
+- **Frontend**:
+  - NEW standalone HTML widget `/app/frontend/public/chat-widget.html` (~140 satır, vanilla JS, ~8KB):
+    - Gradient header (violet→indigo→cyan), bubble message UI, typing dots animation, send button, localStorage-persisted session_id, handoff/error states.
+    - URL params: `?property_id=...&api=...` (api defaults to origin).
+  - `ChatbotAutomationPanel.js` yeni "Embed Widget" tab (`chatbot-embed`):
+    - Canlı önizleme iframe
+    - **Floating Bubble snippet** (💬 button bottom-right, expands iframe on click) — copy-to-clipboard
+    - **Inline iframe snippet** alternatifi
+    - Public endpoint URL + rate limit + audit log notu
+- **Testing**: 3 endpoint curl ✓ (info 200, chat 200, widget HTML 200, 8217 bytes). Widget render ✓ (Aldgate Flats başlık, Türkçe greeting, user msg + typing indicator gözüktü).
+
+
+
 ### 2026-05-19 (iter 342 — Cloudbeds Guest Experience parity · Automated Messages + Chatbot Automations)
 - **User request**: Cloudbeds Automated Messages özelliklerinden eksik 7'sini tamamla, ayrıca Chatbot Automations modülünü 0'dan kur (3 article reference).
 - **Backend — Automation parity** (`routes/automation.py`):

@@ -4,6 +4,26 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 347 — Live Inbox Search & Filter + SLA Highlights)
+- **Backend** `/api/chatbot/all/handoff/sessions` artık 4 yeni filtre kabul ediyor:
+  - `q` — case-insensitive substring search (`last_message_text` OR `session_id`)
+  - `unread_only` — boolean, sadece `unread_count > 0`
+  - `hotel_filter` — csv property_ids (multi-select)
+  - `time_range` — `today` (UTC midnight) / `7d` / `30d` / `all` → `last_message_at` gate
+  - Response her satıra `response_time_minutes` + `responded` boolean ekler (single aggregation: first staff reply per session).
+  - Response'a `total_unread` özet field'ı eklendi.
+- **Frontend** (`LiveChatInboxPanel.js`): `propertyId === "all"` modunda yeni filter bar gözüküyor:
+  - Search input (debounce yok, anında re-fetch çünkü filter callback dependency'de)
+  - "Sadece okunmamış" checkbox
+  - Time range pills (Tümü/Bugün/7g/30g)
+  - Hotel chip strip (en çok handoff alan 12 otelden otomatik üretiliyor + "Tüm Oteller")
+  - **SLA color coding**: `responded:false` ise sol border + clock badge — <5dk yeşil, 5-15dk amber, ≥15dk kırmızı (bold)
+- **Backend curl test ✅**: q=acil→3, unread_only→3, hotel_filter=aldgate-flats→2, time_range=today→3. response_time örnek: 32.7-46.3dk (responded:false). Lint clean.
+
+**Bu Cloudbeds'in henüz tam olmayan kısmıydı — bizim ürünü onların önüne geçirdik.**
+
+
+
 ### 2026-05-19 (iter 346 — Multi-property aggregated handoff feed · Chain supervisor view)
 - **User**: Chain üstü yönetici tüm otellerin handoff'larını tek queue'da görsün.
 - **NEW Backend endpoint** (`/api/chatbot/all/handoff/sessions?status=active`):

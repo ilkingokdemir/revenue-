@@ -602,13 +602,24 @@ def create_chatbot_router(db, require_roles):
 
     # ─────────────────── ADMIN handoff inbox ──────────────────────
     @router.get("/chatbot/all/handoff/sessions")
-    async def list_all_handoff_sessions(status: str = "active",
-                                         current_user: dict = Depends(require_roles("admin", "manager", "superadmin"))):
-        """Multi-property aggregated handoff feed. Returns sessions across ALL properties
-        the user has access to, each row enriched with property_name for the UI badge.
-        Sorted by last_message_at desc."""
-        # Determine accessible properties — admins/superadmins see everything,
-        # managers see only properties they're assigned to.
+    async def list_all_handoff_sessions(
+        status: str = "active",
+        q: str = "",
+        unread_only: bool = False,
+        hotel_filter: str = "",         # comma-separated property_ids
+        time_range: str = "all",         # today / 7d / 30d / all
+        current_user: dict = Depends(require_roles("admin", "manager", "superadmin")),
+    ):
+        """Multi-property aggregated handoff feed with search/filter.
+
+        Filters:
+          - q: substring match (case-insensitive) on last_message_text or session_id
+          - unread_only: only sessions with unread_count > 0
+          - hotel_filter: csv property_ids → restrict to those hotels
+          - time_range: today (UTC midnight) / 7d / 30d / all
+        Each row enriched with property_name + response_time_minutes (since first guest msg
+        until first staff reply, or until now if not yet answered).
+        """
         role = current_user.get("role", "")
         if role in ("admin", "superadmin"):
             props = await db.properties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
@@ -617,18 +628,88 @@ def create_chatbot_router(db, require_roles):
             props = await db.properties.find({"id": {"$in": assigned}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
         prop_map = {p["id"]: p.get("name", p["id"]) for p in props}
         prop_ids = list(prop_map.keys())
-        if not prop_ids:
-            return {"count": 0, "items": [], "properties_count": 0}
 
-        q = {"property_id": {"$in": prop_ids}}
+        # Hotel filter narrows further
+        if hotel_filter:
+            chosen = [h.strip() for h in hotel_filter.split(",") if h.strip()]
+            prop_ids = [pid for pid in prop_ids if pid in chosen]
+
+        if not prop_ids:
+            return {"count": 0, "items": [], "properties_count": 0, "total_unread": 0}
+
+        mongo_q: dict = {"property_id": {"$in": prop_ids}}
         if status and status != "all":
-            q["status"] = status
-        rows = await db.chatbot_handoff_sessions.find(q, {"_id": 0})\
+            mongo_q["status"] = status
+        if unread_only:
+            mongo_q["unread_count"] = {"$gt": 0}
+
+        # Time range filter
+        if time_range and time_range != "all":
+            now = datetime.now(timezone.utc)
+            if time_range == "today":
+                since_dt = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            elif time_range == "7d":
+                since_dt = now - timedelta(days=7)
+            elif time_range == "30d":
+                since_dt = now - timedelta(days=30)
+            else:
+                since_dt = None
+            if since_dt:
+                mongo_q["last_message_at"] = {"$gte": since_dt.isoformat()}
+
+        # Search via $or — substring match
+        if q:
+            qre = {"$regex": q.strip(), "$options": "i"}
+            mongo_q["$or"] = [
+                {"last_message_text": qre},
+                {"session_id": qre},
+            ]
+
+        rows = await db.chatbot_handoff_sessions.find(mongo_q, {"_id": 0})\
             .sort("last_message_at", -1).limit(500).to_list(500)
+
+        # Fetch first staff reply per session for response_time SLA
+        sids = [r["session_id"] for r in rows]
+        first_staff: dict = {}
+        if sids:
+            pipeline = [
+                {"$match": {"session_id": {"$in": sids}, "sender": "staff"}},
+                {"$sort": {"created_at": 1}},
+                {"$group": {"_id": "$session_id", "first": {"$first": "$created_at"}}},
+            ]
+            async for doc in db.chatbot_handoff_messages.aggregate(pipeline):
+                first_staff[doc["_id"]] = doc["first"]
+
+        now_dt = datetime.now(timezone.utc)
         for r in rows:
             r["property_name"] = prop_map.get(r.get("property_id"), r.get("property_id"))
-        return {"count": len(rows), "items": rows,
-                "properties_count": len(prop_ids)}
+            started = r.get("started_at")
+            staff_at = first_staff.get(r["session_id"])
+            try:
+                start_dt = datetime.fromisoformat(started.replace("Z", "+00:00")) if started else None
+                end_dt = datetime.fromisoformat(staff_at.replace("Z", "+00:00")) if staff_at else now_dt
+                if start_dt:
+                    delta = (end_dt - start_dt).total_seconds() / 60.0
+                    r["response_time_minutes"] = round(delta, 1)
+                    r["responded"] = bool(staff_at)
+                else:
+                    r["response_time_minutes"] = None
+                    r["responded"] = bool(staff_at)
+            except Exception:
+                r["response_time_minutes"] = None
+                r["responded"] = bool(staff_at)
+
+        total_unread = sum(r.get("unread_count", 0) for r in rows if r.get("status") == "active")
+        return {
+            "count": len(rows),
+            "items": rows,
+            "properties_count": len(prop_ids),
+            "total_unread": total_unread,
+            "filter_applied": {
+                "q": q, "unread_only": unread_only,
+                "hotel_filter": hotel_filter, "time_range": time_range,
+            },
+        }
 
     @router.get("/chatbot/{property_id}/handoff/sessions")
     async def list_handoff_sessions(property_id: str, status: str = "active",

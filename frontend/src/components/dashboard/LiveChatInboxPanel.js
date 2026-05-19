@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Headset, MessageSquare, X, Send, RefreshCw, Inbox, Bell, BellOff } from "lucide-react";
+import { Headset, MessageSquare, X, Send, RefreshCw, Inbox, Bell, BellOff, Search, Clock } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const auth = () => ({ Authorization: `Bearer ${localStorage.getItem("access_token")}` });
@@ -34,6 +34,11 @@ const LiveChatInboxPanel = ({ propertyId }) => {
   const [thread, setThread] = useState([]);
   const [reply, setReply] = useState("");
   const [statusFilter, setStatusFilter] = useState("active");
+  const [searchQ, setSearchQ] = useState("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [hotelFilter, setHotelFilter] = useState("");      // csv property_ids
+  const [timeRange, setTimeRange] = useState("all");        // today / 7d / 30d / all
+  const [hotelOptions, setHotelOptions] = useState([]);     // [{id, name, count}]
   const [busy, setBusy] = useState(false);
   const [notifPerm, setNotifPerm] = useState(typeof Notification !== "undefined" ? Notification.permission : "denied");
   const bottomRef = useRef(null);
@@ -46,9 +51,29 @@ const LiveChatInboxPanel = ({ propertyId }) => {
       const url = propertyId === "all"
         ? `${API}/chatbot/all/handoff/sessions`
         : `${API}/chatbot/${propertyId}/handoff/sessions`;
-      const r = await axios.get(url, { params: { status: statusFilter }, headers: auth() });
+      const params = { status: statusFilter };
+      // /all endpoint accepts extra filters; /single endpoint ignores them
+      if (propertyId === "all") {
+        if (searchQ) params.q = searchQ;
+        if (unreadOnly) params.unread_only = true;
+        if (hotelFilter) params.hotel_filter = hotelFilter;
+        if (timeRange && timeRange !== "all") params.time_range = timeRange;
+      }
+      const r = await axios.get(url, { params, headers: auth() });
       const items = r.data.items || [];
       setSessions(items);
+
+      // Build hotel options for the filter chip strip (count per hotel)
+      if (propertyId === "all") {
+        const counts = {};
+        items.forEach(s => {
+          const key = s.property_id;
+          if (!key) return;
+          if (!counts[key]) counts[key] = { id: key, name: s.property_name || key, count: 0 };
+          counts[key].count += 1;
+        });
+        setHotelOptions(Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 12));
+      }
 
       // Build property_id map for quick lookup when rows have property_name
       // (already included by backend in /all/ aggregator)
@@ -74,7 +99,7 @@ const LiveChatInboxPanel = ({ propertyId }) => {
       }
       lastSnapRef.current = { unreadTotal: newUnreadTotal, sessionIds: currentIds };
     } catch (e) { /* silent during poll */ }
-  }, [propertyId, statusFilter]);
+  }, [propertyId, statusFilter, searchQ, unreadOnly, hotelFilter, timeRange]);
 
   const loadThread = useCallback(async (session_id, property_id_override = null) => {
     if (!session_id) return;
@@ -236,6 +261,67 @@ const LiveChatInboxPanel = ({ propertyId }) => {
               ))}
             </div>
           </div>
+
+          {/* FILTER BAR — only in /all/ view */}
+          {propertyId === "all" && (
+            <div className="px-3 py-2 border-b border-stone-100 bg-stone-50 space-y-2" data-testid="live-filters">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  data-testid="live-filter-search"
+                  type="text"
+                  value={searchQ}
+                  onChange={(e) => setSearchQ(e.target.value)}
+                  placeholder="Mesajda ara…"
+                  className="w-full pl-8 pr-2 py-1.5 border border-stone-200 rounded text-xs focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-1.5 text-[11px] text-stone-700 cursor-pointer">
+                  <input
+                    data-testid="live-filter-unread"
+                    type="checkbox"
+                    checked={unreadOnly}
+                    onChange={(e) => setUnreadOnly(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-rose-500"
+                  />
+                  Sadece okunmamış
+                </label>
+                <div className="flex gap-1">
+                  {[
+                    { id: "all", label: "Tümü" },
+                    { id: "today", label: "Bugün" },
+                    { id: "7d", label: "7g" },
+                    { id: "30d", label: "30g" },
+                  ].map(t => (
+                    <button key={t.id} onClick={() => setTimeRange(t.id)}
+                      data-testid={`live-filter-time-${t.id}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded ${timeRange === t.id ? "bg-stone-900 text-white" : "bg-white border border-stone-200 text-stone-600"}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {hotelOptions.length > 1 && (
+                <div className="flex gap-1 flex-wrap" data-testid="live-filter-hotels">
+                  <button
+                    data-testid="live-filter-hotel-all"
+                    onClick={() => setHotelFilter("")}
+                    className={`text-[10px] px-1.5 py-0.5 rounded ${!hotelFilter ? "bg-violet-600 text-white" : "bg-white border border-stone-200 text-stone-600"}`}>
+                    Tüm Oteller
+                  </button>
+                  {hotelOptions.map(h => (
+                    <button key={h.id} onClick={() => setHotelFilter(h.id)}
+                      data-testid={`live-filter-hotel-${h.id}`}
+                      className={`text-[10px] px-1.5 py-0.5 rounded ${hotelFilter === h.id ? "bg-violet-600 text-white" : "bg-white border border-stone-200 text-stone-600"}`}>
+                      🏨 {h.name.slice(0, 14)} ({h.count})
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto max-h-[520px]">
             {sessions.length === 0 && (
               <div className="p-8 text-center text-stone-400 text-sm">
@@ -243,12 +329,33 @@ const LiveChatInboxPanel = ({ propertyId }) => {
                 Henüz handoff yok
               </div>
             )}
-            {sessions.map((s, idx) => (
+            {sessions.map((s, idx) => {
+              const rt = s.response_time_minutes;
+              const slaTone = !s.responded && rt != null
+                ? (rt >= 15 ? "border-l-4 border-rose-500" : rt >= 5 ? "border-l-4 border-amber-500" : "border-l-4 border-emerald-500")
+                : "";
+              return (
               <button key={s.id} onClick={() => loadThread(s.session_id, s.property_id)}
                 data-testid={`live-session-${idx}`}
-                className={`w-full text-left p-3 border-b border-stone-100 hover:bg-stone-50 transition ${active?.session_id === s.session_id ? "bg-emerald-50" : ""}`}>
+                className={`w-full text-left p-3 border-b border-stone-100 hover:bg-stone-50 transition ${slaTone} ${active?.session_id === s.session_id ? "bg-emerald-50" : ""}`}>
                 <div className="flex items-center justify-between mb-1 gap-2">
                   <span className="text-xs font-mono text-stone-500 truncate flex-1" title={s.session_id}>{s.session_id.slice(0, 14)}…</span>
+                  {rt != null && (
+                    <span
+                      data-testid={`live-session-sla-${idx}`}
+                      title={s.responded ? "Yanıt verildi" : "Henüz yanıtsız"}
+                      className={`text-[9px] px-1 py-0.5 rounded font-mono shrink-0 flex items-center gap-0.5 ${
+                        s.responded
+                          ? "bg-stone-100 text-stone-500"
+                          : rt >= 15
+                            ? "bg-rose-100 text-rose-700 font-bold"
+                            : rt >= 5
+                              ? "bg-amber-100 text-amber-700"
+                              : "bg-emerald-100 text-emerald-700"
+                      }`}>
+                      <Clock className="w-2.5 h-2.5" />{rt}m
+                    </span>
+                  )}
                   {s.unread_count > 0 && (
                     <span className="text-[10px] bg-rose-600 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">{s.unread_count}</span>
                   )}
@@ -264,7 +371,8 @@ const LiveChatInboxPanel = ({ propertyId }) => {
                   <span className="text-[10px] text-stone-400">{s.last_message_at ? new Date(s.last_message_at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 

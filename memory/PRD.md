@@ -4,6 +4,31 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 340 — AI Pricing Suggestion Engine · Hybrid RMS Pro motoru)
+- **User-approved suggestion**: "Auto-Discover → Vision → Cron → Drilldown" zincirini AI öneri motoru ile tamamla.
+- **NEW Backend** (`routes/ai_pricing_engine.py` — yeni modül, 600+ satır):
+  - Pure helpers: `compute_suggestion` (lead-time × occupancy multiplier formülü), `_lead_time_multiplier`, `_occupancy_multiplier`, `_classify_demand`.
+  - 7 endpoint: `GET /config`, `PUT /config`, `GET /suggestions`, `POST /accept`, `POST /reject`, `POST /run-auto-apply`, `GET /history` (hepsi `/api/revenue/ai-pricing/{property_id}/` altında).
+  - Smart-threshold (±5% default) auto-apply: |Δ| eşik içindekiler `auto_apply=true` ise sessizce `rate_overrides`'a yazılır, dışındakiler pending kalır.
+  - Hybrid LLM enrichment: GPT-4o-mini (Emergent LLM Key) tek call'da 30 günü TR tek-cümle gerekçe ile zenginleştirir.
+  - **12 saatlik rationale cache** (`ai_pricing_rationale_cache` collection): aynı gün tekrarlı GET'lerde LLM token harcamaz.
+  - Daily cron handler (`ai_pricing_auto_apply`) `JOB_HANDLERS`'a register edildi → scheduler_loop her gün otomatik çalıştırabilir.
+- **NEW Frontend** (`AIPricingEnginePanel.js` — 530 satır):
+  - Header gradient (violet→indigo→cyan) + "Auto-Apply Şimdi" + "Yenile" CTA.
+  - Config strip (Motor Açık / Auto-Apply / Eşik % / LLM toggle) — inline kaydetme.
+  - 5 stat card: Toplam, Auto Uygun, Manuel İnceleme, Ort Δ%, Tahmini Uplift.
+  - 5 filter pill (all/auto/review/pending/accepted) + 5 day-horizon switcher (7/14/30/60/90).
+  - Suggestion table: Tarih · Lead · Talep badge · Doluluk% · Pazar Ort · Mevcut · Öneri · Δ% · Gerekçe · Status · Kabul/Reddet.
+  - Reject modal (sebep input + onay).
+- **Integration**:
+  - `MarketRobot.js` tab strip'e `ai-pricing` sub-tab eklendi (Dashboard'dan sonra ikinci sıra).
+  - 7 dile i18n key `mr.sub.aiPricing` eklendi (TR/EN/DE/ES/FR/RU/AR).
+  - `server.py` L78 import + L527-528 router register + L791-806 cron handler.
+- **Testing**: testing_agent_v3_fork (iter 325) — Backend 15/15 ✓, Frontend 100% ✓. Testing agent currency formatter usage + render block placement düzeltti.
+- **Performance**: İlk çağrı 13s (LLM), cached çağrı 8s — 12h cache LLM token tasarrufu sağlıyor.
+
+
+
 ### 2026-05-19 (iter 339 — inFlightRef double-click guards · NeighborhoodScanPanel)
 - **Continuity from prev fork**: Çift rakip kaydı kök neden 3-katmanlı fix (iter 338) ile çözüldü; bu iter UI tarafında defensive guard ekledi.
 - **Frontend** (`NeighborhoodScanPanel.js`):

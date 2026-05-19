@@ -325,15 +325,46 @@ def create_ai_pricing_router(db, require_roles):
                 suggestions.append(item)
 
                 # Build LLM input for primary room type only (avoid burning tokens on duplicates)
-                if rt is room_types[0]:
+                if rt is room_types[0] and not item.get("rationale"):
                     llm_input.append(item)
 
-        # Optional LLM enrichment
+        # Optional LLM enrichment — with 12h cache to avoid re-spending tokens on every reload.
         if use_llm and cfg.get("use_llm", True) and llm_input:
-            rationales = await _llm_rationales(llm_input[:30], symbol)
+            # Step 1: try cache first
+            cache_dates = [i["date"] for i in llm_input]
+            cache_cutoff = (datetime.now(timezone.utc) - timedelta(hours=12)).isoformat()
+            cache_rows = await db.ai_pricing_rationale_cache.find(
+                {"property_id": property_id, "date": {"$in": cache_dates},
+                 "cached_at": {"$gte": cache_cutoff}},
+                {"_id": 0, "date": 1, "rationale": 1},
+            ).to_list(500)
+            cache_hits = {c["date"]: c["rationale"] for c in cache_rows}
+
+            # Apply cache hits and shrink the LLM payload to true misses
+            misses = [i for i in llm_input if i["date"] not in cache_hits]
             for s in suggestions:
-                if not s.get("rationale") and s["date"] in rationales:
-                    s["rationale"] = rationales[s["date"]]
+                if not s.get("rationale") and s["date"] in cache_hits:
+                    s["rationale"] = cache_hits[s["date"]]
+
+            # Step 2: call LLM only for cache misses
+            if misses:
+                rationales = await _llm_rationales(misses[:30], symbol)
+                if rationales:
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    bulk_ops = []
+                    for d, txt in rationales.items():
+                        bulk_ops.append({"property_id": property_id, "date": d,
+                                          "rationale": txt, "cached_at": now_iso})
+                    # Upsert each rationale (small N=<=30 so safe to do sequentially via update_many alternative)
+                    for op in bulk_ops:
+                        await db.ai_pricing_rationale_cache.update_one(
+                            {"property_id": property_id, "date": op["date"]},
+                            {"$set": op},
+                            upsert=True,
+                        )
+                    for s in suggestions:
+                        if not s.get("rationale") and s["date"] in rationales:
+                            s["rationale"] = rationales[s["date"]]
 
         return {
             "property_id": property_id,

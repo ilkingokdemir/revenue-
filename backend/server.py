@@ -280,6 +280,15 @@ async def seed_admin():
         await db.market_supply.create_index([("property_id", 1), ("scan_type", 1), ("scanned_at", -1)])
         await db.market_supply.create_index([("scan_type", 1), ("date", 1)])
         await db.market_competitors.create_index([("property_id", 1)])
+        # iter 338 — Hard-prevent duplicate competitor inserts via PARALLEL
+        # bulk-add calls (race condition: 2 concurrent /bulk-add reads the
+        # same `existing` snapshot and both pass dedup). The application-
+        # level dedup in add_competitor + bulk_add_competitors handles the
+        # serial path; this index closes the race window.
+        await db.market_competitors.create_index(
+            [("property_id", 1), ("booking_url", 1)],
+            unique=True, name="prop_url_uniq",
+        )
         await db.bookings.create_index([("property_id", 1), ("check_in", 1), ("check_out", 1), ("status", 1)])
     except Exception as e:
         logger.warning("market_supply index creation failed: %s", e)

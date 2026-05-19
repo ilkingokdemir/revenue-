@@ -3293,6 +3293,29 @@ def create_market_robot_router(db, require_roles, resend=None):
         if not booking_url:
             return {"error": "Booking.com URL is required"}
 
+        # Dedup BEFORE any expensive Booking.com round-trip — otherwise the
+        # user pastes the same URL twice from different tabs and we burn 10s
+        # validating it just to insert a duplicate row.
+        norm_url = booking_url.rstrip("/").split("?")[0]
+        norm_url_no_locale = re.sub(r"\.[a-z]{2}-[a-z]{2}\.html$", ".html", norm_url, flags=re.I)
+        existing_dup = await db.market_competitors.find_one(
+            {
+                "property_id": property_id,
+                "$or": [
+                    {"booking_url": booking_url},
+                    {"booking_url": norm_url},
+                    {"booking_url": norm_url_no_locale},
+                ],
+            },
+            {"_id": 0, "id": 1, "name": 1, "booking_url": 1, "booking_hotel_id": 1},
+        )
+        if existing_dup:
+            return {
+                "error": "duplicate",
+                "message": f"Bu rakip zaten ekli: {existing_dup.get('name')}",
+                "existing": existing_dup,
+            }
+
         # Resolve hotel_id (also doubles as a sanity test — if Booking won't give us
         # an id, the URL is wrong and we should warn the user before saving).
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
@@ -3317,6 +3340,22 @@ def create_market_robot_router(db, require_roles, resend=None):
             except Exception as e:
                 logger.warning(f"Competitor URL validation failed: {e}")
 
+        # Second-chance dedup BY hotel_id — catches the case where the user
+        # pasted the same hotel under a different URL (e.g. with vs without
+        # locale suffix, with vs without trailing slash, with vs without query
+        # params).
+        if hotel_id:
+            id_dup = await db.market_competitors.find_one(
+                {"property_id": property_id, "booking_hotel_id": str(hotel_id)},
+                {"_id": 0, "id": 1, "name": 1},
+            )
+            if id_dup:
+                return {
+                    "error": "duplicate_hotel_id",
+                    "message": f"Bu otel zaten ekli (farklı URL ile): {id_dup.get('name')}",
+                    "existing": id_dup,
+                }
+
         # Extract hotel slug from URL
         slug_match = re.search(r'/hotel/[a-z]{2}/([^.?]+)', booking_url)
         slug = slug_match.group(1) if slug_match else ""
@@ -3333,7 +3372,23 @@ def create_market_robot_router(db, require_roles, resend=None):
             "last_scraped": None,
             "prices": [],
         }
-        await db.market_competitors.insert_one(comp)
+        try:
+            await db.market_competitors.insert_one(comp)
+        except Exception as e:
+            # Unique-index race (parallel POST /competitors): another tab
+            # just inserted the same row 5ms before us. Return the existing
+            # row instead of a 500.
+            if "duplicate key" in str(e).lower():
+                existing_now = await db.market_competitors.find_one(
+                    {"property_id": property_id, "booking_url": booking_url},
+                    {"_id": 0, "id": 1, "name": 1},
+                )
+                return {
+                    "error": "duplicate",
+                    "message": "Bu rakip zaten ekli (eş zamanlı eklendi).",
+                    "existing": existing_now,
+                }
+            raise
         comp.pop("_id", None)
         return {**comp, "validation": validation}
 
@@ -4999,7 +5054,27 @@ def create_market_robot_router(db, require_roles, resend=None):
             added += 1
 
         if to_insert:
-            await db.market_competitors.insert_many(to_insert)
+            # ordered=False so a single colliding doc (race condition with a
+            # parallel /bulk-add or /competitors POST) doesn't abort the
+            # whole batch. The DB-side unique index on (property_id,
+            # booking_url) is the source of truth.
+            try:
+                await db.market_competitors.insert_many(to_insert, ordered=False)
+            except Exception as e:
+                # BulkWriteError when *some* docs collide. Pymongo still
+                # inserts the non-colliding ones. We count writeErrors to
+                # report a truthful "added" number.
+                write_errors = getattr(e, "details", {}).get("writeErrors", [])
+                if write_errors:
+                    collided = len(write_errors)
+                    added -= collided
+                    skipped += collided
+                    logger.info(
+                        "bulk_add_competitors: %s parallel-race duplicates skipped at DB layer",
+                        collided,
+                    )
+                else:
+                    raise
 
         return {
             "ok": True, "added": added, "skipped": skipped,

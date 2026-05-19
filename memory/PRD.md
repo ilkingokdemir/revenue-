@@ -4,6 +4,24 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 338 — Duplicate Competitor Bug Fix · Race condition + DB unique index)
+- **User report** (TR): "city prime camden iki sefer kayıt edilmiş chart'ta".
+- **Root cause**: 
+  1. `add_competitor` endpoint'inde **hiç dedup yoktu** (yalnızca bulk-add'de vardı).
+  2. `bulk_add_competitors` race condition'a karşı korumalı değildi — 2 paralel POST `existing` snapshot'ını aynı anda okuyup ikisi de insert ediyordu.
+  3. URL normalizasyonu eksikti — `.en-gb.html` locale suffix'i ile aynı otel iki kez girilebiliyordu.
+- **3-katmanlı fix**:
+  - **Application-level dedup** (`add_competitor`): pre-validation URL match + locale-stripped variant + post-validation hotel_id match. Üç check, %99 case'i yakalar.
+  - **Race-safe insert** (`add_competitor`, `bulk_add_competitors`): `DuplicateKeyError` ve `BulkWriteError.writeErrors` graceful handle. `add_competitor` `{error:"duplicate", existing:...}` döndürür. `bulk_add` `insert_many(ordered=False)` + collided count'u `skipped`'e ekler.
+  - **DB-level unique index** (`server.py` startup): `market_competitors` üstüne `(property_id, booking_url) UNIQUE name="prop_url_uniq"`. Tüm race window'larını kapatır.
+- **One-time cleanup**: 2 duplicate doc silindi (camden-suites: City Prime Camden + Agar Villa) — earliest record kept.
+- **Live verification**: 
+  - ✅ Unique index oluştu (`UNIQUE` flag confirmed)
+  - ✅ Duplicate URL POST → `{"error":"duplicate", "message":"Bu rakip zaten ekli: City Prime Camden"}`
+  - ✅ camden-suites artık 2 unique rakip (önce 4 idi, 2 dup'tı)
+
+
+
 ### 2026-05-19 (iter 337 — Chart Day Drilldown Modal · Tek-tık fiyat override)
 - **User-approved suggestion**: "uygula" → click-to-drilldown action.
 - **Frontend** (`NeighborhoodScanPanel.js`):

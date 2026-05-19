@@ -4,6 +4,21 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 334 — "⏰ Otomatik Tarama Geçmişi" paneli · Kullanıcı otomasyonu gözle görsün)
+- **User-approved suggestion**: "evet uygula" → Pazartesi cron'larının çalıştığını kullanıcıya görselle ispatlayan inline timeline.
+- **Frontend** (`NeighborhoodScanPanel.js`):
+  - **NEW** state: `schedulerHistory` (`useState([])`) + `loadAll`'ın içinde non-blocking `GET /api/scheduler/history?limit=50` çağrısı + fleet-only filter (`fleet_geo_validate`, `fleet_vision_enrich`, `fleet_competitor_price_scan`) + son 12 kayıt.
+  - **NEW** UI panel `data-testid=scheduler-history-card`: emerald gradient header "⏰ Otomatik Tarama Geçmişi · Auto-Scan History" + altında "Pazartesi 03:00→05:00 UTC haftalık fleet otomasyonu" alt başlığı + sağda "Son N çalışma" badge'i.
+  - Her satır: 
+    - Emoji ikon (🌍 / 🤖 / 🔵 job tipine göre)
+    - İş adı + ✓ Başarılı / ✗ Hata rozet + ⏰ Cron veya Manuel etiketi + tarih (TR locale)
+    - Özet metni job-aware: `geo-validate` → "N property tarandı · X onarıldı" | `vision-enrich` → "N property · X enriched · Y block" | `price-scan` → "N property · X rakip · Y fiyat noktası"
+  - Footer: "🟢 03:00 koordinat · 🟣 04:00 Vision · 🔵 05:00 fiyat — her Pazartesi otomatik."
+  - Scroll'lu max-h-64 — büyür ama yer kaplamaz.
+- **Live verification** (screenshot): 3 satır timeline render oluyor (Vision Enrich cron + 2× geo-validate). Lint ✓.
+
+
+
 ### 2026-05-19 (iter 333 — fleet_competitor_price_scan: 3. haftalık cron · chart hep güncel kalır)
 - **User-approved suggestion**: "evet uygula" → fleet'in tamamı için haftalık Booking.com fiyat tarama cron'u eklendi.
 - **Backend**:

@@ -101,6 +101,10 @@ export default function NeighborhoodScanPanel({ propertyId }) {
   // populate. ~6-7 min for 30 days × 10 competitors with parallelism.
   const [compScanRunning, setCompScanRunning] = useState(false);
   const [compScanProgress, setCompScanProgress] = useState(null);  // {done, total}
+  // Scheduler history — last 12 fleet cron runs (geo-validate, vision-enrich,
+  // competitor-price-scan). Shows the user the platform is doing work even
+  // when they're not looking. Auto-refreshed on panel mount + every 60s.
+  const [schedulerHistory, setSchedulerHistory] = useState([]);
   const refreshCompetitorPrices = async () => {
     if (propertyId === "all") { toast.error("Önce yukarıdan tek bir şube seçin"); return; }
     if ((competitorSeries || []).length === 0) {
@@ -503,6 +507,14 @@ export default function NeighborhoodScanPanel({ propertyId }) {
       const obUrl = ob?.booking_url || "";
       setOurBookingUrl(obUrl);
       setOurBookingUrlDraft(obUrl);
+      // Fetch latest 30 fleet scheduler runs in the background (non-blocking).
+      // We filter to fleet-wide jobs (property_id="") so we only show jobs
+      // that touch the whole estate.
+      axios.get(`${API}/scheduler/history?limit=50`).then(({ data }) => {
+        const fleetJobs = ["fleet_geo_validate", "fleet_vision_enrich", "fleet_competitor_price_scan"];
+        const filtered = (data || []).filter(r => fleetJobs.includes(r.job)).slice(0, 12);
+        setSchedulerHistory(filtered);
+      }).catch(() => {});
     } catch (err) {
       // Don't swallow — surface the failure so the user knows the chart is
       // empty *because of a load error*, not because no scan has run yet.
@@ -1632,6 +1644,79 @@ export default function NeighborhoodScanPanel({ propertyId }) {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ⏰ Otomatik Tarama Geçmişi — fleet-wide weekly cron timeline */}
+      {schedulerHistory.length > 0 && (
+        <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-5" data-testid="scheduler-history-card">
+          <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-sm font-bold text-stone-100">⏰ Otomatik Tarama Geçmişi · Auto-Scan History</h3>
+              <span className="text-[10px] text-stone-500">Pazartesi 03:00→05:00 UTC haftalık fleet otomasyonu</span>
+            </div>
+            <div className="text-[10px] text-stone-400 italic">Son {schedulerHistory.length} çalışma</div>
+          </div>
+          <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            {schedulerHistory.map((row, idx) => {
+              const ranAt = row.ran_at ? new Date(row.ran_at) : null;
+              const result = row.result || {};
+              const isOk = !result.error && (
+                (row.job === "fleet_geo_validate" && result.checked != null) ||
+                (row.job === "fleet_vision_enrich" && result.processed != null) ||
+                (row.job === "fleet_competitor_price_scan" && result.competitors_scanned != null) ||
+                result.ok === true
+              );
+              const jobMeta = {
+                fleet_geo_validate: {
+                  icon: "🌍", color: "text-cyan-300", bg: "bg-cyan-500/10 border-cyan-500/30",
+                  label: "Koordinat Doğrulama",
+                  summary: () => `${result.checked || 0} property tarandı · ${result.fixed_count || 0} onarıldı`,
+                },
+                fleet_vision_enrich: {
+                  icon: "🤖", color: "text-violet-300", bg: "bg-violet-500/10 border-violet-500/30",
+                  label: "Vision Enrich",
+                  summary: () => `${result.properties_done || 0} property · ${result.enriched || 0} zenginleştirildi · ${result.blocked || 0} block`,
+                },
+                fleet_competitor_price_scan: {
+                  icon: "🔵", color: "text-sky-300", bg: "bg-sky-500/10 border-sky-500/30",
+                  label: "Rakip Fiyat Taraması",
+                  summary: () => `${result.properties_done || 0} property · ${result.competitors_scanned || 0} rakip · ${result.prices_found || 0} fiyat noktası`,
+                },
+              };
+              const meta = jobMeta[row.job] || { icon: "•", color: "text-stone-300", bg: "bg-stone-500/10 border-stone-500/30", label: row.job, summary: () => "—" };
+              return (
+                <div
+                  key={`${row.job}-${row.ran_at}-${idx}`}
+                  className={`flex items-start gap-2 px-2.5 py-1.5 rounded-lg border ${meta.bg}`}
+                  data-testid={`scheduler-history-row-${idx}`}
+                >
+                  <span className="text-base shrink-0 leading-tight">{meta.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[11px] font-bold ${meta.color}`}>{meta.label}</span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isOk ? "bg-emerald-500/15 text-emerald-300" : "bg-rose-500/15 text-rose-300"}`}>
+                        {isOk ? "✓ Başarılı" : "✗ Hata"}
+                      </span>
+                      <span className="text-[10px] text-stone-400">
+                        {row.trigger === "manual" ? "Manuel" : "⏰ Cron"}
+                      </span>
+                      {ranAt && (
+                        <span className="text-[10px] text-stone-500 ml-auto">
+                          {ranAt.toLocaleString("tr-TR", { month: "short", day: "numeric", weekday: "short", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-stone-400 truncate">{meta.summary()}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[9px] text-stone-500 mt-2 italic">
+            🟢 03:00 koordinat onarımı · 🟣 04:00 Vision enrich · 🔵 05:00 fiyat taraması — her Pazartesi otomatik.
+          </p>
         </div>
       )}
 

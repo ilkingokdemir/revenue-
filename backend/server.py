@@ -75,6 +75,7 @@ from routes.revenue_phase2 import create_revenue_phase2_router
 from routes.revenue_copilot import create_revenue_copilot_router
 from routes.revenue_exports import create_revenue_exports_router
 from routes.market_robot import create_market_robot_router
+from routes.ai_pricing_engine import create_ai_pricing_router
 from routes.dynamic_pricing import create_dynamic_pricing_router
 from routes.event_intelligence import create_event_intelligence_router
 from routes.parity_analysis import create_parity_analysis_router
@@ -525,6 +526,9 @@ api_router.include_router(revenue_exports_router)
 market_robot_router = create_market_robot_router(db, require_roles, resend)
 api_router.include_router(market_robot_router)
 
+ai_pricing_router = create_ai_pricing_router(db, require_roles)
+api_router.include_router(ai_pricing_router)
+
 dynamic_pricing_router = create_dynamic_pricing_router(db, require_roles)
 api_router.include_router(dynamic_pricing_router)
 
@@ -782,6 +786,22 @@ async def _job_auto_deposit_capture(property_id: str) -> dict:
                                   triggered_by="scheduler")
 
 JOB_HANDLERS = {"auto_deposit_capture": _job_auto_deposit_capture}
+
+# Iter 339 — AI Pricing daily auto-apply hook.
+# Calls the internal helper attached to the ai_pricing_router so the cron does
+# not need to go through HTTP/auth. Runs once per day at 06:00 UTC after the
+# Mon 05:00 fleet competitor price scrape — keeping rates fresh.
+_ai_auto_fn = getattr(ai_pricing_router, "run_auto_apply_internal", None)
+
+async def _job_ai_pricing_auto_apply(property_id: str) -> dict:
+    if _ai_auto_fn is None:
+        return {"applied": 0, "error": "internal helper missing"}
+    try:
+        return await _ai_auto_fn(property_id)
+    except Exception as e:
+        return {"applied": 0, "error": str(e)}
+
+JOB_HANDLERS["ai_pricing_auto_apply"] = _job_ai_pricing_auto_apply
 api_router.include_router(create_scheduler_router(db, require_roles, JOB_HANDLERS))
 
 @app.on_event("startup")

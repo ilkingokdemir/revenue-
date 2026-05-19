@@ -1,0 +1,61 @@
+{
+  "summary": "AI Pricing Engine feature testing complete. Backend: 15/15 tests passed. Frontend: Fixed 2 critical bugs (missing component render, currency formatter). All core features working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/revenue/ai-pricing/{property_id}/suggestions", "issue": "Slow response time (~18s for 30-day horizon) due to computation complexity"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_pricing_engine.py",
+    "/app/test_reports/pytest/pytest_iteration339_ai_pricing.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FIXED: AIPricingEnginePanel was imported but never rendered in MarketRobot.js - added missing {subTab === 'ai-pricing' && <AIPricingEnginePanel propertyId={propertyId} />}",
+    "FIXED: Currency formatter usage - makeCurrencyFormatter returns object with .format() method, not a function. Changed cur() to cur.format() wrapper"
+  ],
+  "updated_files": [
+    "/app/frontend/src/components/dashboard/MarketRobot.js",
+    "/app/frontend/src/components/dashboard/AIPricingEnginePanel.js"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "100%"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing property aldgate-flats",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "AI Pricing Engine feature fully tested. Backend endpoints all working. Frontend panel renders correctly after fixes. Navigation path: Login → Select single property (not All Branches) → REVENUE & RATES → Revenue management card → Market Robot → AI Pricing tab",
+  "features_tested": {
+    "backend": {
+      "GET /api/revenue/ai-pricing/{property_id}/config": "PASS - Returns default config with enabled=true, auto_apply=false, threshold=5.0, days_horizon=30",
+      "PUT /api/revenue/ai-pricing/{property_id}/config": "PASS - Persists updates and clamps to valid range (0.5-25)",
+      "GET /api/revenue/ai-pricing/{property_id}/suggestions": "PASS - Returns array with suggested_rate, lead_time_mult, occupancy_mult, days_out, auto_apply_eligible, summary block",
+      "POST /api/revenue/ai-pricing/{property_id}/accept": "PASS - Writes to rate_overrides and creates ai_pricing_decisions row",
+      "POST /api/revenue/ai-pricing/{property_id}/reject": "PASS - Records rejection with reason in ai_pricing_decisions",
+      "POST /api/revenue/ai-pricing/{property_id}/run-auto-apply": "PASS - Returns skipped_reason when disabled, applies when enabled",
+      "GET /api/revenue/ai-pricing/{property_id}/history": "PASS - Returns recent decisions sorted by decided_at desc",
+      "days_out=0 for today": "PASS - Timezone-safe date math verified",
+      "min_rate_pct/max_rate_pct clamping": "PASS - clamped flag set when raw exceeds bounds"
+    },
+    "frontend": {
+      "AI Pricing sub-tab in Market Robot": "PASS - data-testid=market-robot-ai-pricing present and clickable",
+      "Header card with gradient": "PASS - violet→indigo→cyan gradient visible",
+      "Config strip with 4 controls": "PASS - Motor Açık, Auto-Apply, Eşik, LLM Gerekçesi all present",
+      "5 stat cards": "PASS - TOPLAM ÖNERİ, AUTO UYGUN, MANUEL İNCELEME, ORT.Δ%, TAHMİNİ UPLIFT",
+      "Filter pills": "PASS - Tümü, Auto Uygun, İncelene, Bekliyor, Uygulanan all working",
+      "Day horizon switcher": "PASS - 7g/14g/30g/60g/90g buttons re-fetch with new horizon",
+      "Suggestion table": "PASS - Shows date, lead, demand, occupancy, market avg, current, suggested, delta, rationale, status",
+      "Tüm Auto-Uygunları Kabul Et button": "PASS - Present and functional",
+      "Per-row Kabul/Reddet buttons": "PASS - Accept and reject buttons visible per row",
+      "Auto-Apply Şimdi button": "PASS - Present with correct disabled state based on config"
+    }
+  }
+}

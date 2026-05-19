@@ -14,6 +14,7 @@ import { MarketDemandDashboard } from "./MarketDemandDashboard";
 import { DemandRadar } from "./DemandRadar";
 import NeighborhoodScanPanel from "./NeighborhoodScanPanel";
 import AIClassificationHistoryPanel from "./AIClassificationHistoryPanel";
+import AIPricingEnginePanel from "./AIPricingEnginePanel";
 import MarketRobotHealthWidget from "./MarketRobotHealthWidget";
 import CompetitorPricePulseCard from "./CompetitorPricePulseCard";
 import FleetCompetitorPulseCard from "./FleetCompetitorPulseCard";
@@ -386,6 +387,7 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
       <div className="flex items-center gap-1 border-b border-stone-200 overflow-x-auto">
         {[
           {id:"dashboard",labelKey:"mr.sub.dashboard"},
+          {id:"ai-pricing",labelKey:"mr.sub.aiPricing"},
           {id:"radar",labelKey:"mr.sub.radar"},
           {id:"neighborhood",labelKey:"mr.sub.neighborhood"},
           {id:"demand",labelKey:"mr.sub.demand"},
@@ -720,6 +722,9 @@ export const MarketRobot = ({ propertyId, properties = [] }) => {
         </div>
       )}
 
+
+      {/* AI Pricing Engine Tab */}
+      {subTab === "ai-pricing" && <AIPricingEnginePanel propertyId={propertyId} />}
 
       {/* Market Demand Tab */}
       {subTab === "demand" && <MarketDemandDashboard propertyId={propertyId} hotelName={selectedName} />}

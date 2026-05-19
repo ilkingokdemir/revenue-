@@ -2123,6 +2123,94 @@ export default function NeighborhoodScanPanel({ propertyId }) {
                   </g>
                 );
               })}
+              {/* === INLINE PRICE LABELS — end-of-line tag + every-7th-day mid-line price === */}
+              {/* End-of-line tags help the eye assign a number to each colour without
+                  hovering. We stagger them vertically (snap to 12px grid) so two close
+                  competitor prices don't overlap. */}
+              {(() => {
+                const tags = [];
+                // Collect end-of-line points: market, our, each visible competitor
+                const candidates = [];
+                const lastIdx = snapshots.length - 1;
+                const lastMarket = snapshots[lastIdx]?.avg_price || 0;
+                if (lastMarket > 0) {
+                  candidates.push({
+                    x: chart.sx(lastIdx),
+                    y: chart.syP(lastMarket),
+                    v: lastMarket, colour: "#f59e0b", label: "Market",
+                    isMarket: true,
+                  });
+                }
+                if (chart.ourLinePoints && chart.ourLinePoints.length > 0) {
+                  const last = chart.ourLinePoints[chart.ourLinePoints.length - 1];
+                  candidates.push({
+                    x: last.x, y: last.y, v: last.v, colour: "#a78bfa",
+                    label: (ourHotelName || t("ns.chart.legend.us")).slice(0, 10),
+                    isOurs: true,
+                  });
+                }
+                chart.compLines.forEach((c) => {
+                  if (hiddenComps[c.id] || !c.points.length) return;
+                  const last = c.points[c.points.length - 1];
+                  candidates.push({
+                    x: last.x, y: last.y, v: last.v, colour: c.colour,
+                    label: c.name.slice(0, 16),
+                  });
+                });
+                if (candidates.length === 0) return null;
+                // Stagger labels vertically to avoid overlap: sort by y, then nudge each
+                // one at least 14px below the previous when they collide.
+                candidates.sort((a, b) => a.y - b.y);
+                const minGap = 14;
+                let prevY = -Infinity;
+                candidates.forEach((c) => {
+                  if (c.y < prevY + minGap) c.y = prevY + minGap;
+                  prevY = c.y;
+                });
+                candidates.forEach((c, i) => {
+                  const textW = String(Math.round(c.v)).length * 6 + (c.colour === "#f59e0b" || c.colour === "#a78bfa" ? 12 : 12);
+                  const labelX = c.x + 6;
+                  // Clamp so labels don't escape the chart area
+                  const tx = Math.min(labelX, chart.W - chart.pad.r - textW - 4);
+                  const fontSize = c.isOurs || c.isMarket ? 11 : 9.5;
+                  const fontWeight = c.isOurs ? 800 : c.isMarket ? 700 : 700;
+                  tags.push(
+                    <g key={`tag-${i}`} style={{ pointerEvents: "none" }}>
+                      <rect x={tx - 2} y={c.y - fontSize + 1} width={textW + 4} height={fontSize + 4} rx={3}
+                            fill="#0a0a0a" opacity={hoveredCompId && !c.isOurs && !c.isMarket && hoveredCompId !== candidates[i].id ? 0.4 : 0.88}
+                            stroke={c.colour} strokeWidth="0.6" />
+                      <text x={tx} y={c.y + 2} fontSize={fontSize} fontWeight={fontWeight}
+                            fill={c.colour} fontFamily="ui-monospace, monospace">
+                        {cur(Math.round(c.v))}
+                      </text>
+                    </g>
+                  );
+                });
+                // Mid-line value labels for the OUR line every 7 days — gives the user
+                // a "at a glance" price reading without hovering. We add one every 7
+                // points and only when the chart is wide enough.
+                if (chart.ourLinePoints && chart.ourLinePoints.length >= 4) {
+                  chart.ourLinePoints.forEach((p, i) => {
+                    if (i === 0 || i === chart.ourLinePoints.length - 1) return;
+                    if (i % 7 !== 0) return;
+                    const txt = cur(Math.round(p.v));
+                    const textW = txt.length * 6 + 6;
+                    tags.push(
+                      <g key={`our-mid-${i}`} style={{ pointerEvents: "none" }}>
+                        <rect x={p.x - textW / 2} y={p.y - 16} width={textW} height={13} rx={3}
+                              fill="#0a0a0a" opacity={hoveredCompId ? 0.3 : 0.85}
+                              stroke="#a78bfa" strokeWidth="0.6" />
+                        <text x={p.x} y={p.y - 6} fontSize="9.5" fontWeight="800"
+                              textAnchor="middle"
+                              fill="#a78bfa" fontFamily="ui-monospace, monospace">
+                          {txt}
+                        </text>
+                      </g>
+                    );
+                  });
+                }
+                return tags;
+              })()}
               {/* === HOVER CROSSHAIR + TOOLTIP === */}
               {hoverIdx !== null && snapshots[hoverIdx] && (() => {
                 const s = snapshots[hoverIdx];

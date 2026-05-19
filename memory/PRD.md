@@ -4,6 +4,18 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 335 — Chart inline fiyat etiketleri · 29 günlük trend görsel okunaklı)
+- **User request** (TR): "Neighborhood Market · Per-Hotel Price Trend (29 gün) chart'a fiyatlar gösterilsin".
+- **Frontend** (`NeighborhoodScanPanel.js` — SVG chart):
+  - **NEW** end-of-line price tags: chart'ın sağ kenarına her line için (Aldgate Flats hero violet, Market amber dashed, her competitor) fiyat etiketi (colored border + dark bg + monospace number). Stagger logic — 14px minGap ile üst üste binme önlenir, sortlanır.
+  - **NEW** mid-line value labels: "Bizim" violet line üstünde her 7. günde inline fiyat tag (örn £326, £283, £260, £241, £136, £158, £118). Anlık göz okuması için.
+  - Hover edilince diğer label'lar dim'leniyor (opacity 0.3-0.4) — kullanıcı bir rakibe hover edince sadece onun tag'i parlıyor.
+  - Tüm tag'ler currency-aware (`cur()` helper) — `£`, `€`, `$`, `₺`, `CHF` desteği zaten mevcut.
+- **Etki**: kullanıcı artık hover etmeden chart'taki gerçek fiyatları görebilir. Y-axis label'ları + line-end tag'ler + mid-line tag'ler birlikte tam fiyat görünürlük.
+- **Live verification** (screenshot): 10 farklı fiyat tag'i render oluyor (£394, £372, £326, £320, £301, £283, £260, £245, £241, £233, £199, £171, £158, £140, £136, £118, £97). Stagger çalışıyor, çakışma yok.
+
+
+
 ### 2026-05-19 (iter 334 — "⏰ Otomatik Tarama Geçmişi" paneli · Kullanıcı otomasyonu gözle görsün)
 - **User-approved suggestion**: "evet uygula" → Pazartesi cron'larının çalıştığını kullanıcıya görselle ispatlayan inline timeline.
 - **Frontend** (`NeighborhoodScanPanel.js`):

@@ -3723,6 +3723,14 @@ def create_market_robot_router(db, require_roles, resend=None):
         )
         return doc or {"property_id": property_id, "status": "idle"}
 
+    @router.delete("/revenue/market-robot/competitors/{competitor_id}")
+    async def remove_competitor(competitor_id: str,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Delete a single competitor by id. Used by the trash button on each
+        row in the Competitor Hotels tab UI."""
+        await db.market_competitors.delete_one({"id": competitor_id})
+        return {"message": "Removed"}
+
     @router.post("/revenue/market-robot/{property_id}/competitors/discover")
     async def discover_nearby_competitors(
         property_id: str, background_tasks: BackgroundTasks, data: Dict = {},

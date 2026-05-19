@@ -4,6 +4,24 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-05-19 (iter 341 — Market Robot Performance & UX fixes · 4 user-reported issues)
+- **User report (TR)** — 4 sorun raporlandı:
+  1. "90 Day Occupancy & Pickup. herhangi bir data yok statistik gorunmuyor"
+  2. "COMPETITIVE LANDSCAPE rakip fiyatlarinin 90 gun veya bir yillik gostermiyor kisitli gosteriyor"
+  3. "Robot Performance Report sadece iki rakip gosteriyor Competitor Hotels"
+  4. "Otomatik Rakip Bul · Auto-Discover 15 Neighbors sadece iki hotel buldu"
+- **Backend fixes**:
+  - **`/occupancy-pickup`** (L2606-2680): Serial `await db.bookings.count_documents()` `for i in range(days)` döngüsü → `asyncio.gather` ile paralel. 90d×N property = 7200 sequential query'den (>30s timeout) tek round-trip'e indirildi. **Sonuç: 1.44s** (was timeout).
+  - **`/supply`** (our-hotel overlay L2477): Aynı serial pattern → `asyncio.gather`. **Sonuç: 6.36s** (was timeout).
+  - **`/competitors/discover`** (L3732+): Synchronous Playwright scrape Booking.com'da 50-90s sürebiliyordu, Kubernetes ingress 60s'de kesiyordu (502). BackgroundTask + polling pattern'ine çevrildi (geo-scan gibi). POST anında `{scan_id, status:'queued'}` döner, frontend `GET /competitors/discover-status` ile poll eder. **Sonuç: discover sürekli tamamlanabiliyor.**
+  - **`booking_scraper.discover_nearby_hotels`** filter relax: önceden `review_count=None` olan candidate'ler filtrelendiği için (Booking.com çoğu yeni apartment listingsinde rc çıkaramıyor), camden-suites 0-2 sonuç dönüyordu. Şimdi sadece **bilinen** `rc < threshold` filtrelenir, `rc=None` korunur. **Sonuç: 13 candidate (was 0-2)**.
+  - **NEW endpoint**: `GET /api/revenue/market-robot/{property_id}/competitors/discover-status` polling için.
+- **Frontend** (`NeighborhoodScanPanel.js` L269-340):
+  - `runAutoDiscoverCompetitors` artık polling pattern kullanıyor: POST → `{scan_id}` → 4s aralıklarla 180s'ye kadar `discover-status` GET → done/error.
+- **Testing**: testing_agent_v3_fork iter 326 — Backend 8/8 ✓, Frontend 100% ✓. Camden-suites discover 105s'de 8 candidate döndü, aldgate-flats Competitor Hotels tab'ı tüm 10 rakibi listeliyor.
+
+
+
 ### 2026-05-19 (iter 340 — AI Pricing Suggestion Engine · Hybrid RMS Pro motoru)
 - **User-approved suggestion**: "Auto-Discover → Vision → Cron → Drilldown" zincirini AI öneri motoru ile tamamla.
 - **NEW Backend** (`routes/ai_pricing_engine.py` — yeni modül, 600+ satır):

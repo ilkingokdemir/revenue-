@@ -214,7 +214,7 @@ def create_city_ledger_router(db, resend_lib=None):
         amount = float(data.amount)
         if lines:
             try:
-                from routes.currency_fx import _get_rate_map, _convert
+                from routes.finance_ext.currency_fx import _get_rate_map, _convert
                 rates = await _get_rate_map(db)
                 rolled = 0.0
                 for li in lines:

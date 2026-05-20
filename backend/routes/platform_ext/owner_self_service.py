@@ -129,7 +129,7 @@ def create_owner_auth_router(db, require_roles):
     @router.get("/owner-auth/dashboard")
     async def dashboard(year: str = "", owner: dict = Depends(get_current_owner)):
         """YTD performance + monthly breakdown for the logged-in owner."""
-        from routes.owner_portal import create_owner_portal_router  # noqa: F401 (ensures models share collections)
+        from routes.platform_ext.owner_portal import create_owner_portal_router  # noqa: F401 (ensures models share collections)
         if not year:
             year = datetime.now(timezone.utc).strftime("%Y")
         # Re-implement the slim summary inline (avoid private import noise)
@@ -186,7 +186,7 @@ def create_owner_auth_router(db, require_roles):
     @router.get("/owner-auth/statement.pdf")
     async def get_statement_pdf(month: str = "", owner: dict = Depends(get_current_owner)):
         """Owner-scoped PDF endpoint — re-uses the same generator as the admin path."""
-        from routes.owner_portal import create_owner_portal_router  # noqa: F401
+        from routes.platform_ext.owner_portal import create_owner_portal_router  # noqa: F401
         # Call the admin endpoint's PDF builder by re-creating the same data flow.
         # Cheapest: just import and call get_statement_pdf logic.
         # We replicate the body inline rather than introduce a circular dep.

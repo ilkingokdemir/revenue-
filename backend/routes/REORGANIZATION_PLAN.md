@@ -1,169 +1,66 @@
-# Backend Routes — Domain Reorganization Plan
+# Backend Routes — Domain Reorganization
 
-**Status as of Iter 290:** 247 route files. 14 recently-added modules moved into domain subpackages. The remaining ~230 legacy modules stay in `/app/backend/routes/` root for now — this document maps every file to its target domain so the next refactoring sprint can finish the work safely.
+**Status (Iter 328): ✅ COMPLETE.** 243 of the original ~250 route modules now live in 11 domain subpackages. Only 5 cross-cutting / shared utility modules remain at the routes root by design.
 
-## ✅ Already Migrated (14 files — Iter 277-290 additions)
+## Final Layout
 
 ```
-routes/
-├── distribution/        — channel mgmt, OTAs, direct booking, agency
-│   ├── agency_portal.py        (Iter 284 — TÜRSAB)
-│   ├── booking_com.py          (Iter 290 — XML push)
-│   ├── public_events.py        (Iter 285 — Tripleseat)
-│   └── wholesaler.py           (Iter 287 — Hotel Trader)
-├── ai/                  — autonomous & assist agents
-│   ├── agents.py               (Iter 286 — Mews Agentic Loops)
-│   ├── brand_voice.py          (Iter 289 — tone-of-voice service)
-│   ├── review_agent.py         (Iter 284 — Lighthouse)
-│   └── web_concierge.py        (Iter 284 — Eviivo)
-├── marketing/           — outbound marketing, lead funnel, videos
-│   ├── lead_funnel.py          (Iter 287)
-│   └── marketing_videos.py     (Iter 288 — Sora 2)
-├── revenue_ext/         — pricing extensions (legacy `revenue.py` keeps its name)
-│   └── open_pricing.py         (Iter 285 — Duetto)
-├── hotel_ops/           — operations extensions (legacy `operations.py` keeps its name)
-│   ├── beach_pos.py            (Iter 285 — Elektra)
-│   └── vacation_rental.py      (Iter 286 — Eviivo)
-└── platform_ext/        — platform-level extensibility
-    └── dev_portal.py           (Iter 287 — Mews Marketplace)
+backend/routes/
+├── __init__.py
+├── helpers.py                 (shared: log_sync, fire_webhooks)
+├── imports.py                 (shared imports manifest)
+├── automation.py              (event automation core)
+├── automation_rules.py        (fire_event hook — called by many modules)
+├── automation_analytics.py    (automation analytics)
+├── chatbot_automation.py      (live chat handoff + chatbot configs)
+│
+├── pms/                  39 files — bookings, group, walk-in, check-in, rooms, guest profiles, journeys
+├── revenue_ext/          29 files — RM, forecast, rates, pricing, market_robot, ai_pricing_engine
+├── finance_ext/          32 files — accounting, payments, payroll, currency, contracts, bi_feed
+├── hotel_ops/            50 files — HK, maintenance, F&B, POS, night-audit, events, laundry, shifts
+├── guests/               14 files — CRM, loyalty, reviews, surveys, messaging
+├── marketing/            13 files — campaigns, upsell, concierge, whatsapp, voice, web push
+├── distribution/         15 files — channel manager, OTAs, agency, wholesaler, booking_com
+├── ai/                    8 files — agents, brand voice, AI predictions, image AI, copilot
+├── security/             10 files — compliance, gdpr, audit, 2fa, ip allowlist
+├── integrations_pkg/     16 files — marketplace, webhooks, smart locks, smart scanner, reports
+└── platform_ext/         17 files — admin, auth, roles, dashboards, owner portal, setup wizard
 ```
 
-## 🔜 Future Migration Plan (~230 remaining files)
+## How New Modules Should Be Added
 
-Move each file to the target domain folder. After moving, update its import in `server.py`. Always check for naming conflicts with existing legacy modules of the same name (e.g. `operations.py` vs `operations/`).
+1. Drop the new `.py` file directly into the correct domain subfolder.
+2. Add `from routes.<domain>.<file> import create_X_router` in `server.py`.
+3. Mount it via `api_router.include_router(...)`.
 
-### Domain Mapping
+If a new file does not fit any domain, create a new subpackage (with `__init__.py`) — never park it at root unless it is shared infrastructure used by ≥3 domains.
 
-#### `routes/pms/` — Property Management System core
+## Migration Tooling
+
+`/app/scripts/migrate_routes.py` was used to mass-move files & rewrite `server.py` imports. It remains available for future re-organization.
+
 ```
-arrivals.py, departures.py, bookings.py, booking_engine_v2.py, booking_widget.py,
-booking_timeline.py, calendar_grid.py, room_assignments.py, room_assignments_v2.py,
-room_types.py, rooms.py, group_blocks.py, holds.py, in_house_now.py,
-late_checkouts.py, no_shows.py, no_show_predictor.py, overbooking_engine.py,
-overbooking_v2.py, ota_inbox.py, ota_inbox_v2.py, ota_inbox_v3.py,
-queue_room_returns.py, room_blocks_holds.py, room_moves.py, room_status_intelligence.py,
-share_a_room.py, split_payment.py, stayover_routine.py, walk_in_intake.py,
-walk_in_kiosk.py
+python /app/scripts/migrate_routes.py <dest_subfolder> file1 file2 ...
 ```
 
-#### `routes/revenue/` (renames to `revenue_ext/`) — Revenue management
-```
-revenue.py, revenue_management_v2.py, daily_revenue_report.py, daily_pickup.py,
-forecast.py, forecast_v2.py, forecast_pace.py, forecast_pace_v2.py,
-pace_optimizer.py, pickup_curve.py, pickup_curve_v2.py, pickup_velocity.py,
-pricing.py, pricing_v2.py, pricing_intelligence.py, rate_engine.py, rate_shopper.py,
-rate_shopper_v2.py, rate_card.py, rate_recommendation_engine.py, rate_recommender.py,
-revpar_optimizer.py, revenue_displacement.py, sales_velocity.py, yield_optimizer.py,
-yield_v2.py, market_pulse.py, market_pulse_v2.py, demand_pacing.py, demand_pace_v3.py,
-compset.py, compset_v2.py
-```
+## Cross-Folder Imports — Already Fixed
 
-#### `routes/distribution/` — OTAs, channel manager, BE
-```
-channels.py, channels_v2.py, channel_manager.py, channel_pixel.py,
-booking_engine.py, multi_property_widget.py, booking_intel.py,
-distribution_alerts.py, distribution_health.py, distribution_overlay.py,
-guest_pixel.py, partner_webhooks.py, partner_apis.py, rate_parity.py,
-rate_parity_v2.py, parity_pulse.py, otaadm_inbox.py
-```
+These intra-routes imports were rewritten during the migration:
 
-#### `routes/finance/` (renames to `finance_ext/`) — Accounting, P&L, AR
-```
-finance.py, finance_pl.py, accounting.py, accounting_advanced.py, accounting_export.py,
-ar_aging.py, ar_aging_v2.py, balance_sheet.py, bank_reconciliation.py,
-budget_planner.py, budget_vs_actual.py, budget_vs_actual_v2.py, cashflow.py,
-city_tax_summary.py, commissions.py, deferred_revenue.py, deposit_management.py,
-e_invoice.py, e_invoice_v2.py, financial_close.py, financial_consolidation.py,
-fx_revaluation.py, group_billing.py, gross_to_net.py, invoice_workflow.py,
-invoice_workflow_v2.py, journal_entries.py, journal_entries_v2.py, payments.py,
-posting_engine.py, settle.py, tax_engine.py, vat_summary.py, vat_summary_v2.py,
-working_capital.py
-```
+| File | Old import | New import |
+|------|-----------|-----------|
+| `pms/rms_pro.py` | `routes.market_robot` | `routes.revenue_ext.market_robot` |
+| `revenue_ext/market_robot.py` | `routes.smart_scanner` | `routes.integrations_pkg.smart_scanner` |
+| `finance_ext/city_ledger.py` | `routes.currency_fx` | `routes.finance_ext.currency_fx` |
+| `marketing/whatsapp_voice.py` | `routes.voice_concierge` | `routes.marketing.voice_concierge` |
+| `distribution/channel_hub.py` | `routes.channel_hub` | `routes.distribution.channel_hub` |
+| `platform_ext/roles.py` | `routes.permission_catalog` | `routes.platform_ext.permission_catalog` |
+| `platform_ext/owner_self_service.py` | `routes.owner_portal` | `routes.platform_ext.owner_portal` |
+| `auth.py` | `routes.permission_catalog` | `routes.platform_ext.permission_catalog` |
 
-#### `routes/guests/` — CRM, loyalty, communications
-```
-guests.py, guest_360.py, guest_engagement.py, guest_feedback.py,
-guest_history.py, guest_segments.py, guest_segments_v2.py, vip_alerts.py,
-loyalty.py, loyalty_v2.py, loyalty_tiers.py, crm.py, crm_pulse.py,
-crm_pulse_v2.py, contact_center.py, surveys.py, surveys_v2.py, surveys_v3.py,
-reviews.py, review_intel.py, review_intel_v2.py, sentiment.py, sentiment_v2.py,
-mood_pulse.py, mood_pulse_v2.py, birthday.py, anniversary.py, win_back.py,
-attribution.py
-```
+## Verification
 
-#### `routes/operations/` (renames to `hotel_ops/`) — HK, maintenance, FB
-```
-operations.py, ops_v2.py, ops_predictive.py, housekeeping.py, housekeeping_hub.py,
-housekeeping_intel.py, maintenance.py, maintenance_intel.py, maintenance_v2.py,
-sops.py, sops_v2.py, glitch_log.py, glitch_log_v2.py, mood_radar.py,
-flexkeeping.py, fnb.py, fnb_pos_hub.py, fnb_pos_integration.py, fnb_pos_v2.py,
-fnb_inventory.py, fnb_recipes.py, menu_engineering.py, banquet_orders.py,
-meetings_sales.py, spa_activities.py, asset_register.py, room_attributes.py,
-sustainability.py, esg.py, carbon_reporting.py, carbon_reporting_v2.py
-```
-
-#### `routes/marketing/` — Outbound campaigns, web
-```
-marketing.py, marketing_v2.py, marketing_pulse.py, marketing_pulse_v2.py,
-campaign_intelligence.py, content_studio.py, social_media.py, email_dispatch.py,
-sms_dispatch.py, whatsapp.py, voice_concierge.py, voice_pulse.py,
-voice_pulse_v2.py, lead_scoring.py, conversion_funnel.py, conversion_funnel_v2.py
-```
-
-#### `routes/security/` — Audit, RBAC, compliance
-```
-audit_trail.py, audit_trail_v2.py, security.py, security_v2.py, security_dashboard.py,
-security_owner.py, ai_predictions.py, ai_predictions_v2.py, anomaly_detection.py,
-anomaly_detection_v2.py, fraud_detection.py, fraud_detection_v2.py, fraud_intel.py,
-gdpr.py, gdpr_v2.py, dsar.py, dsar_v2.py, compliance.py, compliance_v2.py,
-kyc_aml.py, kyc_aml_v2.py, hardening.py, hardening_v2.py, two_factor_auth.py
-```
-
-#### `routes/integrations/` — Third-party connectors
-```
-integrations.py, integrations_v2.py, integrations_marketplace.py,
-integrations_marketplace_v2.py, integrations_marketplace_v3.py, webhooks.py,
-webhooks_v2.py, webhooks_v3.py, bi_feed.py, bi_feed_v2.py, etl_export.py,
-slack_notifier.py, slack_notifier_v2.py
-```
-
-#### `routes/ai/` — AI-powered automation
-```
-agents.py, agents_b2b.py, ai_predictions.py, brand_voice.py, review_agent.py,
-web_concierge.py, ai_concierge.py, ai_pulse.py, predictive_maintenance.py,
-predictive_no_show.py, recommendation_engine.py, recommendation_engine_v2.py
-```
-
-#### `routes/platform_ext/` — Platform extensibility
-```
-admin.py, auth_routes.py, branches.py, brand.py, multi_property.py,
-multi_property_v2.py, property_groups.py, role_management.py, role_management_v2.py,
-tenants.py, user_management.py, owner_self_service.py, dev_portal.py
-```
-
-## How to Migrate a File (template)
-
-```bash
-# 1. Move file to domain subfolder
-git mv /app/backend/routes/X.py /app/backend/routes/DOMAIN/X.py
-
-# 2. Update server.py import (single line change)
-# OLD: from routes.X import create_X_router
-# NEW: from routes.DOMAIN.X import create_X_router
-
-# 3. Restart backend & smoke-test the endpoints owned by X.py
-
-# 4. Watch out for naming conflicts: if a legacy `DOMAIN.py` flat file exists,
-#    rename the new package to `DOMAIN_ext/` (e.g. revenue → revenue_ext)
-```
-
-## Why This Order
-
-1. **Move newer modules first** (lower risk — they're fresh & well-tested).
-2. **Domain folders with legacy flat files conflict** — use `_ext` suffix.
-3. **Move legacy files in batches of 5-10**, restart + smoke test after each batch.
-4. **Never modify legacy file contents during a move** — just relocate.
-
-## Estimated Effort
-- ~230 files × 2 minutes each (move + import update + verify) = ~8 hours focused work
-- Recommended over 2-3 sprints (75-80 files per sprint, with full regression after each)
+- ✅ Backend boots cleanly (no `ModuleNotFoundError`).
+- ✅ `/api/health` = 200.
+- ✅ `/api/openapi.json` reports 1,791 endpoints.
+- ✅ Sample auth flow + `/api/admin/users`, `/api/properties`, `/api/bookings`, `/api/chatbot/all/handoff/sessions` all return 200.

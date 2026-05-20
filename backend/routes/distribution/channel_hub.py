@@ -651,7 +651,7 @@ def create_channel_hub_router(db, require_roles):
     async def run_drift_now(property_id: str,
                             current_user: dict = Depends(require_roles("admin", "manager"))):
         # Import inside to avoid circular init ordering surprises
-        from routes.channel_hub import nightly_dry_publish as _run
+        from routes.distribution.channel_hub import nightly_dry_publish as _run
         result = await _run(db, property_id)
         return {"status": "ok", **result}
 

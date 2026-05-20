@@ -1,0 +1,109 @@
+{
+  "summary": "Backend Route Reorganization (Iter 328) - Regression Testing Complete. All 11 domain subfolders verified working. 1791 endpoints registered. Fixed currency_fx.py KeyError bug.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/currency-fx/rates",
+        "issue": "KeyError: 'code' when fx_rates collection has docs without code field - FIXED",
+        "priority": "LOW",
+        "status": "FIXED"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration328_route_reorganization.py",
+    "/app/test_reports/pytest/pytest_iteration328_route_reorganization.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Route reorganization complete - 243 route modules moved to 11 domain subfolders",
+    "All imports in server.py correctly updated to new paths",
+    "Cross-folder imports fixed during migration (rms_pro→market_robot, etc.)"
+  ],
+  "updated_files": [
+    "/app/backend/routes/finance_ext/currency_fx.py"
+  ],
+  "success_rate": {
+    "backend": "100% - All 11 domain subfolders verified working"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend route reorganization complete. All routes moved from flat /app/backend/routes/ to 11 domain subfolders (pms, revenue_ext, finance_ext, hotel_ops, guests, marketing, distribution, ai, security, integrations_pkg, platform_ext). Only 5 cross-cutting modules remain at root (automation.py, automation_rules.py, automation_analytics.py, chatbot_automation.py, helpers.py, imports.py). Fixed currency_fx.py KeyError bug by adding defensive checks for docs without 'code' field.",
+  "verified_domains": {
+    "pms": {
+      "files": 39,
+      "sample_endpoints": ["/api/properties", "/api/bookings", "/api/room-types", "/api/groups"],
+      "status": "WORKING"
+    },
+    "revenue_ext": {
+      "files": 29,
+      "sample_endpoints": ["/api/revenue/market-robot/{property_id}/config", "/api/revenue/ai-pricing/{property_id}/config", "/api/revenue/market-robot/{property_id}/competitors"],
+      "status": "WORKING"
+    },
+    "finance_ext": {
+      "files": 32,
+      "sample_endpoints": ["/api/accounting/payments/{property_id}", "/api/currency-fx/rates", "/api/expenses/{property_id}"],
+      "status": "WORKING"
+    },
+    "hotel_ops": {
+      "files": 50,
+      "sample_endpoints": ["/api/housekeeping/rooms/{property_id}", "/api/pos/menu/{property_id}", "/api/accounting/night-audit/{property_id}"],
+      "status": "WORKING"
+    },
+    "guests": {
+      "files": 14,
+      "sample_endpoints": ["/api/reviews", "/api/loyalty/tiers/{property_id}"],
+      "status": "WORKING"
+    },
+    "marketing": {
+      "files": 13,
+      "sample_endpoints": ["/api/campaigns/{property_id}"],
+      "status": "WORKING"
+    },
+    "distribution": {
+      "files": 15,
+      "sample_endpoints": ["/api/channel-revenue/channels/{property_id}", "/api/ota-health/{property_id}"],
+      "status": "WORKING"
+    },
+    "ai": {
+      "files": 8,
+      "sample_endpoints": ["/api/agents/{property_id}"],
+      "status": "WORKING"
+    },
+    "security": {
+      "files": 10,
+      "sample_endpoints": ["/api/audit-trail", "/api/gdpr/search"],
+      "status": "WORKING"
+    },
+    "integrations_pkg": {
+      "files": 16,
+      "sample_endpoints": ["/api/integrations", "/api/notifications/settings"],
+      "status": "WORKING"
+    },
+    "platform_ext": {
+      "files": 17,
+      "sample_endpoints": ["/api/admin/users", "/api/auth/me", "/api/roles", "/api/dashboard/overview/{property_id}"],
+      "status": "WORKING"
+    }
+  },
+  "key_metrics": {
+    "total_endpoints": 1791,
+    "health_check": "200 OK",
+    "admin_login": "Working",
+    "openapi_spec": "Valid"
+  },
+  "bug_fix_applied": {
+    "file": "/app/backend/routes/finance_ext/currency_fx.py",
+    "issue": "KeyError: 'code' in _get_rate_map() and list_rates()",
+    "fix": "Added defensive checks: filter query for docs with code field, skip docs without code in iteration",
+    "lines_changed": [116, 119, 120, 121, 122, 220, 223, 224, 225, 226, 227]
+  }
+}

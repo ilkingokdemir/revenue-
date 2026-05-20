@@ -432,7 +432,7 @@ def create_rms_pro_router(db, require_roles):
         """
         import asyncio
         import logging
-        from routes.market_robot import _internal_close_gap
+        from routes.revenue_ext.market_robot import _internal_close_gap
         logger = logging.getLogger("autopilot")
         logger.info("🤖 Autopilot loop started")
 

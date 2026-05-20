@@ -6901,7 +6901,7 @@ Date range: {date_from} to {date_to}."""
                 "hotel_id": resolved_hotel_id}
 
     # Initialize smart scanner with event + competitor + our-hotel scanning
-    from routes.smart_scanner import init_scanner
+    from routes.integrations_pkg.smart_scanner import init_scanner
     scanner = init_scanner(db, _scrape_booking_date, _calculate_price_adjustment, _auto_apply_pricing, _auto_event_scan, _auto_competitor_scan, _auto_our_hotel_scan)
 
     @router.post("/revenue/market-robot/{property_id}/scanner/start")

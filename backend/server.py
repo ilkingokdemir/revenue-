@@ -22,126 +22,126 @@ import secrets
 from bson import ObjectId
 
 # Import extracted route modules
-from routes.messaging import create_messaging_router
-from routes.messaging_advanced import create_messaging_advanced_router
-from routes.surveys import create_surveys_router
+from routes.guests.messaging import create_messaging_router
+from routes.guests.messaging_advanced import create_messaging_advanced_router
+from routes.guests.surveys import create_surveys_router
 from routes.automation import create_automation_router
-from routes.dashboard import create_dashboard_router
-from routes.staff_performance import create_staff_performance_router
-from routes.calendar_gss import create_calendar_gss_router
-from routes.housekeeping import create_housekeeping_router
-from routes.admin import create_admin_router
-from routes.night_audit import create_night_audit_router
-from routes.loyalty_logbook_forecast import create_loyalty_router
-from routes.guest_profiles import create_guest_profiles_router
-from routes.campaigns import create_campaigns_router
-from routes.guest_app import create_guest_app_router
-from routes.smart_locks import create_smart_locks_router
-from routes.setup_wizard import create_setup_wizard_router
-from routes.stock import create_stock_router
+from routes.platform_ext.dashboard import create_dashboard_router
+from routes.hotel_ops.staff_performance import create_staff_performance_router
+from routes.pms.calendar_gss import create_calendar_gss_router
+from routes.hotel_ops.housekeeping import create_housekeeping_router
+from routes.platform_ext.admin import create_admin_router
+from routes.hotel_ops.night_audit import create_night_audit_router
+from routes.guests.loyalty_logbook_forecast import create_loyalty_router
+from routes.pms.guest_profiles import create_guest_profiles_router
+from routes.marketing.campaigns import create_campaigns_router
+from routes.pms.guest_app import create_guest_app_router
+from routes.integrations_pkg.smart_locks import create_smart_locks_router
+from routes.platform_ext.setup_wizard import create_setup_wizard_router
+from routes.hotel_ops.stock import create_stock_router
 from routes.finance_ext.accounting import create_accounting_router
 from routes.finance_ext.accounting_advanced import create_accounting_advanced_router
 from routes.finance_ext.bank_reconciliation import create_bank_reconciliation_router
-from routes.enhanced_features import create_enhanced_features_router
-from routes.pos import create_pos_router
-from routes.pos_advanced import create_pos_advanced_router
-from routes.pos_ai import create_pos_ai_router
+from routes.pms.enhanced_features import create_enhanced_features_router
+from routes.hotel_ops.pos import create_pos_router
+from routes.hotel_ops.pos_advanced import create_pos_advanced_router
+from routes.hotel_ops.pos_ai import create_pos_ai_router
 from routes.finance_ext.payments import create_payments_router
-from routes.terminal import create_terminal_router
-from routes.auth_routes import create_auth_router
-from routes.connections import create_connections_router
-from routes.reviews import create_reviews_router
-from routes.integrations import create_integrations_router
-from routes.bookings import create_bookings_router
-from routes.guest_payment import create_guest_payment_router
-from routes.guest_journey import create_guest_journey_router
-from routes.maintenance import create_maintenance_router
-from routes.rate_manager import create_rate_manager_router
-from routes.reports import create_reports_router
-from routes.booking_widget import create_booking_widget_router
-from routes.operations import create_operations_router
-from routes.shifts import create_shifts_router, create_shifts_v2_router
-from routes.rates_grid import create_rates_grid_router
-from routes.workforce_extras import create_workforce_extras_router
-from routes.notifications import create_notifications_router
+from routes.hotel_ops.terminal import create_terminal_router
+from routes.platform_ext.auth_routes import create_auth_router
+from routes.integrations_pkg.connections import create_connections_router
+from routes.guests.reviews import create_reviews_router
+from routes.integrations_pkg.integrations import create_integrations_router
+from routes.pms.bookings import create_bookings_router
+from routes.pms.guest_payment import create_guest_payment_router
+from routes.pms.guest_journey import create_guest_journey_router
+from routes.hotel_ops.maintenance import create_maintenance_router
+from routes.revenue_ext.rate_manager import create_rate_manager_router
+from routes.integrations_pkg.reports import create_reports_router
+from routes.pms.booking_widget import create_booking_widget_router
+from routes.hotel_ops.operations import create_operations_router
+from routes.hotel_ops.shifts import create_shifts_router, create_shifts_v2_router
+from routes.revenue_ext.rates_grid import create_rates_grid_router
+from routes.hotel_ops.workforce_extras import create_workforce_extras_router
+from routes.integrations_pkg.notifications import create_notifications_router
 from routes.finance_ext.finance import create_finance_router
-from routes.my_tasks import create_my_tasks_router
-from routes.lost_found import create_lost_found_router
-from routes.events import create_events_router
-from routes.settings_hub import create_settings_hub_router
-from routes.revenue import create_revenue_router
-from routes.revenue_advanced import create_revenue_advanced_router
-from routes.revenue_phase2 import create_revenue_phase2_router
-from routes.revenue_copilot import create_revenue_copilot_router
-from routes.revenue_exports import create_revenue_exports_router
-from routes.market_robot import create_market_robot_router
-from routes.ai_pricing_engine import create_ai_pricing_router
+from routes.pms.my_tasks import create_my_tasks_router
+from routes.hotel_ops.lost_found import create_lost_found_router
+from routes.hotel_ops.events import create_events_router
+from routes.platform_ext.settings_hub import create_settings_hub_router
+from routes.revenue_ext.revenue import create_revenue_router
+from routes.revenue_ext.revenue_advanced import create_revenue_advanced_router
+from routes.revenue_ext.revenue_phase2 import create_revenue_phase2_router
+from routes.revenue_ext.revenue_copilot import create_revenue_copilot_router
+from routes.revenue_ext.revenue_exports import create_revenue_exports_router
+from routes.revenue_ext.market_robot import create_market_robot_router
+from routes.revenue_ext.ai_pricing_engine import create_ai_pricing_router
 from routes.chatbot_automation import create_chatbot_router
-from routes.dynamic_pricing import create_dynamic_pricing_router
-from routes.event_intelligence import create_event_intelligence_router
-from routes.parity_analysis import create_parity_analysis_router
-from routes.channel_manager import create_channel_manager_router
-from routes.historical_pricing import create_historical_pricing_router
-from routes.revenue_intelligence import create_revenue_intelligence_router
-from routes.demand_radar import create_demand_radar_router
-from routes.compset_intel import create_compset_intel_router
-from routes.price_alerts import create_price_alerts_router
-from routes.booking_timeline import create_booking_timeline_router
-from routes.guest_services import create_guest_services_router
-from routes.displacement import create_displacement_router
-from routes.los_optimizer import create_los_optimizer_router
-from routes.mobile_api import create_mobile_router
-from routes.weekly_digest import create_weekly_digest_router
-from routes.upsell_engine import create_upsell_router
-from routes.rate_scraper import create_rate_scraper_router
-from routes.enhanced_dashboard import create_enhanced_dashboard_router
-from routes.reports_hub import create_reports_hub_router
+from routes.revenue_ext.dynamic_pricing import create_dynamic_pricing_router
+from routes.hotel_ops.event_intelligence import create_event_intelligence_router
+from routes.revenue_ext.parity_analysis import create_parity_analysis_router
+from routes.distribution.channel_manager import create_channel_manager_router
+from routes.revenue_ext.historical_pricing import create_historical_pricing_router
+from routes.revenue_ext.revenue_intelligence import create_revenue_intelligence_router
+from routes.revenue_ext.demand_radar import create_demand_radar_router
+from routes.revenue_ext.compset_intel import create_compset_intel_router
+from routes.revenue_ext.price_alerts import create_price_alerts_router
+from routes.pms.booking_timeline import create_booking_timeline_router
+from routes.pms.guest_services import create_guest_services_router
+from routes.revenue_ext.displacement import create_displacement_router
+from routes.revenue_ext.los_optimizer import create_los_optimizer_router
+from routes.integrations_pkg.mobile_api import create_mobile_router
+from routes.marketing.weekly_digest import create_weekly_digest_router
+from routes.marketing.upsell_engine import create_upsell_router
+from routes.revenue_ext.rate_scraper import create_rate_scraper_router
+from routes.platform_ext.enhanced_dashboard import create_enhanced_dashboard_router
+from routes.integrations_pkg.reports_hub import create_reports_hub_router
 from routes.finance_ext.finance_pl import create_finance_pl_router
-from routes.shift_scheduler import create_shift_scheduler_router
-from routes.pass_over import create_pass_over_router
-from routes.compliance import create_compliance_router
-from routes.tr_compliance import create_tr_compliance_router
-from routes.eu_compliance import create_eu_compliance_router
-from routes.channel_revenue import create_channel_revenue_router
-from routes.pos_kds import create_pos_kds_router
-from routes.loyalty_v2 import create_loyalty_v2_router
-from routes.sentiment import create_sentiment_router as create_cross_sentiment_router
-from routes.self_checkin_v2 import create_self_checkin_v2_router
-from routes.brand_portal import create_brand_portal_router
-from routes.ops_v2 import create_ops_v2_router
-from routes.forecast_v2 import create_forecast_v2_router
-from routes.anomaly_detection import create_anomaly_router
-from routes.tipping import create_tipping_router
-from routes.guest_portal_v2 import create_guest_portal_v2_router
-from routes.conference_sc import create_conference_sc_router
-from routes.copilot import create_copilot_router
-from routes.image_ai import create_image_ai_router
-from routes.fnb_tabs import create_fnb_tabs_router
-from routes.bi_feed import create_bi_feed_router
-from routes.hk_turnover import create_hk_turnover_router
-from routes.pricing_explain import create_pricing_explain_router
-from routes.loyalty_tier import create_loyalty_tier_router
-from routes.banquet_orders import create_banquet_orders_router
-from routes.help import create_help_router
-from routes.site_feasibility import create_site_feasibility_router
-from routes.self_checkin_auto import create_self_checkin_auto_router
-from routes.lock_sdk import create_lock_sdk_router
-from routes.recipe_cogs import create_recipe_cogs_router
-from routes.voice_concierge import create_voice_concierge_router
-from routes.whatsapp_voice import create_whatsapp_voice_router
+from routes.hotel_ops.shift_scheduler import create_shift_scheduler_router
+from routes.pms.pass_over import create_pass_over_router
+from routes.security.compliance import create_compliance_router
+from routes.security.tr_compliance import create_tr_compliance_router
+from routes.security.eu_compliance import create_eu_compliance_router
+from routes.distribution.channel_revenue import create_channel_revenue_router
+from routes.hotel_ops.pos_kds import create_pos_kds_router
+from routes.guests.loyalty_v2 import create_loyalty_v2_router
+from routes.integrations_pkg.sentiment import create_sentiment_router as create_cross_sentiment_router
+from routes.pms.self_checkin_v2 import create_self_checkin_v2_router
+from routes.platform_ext.brand_portal import create_brand_portal_router
+from routes.hotel_ops.ops_v2 import create_ops_v2_router
+from routes.revenue_ext.forecast_v2 import create_forecast_v2_router
+from routes.security.anomaly_detection import create_anomaly_router
+from routes.hotel_ops.tipping import create_tipping_router
+from routes.pms.guest_portal_v2 import create_guest_portal_v2_router
+from routes.hotel_ops.conference_sc import create_conference_sc_router
+from routes.ai.copilot import create_copilot_router
+from routes.ai.image_ai import create_image_ai_router
+from routes.hotel_ops.fnb_tabs import create_fnb_tabs_router
+from routes.finance_ext.bi_feed import create_bi_feed_router
+from routes.hotel_ops.hk_turnover import create_hk_turnover_router
+from routes.revenue_ext.pricing_explain import create_pricing_explain_router
+from routes.guests.loyalty_tier import create_loyalty_tier_router
+from routes.hotel_ops.banquet_orders import create_banquet_orders_router
+from routes.platform_ext.help import create_help_router
+from routes.platform_ext.site_feasibility import create_site_feasibility_router
+from routes.pms.self_checkin_auto import create_self_checkin_auto_router
+from routes.integrations_pkg.lock_sdk import create_lock_sdk_router
+from routes.hotel_ops.recipe_cogs import create_recipe_cogs_router
+from routes.marketing.voice_concierge import create_voice_concierge_router
+from routes.marketing.whatsapp_voice import create_whatsapp_voice_router
 from routes.ai.ai_predictions import create_ai_predictions_router
-from routes.laundry import create_laundry_router
-from routes.payroll import create_payroll_router
-from routes.expenses import create_expenses_router
+from routes.hotel_ops.laundry import create_laundry_router
+from routes.finance_ext.payroll import create_payroll_router
+from routes.finance_ext.expenses import create_expenses_router
 from routes.finance_ext.cashflow import create_cashflow_router
-from routes.marketplace import create_marketplace_router
-from routes.arrivals import create_arrivals_router
-from routes.contracts import create_contracts_router
-from routes.legal_documents import create_legal_documents_router
-from routes.staff_onboarding import create_staff_onboarding_router
-from routes.payroll_matrix import create_payroll_matrix_router
-from routes.bug_tracker import create_bug_tracker_router
-from routes.roles import create_roles_router
+from routes.integrations_pkg.marketplace import create_marketplace_router
+from routes.pms.arrivals import create_arrivals_router
+from routes.finance_ext.contracts import create_contracts_router
+from routes.security.legal_documents import create_legal_documents_router
+from routes.hotel_ops.staff_onboarding import create_staff_onboarding_router
+from routes.finance_ext.payroll_matrix import create_payroll_matrix_router
+from routes.security.bug_tracker import create_bug_tracker_router
+from routes.platform_ext.roles import create_roles_router
 from routes.imports import create_imports_router
 
 # Import extracted modules
@@ -438,7 +438,7 @@ connections_router = create_connections_router(db, require_roles)
 api_router.include_router(connections_router)
 
 # Register sentiment router BEFORE reviews router to avoid /reviews/{review_id} catching /reviews/sentiment/*
-from routes.review_sentiment import create_sentiment_router
+from routes.integrations_pkg.review_sentiment import create_sentiment_router
 api_router.include_router(create_sentiment_router(db, require_roles, LlmChat, UserMessage))
 
 reviews_router = create_reviews_router(db, require_roles, get_current_user, verify_api_key, LlmChat, UserMessage, resend)
@@ -665,16 +665,16 @@ api_router.include_router(imports_router)
 from routes.security.audit_trail import create_audit_trail_router
 audit_trail_router = create_audit_trail_router(db)
 api_router.include_router(audit_trail_router)
-from routes.collisions import create_collisions_router
+from routes.pms.collisions import create_collisions_router
 collisions_router = create_collisions_router(db)
 api_router.include_router(collisions_router)
-from routes.profit_os import create_profit_os_router
+from routes.finance_ext.profit_os import create_profit_os_router
 profit_os_router = create_profit_os_router(db)
 api_router.include_router(profit_os_router)
-from routes.oos_blocks import create_oos_router
+from routes.pms.oos_blocks import create_oos_router
 oos_router = create_oos_router(db)
 api_router.include_router(oos_router)
-from routes.city_ledger import create_city_ledger_router
+from routes.finance_ext.city_ledger import create_city_ledger_router
 city_ledger_router = create_city_ledger_router(db, resend)
 api_router.include_router(city_ledger_router)
 from routes.finance_ext.tax_config import create_tax_config_router
@@ -683,22 +683,22 @@ api_router.include_router(tax_config_router)
 from routes.finance_ext.deposit_policies import create_deposit_policies_router
 deposit_policies_router = create_deposit_policies_router(db)
 api_router.include_router(deposit_policies_router)
-from routes.unified_inbox import create_unified_inbox_router
+from routes.integrations_pkg.unified_inbox import create_unified_inbox_router
 unified_inbox_router = create_unified_inbox_router(db)
 api_router.include_router(unified_inbox_router)
-from routes.competitor_parity import create_competitor_parity_router
+from routes.revenue_ext.competitor_parity import create_competitor_parity_router
 competitor_parity_router = create_competitor_parity_router(db, require_roles)
 api_router.include_router(competitor_parity_router)
-from routes.forecast_accuracy import create_forecast_accuracy_router
+from routes.revenue_ext.forecast_accuracy import create_forecast_accuracy_router
 forecast_accuracy_router = create_forecast_accuracy_router(db, require_roles)
 api_router.include_router(forecast_accuracy_router)
-from routes.concierge import create_concierge_router
+from routes.marketing.concierge import create_concierge_router
 concierge_router = create_concierge_router(db)
 api_router.include_router(concierge_router)
-from routes.sustainability import create_sustainability_router
+from routes.hotel_ops.sustainability import create_sustainability_router
 sustainability_router = create_sustainability_router(db, require_roles)
 api_router.include_router(sustainability_router)
-from routes.nightly_recap import create_nightly_recap_router, create_concierge_topics_router
+from routes.marketing.nightly_recap import create_nightly_recap_router, create_concierge_topics_router
 nightly_recap_router = create_nightly_recap_router(db, require_roles)
 api_router.include_router(nightly_recap_router)
 concierge_topics_router = create_concierge_topics_router(db, require_roles)
@@ -706,70 +706,70 @@ api_router.include_router(concierge_topics_router)
 from routes.finance_ext.accounting_export import create_accounting_export_router
 accounting_export_router = create_accounting_export_router(db, require_roles)
 api_router.include_router(accounting_export_router)
-from routes.currency_fx import create_currency_fx_router
+from routes.finance_ext.currency_fx import create_currency_fx_router
 currency_fx_router = create_currency_fx_router(db)
 api_router.include_router(currency_fx_router)
-from routes.rate_structure import create_rate_structure_router
+from routes.revenue_ext.rate_structure import create_rate_structure_router
 rate_structure_router = create_rate_structure_router(db)
 api_router.include_router(rate_structure_router)
 
-from routes.rms_pro import create_rms_pro_router
+from routes.pms.rms_pro import create_rms_pro_router
 rms_pro_router = create_rms_pro_router(db, require_roles)
 api_router.include_router(rms_pro_router)
-from routes.groups import create_groups_router
+from routes.pms.groups import create_groups_router
 groups_router = create_groups_router(db)
 api_router.include_router(groups_router)
 from routes.security.gdpr import create_gdpr_router
 gdpr_router = create_gdpr_router(db)
 api_router.include_router(gdpr_router)
-from routes.og_images import create_og_router
+from routes.marketing.og_images import create_og_router
 og_router = create_og_router()
 api_router.include_router(og_router)
-from routes.property_onboarding import create_onboarding_router
+from routes.platform_ext.property_onboarding import create_onboarding_router
 onboarding_router = create_onboarding_router(db)
 api_router.include_router(onboarding_router)
-from routes.demo_seeder import create_demo_seeder_router
+from routes.platform_ext.demo_seeder import create_demo_seeder_router
 demo_seeder_router = create_demo_seeder_router(db)
 api_router.include_router(demo_seeder_router)
 
 # ===== Iter 156 — Top-10 competitor gap features =====
-from routes.night_audit_close import create_night_audit_close_router
+from routes.hotel_ops.night_audit_close import create_night_audit_close_router
 api_router.include_router(create_night_audit_close_router(db, require_roles))
 
 from routes.finance_ext.deposit_ledger import create_deposit_ledger_router
 api_router.include_router(create_deposit_ledger_router(db, require_roles))
 
-from routes.commission_recon import create_commission_recon_router
+from routes.finance_ext.commission_recon import create_commission_recon_router
 api_router.include_router(create_commission_recon_router(db, require_roles))
 
-from routes.gift_cards import create_gift_cards_router
+from routes.finance_ext.gift_cards import create_gift_cards_router
 api_router.include_router(create_gift_cards_router(db, require_roles))
 
 # Note: review_sentiment router is registered earlier (before reviews_router) to avoid route conflicts
 
-from routes.guest_rfm import create_rfm_router
+from routes.pms.guest_rfm import create_rfm_router
 api_router.include_router(create_rfm_router(db, require_roles))
 
-from routes.preventive_maintenance import create_preventive_maintenance_router
+from routes.hotel_ops.preventive_maintenance import create_preventive_maintenance_router
 api_router.include_router(create_preventive_maintenance_router(db, require_roles))
 
-from routes.asset_register import create_asset_register_router
+from routes.hotel_ops.asset_register import create_asset_register_router
 api_router.include_router(create_asset_register_router(db, require_roles))
 
-from routes.cash_drawer import create_cash_drawer_router
+from routes.finance_ext.cash_drawer import create_cash_drawer_router
 api_router.include_router(create_cash_drawer_router(db, require_roles))
 
-from routes.two_factor_auth import create_2fa_router
+from routes.security.two_factor_auth import create_2fa_router
 api_router.include_router(create_2fa_router(db, require_roles, get_current_user))
 
 # ===== Iter 157 — Revenue Health + IP Allowlist + PCI Card Vault =====
-from routes.revenue_health import create_revenue_health_router
+from routes.revenue_ext.revenue_health import create_revenue_health_router
 api_router.include_router(create_revenue_health_router(db, require_roles))
 
-from routes.ip_allowlist import create_ip_allowlist_router
+from routes.security.ip_allowlist import create_ip_allowlist_router
 api_router.include_router(create_ip_allowlist_router(db, require_roles))
 
-from routes.card_vault import create_card_vault_router
+from routes.finance_ext.card_vault import create_card_vault_router
 api_router.include_router(create_card_vault_router(db, require_roles))
 
 # Iter 158 — Deposit Automation (bridges deposit_policies + card_vault + folio_items)
@@ -778,7 +778,7 @@ deposit_auto_router = create_deposit_automation_router(db, require_roles)
 api_router.include_router(deposit_auto_router)
 
 # Iter 159 — Scheduler (async background task runner, currently nightly auto-deposit)
-from routes.scheduler import create_scheduler_router, scheduler_loop
+from routes.hotel_ops.scheduler import create_scheduler_router, scheduler_loop
 _auto_capture_fn = getattr(deposit_auto_router, "run_capture", None)
 
 async def _job_auto_deposit_capture(property_id: str) -> dict:
@@ -826,24 +826,24 @@ async def _start_scheduler():
         _asyncio.create_task(_ap_loop())
 
 # Iter 160 — Channel Manager MVP (restrictions + inbound + parity)
-from routes.channel_restrictions import create_channel_restrictions_router
+from routes.distribution.channel_restrictions import create_channel_restrictions_router
 api_router.include_router(create_channel_restrictions_router(db, require_roles))
 
-from routes.channel_inbound import create_channel_inbound_router
+from routes.distribution.channel_inbound import create_channel_inbound_router
 api_router.include_router(create_channel_inbound_router(db, require_roles))
 
-from routes.channel_parity import create_channel_parity_router
+from routes.distribution.channel_parity import create_channel_parity_router
 api_router.include_router(create_channel_parity_router(db, require_roles))
 
 # Iter 161 — OTA Health Dashboard (composite of parity + commission + direct + balance)
-from routes.ota_health import create_ota_health_router
+from routes.distribution.ota_health import create_ota_health_router
 api_router.include_router(create_ota_health_router(db, require_roles))
 
 # Iter 162 — Channel mappings + Sync queue with exponential backoff
-from routes.channel_mappings import create_channel_mappings_router
+from routes.distribution.channel_mappings import create_channel_mappings_router
 api_router.include_router(create_channel_mappings_router(db, require_roles))
 
-from routes.sync_queue import create_sync_queue_router, process_due_tasks
+from routes.integrations_pkg.sync_queue import create_sync_queue_router, process_due_tasks
 api_router.include_router(create_sync_queue_router(db, require_roles))
 
 # Wire the sync-queue worker into the scheduler engine from Iter 159
@@ -854,7 +854,7 @@ JOB_HANDLERS["sync_queue_tick"] = _job_sync_queue_tick
 
 # Iter 163 — Channel Hub (configs, payload profiles, publish jobs,
 # price overrides, channel audit, benchmark cockpit)
-from routes.channel_hub import create_channel_hub_router, nightly_dry_publish
+from routes.distribution.channel_hub import create_channel_hub_router, nightly_dry_publish
 api_router.include_router(create_channel_hub_router(db, require_roles))
 
 # Wire the nightly dry-run publisher into the scheduler engine
@@ -864,7 +864,7 @@ async def _job_nightly_dry_publish(property_id: str) -> dict:
 JOB_HANDLERS["nightly_dry_publish"] = _job_nightly_dry_publish
 
 # Iter 320 — Weekly fleet-wide geo-validate (Camden→Boston bug auto-repair).
-from routes.market_robot import (
+from routes.revenue_ext.market_robot import (
     fleet_geo_validate_worker,
     fleet_vision_enrich_worker,
     fleet_competitor_price_scan_worker,
@@ -893,51 +893,51 @@ async def _job_fleet_competitor_price_scan(property_id: str) -> dict:
 JOB_HANDLERS["fleet_competitor_price_scan"] = _job_fleet_competitor_price_scan
 
 # Iter 164 — Inventory Allocations (pooled / dedicated / capped per channel×room)
-from routes.inventory_allocations import create_inventory_allocations_router
+from routes.hotel_ops.inventory_allocations import create_inventory_allocations_router
 api_router.include_router(create_inventory_allocations_router(db, require_roles))
 
 # Iter 165 — Group Blocks (group reservations)
-from routes.group_blocks import create_group_blocks_router
+from routes.pms.group_blocks import create_group_blocks_router
 api_router.include_router(create_group_blocks_router(db, require_roles))
 
 # Iter 165 — Smart Rate Control (bulk rate/availability editor)
-from routes.smart_rate_control import create_smart_rate_control_router
+from routes.revenue_ext.smart_rate_control import create_smart_rate_control_router
 api_router.include_router(create_smart_rate_control_router(db, require_roles))
 
-from routes.late_checkout import create_late_checkout_router
+from routes.pms.late_checkout import create_late_checkout_router
 api_router.include_router(create_late_checkout_router(db, require_roles))
 
-from routes.service_recovery import create_service_recovery_router
+from routes.guests.service_recovery import create_service_recovery_router
 api_router.include_router(create_service_recovery_router(db, require_roles))
 
-from routes.room_qr import create_room_qr_router
+from routes.pms.room_qr import create_room_qr_router
 api_router.include_router(create_room_qr_router(db, require_roles))
 
 from routes.finance_ext.tax_presets import create_tax_presets_router
 api_router.include_router(create_tax_presets_router(db, require_roles))
 
-from routes.walkin import create_walkin_router
+from routes.pms.walkin import create_walkin_router
 api_router.include_router(create_walkin_router(db, require_roles))
 
-from routes.no_show import create_no_show_router
+from routes.pms.no_show import create_no_show_router
 api_router.include_router(create_no_show_router(db, require_roles))
 
-from routes.guest_prefs import create_guest_prefs_router
+from routes.pms.guest_prefs import create_guest_prefs_router
 api_router.include_router(create_guest_prefs_router(db, require_roles))
 
-from routes.cleaning_checklists import create_cleaning_checklists_router
+from routes.hotel_ops.cleaning_checklists import create_cleaning_checklists_router
 api_router.include_router(create_cleaning_checklists_router(db, require_roles))
 
-from routes.room_move import create_room_move_router
+from routes.pms.room_move import create_room_move_router
 api_router.include_router(create_room_move_router(db, require_roles))
 
-from routes.lost_found_match import create_lost_found_match_router
+from routes.hotel_ops.lost_found_match import create_lost_found_match_router
 api_router.include_router(create_lost_found_match_router(db, require_roles))
 
-from routes.glitch_log import create_glitch_log_router
+from routes.hotel_ops.glitch_log import create_glitch_log_router
 api_router.include_router(create_glitch_log_router(db, require_roles))
 
-from routes.sops import create_sops_router
+from routes.hotel_ops.sops import create_sops_router
 api_router.include_router(create_sops_router(db, require_roles))
 
 from routes.automation_rules import create_automation_router, fire_event as _fire_event
@@ -945,129 +945,129 @@ api_router.include_router(create_automation_router(db, require_roles))
 # Expose for other modules to import: routes.automation_rules.fire_event
 __all__ = ["_fire_event"]
 
-from routes.team_chat import create_team_chat_router
+from routes.integrations_pkg.team_chat import create_team_chat_router
 api_router.include_router(create_team_chat_router(db, require_roles))
 
-from routes.crm_360 import create_crm360_router
+from routes.guests.crm_360 import create_crm360_router
 api_router.include_router(create_crm360_router(db, require_roles))
 
-from routes.channels_v2 import create_channels_v2_router
+from routes.distribution.channels_v2 import create_channels_v2_router
 api_router.include_router(create_channels_v2_router(db, require_roles))
 
-from routes.group_rooming import create_group_rooming_router
+from routes.pms.group_rooming import create_group_rooming_router
 api_router.include_router(create_group_rooming_router(db, require_roles))
 
-from routes.attribution import create_attribution_router
+from routes.marketing.attribution import create_attribution_router
 api_router.include_router(create_attribution_router(db, require_roles))
 
-from routes.timeslots import create_timeslot_router
+from routes.hotel_ops.timeslots import create_timeslot_router
 api_router.include_router(create_timeslot_router(db, require_roles))
 
-from routes.staff_ops import create_staff_ops_router
+from routes.hotel_ops.staff_ops import create_staff_ops_router
 api_router.include_router(create_staff_ops_router(db, require_roles))
 
-from routes.revenue_protection import create_revenue_protection_router
+from routes.revenue_ext.revenue_protection import create_revenue_protection_router
 api_router.include_router(create_revenue_protection_router(db, require_roles))
 
-from routes.spaces import create_spaces_router
+from routes.hotel_ops.spaces import create_spaces_router
 api_router.include_router(create_spaces_router(db, require_roles))
 
-from routes.extras_v1 import create_extras_router
+from routes.hotel_ops.extras_v1 import create_extras_router
 api_router.include_router(create_extras_router(db, require_roles))
 
 from routes.ai.agents_b2b import create_agents_router
 api_router.include_router(create_agents_router(db, require_roles))
 
-from routes.extras_v2 import create_extras_v2_router
+from routes.hotel_ops.extras_v2 import create_extras_v2_router
 api_router.include_router(create_extras_v2_router(db, require_roles))
 
 # ===== Batch 6 (final P0): Pre-Auth, Chargeback, Web Push, PMS-CRS, Public API =====
-from routes.preauth import create_preauth_router
+from routes.finance_ext.preauth import create_preauth_router
 api_router.include_router(create_preauth_router(db, require_roles))
 
-from routes.chargeback import create_chargeback_router
+from routes.finance_ext.chargeback import create_chargeback_router
 api_router.include_router(create_chargeback_router(db, require_roles))
 
-from routes.web_push import create_web_push_router
+from routes.marketing.web_push import create_web_push_router
 api_router.include_router(create_web_push_router(db, require_roles))
 
-from routes.pms_crs import create_pms_crs_router
+from routes.pms.pms_crs import create_pms_crs_router
 api_router.include_router(create_pms_crs_router(db, require_roles))
 
-from routes.public_api import create_public_api_router
+from routes.distribution.public_api import create_public_api_router
 api_router.include_router(create_public_api_router(db, require_roles))
 
 # ===== Batch 7 (P1 keyless): Mid-stay survey, Live folio PDF, A/B tests, Pre-arrival drip, Menu engineering =====
-from routes.mid_stay import create_mid_stay_router
+from routes.pms.mid_stay import create_mid_stay_router
 api_router.include_router(create_mid_stay_router(db, require_roles))
 
-from routes.folio_live import create_folio_live_router
+from routes.finance_ext.folio_live import create_folio_live_router
 api_router.include_router(create_folio_live_router(db, require_roles))
 
-from routes.ab_test import create_ab_test_router
+from routes.marketing.ab_test import create_ab_test_router
 api_router.include_router(create_ab_test_router(db, require_roles))
 
-from routes.pre_arrival import create_pre_arrival_router
+from routes.pms.pre_arrival import create_pre_arrival_router
 api_router.include_router(create_pre_arrival_router(db, require_roles))
 
-from routes.menu_engineering import create_menu_engineering_router
+from routes.hotel_ops.menu_engineering import create_menu_engineering_router
 api_router.include_router(create_menu_engineering_router(db, require_roles))
 
 # ===== Batch 8 (P1 keyless): SR Voucher, Folio split, Loyalty auto, Late checkout offer, OTA stop-sell forecast =====
-from routes.sr_voucher import create_service_recovery_voucher_router
+from routes.hotel_ops.sr_voucher import create_service_recovery_voucher_router
 api_router.include_router(create_service_recovery_voucher_router(db, require_roles))
 
-from routes.folio_split import create_folio_split_router
+from routes.finance_ext.folio_split import create_folio_split_router
 api_router.include_router(create_folio_split_router(db, require_roles))
 
-from routes.loyalty_auto import create_loyalty_auto_router
+from routes.guests.loyalty_auto import create_loyalty_auto_router
 api_router.include_router(create_loyalty_auto_router(db, require_roles))
 
-from routes.late_checkout_offer import create_late_checkout_offer_router
+from routes.pms.late_checkout_offer import create_late_checkout_offer_router
 api_router.include_router(create_late_checkout_offer_router(db, require_roles))
 
-from routes.ota_stop_sell_forecast import create_ota_stop_sell_forecast_router
+from routes.distribution.ota_stop_sell_forecast import create_ota_stop_sell_forecast_router
 api_router.include_router(create_ota_stop_sell_forecast_router(db, require_roles))
 
 # ===== Batch 9 (P1 keyless): Msg Templates, Birthday auto-discount, Low-stock alerts, Rebook CTA, Stay extension, Long-stay discount =====
-from routes.msg_templates import create_msg_templates_router
+from routes.guests.msg_templates import create_msg_templates_router
 api_router.include_router(create_msg_templates_router(db, require_roles))
 
-from routes.birthday import create_birthday_router
+from routes.guests.birthday import create_birthday_router
 api_router.include_router(create_birthday_router(db, require_roles))
 
-from routes.low_stock import create_low_stock_router
+from routes.hotel_ops.low_stock import create_low_stock_router
 api_router.include_router(create_low_stock_router(db, require_roles))
 
-from routes.rebook import create_rebook_router
+from routes.guests.rebook import create_rebook_router
 api_router.include_router(create_rebook_router(db, require_roles))
 
-from routes.stay_ext import create_stay_ext_router
+from routes.pms.stay_ext import create_stay_ext_router
 api_router.include_router(create_stay_ext_router(db, require_roles))
 
-from routes.long_stay import create_long_stay_router
+from routes.hotel_ops.long_stay import create_long_stay_router
 api_router.include_router(create_long_stay_router(db, require_roles))
 
 # ===== Batch 10 (P1 keyless final): Cancel insurance, Group rooming wizard, Tax reports v2, Check-in slots =====
-from routes.cancel_insurance import create_cancel_insurance_router
+from routes.finance_ext.cancel_insurance import create_cancel_insurance_router
 api_router.include_router(create_cancel_insurance_router(db, require_roles))
 
-from routes.group_rooming_wiz import create_group_rooming_router
+from routes.pms.group_rooming_wiz import create_group_rooming_router
 api_router.include_router(create_group_rooming_router(db, require_roles))
 
 from routes.finance_ext.tax_reports_v2 import create_tax_reports_router
 api_router.include_router(create_tax_reports_router(db, require_roles))
 
-from routes.ci_slots import create_ci_slots_router
+from routes.pms.ci_slots import create_ci_slots_router
 api_router.include_router(create_ci_slots_router(db, require_roles))
 
 # ===== Batch 11: Tier-1 Master Operations Dashboard (aggregates KPIs from all 50 keyless features) =====
-from routes.tier1_dashboard import create_tier1_dashboard_router
+from routes.platform_ext.tier1_dashboard import create_tier1_dashboard_router
 api_router.include_router(create_tier1_dashboard_router(db, require_roles))
 
 # ===== Competitor Parity v3 (Booking Engine v2, Groups, Owner Portal, Spa, Loyalty Tiers,
 #                              Budget vs Actual, Compset, Webhooks & API keys, Automation Analytics) =====
-from routes.booking_engine_v2 import create_booking_engine_v2_router
+from routes.pms.booking_engine_v2 import create_booking_engine_v2_router
 api_router.include_router(create_booking_engine_v2_router(db, require_roles))
 
 # Note: Group Bookings module already exists at routes/group_blocks.py
@@ -1075,37 +1075,37 @@ api_router.include_router(create_booking_engine_v2_router(db, require_roles))
 # parallel implementation kept on disk for reference but NOT registered
 # to avoid path collisions at /group-blocks.
 
-from routes.owner_portal import create_owner_portal_router
+from routes.platform_ext.owner_portal import create_owner_portal_router
 api_router.include_router(create_owner_portal_router(db, require_roles))
 
-from routes.spa_activities import create_spa_router
+from routes.hotel_ops.spa_activities import create_spa_router
 api_router.include_router(create_spa_router(db, require_roles))
 
-from routes.loyalty_tiers import create_loyalty_tiers_router
+from routes.guests.loyalty_tiers import create_loyalty_tiers_router
 api_router.include_router(create_loyalty_tiers_router(db, require_roles))
 
-from routes.budget_actual import create_budget_router
+from routes.finance_ext.budget_actual import create_budget_router
 api_router.include_router(create_budget_router(db, require_roles))
 
-from routes.compset import create_compset_router
+from routes.revenue_ext.compset import create_compset_router
 api_router.include_router(create_compset_router(db, require_roles))
 
-from routes.webhooks_api_keys import create_webhooks_api_keys_router
+from routes.integrations_pkg.webhooks_api_keys import create_webhooks_api_keys_router
 api_router.include_router(create_webhooks_api_keys_router(db, require_roles))
 
 from routes.automation_analytics import create_automation_analytics_router
 api_router.include_router(create_automation_analytics_router(db, require_roles))
 
 # ===== Meeting & Events Sales (MICE pipeline) =====
-from routes.meetings_sales import create_meetings_router
+from routes.hotel_ops.meetings_sales import create_meetings_router
 api_router.include_router(create_meetings_router(db, require_roles))
 
 # ===== F&B POS Integration Hub (Simphony / Lightspeed / Square / Toast) =====
-from routes.fnb_pos_hub import create_fnb_pos_router
+from routes.hotel_ops.fnb_pos_hub import create_fnb_pos_router
 api_router.include_router(create_fnb_pos_router(db, require_roles))
 
 # ===== Owner Self-Service Login (Iter 282) =====
-from routes.owner_self_service import create_owner_auth_router
+from routes.platform_ext.owner_self_service import create_owner_auth_router
 api_router.include_router(create_owner_auth_router(db, require_roles))
 
 # ===== TÜRSAB Agency Portal (Iter 284) =====
@@ -1165,7 +1165,7 @@ from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))
 
 # ===== PMS Pro (Iter 295) — Smart Assign / AI Concierge / Journey Rules / Anomaly Alerts =====
-from routes.pms_pro import create_pms_pro_router, journey_engine_loop as _journey_engine_loop
+from routes.pms.pms_pro import create_pms_pro_router, journey_engine_loop as _journey_engine_loop
 api_router.include_router(create_pms_pro_router(db, require_roles))
 
 @app.on_event("startup")

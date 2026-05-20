@@ -113,13 +113,16 @@ async def _get_rate_map(db) -> Dict[str, float]:
         } for code in missing]
         await db.fx_rates.insert_many([dict(d) for d in docs])
 
-    rows = await db.fx_rates.find({}, {"_id": 0}).to_list(500)
+    rows = await db.fx_rates.find({"code": {"$exists": True}}, {"_id": 0}).to_list(500)
     # Keep the most recent per code (as_of DESC)
     by_code: Dict[str, dict] = {}
     for r in rows:
-        existing_r = by_code.get(r["code"])
+        code = r.get("code")
+        if not code:
+            continue  # Skip docs without code field
+        existing_r = by_code.get(code)
         if not existing_r or (r.get("as_of", "") >= existing_r.get("as_of", "")):
-            by_code[r["code"]] = r
+            by_code[code] = r
     return {code: float(row.get("rate_to_base", 1)) for code, row in by_code.items()}
 
 
@@ -214,14 +217,17 @@ def create_currency_fx_router(db):
     ):
         # Ensure seed rows exist
         await _get_rate_map(db)
-        rows = await db.fx_rates.find({}, {"_id": 0}).sort("code", 1).to_list(500)
+        rows = await db.fx_rates.find({"code": {"$exists": True}}, {"_id": 0}).sort("code", 1).to_list(500)
         # Collapse to latest per code for the UI
         latest: Dict[str, dict] = {}
         for r in rows:
-            existing_r = latest.get(r["code"])
+            code = r.get("code")
+            if not code:
+                continue
+            existing_r = latest.get(code)
             if not existing_r or (r.get("as_of", "") >= existing_r.get("as_of", "")):
-                latest[r["code"]] = r
-        return sorted(latest.values(), key=lambda r: r["code"])
+                latest[code] = r
+        return sorted(latest.values(), key=lambda r: r.get("code", ""))
 
     @router.post("/rates")
     async def upsert_rate(

@@ -77,7 +77,7 @@ def _get_legacy_role_perms():
     if _LEGACY_ROLE_PERMS_CACHE is not None:
         return _LEGACY_ROLE_PERMS_CACHE
     try:
-        from routes.permission_catalog import expand_template_permissions, get_all_permission_keys
+        from routes.platform_ext.permission_catalog import expand_template_permissions, get_all_permission_keys
         _LEGACY_ROLE_PERMS_CACHE = {
             "admin":        set(get_all_permission_keys()),   # admin = all perms
             "manager":      set(get_all_permission_keys()),   # manager = all (matches 'manager' template)
@@ -104,7 +104,7 @@ async def get_user_permissions(user: dict) -> set:
         role_doc = await db.roles.find_one({"key": role_key}, {"_id": 0, "permissions": 1, "is_global_admin": 1})
         if role_doc:
             if role_doc.get("is_global_admin"):
-                from routes.permission_catalog import get_all_permission_keys
+                from routes.platform_ext.permission_catalog import get_all_permission_keys
                 return set(get_all_permission_keys())
             return set(role_doc.get("permissions") or [])
 

@@ -192,7 +192,7 @@ def create_whatsapp_voice_router(db, require_roles):
 
         # Run intent classification + LLM reply
         try:
-            from routes.voice_concierge import _classify_intent, _action_for_intent
+            from routes.marketing.voice_concierge import _classify_intent, _action_for_intent
         except Exception:
             _classify_intent = lambda t: "concierge_chat"
             _action_for_intent = lambda i: {"route_to": "guest_chat"}
@@ -314,7 +314,7 @@ def create_whatsapp_voice_router(db, require_roles):
         # Build a fake form and call the inbound logic
         from starlette.requests import Request as SR
         # easier path: call _classify_intent + _send_whatsapp_reply directly
-        from routes.voice_concierge import _classify_intent, _action_for_intent
+        from routes.marketing.voice_concierge import _classify_intent, _action_for_intent
         intent = _classify_intent(text)
         send_result = await _send_whatsapp_reply(From, f"(test) Niyet: {intent}. Mesajınız alındı.")
         await db.whatsapp_voice_log.insert_one({

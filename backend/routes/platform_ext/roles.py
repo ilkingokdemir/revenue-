@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 import uuid
 import re
 
-from routes.permission_catalog import (
+from routes.platform_ext.permission_catalog import (
     PERMISSION_CATALOG, ROLE_TEMPLATES,
     get_all_permission_keys, count_total_permissions,
     expand_template_permissions, enrich_catalog, get_risk,

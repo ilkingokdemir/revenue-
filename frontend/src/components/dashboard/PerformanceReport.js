@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, DollarSign, Zap, BarChart3, Calendar, Radar, PartyPopper, Activity, RefreshCw } from "lucide-react";
+import { TrendingUp, TrendingDown, Zap, BarChart3, Calendar, Radar, PartyPopper, Activity, RefreshCw, Wallet } from "lucide-react";
 import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
+import { makeCurrencyFormatter } from "../../lib/currency";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-const cur = (v) => `£${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
 const SOURCE_LABELS = {
   auto_scanner: { label: "Auto Scanner", color: "bg-emerald-500" },
@@ -28,10 +28,19 @@ export const PerformanceReport = ({ propertyId }) => {
   // ⚡ Performance KPIs (RevPAR, ADR, occupancy) refresh every 90s
   useLivePolling(load, { intervalMs: 90000 });
 
+  // Currency formatter driven by the property's configured currency.
+  // Hooks must run unconditionally — derive once and gracefully fall back
+  // to GBP until the data arrives.
+  const fmt = useMemo(
+    () => makeCurrencyFormatter(data?.property_currency || ""),
+    [data?.property_currency]
+  );
+
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Calculating performance...</div>;
   if (!data) return null;
 
-  const { kpis, by_source, daily_impact, monthly_impact } = data;
+  const { kpis, by_source, daily_impact, monthly_impact, property_currency } = data;
+  const cur = (v) => fmt.format(v, 0);
 
   // Bar chart max
   const maxMonthly = Math.max(...monthly_impact.map(m => Math.abs(m.est_revenue_uplift)), 1);
@@ -43,11 +52,18 @@ export const PerformanceReport = ({ propertyId }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-6 h-6 text-emerald-300" />
+              <Wallet className="w-6 h-6 text-emerald-300" />
             </div>
             <div>
               <h2 className="text-xl font-bold">Robot Performance Report</h2>
-              <p className="text-sm text-white/60">Revenue impact from automated pricing across all sources</p>
+              <p className="text-sm text-white/60">
+                Revenue impact from automated pricing across all sources
+                <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-white/40">
+                  · <span className="font-mono text-emerald-200">{property_currency || "GBP"}</span>
+                  {data.total_rooms ? <span>· {data.total_rooms} rooms</span> : null}
+                  {data.occupancy_assumption ? <span title={`Estimated revenue = per-room uplift × ${data.total_rooms} rooms × ${Math.round(data.occupancy_assumption*100)}% assumed occupancy`}>· {Math.round(data.occupancy_assumption*100)}% occupancy assumed</span> : null}
+                </span>
+              </p>
             </div>
           </div>
           <button onClick={load} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium" data-testid="perf-refresh">

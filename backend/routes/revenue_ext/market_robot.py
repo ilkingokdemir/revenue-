@@ -3145,9 +3145,25 @@ def create_market_robot_router(db, require_roles, resend=None):
         today_str = now.strftime("%Y-%m-%d")
         month_start = now.replace(day=1).strftime("%Y-%m-%d")
 
-        # Get base rate
-        rt = await db.room_types.find_one({"property_id": property_id}, {"_id": 0})
-        base_rate = float(rt.get("base_rate", 100) or 100) if rt else 100.0
+        # Property currency (for frontend formatting) + room inventory (for accurate revenue estimates)
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1, "name": 1})
+        property_currency = (prop.get("currency") if prop else None) or "GBP"
+
+        # Get all room types — base rate + inventory
+        room_types_list = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(50)
+        # Only types with a real base_rate contribute to the average — otherwise
+        # types that are missing the rate field dilute the mean to near-zero
+        # (which then makes every rate-override look like a £100+ uplift).
+        rated_types = [r for r in room_types_list if float(r.get("base_rate", 0) or 0) > 0]
+        if rated_types:
+            base_rate = sum(float(r.get("base_rate", 0)) for r in rated_types) / len(rated_types)
+        else:
+            base_rate = 100.0
+        total_rooms = sum(int(r.get("total_rooms", 0) or 0) for r in room_types_list) or 10
+        # Estimated occupancy assumption used to bound revenue uplift to a realistic
+        # figure. Multiplying by every single room ignores that not all rooms sell
+        # every night. 70 % is the global hotel-industry long-run average.
+        occupancy_factor = 0.7
 
         # Get ALL rate overrides set by robot/scanner/dynamic-pricing
         all_overrides = await db.rate_overrides.find(
@@ -3229,8 +3245,8 @@ def create_market_robot_router(db, require_roles, resend=None):
         mega_events = await db.market_events.count_documents({"property_id": property_id, "impact": "mega"})
         large_events = await db.market_events.count_documents({"property_id": property_id, "impact": "large"})
 
-        # Estimated revenue impact (assume avg 10 rooms per night)
-        avg_rooms = 10
+        # Estimated revenue impact = per-room uplift × inventory × occupancy
+        avg_rooms = max(round(total_rooms * occupancy_factor), 1)
         estimated_rev_uplift = round(total_uplift * avg_rooms, 2)
         monthly_rev_uplift = round(sum(m["uplift"] for k, m in monthly_impact.items() if k >= month_start[:7]) * avg_rooms, 2)
 
@@ -3274,6 +3290,10 @@ def create_market_robot_router(db, require_roles, resend=None):
             },
             "daily_impact": sorted(daily_impact, key=lambda x: x["date"], reverse=True),
             "monthly_impact": monthly_sorted,
+            "property_currency": property_currency,
+            "total_rooms": total_rooms,
+            "base_rate": round(base_rate, 2),
+            "occupancy_assumption": occupancy_factor,
         }
 
     @router.get("/revenue/market-robot/{property_id}/competitors")

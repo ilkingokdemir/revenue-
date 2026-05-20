@@ -52,6 +52,78 @@ _lock = asyncio.Lock()
 # In-process cache: booking_url → hotel_id (Booking's internal dest_id)
 _HOTEL_ID_CACHE: Dict[str, str] = {}
 
+# Shared "warm" Booking.com browser context — once we've cleared the first
+# anti-bot challenge and Booking.com has set its session cookies on this
+# context, every subsequent page navigation on the SAME context skips that
+# challenge entirely. Multi-date scans previously created a fresh context per
+# probe → every probe re-paid the 30-40s cold-start cost and most timed out.
+# Reusing the warmed context cuts per-probe cost from ~35s to ~3-6s.
+_booking_ctx = None  # type: ignore[var-annotated]
+_booking_ctx_lock = asyncio.Lock()
+_booking_ctx_warmed = False
+
+
+async def _get_warm_booking_context():
+    """Return the shared warmed-up Browser context for Booking.com scraping.
+
+    Lazy-created on first use, warmed by visiting the homepage so Booking sets
+    its anti-bot cookies on us. Re-creates if the previous context was closed.
+    """
+    global _booking_ctx, _booking_ctx_warmed
+    async with _booking_ctx_lock:
+        # Detect dead contexts (browser restarted) and recreate
+        try:
+            if _booking_ctx is not None:
+                # Touch a property; if context is closed Playwright raises
+                _ = _booking_ctx.pages
+        except Exception:
+            _booking_ctx = None
+            _booking_ctx_warmed = False
+
+        if _booking_ctx is None:
+            browser = await _get_browser()
+            ctx_kwargs = dict(
+                user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/120.0.0.0 Safari/537.36"),
+                locale="en-GB",
+                viewport={"width": 1366, "height": 900},
+                extra_http_headers={
+                    "Accept-Language": "en-GB,en;q=0.9",
+                    "sec-ch-ua-platform": '"Windows"',
+                },
+            )
+            proxy_cfg = _booking_proxy_config()
+            if proxy_cfg:
+                ctx_kwargs["proxy"] = proxy_cfg
+            _booking_ctx = await browser.new_context(**ctx_kwargs)
+            _booking_ctx_warmed = False
+            logger.info("Booking scraper: created shared warm context")
+
+        if not _booking_ctx_warmed:
+            # Pre-warm: visit homepage to acquire bot-challenge cookies
+            try:
+                page = await _booking_ctx.new_page()
+                try:
+                    await page.goto(
+                        "https://www.booking.com/index.en-gb.html",
+                        wait_until="domcontentloaded",
+                        timeout=20000,
+                    )
+                    await page.wait_for_timeout(1500)
+                    _booking_ctx_warmed = True
+                    logger.info("Booking scraper: warm context primed via homepage visit")
+                finally:
+                    await page.close()
+            except Exception as e:
+                logger.warning("Booking scraper: warm-up navigation failed (%s) — context still usable", e)
+                # Mark warmed anyway so we don't loop forever; subsequent
+                # scrapes may still succeed if Booking just rate-limited the
+                # homepage but lets product pages through.
+                _booking_ctx_warmed = True
+
+        return _booking_ctx
+
 
 def _booking_proxy_config() -> Optional[Dict]:
     """Returns Playwright proxy config dict if BOOKING_PROXY_URL is set, else None.
@@ -953,21 +1025,33 @@ async def scrape_booking_screenshot(
     """
     if not booking_url:
         return None
-    browser = await _get_browser()
-    ctx = await browser.new_context(
-        user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"),
-        locale="en-GB",
-        viewport={"width": 1366, "height": 900},
-        extra_http_headers={
-            "Accept-Language": "en-GB,en;q=0.9",
-            "sec-ch-ua-platform": '"Windows"',
-        },
-    )
+    # Use the shared warmed-up Booking.com context — drastically reduces
+    # anti-bot challenges on subsequent calls (cookies persist).
+    ctx = await _get_warm_booking_context()
     try:
         page = await ctx.new_page()
-        if pre_warm:
+    except Exception as e:
+        logger.warning("scrape_booking_screenshot: could not create page on warm ctx (%s) — falling back to fresh ctx", e)
+        browser = await _get_browser()
+        ctx = await browser.new_context(
+            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"),
+            locale="en-GB",
+            viewport={"width": 1366, "height": 900},
+            extra_http_headers={
+                "Accept-Language": "en-GB,en;q=0.9",
+                "sec-ch-ua-platform": '"Windows"',
+            },
+        )
+        page = await ctx.new_page()
+        _fresh_ctx_to_close = ctx
+    else:
+        _fresh_ctx_to_close = None
+    try:
+        # pre_warm is now a no-op when using the shared context (already warmed
+        # at construction); we still honour the flag for the fresh-ctx fallback.
+        if pre_warm and _fresh_ctx_to_close is not None:
             try:
                 await page.goto("https://www.booking.com/index.en-gb.html",
                                 wait_until="domcontentloaded", timeout=timeout_ms)
@@ -987,10 +1071,17 @@ async def scrape_booking_screenshot(
             logger.warning("scrape_booking_screenshot: shot failed %s — %s", booking_url, e)
             return None
     finally:
+        # Only close the PAGE (keep the shared warm context alive); close the
+        # fallback fresh context if we created one.
         try:
-            await ctx.close()
+            await page.close()
         except Exception:
             pass
+        if _fresh_ctx_to_close is not None:
+            try:
+                await _fresh_ctx_to_close.close()
+            except Exception:
+                pass
 
 
 

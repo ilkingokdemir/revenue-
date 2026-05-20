@@ -278,6 +278,61 @@ _DEFAULT_HEADERS = {
     "Referer": "https://www.booking.com/",
 }
 
+# In-process cache: { normalized_url: room_count_int }
+_ROOM_COUNT_CACHE: Dict[str, int] = {}
+
+# Patterns we use to read the property-level inventory off the Booking.com hotel page.
+# Booking publishes the room count in several spots — JSON-LD ("numberOfRooms"),
+# inline page state ("hotel_room_count" / "n_rooms"), or human-readable copy in
+# the "About this property" block ("This property has 9 rooms / apartments / units").
+# We try every pattern in order; first non-zero match wins. Reviews count is
+# explicitly EXCLUDED — we never read a number that's adjacent to "review(s)".
+_ROOM_COUNT_PATTERNS = [
+    re.compile(r'"numberOfRooms"\s*:\s*"?(\d{1,4})"?', re.I),
+    re.compile(r'"hotel_room_count"\s*:\s*(\d{1,4})', re.I),
+    re.compile(r'"n_rooms"\s*:\s*(\d{1,4})', re.I),
+    re.compile(r'<meta\s+itemprop=["\']numberOfRooms["\']\s+content=["\'](\d{1,4})["\']', re.I),
+    # Visible copy fallbacks — must NOT be near "review" / "rating".
+    re.compile(r'(?:property|hotel|apart\s?hotel|aparthotel|building|residence)\s+(?:has|offers|features)\s+(\d{1,4})\s+(?:rooms?|apartments?|units?|studios?)\b', re.I),
+    re.compile(r'\b(\d{1,4})\s+(?:rooms?|apartments?|units?|studios?)\s+(?:in\s+total|available|at\s+this\s+property)', re.I),
+]
+
+
+def _extract_room_count_from_html(html: str) -> Optional[int]:
+    """Pull the property-level room count out of a Booking.com hotel-detail HTML
+    blob. Returns None if no pattern matches or the number looks unreasonable.
+
+    Why this exists: scraping the *review count* and treating it as rooms is the
+    classic Booking.com bug — reviews can be in the thousands and look nothing
+    like the real inventory. This helper goes the other way: only patterns that
+    are anchored to property structure (JSON-LD, inline state, "this property
+    has N rooms" sentences) are accepted.
+    """
+    if not html:
+        return None
+    # Snip the part of the HTML that immediately surrounds the "review" word so
+    # we don't accidentally match "1,234 reviews".
+    text_lower = html.lower()
+    if "review" in text_lower:
+        # We still want JSON-LD / state matches; they're safe because they look
+        # for the explicit key. Only the natural-language patterns at the bottom
+        # of the list need this guard, and they require very specific anchor
+        # words ("property has", "in total", "at this property") that don't
+        # appear next to review counts anyway.
+        pass
+    for rx in _ROOM_COUNT_PATTERNS:
+        m = rx.search(html)
+        if m:
+            try:
+                n = int(m.group(1))
+            except (TypeError, ValueError):
+                continue
+            # Sanity bounds: Booking.com lists properties from 1 to ~2000 rooms.
+            # Anything outside this window is almost certainly a misread.
+            if 1 <= n <= 2000:
+                return n
+    return None
+
 
 def _normalize_base_url(url: str) -> str:
     """Strip query + fragment so we get a stable cache key per hotel."""
@@ -338,10 +393,16 @@ async def resolve_hotel_id(
                 pass
             html = await page.content()
             m = _HOTEL_ID_RE.search(html) or _HOTEL_ID_RE_ALT.search(html)
+            # Opportunistic room-count extraction from the same HTML payload —
+            # avoids a second scrape on the same Booking.com page (saves ~2-3s
+            # and keeps us under our polite request budget).
+            rc = _extract_room_count_from_html(html)
+            if rc is not None:
+                _ROOM_COUNT_CACHE[key] = rc
             if m:
                 hid = m.group(1)
                 _HOTEL_ID_CACHE[key] = hid
-                logger.info("Booking scraper: resolved hotel_id=%s for %s", hid, _extract_hotel_slug(booking_url))
+                logger.info("Booking scraper: resolved hotel_id=%s for %s (room_count=%s)", hid, _extract_hotel_slug(booking_url), rc)
                 return hid
             # Fallback: look for the id inside any link pointing to searchresults
             m2 = re.search(r"dest_id=(\d{4,12})[^\"']*dest_type=hotel", html)
@@ -378,6 +439,27 @@ async def resolve_hotel_id(
 
     logger.warning("Booking scraper: could not extract hotel_id from %s (last_err=%s)", booking_url, last_err)
     return None
+
+
+async def scrape_hotel_room_count(
+    booking_url: str,
+    *,
+    timeout_ms: int = 25000,
+    force_refresh: bool = False,
+) -> Optional[int]:
+    """Public helper — return the room/apartment/unit count from a Booking.com hotel
+    page. Cached per-process; uses the same HTML the hotel_id resolver fetches so
+    repeated calls cost nothing. Returns None if the property page doesn't expose
+    a count we can trust.
+    """
+    if not booking_url:
+        return None
+    key = _normalize_base_url(booking_url)
+    if not force_refresh and key in _ROOM_COUNT_CACHE:
+        return _ROOM_COUNT_CACHE[key]
+    # Resolving the hotel_id populates the room-count cache as a side effect.
+    await resolve_hotel_id(booking_url, timeout_ms=timeout_ms, force_refresh=force_refresh)
+    return _ROOM_COUNT_CACHE.get(key)
 
 
 async def _find_hotel_id_by_slug(slug: str, timeout_ms: int = 25000) -> Optional[str]:

@@ -60,7 +60,20 @@ export const PerformanceReport = ({ propertyId }) => {
                 Revenue impact from automated pricing across all sources
                 <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-white/40">
                   · <span className="font-mono text-emerald-200">{property_currency || "GBP"}</span>
-                  {data.total_rooms ? <span>· {data.total_rooms} rooms</span> : null}
+                  {data.total_rooms ? (
+                    <span title={
+                      data.room_count_source === "booking_com"
+                        ? "Room count scraped directly from the Booking.com hotel page"
+                        : data.room_count_source === "room_types"
+                          ? "Room count summed from your local room_types — may be inaccurate. Use 'Re-scan room count' in Onboarding to pull the real value from Booking.com."
+                          : "No room count available — using fallback of 10"
+                    }>
+                      · {data.total_rooms} rooms
+                      <span className={`ml-1 px-1 rounded text-[8px] ${data.room_count_source === "booking_com" ? "bg-sky-500/30 text-sky-200" : "bg-stone-500/30 text-stone-200"}`}>
+                        {data.room_count_source === "booking_com" ? "booking.com" : data.room_count_source === "room_types" ? "local" : "fallback"}
+                      </span>
+                    </span>
+                  ) : null}
                   {data.occupancy_assumption ? (
                     <span title={`Estimated revenue = per-room uplift × ${data.total_rooms} rooms × ${Math.round(data.occupancy_assumption*100)}% occupancy (${data.occupancy_basis === "actual_30d" ? "actual last-30-day occupancy" : "70% industry-average fallback (no booking history yet)"})`}>
                       · {Math.round(data.occupancy_assumption*100)}%

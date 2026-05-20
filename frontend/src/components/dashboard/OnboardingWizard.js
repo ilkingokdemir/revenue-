@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Building2, BedDouble, Tags, Receipt, CheckCircle2, Circle, Plus, Trash2,
   Sparkles, ArrowRight, ArrowLeft, PartyPopper, Loader2, MapPin, Banknote,
-  Radar, Zap,
+  Radar, Zap, RefreshCw,
 } from "lucide-react";
 import { getCurrencyInfo } from "../../lib/currency";
 
@@ -557,6 +557,40 @@ const FinishedScreen = ({ propertyId, onClose }) => {
       toast.error(e?.response?.data?.detail || "Failed to seed occupancy");
     } finally { setSeeding(false); }
   };
+  const refreshRoomCount = async () => {
+    setSeeding(true);
+    try {
+      await axios.post(`${API}/revenue/market-robot/${propertyId}/refresh-room-count`);
+      toast.info("Booking.com sayfası taranıyor — ~30-90 saniye sürebilir...");
+      const start = Date.now();
+      const poll = async () => {
+        try {
+          const { data } = await axios.get(`${API}/revenue/market-robot/${propertyId}/refresh-room-count/status`);
+          if (data.status === "done" && data.result?.room_count) {
+            const src = data.result.source === "booking_com_vision" ? "vision LLM" : "Booking.com HTML";
+            toast.success(`Oda sayısı: ${data.result.room_count} (${src}${data.result.evidence ? ` · "${data.result.evidence}"` : ""})`);
+            return true;
+          }
+          if (data.status === "no_data") {
+            toast.warning("Booking.com bu mülk için açık oda sayısı sergilemiyor. Manuel girilebilir.");
+            return true;
+          }
+          if (data.error) { toast.error(`Tarama başarısız: ${data.error}`); return true; }
+          return false;
+        } catch { return false; }
+      };
+      const interval = setInterval(async () => {
+        if (await poll() || Date.now() - start > 180000) {
+          clearInterval(interval);
+          setSeeding(false);
+        }
+      }, 5000);
+      setTimeout(poll, 1500);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Refresh failed");
+      setSeeding(false);
+    }
+  };
   const clear = async () => {
     if (!window.confirm("Remove all demo bookings? Your real bookings will stay untouched.")) return;
     setClearing(true);
@@ -621,6 +655,13 @@ const FinishedScreen = ({ propertyId, onClose }) => {
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold disabled:opacity-50 shadow hover:-translate-y-0.5 transition-transform">
                 {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
                 Seed 65% occupancy (30d)
+              </button>
+              <button onClick={refreshRoomCount} disabled={seeding}
+                data-testid="refresh-room-count"
+                title="Re-read the property's room/apartment/unit count directly from the Booking.com hotel page (NOT from reviews). Use this when the dashboard shows the wrong total room count."
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white text-xs font-bold disabled:opacity-50 shadow hover:-translate-y-0.5 transition-transform">
+                {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                Re-scan room count
               </button>
               {demoCount > 0 && (
                 <button onClick={clear} disabled={clearing}

@@ -3146,7 +3146,10 @@ def create_market_robot_router(db, require_roles, resend=None):
         month_start = now.replace(day=1).strftime("%Y-%m-%d")
 
         # Property currency (for frontend formatting) + room inventory (for accurate revenue estimates)
-        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1, "name": 1})
+        prop = await db.properties.find_one(
+            {"id": property_id},
+            {"_id": 0, "currency": 1, "name": 1, "booking_room_count": 1, "booking_room_count_scanned_at": 1}
+        )
         property_currency = (prop.get("currency") if prop else None) or "GBP"
 
         # Get all room types — base rate + inventory
@@ -3159,7 +3162,20 @@ def create_market_robot_router(db, require_roles, resend=None):
             base_rate = sum(float(r.get("base_rate", 0)) for r in rated_types) / len(rated_types)
         else:
             base_rate = 100.0
-        total_rooms = sum(int(r.get("total_rooms", 0) or 0) for r in room_types_list) or 10
+        # Room count priority: live Booking.com value > sum of room_types > fallback.
+        # The Booking.com hotel-detail page exposes the real inventory; our local
+        # room_types collection is often seeded incorrectly, hence the override.
+        booking_room_count = (prop or {}).get("booking_room_count") if prop else None
+        total_rooms_local = sum(int(r.get("total_rooms", 0) or 0) for r in room_types_list)
+        if booking_room_count and int(booking_room_count) > 0:
+            total_rooms = int(booking_room_count)
+            room_count_source = "booking_com"
+        elif total_rooms_local > 0:
+            total_rooms = total_rooms_local
+            room_count_source = "room_types"
+        else:
+            total_rooms = 10
+            room_count_source = "fallback"
         # Real occupancy from the last 30 days — parallel count of bookings overlapping each day.
         # If the property has no booking history we fall back to a 70 % industry average.
         last_30_dates = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 31)]
@@ -3307,6 +3323,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             "monthly_impact": monthly_sorted,
             "property_currency": property_currency,
             "total_rooms": total_rooms,
+            "room_count_source": room_count_source,
             "base_rate": round(base_rate, 2),
             "occupancy_assumption": occupancy_factor,
             "occupancy_basis": occupancy_basis,
@@ -6927,6 +6944,17 @@ Date range: {date_from} to {date_to}."""
             prop_update["booking_hotel_id"] = resolved_hotel_id
         if review_score and not prop.get("review_score"):
             prop_update["review_score"] = review_score
+        # Pull the real room/apartment/unit count from the same Booking.com page
+        # so the Performance Report and other revenue dashboards stop guessing
+        # from the (often-mis-seeded) room_types collection.
+        try:
+            from utils.booking_scraper import scrape_hotel_room_count
+            bk_room_count = await scrape_hotel_room_count(base_url)
+            if bk_room_count and bk_room_count > 0:
+                prop_update["booking_room_count"] = bk_room_count
+                prop_update["booking_room_count_scanned_at"] = now.isoformat()
+        except Exception as exc:
+            logger.warning("Booking room-count scrape failed for %s: %s", property_id, exc)
         await db_ref.properties.update_one(
             {"id": property_id},
             {"$set": prop_update}
@@ -7051,6 +7079,181 @@ Date range: {date_from} to {date_to}."""
         background_tasks.add_task(_auto_our_hotel_scan, db, property_id)
         return {"ok": True, "status": "queued",
                 "message": "Scraping started in background. Check GET /our-booking in ~60-90s for results."}
+
+    async def _run_room_count_job(property_id: str, booking_url: str):
+        """Worker: regex → vision-LLM cascade. Writes outcome to `room_count_jobs`."""
+        from utils.booking_scraper import scrape_hotel_room_count, scrape_booking_screenshot
+        rc: Optional[int] = None
+        source: Optional[str] = None
+        err: Optional[str] = None
+        evidence: Optional[str] = None
+
+        # Stage 1 — regex / JSON-LD fast path
+        try:
+            rc = await scrape_hotel_room_count(booking_url, force_refresh=True)
+            if rc:
+                source = "booking_com_html"
+        except Exception as exc:
+            logger.warning("HTML room-count scrape failed for %s: %s", property_id, exc)
+            err = str(exc)[:200]
+
+        # Stage 2 — GPT-4o-mini vision fallback when HTML didn't expose a count
+        if not rc:
+            logger.info("Room-count vision fallback starting for %s", property_id)
+            try:
+                from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
+                import base64 as _b64
+                import json as _json
+                from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+                api_key = os.environ.get("EMERGENT_LLM_KEY")
+                if not api_key:
+                    raise RuntimeError("EMERGENT_LLM_KEY not configured")
+
+                url = booking_url
+                # Add dates so the hotel detail page renders the full layout
+                # (without dates Booking.com sometimes serves a stripped-down view).
+                if "/hotel/" in url:
+                    ci = (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat()
+                    co = (datetime.now(timezone.utc).date() + timedelta(days=15)).isoformat()
+                    p = urlparse(url)
+                    q = parse_qs(p.query)
+                    q.setdefault("checkin", [ci])
+                    q.setdefault("checkout", [co])
+                    q.setdefault("group_adults", ["2"])
+                    q.setdefault("no_rooms", ["1"])
+                    url = urlunparse(p._replace(query=urlencode(q, doseq=True)))
+
+                png = await scrape_booking_screenshot(url, full_page=True)
+                logger.info("Room-count vision screenshot for %s: got %s bytes", property_id, len(png) if png else 0)
+                if png:
+                    SYSTEM = (
+                        "You read Booking.com hotel listings. Extract the property's "
+                        "total room/apartment/unit count and return ONLY compact JSON: "
+                        '{"room_count": <int|null>, "evidence": <short string>}. '
+                        "STRICT RULES: "
+                        "- ONLY return a number if you can see explicit copy like "
+                        "'this property has X rooms', 'X apartments', 'X studios', "
+                        "'X units', or a room-type table where each row is a distinct "
+                        "unit. Count distinct units, not duplicate listings. "
+                        "- DO NOT use the review count (e.g. '927 reviews'), the "
+                        "people count (e.g. 'sleeps 4'), the number of bedrooms in "
+                        "one apartment, or the number of property photos. "
+                        "- If the page does not explicitly state a total inventory, "
+                        "return null. "
+                        "- evidence: cite the visible text you used (e.g. "
+                        "'\"9 apartments\" near top of description'). "
+                        "Return ONLY JSON, no markdown fences."
+                    )
+                    chat = LlmChat(
+                        api_key=api_key,
+                        session_id=f"room-count-vision-{property_id[:8]}",
+                        system_message=SYSTEM,
+                    ).with_model("openai", "gpt-4o-mini")
+                    reply = await chat.send_message(UserMessage(
+                        text="How many rooms / apartments / units does this property have in total?",
+                        file_contents=[ImageContent(image_base64=_b64.b64encode(png).decode("ascii"))],
+                    ))
+                    logger.info("Room-count vision raw reply for %s: %s", property_id, (reply or "")[:300])
+                    raw = (reply or "").strip()
+                    if raw.startswith("```"):
+                        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
+                    try:
+                        parsed = _json.loads(raw)
+                    except Exception as je:
+                        logger.warning("Room-count vision parse failed for %s: %s (raw=%s)", property_id, je, raw[:200])
+                        parsed = {}
+                    vrc = parsed.get("room_count")
+                    # Accept stringified ints from LLM too
+                    if isinstance(vrc, str) and vrc.isdigit():
+                        vrc = int(vrc)
+                    if isinstance(vrc, int) and 1 <= vrc <= 2000:
+                        rc = vrc
+                        source = "booking_com_vision"
+                        evidence = (parsed.get("evidence") or "")[:200]
+                        logger.info("Vision room-count for %s = %s (evidence=%s)",
+                                    property_id, vrc, evidence)
+            except Exception as exc:
+                logger.warning("Vision room-count fallback failed for %s: %s", property_id, exc)
+                err = err or str(exc)[:200]
+
+        result: Dict[str, Optional[object]] = {
+            "room_count": rc,
+            "source": source,
+            "evidence": evidence,
+        }
+        if rc:
+            await db.properties.update_one(
+                {"id": property_id},
+                {"$set": {
+                    "booking_room_count": rc,
+                    "booking_room_count_scanned_at": datetime.now(timezone.utc).isoformat(),
+                    "booking_room_count_source": source,
+                }}
+            )
+        await db.room_count_jobs.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "status": "done" if rc else "no_data",
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "result": result,
+                "error": err,
+            }},
+        )
+
+    @router.post("/revenue/market-robot/{property_id}/refresh-room-count")
+    async def refresh_room_count(property_id: str,
+                                 background_tasks: BackgroundTasks,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Kick off a Booking.com room-count scrape in the background.
+
+        Returns immediately (the 60s ingress timeout makes synchronous scraping
+        impossible for vision-based extraction, which takes 30-90s). The client
+        polls `GET /refresh-room-count/status` to retrieve the result.
+
+        Strategy on the worker:
+          1. Fast path — pull `numberOfRooms` / `n_rooms` / "this property has N
+             rooms" out of the rendered HTML via regex.
+          2. Vision fallback — when HTML doesn't expose it (most apartment-style
+             pages), take a full-page screenshot and ask GPT-4o-mini to count
+             units WITHOUT reading the review count.
+        """
+        prop = await db.properties.find_one(
+            {"id": property_id},
+            {"_id": 0, "booking_url": 1, "booking_room_count": 1}
+        )
+        if not prop or not prop.get("booking_url"):
+            raise HTTPException(400, "Set booking_url on the property first")
+
+        await db.room_count_jobs.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "property_id": property_id,
+                "status": "running",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "result": None,
+                "error": None,
+            }},
+            upsert=True,
+        )
+        background_tasks.add_task(_run_room_count_job, property_id, prop["booking_url"])
+        return {
+            "ok": True,
+            "status": "queued",
+            "property_id": property_id,
+            "message": "Tarama başlatıldı. Sonuç ~30-90 saniye içinde hazır olacak.",
+        }
+
+    @router.get("/revenue/market-robot/{property_id}/refresh-room-count/status")
+    async def refresh_room_count_status(property_id: str,
+                                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Poll the latest room-count refresh job for this property."""
+        job = await db.room_count_jobs.find_one(
+            {"property_id": property_id}, {"_id": 0}
+        )
+        if not job:
+            return {"status": "idle"}
+        return job
 
     @router.get("/revenue/market-robot/{property_id}/ranking")
     async def get_ranking_analysis(property_id: str, days: int = 7,

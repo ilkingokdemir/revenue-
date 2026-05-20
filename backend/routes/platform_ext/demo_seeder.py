@@ -197,4 +197,113 @@ def create_demo_seeder_router(db):
         await db.folio_charges.delete_many({"is_demo": True})
         return {"ok": True, "deleted": r.deleted_count}
 
+    @router.post("/seed-occupancy/{property_id}")
+    async def seed_occupancy(
+        property_id: str,
+        occupancy: int = 65,
+        days: int = 30,
+        current_user: dict = Depends(require_perm("edit_bookings")),
+    ):
+        """Generate a realistic last-N-day booking distribution that hits a target
+        occupancy percentage. Used to populate the Robot Performance Report and any
+        other revenue dashboards with believable seed data so the `actual` occupancy
+        badge lights up green during demos.
+
+        Body params (querystring):
+          - occupancy: target occupancy %, clamped to 1–100 (default 65)
+          - days: trailing window length in days, max 90 (default 30)
+        """
+        occupancy = max(1, min(int(occupancy or 65), 100))
+        days = max(1, min(int(days or 30), 90))
+        occ_factor = occupancy / 100.0
+
+        rooms = await db.room_types.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(200)
+        if not rooms:
+            raise HTTPException(400, "Add at least one room type before seeding demo data")
+
+        total_rooms = sum(int(r.get("total_rooms", 0) or 0) for r in rooms) or 10
+        target_rn = round(total_rooms * days * occ_factor)
+        if target_rn <= 0:
+            return {"ok": True, "created": 0, "note": "target_room_nights=0"}
+
+        prop = await db.properties.find_one(
+            {"id": property_id}, {"_id": 0, "currency": 1}
+        )
+        currency = (prop or {}).get("currency", "GBP")
+
+        today = datetime.now(timezone.utc).date()
+        window_start = today - timedelta(days=days)
+        produced_rn = 0
+        inserts = []
+        guard = 0
+        # Generate bookings until we hit target room-nights. Each booking
+        # consumes (los × rooms_booked) room-nights from the window.
+        while produced_rn < target_rn and guard < 4 * target_rn:
+            guard += 1
+            guest = random.choice(GUESTS)
+            room = random.choice(rooms)
+            los = _pick_los()
+            # Random check-in inside window such that the full stay still fits
+            max_ci_offset = max(1, days - 1)
+            ci_offset = random.randint(0, max_ci_offset)
+            check_in_date = window_start + timedelta(days=ci_offset)
+            check_out_date = check_in_date + timedelta(days=los)
+            # Clip room-nights to the analysis window so produced_rn ≈ target_rn
+            overlap = max(0, min((check_out_date - max(check_in_date, window_start)).days, days - ci_offset))
+            if overlap <= 0:
+                continue
+
+            adults = random.choices([1, 2, 2, 2, 3, 4], weights=[10, 25, 25, 20, 12, 8])[0]
+            children = random.choices([0, 0, 0, 1, 2], weights=[55, 20, 10, 10, 5])[0]
+            rooms_booked = 1
+
+            base_price = float(room.get("base_rate") or room.get("base_price") or 120)
+            nightly = round(base_price * random.uniform(0.92, 1.18), 2)
+            total_price = round(nightly * los * rooms_booked, 2)
+
+            # Always "checked_out" for historical demo data so finance/occupancy
+            # treats it as realized revenue.
+            bstatus = "checked_out"
+            doc = {
+                "id": str(uuid.uuid4()),
+                "property_id": property_id,
+                "room_type_id": room["id"],
+                "guest_name": guest[0],
+                "guest_email": guest[1],
+                "guest_phone": guest[2],
+                "guest_country": guest[3],
+                "check_in": check_in_date.isoformat(),
+                "check_out": check_out_date.isoformat(),
+                "adults": adults,
+                "children": children,
+                "rooms": rooms_booked,
+                "total_price": total_price,
+                "currency": currency,
+                "status": bstatus,
+                "payment_status": "paid",
+                "channel": _pick_channel(),
+                "source": "demo_seed_occupancy",
+                "is_demo": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": current_user.get("email", "demo-seeder"),
+            }
+            inserts.append(doc)
+            produced_rn += overlap * rooms_booked
+
+        if inserts:
+            await db.bookings.insert_many([dict(d) for d in inserts])
+
+        return {
+            "ok": True,
+            "created": len(inserts),
+            "property_id": property_id,
+            "target_room_nights": target_rn,
+            "produced_room_nights": produced_rn,
+            "target_occupancy_pct": occupancy,
+            "actual_occupancy_pct": round((produced_rn / (total_rooms * days)) * 100, 1),
+            "window": {"from": window_start.isoformat(), "to": today.isoformat()},
+        }
+
     return router

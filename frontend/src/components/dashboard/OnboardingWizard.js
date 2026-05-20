@@ -547,6 +547,16 @@ const FinishedScreen = ({ propertyId, onClose }) => {
       toast.error(e?.response?.data?.detail || "Failed to seed demo data");
     } finally { setSeeding(false); }
   };
+  const seedOccupancy = async (occupancy) => {
+    setSeeding(true);
+    try {
+      const { data } = await axios.post(`${API}/demo-seeder/seed-occupancy/${propertyId}?occupancy=${occupancy}&days=30`);
+      toast.success(`Seeded ${data.created} bookings → ${data.actual_occupancy_pct}% actual occupancy (last 30 days)`);
+      loadDemoCount();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to seed occupancy");
+    } finally { setSeeding(false); }
+  };
   const clear = async () => {
     if (!window.confirm("Remove all demo bookings? Your real bookings will stay untouched.")) return;
     setClearing(true);
@@ -605,6 +615,13 @@ const FinishedScreen = ({ propertyId, onClose }) => {
                   Seed {n} bookings
                 </button>
               ))}
+              <button onClick={() => seedOccupancy(65)} disabled={seeding}
+                data-testid="demo-seed-occupancy-65"
+                title="Populate the last 30 days with enough bookings to reach ~65% actual occupancy — makes the Robot Performance Report show realistic revenue uplift."
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold disabled:opacity-50 shadow hover:-translate-y-0.5 transition-transform">
+                {seeding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                Seed 65% occupancy (30d)
+              </button>
               {demoCount > 0 && (
                 <button onClick={clear} disabled={clearing}
                   data-testid="demo-clear"

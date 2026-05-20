@@ -443,6 +443,10 @@ const FinishedScreen = ({ propertyId, onClose }) => {
   const [bookingValidating, setBookingValidating] = useState(false);
   const [bookingSaving, setBookingSaving] = useState(false);
   const [bookingValidation, setBookingValidation] = useState(null);
+  // Room-count panel state: shows manual override + auto-scan value side by side.
+  const [roomCountState, setRoomCountState] = useState(null);
+  const [manualRoomInput, setManualRoomInput] = useState("");
+  const [savingManualRC, setSavingManualRC] = useState(false);
 
   const loadDemoCount = useCallback(async () => {
     try {
@@ -467,6 +471,16 @@ const FinishedScreen = ({ propertyId, onClose }) => {
   }, [propertyId]);
 
   useEffect(() => { loadDemoCount(); loadMarketRobot(); }, [loadDemoCount, loadMarketRobot]);
+
+  const loadRoomCountState = useCallback(async () => {
+    if (!propertyId) return;
+    try {
+      const { data } = await axios.get(`${API}/revenue/market-robot/${propertyId}/room-count`);
+      setRoomCountState(data);
+      if (data.manual_room_count) setManualRoomInput(String(data.manual_room_count));
+    } catch { /* non-fatal */ }
+  }, [propertyId]);
+  useEffect(() => { loadRoomCountState(); }, [loadRoomCountState]);
 
   const startMarketRobot = async () => {
     setMrStarting(true);
@@ -561,18 +575,20 @@ const FinishedScreen = ({ propertyId, onClose }) => {
     setSeeding(true);
     try {
       await axios.post(`${API}/revenue/market-robot/${propertyId}/refresh-room-count`);
-      toast.info("Booking.com sayfası taranıyor — ~30-90 saniye sürebilir...");
+      toast.info("Booking.com tarama başladı (6+ tarih paralel taranıyor) — ~60-150 saniye sürebilir...");
       const start = Date.now();
       const poll = async () => {
         try {
           const { data } = await axios.get(`${API}/revenue/market-robot/${propertyId}/refresh-room-count/status`);
           if (data.status === "done" && data.result?.room_count) {
-            const src = data.result.source === "booking_com_vision" ? "vision LLM" : "Booking.com HTML";
-            toast.success(`Oda sayısı: ${data.result.room_count} (${src}${data.result.evidence ? ` · "${data.result.evidence}"` : ""})`);
+            const src = data.result.source === "booking_com_vision_multidate" ? "multi-date vision" : data.result.source === "booking_com_vision" ? "vision LLM" : "Booking.com HTML";
+            toast.success(`Oda sayısı: ${data.result.room_count} (${src}${data.result.evidence ? ` · ${data.result.evidence}` : ""})`);
+            loadRoomCountState();
             return true;
           }
           if (data.status === "no_data") {
-            toast.warning("Booking.com bu mülk için açık oda sayısı sergilemiyor. Manuel girilebilir.");
+            toast.warning("Booking.com bu mülk için açık oda sayısı sergilemiyor. Lütfen aşağıdan manuel girin.");
+            loadRoomCountState();
             return true;
           }
           if (data.error) { toast.error(`Tarama başarısız: ${data.error}`); return true; }
@@ -580,7 +596,7 @@ const FinishedScreen = ({ propertyId, onClose }) => {
         } catch { return false; }
       };
       const interval = setInterval(async () => {
-        if (await poll() || Date.now() - start > 180000) {
+        if (await poll() || Date.now() - start > 300000) {
           clearInterval(interval);
           setSeeding(false);
         }
@@ -590,6 +606,22 @@ const FinishedScreen = ({ propertyId, onClose }) => {
       toast.error(e?.response?.data?.detail || "Refresh failed");
       setSeeding(false);
     }
+  };
+  const saveManualRoomCount = async (clear = false) => {
+    setSavingManualRC(true);
+    try {
+      const payload = clear ? { room_count: null } : { room_count: parseInt(manualRoomInput, 10) || 0 };
+      const { data } = await axios.post(`${API}/revenue/market-robot/${propertyId}/room-count/manual`, payload);
+      if (data.cleared) {
+        toast.success("Manuel oda sayısı temizlendi — otomatik tarama değeri kullanılacak.");
+        setManualRoomInput("");
+      } else {
+        toast.success(`Manuel oda sayısı: ${data.manual_room_count} (otomatik taramayı geçersiz kılar)`);
+      }
+      loadRoomCountState();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Kaydetme başarısız");
+    } finally { setSavingManualRC(false); }
   };
   const clear = async () => {
     if (!window.confirm("Remove all demo bookings? Your real bookings will stay untouched.")) return;
@@ -677,6 +709,71 @@ const FinishedScreen = ({ propertyId, onClose }) => {
                 <CheckCircle2 className="w-3 h-3 inline text-emerald-500" /> {demoCount} demo booking{demoCount === 1 ? "" : "s"} currently in the system.
               </p>
             )}
+
+            {/* Manual room count override */}
+            <div className="mt-4 pt-4 border-t border-stone-100" data-testid="manual-room-count-card">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h4 className="text-sm font-bold text-stone-900">Toplam Oda Sayısı</h4>
+                  <p className="text-[11px] text-stone-500 mt-0.5 max-w-md">
+                    Otomatik tarama Booking.com'da sadece müsait üniteleri gösterebilir.
+                    Gerçek envanteri biliyorsanız manuel girin — bu değer her zaman önceliklidir.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    max="5000"
+                    value={manualRoomInput}
+                    onChange={(e) => setManualRoomInput(e.target.value)}
+                    placeholder="ör. 9"
+                    data-testid="manual-room-count-input"
+                    className="w-24 px-3 py-2 rounded-xl border border-stone-300 focus:border-fuchsia-400 focus:outline-none text-sm font-semibold text-center"
+                  />
+                  <button
+                    onClick={() => saveManualRoomCount(false)}
+                    disabled={savingManualRC || !manualRoomInput}
+                    data-testid="save-manual-room-count"
+                    className="px-4 py-2 rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 hover:from-fuchsia-400 hover:to-violet-500 text-white text-xs font-bold disabled:opacity-50 shadow"
+                  >
+                    {savingManualRC ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Kaydet"}
+                  </button>
+                  {roomCountState?.manual_room_count ? (
+                    <button
+                      onClick={() => saveManualRoomCount(true)}
+                      disabled={savingManualRC}
+                      data-testid="clear-manual-room-count"
+                      title="Manuel override'ı kaldır ve otomatik taramaya dön"
+                      className="px-3 py-2 rounded-xl bg-white hover:bg-rose-50 border border-rose-200 text-rose-600 text-xs font-bold disabled:opacity-50">
+                      Temizle
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {roomCountState && (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-fuchsia-50 border border-fuchsia-200 p-2 text-center">
+                    <div className="text-[9px] uppercase font-bold text-fuchsia-700">Manuel (aktif)</div>
+                    <div className={`text-base font-black ${roomCountState.manual_room_count ? "text-fuchsia-900" : "text-stone-300"}`}>
+                      {roomCountState.manual_room_count || "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-sky-50 border border-sky-200 p-2 text-center">
+                    <div className="text-[9px] uppercase font-bold text-sky-700">Booking.com</div>
+                    <div className={`text-base font-black ${roomCountState.booking_room_count ? "text-sky-900" : "text-stone-300"}`}>
+                      {roomCountState.booking_room_count || "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-stone-50 border border-stone-200 p-2 text-center">
+                    <div className="text-[9px] uppercase font-bold text-stone-600">Lokal (room_types)</div>
+                    <div className={`text-base font-black ${roomCountState.room_types_total ? "text-stone-900" : "text-stone-300"}`}>
+                      {roomCountState.room_types_total || "—"}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

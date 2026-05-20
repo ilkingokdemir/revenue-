@@ -62,15 +62,17 @@ export const PerformanceReport = ({ propertyId }) => {
                   · <span className="font-mono text-emerald-200">{property_currency || "GBP"}</span>
                   {data.total_rooms ? (
                     <span title={
-                      data.room_count_source === "booking_com"
-                        ? "Room count scraped directly from the Booking.com hotel page"
-                        : data.room_count_source === "room_types"
-                          ? "Room count summed from your local room_types — may be inaccurate. Use 'Re-scan room count' in Onboarding to pull the real value from Booking.com."
-                          : "No room count available — using fallback of 10"
+                      data.room_count_source === "manual"
+                        ? "Operator tarafından manuel girilen oda sayısı (her şeyin üstünde önceliklidir)"
+                        : data.room_count_source === "booking_com"
+                          ? "Room count scraped directly from the Booking.com hotel page"
+                          : data.room_count_source === "room_types"
+                            ? "Room count summed from your local room_types — may be inaccurate. Use 'Re-scan room count' in Onboarding to pull the real value from Booking.com."
+                            : "No room count available — using fallback of 10"
                     }>
                       · {data.total_rooms} rooms
-                      <span className={`ml-1 px-1 rounded text-[8px] ${data.room_count_source === "booking_com" ? "bg-sky-500/30 text-sky-200" : "bg-stone-500/30 text-stone-200"}`}>
-                        {data.room_count_source === "booking_com" ? "booking.com" : data.room_count_source === "room_types" ? "local" : "fallback"}
+                      <span className={`ml-1 px-1 rounded text-[8px] ${data.room_count_source === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.room_count_source === "booking_com" ? "bg-sky-500/30 text-sky-200" : "bg-stone-500/30 text-stone-200"}`}>
+                        {data.room_count_source === "manual" ? "manuel" : data.room_count_source === "booking_com" ? "booking.com" : data.room_count_source === "room_types" ? "local" : "fallback"}
                       </span>
                     </span>
                   ) : null}

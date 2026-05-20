@@ -4,7 +4,7 @@ Tracks availability for 90 days, detects demand changes, and feeds into Smart Pr
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from datetime import datetime, timezone, timedelta
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 import uuid
 import re
 import asyncio
@@ -3148,7 +3148,9 @@ def create_market_robot_router(db, require_roles, resend=None):
         # Property currency (for frontend formatting) + room inventory (for accurate revenue estimates)
         prop = await db.properties.find_one(
             {"id": property_id},
-            {"_id": 0, "currency": 1, "name": 1, "booking_room_count": 1, "booking_room_count_scanned_at": 1}
+            {"_id": 0, "currency": 1, "name": 1,
+             "booking_room_count": 1, "booking_room_count_scanned_at": 1,
+             "manual_room_count": 1, "manual_room_count_set_at": 1}
         )
         property_currency = (prop.get("currency") if prop else None) or "GBP"
 
@@ -3162,12 +3164,17 @@ def create_market_robot_router(db, require_roles, resend=None):
             base_rate = sum(float(r.get("base_rate", 0)) for r in rated_types) / len(rated_types)
         else:
             base_rate = 100.0
-        # Room count priority: live Booking.com value > sum of room_types > fallback.
-        # The Booking.com hotel-detail page exposes the real inventory; our local
-        # room_types collection is often seeded incorrectly, hence the override.
+        # Room count priority: manual override (operator-set) > Booking.com auto-scan
+        # > local room_types sum > 10-room fallback. The manual override exists so
+        # operators can correct cases where Booking.com only exposes a subset of
+        # available units for a given date.
+        manual_rc = (prop or {}).get("manual_room_count") if prop else None
         booking_room_count = (prop or {}).get("booking_room_count") if prop else None
         total_rooms_local = sum(int(r.get("total_rooms", 0) or 0) for r in room_types_list)
-        if booking_room_count and int(booking_room_count) > 0:
+        if isinstance(manual_rc, (int, float)) and int(manual_rc) > 0:
+            total_rooms = int(manual_rc)
+            room_count_source = "manual"
+        elif booking_room_count and int(booking_room_count) > 0:
             total_rooms = int(booking_room_count)
             room_count_source = "booking_com"
         elif total_rooms_local > 0:
@@ -7097,9 +7104,14 @@ Date range: {date_from} to {date_to}."""
             logger.warning("HTML room-count scrape failed for %s: %s", property_id, exc)
             err = str(exc)[:200]
 
-        # Stage 2 — GPT-4o-mini vision fallback when HTML didn't expose a count
+        # Stage 2 — GPT-4o-mini vision fallback when HTML didn't expose a count.
+        # We scan multiple dates in parallel and take the MAX of all results, because
+        # Booking.com only shows AVAILABLE units for the requested check-in date.
+        # A property with 9 apartments may show "3 apartments" on a busy weekend and
+        # "9 apartments" on a quiet Tuesday. Max across diverse weekday/weekend dates
+        # converges to the real inventory.
         if not rc:
-            logger.info("Room-count vision fallback starting for %s", property_id)
+            logger.info("Room-count vision multi-date scan starting for %s", property_id)
             try:
                 from emergentintegrations.llm.chat import LlmChat, UserMessage, ImageContent
                 import base64 as _b64
@@ -7110,71 +7122,124 @@ Date range: {date_from} to {date_to}."""
                 if not api_key:
                     raise RuntimeError("EMERGENT_LLM_KEY not configured")
 
-                url = booking_url
-                # Add dates so the hotel detail page renders the full layout
-                # (without dates Booking.com sometimes serves a stripped-down view).
-                if "/hotel/" in url:
-                    ci = (datetime.now(timezone.utc).date() + timedelta(days=14)).isoformat()
-                    co = (datetime.now(timezone.utc).date() + timedelta(days=15)).isoformat()
-                    p = urlparse(url)
-                    q = parse_qs(p.query)
-                    q.setdefault("checkin", [ci])
-                    q.setdefault("checkout", [co])
-                    q.setdefault("group_adults", ["2"])
-                    q.setdefault("no_rooms", ["1"])
-                    url = urlunparse(p._replace(query=urlencode(q, doseq=True)))
+                SYSTEM = (
+                    "You read Booking.com hotel listings. Extract the property's "
+                    "total room/apartment/unit count and return ONLY compact JSON: "
+                    '{"room_count": <int|null>, "evidence": <short string>}. '
+                    "STRICT RULES: "
+                    "- ONLY return a number if you can see explicit copy like "
+                    "'this property has X rooms', 'X apartments', 'X studios', "
+                    "'X units', or a room-type table where each row is a distinct "
+                    "unit. Count distinct units, not duplicate listings. "
+                    "- DO NOT use the review count (e.g. '927 reviews'), the "
+                    "people count (e.g. 'sleeps 4'), the number of bedrooms in "
+                    "one apartment, or the number of property photos. "
+                    "- If the page does not explicitly state a total inventory, "
+                    "return null. "
+                    "- evidence: cite the visible text you used (e.g. "
+                    "'\"9 apartments\" near top of description'). "
+                    "Return ONLY JSON, no markdown fences."
+                )
 
-                png = await scrape_booking_screenshot(url, full_page=True)
-                logger.info("Room-count vision screenshot for %s: got %s bytes", property_id, len(png) if png else 0)
-                if png:
-                    SYSTEM = (
-                        "You read Booking.com hotel listings. Extract the property's "
-                        "total room/apartment/unit count and return ONLY compact JSON: "
-                        '{"room_count": <int|null>, "evidence": <short string>}. '
-                        "STRICT RULES: "
-                        "- ONLY return a number if you can see explicit copy like "
-                        "'this property has X rooms', 'X apartments', 'X studios', "
-                        "'X units', or a room-type table where each row is a distinct "
-                        "unit. Count distinct units, not duplicate listings. "
-                        "- DO NOT use the review count (e.g. '927 reviews'), the "
-                        "people count (e.g. 'sleeps 4'), the number of bedrooms in "
-                        "one apartment, or the number of property photos. "
-                        "- If the page does not explicitly state a total inventory, "
-                        "return null. "
-                        "- evidence: cite the visible text you used (e.g. "
-                        "'\"9 apartments\" near top of description'). "
-                        "Return ONLY JSON, no markdown fences."
+                # Build a diverse set of probe dates: mix Sun / Tue / Fri across the
+                # next 6 months. The further-out / midweek dates usually expose
+                # max inventory because most rooms are unsold.
+                today = datetime.now(timezone.utc).date()
+                candidates: List = []
+                offsets = [14, 28, 45, 60, 90, 120]
+                for off in offsets:
+                    d = today + timedelta(days=off)
+                    candidates.append(d)
+                # Force at least one Tuesday & one Sunday somewhere in the window
+                for off in (35, 70):
+                    d = today + timedelta(days=off)
+                    # nudge to next Tuesday (weekday=1)
+                    while d.weekday() != 1:
+                        d += timedelta(days=1)
+                    candidates.append(d)
+                # Deduplicate
+                seen = set()
+                probe_dates = []
+                for d in candidates:
+                    if d not in seen:
+                        seen.add(d)
+                        probe_dates.append(d)
+
+                async def _scan_one(ci_date, sem) -> Optional[Dict[str, Optional[object]]]:
+                    async with sem:
+                        co_date = ci_date + timedelta(days=1)
+                        url = booking_url
+                        if "/hotel/" in url:
+                            p = urlparse(url)
+                            q = parse_qs(p.query)
+                            q["checkin"] = [ci_date.isoformat()]
+                            q["checkout"] = [co_date.isoformat()]
+                            q.setdefault("group_adults", ["2"])
+                            q.setdefault("no_rooms", ["1"])
+                            url = urlunparse(p._replace(query=urlencode(q, doseq=True)))
+                        try:
+                            from utils.booking_scraper import scrape_booking_screenshot as _sbs
+                            # Hard 35-second cap per probe so a single stuck scrape
+                            # can't hold up the whole multi-date job.
+                            png = await asyncio.wait_for(_sbs(url, full_page=True), timeout=35)
+                            if not png:
+                                return None
+                            chat = LlmChat(
+                                api_key=api_key,
+                                session_id=f"rc-{property_id[:8]}-{ci_date.isoformat()}",
+                                system_message=SYSTEM,
+                            ).with_model("openai", "gpt-4o-mini")
+                            reply = await asyncio.wait_for(chat.send_message(UserMessage(
+                                text="How many rooms / apartments / units does this property have in total?",
+                                file_contents=[ImageContent(image_base64=_b64.b64encode(png).decode("ascii"))],
+                            )), timeout=25)
+                            raw = (reply or "").strip()
+                            if raw.startswith("```"):
+                                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
+                            try:
+                                parsed = _json.loads(raw)
+                            except Exception:
+                                parsed = {}
+                            vrc = parsed.get("room_count")
+                            if isinstance(vrc, str) and vrc.isdigit():
+                                vrc = int(vrc)
+                            if isinstance(vrc, int) and 1 <= vrc <= 2000:
+                                logger.info("Multi-date probe %s @ %s = %s (evidence=%s)",
+                                            property_id, ci_date, vrc, (parsed.get("evidence") or "")[:80])
+                                return {
+                                    "room_count": vrc,
+                                    "evidence": (parsed.get("evidence") or "")[:200],
+                                    "date": ci_date.isoformat(),
+                                    "weekday": ci_date.strftime("%a"),
+                                }
+                        except asyncio.TimeoutError:
+                            logger.warning("Multi-date scan timeout for %s @ %s", property_id, ci_date)
+                        except Exception as scan_exc:
+                            logger.warning("Multi-date scan failed for %s @ %s: %s", property_id, ci_date, scan_exc)
+                        return None
+
+                # Run scans with limited concurrency — the shared headless Chromium
+                # can't serve 8 simultaneous pages without deadlocking.
+                sem = asyncio.Semaphore(3)
+                scan_results = await asyncio.gather(*[_scan_one(d, sem) for d in probe_dates])
+                hits = [s for s in scan_results if s and s.get("room_count")]
+                if hits:
+                    best = max(hits, key=lambda h: h["room_count"])
+                    rc = int(best["room_count"])
+                    source = "booking_com_vision_multidate"
+                    evidence = (
+                        f"max across {len(hits)} dates: {best['room_count']} on "
+                        f"{best['weekday']} {best['date']} ({best['evidence']})"
                     )
-                    chat = LlmChat(
-                        api_key=api_key,
-                        session_id=f"room-count-vision-{property_id[:8]}",
-                        system_message=SYSTEM,
-                    ).with_model("openai", "gpt-4o-mini")
-                    reply = await chat.send_message(UserMessage(
-                        text="How many rooms / apartments / units does this property have in total?",
-                        file_contents=[ImageContent(image_base64=_b64.b64encode(png).decode("ascii"))],
-                    ))
-                    logger.info("Room-count vision raw reply for %s: %s", property_id, (reply or "")[:300])
-                    raw = (reply or "").strip()
-                    if raw.startswith("```"):
-                        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
-                    try:
-                        parsed = _json.loads(raw)
-                    except Exception as je:
-                        logger.warning("Room-count vision parse failed for %s: %s (raw=%s)", property_id, je, raw[:200])
-                        parsed = {}
-                    vrc = parsed.get("room_count")
-                    # Accept stringified ints from LLM too
-                    if isinstance(vrc, str) and vrc.isdigit():
-                        vrc = int(vrc)
-                    if isinstance(vrc, int) and 1 <= vrc <= 2000:
-                        rc = vrc
-                        source = "booking_com_vision"
-                        evidence = (parsed.get("evidence") or "")[:200]
-                        logger.info("Vision room-count for %s = %s (evidence=%s)",
-                                    property_id, vrc, evidence)
+                    logger.info(
+                        "Multi-date room-count for %s: max=%s across %s probes, picked %s",
+                        property_id, rc, len(hits), best,
+                    )
+                else:
+                    logger.info("Multi-date room-count for %s: no usable signal across %s probes",
+                                property_id, len(probe_dates))
             except Exception as exc:
-                logger.warning("Vision room-count fallback failed for %s: %s", property_id, exc)
+                logger.warning("Vision room-count multi-date fallback failed for %s: %s", property_id, exc)
                 err = err or str(exc)[:200]
 
         result: Dict[str, Optional[object]] = {
@@ -7254,6 +7319,60 @@ Date range: {date_from} to {date_to}."""
         if not job:
             return {"status": "idle"}
         return job
+
+    @router.get("/revenue/market-robot/{property_id}/room-count")
+    async def get_room_count_state(property_id: str,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Return all known room-count signals for the property so the UI can show
+        manual, booking-com (auto), and room_types values side-by-side."""
+        prop = await db.properties.find_one(
+            {"id": property_id},
+            {"_id": 0, "manual_room_count": 1, "manual_room_count_set_at": 1,
+             "booking_room_count": 1, "booking_room_count_scanned_at": 1,
+             "booking_room_count_source": 1}
+        )
+        room_types_local = await db.room_types.find({"property_id": property_id},
+                                                    {"_id": 0, "total_rooms": 1}).to_list(50)
+        total_local = sum(int(r.get("total_rooms", 0) or 0) for r in room_types_local)
+        return {
+            "manual_room_count": (prop or {}).get("manual_room_count"),
+            "manual_room_count_set_at": (prop or {}).get("manual_room_count_set_at"),
+            "booking_room_count": (prop or {}).get("booking_room_count"),
+            "booking_room_count_scanned_at": (prop or {}).get("booking_room_count_scanned_at"),
+            "booking_room_count_source": (prop or {}).get("booking_room_count_source"),
+            "room_types_total": total_local,
+        }
+
+    @router.post("/revenue/market-robot/{property_id}/room-count/manual")
+    async def set_manual_room_count(property_id: str,
+                                    body: Dict,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Operator-supplied room count. Always wins over auto-scan in the
+        Performance Report and any other revenue calc. Pass `room_count: null`
+        (or omit) to clear the override and fall back to the auto-scanned value.
+        """
+        rc = body.get("room_count")
+        if rc in (None, "", 0):
+            await db.properties.update_one(
+                {"id": property_id},
+                {"$unset": {"manual_room_count": "", "manual_room_count_set_at": ""}},
+            )
+            return {"ok": True, "manual_room_count": None, "cleared": True}
+        try:
+            n = int(rc)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "room_count must be a positive integer")
+        if n < 1 or n > 5000:
+            raise HTTPException(400, "room_count must be between 1 and 5000")
+        await db.properties.update_one(
+            {"id": property_id},
+            {"$set": {
+                "manual_room_count": n,
+                "manual_room_count_set_at": datetime.now(timezone.utc).isoformat(),
+                "manual_room_count_set_by": current_user.get("email", "unknown"),
+            }},
+        )
+        return {"ok": True, "manual_room_count": n}
 
     @router.get("/revenue/market-robot/{property_id}/ranking")
     async def get_ranking_analysis(property_id: str, days: int = 7,

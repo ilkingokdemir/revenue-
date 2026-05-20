@@ -3,6 +3,23 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-05-20 (iter 348 — Backend Refactoring Sprint 2 ✅ COMPLETE)
+- **Kullanıcı isteği**: "duzenle" → `/app/backend/routes/` altındaki ~220 düz route dosyasını domain alt-klasörlerine taşı (REORGANIZATION_PLAN.md).
+- **Sonuç**: 218 düz dosyadan **243 dosya** 11 domain klasörüne taşındı. Yalnızca 6 paylaşılan altyapı dosyası kökte kaldı (`automation*`, `chatbot_automation`, `helpers`, `imports`).
+- **Yeni layout**:
+  - `pms/` (39), `revenue_ext/` (29), `finance_ext/` (32), `hotel_ops/` (50), `guests/` (14)
+  - `marketing/` (13), `distribution/` (15), `ai/` (8), `security/` (10), `integrations_pkg/` (16), `platform_ext/` (17)
+- **Tooling**: `/app/scripts/migrate_routes.py` — toplu taşıma + `server.py` import path rewrite + dest `__init__.py` ensure. Tekrar kullanılabilir.
+- **Cross-folder import fix'leri** (8 file): `rms_pro→market_robot`, `market_robot→smart_scanner`, `city_ledger→currency_fx`, `whatsapp_voice→voice_concierge`, `channel_hub→channel_hub` (self), `roles→permission_catalog`, `owner_self_service→owner_portal`, `auth.py→permission_catalog`.
+- **Testing agent verification ✅** (`iteration_328.json`):
+  - 11/11 domain klasörü çalışıyor, 1791 endpoint registered (no loss)
+  - `/api/health=200`, admin login OK, tüm domain'lerden sample endpoint'ler 200
+  - Migration sırasında bulunan tek minor bug (currency_fx KeyError) testing agent tarafından fix'lendi
+- **REORGANIZATION_PLAN.md** güncellendi (final layout + future "yeni dosya ekleme" rehberi).
+
+**Maintainability kazancı**: yeni route eklerken artık doğru domain klasörünü seçmek 30 saniyelik karar. Server.py'de scan kolaylaştı.
+
+
 
 ### 2026-05-19 (iter 347 — Live Inbox Search & Filter + SLA Highlights)
 - **Backend** `/api/chatbot/all/handoff/sessions` artık 4 yeni filtre kabul ediyor:

@@ -61,7 +61,14 @@ export const PerformanceReport = ({ propertyId }) => {
                 <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-white/40">
                   · <span className="font-mono text-emerald-200">{property_currency || "GBP"}</span>
                   {data.total_rooms ? <span>· {data.total_rooms} rooms</span> : null}
-                  {data.occupancy_assumption ? <span title={`Estimated revenue = per-room uplift × ${data.total_rooms} rooms × ${Math.round(data.occupancy_assumption*100)}% assumed occupancy`}>· {Math.round(data.occupancy_assumption*100)}% occupancy assumed</span> : null}
+                  {data.occupancy_assumption ? (
+                    <span title={`Estimated revenue = per-room uplift × ${data.total_rooms} rooms × ${Math.round(data.occupancy_assumption*100)}% occupancy (${data.occupancy_basis === "actual_30d" ? "actual last-30-day occupancy" : "70% industry-average fallback (no booking history yet)"})`}>
+                      · {Math.round(data.occupancy_assumption*100)}%
+                      <span className={`ml-1 px-1 rounded text-[8px] ${data.occupancy_basis === "actual_30d" ? "bg-emerald-500/30 text-emerald-200" : "bg-amber-500/30 text-amber-200"}`}>
+                        {data.occupancy_basis === "actual_30d" ? "actual" : "est."}
+                      </span>
+                    </span>
+                  ) : null}
                 </span>
               </p>
             </div>

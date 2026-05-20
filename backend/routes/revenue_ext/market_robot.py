@@ -3160,10 +3160,25 @@ def create_market_robot_router(db, require_roles, resend=None):
         else:
             base_rate = 100.0
         total_rooms = sum(int(r.get("total_rooms", 0) or 0) for r in room_types_list) or 10
-        # Estimated occupancy assumption used to bound revenue uplift to a realistic
-        # figure. Multiplying by every single room ignores that not all rooms sell
-        # every night. 70 % is the global hotel-industry long-run average.
-        occupancy_factor = 0.7
+        # Real occupancy from the last 30 days — parallel count of bookings overlapping each day.
+        # If the property has no booking history we fall back to a 70 % industry average.
+        last_30_dates = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 31)]
+        per_day_counts = await asyncio.gather(*[
+            db.bookings.count_documents({
+                "property_id": property_id,
+                "check_in": {"$lte": d},
+                "check_out": {"$gt": d},
+                "status": {"$nin": ["cancelled"]},
+            }) for d in last_30_dates
+        ])
+        total_occupied_rn = sum(per_day_counts)
+        available_rn = total_rooms * len(last_30_dates)
+        if available_rn > 0 and total_occupied_rn > 0:
+            occupancy_factor = max(0.05, min(1.0, total_occupied_rn / available_rn))
+            occupancy_basis = "actual_30d"
+        else:
+            occupancy_factor = 0.7
+            occupancy_basis = "industry_avg_fallback"
 
         # Get ALL rate overrides set by robot/scanner/dynamic-pricing
         all_overrides = await db.rate_overrides.find(
@@ -3294,6 +3309,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             "total_rooms": total_rooms,
             "base_rate": round(base_rate, 2),
             "occupancy_assumption": occupancy_factor,
+            "occupancy_basis": occupancy_basis,
         }
 
     @router.get("/revenue/market-robot/{property_id}/competitors")

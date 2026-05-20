@@ -7167,6 +7167,14 @@ Date range: {date_from} to {date_to}."""
 
                 async def _scan_one(ci_date, sem) -> Optional[Dict[str, Optional[object]]]:
                     async with sem:
+                        # Rotate Tor circuit before each probe so each one
+                        # gets a fresh exit IP. If Tor is disabled this is a
+                        # no-op and returns False quickly.
+                        try:
+                            from utils.tor_manager import rotate_circuit
+                            await rotate_circuit()
+                        except Exception:
+                            pass
                         co_date = ci_date + timedelta(days=1)
                         url = booking_url
                         if "/hotel/" in url:

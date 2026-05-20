@@ -126,40 +126,47 @@ async def _get_warm_booking_context():
 
 
 def _booking_proxy_config() -> Optional[Dict]:
-    """Returns Playwright proxy config dict if BOOKING_PROXY_URL is set, else None.
+    """Returns Playwright proxy config dict. Priority:
+      1. BOOKING_PROXY_URL (paid residential / SOCKS / HTTPS proxy)
+      2. Local Tor SOCKS (free, IP rotates per circuit)
+      3. None — direct pod IP
 
     Booking.com aggressively blocks/rate-limits scraping from cloud/datacenter
-    IPs. To work around this, set BOOKING_PROXY_URL to a residential or
-    rotating-proxy endpoint (Bright Data, Smartproxy, IPRoyal, Oxylabs, etc.).
+    IPs. The Tor fallback gives users a free way to rotate IP per scrape
+    without paying for a residential proxy provider; Tor exit IPs are widely
+    blocked by Booking too but it's strictly better than the static pod IP.
 
-    Format (one of):
+    Format (for BOOKING_PROXY_URL):
       - http://user:pass@host:port
       - https://user:pass@host:port
       - http://host:port            (no auth)
       - socks5://user:pass@host:port
-
-    Each new browser context will route ALL Booking.com traffic through it.
-    When the env var is unset, scraping uses the pod's own IP (which works
-    for search results but typically gets blocked for property-detail pages).
     """
     url = os.environ.get("BOOKING_PROXY_URL", "").strip()
-    if not url:
-        return None
+    if url:
+        try:
+            from urllib.parse import urlparse
+            u = urlparse(url)
+            if not u.hostname:
+                logger.warning("BOOKING_PROXY_URL has no host: %s", url)
+            else:
+                cfg = {"server": f"{u.scheme}://{u.hostname}:{u.port or 80}"}
+                if u.username:
+                    cfg["username"] = u.username
+                if u.password:
+                    cfg["password"] = u.password
+                return cfg
+        except Exception as e:
+            logger.warning("BOOKING_PROXY_URL parse failed: %s — %s", url, e)
+    # Free fallback: local Tor SOCKS proxy (if enabled & running)
     try:
-        from urllib.parse import urlparse
-        u = urlparse(url)
-        if not u.hostname:
-            logger.warning("BOOKING_PROXY_URL has no host: %s", url)
-            return None
-        cfg = {"server": f"{u.scheme}://{u.hostname}:{u.port or 80}"}
-        if u.username:
-            cfg["username"] = u.username
-        if u.password:
-            cfg["password"] = u.password
-        return cfg
-    except Exception as e:
-        logger.warning("BOOKING_PROXY_URL parse failed: %s — %s", url, e)
-        return None
+        from utils.tor_manager import playwright_proxy_config as _tor_pw_proxy
+        tor_cfg = _tor_pw_proxy()
+        if tor_cfg:
+            return tor_cfg
+    except Exception:
+        pass
+    return None
 
 
 async def _ensure_chromium_installed(*, force: bool = False) -> bool:

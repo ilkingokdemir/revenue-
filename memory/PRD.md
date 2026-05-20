@@ -3,6 +3,23 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-05-20 (iter 349 — Tor-based Free IP Rotation for Booking.com ✅ COMPLETE)
+- **Kullanıcı isteği**: "her seferinde VPN üzerinden IP değişsin, ücret ödemek istemiyorum"
+- **Çözüm**: Local Tor SOCKS proxy + circuit rotation per multi-date scrape
+- **Implementation**:
+  - `apt install tor` (free) + `/app/backend/utils/tor_manager.py` (new): lifecycle, `playwright_proxy_config()`, `rotate_circuit()` via stem NEWNYM signal
+  - `_booking_proxy_config()` priority: BOOKING_PROXY_URL (paid) > Tor SOCKS > direct pod IP
+  - `server.py` startup hook auto-launches Tor (idempotent, writes `/etc/tor/torrc.d/01-rotating.conf`)
+  - Multi-date scanner rotates Tor circuit before EACH probe — every scrape uses a fresh exit IP
+  - Disable via `USE_TOR_FOR_BOOKING=0`
+- **Ölçülen sonuç** (camden-suites):
+  - Tor öncesi: 8/8 probe timeout (pod IP rate-limited by Booking.com), 4+ dakika, 0 sonuç
+  - Tor sonrası: **3/8 probe başarılı, MAX=4 alındı, 52 saniye**, evidence: "This property has 4 apartments"
+  - 4 unique Tor exit IPs verified via test rotation
+- **Stack**: `stem==1.8.2` (Tor controller), `PySocks==1.7.1`
+- Manual override hala primary path (her zaman ön plana çıkar)
+
+
 ### 2026-05-20 (iter 348 — Backend Refactoring Sprint 2 ✅ COMPLETE)
 - **Kullanıcı isteği**: "duzenle" → `/app/backend/routes/` altındaki ~220 düz route dosyasını domain alt-klasörlerine taşı (REORGANIZATION_PLAN.md).
 - **Sonuç**: 218 düz dosyadan **243 dosya** 11 domain klasörüne taşındı. Yalnızca 6 paylaşılan altyapı dosyası kökte kaldı (`automation*`, `chatbot_automation`, `helpers`, `imports`).

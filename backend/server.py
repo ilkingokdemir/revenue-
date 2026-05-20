@@ -1426,6 +1426,18 @@ async def startup_event():
     except Exception as e:
         logger.warning("Playwright Chromium ensure failed: %s", e)
 
+    # Best-effort: start a local Tor daemon for free IP rotation. Booking.com
+    # blocks our static pod IP, but Tor exit relays give us a moving target.
+    # `USE_TOR_FOR_BOOKING=0` env var disables this entirely.
+    try:
+        from utils.tor_manager import tor_enabled, ensure_tor_running_async
+        if tor_enabled():
+            ok = await ensure_tor_running_async(wait_seconds=20)
+            logger.info("Tor SOCKS proxy %s for Booking scraping",
+                        "ready ✓" if ok else "NOT available — falling back to direct pod IP")
+    except Exception as e:
+        logger.warning("Tor startup failed: %s", e)
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()

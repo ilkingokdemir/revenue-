@@ -3528,6 +3528,29 @@ def create_market_robot_router(db, require_roles, resend=None):
         except Exception as e:
             logger.warning("YoY uploaded-history merge failed for %s: %s", property_id, e)
 
+        # ── Operator-uploaded expense items → drive Net Profit calculation ──
+        expense_rows: List[Dict] = []
+        annual_expense_total = 0.0
+        monthly_expense_total = 0.0
+        try:
+            expense_rows = await db.property_yoy_expenses.find(
+                {"property_id": property_id}, {"_id": 0}
+            ).sort("label", 1).to_list(50)
+            for x in expense_rows:
+                amt = float(x.get("amount") or 0)
+                if amt <= 0:
+                    continue
+                if str(x.get("period", "annual")).lower() == "monthly":
+                    annual_expense_total += amt * 12
+                    monthly_expense_total += amt
+                else:
+                    annual_expense_total += amt
+                    monthly_expense_total += amt / 12
+        except Exception as e:
+            logger.warning("YoY expenses load failed for %s: %s", property_id, e)
+        annual_expense_total = round(annual_expense_total, 2)
+        monthly_expense_total = round(monthly_expense_total, 2)
+
         # Decorate forecast months with prev-year revenue & delta %
         prev_year_total = 0.0
         for fm in annual_forecast["monthly"]:
@@ -3555,6 +3578,24 @@ def create_market_robot_router(db, require_roles, resend=None):
             "delta_pct": yoy_total_delta_pct,
             "months_with_history": months_with_history,
             "horizon_months": annual_forecast.get("horizon_months", 12),
+        }
+
+        # ── Net Profit block: per-month and annual net (forecast - expenses) ──
+        annual_gross = annual_forecast["annual_revenue"]
+        annual_net = round(annual_gross - annual_expense_total, 2)
+        # Decorate each forecast month with its monthly expense allocation + net
+        for fm in annual_forecast["monthly"]:
+            fm["expense"] = monthly_expense_total
+            fm["net_revenue"] = round(float(fm.get("revenue", 0)) - monthly_expense_total, 2)
+            # Prev-year net = prev-year actual − same monthly expense (best-effort assumption)
+            fm["prev_year_net"] = round(float(fm.get("prev_year_revenue", 0)) - monthly_expense_total, 2) \
+                if fm.get("prev_year_revenue", 0) > 0 else 0
+        annual_forecast["expenses"] = {
+            "items": expense_rows,
+            "annual_total": annual_expense_total,
+            "monthly_avg": monthly_expense_total,
+            "annual_net_revenue": annual_net,
+            "net_margin_pct": round((annual_net / annual_gross) * 100, 1) if annual_gross > 0 else 0,
         }
 
         return {
@@ -7803,24 +7844,35 @@ Date range: {date_from} to {date_to}."""
             "filename": file.filename,
             "source_kind": result["source_kind"],
             "detected_count": result["detected_count"],
+            "detected_expenses_count": result.get("detected_expenses_count", 0),
             "entries": result["entries"],
+            "expenses": result.get("expenses", []),
         }
 
     @router.post("/revenue/market-robot/{property_id}/yoy-upload/confirm")
     async def yoy_upload_confirm(property_id: str,
                                  payload: dict,
                                  current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Persist user-approved monthly revenue rows. Payload shape:
-            {"entries": [{"year": 2025, "month": 1, "revenue": 12345.67}, ...],
-             "source_kind": "excel|csv|pdf|image"}
-        Replaces any existing rows for the same month_key.
+        """Persist user-approved monthly revenue rows AND expense items.
+        Payload:
+            {
+              "entries": [{"year": 2025, "month": 1, "revenue": 12345.67}, ...],
+              "expenses": [{"label": "Rent", "amount": 110000, "period": "annual|monthly"}, ...],
+              "source_kind": "excel|csv|pdf|image",
+              "replace_expenses": true   # if true (default) clears existing expenses first
+            }
+        Both lists are optional; whichever is provided gets saved.
         """
         entries = payload.get("entries") or []
+        expenses = payload.get("expenses") or []
         source_kind = payload.get("source_kind") or "manual"
-        if not entries:
-            raise HTTPException(400, "No entries to save")
+        replace_expenses = payload.get("replace_expenses", True)
+        if not entries and not expenses:
+            raise HTTPException(400, "No entries or expenses to save")
         now_iso = datetime.now(timezone.utc).isoformat()
-        # Validate & normalise
+        uploader = (current_user or {}).get("email") or "unknown"
+
+        # ── Revenue rows ──
         rows: List[Dict] = []
         for e in entries:
             try:
@@ -7836,20 +7888,50 @@ Date range: {date_from} to {date_to}."""
                     "month_key": f"{y:04d}-{m:02d}",
                     "revenue": round(rev, 2),
                     "source": f"upload_{source_kind}",
-                    "uploaded_by": (current_user or {}).get("email") or "unknown",
+                    "uploaded_by": uploader,
                     "uploaded_at": now_iso,
                 })
             except Exception:
                 continue
-        if not rows:
-            raise HTTPException(400, "No valid entries after validation")
-        # Replace existing rows for the same property+month_key
-        keys = [r["month_key"] for r in rows]
-        await db.property_yoy_history.delete_many({
-            "property_id": property_id, "month_key": {"$in": keys}
-        })
-        await db.property_yoy_history.insert_many([dict(r) for r in rows])
-        return {"ok": True, "saved_count": len(rows), "month_keys": keys}
+        if rows:
+            keys = [r["month_key"] for r in rows]
+            await db.property_yoy_history.delete_many({
+                "property_id": property_id, "month_key": {"$in": keys}
+            })
+            await db.property_yoy_history.insert_many([dict(r) for r in rows])
+
+        # ── Expense rows ──
+        exp_rows: List[Dict] = []
+        for x in expenses:
+            try:
+                label = str(x.get("label") or "").strip()
+                amt = float(x.get("amount") or 0)
+                period = str(x.get("period") or "annual").lower()
+                if not label or amt <= 0 or period not in ("annual", "monthly"):
+                    continue
+                exp_rows.append({
+                    "property_id": property_id,
+                    "label": label,
+                    "amount": round(amt, 2),
+                    "period": period,
+                    "source": f"upload_{source_kind}",
+                    "uploaded_by": uploader,
+                    "uploaded_at": now_iso,
+                })
+            except Exception:
+                continue
+        if expenses is not None and (replace_expenses or exp_rows):
+            if replace_expenses:
+                await db.property_yoy_expenses.delete_many({"property_id": property_id})
+            if exp_rows:
+                await db.property_yoy_expenses.insert_many([dict(x) for x in exp_rows])
+
+        return {
+            "ok": True,
+            "saved_count": len(rows),
+            "saved_expenses": len(exp_rows),
+            "month_keys": [r["month_key"] for r in rows],
+        }
 
     @router.get("/revenue/market-robot/{property_id}/yoy-history")
     async def yoy_history_list(property_id: str,
@@ -7857,7 +7939,10 @@ Date range: {date_from} to {date_to}."""
         rows = await db.property_yoy_history.find(
             {"property_id": property_id}, {"_id": 0}
         ).sort("month_key", 1).to_list(60)
-        return {"property_id": property_id, "rows": rows}
+        expenses = await db.property_yoy_expenses.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("label", 1).to_list(50)
+        return {"property_id": property_id, "rows": rows, "expenses": expenses}
 
     @router.delete("/revenue/market-robot/{property_id}/yoy-history")
     async def yoy_history_clear(property_id: str,
@@ -7869,6 +7954,13 @@ Date range: {date_from} to {date_to}."""
         if month_key:
             q["month_key"] = month_key
         res = await db.property_yoy_history.delete_many(q)
+        return {"ok": True, "deleted_count": res.deleted_count}
+
+    @router.delete("/revenue/market-robot/{property_id}/yoy-expenses")
+    async def yoy_expenses_clear(property_id: str,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Clear all uploaded YoY expense rows for the property."""
+        res = await db.property_yoy_expenses.delete_many({"property_id": property_id})
         return {"ok": True, "deleted_count": res.deleted_count}
 
 

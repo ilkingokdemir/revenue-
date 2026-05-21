@@ -42,21 +42,18 @@ def _build_camden_xlsx() -> bytes:
 
 def test_multi_column_xlsx_picks_revenue_not_adr():
     content = _build_camden_xlsx()
-    entries = parse_spreadsheet(content, "camden_2025.xlsx", 2025)
+    entries, _expenses = parse_spreadsheet(content, "camden_2025.xlsx", 2025)
     assert len(entries) == 12, f"Expected 12 months, got {len(entries)}"
-    # Check it picked revenue (large) not ADR (small)
     jan = next((e for e in entries if e["month"] == 1), None)
     assert jan is not None
     assert jan["revenue"] == 7112.20, \
         f"Jan revenue should be 7112.20 (Room Rates), got {jan['revenue']} (likely picked ADR)"
-    # Total should match the sum of Room Rates column
     total = sum(e["revenue"] for e in entries)
     assert abs(total - 198037.85) < 1.0, f"Total mismatch: {total} vs expected 198037.85"
 
 
 def test_multi_column_xlsx_month_order():
     content = _build_camden_xlsx()
-    entries = parse_spreadsheet(content, "camden_2025.xlsx", 2025)
-    # Entries must be sorted by month_key ascending
+    entries, _expenses = parse_spreadsheet(content, "camden_2025.xlsx", 2025)
     months = [e["month"] for e in entries]
     assert months == list(range(1, 13)), f"Months not in order: {months}"

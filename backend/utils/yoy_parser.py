@@ -132,10 +132,80 @@ def _row_to_entry(month_cell, revenue_cell, default_year: int) -> Optional[Dict]
     }
 
 
+def _is_expense_label(s: str) -> bool:
+    """Heuristic: a non-empty string that is NOT a month name, NOT a year,
+    NOT a pure number. Typical examples: 'rent', 'commission', 'temizlik'.
+    """
+    if not s:
+        return False
+    t = str(s).strip().lower()
+    if not t or len(t) < 2 or len(t) > 40:
+        return False
+    if t in _MONTH_MAP:
+        return False
+    # Pure number or year
+    if re.fullmatch(r"\d{2,4}([.,]\d{1,2})?", t):
+        return False
+    # Common revenue/header keywords to skip (these are not expenses)
+    skip = {
+        "date", "month", "year", "total", "subtotal", "revenue", "gelir",
+        "ciro", "income", "gross", "net", "adr", "occupancy", "doluluk",
+        "bookings", "nights", "room rates", "accommodations", "yıl",
+    }
+    if t in skip:
+        return False
+    # If contains a digit but also letters → maybe "room rates 2025" header
+    has_letter = any(c.isalpha() for c in t)
+    if not has_letter:
+        return False
+    return True
+
+
+def extract_expenses_from_spreadsheet(df) -> List[Dict]:
+    """Find rows that look like {label: text, amount: number} expense entries.
+    Used after main month/revenue parsing to capture the cost-line items the
+    operator typically lists below the monthly table (rent, cleaning, council,
+    commission, etc.).
+    """
+    expenses: List[Dict] = []
+    seen_labels = set()
+    n_cols = df.shape[1]
+    for i in range(len(df)):
+        # Find a label cell and an amount cell on this row
+        label_val: Optional[str] = None
+        amount_val: Optional[float] = None
+        for c in range(n_cols):
+            cell = str(df.iat[i, c]).strip() if df.iat[i, c] is not None else ""
+            if not cell:
+                continue
+            # Is this cell a month? Skip the whole row — it's an income row.
+            if _detect_month(cell, 0) is not None:
+                label_val = None
+                break
+            num = _normalise_number(cell)
+            if num is not None and num >= 100:
+                if amount_val is None or num > amount_val:
+                    amount_val = num
+            elif _is_expense_label(cell):
+                if label_val is None or len(cell) > len(label_val):
+                    label_val = cell
+        if label_val and amount_val and amount_val >= 100:
+            key = label_val.strip().lower()
+            if key in seen_labels:
+                continue
+            seen_labels.add(key)
+            expenses.append({
+                "label": label_val.strip(),
+                "amount": round(amount_val, 2),
+                "period": "annual",  # default; user can edit in UI
+            })
+    return expenses
+
+
 # ─────────────────────────────────────────────────────────────────────────
 # Spreadsheet (XLSX / XLS / CSV)
 # ─────────────────────────────────────────────────────────────────────────
-def parse_spreadsheet(content: bytes, filename: str, default_year: int) -> List[Dict]:
+def parse_spreadsheet(content: bytes, filename: str, default_year: int) -> Tuple[List[Dict], List[Dict]]:
     import pandas as pd
     name = filename.lower()
     if name.endswith(".csv"):
@@ -177,13 +247,15 @@ def parse_spreadsheet(content: bytes, filename: str, default_year: int) -> List[
     for e in entries:
         if e["month_key"] not in by_key or e["revenue"] > by_key[e["month_key"]]["revenue"]:
             by_key[e["month_key"]] = e
-    return sorted(by_key.values(), key=lambda x: x["month_key"])
+    income_entries = sorted(by_key.values(), key=lambda x: x["month_key"])
+    expenses = extract_expenses_from_spreadsheet(df)
+    return income_entries, expenses
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # PDF — text extraction first, OCR fallback
 # ─────────────────────────────────────────────────────────────────────────
-def parse_pdf(content: bytes, default_year: int) -> List[Dict]:
+def parse_pdf(content: bytes, default_year: int) -> Tuple[List[Dict], List[Dict]]:
     text = ""
     try:
         import pdfplumber
@@ -211,7 +283,7 @@ def parse_pdf(content: bytes, default_year: int) -> List[Dict]:
 # ─────────────────────────────────────────────────────────────────────────
 # Image (JPG/PNG) — Tesseract OCR
 # ─────────────────────────────────────────────────────────────────────────
-def parse_image(content: bytes, default_year: int) -> List[Dict]:
+def parse_image(content: bytes, default_year: int) -> Tuple[List[Dict], List[Dict]]:
     from PIL import Image
     import pytesseract
     img = Image.open(io.BytesIO(content))
@@ -224,34 +296,30 @@ def parse_image(content: bytes, default_year: int) -> List[Dict]:
 # ─────────────────────────────────────────────────────────────────────────
 # Generic text-block parser (line-by-line)
 # ─────────────────────────────────────────────────────────────────────────
-def parse_text_block(text: str, default_year: int) -> List[Dict]:
-    """Extract (month, revenue) pairs from free-text. Each line is scanned
-    for a month token and a numeric token; if both are present we emit a row.
+def parse_text_block(text: str, default_year: int) -> Tuple[List[Dict], List[Dict]]:
+    """Extract (month, revenue) pairs AND expense rows from free-text.
+    Returns (income_entries, expenses).
     """
     if not text:
-        return []
+        return [], []
     by_key: Dict[str, Dict] = {}
+    expenses: List[Dict] = []
+    seen_exp_labels: set = set()
     # Match month tokens (full/abbrev English+Turkish OR YYYY-MM OR MM/YYYY)
     month_re = re.compile(
         r"(?:(\d{4})[-/.](\d{1,2})|(\d{1,2})[-/.](\d{4})|"
         r"([A-Za-zÇĞİÖŞÜçğıöşü]{3,12})\s*[-,/]?\s*(\d{2,4})?)",
         re.UNICODE,
     )
-    # Match any numeric token (currency-prefixed) and let _normalise_number
-    # parse the format. Using a single greedy bracket-class avoids the
-    # subtle backtracking pitfalls of trying to encode all thousand-separator
-    # rules into the regex itself.
     num_re = re.compile(r"[£$€₺]?\s*\d[\d.,]*\d|\d")
 
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line or len(line) < 4:
             continue
-        # Find first month-like token in the line
         ym = None
         match_span = None
         for m in month_re.finditer(line):
-            # Year-Month numeric
             if m.group(1) and m.group(2):
                 yr, mm = int(m.group(1)), int(m.group(2))
                 if 1 <= mm <= 12 and 2000 <= yr <= 2100:
@@ -267,55 +335,82 @@ def parse_text_block(text: str, default_year: int) -> List[Dict]:
                     if yr < 100:
                         yr += 2000
                     ym = (yr, _MONTH_MAP[name]); match_span = m.span(); break
-        if not ym:
-            continue
-        # Mask out the month-match region so the year inside it isn't picked
-        # up as a revenue value (e.g. "Jan 2025: £450" must NOT yield 2025).
-        line_for_nums = line
-        if match_span:
-            line_for_nums = line[:match_span[0]] + (" " * (match_span[1] - match_span[0])) + line[match_span[1]:]
-        # Find the largest plausible number on the line (must be > 100)
-        nums: List[float] = []
-        for nm in num_re.finditer(line_for_nums):
-            v = _normalise_number(nm.group(0))
-            if v is not None and v > 100:
-                nums.append(v)
-        if not nums:
-            continue
-        rev = max(nums)
-        y, mm = ym
-        key = f"{y:04d}-{mm:02d}"
-        if key not in by_key or rev > by_key[key]["revenue"]:
-            by_key[key] = {
-                "year": y, "month": mm, "month_key": key,
-                "month_label": f"{calendar.month_abbr[mm]} {y}",
-                "revenue": round(rev, 2),
-            }
-    return sorted(by_key.values(), key=lambda x: x["month_key"])
+        if ym:
+            # ── INCOME row ──
+            line_for_nums = line
+            if match_span:
+                line_for_nums = line[:match_span[0]] + (" " * (match_span[1] - match_span[0])) + line[match_span[1]:]
+            nums: List[float] = []
+            for nm in num_re.finditer(line_for_nums):
+                v = _normalise_number(nm.group(0))
+                if v is not None and v > 100:
+                    nums.append(v)
+            if not nums:
+                continue
+            rev = max(nums)
+            y, mm = ym
+            key = f"{y:04d}-{mm:02d}"
+            if key not in by_key or rev > by_key[key]["revenue"]:
+                by_key[key] = {
+                    "year": y, "month": mm, "month_key": key,
+                    "month_label": f"{calendar.month_abbr[mm]} {y}",
+                    "revenue": round(rev, 2),
+                }
+        else:
+            # ── Possible EXPENSE line ── extract a label + amount
+            # Look for the largest number on the line and a labelish word
+            nums: List[float] = []
+            for nm in num_re.finditer(line):
+                v = _normalise_number(nm.group(0))
+                if v is not None and v >= 100:
+                    nums.append(v)
+            if not nums:
+                continue
+            amount = max(nums)
+            # Strip currency and digit tokens to find the label words
+            label_part = re.sub(r"[£$€₺]?\s*\d[\d.,]*", " ", line)
+            label_part = re.sub(r"[^A-Za-zÇĞİÖŞÜçğıöşü\s]", " ", label_part)
+            label_part = re.sub(r"\s+", " ", label_part).strip()
+            if not _is_expense_label(label_part):
+                continue
+            key = label_part.lower()
+            if key in seen_exp_labels:
+                continue
+            seen_exp_labels.add(key)
+            expenses.append({
+                "label": label_part,
+                "amount": round(amount, 2),
+                "period": "annual",
+            })
+    return sorted(by_key.values(), key=lambda x: x["month_key"]), expenses
 
 
 # ─────────────────────────────────────────────────────────────────────────
 # Main dispatcher
 # ─────────────────────────────────────────────────────────────────────────
 def parse_upload(content: bytes, filename: str, default_year: int) -> Dict:
-    """Returns {entries: [...], source_kind: 'excel|csv|pdf|image', detected_count: N}."""
+    """Returns {entries, expenses, source_kind, detected_count}.
+    `entries` = monthly revenue rows · `expenses` = annual cost-line items.
+    """
     name = (filename or "").lower()
     if name.endswith((".xlsx", ".xls")):
-        entries = parse_spreadsheet(content, filename, default_year)
+        entries, expenses = parse_spreadsheet(content, filename, default_year)
         kind = "excel"
     elif name.endswith(".csv"):
-        entries = parse_spreadsheet(content, filename, default_year)
+        entries, expenses = parse_spreadsheet(content, filename, default_year)
         kind = "csv"
     elif name.endswith(".pdf"):
-        entries = parse_pdf(content, default_year)
+        entries, expenses = parse_pdf(content, default_year)
         kind = "pdf"
     elif name.endswith((".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff")):
-        entries = parse_image(content, default_year)
+        entries, expenses = parse_image(content, default_year)
         kind = "image"
     else:
         raise ValueError(f"Unsupported file type: {filename}")
     return {
         "entries": entries,
+        "expenses": expenses,
         "source_kind": kind,
         "detected_count": len(entries),
+        "detected_expenses_count": len(expenses),
     }

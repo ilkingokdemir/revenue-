@@ -20,19 +20,32 @@ const SOURCE_ICON = {
 export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
   const fileInputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState(null); // {entries, source_kind, filename}
-  const [rows, setRows] = useState([]); // editable copy of entries
+  const [preview, setPreview] = useState(null); // {entries, source_kind, filename, expenses}
+  const [rows, setRows] = useState([]); // editable income rows
+  const [expenseRows, setExpenseRows] = useState([]); // editable expense rows
   const [saving, setSaving] = useState(false);
   const [existing, setExisting] = useState([]);
+  const [existingExpenses, setExistingExpenses] = useState([]);
   const [loadingExisting, setLoadingExisting] = useState(true);
 
-  // Load any previously saved YoY rows on open
+  // Load any previously saved YoY rows + expenses on open
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const r = await axios.get(`${API}/revenue/market-robot/${propertyId}/yoy-history`);
-        if (!cancelled) setExisting(r.data.rows || []);
+        if (!cancelled) {
+          setExisting(r.data.rows || []);
+          setExistingExpenses(r.data.expenses || []);
+          // If user already has saved expenses, pre-populate the editor so
+          // they're shown alongside any newly parsed file (and so the user
+          // doesn't have to re-enter them when uploading a new revenue file).
+          if (r.data.expenses && r.data.expenses.length > 0) {
+            setExpenseRows(r.data.expenses.map(x => ({
+              label: x.label, amount: x.amount, period: x.period || "annual"
+            })));
+          }
+        }
       } catch (e) {
         // non-fatal
       } finally {
@@ -56,10 +69,23 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
       );
       setPreview(r.data);
       setRows(r.data.entries || []);
-      if ((r.data.entries || []).length === 0) {
-        toast.warning("Dosyada satır bulunamadı. Lütfen ayları manuel olarak girebilirsiniz.");
+      // Merge parsed expenses with any existing ones (parsed take priority by label)
+      const parsedExp = r.data.expenses || [];
+      if (parsedExp.length > 0) {
+        setExpenseRows(prev => {
+          const byLabel = new Map(prev.map(x => [x.label.toLowerCase(), x]));
+          for (const x of parsedExp) {
+            byLabel.set(x.label.toLowerCase(), { label: x.label, amount: x.amount, period: x.period || "annual" });
+          }
+          return Array.from(byLabel.values());
+        });
+      }
+      const incCount = (r.data.entries || []).length;
+      const expCount = parsedExp.length;
+      if (incCount === 0 && expCount === 0) {
+        toast.warning("Dosyada satır bulunamadı. Manuel girebilirsiniz.");
       } else {
-        toast.success(`${r.data.entries.length} ay verisi okundu — kontrol edip kaydedin.`);
+        toast.success(`${incCount} ay + ${expCount} gider kalemi okundu — kontrol edip kaydedin.`);
       }
     } catch (err) {
       toast.error(err.response?.data?.detail || "Dosya okunamadı");
@@ -83,6 +109,17 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
     setRows(prev => [...prev, { year: lastYear, month: 1, month_key: `${lastYear}-01`, month_label: `Jan ${lastYear}`, revenue: 0 }]);
   };
 
+  // Expense row management
+  const updateExp = (idx, key, val) => {
+    setExpenseRows(prev => prev.map((r, i) => i === idx ? { ...r, [key]: val } : r));
+  };
+  const removeExp = (idx) => {
+    setExpenseRows(prev => prev.filter((_, i) => i !== idx));
+  };
+  const addExp = () => {
+    setExpenseRows(prev => [...prev, { label: "", amount: 0, period: "annual" }]);
+  };
+
   const handleSave = async () => {
     const validRows = rows.filter(r => {
       const y = parseInt(r.year, 10);
@@ -91,8 +128,14 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
       return Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(rev) &&
              y >= 2000 && y <= 2100 && m >= 1 && m <= 12 && rev > 0;
     });
-    if (validRows.length === 0) {
-      toast.error("Kaydedilecek geçerli satır yok");
+    const validExpenses = expenseRows.filter(x => {
+      const amt = parseFloat(x.amount);
+      return x.label && x.label.toString().trim().length > 0 &&
+             Number.isFinite(amt) && amt > 0 &&
+             ["annual", "monthly"].includes((x.period || "annual").toLowerCase());
+    });
+    if (validRows.length === 0 && validExpenses.length === 0) {
+      toast.error("Kaydedilecek veri yok (gelir veya gider satırı ekleyin)");
       return;
     }
     setSaving(true);
@@ -103,13 +146,19 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
           month: parseInt(r.month, 10),
           revenue: parseFloat(r.revenue),
         })),
+        expenses: validExpenses.map(x => ({
+          label: x.label.toString().trim(),
+          amount: parseFloat(x.amount),
+          period: (x.period || "annual").toLowerCase(),
+        })),
         source_kind: preview?.source_kind || "manual",
+        replace_expenses: true,
       };
       const r = await axios.post(
         `${API}/revenue/market-robot/${propertyId}/yoy-upload/confirm`,
         payload,
       );
-      toast.success(`${r.data.saved_count} ay verisi kaydedildi — YoY karşılaştırma güncellendi`);
+      toast.success(`${r.data.saved_count} ay + ${r.data.saved_expenses} gider kaydedildi`);
       if (onSaved) onSaved();
       if (onClose) onClose();
     } catch (e) {
@@ -120,10 +169,15 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
   };
 
   const clearAll = async () => {
-    if (!window.confirm("Tüm yüklenmiş geçmiş veriyi silmek istiyor musunuz?")) return;
+    if (!window.confirm("Tüm yüklenmiş geçmiş veriyi (gelir + gider) silmek istiyor musunuz?")) return;
     try {
-      await axios.delete(`${API}/revenue/market-robot/${propertyId}/yoy-history`);
+      await Promise.all([
+        axios.delete(`${API}/revenue/market-robot/${propertyId}/yoy-history`),
+        axios.delete(`${API}/revenue/market-robot/${propertyId}/yoy-expenses`),
+      ]);
       setExisting([]);
+      setExistingExpenses([]);
+      setExpenseRows([]);
       toast.success("Geçmiş veri silindi");
       if (onSaved) onSaved();
     } catch (e) {
@@ -164,7 +218,8 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-emerald-600" />
                 <span className="text-sm text-emerald-800">
-                  <span className="font-bold">{existing.length}</span> ay verisi kayıtlı
+                  <span className="font-bold">{existing.length}</span> ay gelir +{" "}
+                  <span className="font-bold">{existingExpenses.length}</span> gider kayıtlı
                   <span className="text-emerald-600/70 ml-1">(yeni yükleme aynı ayları günceller)</span>
                 </span>
               </div>
@@ -179,8 +234,8 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
             </div>
           )}
 
-          {/* Upload zone */}
-          {!preview && (
+          {/* Upload zone — show when no preview AND no existing tables to edit */}
+          {!preview && expenseRows.length === 0 && (
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
@@ -200,9 +255,21 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                   <p className="text-xs text-stone-500 mt-2">
                     Desteklenen formatlar: <span className="font-mono">.pdf · .jpg · .jpeg · .png · .xlsx · .xls · .csv</span>
                   </p>
-                  <p className="text-[11px] text-stone-400 mt-1">Aylık ciro içermeli (Ocak 2025 → 12,450 gibi)</p>
+                  <p className="text-[11px] text-stone-400 mt-1">Aylık ciro + opsiyonel gider satırları (Rent / Komisyon / Council vs.)</p>
                 </>
               )}
+            </button>
+          )}
+          {/* "Add file" link when expense table is already open */}
+          {!preview && expenseRows.length > 0 && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              data-testid="yoy-upload-add-file"
+              className="w-full border border-dashed border-stone-300 hover:border-indigo-400 rounded-lg py-3 px-4 text-sm text-stone-600 font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              {uploading ? "İşleniyor..." : "Dosya yükle (PDF/JPG/Excel/CSV)"}
             </button>
           )}
           <input
@@ -215,25 +282,28 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
           />
 
           {/* Preview / Edit table */}
-          {preview && (
+          {(preview || rows.length > 0) && (
             <div data-testid="yoy-preview-table">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <SourceIcon className="w-4 h-4 text-indigo-500" />
-                  <span className="text-sm text-stone-700 font-bold">{preview.filename}</span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-bold">
-                    {preview.source_kind.toUpperCase()}
-                  </span>
-                  <span className="text-xs text-stone-500">· {rows.length} satır</span>
+              {preview && (
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <SourceIcon className="w-4 h-4 text-indigo-500" />
+                    <span className="text-sm text-stone-700 font-bold">{preview.filename}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-bold">
+                      {preview.source_kind.toUpperCase()}
+                    </span>
+                    <span className="text-xs text-stone-500">· {rows.length} ay · {expenseRows.length} gider</span>
+                  </div>
+                  <button
+                    onClick={() => { setPreview(null); setRows([]); }}
+                    data-testid="yoy-restart"
+                    className="text-xs text-stone-500 hover:text-stone-700"
+                  >
+                    Başka dosya seç
+                  </button>
                 </div>
-                <button
-                  onClick={() => { setPreview(null); setRows([]); }}
-                  data-testid="yoy-restart"
-                  className="text-xs text-stone-500 hover:text-stone-700"
-                >
-                  Başka dosya seç
-                </button>
-              </div>
+              )}
+              <p className="text-xs font-bold text-stone-600 uppercase mb-2">💰 Aylık Gelirler</p>
               <div className="border border-stone-200 rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-stone-50 text-stone-600 text-xs uppercase">
@@ -301,9 +371,111 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                   </button>
                 </div>
               </div>
-              <p className="text-[11px] text-stone-400 mt-2">
+              <p className="text-[11px] text-stone-400 mt-2 mb-4">
                 💡 Yanlış okunan satırları düzeltebilir, fazladan satırları silebilir veya manuel ekleyebilirsiniz.
                 Aynı ay için tekrar yükleme önceki değeri günceller.
+              </p>
+            </div>
+          )}
+
+          {/* Expense table — always editable */}
+          {(preview || expenseRows.length > 0 || rows.length > 0) && (
+            <div data-testid="yoy-expense-table">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold text-stone-600 uppercase">💸 Yıllık Gider Kalemleri</p>
+                {(() => {
+                  const totalAnnual = expenseRows.reduce((sum, x) => {
+                    const a = parseFloat(x.amount) || 0;
+                    return sum + (String(x.period).toLowerCase() === "monthly" ? a * 12 : a);
+                  }, 0);
+                  const totalRev = rows.reduce((sum, r) => sum + (parseFloat(r.revenue) || 0), 0);
+                  const net = totalRev - totalAnnual;
+                  if (totalAnnual === 0 && totalRev === 0) return null;
+                  return (
+                    <div className="text-[11px] text-stone-500 flex items-center gap-3" data-testid="yoy-net-summary">
+                      <span>Gelir: <span className="font-bold text-emerald-600">{cur ? cur(totalRev) : totalRev.toFixed(0)}</span></span>
+                      <span>Gider: <span className="font-bold text-rose-600">{cur ? cur(totalAnnual) : totalAnnual.toFixed(0)}</span></span>
+                      <span>Net: <span className={`font-black ${net >= 0 ? "text-indigo-600" : "text-rose-600"}`}>{cur ? cur(net) : net.toFixed(0)}</span></span>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="border border-stone-200 rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-stone-50 text-stone-600 text-xs uppercase">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Kalem</th>
+                      <th className="px-3 py-2 text-right">Tutar</th>
+                      <th className="px-3 py-2 text-left w-28">Periyot</th>
+                      <th className="px-3 py-2 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {expenseRows.map((x, idx) => (
+                      <tr key={idx} className="border-t border-stone-100 hover:bg-stone-50/60" data-testid={`yoy-exp-row-${idx}`}>
+                        <td className="px-3 py-2">
+                          <input
+                            type="text"
+                            value={x.label}
+                            onChange={(e) => updateExp(idx, "label", e.target.value)}
+                            placeholder="Rent, Komisyon, Council, Temizlik..."
+                            className="w-full px-2 py-1 border border-stone-200 rounded text-sm focus:outline-none focus:border-indigo-400"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={x.amount}
+                            onChange={(e) => updateExp(idx, "amount", e.target.value)}
+                            className="w-32 px-2 py-1 border border-stone-200 rounded text-sm text-right focus:outline-none focus:border-indigo-400"
+                          />
+                          <span className="text-xs text-stone-400 ml-1">{cur ? cur(parseFloat(x.amount) || 0) : ""}</span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={x.period || "annual"}
+                            onChange={(e) => updateExp(idx, "period", e.target.value)}
+                            className="px-2 py-1 border border-stone-200 rounded text-sm focus:outline-none focus:border-indigo-400"
+                          >
+                            <option value="annual">Yıllık</option>
+                            <option value="monthly">Aylık</option>
+                          </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => removeExp(idx)}
+                            data-testid={`yoy-exp-remove-${idx}`}
+                            className="p-1 rounded hover:bg-rose-100 text-rose-500"
+                            title="Sil"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                    {expenseRows.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-6 text-center text-xs text-stone-400">
+                          Henüz gider satırı yok — alttan "Manuel gider ekle" ile başlayın veya bir dosya yükleyin.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                <div className="bg-stone-50 px-3 py-2 border-t border-stone-100">
+                  <button
+                    onClick={addExp}
+                    data-testid="yoy-add-expense"
+                    className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Manuel gider ekle
+                  </button>
+                </div>
+              </div>
+              <p className="text-[11px] text-stone-400 mt-2">
+                💡 "Yıllık" seçimi bu kalemin yılda toplam tutarı olduğunu söyler. "Aylık" seçilirse 12 ile çarpılıp yıllığa çevrilir.
               </p>
             </div>
           )}
@@ -312,7 +484,9 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
         {/* Footer */}
         <div className="px-6 py-4 border-t border-stone-200 flex justify-between items-center gap-3 bg-stone-50">
           <p className="text-xs text-stone-500">
-            {preview ? `${rows.length} ay · Kaydetmeden çıkarsanız değişiklikler iptal olur` : "Dosya seçtikten sonra düzenleyebilirsiniz"}
+            {(rows.length > 0 || expenseRows.length > 0)
+              ? `${rows.length} gelir ay · ${expenseRows.length} gider kalemi`
+              : "Dosya seçtikten sonra düzenleyebilirsiniz"}
           </p>
           <div className="flex gap-2">
             <button
@@ -324,12 +498,12 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
             </button>
             <button
               onClick={handleSave}
-              disabled={saving || rows.length === 0}
+              disabled={saving || (rows.length === 0 && expenseRows.length === 0)}
               data-testid="yoy-modal-save"
               className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold flex items-center gap-2 disabled:opacity-50"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              {rows.length > 0 ? `${rows.length} satırı kaydet` : "Kaydet"}
+              Kaydet
             </button>
           </div>
         </div>

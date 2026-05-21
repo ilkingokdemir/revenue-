@@ -589,7 +589,7 @@ export const PerformanceReport = ({ propertyId }) => {
                       {cur(m.revenue)}
                     </div>
                     <div
-                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? "Booking.com canlı" : "tahmin"}) · doluluk %${m.occupancy_pct}${m.prev_year_revenue > 0 ? ` · Geçen yıl gerçek: ${cur(m.prev_year_revenue)} (${m.yoy_delta_pct >= 0 ? "+" : ""}${m.yoy_delta_pct}%)` : ""}`}
+                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? "Booking.com canlı" : "tahmin"}) · doluluk %${m.occupancy_pct}${m.prev_year_revenue > 0 ? ` · Geçen yıl gerçek: ${cur(m.prev_year_revenue)} (${m.yoy_delta_pct >= 0 ? "+" : ""}${m.yoy_delta_pct}%)` : ""}${m.expense > 0 ? ` · Aylık gider: ${cur(m.expense)} → Net: ${cur(m.net_revenue)}` : ""}`}
                       className={`w-full rounded-t-md transition-all hover:opacity-90 ${colorClass}`}
                       style={{ height: `${h}%` }}
                     />
@@ -638,6 +638,78 @@ export const PerformanceReport = ({ propertyId }) => {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Net Profit strip — gross revenue MINUS uploaded expense items */}
+            {af.expenses && af.expenses.annual_total > 0 && (
+              <div className="mt-3 rounded-xl bg-gradient-to-r from-fuchsia-900/30 to-indigo-900/30 border border-white/10 p-3" data-testid="net-profit-strip">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-fuchsia-300" />
+                    <p className="text-xs font-bold text-white/90">Yıllık Net Kâr</p>
+                    <span className="text-[10px] text-white/40">({af.expenses.items.length} gider kalemi)</span>
+                    <button
+                      onClick={() => setYoyUploadOpen(true)}
+                      data-testid="net-profit-edit-expenses"
+                      className="ml-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                      title="Gider kalemlerini düzenle"
+                    >
+                      <Pencil className="w-2.5 h-2.5" />
+                      Düzenle
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-4 text-right">
+                    <div>
+                      <p className="text-[9px] text-white/40 uppercase">Yıllık Gelir</p>
+                      <p className="text-sm font-bold text-emerald-300">{cur(af.annual_revenue)}</p>
+                    </div>
+                    <div className="text-white/30">−</div>
+                    <div>
+                      <p className="text-[9px] text-white/40 uppercase">Yıllık Gider</p>
+                      <p className="text-sm font-bold text-rose-300">{cur(af.expenses.annual_total)}</p>
+                    </div>
+                    <div className="border-l border-white/20 pl-4">
+                      <p className="text-[9px] text-white/40 uppercase">Yıllık Net</p>
+                      <p className={`text-base font-black flex items-center gap-1 ${af.expenses.annual_net_revenue >= 0 ? "text-fuchsia-200" : "text-rose-300"}`}>
+                        {cur(af.expenses.annual_net_revenue)}
+                        <span className="text-[10px] font-bold ml-1 text-white/60">({af.expenses.net_margin_pct}%)</span>
+                      </p>
+                    </div>
+                    <div className="border-l border-white/20 pl-4">
+                      <p className="text-[9px] text-white/40 uppercase">Aylık Ort. Net</p>
+                      <p className="text-sm font-bold text-white/90">
+                        {cur(af.expenses.annual_net_revenue / 12)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                {/* Expense items breakdown */}
+                <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 md:grid-cols-5 gap-2" data-testid="net-profit-items">
+                  {af.expenses.items.map((x, idx) => (
+                    <div key={idx} className="bg-white/5 rounded-lg px-2 py-1.5">
+                      <p className="text-[10px] text-white/50 capitalize truncate" title={x.label}>{x.label}</p>
+                      <p className="text-xs font-bold text-rose-200">
+                        {cur(x.amount)}
+                        <span className="text-[9px] text-white/40 ml-1">/{x.period === "monthly" ? "ay" : "yıl"}</span>
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* CTA when no expenses set yet */}
+            {(!af.expenses || af.expenses.annual_total === 0) && af.yoy_comparison && af.yoy_comparison.prev_year_total_revenue > 0 && (
+              <div className="mt-3 rounded-xl bg-white/5 border border-white/10 border-dashed p-2.5 text-center" data-testid="net-profit-empty">
+                <button
+                  onClick={() => setYoyUploadOpen(true)}
+                  data-testid="net-profit-add-expenses"
+                  className="text-xs text-white/80 hover:text-white inline-flex items-center gap-1.5 font-bold"
+                >
+                  <Wallet className="w-3.5 h-3.5 text-fuchsia-300" />
+                  Net kâr için gider kalemlerini ekle (Rent / Komisyon / Council...)
+                  <Upload className="w-3 h-3" />
+                </button>
               </div>
             )}
             <p className="text-[10px] text-white/40 text-center mt-3">

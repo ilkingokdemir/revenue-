@@ -1,6 +1,32 @@
 # Changelog — Hotel PMS & Revenue Management
 
+## 2026-05-21 — Net Kâr (Gelir − Gider) Performance Report'a eklendi
+- **Goal**: Operatör yıllık/aylık net kârını aynı sayfada görsün.
+- **Backend** (`market_robot.py` + `utils/yoy_parser.py`):
+  - Parser artık Excel/PDF/JPG/CSV'lerden hem **aylık gelir** hem **gider kalemleri** (rent / commission / temizlik / council / cleaning vb.) çıkartıyor — annual veya monthly periyod.
+  - `POST /yoy-upload/confirm` artık `entries` yanında `expenses` listesini de saklıyor (yeni koleksiyon `property_yoy_expenses`).
+  - `GET /yoy-history` artık `{rows, expenses}` döndürüyor.
+  - Yeni `DELETE /yoy-expenses` endpoint'i.
+  - `GET /performance` response'ında yeni `annual_forecast.expenses` blok: `items`, `annual_total`, `monthly_avg`, `annual_net_revenue`, `net_margin_pct`. Her aylık forecast row'una `expense` ve `net_revenue` decorate edildi.
+- **Frontend**:
+  - `YoYUploadModal` artık iki tablolu: Gelir + Gider. Her tablo düzenlenebilir; "Yıllık/Aylık" periyod seçimi destekleniyor. Canlı **Net = Gelir − Gider** özeti.
+  - `PerformanceReport`: Annual forecast card'ında yeni **"Yıllık Net Kâr" strip** — Gelir / Gider / Yıllık Net / Aylık Ort. Net + gider kalemleri detay grid + "Düzenle" butonu.
+  - Henüz gider yoksa CTA strip "Net kâr için gider kalemlerini ekle".
+  - Aylık bar tooltip'ine `Aylık gider` ve `Net` eklendi.
+- **Test**: Pytest **8/8 PASS** (`test_yoy_expenses_net_profit.py` 3 case + `test_yoy_parser_multi_column.py` 2 case + `test_iteration331_perf_kpi_dedup.py` 3 case).
+- **Camden örneği doğrulandı**: 12 ay £198,037 gelir → 5 gider kalemi £180,200 → **Yıllık Net £17,837 (9% margin)** veya cari yıl forecast £437,298 → Net £257,098 (58.8% margin).
+
+## 2026-05-21 — Fix: Camden çoklu-sütun Excel parser bug
+- Çoklu sütun Excel (Date | ADR | Bookings | Room Rates) ay sütunu doğru, ama yanlış değer sütunu seçiliyordu (ADR yerine Revenue). Tie-breaker: aynı satır sayısında **toplam değer en yüksek** sütun seçildi.
+
 ## 2026-05-21 — Fix: Performance Report KPI'leri abartılı/duplicate sayım
+- 90 gün horizon + (date, room_type) dedup + per-date averaging. 491→91 days, çok daha gerçekçi numbers.
+
+## 2026-05-21 — YoY Historical-Revenue Upload (PDF/JPG/Excel/CSV)
+- Tesseract OCR + pdfplumber + openpyxl ile $0 maliyet upload pipeline. Inline editable preview table. iter 330 ile doğrulandı.
+
+## 2026-05-21 — Performance Report YoY Comparison strip
+- annual_forecast.yoy_comparison (prev_year vs forecast) + per-month yoy_delta_pct.
 - **Şikayet**: "Estimated Revenue Uplift +£95,554 / Days Optimized 491 (421 up / 70 down) — bu sacma rakamlar".
 - **Kök neden**: `get_performance_report` her `rate_override` satırını ham toplam ediyordu. Robot her tarama için aynı (tarih, oda tipi) için yeni override yazıyor + her gün için N oda tipi → aynı uplift 4-5x sayılıyordu. Ayrıca 13 ay forward / 30 gün backward bütün geçmiş yazıma dahildi.
 - **Düzeltme** (`/app/backend/routes/revenue_ext/market_robot.py:3312`):

@@ -2,7 +2,7 @@
 Market Robot — Scrapes Booking.com market supply data and auto-adjusts hotel rates.
 Tracks availability for 90 days, detects demand changes, and feeds into Smart Pricing.
 """
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form
 from datetime import datetime, timezone, timedelta, date
 from typing import Dict, List, Optional
 import uuid
@@ -3471,6 +3471,23 @@ def create_market_robot_router(db, require_roles, resend=None):
                     d += timedelta(days=1)
         except Exception as e:
             logger.warning("YoY prev-year aggregation failed for %s: %s", property_id, e)
+
+        # Merge uploaded historical revenue (from PDF/JPG/Excel uploads).
+        # Upload takes priority over bookings for the same month — operators
+        # upload these when their PMS booking history is incomplete or only
+        # exists in external systems.
+        try:
+            uploaded = await db.property_yoy_history.find(
+                {"property_id": property_id}, {"_id": 0, "month_key": 1, "revenue": 1}
+            ).to_list(120)
+            for u in uploaded:
+                key = u.get("month_key")
+                rev = float(u.get("revenue") or 0)
+                if key and rev > 0:
+                    # Override (uploads are explicit operator input → highest trust)
+                    prev_rev_by_key[key] = rev
+        except Exception as e:
+            logger.warning("YoY uploaded-history merge failed for %s: %s", property_id, e)
 
         # Decorate forecast months with prev-year revenue & delta %
         prev_year_total = 0.0
@@ -7713,6 +7730,108 @@ Date range: {date_from} to {date_to}."""
             {"_id": 0},
         ).sort("month_key", 1).to_list(24)
         return {"property_id": property_id, "prices": rows}
+
+    # ────────────────────────────────────────────────────────────────────
+    #  YoY historical revenue upload (PDF / JPG / Excel / CSV)
+    # ────────────────────────────────────────────────────────────────────
+    @router.post("/revenue/market-robot/{property_id}/yoy-upload/preview")
+    async def yoy_upload_preview(property_id: str,
+                                 file: UploadFile = File(...),
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Parse an uploaded historical revenue file (Excel/CSV/PDF/JPG/PNG)
+        WITHOUT saving — returns detected month/revenue rows so the operator
+        can review/edit in the UI before confirming.
+        """
+        from utils.yoy_parser import parse_upload
+        try:
+            content = await file.read()
+        except Exception as e:
+            raise HTTPException(400, f"Failed to read file: {e}")
+        if not content or len(content) < 16:
+            raise HTTPException(400, "Empty or invalid file")
+        if len(content) > 20 * 1024 * 1024:
+            raise HTTPException(400, "File too large (max 20MB)")
+        default_year = datetime.now(timezone.utc).year - 1
+        try:
+            result = parse_upload(content, file.filename or "upload", default_year)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except Exception as e:
+            logger.exception("YoY parse failed: %s", e)
+            raise HTTPException(500, f"Parse error: {str(e)[:200]}")
+        return {
+            "property_id": property_id,
+            "filename": file.filename,
+            "source_kind": result["source_kind"],
+            "detected_count": result["detected_count"],
+            "entries": result["entries"],
+        }
+
+    @router.post("/revenue/market-robot/{property_id}/yoy-upload/confirm")
+    async def yoy_upload_confirm(property_id: str,
+                                 payload: dict,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Persist user-approved monthly revenue rows. Payload shape:
+            {"entries": [{"year": 2025, "month": 1, "revenue": 12345.67}, ...],
+             "source_kind": "excel|csv|pdf|image"}
+        Replaces any existing rows for the same month_key.
+        """
+        entries = payload.get("entries") or []
+        source_kind = payload.get("source_kind") or "manual"
+        if not entries:
+            raise HTTPException(400, "No entries to save")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        # Validate & normalise
+        rows: List[Dict] = []
+        for e in entries:
+            try:
+                y = int(e["year"])
+                m = int(e["month"])
+                rev = float(e["revenue"])
+                if not (2000 <= y <= 2100) or not (1 <= m <= 12) or rev <= 0:
+                    continue
+                rows.append({
+                    "property_id": property_id,
+                    "year": y,
+                    "month": m,
+                    "month_key": f"{y:04d}-{m:02d}",
+                    "revenue": round(rev, 2),
+                    "source": f"upload_{source_kind}",
+                    "uploaded_by": (current_user or {}).get("email") or "unknown",
+                    "uploaded_at": now_iso,
+                })
+            except Exception:
+                continue
+        if not rows:
+            raise HTTPException(400, "No valid entries after validation")
+        # Replace existing rows for the same property+month_key
+        keys = [r["month_key"] for r in rows]
+        await db.property_yoy_history.delete_many({
+            "property_id": property_id, "month_key": {"$in": keys}
+        })
+        await db.property_yoy_history.insert_many([dict(r) for r in rows])
+        return {"ok": True, "saved_count": len(rows), "month_keys": keys}
+
+    @router.get("/revenue/market-robot/{property_id}/yoy-history")
+    async def yoy_history_list(property_id: str,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        rows = await db.property_yoy_history.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).sort("month_key", 1).to_list(60)
+        return {"property_id": property_id, "rows": rows}
+
+    @router.delete("/revenue/market-robot/{property_id}/yoy-history")
+    async def yoy_history_clear(property_id: str,
+                                month_key: Optional[str] = None,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Clear all uploaded YoY history for the property, or a specific
+        month_key if provided (?month_key=2025-03)."""
+        q: Dict = {"property_id": property_id}
+        if month_key:
+            q["month_key"] = month_key
+        res = await db.property_yoy_history.delete_many(q)
+        return {"ok": True, "deleted_count": res.deleted_count}
+
 
     @router.get("/revenue/market-robot/{property_id}/room-count")
     async def get_room_count_state(property_id: str,

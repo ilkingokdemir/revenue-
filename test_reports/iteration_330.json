@@ -1,0 +1,72 @@
+{
+  "summary": "YoY Historical Revenue Upload Feature (Iter 330) - Backend PASSED (10/10 tests), Frontend PASSED. All backend endpoints work correctly: preview parses CSV with 12 months, confirm saves to property_yoy_history, GET /yoy-history returns saved rows, DELETE clears rows (all or by month_key), performance endpoint returns yoy_comparison with uploaded data. Frontend shows all required elements: yoy-tile-empty, yoy-upload-open-empty button, yoy-upload-modal with file input, dropzone, save/cancel buttons. Regression verified: hero-adr-edit, hero-occupancy-edit, annual-forecast-card, scrape-yearly-prices-btn all present.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Performance Report",
+        "issues": ["React key warning: 'Encountered two children with the same key' for date keys in daily_impact table - minor console warning, doesn't affect functionality (same as iter 329)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration330_yoy_upload.py",
+    "/app/test_reports/pytest/pytest_iteration330_yoy_upload.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend YoY upload endpoints correctly handle CSV/Excel/PDF/Image parsing via utils/yoy_parser.py",
+    "Backend validates file size (max 20MB), file type (.txt returns 400), and empty entries (returns 400)",
+    "Backend correctly stores uploaded data in property_yoy_history collection with month_key indexing",
+    "Frontend YoYUploadModal correctly shows upload dropzone, preview table with editable rows, and save/cancel buttons",
+    "Frontend correctly shows yoy-tile-empty when no historical data exists for the property",
+    "Minor: React key warning in console for daily_impact table - consider using unique keys (e.g., date + source)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration330_yoy_upload.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (all YoY elements render correctly, modal opens and shows all required components)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - tests use dynamically generated CSV files",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "YoY historical revenue upload feature fully tested. Backend endpoints: POST /yoy-upload/preview (parses file, returns entries), POST /yoy-upload/confirm (saves to property_yoy_history), GET /yoy-history (returns saved rows), DELETE /yoy-history (clears all or by ?month_key=YYYY-MM). Frontend: yoy-tile-empty shows when no historical data, clicking yoy-upload-open-empty opens yoy-upload-modal with file input, dropzone, preview table, save/cancel buttons. Navigation: Login → REVENUE & RATES → Revenue management → Market Robot → Performance tab.",
+  "verified_features": {
+    "backend_yoy_upload": {
+      "preview_csv_12_months": "PASSED - returns detected_count=12, entries sorted by month_key",
+      "preview_unsupported_txt": "PASSED - returns 400",
+      "preview_empty_file": "PASSED - returns 400",
+      "confirm_saves_to_history": "PASSED - saves 12 rows, GET returns them",
+      "confirm_empty_entries": "PASSED - returns 400",
+      "delete_all_history": "PASSED - clears all rows",
+      "delete_single_month": "PASSED - clears only specified month_key",
+      "performance_yoy_integration": "PASSED - prev_year_total_revenue populated from uploaded data",
+      "csv_with_month_names": "PASSED - parses Jan 2025, Feb 2025 format",
+      "csv_with_currency_symbols": "PASSED - strips £, $, € symbols"
+    },
+    "frontend_elements": {
+      "performance-report": "PRESENT",
+      "annual-forecast-card": "PRESENT",
+      "yoy-tile-empty": "PRESENT (correct for All Branches view)",
+      "yoy-upload-open-empty": "PRESENT (clickable)",
+      "yoy-upload-modal": "PRESENT (opens on click)",
+      "yoy-file-input": "PRESENT",
+      "yoy-upload-dropzone": "PRESENT",
+      "yoy-modal-close": "PRESENT",
+      "yoy-modal-save": "PRESENT",
+      "hero-adr-edit": "PRESENT (regression OK)",
+      "hero-occupancy-edit": "PRESENT (regression OK)",
+      "scrape-yearly-prices-btn": "PRESENT (regression OK)",
+      "annual-forecast-chart": "PRESENT (regression OK)"
+    }
+  },
+  "navigation_notes": "To reach Performance tab: Login → REVENUE & RATES (sidebar header, click to expand) → Revenue management → Market Robot (in Intelligence section) → Performance subtab. YoY upload button appears in the annual forecast card when no historical data exists."
+}

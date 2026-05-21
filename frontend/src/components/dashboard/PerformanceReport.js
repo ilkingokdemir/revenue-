@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Zap, BarChart3, Calendar, Radar, PartyPopper, Activity, RefreshCw, Wallet, Pencil, X, Check, Loader2 } from "lucide-react";
+import { TrendingUp, TrendingDown, Zap, BarChart3, Calendar, Radar, PartyPopper, Activity, RefreshCw, Wallet, Pencil, X, Check, Loader2, Upload } from "lucide-react";
 import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
+import { YoYUploadModal } from "./YoYUploadModal";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -34,6 +35,8 @@ export const PerformanceReport = ({ propertyId }) => {
   // from the Onboarding "Re-scan room count" button. Polled every 10s so the
   // banner reflects scrape progress without the user having to switch tabs.
   const [roomCountJob, setRoomCountJob] = useState(null);
+  // YoY historical-revenue upload modal (PDF/JPG/Excel/CSV → feeds YoY comparison)
+  const [yoyUploadOpen, setYoyUploadOpen] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -442,16 +445,33 @@ export const PerformanceReport = ({ propertyId }) => {
                 </div>
                 {af.yoy_comparison && af.yoy_comparison.prev_year_total_revenue > 0 ? (
                   <div data-testid="yoy-tile" title={`Geçen yıl gerçek ciro: ${cur(af.yoy_comparison.prev_year_total_revenue)} · ${af.yoy_comparison.months_with_history}/12 ayda geçmiş veri bulundu`}>
-                    <p className="text-[9px] text-white/50 uppercase">YoY Δ</p>
+                    <p className="text-[9px] text-white/50 uppercase flex items-center justify-end gap-1">
+                      YoY Δ
+                      <button
+                        onClick={() => setYoyUploadOpen(true)}
+                        data-testid="yoy-upload-open-tile"
+                        className="p-0.5 rounded hover:bg-white/20 transition-colors"
+                        title="Geçen yıl verisini PDF/JPG/Excel olarak yükle"
+                      >
+                        <Upload className="w-2.5 h-2.5" />
+                      </button>
+                    </p>
                     <p className={`text-xl font-black flex items-center justify-end gap-1 ${af.yoy_comparison.delta_pct >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
                       {af.yoy_comparison.delta_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                       {af.yoy_comparison.delta_pct >= 0 ? "+" : ""}{af.yoy_comparison.delta_pct}%
                     </p>
                   </div>
                 ) : (
-                  <div title="Geçmiş bookings verisi henüz yetersiz — YoY karşılaştırması için geçen yılın aynı aylarına ait rezervasyonlar gerekir." data-testid="yoy-tile-empty">
+                  <div title="Geçmiş bookings verisi henüz yetersiz — geçen yılın ciro verisini yüklemek için tıklayın." data-testid="yoy-tile-empty">
                     <p className="text-[9px] text-white/50 uppercase">YoY Δ</p>
-                    <p className="text-xl font-black text-white/40">—</p>
+                    <button
+                      onClick={() => setYoyUploadOpen(true)}
+                      data-testid="yoy-upload-open-empty"
+                      className="text-sm font-bold text-white/70 hover:text-white inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 rounded px-2 py-1 mt-1 transition-colors"
+                    >
+                      <Upload className="w-3 h-3" />
+                      Geçmiş Yükle
+                    </button>
                   </div>
                 )}
                 <div>
@@ -586,6 +606,15 @@ export const PerformanceReport = ({ propertyId }) => {
                     <BarChart3 className="w-4 h-4 text-emerald-300" />
                     <p className="text-xs font-bold text-white/90">Geçen Yıl vs Bu Yıl Tahmini</p>
                     <span className="text-[10px] text-white/40">({af.yoy_comparison.months_with_history}/12 ayda geçmiş veri)</span>
+                    <button
+                      onClick={() => setYoyUploadOpen(true)}
+                      data-testid="yoy-upload-open-strip"
+                      className="ml-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 transition-colors"
+                      title="Geçen yıl verisini PDF/JPG/Excel olarak yükle/güncelle"
+                    >
+                      <Upload className="w-2.5 h-2.5" />
+                      Güncelle
+                    </button>
                   </div>
                   <div className="flex items-center gap-4 text-right">
                     <div>
@@ -762,6 +791,16 @@ export const PerformanceReport = ({ propertyId }) => {
             </table>
           </div>
         </div>
+      )}
+
+      {/* YoY historical-revenue upload modal */}
+      {yoyUploadOpen && (
+        <YoYUploadModal
+          propertyId={propertyId}
+          cur={cur}
+          onClose={() => setYoyUploadOpen(false)}
+          onSaved={() => { setYoyUploadOpen(false); load(); }}
+        />
       )}
     </div>
   );

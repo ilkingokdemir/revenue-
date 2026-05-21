@@ -614,7 +614,7 @@ export const PerformanceReport = ({ propertyId }) => {
                       {cur(m.revenue)}
                     </div>
                     <div
-                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? "Booking.com canlı" : "tahmin"}) · doluluk %${m.occupancy_pct}${m.prev_year_revenue > 0 ? ` · Geçen yıl gerçek: ${cur(m.prev_year_revenue)} (${m.yoy_delta_pct >= 0 ? "+" : ""}${m.yoy_delta_pct}%)` : ""}${m.expense > 0 ? ` · Aylık gider: ${cur(m.expense)} → Net: ${cur(m.net_revenue)}` : ""}`}
+                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? `Booking.com canlı${m.scrape_meta?.sample_size ? `, ${m.scrape_meta.sample_size} gün ortalaması (£${m.scrape_meta.min_price}-£${m.scrape_meta.max_price})` : ""}` : "tahmin"}) · doluluk %${m.occupancy_pct}${m.prev_year_revenue > 0 ? ` · Geçen yıl gerçek: ${cur(m.prev_year_revenue)} (${m.yoy_delta_pct >= 0 ? "+" : ""}${m.yoy_delta_pct}%)` : ""}${m.expense > 0 ? ` · Aylık gider: ${cur(m.expense)} → Net: ${cur(m.net_revenue)}` : ""}`}
                       className={`w-full rounded-t-md transition-all hover:opacity-90 ${colorClass}`}
                       style={{ height: `${h}%` }}
                     />

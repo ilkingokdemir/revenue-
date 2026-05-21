@@ -3468,6 +3468,15 @@ def create_market_robot_router(db, require_roles, resend=None):
         # `base_rate` per matching month in the annual forecast, giving us
         # actual market-priced revenue projections.
         monthly_adr_overrides = {r["month_key"]: float(r["adr"]) for r in scraped_rows if r.get("adr")}
+        # Sample-size metadata so the UI can show "based on N days" tooltips.
+        scraped_meta_by_key = {r["month_key"]: {
+            "sample_size": int(r.get("sample_size") or 0),
+            "sample_dates": r.get("sample_dates") or [],
+            "min_price": r.get("min_price"),
+            "max_price": r.get("max_price"),
+            "source": r.get("source"),
+            "scraped_at": r.get("scraped_at"),
+        } for r in scraped_rows}
 
         # If we're on the aggregate "all" view (no property-specific scraped
         # prices), aggregate scraped ADRs across all configured properties
@@ -3519,6 +3528,12 @@ def create_market_robot_router(db, require_roles, resend=None):
             start_date=now.date(),
             monthly_adr_overrides=monthly_adr_overrides,
         )
+        # Attach scrape provenance to each forecast month so the UI can display
+        # "ADR averaged from N days" tooltips and audit data origin.
+        for fm in annual_forecast["monthly"]:
+            meta = scraped_meta_by_key.get(fm["month_key"])
+            if meta and meta.get("sample_size"):
+                fm["scrape_meta"] = meta
 
         # ────────────────────────────────────────────────────────────────
         # YoY Comparison — last year ACTUAL revenue vs this year FORECAST
@@ -7729,20 +7744,29 @@ Date range: {date_from} to {date_to}."""
             rotate_circuit = None  # type: ignore
 
         today = datetime.now(timezone.utc).date()
-        targets = []
+        # Sample 4 days per month (1st, 8th, 15th, 22nd) for a robust monthly
+        # average. Mix of weekday/weekend naturally cycles through the calendar,
+        # capturing London's large weekend premium (~30-50% higher Fri-Sun)
+        # instead of being biased by whatever a single mid-month probe lands on.
+        SAMPLE_DAYS = (1, 8, 15, 22)
+        targets: List[Tuple[int, int, "date", "date"]] = []
         for i in range(12):
             y = today.year + (today.month - 1 + i) // 12
             m = (today.month - 1 + i) % 12 + 1
-            # Use the 15th — clear of weekend / holiday distortion
-            try:
-                ci = date(y, m, 15)
-            except ValueError:
-                continue
-            co = ci + timedelta(days=1)
-            targets.append((y, m, ci, co))
+            for d in SAMPLE_DAYS:
+                try:
+                    ci = date(y, m, d)
+                except ValueError:
+                    continue
+                # Skip past dates (within current month)
+                if ci < today:
+                    continue
+                co = ci + timedelta(days=1)
+                targets.append((y, m, ci, co))
 
         sem = asyncio.Semaphore(3)
-        produced: List[Dict] = []
+        # Group probe results by month_key so we can average at the end.
+        per_month: Dict[str, List[Dict]] = {}
         failed_months: List[str] = []
 
         async def _scrape_one(y, m, ci, co):
@@ -7750,8 +7774,10 @@ Date range: {date_from} to {date_to}."""
             async with sem:
                 price: Optional[float] = None
                 last_err: Optional[str] = None
-                # Up to 4 attempts with Tor rotation
+                attempt_used = 0
+                url = build_dated_url(booking_url, ci.isoformat(), co.isoformat())
                 for attempt in range(4):
+                    attempt_used = attempt + 1
                     if rotate_circuit is not None:
                         try:
                             await rotate_circuit()
@@ -7761,7 +7787,6 @@ Date range: {date_from} to {date_to}."""
                         except Exception:
                             pass
                     try:
-                        url = build_dated_url(booking_url, ci.isoformat(), co.isoformat())
                         result = await asyncio.wait_for(scrape_booking_url(url), timeout=22)
                         if result and result.get("lowest_price"):
                             price = float(result["lowest_price"])
@@ -7772,24 +7797,20 @@ Date range: {date_from} to {date_to}."""
                     except Exception as e:
                         last_err = str(e)[:120]
                 if price:
-                    produced.append({
-                        "property_id": property_id,
-                        "month_key": month_key,
-                        "year": y,
-                        "month": m,
-                        "checkin": ci.isoformat(),
-                        "checkout": co.isoformat(),
-                        "adr": round(price, 2),
-                        "scraped_at": datetime.now(timezone.utc).isoformat(),
+                    per_month.setdefault(month_key, []).append({
+                        "date": ci.isoformat(),
+                        "price": round(price, 2),
+                        "url": url,
+                        "attempt": attempt_used,
                     })
-                else:
-                    failed_months.append(month_key)
-                # Update progress (running count) every probe
+                # Update progress (running probe count) every probe
+                produced_so_far = sum(len(v) for v in per_month.values())
                 await db.yearly_price_jobs.update_one(
                     {"property_id": property_id},
                     {"$set": {
-                        "produced_count": len(produced),
-                        "failed_count": len(failed_months),
+                        "produced_count": produced_so_far,
+                        "probes_total": len(targets),
+                        "failed_count": len([k for k in per_month.keys() if not per_month[k]]),
                         "last_month_done": month_key,
                         "last_err": last_err,
                     }},
@@ -7797,6 +7818,30 @@ Date range: {date_from} to {date_to}."""
 
         try:
             await asyncio.gather(*[_scrape_one(*t) for t in targets])
+            produced: List[Dict] = []
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for month_key, samples in per_month.items():
+                if not samples:
+                    failed_months.append(month_key)
+                    continue
+                prices = [s["price"] for s in samples]
+                y, m = int(month_key[:4]), int(month_key[5:7])
+                produced.append({
+                    "property_id": property_id,
+                    "month_key": month_key,
+                    "year": y,
+                    "month": m,
+                    "adr": round(sum(prices) / len(prices), 2),
+                    "min_price": min(prices),
+                    "max_price": max(prices),
+                    "scraped_at": now_iso,
+                    # Provenance: source, sample size & exact dates used so the
+                    # operator can audit and reproduce the average in the UI.
+                    "source": "booking_com_live",
+                    "booking_url": samples[0]["url"],
+                    "sample_size": len(samples),
+                    "sample_dates": [s["date"] for s in samples],
+                })
             if produced:
                 # Replace stale rows for these months
                 month_keys = [p["month_key"] for p in produced]
@@ -7854,7 +7899,7 @@ Date range: {date_from} to {date_to}."""
         )
         background_tasks.add_task(_run_yearly_price_scan, property_id, prop["booking_url"])
         return {"ok": True, "status": "queued",
-                "message": "12 aylık fiyat taraması başladı (~3-5 dakika)."}
+                "message": "12 aylık fiyat taraması başladı (4 gün/ay × 12 ay ≈ 48 probe, ~6-10 dakika)."}
 
     @router.get("/revenue/market-robot/{property_id}/scrape-yearly-prices/status")
     async def scrape_yearly_prices_status(property_id: str,

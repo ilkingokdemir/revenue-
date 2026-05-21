@@ -444,9 +444,11 @@ export const PerformanceReport = ({ propertyId }) => {
                   <p className="text-xl font-black text-sky-300">{cur(af.revpar)}</p>
                 </div>
                 {af.yoy_comparison && af.yoy_comparison.prev_year_total_revenue > 0 ? (
-                  <div data-testid="yoy-tile" title={`Geçen yıl gerçek ciro: ${cur(af.yoy_comparison.prev_year_total_revenue)} · ${af.yoy_comparison.months_with_history}/12 ayda geçmiş veri bulundu`}>
+                  <div data-testid="yoy-tile" title={`Geçen yıl (${af.yoy_comparison.months_with_history} ay): ${cur(af.yoy_comparison.prev_year_total_revenue)} → bu yıl aynı aylar: ${cur(af.yoy_comparison.this_year_forecast_revenue)}. Karşılaştırma sadece geçmiş veri bulunan aylar üzerinden yapılır.`}>
                     <p className="text-[9px] text-white/50 uppercase flex items-center justify-end gap-1">
-                      YoY Δ
+                      YoY Δ {af.yoy_comparison.months_with_history < 12 && (
+                        <span className="text-[8px] text-amber-300/80">({af.yoy_comparison.months_with_history}/12)</span>
+                      )}
                       <button
                         onClick={() => setYoyUploadOpen(true)}
                         data-testid="yoy-upload-open-tile"
@@ -605,7 +607,9 @@ export const PerformanceReport = ({ propertyId }) => {
                   <div className="flex items-center gap-2">
                     <BarChart3 className="w-4 h-4 text-emerald-300" />
                     <p className="text-xs font-bold text-white/90">Geçen Yıl vs Bu Yıl Tahmini</p>
-                    <span className="text-[10px] text-white/40">({af.yoy_comparison.months_with_history}/12 ayda geçmiş veri)</span>
+                    <span className="text-[10px] text-white/40" title="Karşılaştırma sadece geçmiş veri bulunan aylar için yapılır (apples-to-apples)">
+                      ({af.yoy_comparison.months_with_history}/12 ay eşleşti)
+                    </span>
                     <button
                       onClick={() => setYoyUploadOpen(true)}
                       data-testid="yoy-upload-open-strip"
@@ -618,12 +622,12 @@ export const PerformanceReport = ({ propertyId }) => {
                   </div>
                   <div className="flex items-center gap-4 text-right">
                     <div>
-                      <p className="text-[9px] text-white/40 uppercase">Geçen Yıl Gerçek</p>
+                      <p className="text-[9px] text-white/40 uppercase">Geçen Yıl ({af.yoy_comparison.months_with_history} ay)</p>
                       <p className="text-sm font-bold text-stone-200">{cur(af.yoy_comparison.prev_year_total_revenue)}</p>
                     </div>
                     <div className="text-white/30">→</div>
                     <div>
-                      <p className="text-[9px] text-white/40 uppercase">Bu Yıl Tahmini</p>
+                      <p className="text-[9px] text-white/40 uppercase">Bu Yıl ({af.yoy_comparison.months_with_history} ay)</p>
                       <p className="text-sm font-bold text-emerald-300">{cur(af.yoy_comparison.this_year_forecast_revenue)}</p>
                     </div>
                     <div className="border-l border-white/20 pl-4">

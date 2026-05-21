@@ -3576,6 +3576,7 @@ def create_market_robot_router(db, require_roles, resend=None):
 
         # Decorate forecast months with prev-year revenue & delta %
         prev_year_total = 0.0
+        forecast_total_comparable = 0.0  # forecast SUM but only for months where prev-year exists
         for fm in annual_forecast["monthly"]:
             prev_key = f"{fm['year'] - 1:04d}-{fm['month']:02d}"
             prev_rev = round(prev_rev_by_key.get(prev_key, 0.0), 2)
@@ -3583,24 +3584,31 @@ def create_market_robot_router(db, require_roles, resend=None):
             fm["prev_year_month_key"] = prev_key
             if prev_rev > 0:
                 fm["yoy_delta_pct"] = round(((fm["revenue"] - prev_rev) / prev_rev) * 100, 1)
+                forecast_total_comparable += float(fm["revenue"])
             else:
                 fm["yoy_delta_pct"] = None
             prev_year_total += prev_rev
         prev_year_total = round(prev_year_total, 2)
+        forecast_total_comparable = round(forecast_total_comparable, 2)
         months_with_history = sum(1 for fm in annual_forecast["monthly"] if fm["prev_year_revenue"] > 0)
-        if prev_year_total > 0:
+        # Apples-to-apples: only compare forecast for months that have prev-year
+        # data. Otherwise a property with 2 months of history would show a
+        # nonsense +71,000% delta against a 12-month forecast.
+        if prev_year_total > 0 and forecast_total_comparable > 0:
             yoy_total_delta_pct = round(
-                ((annual_forecast["annual_revenue"] - prev_year_total) / prev_year_total) * 100, 1
+                ((forecast_total_comparable - prev_year_total) / prev_year_total) * 100, 1
             )
         else:
             yoy_total_delta_pct = None
         annual_forecast["yoy_comparison"] = {
             "prev_year_total_revenue": prev_year_total,
-            "this_year_forecast_revenue": annual_forecast["annual_revenue"],
-            "delta_revenue": round(annual_forecast["annual_revenue"] - prev_year_total, 2),
+            "this_year_forecast_revenue": forecast_total_comparable,
+            "delta_revenue": round(forecast_total_comparable - prev_year_total, 2),
             "delta_pct": yoy_total_delta_pct,
             "months_with_history": months_with_history,
             "horizon_months": annual_forecast.get("horizon_months", 12),
+            "comparable": True,  # signals FE that totals are aligned to matching months only
+            "full_year_forecast": annual_forecast["annual_revenue"],
         }
 
         # ── Net Profit block: per-month and annual net (forecast - expenses) ──

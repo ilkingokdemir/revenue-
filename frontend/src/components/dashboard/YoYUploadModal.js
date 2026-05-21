@@ -179,7 +179,10 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
         `${API}/revenue/market-robot/${propertyId}/yoy-upload/confirm`,
         payload,
       );
-      toast.success(`${r.data.saved_count} ay + ${r.data.saved_expenses} gider kaydedildi`);
+      toast.success(`✅ Kaydedildi · ${r.data.saved_count} ay gelir + ${r.data.saved_expenses} gider`, {
+        description: "Performance Report'ta Yıllık Net Kâr ve Kategori Dağılımı güncellendi.",
+        duration: 5000,
+      });
       if (onSaved) onSaved();
       if (onClose) onClose();
     } catch (e) {

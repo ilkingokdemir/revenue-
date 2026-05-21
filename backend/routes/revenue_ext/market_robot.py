@@ -3272,14 +3272,26 @@ def create_market_robot_router(db, require_roles, resend=None):
         # types that are missing the rate field dilute the mean to near-zero
         # (which then makes every rate-override look like a £100+ uplift).
         rated_types = [r for r in room_types_list if float(r.get("base_rate", 0) or 0) > 0]
-        # ADR priority: operator-supplied manual_adr > average of room-type base
-        # rates > 100 fallback. Manual ADR exists so operators can correct cases
-        # where their *real* sold ADR differs from what's in room_types
-        # (commission-net vs gross, channel mix, etc.).
+        # ADR priority: operator-supplied manual_adr > scraped Booking.com
+        # monthly average (real market price for THIS property) > average of
+        # room-type base rates > 100 fallback. Manual ADR exists so operators
+        # can correct cases where their *real* sold ADR differs from what's
+        # in room_types (commission-net vs gross, channel mix, etc.).
         manual_adr = (prop or {}).get("manual_adr") if prop else None
+        # Pre-fetch scraped per-month ADRs so we can use them BOTH as the
+        # base_rate (when no manual override) AND as per-month overrides
+        # inside the annual forecast.
+        scraped_rows = await db.property_monthly_prices.find(
+            {"property_id": property_id, "adr": {"$gt": 0}},
+            {"_id": 0, "month_key": 1, "adr": 1},
+        ).to_list(24)
+        scraped_avg_adr = (sum(float(r["adr"]) for r in scraped_rows) / len(scraped_rows)) if scraped_rows else 0
         if isinstance(manual_adr, (int, float)) and float(manual_adr) > 0:
             base_rate = float(manual_adr)
             adr_source = "manual"
+        elif scraped_avg_adr > 0:
+            base_rate = round(scraped_avg_adr, 2)
+            adr_source = "booking_com_scraped"
         elif rated_types:
             base_rate = sum(float(r.get("base_rate", 0)) for r in rated_types) / len(rated_types)
             adr_source = "room_types"
@@ -3451,14 +3463,11 @@ def create_market_robot_router(db, require_roles, resend=None):
         mega_events = await db.market_events.count_documents({"property_id": property_id, "impact": "mega"})
         large_events = await db.market_events.count_documents({"property_id": property_id, "impact": "large"})
 
-        # Real Booking.com scraped per-month ADRs (from `scrape-yearly-prices`).
-        # When present these override the global `base_rate` per matching month
-        # in the annual forecast, giving us actual market-priced revenue
-        # projections instead of a flat estimate.
-        monthly_price_rows = await db.property_monthly_prices.find(
-            {"property_id": property_id}, {"_id": 0, "month_key": 1, "adr": 1}
-        ).to_list(24)
-        monthly_adr_overrides = {r["month_key"]: float(r["adr"]) for r in monthly_price_rows if r.get("adr")}
+        # Real Booking.com scraped per-month ADRs (already fetched above for
+        # base_rate calculation). When present these override the global
+        # `base_rate` per matching month in the annual forecast, giving us
+        # actual market-priced revenue projections.
+        monthly_adr_overrides = {r["month_key"]: float(r["adr"]) for r in scraped_rows if r.get("adr")}
 
         # If we're on the aggregate "all" view (no property-specific scraped
         # prices), aggregate scraped ADRs across all configured properties

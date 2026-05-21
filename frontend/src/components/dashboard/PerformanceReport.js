@@ -264,6 +264,65 @@ export const PerformanceReport = ({ propertyId }) => {
         </div>
       </div>
 
+      {/* 12-Month Forward Revenue Forecast (room-only) */}
+      {data.annual_forecast && (() => {
+        const af = data.annual_forecast;
+        const maxRev = Math.max(...af.monthly.map(m => m.revenue), 1);
+        return (
+          <div className="bg-gradient-to-br from-indigo-900 via-violet-900 to-purple-900 rounded-3xl p-6 text-white shadow-xl" data-testid="annual-forecast-card">
+            <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
+                  <Calendar className="w-6 h-6 text-violet-200" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Yıllık Ciro Tahmini (12 Ay)</h3>
+                  <p className="text-xs text-white/60">{af.methodology} · {af.total_rooms} oda · {cur(af.adr)} ADR</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-right">
+                <div>
+                  <p className="text-[9px] text-white/50 uppercase">Yıllık Toplam</p>
+                  <p className="text-xl font-black text-emerald-300">{cur(af.annual_revenue)}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-white/50 uppercase">RevPAR</p>
+                  <p className="text-xl font-black text-sky-300">{cur(af.revpar)}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-white/50 uppercase">Ort. Doluluk</p>
+                  <p className="text-xl font-black text-amber-300">%{af.avg_occupancy_pct}</p>
+                </div>
+              </div>
+            </div>
+            {/* Bar chart */}
+            <div className="grid grid-cols-12 gap-1.5 h-44 mt-4 items-end" data-testid="annual-forecast-chart">
+              {af.monthly.map((m, idx) => {
+                const h = Math.max((m.revenue / maxRev) * 100, 4);
+                const isSummerPeak = [6, 7, 8].includes(m.month);
+                return (
+                  <div key={idx} className="flex flex-col items-center gap-1 group">
+                    <div className="text-[9px] font-bold text-white/70 group-hover:text-white transition-colors">
+                      {cur(m.revenue)}
+                    </div>
+                    <div
+                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} · doluluk %${m.occupancy_pct}`}
+                      className={`w-full rounded-t-md transition-all hover:opacity-90 ${isSummerPeak ? "bg-gradient-to-t from-amber-500 to-amber-300" : "bg-gradient-to-t from-violet-500 to-violet-300"}`}
+                      style={{ height: `${h}%` }}
+                    />
+                    <div className="text-[10px] font-semibold text-white/60">{m.label.split(" ")[0]}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-[10px] text-white/40 text-center mt-3">
+              Hesaplama: ADR × oda × günler × doluluk × sezonalite. Sezonalite Kuzey Yarımküre standart turizm dağılımıdır.
+              Manuel doluluk veya ADR set'lediğinizde yeniden hesaplanır.
+            </p>
+          </div>
+        );
+      })()}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4" data-testid="perf-stats">
         <div className="bg-white border border-stone-200 rounded-2xl p-5 text-center">

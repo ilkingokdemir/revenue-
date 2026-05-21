@@ -3137,6 +3137,72 @@ def create_market_robot_router(db, require_roles, resend=None):
         latest_ts = events[0]["timestamp"] if events else None
         return {"events": events, "latest_ts": latest_ts, "unread": len(events)}
 
+    # Standard hotel-industry monthly seasonality multipliers (Northern
+    # Hemisphere / urban-leisure mix). Multiplying by these gives the
+    # per-month deviation from the annual mean (which averages to ~1.0).
+    # Indexes: 0 = January … 11 = December.
+    _MONTH_SEASONALITY = [
+        0.78,  # Jan — post-NYE lull
+        0.82,  # Feb — short month, mid-low season
+        0.92,  # Mar — spring shoulder
+        1.02,  # Apr — Easter pickup
+        1.08,  # May — high shoulder
+        1.18,  # Jun — early summer peak
+        1.25,  # Jul — peak summer
+        1.22,  # Aug — peak summer
+        1.05,  # Sep — late shoulder
+        0.98,  # Oct — autumn shoulder
+        0.88,  # Nov — pre-holiday lull
+        0.92,  # Dec — Christmas/NYE bump
+    ]
+
+    def _build_annual_revenue_forecast(*, base_rate: float, total_rooms: int,
+                                       occupancy_factor: float, start_date) -> dict:
+        """Forward-looking 12-month room revenue projection.
+
+        Methodology (same maths as Hotel Revenue Lab's "Sadece Oda" mode):
+            monthly_revenue = ADR × rooms × days_in_month × occupancy × season_mult
+        Annual revenue is the sum across all 12 months. Returns enough metadata
+        for the frontend to render a bar chart + KPI tiles.
+        """
+        import calendar as _cal
+        monthly: List[Dict] = []
+        annual_total = 0.0
+        # Generate 12 months starting from the current month
+        cur_y = start_date.year
+        cur_m = start_date.month
+        for i in range(12):
+            y = cur_y + (cur_m - 1 + i) // 12
+            m = (cur_m - 1 + i) % 12 + 1
+            days_in_month = _cal.monthrange(y, m)[1]
+            season_mult = _MONTH_SEASONALITY[m - 1]
+            month_revenue = base_rate * total_rooms * days_in_month * occupancy_factor * season_mult
+            month_revenue = round(month_revenue, 2)
+            annual_total += month_revenue
+            monthly.append({
+                "year": y,
+                "month": m,
+                "label": f"{_cal.month_abbr[m]} {str(y)[2:]}",
+                "days": days_in_month,
+                "season_multiplier": season_mult,
+                "occupancy_pct": round(occupancy_factor * season_mult * 100, 1),
+                "adr": round(base_rate, 2),
+                "revenue": month_revenue,
+            })
+        # RevPAR = annual_revenue / (rooms × 365)
+        rev_par = annual_total / (total_rooms * 365) if total_rooms else 0
+        avg_occupancy = sum(m["occupancy_pct"] for m in monthly) / 12.0 if monthly else 0
+        return {
+            "annual_revenue": round(annual_total, 2),
+            "monthly": monthly,
+            "adr": round(base_rate, 2),
+            "revpar": round(rev_par, 2),
+            "avg_occupancy_pct": round(avg_occupancy, 1),
+            "total_rooms": total_rooms,
+            "methodology": "ADR × rooms × days × occupancy × seasonality",
+        }
+
+
     @router.get("/revenue/market-robot/{property_id}/performance")
     async def get_performance_report(property_id: str,
                                      current_user: dict = Depends(require_roles("admin", "manager"))):
@@ -3334,6 +3400,12 @@ def create_market_robot_router(db, require_roles, resend=None):
             "base_rate": round(base_rate, 2),
             "occupancy_assumption": occupancy_factor,
             "occupancy_basis": occupancy_basis,
+            "annual_forecast": _build_annual_revenue_forecast(
+                base_rate=base_rate,
+                total_rooms=total_rooms,
+                occupancy_factor=occupancy_factor,
+                start_date=now.date(),
+            ),
         }
 
     @router.get("/revenue/market-robot/{property_id}/competitors")

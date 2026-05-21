@@ -281,6 +281,17 @@ export const PerformanceReport = ({ propertyId }) => {
                             {data.room_count_source === "manual" ? "manuel" : data.room_count_source === "booking_com" ? "booking.com" : data.room_count_source === "room_types" ? "local" : "fallback"}
                           </span>
                         </button>
+                        {data.room_count_source === "manual" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); if (window.confirm("Manuel oda sayısını sıfırla? Booking.com taraması / yerel oda tipleri kullanılacak.")) saveRoomCount(true); }}
+                            disabled={savingRoomCount}
+                            data-testid="room-count-reset"
+                            title="Manuel oda sayısını sıfırla, otomatik değere geri dön"
+                            className="ml-1 p-0.5 rounded hover:bg-rose-500/30 text-fuchsia-200/70 hover:text-rose-200 transition-colors disabled:opacity-50"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        )}
                       </span>
                     )
                   ) : null}
@@ -432,6 +443,17 @@ export const PerformanceReport = ({ propertyId }) => {
                         </span>
                       </button>
                     )}
+                    {data.adr_source === "manual" && !editingAdr && (
+                      <button
+                        onClick={() => { if (window.confirm("Manuel ADR'i sıfırla? Otomatik (room_types ortalaması veya scrape) değere geri dönülecek.")) saveAdr(true); }}
+                        disabled={savingAdr}
+                        data-testid="adr-reset"
+                        title="Manuel ADR'i sıfırla, otomatik değere geri dön"
+                        className="ml-1 p-0.5 rounded hover:bg-rose-500/30 text-fuchsia-200/70 hover:text-rose-200 transition-colors disabled:opacity-50 align-middle inline-flex"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    )}
                   </p>
                 </div>
               </div>
@@ -531,17 +553,17 @@ export const PerformanceReport = ({ propertyId }) => {
                       {data.occupancy_basis === "manual" && (
                         <span className="ml-0.5 px-1 rounded text-[8px] bg-fuchsia-500/30 text-fuchsia-200">manuel</span>
                       )}
-                      {data.occupancy_basis === "manual" && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); saveOccupancy(true); }}
-                          disabled={savingOccupancy}
-                          data-testid="hero-occupancy-clear"
-                          className="p-0.5 ml-0.5 rounded bg-amber-500/40 hover:bg-amber-500/60 text-[9px] px-1.5"
-                          title="Manuel doluluğu temizle"
-                        >
-                          ×
-                        </button>
-                      )}
+                    </button>
+                  )}
+                  {data.occupancy_basis === "manual" && !editingOccupancy && (
+                    <button
+                      onClick={() => { if (window.confirm("Manuel doluluğu sıfırla? Son 30 günün gerçek booking oranı veya %70 fallback kullanılacak.")) saveOccupancy(true); }}
+                      disabled={savingOccupancy}
+                      data-testid="hero-occupancy-clear"
+                      title="Manuel doluluğu sıfırla, otomatik değere geri dön"
+                      className="ml-1 p-0.5 rounded hover:bg-rose-500/30 text-fuchsia-200/70 hover:text-rose-200 transition-colors disabled:opacity-50 inline-flex"
+                    >
+                      <X className="w-2.5 h-2.5" />
                     </button>
                   )}
                 </div>

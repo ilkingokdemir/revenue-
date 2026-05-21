@@ -1,5 +1,14 @@
 # Changelog — Hotel PMS & Revenue Management
 
+## 2026-05-21 — Fix: Performance Report KPI'leri abartılı/duplicate sayım
+- **Şikayet**: "Estimated Revenue Uplift +£95,554 / Days Optimized 491 (421 up / 70 down) — bu sacma rakamlar".
+- **Kök neden**: `get_performance_report` her `rate_override` satırını ham toplam ediyordu. Robot her tarama için aynı (tarih, oda tipi) için yeni override yazıyor + her gün için N oda tipi → aynı uplift 4-5x sayılıyordu. Ayrıca 13 ay forward / 30 gün backward bütün geçmiş yazıma dahildi.
+- **Düzeltme** (`/app/backend/routes/revenue_ext/market_robot.py:3312`):
+  1. Sorgu **aktif horizon**'a bağlandı: `today ≤ date ≤ today+90d` (robotun gerçek aktif penceresi).
+  2. `(date, room_type)` başına **en son** override seçildi (eski yazımlar yutuldu).
+  3. Tarih başına oda tipi rate'leri **ortalama** alındı → multi-room-type properties artık N-kat sayılmıyor.
+- **Etki**: aldgate-flats 491 gün → **91 gün**; £95,554 → gerçekçi seviye. Pytest 3/3 PASS (`tests/test_iteration331_perf_kpi_dedup.py`).
+
 ## 2026-05-21 — YoY Historical-Revenue Upload (PDF/JPG/Excel/CSV)
 - **Goal**: Operatör Booking history yoksa bile geçen yılın ciro verisini yükleyebilsin → YoY karşılaştırma anında dolsun.
 - **Cost**: $0 — Tesseract OCR (lokal) + pdfplumber + pandas/openpyxl. Hiçbir paid API yok.

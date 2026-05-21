@@ -3309,11 +3309,49 @@ def create_market_robot_router(db, require_roles, resend=None):
             occupancy_factor = 0.7
             occupancy_basis = "industry_avg_fallback"
 
-        # Get ALL rate overrides set by robot/scanner/dynamic-pricing
+        # Get rate overrides set by robot/scanner/dynamic-pricing within the
+        # ACTIVE optimization horizon — today through today+90 days. This is
+        # the window the auto-scanner actively maintains; older or far-future
+        # overrides are stale and would inflate the numbers without reflecting
+        # the robot's current performance. Bounding the range here is what
+        # turns "Days Optimized: 491 / +£95,554" (cumulative noise) into the
+        # honest "current robot impact" figures the user asked for.
+        horizon_end = (now + timedelta(days=90)).strftime("%Y-%m-%d")
         all_overrides = await db.rate_overrides.find(
-            {"property_id": property_id, "set_by": {"$in": ["auto-scanner", "market-robot", "ai-dynamic-pricing", "event-intelligence"]}},
-            {"_id": 0}
-        ).sort("date", 1).to_list(500)
+            {
+                "property_id": property_id,
+                "set_by": {"$in": ["auto-scanner", "market-robot", "ai-dynamic-pricing", "event-intelligence"]},
+                "date": {"$gte": today_str, "$lte": horizon_end},
+            },
+            {"_id": 0},
+        ).sort("date", 1).to_list(2000)
+
+        # Deduplicate per (date, room_type) — only the LATEST override applies
+        # (the robot rewrites the same date multiple times as the market shifts).
+        # Then collapse to one entry per DATE by averaging across room types so a
+        # property with 3-4 room types doesn't get its uplift counted 3-4 times.
+        # This is the fix for the inflated "491 days / £95,554" figures the user
+        # reported — those came from naïvely summing every historical write.
+        by_date_room: Dict[str, Dict] = {}
+        for ov in all_overrides:
+            key = f"{ov.get('date','')}::{ov.get('room_type_id','')}"
+            existing = by_date_room.get(key)
+            if not existing or (ov.get("updated_at", "") > existing.get("updated_at", "")):
+                by_date_room[key] = ov
+        # Now group per date — averaging custom_rate across room types
+        per_date: Dict[str, Dict] = {}
+        for ov in by_date_room.values():
+            d = ov.get("date", "")
+            if not d:
+                continue
+            slot = per_date.setdefault(d, {
+                "rates": [], "reasons": [], "sources": [], "updated_at": ov.get("updated_at", "")
+            })
+            slot["rates"].append(float(ov.get("custom_rate", base_rate)))
+            slot["reasons"].append(ov.get("reason", ""))
+            slot["sources"].append(ov.get("set_by", "unknown"))
+            if ov.get("updated_at", "") > slot["updated_at"]:
+                slot["updated_at"] = ov.get("updated_at", "")
 
         # Calculate revenue uplift
         total_uplift = 0
@@ -3327,15 +3365,16 @@ def create_market_robot_router(db, require_roles, resend=None):
         daily_impact = []
         monthly_impact = {}
 
-        for ov in all_overrides:
-            rate = float(ov.get("custom_rate", base_rate))
-            diff = rate - base_rate
+        for ov_date, slot in per_date.items():
+            # Average rate across room types for the date → one figure per day
+            avg_rate = sum(slot["rates"]) / len(slot["rates"]) if slot["rates"] else base_rate
+            diff = avg_rate - base_rate
             diff_pct = round((diff / base_rate) * 100, 1) if base_rate > 0 else 0
-            ov_date = ov.get("date", "")
-            source = ov.get("set_by", "unknown")
-            reason = ov.get("reason", "")
+            # Source/reason from the most recent room-type override on that day
+            source = slot["sources"][-1] if slot["sources"] else "unknown"
+            reason = slot["reasons"][-1] if slot["reasons"] else ""
 
-            if rate != base_rate:
+            if avg_rate != base_rate:
                 total_days_adjusted += 1
                 total_uplift += diff
                 if diff > 0:
@@ -3371,7 +3410,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 daily_impact.append({
                     "date": ov_date,
                     "base_rate": base_rate,
-                    "robot_rate": rate,
+                    "robot_rate": round(avg_rate, 2),
                     "uplift": round(diff, 2),
                     "uplift_pct": diff_pct,
                     "source": source,

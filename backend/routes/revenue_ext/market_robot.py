@@ -3158,8 +3158,9 @@ def create_market_robot_router(db, require_roles, resend=None):
 
     def _build_annual_revenue_forecast(*, base_rate: float, total_rooms: int,
                                        occupancy_factor: float, start_date,
-                                       monthly_adr_overrides: Optional[Dict[str, float]] = None) -> dict:
-        """Forward-looking 12-month room revenue projection.
+                                       monthly_adr_overrides: Optional[Dict[str, float]] = None,
+                                       horizon_months: int = 24) -> dict:
+        """Forward-looking N-month room revenue projection (default 24 months).
 
         Methodology (same maths as Hotel Revenue Lab's "Sadece Oda" mode):
             monthly_revenue = ADR_for_month × rooms × days_in_month × occupancy × season_mult
@@ -3171,11 +3172,12 @@ def create_market_robot_router(db, require_roles, resend=None):
         """
         import calendar as _cal
         monthly: List[Dict] = []
-        annual_total = 0.0
+        annual_total = 0.0   # First 12 months
+        biennial_total = 0.0  # Full horizon (typically 24)
         scraped_months = 0
         cur_y = start_date.year
         cur_m = start_date.month
-        for i in range(12):
+        for i in range(horizon_months):
             y = cur_y + (cur_m - 1 + i) // 12
             m = (cur_m - 1 + i) % 12 + 1
             month_key = f"{y:04d}-{m:02d}"
@@ -3191,7 +3193,9 @@ def create_market_robot_router(db, require_roles, resend=None):
                 adr_origin = "estimated"
             month_revenue = adr_used * total_rooms * days_in_month * occupancy_factor * season_mult
             month_revenue = round(month_revenue, 2)
-            annual_total += month_revenue
+            biennial_total += month_revenue
+            if i < 12:
+                annual_total += month_revenue
             monthly.append({
                 "year": y,
                 "month": m,
@@ -3205,16 +3209,18 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "revenue": month_revenue,
             })
         rev_par = annual_total / (total_rooms * 365) if total_rooms else 0
-        avg_occupancy = sum(m["occupancy_pct"] for m in monthly) / 12.0 if monthly else 0
+        avg_occupancy = sum(m["occupancy_pct"] for m in monthly[:12]) / 12.0 if monthly else 0
         return {
             "annual_revenue": round(annual_total, 2),
+            "biennial_revenue": round(biennial_total, 2),
+            "horizon_months": horizon_months,
             "monthly": monthly,
             "adr": round(base_rate, 2),
             "revpar": round(rev_par, 2),
             "avg_occupancy_pct": round(avg_occupancy, 1),
             "total_rooms": total_rooms,
             "scraped_months_count": scraped_months,
-            "methodology": "ADR × oda × günler × doluluk × sezonalite" + (f" · {scraped_months}/12 ay canlı Booking.com fiyatlarıyla" if scraped_months else ""),
+            "methodology": "ADR × oda × günler × doluluk × sezonalite" + (f" · {scraped_months}/{horizon_months} ay canlı Booking.com fiyatlarıyla" if scraped_months else ""),
         }
 
 

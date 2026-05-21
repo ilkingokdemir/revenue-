@@ -3159,8 +3159,8 @@ def create_market_robot_router(db, require_roles, resend=None):
     def _build_annual_revenue_forecast(*, base_rate: float, total_rooms: int,
                                        occupancy_factor: float, start_date,
                                        monthly_adr_overrides: Optional[Dict[str, float]] = None,
-                                       horizon_months: int = 24) -> dict:
-        """Forward-looking N-month room revenue projection (default 24 months).
+                                       horizon_months: int = 12) -> dict:
+        """Forward-looking N-month room revenue projection (default 12 months).
 
         Methodology (same maths as Hotel Revenue Lab's "Sadece Oda" mode):
             monthly_revenue = ADR_for_month × rooms × days_in_month × occupancy × season_mult

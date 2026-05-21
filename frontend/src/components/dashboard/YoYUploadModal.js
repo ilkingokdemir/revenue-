@@ -234,42 +234,38 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
             </div>
           )}
 
-          {/* Upload zone — show when no preview AND no existing tables to edit */}
-          {!preview && expenseRows.length === 0 && (
+          {/* Upload zone — show smaller version after first interaction */}
+          {!preview && rows.length === 0 && expenseRows.length === 0 && (
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
               data-testid="yoy-upload-dropzone"
-              className="w-full border-2 border-dashed border-stone-300 hover:border-indigo-400 rounded-xl py-12 px-4 text-center transition-colors disabled:opacity-50"
+              className="w-full border-2 border-dashed border-stone-300 hover:border-indigo-400 rounded-xl py-8 px-4 text-center transition-colors disabled:opacity-50"
             >
               {uploading ? (
                 <>
                   <Loader2 className="w-8 h-8 text-indigo-500 mx-auto animate-spin mb-3" />
                   <p className="text-stone-600 font-bold">Dosya işleniyor (OCR/parse)...</p>
-                  <p className="text-xs text-stone-400 mt-1">PDF/JPG için OCR birkaç saniye sürer</p>
                 </>
               ) : (
                 <>
-                  <Upload className="w-10 h-10 text-stone-400 mx-auto mb-3" />
-                  <p className="text-stone-700 font-bold">Dosya seçin veya buraya tıklayın</p>
-                  <p className="text-xs text-stone-500 mt-2">
-                    Desteklenen formatlar: <span className="font-mono">.pdf · .jpg · .jpeg · .png · .xlsx · .xls · .csv</span>
-                  </p>
-                  <p className="text-[11px] text-stone-400 mt-1">Aylık ciro + opsiyonel gider satırları (Rent / Komisyon / Council vs.)</p>
+                  <Upload className="w-8 h-8 text-stone-400 mx-auto mb-2" />
+                  <p className="text-stone-700 font-bold text-sm">Dosya seç (PDF · JPG · Excel · CSV)</p>
+                  <p className="text-[11px] text-stone-400 mt-1">veya aşağıdan manuel ekleyebilirsiniz</p>
                 </>
               )}
             </button>
           )}
-          {/* "Add file" link when expense table is already open */}
-          {!preview && expenseRows.length > 0 && (
+          {/* Smaller add-file button when tables are already populated */}
+          {!preview && (rows.length > 0 || expenseRows.length > 0) && (
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
               data-testid="yoy-upload-add-file"
-              className="w-full border border-dashed border-stone-300 hover:border-indigo-400 rounded-lg py-3 px-4 text-sm text-stone-600 font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full border border-dashed border-stone-300 hover:border-indigo-400 rounded-lg py-2.5 px-4 text-xs text-stone-600 font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {uploading ? "İşleniyor..." : "Dosya yükle (PDF/JPG/Excel/CSV)"}
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              {uploading ? "İşleniyor..." : "Dosyadan içe aktar (PDF / JPG / Excel / CSV)"}
             </button>
           )}
           <input
@@ -281,29 +277,29 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
             data-testid="yoy-file-input"
           />
 
-          {/* Preview / Edit table */}
-          {(preview || rows.length > 0) && (
-            <div data-testid="yoy-preview-table">
-              {preview && (
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <SourceIcon className="w-4 h-4 text-indigo-500" />
-                    <span className="text-sm text-stone-700 font-bold">{preview.filename}</span>
-                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-bold">
-                      {preview.source_kind.toUpperCase()}
-                    </span>
-                    <span className="text-xs text-stone-500">· {rows.length} ay · {expenseRows.length} gider</span>
-                  </div>
-                  <button
-                    onClick={() => { setPreview(null); setRows([]); }}
-                    data-testid="yoy-restart"
-                    className="text-xs text-stone-500 hover:text-stone-700"
-                  >
-                    Başka dosya seç
-                  </button>
+          {/* Income table — always rendered so users can add monthly revenue
+              rows manually without uploading a file. */}
+          <div data-testid="yoy-preview-table">
+            {preview && (
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <SourceIcon className="w-4 h-4 text-indigo-500" />
+                  <span className="text-sm text-stone-700 font-bold">{preview.filename}</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 font-bold">
+                    {preview.source_kind.toUpperCase()}
+                  </span>
+                  <span className="text-xs text-stone-500">· {rows.length} ay · {expenseRows.length} gider</span>
                 </div>
-              )}
-              <p className="text-xs font-bold text-stone-600 uppercase mb-2">💰 Aylık Gelirler</p>
+                <button
+                  onClick={() => { setPreview(null); setRows([]); }}
+                  data-testid="yoy-restart"
+                  className="text-xs text-stone-500 hover:text-stone-700"
+                >
+                  Dosyayı kaldır
+                </button>
+              </div>
+            )}
+            <p className="text-xs font-bold text-stone-600 uppercase mb-2">💰 Aylık Gelirler</p>
               <div className="border border-stone-200 rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-stone-50 text-stone-600 text-xs uppercase">
@@ -358,6 +354,13 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                         </td>
                       </tr>
                     ))}
+                    {rows.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-6 text-center text-xs text-stone-400">
+                          Henüz aylık gelir satırı yok — alttan "Manuel satır ekle" ile başlayın veya dosya yükleyin.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
                 <div className="bg-stone-50 px-3 py-2 border-t border-stone-100">
@@ -367,7 +370,7 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                     className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    Manuel satır ekle
+                    Manuel gelir satırı ekle
                   </button>
                 </div>
               </div>
@@ -376,11 +379,9 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                 Aynı ay için tekrar yükleme önceki değeri günceller.
               </p>
             </div>
-          )}
 
           {/* Expense table — always editable */}
-          {(preview || expenseRows.length > 0 || rows.length > 0) && (
-            <div data-testid="yoy-expense-table">
+          <div data-testid="yoy-expense-table">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-bold text-stone-600 uppercase">💸 Yıllık Gider Kalemleri</p>
                 {(() => {
@@ -478,7 +479,6 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                 💡 "Yıllık" seçimi bu kalemin yılda toplam tutarı olduğunu söyler. "Aylık" seçilirse 12 ile çarpılıp yıllığa çevrilir.
               </p>
             </div>
-          )}
         </div>
 
         {/* Footer */}
@@ -486,7 +486,7 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
           <p className="text-xs text-stone-500">
             {(rows.length > 0 || expenseRows.length > 0)
               ? `${rows.length} gelir ay · ${expenseRows.length} gider kalemi`
-              : "Dosya seçtikten sonra düzenleyebilirsiniz"}
+              : "Aşağıdan manuel ekleyebilir veya dosya yükleyebilirsiniz"}
           </p>
           <div className="flex gap-2">
             <button

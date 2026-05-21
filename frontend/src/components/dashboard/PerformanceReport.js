@@ -23,6 +23,10 @@ export const PerformanceReport = ({ propertyId }) => {
   const [editingRoomCount, setEditingRoomCount] = useState(false);
   const [roomCountInput, setRoomCountInput] = useState("");
   const [savingRoomCount, setSavingRoomCount] = useState(false);
+  // Live indicator for any in-progress background room-count scan kicked off
+  // from the Onboarding "Re-scan room count" button. Polled every 10s so the
+  // banner reflects scrape progress without the user having to switch tabs.
+  const [roomCountJob, setRoomCountJob] = useState(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -54,6 +58,36 @@ export const PerformanceReport = ({ propertyId }) => {
       toast.error(e?.response?.data?.detail || "Kaydetme başarısız");
     } finally { setSavingRoomCount(false); }
   };
+
+  // Background-scan job status poller. Polls every 10s while a job is
+  // 'running'; stops polling as soon as the job finishes (or there is no
+  // job). When a job transitions from 'running' to 'done'/'no_data' we also
+  // re-fetch the performance data so the banner shows the new room count.
+  useEffect(() => {
+    let timer;
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const { data: j } = await axios.get(
+          `${API}/revenue/market-robot/${propertyId}/refresh-room-count/status`,
+        );
+        if (stopped) return;
+        const prevStatus = roomCountJob?.status;
+        setRoomCountJob(j);
+        // If job just finished, refresh main performance data
+        if (prevStatus === "running" && j.status !== "running") {
+          load();
+        }
+        // Keep polling while running, otherwise back off to 30s
+        timer = setTimeout(tick, j.status === "running" ? 10000 : 30000);
+      } catch {
+        if (!stopped) timer = setTimeout(tick, 30000);
+      }
+    };
+    tick();
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
 
   // Currency formatter driven by the property's configured currency.
   // Hooks must run unconditionally — derive once and gracefully fall back
@@ -163,6 +197,27 @@ export const PerformanceReport = ({ propertyId }) => {
                       </span>
                     )
                   ) : null}
+                  {/* Live scanning indicator while a background room-count
+                       job is running for this property */}
+                  {roomCountJob?.status === "running" && (
+                    <span
+                      data-testid="room-count-scanning-indicator"
+                      title="Booking.com için arka planda oda sayısı taraması devam ediyor"
+                      className="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded-full bg-amber-500/30 text-amber-200 text-[9px] font-bold uppercase tracking-wide animate-pulse"
+                    >
+                      <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                      Taranıyor
+                    </span>
+                  )}
+                  {roomCountJob?.status === "no_data" && roomCountJob?.finished_at && (
+                    <span
+                      data-testid="room-count-scan-failed"
+                      title={roomCountJob?.error || "Otomatik tarama başarısız — lütfen manuel girin"}
+                      className="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded-full bg-rose-500/30 text-rose-200 text-[9px] font-bold uppercase tracking-wide cursor-help"
+                    >
+                      Otomatik tarama yapılamadı
+                    </span>
+                  )}
                   {data.occupancy_assumption ? (
                     <span title={`Estimated revenue = per-room uplift × ${data.total_rooms} rooms × ${Math.round(data.occupancy_assumption*100)}% occupancy (${data.occupancy_basis === "actual_30d" ? "actual last-30-day occupancy" : "70% industry-average fallback (no booking history yet)"})`}>
                       · {Math.round(data.occupancy_assumption*100)}%

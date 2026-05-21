@@ -3217,7 +3217,8 @@ def create_market_robot_router(db, require_roles, resend=None):
             {"_id": 0, "currency": 1, "name": 1,
              "booking_room_count": 1, "booking_room_count_scanned_at": 1,
              "manual_room_count": 1, "manual_room_count_set_at": 1,
-             "manual_adr": 1, "manual_adr_set_at": 1}
+             "manual_adr": 1, "manual_adr_set_at": 1,
+             "manual_occupancy": 1, "manual_occupancy_set_at": 1}
         )
         property_currency = (prop.get("currency") if prop else None) or "GBP"
 
@@ -3273,7 +3274,14 @@ def create_market_robot_router(db, require_roles, resend=None):
         ])
         total_occupied_rn = sum(per_day_counts)
         available_rn = total_rooms * len(last_30_dates)
-        if available_rn > 0 and total_occupied_rn > 0:
+        # Occupancy priority: manual_occupancy (operator-set) > actual 30-day
+        # bookings > 70 % industry-average fallback. Manual lets owners feed in
+        # their real long-run occupancy when bookings history is sparse.
+        manual_occ = (prop or {}).get("manual_occupancy") if prop else None
+        if isinstance(manual_occ, (int, float)) and 0 < float(manual_occ) <= 1.0:
+            occupancy_factor = float(manual_occ)
+            occupancy_basis = "manual"
+        elif available_rn > 0 and total_occupied_rn > 0:
             occupancy_factor = max(0.05, min(1.0, total_occupied_rn / available_rn))
             occupancy_basis = "actual_30d"
         else:
@@ -7529,6 +7537,43 @@ Date range: {date_from} to {date_to}."""
             }},
         )
         return {"ok": True, "manual_adr": round(n, 2)}
+
+
+    @router.post("/revenue/market-robot/{property_id}/occupancy/manual")
+    async def set_manual_occupancy(property_id: str,
+                                   body: Dict,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Operator-supplied annual-average occupancy (0–100 %). Wins over both
+        the last-30-day actual booking calc and the industry-average fallback.
+
+        Accepts either `occupancy: 0.72` (0–1) or `occupancy: 72` (0–100); we
+        normalise to a 0–1 float. Pass `null` (or 0) to clear and revert.
+        """
+        v = body.get("occupancy")
+        if v in (None, "", 0):
+            await db.properties.update_one(
+                {"id": property_id},
+                {"$unset": {"manual_occupancy": "", "manual_occupancy_set_at": "", "manual_occupancy_set_by": ""}},
+            )
+            return {"ok": True, "manual_occupancy": None, "cleared": True}
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "occupancy must be a number")
+        # Normalize: 0.72 → 0.72, 72 → 0.72
+        if n > 1.0:
+            n = n / 100.0
+        if n < 0.01 or n > 1.0:
+            raise HTTPException(400, "occupancy must be between 1% and 100%")
+        await db.properties.update_one(
+            {"id": property_id},
+            {"$set": {
+                "manual_occupancy": round(n, 4),
+                "manual_occupancy_set_at": datetime.now(timezone.utc).isoformat(),
+                "manual_occupancy_set_by": current_user.get("email", "unknown"),
+            }},
+        )
+        return {"ok": True, "manual_occupancy": round(n, 4), "manual_occupancy_pct": round(n * 100, 1)}
 
 
     @router.get("/revenue/market-robot/{property_id}/ranking")

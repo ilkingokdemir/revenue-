@@ -27,6 +27,9 @@ export const PerformanceReport = ({ propertyId }) => {
   const [editingAdr, setEditingAdr] = useState(false);
   const [adrInput, setAdrInput] = useState("");
   const [savingAdr, setSavingAdr] = useState(false);
+  const [editingOccupancy, setEditingOccupancy] = useState(false);
+  const [occupancyInput, setOccupancyInput] = useState("");
+  const [savingOccupancy, setSavingOccupancy] = useState(false);
   // Live indicator for any in-progress background room-count scan kicked off
   // from the Onboarding "Re-scan room count" button. Polled every 10s so the
   // banner reflects scrape progress without the user having to switch tabs.
@@ -81,6 +84,26 @@ export const PerformanceReport = ({ propertyId }) => {
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Kaydetme başarısız");
     } finally { setSavingAdr(false); }
+  };
+  const saveOccupancy = async (clear = false) => {
+    setSavingOccupancy(true);
+    try {
+      const payload = clear ? { occupancy: null } : { occupancy: parseFloat(occupancyInput) || 0 };
+      const { data: res } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/occupancy/manual`,
+        payload,
+      );
+      if (res.cleared) {
+        toast.success("Manuel doluluk temizlendi");
+      } else {
+        toast.success(`Manuel doluluk: %${res.manual_occupancy_pct}`);
+      }
+      setEditingOccupancy(false);
+      setOccupancyInput("");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Kaydetme başarısız");
+    } finally { setSavingOccupancy(false); }
   };
 
   // Background-scan job status poller. Polls every 10s while a job is
@@ -243,10 +266,10 @@ export const PerformanceReport = ({ propertyId }) => {
                     </span>
                   )}
                   {data.occupancy_assumption ? (
-                    <span title={`Estimated revenue = per-room uplift × ${data.total_rooms} rooms × ${Math.round(data.occupancy_assumption*100)}% occupancy (${data.occupancy_basis === "actual_30d" ? "actual last-30-day occupancy" : "70% industry-average fallback (no booking history yet)"})`}>
+                    <span title={`Estimated revenue = per-room uplift × ${data.total_rooms} rooms × ${Math.round(data.occupancy_assumption*100)}% occupancy (${data.occupancy_basis === "manual" ? "manually set by operator" : data.occupancy_basis === "actual_30d" ? "actual last-30-day occupancy" : "70% industry-average fallback (no booking history yet)"})`}>
                       · {Math.round(data.occupancy_assumption*100)}%
-                      <span className={`ml-1 px-1 rounded text-[8px] ${data.occupancy_basis === "actual_30d" ? "bg-emerald-500/30 text-emerald-200" : "bg-amber-500/30 text-amber-200"}`}>
-                        {data.occupancy_basis === "actual_30d" ? "actual" : "est."}
+                      <span className={`ml-1 px-1 rounded text-[8px] ${data.occupancy_basis === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.occupancy_basis === "actual_30d" ? "bg-emerald-500/30 text-emerald-200" : "bg-amber-500/30 text-amber-200"}`}>
+                        {data.occupancy_basis === "manual" ? "manuel" : data.occupancy_basis === "actual_30d" ? "actual" : "est."}
                       </span>
                     </span>
                   ) : null}
@@ -382,7 +405,71 @@ export const PerformanceReport = ({ propertyId }) => {
                 </div>
                 <div>
                   <p className="text-[9px] text-white/50 uppercase">Ort. Doluluk</p>
-                  <p className="text-xl font-black text-amber-300">%{af.avg_occupancy_pct}</p>
+                  {editingOccupancy ? (
+                    <div className="flex items-center gap-1 justify-end mt-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="0.1"
+                        autoFocus
+                        value={occupancyInput}
+                        onChange={(e) => setOccupancyInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveOccupancy(false);
+                          if (e.key === "Escape") { setEditingOccupancy(false); setOccupancyInput(""); }
+                        }}
+                        data-testid="hero-occupancy-input"
+                        className="w-16 px-1 py-0.5 text-sm rounded bg-white/20 text-white text-right focus:outline-none focus:bg-white/30 border border-white/30"
+                        placeholder="72"
+                      />
+                      <span className="text-sm text-white/60">%</span>
+                      <button
+                        onClick={() => saveOccupancy(false)}
+                        disabled={savingOccupancy || !occupancyInput}
+                        data-testid="hero-occupancy-save"
+                        className="p-1 rounded bg-emerald-500/40 hover:bg-emerald-500/60 disabled:opacity-50"
+                        title="Kaydet"
+                      >
+                        {savingOccupancy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                      </button>
+                      <button
+                        onClick={() => { setEditingOccupancy(false); setOccupancyInput(""); }}
+                        data-testid="hero-occupancy-cancel"
+                        className="p-1 rounded bg-rose-500/40 hover:bg-rose-500/60"
+                        title="İptal"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setOccupancyInput(String(af.avg_occupancy_pct));
+                        setEditingOccupancy(true);
+                      }}
+                      data-testid="hero-occupancy-edit"
+                      className="inline-flex items-center gap-1 hover:bg-white/10 rounded px-1.5 py-0.5 transition-colors"
+                      title={data.occupancy_basis === "manual" ? "Manuel doluluk — değiştirmek için tıklayın" : data.occupancy_basis === "actual_30d" ? "Son 30 günün gerçek booking oranı — manuel girmek için tıklayın" : "Endüstri ortalaması fallback (%70) — manuel girmek için tıklayın"}
+                    >
+                      <span className="text-xl font-black text-amber-300">%{af.avg_occupancy_pct}</span>
+                      <Pencil className="w-2.5 h-2.5 opacity-50 text-amber-300" />
+                      {data.occupancy_basis === "manual" && (
+                        <span className="ml-0.5 px-1 rounded text-[8px] bg-fuchsia-500/30 text-fuchsia-200">manuel</span>
+                      )}
+                      {data.occupancy_basis === "manual" && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); saveOccupancy(true); }}
+                          disabled={savingOccupancy}
+                          data-testid="hero-occupancy-clear"
+                          className="p-0.5 ml-0.5 rounded bg-amber-500/40 hover:bg-amber-500/60 text-[9px] px-1.5"
+                          title="Manuel doluluğu temizle"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

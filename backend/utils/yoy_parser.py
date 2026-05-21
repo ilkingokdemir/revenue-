@@ -150,11 +150,13 @@ def parse_spreadsheet(content: bytes, filename: str, default_year: int) -> List[
     seen_keys = set()
 
     # Try each pair of columns — find the (month_col, revenue_col) combo
-    # that yields the most valid rows. This handles arbitrary spreadsheet
-    # layouts (header row, gaps, multiple sheets etc.) without requiring
-    # the user to clean their file first.
+    # that yields the most valid rows. When multiple (mc, rc) pairs produce
+    # the SAME number of valid rows (e.g. an Excel with month-col + several
+    # numeric cols like ADR / nights / revenue), pick the one with the
+    # HIGHEST total — that's almost always the revenue column rather than
+    # ADR or occupancy.
     n_cols = df.shape[1]
-    best: Tuple[int, int, List[Dict]] = (-1, -1, [])
+    best: Tuple[int, int, List[Dict], float] = (-1, -1, [], -1.0)
     for mc in range(n_cols):
         for rc in range(n_cols):
             if mc == rc:
@@ -166,8 +168,9 @@ def parse_spreadsheet(content: bytes, filename: str, default_year: int) -> List[
                 if e and e["month_key"] not in local_seen:
                     local_seen.add(e["month_key"])
                     rows.append(e)
-            if len(rows) > len(best[2]):
-                best = (mc, rc, rows)
+            row_total = sum(r["revenue"] for r in rows)
+            if (len(rows) > len(best[2])) or (len(rows) == len(best[2]) and row_total > best[3]):
+                best = (mc, rc, rows, row_total)
     entries = best[2]
     # Deduplicate by month_key (keep the largest revenue if duplicates)
     by_key: Dict[str, Dict] = {}

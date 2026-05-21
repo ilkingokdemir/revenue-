@@ -3418,6 +3418,89 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "event_days": mi["events"],
             })
 
+        # Build annual forecast first so we can attach YoY comparison alongside it
+        annual_forecast = _build_annual_revenue_forecast(
+            base_rate=base_rate,
+            total_rooms=total_rooms,
+            occupancy_factor=occupancy_factor,
+            start_date=now.date(),
+            monthly_adr_overrides=monthly_adr_overrides,
+        )
+
+        # ────────────────────────────────────────────────────────────────
+        # YoY Comparison — last year ACTUAL revenue vs this year FORECAST
+        # ────────────────────────────────────────────────────────────────
+        # For each forecast month we look up the SAME calendar month one
+        # year earlier and aggregate the actual paid bookings. This lets
+        # owners/investors see whether the forecast is ahead or behind
+        # historical realised performance.
+        prev_rev_by_key: Dict[str, float] = {}
+        try:
+            # Window: 13 months back from "first forecast month - 1y" through
+            # "last forecast month - 1y" to fully cover the 12 needed months.
+            first_fc = annual_forecast["monthly"][0]
+            last_fc = annual_forecast["monthly"][-1]
+            window_start = datetime(first_fc["year"] - 1, first_fc["month"], 1, tzinfo=timezone.utc)
+            # End is exclusive — start of the month *after* last forecast month a year ago
+            last_y = last_fc["year"] - 1
+            last_m = last_fc["month"]
+            end_y = last_y + (1 if last_m == 12 else 0)
+            end_m = 1 if last_m == 12 else last_m + 1
+            window_end = datetime(end_y, end_m, 1, tzinfo=timezone.utc)
+            bookings_prev = await db.bookings.find(
+                {
+                    "property_id": property_id,
+                    "status": {"$nin": ["cancelled", "no_show"]},
+                    "check_in": {"$lt": window_end.isoformat()},
+                    "check_out": {"$gt": window_start.isoformat()},
+                },
+                {"_id": 0, "check_in": 1, "check_out": 1, "total_price": 1},
+            ).to_list(20000)
+            for b in bookings_prev:
+                try:
+                    ci = datetime.fromisoformat(str(b["check_in"]).replace("Z", "+00:00"))
+                    co = datetime.fromisoformat(str(b["check_out"]).replace("Z", "+00:00"))
+                except Exception:
+                    continue
+                total_nights = max(1, (co.date() - ci.date()).days)
+                per_night = float(b.get("total_price", 0) or 0) / total_nights
+                d = ci
+                while d < co:
+                    key = f"{d.year:04d}-{d.month:02d}"
+                    prev_rev_by_key[key] = prev_rev_by_key.get(key, 0.0) + per_night
+                    d += timedelta(days=1)
+        except Exception as e:
+            logger.warning("YoY prev-year aggregation failed for %s: %s", property_id, e)
+
+        # Decorate forecast months with prev-year revenue & delta %
+        prev_year_total = 0.0
+        for fm in annual_forecast["monthly"]:
+            prev_key = f"{fm['year'] - 1:04d}-{fm['month']:02d}"
+            prev_rev = round(prev_rev_by_key.get(prev_key, 0.0), 2)
+            fm["prev_year_revenue"] = prev_rev
+            fm["prev_year_month_key"] = prev_key
+            if prev_rev > 0:
+                fm["yoy_delta_pct"] = round(((fm["revenue"] - prev_rev) / prev_rev) * 100, 1)
+            else:
+                fm["yoy_delta_pct"] = None
+            prev_year_total += prev_rev
+        prev_year_total = round(prev_year_total, 2)
+        months_with_history = sum(1 for fm in annual_forecast["monthly"] if fm["prev_year_revenue"] > 0)
+        if prev_year_total > 0:
+            yoy_total_delta_pct = round(
+                ((annual_forecast["annual_revenue"] - prev_year_total) / prev_year_total) * 100, 1
+            )
+        else:
+            yoy_total_delta_pct = None
+        annual_forecast["yoy_comparison"] = {
+            "prev_year_total_revenue": prev_year_total,
+            "this_year_forecast_revenue": annual_forecast["annual_revenue"],
+            "delta_revenue": round(annual_forecast["annual_revenue"] - prev_year_total, 2),
+            "delta_pct": yoy_total_delta_pct,
+            "months_with_history": months_with_history,
+            "horizon_months": annual_forecast.get("horizon_months", 12),
+        }
+
         return {
             "kpis": {
                 "total_days_adjusted": total_days_adjusted,
@@ -3450,13 +3533,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             "adr_source": adr_source,
             "occupancy_assumption": occupancy_factor,
             "occupancy_basis": occupancy_basis,
-            "annual_forecast": _build_annual_revenue_forecast(
-                base_rate=base_rate,
-                total_rooms=total_rooms,
-                occupancy_factor=occupancy_factor,
-                start_date=now.date(),
-                monthly_adr_overrides=monthly_adr_overrides,
-            ),
+            "annual_forecast": annual_forecast,
         }
 
     @router.get("/revenue/market-robot/{property_id}/competitors")

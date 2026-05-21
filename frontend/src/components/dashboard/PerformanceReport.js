@@ -431,7 +431,7 @@ export const PerformanceReport = ({ propertyId }) => {
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 text-right">
+              <div className="grid grid-cols-4 gap-3 text-right">
                 <div>
                   <p className="text-[9px] text-white/50 uppercase">Yıllık Toplam</p>
                   <p className="text-xl font-black text-emerald-300">{cur(af.annual_revenue)}</p>
@@ -440,6 +440,20 @@ export const PerformanceReport = ({ propertyId }) => {
                   <p className="text-[9px] text-white/50 uppercase">RevPAR</p>
                   <p className="text-xl font-black text-sky-300">{cur(af.revpar)}</p>
                 </div>
+                {af.yoy_comparison && af.yoy_comparison.prev_year_total_revenue > 0 ? (
+                  <div data-testid="yoy-tile" title={`Geçen yıl gerçek ciro: ${cur(af.yoy_comparison.prev_year_total_revenue)} · ${af.yoy_comparison.months_with_history}/12 ayda geçmiş veri bulundu`}>
+                    <p className="text-[9px] text-white/50 uppercase">YoY Δ</p>
+                    <p className={`text-xl font-black flex items-center justify-end gap-1 ${af.yoy_comparison.delta_pct >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                      {af.yoy_comparison.delta_pct >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                      {af.yoy_comparison.delta_pct >= 0 ? "+" : ""}{af.yoy_comparison.delta_pct}%
+                    </p>
+                  </div>
+                ) : (
+                  <div title="Geçmiş bookings verisi henüz yetersiz — YoY karşılaştırması için geçen yılın aynı aylarına ait rezervasyonlar gerekir." data-testid="yoy-tile-empty">
+                    <p className="text-[9px] text-white/50 uppercase">YoY Δ</p>
+                    <p className="text-xl font-black text-white/40">—</p>
+                  </div>
+                )}
                 <div>
                   <p className="text-[9px] text-white/50 uppercase">Ort. Doluluk</p>
                   {editingOccupancy ? (
@@ -555,7 +569,7 @@ export const PerformanceReport = ({ propertyId }) => {
                       {cur(m.revenue)}
                     </div>
                     <div
-                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? "Booking.com canlı" : "tahmin"}) · doluluk %${m.occupancy_pct}`}
+                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? "Booking.com canlı" : "tahmin"}) · doluluk %${m.occupancy_pct}${m.prev_year_revenue > 0 ? ` · Geçen yıl gerçek: ${cur(m.prev_year_revenue)} (${m.yoy_delta_pct >= 0 ? "+" : ""}${m.yoy_delta_pct}%)` : ""}`}
                       className={`w-full rounded-t-md transition-all hover:opacity-90 ${colorClass}`}
                       style={{ height: `${h}%` }}
                     />
@@ -564,6 +578,39 @@ export const PerformanceReport = ({ propertyId }) => {
                 );
               })}
             </div>
+            {/* YoY comparison strip — last year actual vs this year forecast */}
+            {af.yoy_comparison && af.yoy_comparison.prev_year_total_revenue > 0 && (
+              <div className="mt-4 rounded-xl bg-white/5 border border-white/10 p-3" data-testid="yoy-strip">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-emerald-300" />
+                    <p className="text-xs font-bold text-white/90">Geçen Yıl vs Bu Yıl Tahmini</p>
+                    <span className="text-[10px] text-white/40">({af.yoy_comparison.months_with_history}/12 ayda geçmiş veri)</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-right">
+                    <div>
+                      <p className="text-[9px] text-white/40 uppercase">Geçen Yıl Gerçek</p>
+                      <p className="text-sm font-bold text-stone-200">{cur(af.yoy_comparison.prev_year_total_revenue)}</p>
+                    </div>
+                    <div className="text-white/30">→</div>
+                    <div>
+                      <p className="text-[9px] text-white/40 uppercase">Bu Yıl Tahmini</p>
+                      <p className="text-sm font-bold text-emerald-300">{cur(af.yoy_comparison.this_year_forecast_revenue)}</p>
+                    </div>
+                    <div className="border-l border-white/20 pl-4">
+                      <p className="text-[9px] text-white/40 uppercase">Δ Büyüme</p>
+                      <p className={`text-sm font-black flex items-center gap-1 ${af.yoy_comparison.delta_revenue >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                        {af.yoy_comparison.delta_revenue >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                        {af.yoy_comparison.delta_revenue >= 0 ? "+" : ""}{cur(af.yoy_comparison.delta_revenue)}
+                        <span className="text-[10px] font-bold ml-1">
+                          ({af.yoy_comparison.delta_pct >= 0 ? "+" : ""}{af.yoy_comparison.delta_pct}%)
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <p className="text-[10px] text-white/40 text-center mt-3">
               Hesaplama: ADR × oda × günler × doluluk × sezonalite. Sezonalite Kuzey Yarımküre standart turizm dağılımıdır.
               Manuel doluluk veya ADR set'lediğinizde yeniden hesaplanır.

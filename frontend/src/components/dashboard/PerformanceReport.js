@@ -106,6 +106,43 @@ export const PerformanceReport = ({ propertyId }) => {
     } finally { setSavingOccupancy(false); }
   };
 
+  // 12-month forward price scrape (kicks a background job; polls every 8s)
+  const [scrapingPrices, setScrapingPrices] = useState(false);
+  const [priceJob, setPriceJob] = useState(null);
+  useEffect(() => {
+    let timer; let stopped = false;
+    const tick = async () => {
+      try {
+        const { data: j } = await axios.get(
+          `${API}/revenue/market-robot/${propertyId}/scrape-yearly-prices/status`,
+        );
+        if (stopped) return;
+        const prevStatus = priceJob?.status;
+        setPriceJob(j);
+        if (prevStatus === "running" && j.status !== "running") {
+          load(); // refresh forecast after job ends
+          setScrapingPrices(false);
+        }
+        timer = setTimeout(tick, j.status === "running" ? 8000 : 45000);
+      } catch {
+        if (!stopped) timer = setTimeout(tick, 45000);
+      }
+    };
+    tick();
+    return () => { stopped = true; if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
+  const kickPriceScrape = async () => {
+    setScrapingPrices(true);
+    try {
+      await axios.post(`${API}/revenue/market-robot/${propertyId}/scrape-yearly-prices`);
+      toast.info("12 ay × Booking.com fiyat taraması başladı (Tor ile, ~3-5 dakika)");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Tarama başlatılamadı");
+      setScrapingPrices(false);
+    }
+  };
+
   // Background-scan job status poller. Polls every 10s while a job is
   // 'running'; stops polling as soon as the job finishes (or there is no
   // job). When a job transitions from 'running' to 'done'/'no_data' we also
@@ -474,18 +511,52 @@ export const PerformanceReport = ({ propertyId }) => {
               </div>
             </div>
             {/* Bar chart */}
-            <div className="grid grid-cols-12 gap-1.5 h-44 mt-4 items-end" data-testid="annual-forecast-chart">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] text-white/50 uppercase tracking-wide font-bold">
+                {af.scraped_months_count > 0 ? (
+                  <span className="text-emerald-300">● {af.scraped_months_count}/12 ay canlı Booking.com fiyatlı</span>
+                ) : (
+                  <span>● 12/12 ay tahmin (canlı fiyat yok)</span>
+                )}
+              </p>
+              <button
+                onClick={kickPriceScrape}
+                disabled={scrapingPrices || priceJob?.status === "running"}
+                data-testid="scrape-yearly-prices-btn"
+                title="Booking.com'dan 12 ay × her ayın 15'i fiyatları tarat — gerçek market fiyatlarıyla yıllık ciro"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/30 hover:bg-emerald-500/50 text-emerald-100 text-xs font-bold disabled:opacity-50 transition-colors"
+              >
+                {(scrapingPrices || priceJob?.status === "running") ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Taranıyor {priceJob?.produced_count != null && `(${priceJob.produced_count}/12)`}
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-3 h-3" />
+                    12 Ay Fiyat Tara
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="grid grid-cols-12 gap-1.5 h-44 mt-1 items-end" data-testid="annual-forecast-chart">
               {af.monthly.map((m, idx) => {
                 const h = Math.max((m.revenue / maxRev) * 100, 4);
+                const isScraped = m.adr_origin === "scraped";
                 const isSummerPeak = [6, 7, 8].includes(m.month);
+                const colorClass = isScraped
+                  ? "bg-gradient-to-t from-emerald-500 to-emerald-300"
+                  : isSummerPeak
+                    ? "bg-gradient-to-t from-amber-500 to-amber-300"
+                    : "bg-gradient-to-t from-violet-500 to-violet-300";
                 return (
                   <div key={idx} className="flex flex-col items-center gap-1 group">
                     <div className="text-[9px] font-bold text-white/70 group-hover:text-white transition-colors">
                       {cur(m.revenue)}
                     </div>
                     <div
-                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} · doluluk %${m.occupancy_pct}`}
-                      className={`w-full rounded-t-md transition-all hover:opacity-90 ${isSummerPeak ? "bg-gradient-to-t from-amber-500 to-amber-300" : "bg-gradient-to-t from-violet-500 to-violet-300"}`}
+                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? "Booking.com canlı" : "tahmin"}) · doluluk %${m.occupancy_pct}`}
+                      className={`w-full rounded-t-md transition-all hover:opacity-90 ${colorClass}`}
                       style={{ height: `${h}%` }}
                     />
                     <div className="text-[10px] font-semibold text-white/60">{m.label.split(" ")[0]}</div>

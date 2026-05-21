@@ -3,7 +3,7 @@ Market Robot — Scrapes Booking.com market supply data and auto-adjusts hotel r
 Tracks availability for 90 days, detects demand changes, and feeds into Smart Pricing.
 """
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import Dict, List, Optional
 import uuid
 import re
@@ -3157,39 +3157,53 @@ def create_market_robot_router(db, require_roles, resend=None):
     ]
 
     def _build_annual_revenue_forecast(*, base_rate: float, total_rooms: int,
-                                       occupancy_factor: float, start_date) -> dict:
+                                       occupancy_factor: float, start_date,
+                                       monthly_adr_overrides: Optional[Dict[str, float]] = None) -> dict:
         """Forward-looking 12-month room revenue projection.
 
         Methodology (same maths as Hotel Revenue Lab's "Sadece Oda" mode):
-            monthly_revenue = ADR × rooms × days_in_month × occupancy × season_mult
-        Annual revenue is the sum across all 12 months. Returns enough metadata
-        for the frontend to render a bar chart + KPI tiles.
+            monthly_revenue = ADR_for_month × rooms × days_in_month × occupancy × season_mult
+        Per-month ADR priority:
+            1. Booking.com scraped price for that exact YYYY-MM (if available
+               in `monthly_adr_overrides`) — highest fidelity, real market data.
+            2. Otherwise the global `base_rate` (manual_adr or room_types avg).
+        Returns enough metadata for the frontend to render a bar chart + KPI tiles.
         """
         import calendar as _cal
         monthly: List[Dict] = []
         annual_total = 0.0
-        # Generate 12 months starting from the current month
+        scraped_months = 0
         cur_y = start_date.year
         cur_m = start_date.month
         for i in range(12):
             y = cur_y + (cur_m - 1 + i) // 12
             m = (cur_m - 1 + i) % 12 + 1
+            month_key = f"{y:04d}-{m:02d}"
             days_in_month = _cal.monthrange(y, m)[1]
             season_mult = _MONTH_SEASONALITY[m - 1]
-            month_revenue = base_rate * total_rooms * days_in_month * occupancy_factor * season_mult
+            scraped_adr = (monthly_adr_overrides or {}).get(month_key) if monthly_adr_overrides else None
+            if scraped_adr and scraped_adr > 0:
+                adr_used = float(scraped_adr)
+                adr_origin = "scraped"
+                scraped_months += 1
+            else:
+                adr_used = base_rate
+                adr_origin = "estimated"
+            month_revenue = adr_used * total_rooms * days_in_month * occupancy_factor * season_mult
             month_revenue = round(month_revenue, 2)
             annual_total += month_revenue
             monthly.append({
                 "year": y,
                 "month": m,
+                "month_key": month_key,
                 "label": f"{_cal.month_abbr[m]} {str(y)[2:]}",
                 "days": days_in_month,
                 "season_multiplier": season_mult,
                 "occupancy_pct": round(occupancy_factor * season_mult * 100, 1),
-                "adr": round(base_rate, 2),
+                "adr": round(adr_used, 2),
+                "adr_origin": adr_origin,
                 "revenue": month_revenue,
             })
-        # RevPAR = annual_revenue / (rooms × 365)
         rev_par = annual_total / (total_rooms * 365) if total_rooms else 0
         avg_occupancy = sum(m["occupancy_pct"] for m in monthly) / 12.0 if monthly else 0
         return {
@@ -3199,7 +3213,8 @@ def create_market_robot_router(db, require_roles, resend=None):
             "revpar": round(rev_par, 2),
             "avg_occupancy_pct": round(avg_occupancy, 1),
             "total_rooms": total_rooms,
-            "methodology": "ADR × rooms × days × occupancy × seasonality",
+            "scraped_months_count": scraped_months,
+            "methodology": "ADR × oda × günler × doluluk × sezonalite" + (f" · {scraped_months}/12 ay canlı Booking.com fiyatlarıyla" if scraped_months else ""),
         }
 
 
@@ -3368,6 +3383,15 @@ def create_market_robot_router(db, require_roles, resend=None):
         mega_events = await db.market_events.count_documents({"property_id": property_id, "impact": "mega"})
         large_events = await db.market_events.count_documents({"property_id": property_id, "impact": "large"})
 
+        # Real Booking.com scraped per-month ADRs (from `scrape-yearly-prices`).
+        # When present these override the global `base_rate` per matching month
+        # in the annual forecast, giving us actual market-priced revenue
+        # projections instead of a flat estimate.
+        monthly_price_rows = await db.property_monthly_prices.find(
+            {"property_id": property_id}, {"_id": 0, "month_key": 1, "adr": 1}
+        ).to_list(24)
+        monthly_adr_overrides = {r["month_key"]: float(r["adr"]) for r in monthly_price_rows if r.get("adr")}
+
         # Estimated revenue impact = per-room uplift × inventory × occupancy
         avg_rooms = max(round(total_rooms * occupancy_factor), 1)
         estimated_rev_uplift = round(total_uplift * avg_rooms, 2)
@@ -3425,6 +3449,7 @@ def create_market_robot_router(db, require_roles, resend=None):
                 total_rooms=total_rooms,
                 occupancy_factor=occupancy_factor,
                 start_date=now.date(),
+                monthly_adr_overrides=monthly_adr_overrides,
             ),
         }
 
@@ -7444,6 +7469,167 @@ Date range: {date_from} to {date_to}."""
         if not job:
             return {"status": "idle"}
         return job
+
+    # ────────────────────────────────────────────────────────────────────
+    #  12-month forward price scrape — drives per-month ADR in the forecast
+    # ────────────────────────────────────────────────────────────────────
+    async def _run_yearly_price_scan(property_id: str, booking_url: str):
+        """Scrape Booking.com on the 15th of each of the next 12 months for a
+        1-night, 2-adult stay. Stores results in `property_monthly_prices`
+        and writes job status to `yearly_price_jobs`. Tor circuit rotates per
+        probe so every month gets a fresh exit IP.
+        """
+        from utils.booking_scraper import scrape_booking_url, build_dated_url
+        try:
+            from utils.tor_manager import rotate_circuit
+        except Exception:
+            rotate_circuit = None  # type: ignore
+
+        today = datetime.now(timezone.utc).date()
+        targets = []
+        for i in range(12):
+            y = today.year + (today.month - 1 + i) // 12
+            m = (today.month - 1 + i) % 12 + 1
+            # Use the 15th — clear of weekend / holiday distortion
+            try:
+                ci = date(y, m, 15)
+            except ValueError:
+                continue
+            co = ci + timedelta(days=1)
+            targets.append((y, m, ci, co))
+
+        sem = asyncio.Semaphore(3)
+        produced: List[Dict] = []
+        failed_months: List[str] = []
+
+        async def _scrape_one(y, m, ci, co):
+            month_key = f"{y:04d}-{m:02d}"
+            async with sem:
+                price: Optional[float] = None
+                last_err: Optional[str] = None
+                # Up to 4 attempts with Tor rotation
+                for attempt in range(4):
+                    if rotate_circuit is not None:
+                        try:
+                            await rotate_circuit()
+                            await asyncio.sleep(0.4)
+                            await rotate_circuit()
+                            await asyncio.sleep(1.5)
+                        except Exception:
+                            pass
+                    try:
+                        url = build_dated_url(booking_url, ci.isoformat(), co.isoformat())
+                        result = await asyncio.wait_for(scrape_booking_url(url), timeout=22)
+                        if result and result.get("lowest_price"):
+                            price = float(result["lowest_price"])
+                            break
+                        last_err = result.get("error") if result else "no_price"
+                    except asyncio.TimeoutError:
+                        last_err = "timeout"
+                    except Exception as e:
+                        last_err = str(e)[:120]
+                if price:
+                    produced.append({
+                        "property_id": property_id,
+                        "month_key": month_key,
+                        "year": y,
+                        "month": m,
+                        "checkin": ci.isoformat(),
+                        "checkout": co.isoformat(),
+                        "adr": round(price, 2),
+                        "scraped_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                else:
+                    failed_months.append(month_key)
+                # Update progress (running count) every probe
+                await db.yearly_price_jobs.update_one(
+                    {"property_id": property_id},
+                    {"$set": {
+                        "produced_count": len(produced),
+                        "failed_count": len(failed_months),
+                        "last_month_done": month_key,
+                        "last_err": last_err,
+                    }},
+                )
+
+        try:
+            await asyncio.gather(*[_scrape_one(*t) for t in targets])
+            if produced:
+                # Replace stale rows for these months
+                month_keys = [p["month_key"] for p in produced]
+                await db.property_monthly_prices.delete_many({
+                    "property_id": property_id,
+                    "month_key": {"$in": month_keys},
+                })
+                await db.property_monthly_prices.insert_many([dict(p) for p in produced])
+            await db.yearly_price_jobs.update_one(
+                {"property_id": property_id},
+                {"$set": {
+                    "status": "done" if produced else "no_data",
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "produced_count": len(produced),
+                    "failed_count": len(failed_months),
+                    "failed_months": failed_months,
+                }},
+            )
+        except Exception as e:
+            logger.exception("Yearly price scan crashed for %s: %s", property_id, e)
+            await db.yearly_price_jobs.update_one(
+                {"property_id": property_id},
+                {"$set": {
+                    "status": "error",
+                    "finished_at": datetime.now(timezone.utc).isoformat(),
+                    "error": str(e)[:200],
+                }},
+            )
+
+    @router.post("/revenue/market-robot/{property_id}/scrape-yearly-prices")
+    async def scrape_yearly_prices(property_id: str,
+                                   background_tasks: BackgroundTasks,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Kick off a 12-month forward price scrape in the background. Returns
+        immediately; poll `GET /scrape-yearly-prices/status` to track progress.
+        """
+        prop = await db.properties.find_one(
+            {"id": property_id}, {"_id": 0, "booking_url": 1}
+        )
+        if not prop or not prop.get("booking_url"):
+            raise HTTPException(400, "Set booking_url on the property first")
+        await db.yearly_price_jobs.update_one(
+            {"property_id": property_id},
+            {"$set": {
+                "property_id": property_id,
+                "status": "running",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+                "produced_count": 0,
+                "failed_count": 0,
+                "failed_months": [],
+                "last_month_done": None,
+                "error": None,
+            }},
+            upsert=True,
+        )
+        background_tasks.add_task(_run_yearly_price_scan, property_id, prop["booking_url"])
+        return {"ok": True, "status": "queued",
+                "message": "12 aylık fiyat taraması başladı (~3-5 dakika)."}
+
+    @router.get("/revenue/market-robot/{property_id}/scrape-yearly-prices/status")
+    async def scrape_yearly_prices_status(property_id: str,
+                                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        job = await db.yearly_price_jobs.find_one({"property_id": property_id}, {"_id": 0})
+        if not job:
+            return {"status": "idle"}
+        return job
+
+    @router.get("/revenue/market-robot/{property_id}/monthly-prices")
+    async def get_monthly_prices(property_id: str,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Return the most recent 12 months of scraped Booking.com ADRs."""
+        rows = await db.property_monthly_prices.find(
+            {"property_id": property_id},
+            {"_id": 0},
+        ).sort("month_key", 1).to_list(24)
+        return {"property_id": property_id, "prices": rows}
 
     @router.get("/revenue/market-robot/{property_id}/room-count")
     async def get_room_count_state(property_id: str,

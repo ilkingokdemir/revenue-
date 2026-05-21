@@ -23,6 +23,10 @@ export const PerformanceReport = ({ propertyId }) => {
   const [editingRoomCount, setEditingRoomCount] = useState(false);
   const [roomCountInput, setRoomCountInput] = useState("");
   const [savingRoomCount, setSavingRoomCount] = useState(false);
+  // Same UX for the manual ADR override (used by the 12-month forecast).
+  const [editingAdr, setEditingAdr] = useState(false);
+  const [adrInput, setAdrInput] = useState("");
+  const [savingAdr, setSavingAdr] = useState(false);
   // Live indicator for any in-progress background room-count scan kicked off
   // from the Onboarding "Re-scan room count" button. Polled every 10s so the
   // banner reflects scrape progress without the user having to switch tabs.
@@ -57,6 +61,26 @@ export const PerformanceReport = ({ propertyId }) => {
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Kaydetme başarısız");
     } finally { setSavingRoomCount(false); }
+  };
+  const saveAdr = async (clear = false) => {
+    setSavingAdr(true);
+    try {
+      const payload = clear ? { adr: null } : { adr: parseFloat(adrInput) || 0 };
+      const { data: res } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/adr/manual`,
+        payload,
+      );
+      if (res.cleared) {
+        toast.success("Manuel ADR temizlendi");
+      } else {
+        toast.success(`Manuel ADR kaydedildi: ${cur(res.manual_adr)}`);
+      }
+      setEditingAdr(false);
+      setAdrInput("");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Kaydetme başarısız");
+    } finally { setSavingAdr(false); }
   };
 
   // Background-scan job status poller. Polls every 10s while a job is
@@ -277,7 +301,74 @@ export const PerformanceReport = ({ propertyId }) => {
                 </div>
                 <div>
                   <h3 className="text-lg font-bold">Yıllık Ciro Tahmini (12 Ay)</h3>
-                  <p className="text-xs text-white/60">{af.methodology} · {af.total_rooms} oda · {cur(af.adr)} ADR</p>
+                  <p className="text-xs text-white/60">
+                    {af.methodology} · {af.total_rooms} oda ·{" "}
+                    {editingAdr ? (
+                      <span className="inline-flex items-center gap-1 bg-white/10 rounded px-1.5 py-0.5">
+                        <input
+                          type="number"
+                          min="1"
+                          max="50000"
+                          step="0.01"
+                          autoFocus
+                          value={adrInput}
+                          onChange={(e) => setAdrInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveAdr(false);
+                            if (e.key === "Escape") { setEditingAdr(false); setAdrInput(""); }
+                          }}
+                          data-testid="hero-adr-input"
+                          className="w-20 px-1 py-0.5 text-xs rounded bg-white/20 text-white placeholder-white/40 focus:outline-none focus:bg-white/30 border border-white/30"
+                          placeholder="150"
+                        />
+                        <button
+                          onClick={() => saveAdr(false)}
+                          disabled={savingAdr || !adrInput}
+                          data-testid="hero-adr-save"
+                          className="p-0.5 rounded bg-emerald-500/40 hover:bg-emerald-500/60 disabled:opacity-50"
+                          title="Kaydet"
+                        >
+                          {savingAdr ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        </button>
+                        <button
+                          onClick={() => { setEditingAdr(false); setAdrInput(""); }}
+                          data-testid="hero-adr-cancel"
+                          className="p-0.5 rounded bg-rose-500/40 hover:bg-rose-500/60"
+                          title="İptal"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        {data.adr_source === "manual" && (
+                          <button
+                            onClick={() => saveAdr(true)}
+                            disabled={savingAdr}
+                            data-testid="hero-adr-clear"
+                            className="p-0.5 ml-1 rounded bg-amber-500/40 hover:bg-amber-500/60 text-[9px] px-1.5"
+                            title="Manuel ADR'yi temizle"
+                          >
+                            Temizle
+                          </button>
+                        )}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setAdrInput(String(af.adr));
+                          setEditingAdr(true);
+                        }}
+                        data-testid="hero-adr-edit"
+                        className="inline-flex items-center gap-1 hover:bg-white/10 rounded px-1 py-0.5 transition-colors cursor-pointer text-white/80"
+                        title={data.adr_source === "manual" ? "Manuel ADR — değiştirmek için tıklayın" : "Otomatik ADR (room_types ortalaması) — manuel girmek için tıklayın"}
+                      >
+                        <span className="font-semibold">{cur(af.adr)}</span>
+                        <span>ADR</span>
+                        <Pencil className="w-2.5 h-2.5 opacity-50" />
+                        <span className={`px-1 rounded text-[8px] ${data.adr_source === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.adr_source === "room_types" ? "bg-stone-500/30 text-stone-200" : "bg-stone-500/30 text-stone-200"}`}>
+                          {data.adr_source === "manual" ? "manuel" : data.adr_source === "room_types" ? "auto" : "fallback"}
+                        </span>
+                      </button>
+                    )}
+                  </p>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3 text-right">

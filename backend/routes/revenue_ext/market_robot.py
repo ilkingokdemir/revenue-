@@ -3216,7 +3216,8 @@ def create_market_robot_router(db, require_roles, resend=None):
             {"id": property_id},
             {"_id": 0, "currency": 1, "name": 1,
              "booking_room_count": 1, "booking_room_count_scanned_at": 1,
-             "manual_room_count": 1, "manual_room_count_set_at": 1}
+             "manual_room_count": 1, "manual_room_count_set_at": 1,
+             "manual_adr": 1, "manual_adr_set_at": 1}
         )
         property_currency = (prop.get("currency") if prop else None) or "GBP"
 
@@ -3226,10 +3227,20 @@ def create_market_robot_router(db, require_roles, resend=None):
         # types that are missing the rate field dilute the mean to near-zero
         # (which then makes every rate-override look like a £100+ uplift).
         rated_types = [r for r in room_types_list if float(r.get("base_rate", 0) or 0) > 0]
-        if rated_types:
+        # ADR priority: operator-supplied manual_adr > average of room-type base
+        # rates > 100 fallback. Manual ADR exists so operators can correct cases
+        # where their *real* sold ADR differs from what's in room_types
+        # (commission-net vs gross, channel mix, etc.).
+        manual_adr = (prop or {}).get("manual_adr") if prop else None
+        if isinstance(manual_adr, (int, float)) and float(manual_adr) > 0:
+            base_rate = float(manual_adr)
+            adr_source = "manual"
+        elif rated_types:
             base_rate = sum(float(r.get("base_rate", 0)) for r in rated_types) / len(rated_types)
+            adr_source = "room_types"
         else:
             base_rate = 100.0
+            adr_source = "fallback"
         # Room count priority: manual override (operator-set) > Booking.com auto-scan
         # > local room_types sum > 10-room fallback. The manual override exists so
         # operators can correct cases where Booking.com only exposes a subset of
@@ -3398,6 +3409,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             "total_rooms": total_rooms,
             "room_count_source": room_count_source,
             "base_rate": round(base_rate, 2),
+            "adr_source": adr_source,
             "occupancy_assumption": occupancy_factor,
             "occupancy_basis": occupancy_basis,
             "annual_forecast": _build_annual_revenue_forecast(
@@ -7478,6 +7490,46 @@ Date range: {date_from} to {date_to}."""
             }},
         )
         return {"ok": True, "manual_room_count": n}
+
+    @router.post("/revenue/market-robot/{property_id}/adr/manual")
+    async def set_manual_adr(property_id: str,
+                             body: Dict,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Operator-supplied Average Daily Rate. Always wins over the average
+        of room_types base rates in the Performance Report's annual forecast.
+
+        Use when:
+          - Booking.com list price differs from your actual sold ADR (commission,
+            channel mix, discounts).
+          - You sell mostly long-stay / weekly rates that aren't reflected in
+            the per-night base_rate column.
+
+        Pass `adr: null` (or 0) to clear the override and fall back to the
+        room_types average.
+        """
+        v = body.get("adr")
+        if v in (None, "", 0):
+            await db.properties.update_one(
+                {"id": property_id},
+                {"$unset": {"manual_adr": "", "manual_adr_set_at": "", "manual_adr_set_by": ""}},
+            )
+            return {"ok": True, "manual_adr": None, "cleared": True}
+        try:
+            n = float(v)
+        except (TypeError, ValueError):
+            raise HTTPException(400, "adr must be a positive number")
+        if n < 1 or n > 50000:
+            raise HTTPException(400, "adr must be between 1 and 50000")
+        await db.properties.update_one(
+            {"id": property_id},
+            {"$set": {
+                "manual_adr": round(n, 2),
+                "manual_adr_set_at": datetime.now(timezone.utc).isoformat(),
+                "manual_adr_set_by": current_user.get("email", "unknown"),
+            }},
+        )
+        return {"ok": True, "manual_adr": round(n, 2)}
+
 
     @router.get("/revenue/market-robot/{property_id}/ranking")
     async def get_ranking_analysis(property_id: str, days: int = 7,

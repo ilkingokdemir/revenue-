@@ -426,8 +426,9 @@ export const PerformanceReport = ({ propertyId }) => {
                         <span className="font-semibold">{cur(af.adr)}</span>
                         <span>ADR</span>
                         <Pencil className="w-2.5 h-2.5 opacity-50" />
-                        <span className={`px-1 rounded text-[8px] ${data.adr_source === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.adr_source === "room_types" ? "bg-stone-500/30 text-stone-200" : "bg-stone-500/30 text-stone-200"}`}>
-                          {data.adr_source === "manual" ? "manuel" : data.adr_source === "room_types" ? "auto" : "fallback"}
+                        <span className={`px-1 rounded text-[8px] ${data.adr_source === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.adr_source === "aggregated_branches" ? "bg-sky-500/30 text-sky-200" : data.adr_source === "room_types" ? "bg-stone-500/30 text-stone-200" : "bg-amber-500/30 text-amber-200"}`}
+                              title={data.adr_source === "aggregated_branches" ? "Tüm şubelerden scrape edilmiş canlı ADR'lerin ortalaması" : data.adr_source === "manual" ? "Manuel olarak ayarlandı" : data.adr_source === "room_types" ? "Yerel oda tipi fiyatlarının ortalaması" : "Hiçbir veri yok — 100 GBP fallback"}>
+                          {data.adr_source === "manual" ? "manuel" : data.adr_source === "aggregated_branches" ? "çoklu şube ort." : data.adr_source === "room_types" ? "auto" : "fallback"}
                         </span>
                       </button>
                     )}

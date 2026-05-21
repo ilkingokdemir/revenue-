@@ -3460,6 +3460,28 @@ def create_market_robot_router(db, require_roles, resend=None):
         ).to_list(24)
         monthly_adr_overrides = {r["month_key"]: float(r["adr"]) for r in monthly_price_rows if r.get("adr")}
 
+        # If we're on the aggregate "all" view (no property-specific scraped
+        # prices), aggregate scraped ADRs across all configured properties
+        # using a simple average per month_key. This is what gives sensible
+        # "All Branches" ADR (£200-£300 in London) instead of falling back
+        # to the £100 default when the user hasn't selected a single property.
+        if not monthly_adr_overrides and property_id in ("all", "default"):
+            agg_rows = await db.property_monthly_prices.find(
+                {}, {"_id": 0, "month_key": 1, "adr": 1}
+            ).to_list(2000)
+            by_month: Dict[str, List[float]] = {}
+            for r in agg_rows:
+                a = float(r.get("adr") or 0)
+                k = r.get("month_key")
+                if a > 0 and k:
+                    by_month.setdefault(k, []).append(a)
+            if by_month:
+                monthly_adr_overrides = {k: round(sum(v) / len(v), 2) for k, v in by_month.items()}
+                # Also lift the base_rate to the overall scraped average so
+                # the headline ADR figure isn't the £100 fallback either.
+                base_rate = round(sum(monthly_adr_overrides.values()) / len(monthly_adr_overrides), 2)
+                adr_source = "aggregated_branches"
+
         # Estimated revenue impact = per-room uplift × inventory × occupancy
         avg_rooms = max(round(total_rooms * occupancy_factor), 1)
         estimated_rev_uplift = round(total_uplift * avg_rooms, 2)

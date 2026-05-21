@@ -63,20 +63,31 @@ _booking_ctx_lock = asyncio.Lock()
 _booking_ctx_warmed = False
 
 
-async def _get_warm_booking_context():
+async def _get_warm_booking_context(force_recreate: bool = False):
     """Return the shared warmed-up Browser context for Booking.com scraping.
 
     Lazy-created on first use, warmed by visiting the homepage so Booking sets
     its anti-bot cookies on us. Re-creates if the previous context was closed.
+
+    `force_recreate=True` tears down the existing context and builds a fresh
+    one with empty cookies — used between Tor circuit rotations so the new
+    exit IP doesn't carry over Booking's "this session is a bot" flag.
     """
     global _booking_ctx, _booking_ctx_warmed
     async with _booking_ctx_lock:
         # Detect dead contexts (browser restarted) and recreate
         try:
             if _booking_ctx is not None:
-                # Touch a property; if context is closed Playwright raises
                 _ = _booking_ctx.pages
         except Exception:
+            _booking_ctx = None
+            _booking_ctx_warmed = False
+
+        if force_recreate and _booking_ctx is not None:
+            try:
+                await _booking_ctx.close()
+            except Exception:
+                pass
             _booking_ctx = None
             _booking_ctx_warmed = False
 
@@ -1016,6 +1027,8 @@ async def scrape_booking_screenshot(
     timeout_ms: int = 20000,
     full_page: bool = False,
     pre_warm: bool = True,
+    fresh_context: bool = False,
+    clear_cookies: bool = False,
 ) -> Optional[bytes]:
     """Take a PNG screenshot of a Booking.com property/search page.
 
@@ -1032,15 +1045,14 @@ async def scrape_booking_screenshot(
     """
     if not booking_url:
         return None
-    # Use the shared warmed-up Booking.com context — drastically reduces
-    # anti-bot challenges on subsequent calls (cookies persist).
-    ctx = await _get_warm_booking_context()
-    try:
-        page = await ctx.new_page()
-    except Exception as e:
-        logger.warning("scrape_booking_screenshot: could not create page on warm ctx (%s) — falling back to fresh ctx", e)
+    # When `fresh_context=True` we ALWAYS create a brand-new browser context
+    # (and never touch the shared warm one). Combined with Tor circuit rotation,
+    # this gives every probe its OWN exit IP + OWN cookie jar, which prevents
+    # Booking.com from correlating successive scrapes back to a single
+    # flagged session.
+    if fresh_context:
         browser = await _get_browser()
-        ctx = await browser.new_context(
+        ctx_kwargs = dict(
             user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                         "AppleWebKit/537.36 (KHTML, like Gecko) "
                         "Chrome/120.0.0.0 Safari/537.36"),
@@ -1051,22 +1063,85 @@ async def scrape_booking_screenshot(
                 "sec-ch-ua-platform": '"Windows"',
             },
         )
+        proxy_cfg = _booking_proxy_config()
+        if proxy_cfg:
+            ctx_kwargs["proxy"] = proxy_cfg
+        ctx = await browser.new_context(**ctx_kwargs)
         page = await ctx.new_page()
         _fresh_ctx_to_close = ctx
     else:
-        _fresh_ctx_to_close = None
+        # Use the shared warmed-up Booking.com context — drastically reduces
+        # anti-bot challenges on subsequent calls (cookies persist).
+        ctx = await _get_warm_booking_context()
+        if clear_cookies:
+            # Wipe cookies between Tor circuit rotations so the new exit IP
+            # doesn't carry over Booking's "this session is a bot" flag.
+            try:
+                await ctx.clear_cookies()
+            except Exception:
+                pass
+        try:
+            page = await ctx.new_page()
+            _fresh_ctx_to_close = None
+        except Exception as e:
+            logger.warning("scrape_booking_screenshot: could not create page on warm ctx (%s) — falling back to fresh ctx", e)
+            browser = await _get_browser()
+            ctx = await browser.new_context(
+                user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/120.0.0.0 Safari/537.36"),
+                locale="en-GB",
+                viewport={"width": 1366, "height": 900},
+                extra_http_headers={
+                    "Accept-Language": "en-GB,en;q=0.9",
+                    "sec-ch-ua-platform": '"Windows"',
+                },
+            )
+            page = await ctx.new_page()
+            _fresh_ctx_to_close = ctx
     try:
         # pre_warm is now a no-op when using the shared context (already warmed
-        # at construction); we still honour the flag for the fresh-ctx fallback.
+        # at construction); for fresh contexts we visit the homepage first so
+        # anti-bot cookies are set before navigating to the deep detail URL.
         if pre_warm and _fresh_ctx_to_close is not None:
             try:
                 await page.goto("https://www.booking.com/index.en-gb.html",
                                 wait_until="domcontentloaded", timeout=timeout_ms)
-                await page.wait_for_timeout(1200)
+                await page.wait_for_timeout(1500)
             except Exception:
                 pass
         try:
-            await page.goto(booking_url, wait_until="domcontentloaded", timeout=timeout_ms)
+            # IMPORTANT: use wait_until="commit" so we fail FAST on the bot
+            # challenge response (202) — Booking's challenge page never fires
+            # `domcontentloaded` reliably in headless, so the old setting could
+            # burn the entire timeout budget on a single bad exit. With
+            # `commit` we get response headers back in ~1-3s, can check status,
+            # and bail to the next Tor circuit immediately.
+            resp = await page.goto(booking_url, wait_until="commit", timeout=timeout_ms)
+            status = resp.status if resp else 0
+            if status == 202:
+                # Bot challenge. With Tor + circuit rotation it's cheaper to
+                # abandon this exit and let the caller retry with a fresh
+                # circuit (~3s) than to wait out the challenge page (~30s).
+                try:
+                    from utils.tor_manager import tor_enabled as _tor_enabled
+                    using_tor = _tor_enabled()
+                except Exception:
+                    using_tor = False
+                if using_tor:
+                    logger.info("scrape_booking_screenshot: 202 challenge — abandoning this exit, caller may retry")
+                    return None
+                # Direct-IP path: wait it out once
+                logger.info("scrape_booking_screenshot: 202 challenge — waiting for JS resolution")
+                await page.wait_for_timeout(5000)
+            elif status and not (200 <= status < 400):
+                logger.warning("scrape_booking_screenshot: unexpected status %s on %s", status, booking_url)
+                return None
+            # Now wait for the actual content to render before screenshotting
+            try:
+                await page.wait_for_load_state("domcontentloaded", timeout=timeout_ms)
+            except Exception:
+                pass
         except Exception as e:
             logger.warning("scrape_booking_screenshot: goto failed %s — %s", booking_url, e)
             return None

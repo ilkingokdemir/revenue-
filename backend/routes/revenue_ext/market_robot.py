@@ -7167,14 +7167,6 @@ Date range: {date_from} to {date_to}."""
 
                 async def _scan_one(ci_date, sem) -> Optional[Dict[str, Optional[object]]]:
                     async with sem:
-                        # Rotate Tor circuit before each probe so each one
-                        # gets a fresh exit IP. If Tor is disabled this is a
-                        # no-op and returns False quickly.
-                        try:
-                            from utils.tor_manager import rotate_circuit
-                            await rotate_circuit()
-                        except Exception:
-                            pass
                         co_date = ci_date + timedelta(days=1)
                         url = booking_url
                         if "/hotel/" in url:
@@ -7185,45 +7177,72 @@ Date range: {date_from} to {date_to}."""
                             q.setdefault("group_adults", ["2"])
                             q.setdefault("no_rooms", ["1"])
                             url = urlunparse(p._replace(query=urlencode(q, doseq=True)))
-                        try:
-                            from utils.booking_scraper import scrape_booking_screenshot as _sbs
-                            # Hard 35-second cap per probe so a single stuck scrape
-                            # can't hold up the whole multi-date job.
-                            png = await asyncio.wait_for(_sbs(url, full_page=True), timeout=35)
-                            if not png:
-                                return None
-                            chat = LlmChat(
-                                api_key=api_key,
-                                session_id=f"rc-{property_id[:8]}-{ci_date.isoformat()}",
-                                system_message=SYSTEM,
-                            ).with_model("openai", "gpt-4o-mini")
-                            reply = await asyncio.wait_for(chat.send_message(UserMessage(
-                                text="How many rooms / apartments / units does this property have in total?",
-                                file_contents=[ImageContent(image_base64=_b64.b64encode(png).decode("ascii"))],
-                            )), timeout=25)
-                            raw = (reply or "").strip()
-                            if raw.startswith("```"):
-                                raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
+                        # Up to 6 attempts per date: rotate Tor circuit between
+                        # them. Each attempt gets a fresh exit IP + fresh
+                        # cookie jar (`fresh_context=True` below). Booking
+                        # blocks ~80% of Tor exit IPs, so we need many tries
+                        # to land on a "clean" exit. With fast-bail on 202,
+                        # each failed attempt costs only ~3-5s, so 6 retries
+                        # × 5s = ~30s worst-case per date.
+                        for attempt in range(6):
                             try:
-                                parsed = _json.loads(raw)
+                                from utils.tor_manager import rotate_circuit
+                                # Rotate twice: first call schedules NEWNYM, but
+                                # Tor enforces a 10s rate-limit between actual
+                                # circuit rebuilds. Calling twice with a small
+                                # gap reliably advances to a NEW exit relay
+                                # rather than re-using the previous one.
+                                await rotate_circuit()
+                                await asyncio.sleep(0.5)
+                                await rotate_circuit()
+                                await asyncio.sleep(2.0)
                             except Exception:
-                                parsed = {}
-                            vrc = parsed.get("room_count")
-                            if isinstance(vrc, str) and vrc.isdigit():
-                                vrc = int(vrc)
-                            if isinstance(vrc, int) and 1 <= vrc <= 2000:
-                                logger.info("Multi-date probe %s @ %s = %s (evidence=%s)",
-                                            property_id, ci_date, vrc, (parsed.get("evidence") or "")[:80])
-                                return {
-                                    "room_count": vrc,
-                                    "evidence": (parsed.get("evidence") or "")[:200],
-                                    "date": ci_date.isoformat(),
-                                    "weekday": ci_date.strftime("%a"),
-                                }
-                        except asyncio.TimeoutError:
-                            logger.warning("Multi-date scan timeout for %s @ %s", property_id, ci_date)
-                        except Exception as scan_exc:
-                            logger.warning("Multi-date scan failed for %s @ %s: %s", property_id, ci_date, scan_exc)
+                                pass
+                            try:
+                                from utils.booking_scraper import scrape_booking_screenshot as _sbs
+                                # 18s cap per attempt, warm context + cookie
+                                # reset (instead of fresh context). The warm
+                                # context reuses the Tor SOCKS connection so
+                                # each retry costs ~3-5s instead of 10-15s,
+                                # letting us cycle through far more exits.
+                                png = await asyncio.wait_for(_sbs(url, full_page=True, clear_cookies=True, timeout_ms=15000), timeout=18)
+                                if not png:
+                                    continue
+                                chat = LlmChat(
+                                    api_key=api_key,
+                                    session_id=f"rc-{property_id[:8]}-{ci_date.isoformat()}-{attempt}",
+                                    system_message=SYSTEM,
+                                ).with_model("openai", "gpt-4o-mini")
+                                reply = await asyncio.wait_for(chat.send_message(UserMessage(
+                                    text="How many rooms / apartments / units does this property have in total?",
+                                    file_contents=[ImageContent(image_base64=_b64.b64encode(png).decode("ascii"))],
+                                )), timeout=25)
+                                raw = (reply or "").strip()
+                                if raw.startswith("```"):
+                                    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.S).strip()
+                                try:
+                                    parsed = _json.loads(raw)
+                                except Exception:
+                                    parsed = {}
+                                vrc = parsed.get("room_count")
+                                if isinstance(vrc, str) and vrc.isdigit():
+                                    vrc = int(vrc)
+                                if isinstance(vrc, int) and 1 <= vrc <= 2000:
+                                    logger.info("Multi-date probe %s @ %s (try %s) = %s (evidence=%s)",
+                                                property_id, ci_date, attempt + 1, vrc,
+                                                (parsed.get("evidence") or "")[:80])
+                                    return {
+                                        "room_count": vrc,
+                                        "evidence": (parsed.get("evidence") or "")[:200],
+                                        "date": ci_date.isoformat(),
+                                        "weekday": ci_date.strftime("%a"),
+                                    }
+                            except asyncio.TimeoutError:
+                                logger.warning("Multi-date scan timeout for %s @ %s (try %s)",
+                                               property_id, ci_date, attempt + 1)
+                            except Exception as scan_exc:
+                                logger.warning("Multi-date scan failed for %s @ %s (try %s): %s",
+                                               property_id, ci_date, attempt + 1, scan_exc)
                         return None
 
                 # Run scans with limited concurrency — the shared headless Chromium
@@ -7264,6 +7283,12 @@ Date range: {date_from} to {date_to}."""
                     "booking_room_count_source": source,
                 }}
             )
+        # Surface a helpful, action-oriented message when the auto-scan can't
+        # crack Booking's anti-bot wall (commonly the case with free IP
+        # rotation since Booking blocks all Tor exit ranges at the firewall).
+        # The user already has a manual-override field for exactly this case.
+        if not rc:
+            err = err or "Booking.com tüm denenen IP'leri bot-challenge ile engelledi. Lütfen aşağıdan manuel oda sayısı girin."
         await db.room_count_jobs.update_one(
             {"property_id": property_id},
             {"$set": {

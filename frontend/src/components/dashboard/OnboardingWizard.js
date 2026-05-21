@@ -587,7 +587,10 @@ const FinishedScreen = ({ propertyId, onClose }) => {
             return true;
           }
           if (data.status === "no_data") {
-            toast.warning("Booking.com bu mülk için açık oda sayısı sergilemiyor. Lütfen aşağıdan manuel girin.");
+            toast.warning(
+              data.error || "Booking.com bu mülk için açık oda sayısı sergilemiyor. Lütfen aşağıdan manuel girin.",
+              { duration: 10000 }
+            );
             loadRoomCountState();
             return true;
           }
@@ -710,14 +713,16 @@ const FinishedScreen = ({ propertyId, onClose }) => {
               </p>
             )}
 
-            {/* Manual room count override */}
-            <div className="mt-4 pt-4 border-t border-stone-100" data-testid="manual-room-count-card">
+            {/* Manual room count override — PRIMARY way to get this right */}
+            <div className="mt-4 pt-4 border-t-2 border-fuchsia-200" data-testid="manual-room-count-card">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <h4 className="text-sm font-bold text-stone-900">Toplam Oda Sayısı</h4>
+                  <h4 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                    <span className="inline-block w-2 h-2 rounded-full bg-fuchsia-500"></span>
+                    Toplam Oda Sayısı (Manuel)
+                  </h4>
                   <p className="text-[11px] text-stone-500 mt-0.5 max-w-md">
-                    Otomatik tarama Booking.com'da sadece müsait üniteleri gösterebilir.
-                    Gerçek envanteri biliyorsanız manuel girin — bu değer her zaman önceliklidir.
+                    Performance Report'ta kullanılan oda sayısı. Otomatik tarama Booking.com'un bot-engellemesi nedeniyle çoğu zaman çalışmaz; <b className="text-fuchsia-700">gerçek envanteri biliyorsanız buraya yazın</b> — her zaman önceliklidir.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

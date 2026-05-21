@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, TrendingDown, Zap, BarChart3, Calendar, Radar, PartyPopper, Activity, RefreshCw, Wallet } from "lucide-react";
+import { TrendingUp, TrendingDown, Zap, BarChart3, Calendar, Radar, PartyPopper, Activity, RefreshCw, Wallet, Pencil, X, Check, Loader2 } from "lucide-react";
 import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
 
@@ -17,6 +18,11 @@ const SOURCE_LABELS = {
 export const PerformanceReport = ({ propertyId }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Inline editable manual room count — accessible right from the hero banner
+  // so operators don't have to navigate to Onboarding to fix a wrong count.
+  const [editingRoomCount, setEditingRoomCount] = useState(false);
+  const [roomCountInput, setRoomCountInput] = useState("");
+  const [savingRoomCount, setSavingRoomCount] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -27,6 +33,27 @@ export const PerformanceReport = ({ propertyId }) => {
   useEffect(() => { load(); }, [load]);
   // ⚡ Performance KPIs (RevPAR, ADR, occupancy) refresh every 90s
   useLivePolling(load, { intervalMs: 90000 });
+
+  const saveRoomCount = async (clear = false) => {
+    setSavingRoomCount(true);
+    try {
+      const payload = clear ? { room_count: null } : { room_count: parseInt(roomCountInput, 10) || 0 };
+      const { data: res } = await axios.post(
+        `${API}/revenue/market-robot/${propertyId}/room-count/manual`,
+        payload,
+      );
+      if (res.cleared) {
+        toast.success("Manuel oda sayısı temizlendi");
+      } else {
+        toast.success(`Oda sayısı kaydedildi: ${res.manual_room_count}`);
+      }
+      setEditingRoomCount(false);
+      setRoomCountInput("");
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Kaydetme başarısız");
+    } finally { setSavingRoomCount(false); }
+  };
 
   // Currency formatter driven by the property's configured currency.
   // Hooks must run unconditionally — derive once and gracefully fall back
@@ -61,20 +88,80 @@ export const PerformanceReport = ({ propertyId }) => {
                 <span className="ml-2 inline-flex items-center gap-1 text-[10px] text-white/40">
                   · <span className="font-mono text-emerald-200">{property_currency || "GBP"}</span>
                   {data.total_rooms ? (
-                    <span title={
-                      data.room_count_source === "manual"
-                        ? "Operator tarafından manuel girilen oda sayısı (her şeyin üstünde önceliklidir)"
-                        : data.room_count_source === "booking_com"
-                          ? "Room count scraped directly from the Booking.com hotel page"
-                          : data.room_count_source === "room_types"
-                            ? "Room count summed from your local room_types — may be inaccurate. Use 'Re-scan room count' in Onboarding to pull the real value from Booking.com."
-                            : "No room count available — using fallback of 10"
-                    }>
-                      · {data.total_rooms} rooms
-                      <span className={`ml-1 px-1 rounded text-[8px] ${data.room_count_source === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.room_count_source === "booking_com" ? "bg-sky-500/30 text-sky-200" : "bg-stone-500/30 text-stone-200"}`}>
-                        {data.room_count_source === "manual" ? "manuel" : data.room_count_source === "booking_com" ? "booking.com" : data.room_count_source === "room_types" ? "local" : "fallback"}
+                    editingRoomCount ? (
+                      <span className="inline-flex items-center gap-1 ml-2 bg-white/10 rounded-lg px-2 py-1">
+                        <input
+                          type="number"
+                          min="1"
+                          max="5000"
+                          autoFocus
+                          value={roomCountInput}
+                          onChange={(e) => setRoomCountInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveRoomCount(false);
+                            if (e.key === "Escape") { setEditingRoomCount(false); setRoomCountInput(""); }
+                          }}
+                          data-testid="hero-room-count-input"
+                          className="w-16 px-1 py-0.5 text-xs rounded bg-white/20 text-white placeholder-white/40 focus:outline-none focus:bg-white/30 border border-white/30"
+                          placeholder="9"
+                        />
+                        <button
+                          onClick={() => saveRoomCount(false)}
+                          disabled={savingRoomCount || !roomCountInput}
+                          data-testid="hero-room-count-save"
+                          className="p-1 rounded bg-emerald-500/40 hover:bg-emerald-500/60 disabled:opacity-50"
+                          title="Kaydet"
+                        >
+                          {savingRoomCount ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        </button>
+                        <button
+                          onClick={() => { setEditingRoomCount(false); setRoomCountInput(""); }}
+                          data-testid="hero-room-count-cancel"
+                          className="p-1 rounded bg-rose-500/40 hover:bg-rose-500/60"
+                          title="İptal"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                        {data.room_count_source === "manual" && (
+                          <button
+                            onClick={() => saveRoomCount(true)}
+                            disabled={savingRoomCount}
+                            data-testid="hero-room-count-clear"
+                            className="p-1 ml-1 rounded bg-amber-500/40 hover:bg-amber-500/60 text-[9px] px-1.5"
+                            title="Manuel değeri temizle (auto'ya dön)"
+                          >
+                            Temizle
+                          </button>
+                        )}
                       </span>
-                    </span>
+                    ) : (
+                      <span title={
+                        data.room_count_source === "manual"
+                          ? "Manuel girilen oda sayısı — değiştirmek için tıklayın"
+                          : data.room_count_source === "booking_com"
+                            ? "Booking.com sayfasından alındı — manuel override için tıklayın"
+                            : data.room_count_source === "room_types"
+                              ? "Lokal room_types toplamı — manuel girmek için tıklayın"
+                              : "Fallback — manuel girmek için tıklayın"
+                      }>
+                        ·{" "}
+                        <button
+                          onClick={() => {
+                            setRoomCountInput(String(data.total_rooms));
+                            setEditingRoomCount(true);
+                          }}
+                          data-testid="hero-room-count-edit"
+                          className="inline-flex items-center gap-1 hover:bg-white/10 rounded px-1.5 py-0.5 transition-colors cursor-pointer"
+                        >
+                          <span className="text-white/80 font-semibold">{data.total_rooms}</span>
+                          <span className="text-white/40">rooms</span>
+                          <Pencil className="w-2.5 h-2.5 opacity-50" />
+                          <span className={`ml-0.5 px-1 rounded text-[8px] ${data.room_count_source === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.room_count_source === "booking_com" ? "bg-sky-500/30 text-sky-200" : "bg-stone-500/30 text-stone-200"}`}>
+                            {data.room_count_source === "manual" ? "manuel" : data.room_count_source === "booking_com" ? "booking.com" : data.room_count_source === "room_types" ? "local" : "fallback"}
+                          </span>
+                        </button>
+                      </span>
+                    )
                   ) : null}
                   {data.occupancy_assumption ? (
                     <span title={`Estimated revenue = per-room uplift × ${data.total_rooms} rooms × ${Math.round(data.occupancy_assumption*100)}% occupancy (${data.occupancy_basis === "actual_30d" ? "actual last-30-day occupancy" : "70% industry-average fallback (no booking history yet)"})`}>

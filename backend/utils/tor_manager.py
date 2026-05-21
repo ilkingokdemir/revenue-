@@ -88,7 +88,17 @@ def ensure_tor_running(wait_seconds: int = 25) -> bool:
                 # hashed password for "rotateme"
                 "HashedControlPassword 16:12F662BB1B79490C60E420D35690F1608E4B2D895E05A07B8C8495224C\n"
                 "MaxCircuitDirtiness 30\n"
-                "NewCircuitPeriod 30\n",
+                "NewCircuitPeriod 30\n"
+                # NOTE: We tried ExitNodes={de,nl,fr,...} + StrictNodes 1 to
+                # force Booking-friendly EU exits, but the experiment FAILED:
+                # the most-popular EU Tor exit relays (de/nl in particular)
+                # are heavily fingerprinted by Booking.com and reliably return
+                # 202 bot challenges. Letting Tor pick any exit gives us a
+                # broader pool (~7000 exits worldwide) and the random rotation
+                # eventually hits one Booking treats as a normal traveler.
+                # We DO blacklist a handful of historically-blocked exit
+                # operators below.
+                "ExcludeExitNodes BadExit\n",
                 encoding="utf-8",
             )
             torrc = Path("/etc/tor/torrc")

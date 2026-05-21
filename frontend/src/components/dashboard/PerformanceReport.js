@@ -684,12 +684,52 @@ export const PerformanceReport = ({ propertyId }) => {
                     </div>
                   </div>
                 </div>
-                {/* Expense items breakdown */}
-                <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 md:grid-cols-5 gap-2" data-testid="net-profit-items">
+                {/* Category breakdown — horizontal bars sorted by share */}
+                {af.expenses.by_category && af.expenses.by_category.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/10" data-testid="net-profit-categories">
+                    <p className="text-[10px] text-white/50 uppercase mb-2">Kategori Dağılımı</p>
+                    <div className="space-y-1.5">
+                      {af.expenses.by_category.map((b, idx) => {
+                        // 8 distinct colors for the top categories
+                        const palette = [
+                          "from-fuchsia-400 to-fuchsia-600",
+                          "from-violet-400 to-violet-600",
+                          "from-indigo-400 to-indigo-600",
+                          "from-sky-400 to-sky-600",
+                          "from-emerald-400 to-emerald-600",
+                          "from-amber-400 to-amber-600",
+                          "from-rose-400 to-rose-600",
+                          "from-stone-400 to-stone-600",
+                        ];
+                        const colorClass = palette[idx % palette.length];
+                        return (
+                          <div key={b.category} className="flex items-center gap-2" data-testid={`category-row-${idx}`}>
+                            <div className="w-32 shrink-0 text-[11px] text-white/80 font-bold truncate" title={b.category}>{b.category}</div>
+                            <div className="flex-1 h-5 bg-white/5 rounded overflow-hidden relative">
+                              <div
+                                className={`h-full bg-gradient-to-r ${colorClass} transition-all`}
+                                style={{ width: `${Math.max(2, b.share_pct)}%` }}
+                              />
+                              <span className="absolute inset-0 flex items-center px-2 text-[10px] font-bold text-white/90">
+                                {b.share_pct}%
+                              </span>
+                            </div>
+                            <div className="w-28 text-right text-xs font-bold text-rose-200">{cur(b.annual_amount)}</div>
+                            <div className="w-6 text-[10px] text-white/40 text-center">{b.item_count}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* Raw items grid (compact) */}
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-5 gap-1.5" data-testid="net-profit-items">
                   {af.expenses.items.map((x, idx) => (
-                    <div key={idx} className="bg-white/5 rounded-lg px-2 py-1.5">
-                      <p className="text-[10px] text-white/50 capitalize truncate" title={x.label}>{x.label}</p>
-                      <p className="text-xs font-bold text-rose-200">
+                    <div key={idx} className="bg-white/5 rounded px-2 py-1">
+                      <p className="text-[9px] text-white/40 capitalize truncate" title={`${x.label} (${x.category || "Diğer"})`}>
+                        {x.label} <span className="text-white/30">· {x.category || "Diğer"}</span>
+                      </p>
+                      <p className="text-[11px] font-bold text-rose-200">
                         {cur(x.amount)}
                         <span className="text-[9px] text-white/40 ml-1">/{x.period === "monthly" ? "ay" : "yıl"}</span>
                       </p>

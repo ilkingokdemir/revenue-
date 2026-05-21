@@ -27,6 +27,21 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
   const [existing, setExisting] = useState([]);
   const [existingExpenses, setExistingExpenses] = useState([]);
   const [loadingExisting, setLoadingExisting] = useState(true);
+  const [categories, setCategories] = useState([
+    "Kira", "Komisyon", "Vergi", "Personel", "Temizlik", "Bakım & Onarım",
+    "Enerji & Su", "İnternet & İletişim", "Pazarlama", "Sigorta",
+    "Belediye/Council", "Yiyecek & İçecek", "Yönetim & Ofis",
+    "Yazılım & Abonelik", "Banka & Komisyon Ücretleri", "Diğer",
+  ]);
+
+  // Fetch canonical category list from backend once
+  useEffect(() => {
+    let cancelled = false;
+    axios.get(`${API}/revenue/market-robot/expense-categories`).then(r => {
+      if (!cancelled && r.data?.categories?.length) setCategories(r.data.categories);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Load any previously saved YoY rows + expenses on open
   useEffect(() => {
@@ -42,7 +57,8 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
           // doesn't have to re-enter them when uploading a new revenue file).
           if (r.data.expenses && r.data.expenses.length > 0) {
             setExpenseRows(r.data.expenses.map(x => ({
-              label: x.label, amount: x.amount, period: x.period || "annual"
+              label: x.label, amount: x.amount, period: x.period || "annual",
+              category: x.category || "Diğer",
             })));
           }
         }
@@ -75,7 +91,11 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
         setExpenseRows(prev => {
           const byLabel = new Map(prev.map(x => [x.label.toLowerCase(), x]));
           for (const x of parsedExp) {
-            byLabel.set(x.label.toLowerCase(), { label: x.label, amount: x.amount, period: x.period || "annual" });
+            byLabel.set(x.label.toLowerCase(), {
+              label: x.label, amount: x.amount,
+              period: x.period || "annual",
+              category: x.category || "Diğer",
+            });
           }
           return Array.from(byLabel.values());
         });
@@ -117,7 +137,7 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
     setExpenseRows(prev => prev.filter((_, i) => i !== idx));
   };
   const addExp = () => {
-    setExpenseRows(prev => [...prev, { label: "", amount: 0, period: "annual" }]);
+    setExpenseRows(prev => [...prev, { label: "", amount: 0, period: "annual", category: "Diğer" }]);
   };
 
   const handleSave = async () => {
@@ -150,6 +170,7 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
           label: x.label.toString().trim(),
           amount: parseFloat(x.amount),
           period: (x.period || "annual").toLowerCase(),
+          category: (x.category || "Diğer").toString(),
         })),
         source_kind: preview?.source_kind || "manual",
         replace_expenses: true,
@@ -406,8 +427,9 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                   <thead className="bg-stone-50 text-stone-600 text-xs uppercase">
                     <tr>
                       <th className="px-3 py-2 text-left">Kalem</th>
+                      <th className="px-3 py-2 text-left w-44">Kategori</th>
                       <th className="px-3 py-2 text-right">Tutar</th>
-                      <th className="px-3 py-2 text-left w-28">Periyot</th>
+                      <th className="px-3 py-2 text-left w-24">Periyot</th>
                       <th className="px-3 py-2 w-10"></th>
                     </tr>
                   </thead>
@@ -422,6 +444,16 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                             placeholder="Rent, Komisyon, Council, Temizlik..."
                             className="w-full px-2 py-1 border border-stone-200 rounded text-sm focus:outline-none focus:border-indigo-400"
                           />
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={x.category || "Diğer"}
+                            onChange={(e) => updateExp(idx, "category", e.target.value)}
+                            data-testid={`yoy-exp-category-${idx}`}
+                            className="w-full px-2 py-1 border border-stone-200 rounded text-sm focus:outline-none focus:border-indigo-400"
+                          >
+                            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
                         </td>
                         <td className="px-3 py-2 text-right">
                           <input
@@ -457,7 +489,7 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                     ))}
                     {expenseRows.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="px-3 py-6 text-center text-xs text-stone-400">
+                        <td colSpan={5} className="px-3 py-6 text-center text-xs text-stone-400">
                           Henüz gider satırı yok — alttan "Manuel gider ekle" ile başlayın veya bir dosya yükleyin.
                         </td>
                       </tr>

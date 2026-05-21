@@ -3156,6 +3156,29 @@ def create_market_robot_router(db, require_roles, resend=None):
         0.92,  # Dec — Christmas/NYE bump
     ]
 
+    def _build_expense_category_breakdown(items: List[Dict], annual_total: float) -> List[Dict]:
+        """Group expense items by category → return ordered list of
+        {category, annual_amount, share_pct, item_count} for pie/bar charts."""
+        from utils.yoy_parser import classify_expense
+        buckets: Dict[str, Dict] = {}
+        for x in items:
+            label = str(x.get("label") or "")
+            cat = str(x.get("category") or "").strip() or classify_expense(label)
+            amt = float(x.get("amount") or 0)
+            if amt <= 0:
+                continue
+            annual_amt = amt * 12 if str(x.get("period", "annual")).lower() == "monthly" else amt
+            b = buckets.setdefault(cat, {"category": cat, "annual_amount": 0.0, "item_count": 0})
+            b["annual_amount"] += annual_amt
+            b["item_count"] += 1
+        out = []
+        for b in buckets.values():
+            b["annual_amount"] = round(b["annual_amount"], 2)
+            b["share_pct"] = round((b["annual_amount"] / annual_total) * 100, 1) if annual_total > 0 else 0
+            out.append(b)
+        out.sort(key=lambda r: r["annual_amount"], reverse=True)
+        return out
+
     def _build_annual_revenue_forecast(*, base_rate: float, total_rooms: int,
                                        occupancy_factor: float, start_date,
                                        monthly_adr_overrides: Optional[Dict[str, float]] = None,
@@ -3596,6 +3619,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             "monthly_avg": monthly_expense_total,
             "annual_net_revenue": annual_net,
             "net_margin_pct": round((annual_net / annual_gross) * 100, 1) if annual_gross > 0 else 0,
+            "by_category": _build_expense_category_breakdown(expense_rows, annual_expense_total),
         }
 
         return {
@@ -7901,6 +7925,7 @@ Date range: {date_from} to {date_to}."""
             await db.property_yoy_history.insert_many([dict(r) for r in rows])
 
         # ── Expense rows ──
+        from utils.yoy_parser import classify_expense as _classify_exp, EXPENSE_CATEGORY_NAMES as _CATS
         exp_rows: List[Dict] = []
         for x in expenses:
             try:
@@ -7909,11 +7934,18 @@ Date range: {date_from} to {date_to}."""
                 period = str(x.get("period") or "annual").lower()
                 if not label or amt <= 0 or period not in ("annual", "monthly"):
                     continue
+                # User-provided category wins, else classifier-default. Always
+                # validated against the canonical list so future analytics can
+                # safely group by category without nulls.
+                cat = str(x.get("category") or "").strip()
+                if not cat or cat not in _CATS:
+                    cat = _classify_exp(label)
                 exp_rows.append({
                     "property_id": property_id,
                     "label": label,
                     "amount": round(amt, 2),
                     "period": period,
+                    "category": cat,
                     "source": f"upload_{source_kind}",
                     "uploaded_by": uploader,
                     "uploaded_at": now_iso,
@@ -7955,6 +7987,13 @@ Date range: {date_from} to {date_to}."""
             q["month_key"] = month_key
         res = await db.property_yoy_history.delete_many(q)
         return {"ok": True, "deleted_count": res.deleted_count}
+
+    @router.get("/revenue/market-robot/expense-categories")
+    async def yoy_expense_categories(current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Return the canonical list of expense category names used by the
+        upload modal dropdown. Centralised here so FE/BE stay in sync."""
+        from utils.yoy_parser import EXPENSE_CATEGORY_NAMES
+        return {"categories": EXPENSE_CATEGORY_NAMES}
 
     @router.delete("/revenue/market-robot/{property_id}/yoy-expenses")
     async def yoy_expenses_clear(property_id: str,

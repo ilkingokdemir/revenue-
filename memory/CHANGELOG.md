@@ -1,5 +1,18 @@
 # Changelog — Hotel PMS & Revenue Management
 
+## 2026-05-21 — Gider Kategorileri + Yatırımcı Dostu Kategori Dağılım Grafiği
+- **Backend** (`utils/yoy_parser.py` + `market_robot.py`):
+  - 16 standart kategori: Kira, Komisyon, Vergi, Personel, Temizlik, Bakım & Onarım, Enerji & Su, İnternet & İletişim, Pazarlama, Sigorta, Belediye/Council, Yiyecek & İçecek, Yönetim & Ofis, Yazılım & Abonelik, Banka & Komisyon Ücretleri, Diğer.
+  - `classify_expense(label)` — çoklu dil keyword matching (rent→Kira, council→Belediye/Council, stripe→Banka...).
+  - Parser otomatik upload sırasında her gider'e kategori atıyor.
+  - Confirm endpoint kategori'yi saklıyor + frontend'den gelen user override'ı canonical liste ile validate ediyor.
+  - Yeni `GET /revenue/market-robot/expense-categories` endpoint'i (FE dropdown source).
+  - Performance response'da yeni `annual_forecast.expenses.by_category[]` — `{category, annual_amount, share_pct, item_count}` (yıllık tutara göre sıralı).
+- **Frontend Modal**: Her gider satırına **Kategori dropdown** eklendi (16 seçenek). Otomatik classification varsayılan; user override'layabilir.
+- **Frontend Performance Report**: Yıllık Net Kâr strip'inde yeni **"Kategori Dağılımı"** bölümü — sıralı renkli horizontal bar grafiği, her bar üzerinde %, sağda yıllık tutar, sonda item sayısı. Yatırımcı sunumlarına direkt yansıtılabilir.
+- **Test**: Pytest 3/3 PASS (`test_yoy_expense_categories.py`) + diğer regression testler.
+- **Camden örneği**: Kira %61, Komisyon %22, Temizlik %10, Belediye %7 otomatik tespit.
+
 ## 2026-05-21 — Net Kâr (Gelir − Gider) Performance Report'a eklendi
 - **Goal**: Operatör yıllık/aylık net kârını aynı sayfada görsün.
 - **Backend** (`market_robot.py` + `utils/yoy_parser.py`):

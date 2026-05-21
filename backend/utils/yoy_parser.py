@@ -25,7 +25,59 @@ from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
+# ─────────────────────────────────────────────────────────────────────────
+# Expense category taxonomy — used both for auto-classification on upload
+# and as the UI dropdown list. Each entry is (canonical_label, keywords).
+# The classifier matches whichever category has the largest keyword overlap
+# with the user's label text. Keywords are intentionally multilingual
+# (English + Turkish) since operators often type a mix.
+# ─────────────────────────────────────────────────────────────────────────
+EXPENSE_CATEGORIES: List[Tuple[str, List[str]]] = [
+    ("Kira",            ["rent", "kira", "leasing", "lease"]),
+    ("Komisyon",        ["commission", "comissoin", "komisyon", "booking fee", "ota fee", "channel"]),
+    ("Vergi",           ["tax", "vergi", "kdv", "vat", "stopaj", "withholding"]),
+    ("Personel",        ["salary", "salaries", "personel", "maaş", "maas", "wages", "payroll", "staff", "tip", "bonus"]),
+    ("Temizlik",        ["temizlik", "cleaning", "leaning", "housekeeping", "laundry", "çamaşır", "camasir", "linen"]),
+    ("Bakım & Onarım",  ["bakım", "bakim", "onarım", "onarim", "maintenance", "repair", "tamir"]),
+    ("Enerji & Su",     ["elektrik", "electricity", "energy", "enerji", "gas", "doğalgaz", "dogalgaz", "su", "water", "utility", "utilities"]),
+    ("İnternet & İletişim", ["internet", "iletişim", "iletisim", "telecom", "phone", "telefon", "wifi"]),
+    ("Pazarlama",       ["marketing", "pazarlama", "reklam", "advertising", "advert", "ads", "seo", "ppc"]),
+    ("Sigorta",         ["sigorta", "insurance", "policy"]),
+    ("Belediye/Council", ["council", "belediye", "municipal", "rates", "property tax"]),
+    ("Yiyecek & İçecek", ["food", "beverage", "f&b", "fb", "yiyecek", "içecek", "icecek", "kahvaltı", "kahvalti", "breakfast"]),
+    ("Yönetim & Ofis",  ["admin", "yönetim", "yonetim", "office", "ofis", "muhasebe", "accounting", "legal", "avukat"]),
+    ("Yazılım & Abonelik", ["software", "yazılım", "yazilim", "subscription", "abonelik", "saas", "pms"]),
+    ("Banka & Komisyon Ücretleri", ["bank", "banka", "fee", "ödeme", "odeme", "stripe", "iyzico", "payment"]),
+]
+
+# Convenience: ordered list of canonical names for FE dropdown
+EXPENSE_CATEGORY_NAMES: List[str] = [c[0] for c in EXPENSE_CATEGORIES] + ["Diğer"]
+
+
+def classify_expense(label: str) -> str:
+    """Return the best-matching canonical category for an expense label,
+    or 'Diğer' (Other) if nothing matches."""
+    if not label:
+        return "Diğer"
+    t = label.strip().lower()
+    if not t:
+        return "Diğer"
+    best = ("Diğer", 0)
+    for canon, keywords in EXPENSE_CATEGORIES:
+        score = 0
+        for kw in keywords:
+            if kw in t:
+                # Longer keyword matches outweigh shorter ones (e.g. "council"
+                # should beat "cou…" overlap).
+                score = max(score, len(kw))
+        if score > best[1]:
+            best = (canon, score)
+    return best[0]
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # Month name → number lookup (English + Turkish, full + abbreviations)
+# ─────────────────────────────────────────────────────────────────────────
 _MONTH_MAP: Dict[str, int] = {}
 for i, names in enumerate([
     ["january", "jan", "ocak", "oca"],
@@ -198,6 +250,7 @@ def extract_expenses_from_spreadsheet(df) -> List[Dict]:
                 "label": label_val.strip(),
                 "amount": round(amount_val, 2),
                 "period": "annual",  # default; user can edit in UI
+                "category": classify_expense(label_val),
             })
     return expenses
 
@@ -381,6 +434,7 @@ def parse_text_block(text: str, default_year: int) -> Tuple[List[Dict], List[Dic
                 "label": label_part,
                 "amount": round(amount, 2),
                 "period": "annual",
+                "category": classify_expense(label_part),
             })
     return sorted(by_key.values(), key=lambda x: x["month_key"]), expenses
 

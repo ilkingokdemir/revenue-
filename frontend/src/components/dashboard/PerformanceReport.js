@@ -38,6 +38,9 @@ export const PerformanceReport = ({ propertyId }) => {
   // YoY historical-revenue upload modal (PDF/JPG/Excel/CSV → feeds YoY comparison)
   const [yoyUploadOpen, setYoyUploadOpen] = useState(false);
 
+  // Last-minute discount saving state (handler defined after `load`)
+  const [savingLm, setSavingLm] = useState(false);
+
   const load = useCallback(() => {
     setLoading(true);
     axios.get(`${API}/revenue/market-robot/${propertyId}/performance`)
@@ -45,6 +48,18 @@ export const PerformanceReport = ({ propertyId }) => {
       .catch(() => setLoading(false));
   }, [propertyId]);
   useEffect(() => { load(); }, [load]);
+  // Last-minute discount handler (uses `load` defined above)
+  const saveLastMinute = useCallback(async (next) => {
+    setSavingLm(true);
+    try {
+      await axios.post(`${API}/revenue/market-robot/${propertyId}/last-minute-discount`, next);
+      load();
+    } catch (e) {
+      // surfaced via global error handler
+    } finally {
+      setSavingLm(false);
+    }
+  }, [propertyId, load]);
   // ⚡ Performance KPIs (RevPAR, ADR, occupancy) refresh every 90s
   useLivePolling(load, { intervalMs: 90000 });
 
@@ -598,6 +613,67 @@ export const PerformanceReport = ({ propertyId }) => {
                 )}
               </button>
             </div>
+            {/* Last-Minute Discount preset buttons — applied to monthly & annual forecast */}
+            <div className="mt-3 rounded-xl bg-white/5 border border-white/10 p-2.5 flex items-center justify-between gap-3 flex-wrap" data-testid="last-minute-controls">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-300" />
+                <p className="text-xs font-bold text-white/90">Last-Minute İskonto</p>
+                {af.last_minute?.enabled && (
+                  <span className="text-[10px] text-amber-300/80">
+                    aktif · -%{af.last_minute.discount_pct} · gecelerin %{af.last_minute.share_pct}'i
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5">
+                {[10, 20, 30].map(pct => {
+                  const isActive = af.last_minute?.enabled && Math.round(af.last_minute.discount_pct) === pct;
+                  return (
+                    <button
+                      key={pct}
+                      disabled={savingLm}
+                      onClick={() => saveLastMinute({ enabled: true, discount_pct: pct, share_pct: af.last_minute?.share_pct || 20 })}
+                      data-testid={`lm-discount-${pct}`}
+                      className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors disabled:opacity-50 ${isActive ? "bg-amber-400 text-amber-950" : "bg-white/10 hover:bg-white/20 text-white/80"}`}
+                      title={`Gecelerin %${af.last_minute?.share_pct || 20}'ini -%${pct} iskonto ile sat (forecast'a yansır)`}
+                    >
+                      -%{pct}
+                    </button>
+                  );
+                })}
+                {af.last_minute?.enabled && (
+                  <button
+                    disabled={savingLm}
+                    onClick={() => saveLastMinute({ enabled: false, discount_pct: 0, share_pct: af.last_minute?.share_pct || 20 })}
+                    data-testid="lm-discount-off"
+                    className="ml-1 px-2 py-1 rounded text-[11px] font-bold bg-rose-500/30 hover:bg-rose-500/50 text-rose-100 disabled:opacity-50"
+                    title="Last-minute iskontosunu kapat"
+                  >
+                    Kapat
+                  </button>
+                )}
+                <div className="ml-1 border-l border-white/15 pl-2 flex items-center gap-1">
+                  <span className="text-[10px] text-white/50">% gece:</span>
+                  <input
+                    type="number"
+                    min="0" max="100"
+                    value={af.last_minute?.share_pct || 20}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value);
+                      if (!isNaN(v) && v >= 0 && v <= 100) {
+                        saveLastMinute({ enabled: af.last_minute?.enabled || false, discount_pct: af.last_minute?.discount_pct || 0, share_pct: v });
+                      }
+                    }}
+                    data-testid="lm-share-input"
+                    className="w-12 px-1 py-0.5 bg-white/10 rounded text-[11px] text-white text-center focus:outline-none focus:bg-white/20"
+                  />
+                </div>
+                {af.last_minute?.enabled && af.last_minute.total_savings > 0 && (
+                  <span className="ml-2 text-[10px] text-amber-200/90 border-l border-white/15 pl-2" title="12 ay boyunca toplam last-minute iskonto tutarı">
+                    Toplam etki: -{cur(af.last_minute.total_savings)}
+                  </span>
+                )}
+              </div>
+            </div>
             <div className="grid grid-cols-12 gap-1.5 h-44 mt-1 items-end" data-testid="annual-forecast-chart">
               {af.monthly.map((m, idx) => {
                 const h = Math.max((m.revenue / maxRev) * 100, 4);
@@ -614,7 +690,7 @@ export const PerformanceReport = ({ propertyId }) => {
                       {cur(m.revenue)}
                     </div>
                     <div
-                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? `Booking.com canlı${m.scrape_meta?.sample_size ? `, ${m.scrape_meta.sample_size} gün ortalaması (£${m.scrape_meta.min_price}-£${m.scrape_meta.max_price})` : ""}` : "tahmin"}) · doluluk %${m.occupancy_pct}${m.prev_year_revenue > 0 ? ` · Geçen yıl gerçek: ${cur(m.prev_year_revenue)} (${m.yoy_delta_pct >= 0 ? "+" : ""}${m.yoy_delta_pct}%)` : ""}${m.expense > 0 ? ` · Aylık gider: ${cur(m.expense)} → Net: ${cur(m.net_revenue)}` : ""}`}
+                      title={`${m.label}: ${cur(m.revenue)} · ADR ${cur(m.adr)} (${m.adr_origin === "scraped" ? `Booking.com canlı${m.scrape_meta?.sample_size ? `, ${m.scrape_meta.sample_size} gün ortalaması (£${m.scrape_meta.min_price}-£${m.scrape_meta.max_price})` : ""}` : "tahmin"}) · doluluk %${m.occupancy_pct}${m.last_minute_discount > 0 ? ` · LM iskonto: -${cur(m.last_minute_discount)} (gross £${m.gross_revenue.toLocaleString()})` : ""}${m.prev_year_revenue > 0 ? ` · Geçen yıl gerçek: ${cur(m.prev_year_revenue)} (${m.yoy_delta_pct >= 0 ? "+" : ""}${m.yoy_delta_pct}%)` : ""}${m.expense > 0 ? ` · Aylık gider: ${cur(m.expense)} → Net: ${cur(m.net_revenue)}` : ""}`}
                       className={`w-full rounded-t-md transition-all hover:opacity-90 ${colorClass}`}
                       style={{ height: `${h}%` }}
                     />

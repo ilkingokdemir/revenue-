@@ -3182,8 +3182,14 @@ def create_market_robot_router(db, require_roles, resend=None):
     def _build_annual_revenue_forecast(*, base_rate: float, total_rooms: int,
                                        occupancy_factor: float, start_date,
                                        monthly_adr_overrides: Optional[Dict[str, float]] = None,
-                                       horizon_months: int = 12) -> dict:
+                                       horizon_months: int = 12,
+                                       last_minute: Optional[Dict] = None) -> dict:
         """Forward-looking N-month room revenue projection (default 12 months).
+
+        Optional last-minute discount layer: `last_minute = {enabled, discount_pct, share_pct}`.
+        When enabled, `share_pct` of nights are assumed sold at `discount_pct` off →
+        applied to both monthly rows and annual total so operators see the
+        true after-discount forecast.
 
         Methodology (same maths as Hotel Revenue Lab's "Sadece Oda" mode):
             monthly_revenue = ADR_for_month × rooms × days_in_month × occupancy × season_mult
@@ -3198,6 +3204,12 @@ def create_market_robot_router(db, require_roles, resend=None):
         annual_total = 0.0   # First 12 months
         biennial_total = 0.0  # Full horizon (typically 24)
         scraped_months = 0
+        # Normalise last-minute discount config
+        lm_enabled = bool(last_minute and last_minute.get("enabled"))
+        lm_disc = max(0.0, min(50.0, float((last_minute or {}).get("discount_pct") or 0))) / 100.0
+        lm_share = max(0.0, min(100.0, float((last_minute or {}).get("share_pct") or 0))) / 100.0
+        lm_factor = 1.0 - (lm_disc * lm_share) if lm_enabled else 1.0
+        annual_lm_savings = 0.0
         cur_y = start_date.year
         cur_m = start_date.month
         for i in range(horizon_months):
@@ -3214,8 +3226,10 @@ def create_market_robot_router(db, require_roles, resend=None):
             else:
                 adr_used = base_rate
                 adr_origin = "estimated"
-            month_revenue = adr_used * total_rooms * days_in_month * occupancy_factor * season_mult
-            month_revenue = round(month_revenue, 2)
+            gross_revenue = adr_used * total_rooms * days_in_month * occupancy_factor * season_mult
+            month_revenue = round(gross_revenue * lm_factor, 2)
+            month_lm_discount = round(gross_revenue - month_revenue, 2)
+            annual_lm_savings += month_lm_discount
             biennial_total += month_revenue
             if i < 12:
                 annual_total += month_revenue
@@ -3230,6 +3244,8 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "adr": round(adr_used, 2),
                 "adr_origin": adr_origin,
                 "revenue": month_revenue,
+                "gross_revenue": round(gross_revenue, 2),
+                "last_minute_discount": month_lm_discount,
             })
         rev_par = annual_total / (total_rooms * 365) if total_rooms else 0
         avg_occupancy = sum(m["occupancy_pct"] for m in monthly[:12]) / 12.0 if monthly else 0
@@ -3243,7 +3259,15 @@ def create_market_robot_router(db, require_roles, resend=None):
             "avg_occupancy_pct": round(avg_occupancy, 1),
             "total_rooms": total_rooms,
             "scraped_months_count": scraped_months,
-            "methodology": "ADR × oda × günler × doluluk × sezonalite" + (f" · {scraped_months}/{horizon_months} ay canlı Booking.com fiyatlarıyla" if scraped_months else ""),
+            "last_minute": {
+                "enabled": lm_enabled,
+                "discount_pct": round(lm_disc * 100, 1),
+                "share_pct": round(lm_share * 100, 1),
+                "annual_savings": round(annual_lm_savings if horizon_months >= 12 else (annual_lm_savings * 12 / max(horizon_months, 1)), 2),
+                "total_savings": round(annual_lm_savings, 2),
+                "factor": round(lm_factor, 4),
+            },
+            "methodology": "ADR × oda × günler × doluluk × sezonalite" + (f" · {scraped_months}/{horizon_months} ay canlı Booking.com fiyatlarıyla" if scraped_months else "") + (f" · -%{round(lm_disc*100)} last-minute iskontosu (gecelerin %{round(lm_share*100)}'inde)" if lm_enabled else ""),
         }
 
 
@@ -3262,7 +3286,8 @@ def create_market_robot_router(db, require_roles, resend=None):
              "booking_room_count": 1, "booking_room_count_scanned_at": 1,
              "manual_room_count": 1, "manual_room_count_set_at": 1,
              "manual_adr": 1, "manual_adr_set_at": 1,
-             "manual_occupancy": 1, "manual_occupancy_set_at": 1}
+             "manual_occupancy": 1, "manual_occupancy_set_at": 1,
+             "last_minute_discount": 1}
         )
         property_currency = (prop.get("currency") if prop else None) or "GBP"
 
@@ -3520,6 +3545,9 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "event_days": mi["events"],
             })
 
+        # Last-minute discount config (operator-set; defaults to disabled).
+        lm_cfg = (prop or {}).get("last_minute_discount") or {}
+
         # Build annual forecast first so we can attach YoY comparison alongside it
         annual_forecast = _build_annual_revenue_forecast(
             base_rate=base_rate,
@@ -3527,6 +3555,7 @@ def create_market_robot_router(db, require_roles, resend=None):
             occupancy_factor=occupancy_factor,
             start_date=now.date(),
             monthly_adr_overrides=monthly_adr_overrides,
+            last_minute=lm_cfg,
         )
         # Attach scrape provenance to each forecast month so the UI can display
         # "ADR averaged from N days" tooltips and audit data origin.
@@ -8085,6 +8114,46 @@ Date range: {date_from} to {date_to}."""
         """Clear all uploaded YoY expense rows for the property."""
         res = await db.property_yoy_expenses.delete_many({"property_id": property_id})
         return {"ok": True, "deleted_count": res.deleted_count}
+
+    @router.post("/revenue/market-robot/{property_id}/last-minute-discount")
+    async def set_last_minute_discount(property_id: str,
+                                       payload: dict,
+                                       current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Configure the last-minute discount layer that gets applied to the
+        annual revenue forecast.
+        Payload: {enabled: bool, discount_pct: 0-50, share_pct: 0-100}
+            • discount_pct = 10/20/30 (or any custom 0-50)
+            • share_pct = expected % of nights sold at last-minute
+              (default 20% — a healthy assumption for most city hotels)
+        """
+        enabled = bool(payload.get("enabled"))
+        discount_pct = float(payload.get("discount_pct") or 0)
+        share_pct = float(payload.get("share_pct") or 20)
+        if not (0 <= discount_pct <= 50):
+            raise HTTPException(400, "discount_pct must be 0-50")
+        if not (0 <= share_pct <= 100):
+            raise HTTPException(400, "share_pct must be 0-100")
+        cfg = {
+            "enabled": enabled,
+            "discount_pct": round(discount_pct, 1),
+            "share_pct": round(share_pct, 1),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_by": (current_user or {}).get("email") or "unknown",
+        }
+        await db.properties.update_one(
+            {"id": property_id},
+            {"$set": {"last_minute_discount": cfg}},
+            upsert=False,
+        )
+        return {"ok": True, "last_minute_discount": cfg}
+
+    @router.get("/revenue/market-robot/{property_id}/last-minute-discount")
+    async def get_last_minute_discount(property_id: str,
+                                       current_user: dict = Depends(require_roles("admin", "manager"))):
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "last_minute_discount": 1})
+        return {"property_id": property_id, "last_minute_discount": (prop or {}).get("last_minute_discount") or {
+            "enabled": False, "discount_pct": 0, "share_pct": 20
+        }}
 
 
     @router.get("/revenue/market-robot/{property_id}/room-count")

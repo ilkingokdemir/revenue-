@@ -3,7 +3,20 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
-### 2026-05-22 (iter 350 — Last-Minute Discount: Tahmini → Net görünümü ✅ COMPLETE)
+### 2026-05-22 (iter 351 — ADR/RevPAR matematik tutarlılık fix ✅ COMPLETE)
+- **Kullanıcı raporu**: "camden adr 80 iken revpar nasil 93 olabilir arada bag kurlmamis"
+- **Root cause**: `_build_annual_revenue_forecast` `adr` alanı olarak `base_rate`'i echo ediyordu; aylık scraped Booking.com fiyatları çok daha yüksek olunca effective ADR < RevPAR çelişkisi doğdu.
+- **Fix** (`/app/backend/routes/revenue_ext/market_robot.py`):
+  - `effective_adr_gross = annual_gross / total_room_nights_sold` (room-nights ağırlıklı).
+  - Yeni alanlar: `adr_base_rate` (fallback), `adr_net` (LM sonrası), `revpar_net` (LM sonrası).
+  - Hero `revpar` artık gross-based (annual_gross/(rooms×365)), `revpar_net` ayrı alan olarak yayınlanıyor.
+- **Frontend** (`PerformanceReport.js`):
+  - ADR badge: `scraped_months_count > 0` ise "etkin (N/12 scrape)" gösteriyor (eski "manuel" değil).
+  - RevPAR tile: LM aktifken altta küçük yeşil "Net: £XX" satırı, gross-net ayrımı net.
+- **Test**: `/app/backend/tests/test_adr_revpar_consistency.py` (1/1 PASSED) + frontend testing agent (iter 332). 4 seeded property için RevPAR ≤ ADR invariant doğrulandı.
+- **Doğrulanan değerler**: camden ADR=182 RevPAR=132 (Occ 72.6%), aldgate ADR=120 RevPAR=102, whitechapel ADR=186 RevPAR=131, default ADR=186 RevPAR=29.
+
+### 2026-05-22 (iter 350 — Last-Minute Discount: Tahmini → Net + share_pct=100 default ✅ COMPLETE)
 - **Kullanıcı isteği**: "tahmini cirodan discount dustukten sonra net ciro goster toplam ve aylik"
 - **Backend** (`/app/backend/routes/revenue_ext/market_robot.py`):
   - `_build_annual_revenue_forecast` artık `annual_gross_revenue` alanını da döndürüyor (LM iskontosu uygulanmadan önce 12 ayın gross toplamı).

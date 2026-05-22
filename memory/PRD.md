@@ -3,6 +3,19 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-05-22 (iter 350 — Last-Minute Discount: Tahmini → Net görünümü ✅ COMPLETE)
+- **Kullanıcı isteği**: "tahmini cirodan discount dustukten sonra net ciro goster toplam ve aylik"
+- **Backend** (`/app/backend/routes/revenue_ext/market_robot.py`):
+  - `_build_annual_revenue_forecast` artık `annual_gross_revenue` alanını da döndürüyor (LM iskontosu uygulanmadan önce 12 ayın gross toplamı).
+  - `last_minute.total_savings` ve aylık `gross_revenue`/`last_minute_discount` zaten mevcuttu.
+- **Frontend** (`/app/frontend/src/components/dashboard/PerformanceReport.js`):
+  - Yeni "Tahmini → Net (LM sonrası)" şeridi (data-testid="lm-net-strip"): yıllık gross (üstü çizili) → -LM iskonto → Net (yeşil).
+  - 12 aylık tahmini→net mini grid (data-testid="lm-monthly-grid"): her ay için gross üstü çizili + net bold yeşil.
+  - Her bar üstünde gross değer üstü çizili gösteriliyor (LM aktifken).
+  - Hero "Yıllık Toplam" tile'ı LM aktifken "Net Yıllık (LM sonrası)" oluyor ve altta "Tahmini: …" gross değeri çizili gösteriliyor.
+- **Test**: `/app/backend/tests/test_last_minute_discount.py` (2/2 passed) + Frontend testing agent (iter 331 100% pass — tüm 11 data-testid doğrulandı, enable/disable döngüsü çalışıyor).
+
+
 ### 2026-05-20 (iter 349 — Tor-based Free IP Rotation for Booking.com ✅ COMPLETE)
 - **Kullanıcı isteği**: "her seferinde VPN üzerinden IP değişsin, ücret ödemek istemiyorum"
 - **Çözüm**: Local Tor SOCKS proxy + circuit rotation per multi-date scrape

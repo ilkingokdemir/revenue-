@@ -442,19 +442,19 @@ export const PerformanceReport = ({ propertyId }) => {
                     ) : (
                       <button
                         onClick={() => {
-                          setAdrInput(String(af.adr));
+                          setAdrInput(String(af.adr_base_rate ?? af.adr));
                           setEditingAdr(true);
                         }}
                         data-testid="hero-adr-edit"
                         className="inline-flex items-center gap-1 hover:bg-white/10 rounded px-1 py-0.5 transition-colors cursor-pointer text-white/80"
-                        title={data.adr_source === "manual" ? "Manuel ADR — değiştirmek için tıklayın" : "Otomatik ADR (room_types ortalaması) — manuel girmek için tıklayın"}
+                        title={`Etkin ADR (12 ay ağırlıklı ortalama): ${cur(af.adr)}\nBase rate / fallback: ${cur(af.adr_base_rate ?? af.adr)}${af.scraped_months_count > 0 ? `\n${af.scraped_months_count}/12 ay canlı Booking.com fiyatı` : ""}\n\nManuel ADR'yi değiştirmek için tıklayın.`}
                       >
                         <span className="font-semibold">{cur(af.adr)}</span>
                         <span>ADR</span>
                         <Pencil className="w-2.5 h-2.5 opacity-50" />
-                        <span className={`px-1 rounded text-[8px] ${data.adr_source === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.adr_source === "booking_com_scraped" ? "bg-emerald-500/30 text-emerald-200" : data.adr_source === "aggregated_branches" ? "bg-sky-500/30 text-sky-200" : data.adr_source === "room_types" ? "bg-stone-500/30 text-stone-200" : "bg-amber-500/30 text-amber-200"}`}
-                              title={data.adr_source === "booking_com_scraped" ? "Booking.com'dan canlı scrape edilmiş aylık fiyatların ortalaması" : data.adr_source === "aggregated_branches" ? "Tüm şubelerden scrape edilmiş canlı ADR'lerin ortalaması" : data.adr_source === "manual" ? "Manuel olarak ayarlandı" : data.adr_source === "room_types" ? "Yerel oda tipi fiyatlarının ortalaması" : "Hiçbir veri yok — 100 GBP fallback"}>
-                          {data.adr_source === "manual" ? "manuel" : data.adr_source === "booking_com_scraped" ? "booking.com" : data.adr_source === "aggregated_branches" ? "çoklu şube ort." : data.adr_source === "room_types" ? "auto" : "fallback"}
+                        <span className={`px-1 rounded text-[8px] ${af.scraped_months_count > 0 ? "bg-emerald-500/30 text-emerald-200" : data.adr_source === "manual" ? "bg-fuchsia-500/30 text-fuchsia-200" : data.adr_source === "booking_com_scraped" ? "bg-emerald-500/30 text-emerald-200" : data.adr_source === "aggregated_branches" ? "bg-sky-500/30 text-sky-200" : data.adr_source === "room_types" ? "bg-stone-500/30 text-stone-200" : "bg-amber-500/30 text-amber-200"}`}
+                              title={af.scraped_months_count > 0 ? `${af.scraped_months_count}/12 ay canlı Booking.com fiyatı ile ağırlıklandırıldı (base: ${cur(af.adr_base_rate)})` : data.adr_source === "booking_com_scraped" ? "Booking.com'dan canlı scrape edilmiş aylık fiyatların ortalaması" : data.adr_source === "aggregated_branches" ? "Tüm şubelerden scrape edilmiş canlı ADR'lerin ortalaması" : data.adr_source === "manual" ? "Manuel base rate olarak ayarlandı" : data.adr_source === "room_types" ? "Yerel oda tipi fiyatlarının ortalaması" : "Hiçbir veri yok — 100 GBP fallback"}>
+                          {af.scraped_months_count > 0 ? `etkin (${af.scraped_months_count}/12 scrape)` : data.adr_source === "manual" ? "manuel" : data.adr_source === "booking_com_scraped" ? "booking.com" : data.adr_source === "aggregated_branches" ? "çoklu şube ort." : data.adr_source === "room_types" ? "auto" : "fallback"}
                         </span>
                       </button>
                     )}
@@ -483,8 +483,13 @@ export const PerformanceReport = ({ propertyId }) => {
                   )}
                 </div>
                 <div>
-                  <p className="text-[9px] text-white/50 uppercase">RevPAR</p>
-                  <p className="text-xl font-black text-sky-300">{cur(af.revpar)}</p>
+                  <p className="text-[9px] text-white/50 uppercase">RevPAR{af.last_minute?.enabled && af.last_minute.total_savings > 0 ? " (gross)" : ""}</p>
+                  <p className="text-xl font-black text-sky-300" title={`RevPAR = Ciro / (Oda × 365) = ${cur(af.adr)} × %${af.avg_occupancy_pct} = ${cur(af.revpar)}${af.last_minute?.enabled && af.last_minute.total_savings > 0 ? `\nLM sonrası net RevPAR: ${cur(af.revpar_net)}` : ""}`} data-testid="hero-revpar">{cur(af.revpar)}</p>
+                  {af.last_minute?.enabled && af.last_minute.total_savings > 0 && (
+                    <p className="text-[9px] text-emerald-300/80" title="LM iskontosu sonrası gerçekleşen RevPAR">
+                      Net: {cur(af.revpar_net)}
+                    </p>
+                  )}
                 </div>
                 {af.yoy_comparison && af.yoy_comparison.prev_year_total_revenue > 0 ? (
                   <div data-testid="yoy-tile" title={`Geçen yıl (${af.yoy_comparison.months_with_history} ay): ${cur(af.yoy_comparison.prev_year_total_revenue)} → bu yıl aynı aylar: ${cur(af.yoy_comparison.this_year_forecast_revenue)}. Karşılaştırma sadece geçmiş veri bulunan aylar üzerinden yapılır.`}>

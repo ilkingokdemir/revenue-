@@ -3247,17 +3247,33 @@ def create_market_robot_router(db, require_roles, resend=None):
                 "gross_revenue": round(gross_revenue, 2),
                 "last_minute_discount": month_lm_discount,
             })
-        rev_par = annual_total / (total_rooms * 365) if total_rooms else 0
-        avg_occupancy = sum(m["occupancy_pct"] for m in monthly[:12]) / 12.0 if monthly else 0
+        # Effective ADR = ağırlıklı ortalama oda gecesi başına ücret (gross, LM
+        # iskontosu uygulanmadan önce). base_rate sadece scrape edilmemiş aylar
+        # için fallback; gerçek yıllık ortalama scrape'lenen aylarla çok daha
+        # yüksek olabilir, bu yüzden room-nights ile ağırlıklandırıyoruz.
         annual_gross = sum(m["gross_revenue"] for m in monthly[:12])
+        total_room_nights_sold_12 = sum(
+            total_rooms * m["days"] * (m["occupancy_pct"] / 100.0) for m in monthly[:12]
+        )
+        effective_adr_gross = (annual_gross / total_room_nights_sold_12) if total_room_nights_sold_12 > 0 else float(base_rate)
+        effective_adr_net = (annual_total / total_room_nights_sold_12) if total_room_nights_sold_12 > 0 else float(base_rate)
+        # RevPAR = total revenue / total available room nights (rooms × 365)
+        revpar_gross = annual_gross / (total_rooms * 365) if total_rooms else 0
+        revpar_net = annual_total / (total_rooms * 365) if total_rooms else 0
+        avg_occupancy = sum(m["occupancy_pct"] for m in monthly[:12]) / 12.0 if monthly else 0
         return {
             "annual_revenue": round(annual_total, 2),
             "annual_gross_revenue": round(annual_gross, 2),
             "biennial_revenue": round(biennial_total, 2),
             "horizon_months": horizon_months,
             "monthly": monthly,
-            "adr": round(base_rate, 2),
-            "revpar": round(rev_par, 2),
+            # Hero ADR = effective gross ADR (room-nights ile ağırlıklı). Eski
+            # davranış (base_rate'i echo) RevPAR > ADR çelişkisine yol açıyordu.
+            "adr": round(effective_adr_gross, 2),
+            "adr_net": round(effective_adr_net, 2),
+            "adr_base_rate": round(base_rate, 2),  # rate-card / fallback ADR
+            "revpar": round(revpar_gross, 2),
+            "revpar_net": round(revpar_net, 2),
             "avg_occupancy_pct": round(avg_occupancy, 1),
             "total_rooms": total_rooms,
             "scraped_months_count": scraped_months,

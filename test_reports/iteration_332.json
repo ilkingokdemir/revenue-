@@ -1,0 +1,71 @@
+{
+  "summary": "ADR/RevPAR Bug Fix Verification (Iter 332) - Backend API PASSED, Frontend code review PASSED. The bug where RevPAR > ADR (mathematically impossible) has been fixed. Backend now computes effective_adr_gross = annual_gross / total_room_nights_sold (room-nights weighted) instead of echoing base_rate. All 4 seeded properties verified via API: camden-suites ADR=£182.22 RevPAR=£132.46 ✓, aldgate-flats ADR=£119.97 RevPAR=£101.74 ✓, whitechapel-hotel ADR=£185.65 RevPAR=£131.2 ✓, default ADR=£185.74 RevPAR=£29.08 ✓. All satisfy RevPAR ≤ ADR invariant.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Session management",
+        "issue": "Session frequently times out during navigation between pages, requiring re-login. This prevented full UI verification but does not affect the ADR/RevPAR fix.",
+        "affected_selectors": ["login form"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_adr_revpar_consistency.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend fix verified: _build_annual_revenue_forecast now computes effective_adr_gross = annual_gross / total_room_nights_sold (lines 3254-3258 in market_robot.py)",
+    "Frontend correctly displays af.adr (effective ADR) at line 452 in PerformanceReport.js",
+    "ADR badge correctly shows 'etkin (X/12 scrape)' when scraped_months_count > 0 (line 457)",
+    "RevPAR tile correctly shows gross value with data-testid='hero-revpar' (line 487)",
+    "When LM enabled, RevPAR tile shows 'Net: £XX' below gross value (lines 488-491)",
+    "Math verification: camden-suites ADR=182.22 × Occupancy=72.6% = 132.29 ≈ RevPAR=132.46 ✓"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (4/4 properties verified via API - all satisfy RevPAR ≤ ADR)",
+    "frontend": "Code review PASSED - UI navigation blocked by session timeout issue"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing seeded properties",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "ADR/RevPAR bug fix verified via backend API. The fix computes effective ADR as room-nights weighted average instead of echoing base_rate. Navigation path: Login → REVENUE & RATES → Revenue management → Market Robot (in Intelligence section) → Performance subtab → Select specific property (NOT All Branches). Session timeout issue may require re-login during navigation.",
+  "verified_api_responses": {
+    "camden-suites": {
+      "adr": 182.22,
+      "adr_base_rate": 80.0,
+      "revpar_gross": 132.46,
+      "revpar_net": 92.72,
+      "avg_occupancy_pct": 72.6,
+      "scraped_months": "11/12",
+      "lm_enabled": true,
+      "lm_discount_pct": 30,
+      "revpar_lte_adr": true
+    },
+    "aldgate-flats": {
+      "adr": 119.97,
+      "revpar": 101.74,
+      "occupancy": 84.7,
+      "revpar_lte_adr": true
+    },
+    "whitechapel-hotel": {
+      "adr": 185.65,
+      "revpar": 131.2,
+      "occupancy": 70.6,
+      "revpar_lte_adr": true
+    },
+    "default": {
+      "adr": 185.74,
+      "revpar": 29.08,
+      "occupancy": 15.6,
+      "revpar_lte_adr": true
+    }
+  }
+}

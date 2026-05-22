@@ -3,6 +3,17 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-05-22 (iter 352 — Manuel ADR sovereign override fix ✅ COMPLETE)
+- **Kullanıcı raporu**: "adr manuel degistiryorum ama degismiyor adr manuel degistirince revparda degismesi gerek degismiyor"
+- **Root cause**: `monthly_adr_overrides` (Booking.com scraped fiyatlar) her zaman base_rate'i domine ediyordu. Manuel ADR sadece scrape edilmemiş aylar için fallback olarak kullanılıyordu, yani 11/12 ay scraped olunca manuel değişiklik görünmüyordu.
+- **Fix** (`/app/backend/routes/revenue_ext/market_robot.py:3513`):
+  ```python
+  if adr_source == "manual":
+      monthly_adr_overrides = {}  # manuel sovereign — scraped ignore
+  ```
+- **Sonuç**: Manuel ADR=150 → effective ADR=150, RevPAR=109. Manuel ADR=200 → effective=200, RevPAR=145. Anında yansıyor.
+- **Test**: `/app/backend/tests/test_manual_adr_override.py` (1/1 PASSED) — 3 farklı manuel değerle (120, 175, 250) doğrulandı.
+
 ### 2026-05-22 (iter 351 — ADR/RevPAR matematik tutarlılık fix ✅ COMPLETE)
 - **Kullanıcı raporu**: "camden adr 80 iken revpar nasil 93 olabilir arada bag kurlmamis"
 - **Root cause**: `_build_annual_revenue_forecast` `adr` alanı olarak `base_rate`'i echo ediyordu; aylık scraped Booking.com fiyatları çok daha yüksek olunca effective ADR < RevPAR çelişkisi doğdu.

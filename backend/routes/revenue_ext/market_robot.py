@@ -3510,7 +3510,15 @@ def create_market_robot_router(db, require_roles, resend=None):
         # base_rate calculation). When present these override the global
         # `base_rate` per matching month in the annual forecast, giving us
         # actual market-priced revenue projections.
-        monthly_adr_overrides = {r["month_key"]: float(r["adr"]) for r in scraped_rows if r.get("adr")}
+        # IMPORTANT: when the operator has set a manual_adr explicitly, that
+        # value is sovereign — we do NOT let scraped monthly overrides win,
+        # otherwise changing the manual ADR has no visible effect on the hero
+        # tile (effective ADR stays dominated by scraped data). User mental
+        # model is: "I typed X → show X → recompute RevPAR from X".
+        if adr_source == "manual":
+            monthly_adr_overrides = {}
+        else:
+            monthly_adr_overrides = {r["month_key"]: float(r["adr"]) for r in scraped_rows if r.get("adr")}
         # Sample-size metadata so the UI can show "based on N days" tooltips.
         scraped_meta_by_key = {r["month_key"]: {
             "sample_size": int(r.get("sample_size") or 0),

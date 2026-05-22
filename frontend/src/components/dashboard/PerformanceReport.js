@@ -636,7 +636,7 @@ export const PerformanceReport = ({ propertyId }) => {
                     <button
                       key={pct}
                       disabled={savingLm}
-                      onClick={() => saveLastMinute({ enabled: true, discount_pct: pct, share_pct: af.last_minute?.share_pct ?? 100 })}
+                      onClick={() => saveLastMinute({ enabled: true, discount_pct: pct, share_pct: 100 })}
                       data-testid={`lm-discount-${pct}`}
                       className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors disabled:opacity-50 ${isActive ? "bg-amber-400 text-amber-950" : "bg-white/10 hover:bg-white/20 text-white/80"}`}
                       title={`Toplam ciroyu -%${pct} indir${(af.last_minute?.share_pct ?? 100) < 100 ? ` (gecelerin %${af.last_minute.share_pct}'i için)` : ""}`}

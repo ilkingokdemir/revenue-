@@ -8130,7 +8130,9 @@ Date range: {date_from} to {date_to}."""
         """
         enabled = bool(payload.get("enabled"))
         discount_pct = float(payload.get("discount_pct") or 0)
-        share_pct = float(payload.get("share_pct") or 20)
+        # Default share_pct = 100 → -X% preset = X% straight off gross revenue
+        # (matches operator expectation: "click -30% → 30% off the total").
+        share_pct = float(payload.get("share_pct") if payload.get("share_pct") is not None else 100)
         if not (0 <= discount_pct <= 50):
             raise HTTPException(400, "discount_pct must be 0-50")
         if not (0 <= share_pct <= 100):
@@ -8154,7 +8156,7 @@ Date range: {date_from} to {date_to}."""
                                        current_user: dict = Depends(require_roles("admin", "manager"))):
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "last_minute_discount": 1})
         return {"property_id": property_id, "last_minute_discount": (prop or {}).get("last_minute_discount") or {
-            "enabled": False, "discount_pct": 0, "share_pct": 20
+            "enabled": False, "discount_pct": 0, "share_pct": 100
         }}
 
 

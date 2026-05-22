@@ -625,7 +625,7 @@ export const PerformanceReport = ({ propertyId }) => {
                 <p className="text-xs font-bold text-white/90">Last-Minute İskonto</p>
                 {af.last_minute?.enabled && (
                   <span className="text-[10px] text-amber-300/80">
-                    aktif · -%{af.last_minute.discount_pct} · gecelerin %{af.last_minute.share_pct}'i
+                    aktif · -%{af.last_minute.discount_pct}{af.last_minute.share_pct < 100 ? ` · gecelerin %${af.last_minute.share_pct}'i` : " · tüm ciroya"}
                   </span>
                 )}
               </div>
@@ -636,10 +636,10 @@ export const PerformanceReport = ({ propertyId }) => {
                     <button
                       key={pct}
                       disabled={savingLm}
-                      onClick={() => saveLastMinute({ enabled: true, discount_pct: pct, share_pct: af.last_minute?.share_pct || 20 })}
+                      onClick={() => saveLastMinute({ enabled: true, discount_pct: pct, share_pct: af.last_minute?.share_pct ?? 100 })}
                       data-testid={`lm-discount-${pct}`}
                       className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors disabled:opacity-50 ${isActive ? "bg-amber-400 text-amber-950" : "bg-white/10 hover:bg-white/20 text-white/80"}`}
-                      title={`Gecelerin %${af.last_minute?.share_pct || 20}'ini -%${pct} iskonto ile sat (forecast'a yansır)`}
+                      title={`Toplam ciroyu -%${pct} indir${(af.last_minute?.share_pct ?? 100) < 100 ? ` (gecelerin %${af.last_minute.share_pct}'i için)` : ""}`}
                     >
                       -%{pct}
                     </button>
@@ -648,7 +648,7 @@ export const PerformanceReport = ({ propertyId }) => {
                 {af.last_minute?.enabled && (
                   <button
                     disabled={savingLm}
-                    onClick={() => saveLastMinute({ enabled: false, discount_pct: 0, share_pct: af.last_minute?.share_pct || 20 })}
+                    onClick={() => saveLastMinute({ enabled: false, discount_pct: 0, share_pct: af.last_minute?.share_pct ?? 100 })}
                     data-testid="lm-discount-off"
                     className="ml-1 px-2 py-1 rounded text-[11px] font-bold bg-rose-500/30 hover:bg-rose-500/50 text-rose-100 disabled:opacity-50"
                     title="Last-minute iskontosunu kapat"
@@ -656,12 +656,12 @@ export const PerformanceReport = ({ propertyId }) => {
                     Kapat
                   </button>
                 )}
-                <div className="ml-1 border-l border-white/15 pl-2 flex items-center gap-1">
+                <div className="ml-1 border-l border-white/15 pl-2 flex items-center gap-1" title="Gecelerin yüzde kaçına bu iskonto uygulanacak? Varsayılan 100 (tümü). Daha gerçekçi senaryo için düşürebilirsiniz.">
                   <span className="text-[10px] text-white/50">% gece:</span>
                   <input
                     type="number"
                     min="0" max="100"
-                    value={af.last_minute?.share_pct || 20}
+                    value={af.last_minute?.share_pct ?? 100}
                     onChange={(e) => {
                       const v = parseFloat(e.target.value);
                       if (!isNaN(v) && v >= 0 && v <= 100) {

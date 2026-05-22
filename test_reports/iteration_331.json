@@ -1,0 +1,58 @@
+{
+  "summary": "Last-Minute Discount Feature (Iter 331) - Frontend PASSED. All required data-testid elements verified: lm-net-strip, annual-gross, annual-lm-savings, annual-net, lm-monthly-grid, hero-annual-revenue, lm-discount-10/20/30, lm-discount-off. LM enable/disable flow works correctly. Hero tile label switches between 'Yıllık Toplam' and 'Net Yıllık (LM sonrası)'. Bar chart shows gross figures (struck-through) above net figures when LM enabled.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_last_minute_discount.py"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "LM discount controls correctly show -%10/-%20/-%30 preset buttons with active state highlighting",
+    "lm-net-strip correctly displays Tahmini Yıllık (gross, struck-through) → LM İskonto (negative) → Net Yıllık (green)",
+    "Hero tile correctly switches label to 'Net Yıllık (LM sonrası)' and shows gross figure struck-through underneath",
+    "lm-monthly-grid correctly renders 12 monthly cells with gross (struck-through) and net (bold green) values",
+    "Bar chart correctly shows gross figures above net figures when LM enabled",
+    "Kapat button correctly disables LM and reverts all UI elements to non-LM state"
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (verified via API - LM enabled: true, discount_pct: 20, total_savings: 46049)",
+    "frontend": "100% (all 11 data-testid elements verified, enable/disable flow works)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing aldgate-flats property with LM config",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Last-Minute discount feature fully tested. Navigation: Login → REVENUE & RATES → Revenue management → Market Robot → Performance tab → Select specific property (not All Branches). LM controls appear in the Annual Forecast card. Clicking -%10/-%20/-%30 enables LM with that discount percentage. Kapat button disables LM. Backend endpoints: POST /api/revenue/market-robot/{property_id}/last-minute-discount, GET /api/revenue/market-robot/{property_id}/performance (returns last_minute object with enabled, discount_pct, share_pct, total_savings, and monthly gross_revenue/last_minute_discount).",
+  "verified_features": {
+    "lm_enabled_state": {
+      "lm-net-strip": "PRESENT - shows Tahmini Yıllık £1,151,225 → LM İskonto -£46,049 → Net Yıllık £1,105,176",
+      "annual-gross": "£1,151,225",
+      "annual-lm-savings": "-£46,049",
+      "annual-net": "£1,105,176",
+      "lm-monthly-grid": "PRESENT with 12 cells showing gross (struck-through) and net values",
+      "hero-annual-revenue": "£1,105,176 (net value)",
+      "hero-tile-label": "Net Yıllık (LM sonrası)",
+      "hero-gross-struck": "Tahmini: £1,151,225 (struck-through)",
+      "lm-discount-off": "PRESENT (Kapat button)",
+      "lm-discount-10": "PRESENT",
+      "lm-discount-20": "PRESENT (active/highlighted)",
+      "lm-discount-30": "PRESENT",
+      "annual-forecast-chart": "PRESENT with 12 struck-through gross values above net values"
+    },
+    "lm_disabled_state": {
+      "lm-net-strip": "REMOVED",
+      "lm-discount-off": "REMOVED",
+      "hero-tile-label": "Yıllık Toplam",
+      "hero-annual-revenue": "£1,151,225 (gross value, no struck-through)"
+    }
+  },
+  "navigation_notes": "To reach Performance tab: Login → REVENUE & RATES (sidebar header) → Revenue management → Market Robot (in Intelligence section) → Performance subtab. Must select a specific property (e.g., Aldgate Flats) to see LM controls - All Branches view does not show LM feature."
+}

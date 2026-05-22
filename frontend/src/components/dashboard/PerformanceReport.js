@@ -474,8 +474,13 @@ export const PerformanceReport = ({ propertyId }) => {
               </div>
               <div className="grid grid-cols-4 gap-3 text-right">
                 <div>
-                  <p className="text-[9px] text-white/50 uppercase">Yıllık Toplam</p>
-                  <p className="text-xl font-black text-emerald-300">{cur(af.annual_revenue)}</p>
+                  <p className="text-[9px] text-white/50 uppercase">{af.last_minute?.enabled && af.last_minute.total_savings > 0 ? "Net Yıllık (LM sonrası)" : "Yıllık Toplam"}</p>
+                  <p className="text-xl font-black text-emerald-300" data-testid="hero-annual-revenue">{cur(af.annual_revenue)}</p>
+                  {af.last_minute?.enabled && af.last_minute.total_savings > 0 && (
+                    <p className="text-[9px] text-stone-300/70 line-through decoration-amber-300/50" title="LM iskontosu uygulanmadan önceki tahmini yıllık ciro">
+                      Tahmini: {cur(af.annual_gross_revenue)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-[9px] text-white/50 uppercase">RevPAR</p>
@@ -674,7 +679,44 @@ export const PerformanceReport = ({ propertyId }) => {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-12 gap-1.5 h-44 mt-1 items-end" data-testid="annual-forecast-chart">
+            {/* Tahmini → Net ciro karşılaştırma şeridi (LM iskontosu sonrası) */}
+            {af.last_minute?.enabled && af.last_minute.total_savings > 0 && (
+              <div className="mt-3 rounded-xl bg-gradient-to-r from-amber-900/30 to-emerald-900/30 border border-amber-300/20 p-3" data-testid="lm-net-strip">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-300" />
+                    <p className="text-xs font-bold text-white/90">Yıllık Tahmini → Net (LM iskontosu sonrası)</p>
+                    <span className="text-[10px] text-white/40">-%{af.last_minute.discount_pct} · gecelerin %{af.last_minute.share_pct}'i</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-right">
+                    <div>
+                      <p className="text-[9px] text-white/40 uppercase">Tahmini Yıllık</p>
+                      <p className="text-sm font-bold text-stone-200 line-through decoration-amber-300/50" data-testid="annual-gross">{cur(af.annual_gross_revenue)}</p>
+                    </div>
+                    <div className="text-white/30">−</div>
+                    <div>
+                      <p className="text-[9px] text-white/40 uppercase">LM İskonto</p>
+                      <p className="text-sm font-bold text-amber-300" data-testid="annual-lm-savings">-{cur(af.last_minute.total_savings)}</p>
+                    </div>
+                    <div className="border-l border-white/20 pl-4">
+                      <p className="text-[9px] text-white/40 uppercase">Net Yıllık</p>
+                      <p className="text-base font-black text-emerald-300" data-testid="annual-net">{cur(af.annual_revenue)}</p>
+                    </div>
+                  </div>
+                </div>
+                {/* Aylık tahmini → net mini liste */}
+                <div className="mt-3 grid grid-cols-6 sm:grid-cols-12 gap-1.5 text-center" data-testid="lm-monthly-grid">
+                  {af.monthly.map((m, idx) => (
+                    <div key={idx} className="rounded bg-white/5 border border-white/10 px-1 py-1" title={`${m.label} · Tahmini: ${cur(m.gross_revenue)} → LM: -${cur(m.last_minute_discount)} → Net: ${cur(m.revenue)}`}>
+                      <p className="text-[9px] text-white/40">{m.label.split(" ")[0]}</p>
+                      <p className="text-[9px] text-stone-300/70 line-through">{cur(m.gross_revenue)}</p>
+                      <p className="text-[10px] font-bold text-emerald-300">{cur(m.revenue)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-12 gap-1.5 h-44 mt-3 items-end" data-testid="annual-forecast-chart">
               {af.monthly.map((m, idx) => {
                 const h = Math.max((m.revenue / maxRev) * 100, 4);
                 const isScraped = m.adr_origin === "scraped";
@@ -686,6 +728,11 @@ export const PerformanceReport = ({ propertyId }) => {
                     : "bg-gradient-to-t from-violet-500 to-violet-300";
                 return (
                   <div key={idx} className="flex flex-col items-center gap-1 group">
+                    {af.last_minute?.enabled && m.last_minute_discount > 0 && (
+                      <div className="text-[8px] text-stone-300/60 line-through decoration-amber-300/50">
+                        {cur(m.gross_revenue)}
+                      </div>
+                    )}
                     <div className="text-[9px] font-bold text-white/70 group-hover:text-white transition-colors">
                       {cur(m.revenue)}
                     </div>

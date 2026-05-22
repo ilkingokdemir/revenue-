@@ -3249,8 +3249,10 @@ def create_market_robot_router(db, require_roles, resend=None):
             })
         rev_par = annual_total / (total_rooms * 365) if total_rooms else 0
         avg_occupancy = sum(m["occupancy_pct"] for m in monthly[:12]) / 12.0 if monthly else 0
+        annual_gross = sum(m["gross_revenue"] for m in monthly[:12])
         return {
             "annual_revenue": round(annual_total, 2),
+            "annual_gross_revenue": round(annual_gross, 2),
             "biennial_revenue": round(biennial_total, 2),
             "horizon_months": horizon_months,
             "monthly": monthly,

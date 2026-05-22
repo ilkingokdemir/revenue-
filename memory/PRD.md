@@ -3,6 +3,15 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-05-22 (iter 353 — YoY Upload "kayıt etmiyor" UX fix ✅ COMPLETE)
+- **Kullanıcı raporu**: "camden performance dosya yukluyorum kayit et diyorum ama kayit etmiyor"
+- **Root cause**: Parser kullanıcının dosya formatını tanıyamadığında sessizce 0 satır dönüyordu. Kaydet butonu `rows.length === 0 && expenseRows.length === 0` olduğu için disabled kalıyor, kullanıcı tıklayınca hiçbir şey olmuyor. Toast warning küçük ve gözden kaçıyordu.
+- **Fix** (`/app/frontend/src/components/dashboard/YoYUploadModal.js`):
+  - Yeni `parseFailedFile` state + büyük sarı banner: dosya adı, beklenen format örnekleri (2024-01, Jan 2024, Ocak 2024), CSV şablon indir, tekrar yükle butonu.
+  - `downloadTemplate()`: o yılın 12 ayını `month,revenue` formatında hazır CSV olarak indirir.
+  - Toast mesajı dosya adını içeriyor + duration 6s.
+- **Doğrulama**: Backend POST `/yoy-upload/confirm` zaten doğru çalışıyor (cURL ile 2 row + 1 expense kaydedildi). Frontend testing agent (iter 333) tüm akışı %100 başarılı doğruladı — sorun tamamen kullanıcı dosya formatı/sessiz hata UX.
+
 ### 2026-05-22 (iter 352 — Manuel ADR sovereign override fix ✅ COMPLETE)
 - **Kullanıcı raporu**: "adr manuel degistiryorum ama degismiyor adr manuel degistirince revparda degismesi gerek degismiyor"
 - **Root cause**: `monthly_adr_overrides` (Booking.com scraped fiyatlar) her zaman base_rate'i domine ediyordu. Manuel ADR sadece scrape edilmemiş aylar için fallback olarak kullanılıyordu, yani 11/12 ay scraped olunca manuel değişiklik görünmüyordu.

@@ -33,6 +33,21 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
     "Belediye/Council", "Yiyecek & İçecek", "Yönetim & Ofis",
     "Yazılım & Abonelik", "Banka & Komisyon Ücretleri", "Diğer",
   ]);
+  const [parseFailedFile, setParseFailedFile] = useState(null);
+
+  // Download a ready-to-use CSV template so users have a known-good format.
+  const downloadTemplate = () => {
+    const yr = new Date().getFullYear() - 1;
+    const csv = [
+      "month,revenue",
+      ...Array.from({ length: 12 }, (_, i) => `${yr}-${String(i + 1).padStart(2, "0")},0`),
+    ].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `yoy_template_${yr}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   // Fetch canonical category list from backend once
   useEffect(() => {
@@ -103,8 +118,10 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
       const incCount = (r.data.entries || []).length;
       const expCount = parsedExp.length;
       if (incCount === 0 && expCount === 0) {
-        toast.warning("Dosyada satır bulunamadı. Manuel girebilirsiniz.");
+        setParseFailedFile(f.name);
+        toast.warning(`'${f.name}' dosyasından satır okunamadı — format kontrol edin veya manuel ekleyin.`, { duration: 6000 });
       } else {
+        setParseFailedFile(null);
         toast.success(`${incCount} ay + ${expCount} gider kalemi okundu — kontrol edip kaydedin.`);
       }
     } catch (err) {
@@ -279,6 +296,53 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
                 </>
               )}
             </button>
+          )}
+          {/* Parser failed → prominent guidance banner */}
+          {parseFailedFile && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4" data-testid="yoy-parse-failed-banner">
+              <div className="flex items-start gap-3">
+                <div className="text-2xl leading-none">⚠️</div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-amber-900">
+                    "{parseFailedFile}" dosyasından geçerli satır bulunamadı
+                  </p>
+                  <p className="text-xs text-amber-800 mt-1.5">
+                    Parser şu formatları bekliyor:
+                  </p>
+                  <ul className="text-[11px] text-amber-800 mt-1 ml-4 list-disc space-y-0.5">
+                    <li>Ay kolonu: <code className="bg-amber-100 px-1 rounded">2024-01</code>, <code className="bg-amber-100 px-1 rounded">Jan 2024</code>, <code className="bg-amber-100 px-1 rounded">Ocak 2024</code>, <code className="bg-amber-100 px-1 rounded">01/2024</code></li>
+                    <li>Gelir kolonu: pozitif sayı (örn. <code className="bg-amber-100 px-1 rounded">12345.67</code>, <code className="bg-amber-100 px-1 rounded">£12.345,67</code>)</li>
+                    <li>Excel/CSV → ilk sütun ay, ikinci sütun gelir önerilir</li>
+                  </ul>
+                  <div className="mt-3 flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={downloadTemplate}
+                      data-testid="yoy-download-template"
+                      className="text-xs px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold inline-flex items-center gap-1"
+                    >
+                      <Upload className="w-3 h-3 rotate-180" />
+                      CSV Şablonu İndir
+                    </button>
+                    <button
+                      onClick={() => { setParseFailedFile(null); fileInputRef.current?.click(); }}
+                      data-testid="yoy-retry-upload"
+                      className="text-xs px-2.5 py-1 bg-white hover:bg-amber-100 text-amber-900 rounded font-bold border border-amber-300 inline-flex items-center gap-1"
+                    >
+                      Tekrar Yükle
+                    </button>
+                    <span className="text-[11px] text-amber-700/80">veya aşağıdan manuel ekleyin →</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setParseFailedFile(null)}
+                  data-testid="yoy-parse-failed-dismiss"
+                  className="p-1 rounded hover:bg-amber-100"
+                  title="Kapat"
+                >
+                  <X className="w-4 h-4 text-amber-700" />
+                </button>
+              </div>
+            </div>
           )}
           {/* Smaller add-file button when tables are already populated */}
           {!preview && (rows.length > 0 || expenseRows.length > 0) && (

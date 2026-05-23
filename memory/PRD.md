@@ -3,6 +3,15 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-05-23 (iter 354 — YoY Save Success Overlay UX ✅ COMPLETE)
+- **Kullanıcı isteği**: "ok uygula next action and potansiyel iyilestirme" — kayıt sonrası tam-ekran yeşil onay overlay'i.
+- **Implementation** (`YoYUploadModal.js`):
+  - Yeni `saveSuccess` state + `data-testid="yoy-save-success-overlay"`.
+  - Save başarılı olunca emerald-600/95 backdrop + büyük check icon + "Kaydedildi!" heading + "N ay gelir + M gider" + açıklama metni.
+  - 1.8 saniye gösterim → modal otomatik kapanır (setTimeout).
+- **Bonus bug fix** (`PerformanceReport.js`): Testing agent buldu — `onSaved` callback'i `setYoyUploadOpen(false)` çağırıyordu, modal overlay görünmeden unmount oluyordu. `onSaved={() => {}}` yapıldı, `load()` `onClose`'a taşındı.
+- **Doğrulama**: Frontend testing agent (iter 335) — overlay 500ms içinde göründü, 1.8s gösterildi, modal otomatik kapandı, Performance Report load() ile yenilendi.
+
 ### 2026-05-22 (iter 353 — YoY Upload "kayıt etmiyor" UX fix ✅ COMPLETE)
 - **Kullanıcı raporu**: "camden performance dosya yukluyorum kayit et diyorum ama kayit etmiyor"
 - **Root cause**: Parser kullanıcının dosya formatını tanıyamadığında sessizce 0 satır dönüyordu. Kaydet butonu `rows.length === 0 && expenseRows.length === 0` olduğu için disabled kalıyor, kullanıcı tıklayınca hiçbir şey olmuyor. Toast warning küçük ve gözden kaçıyordu.

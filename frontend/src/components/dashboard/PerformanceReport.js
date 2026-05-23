@@ -1065,8 +1065,8 @@ export const PerformanceReport = ({ propertyId }) => {
         <YoYUploadModal
           propertyId={propertyId}
           cur={cur}
-          onClose={() => setYoyUploadOpen(false)}
-          onSaved={() => { setYoyUploadOpen(false); load(); }}
+          onClose={() => { setYoyUploadOpen(false); load(); }}
+          onSaved={() => {}}
         />
       )}
     </div>

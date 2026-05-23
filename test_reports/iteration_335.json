@@ -1,0 +1,42 @@
+{
+  "summary": "YoY Save Success Overlay UX Enhancement - VERIFIED WORKING after bug fix. The green emerald overlay (data-testid='yoy-save-success-overlay') now appears for ~1.8s after clicking Kaydet, showing check icon + 'Kaydedildi!' heading + 'N ay gelir + M gider' count + explanatory text. Modal auto-closes after overlay display.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_335.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "FIXED: PerformanceReport.js line 1069 - onSaved callback was immediately closing modal before overlay could render. Changed from 'onSaved={() => { setYoyUploadOpen(false); load(); }}' to 'onSaved={() => {}}' so modal stays open for overlay display, and moved load() to onClose callback."
+  ],
+  "updated_files": ["/app/frontend/src/components/dashboard/PerformanceReport.js"],
+  "success_rate": {"backend": "N/A - not tested", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "N/A - used manual row entry for testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "YoY save success overlay now working correctly. Navigation: Login → Camden Apartments → REVENUE & RATES → Revenue management → Market Robot → Performance tab → Click 'Güncelle' button → Add income row → Click 'Kaydet'. Green overlay appears for 1.8s showing 'Kaydedildi!' + count before modal auto-closes.",
+  "test_results": {
+    "overlay_found": true,
+    "overlay_testid": "yoy-save-success-overlay",
+    "overlay_content": {
+      "heading": "Kaydedildi!",
+      "count_text": "1 ay gelir + 5 gider",
+      "explanatory_text": "Performance Report otomatik güncellendi — YoY karşılaştırma ve Net Kâr şeridi görünecek."
+    },
+    "overlay_timing": "Appeared within 500ms of save click, displayed for ~1.8s",
+    "modal_auto_close": true,
+    "toast_notification_also_shown": true
+  },
+  "bug_fix_applied": {
+    "file": "/app/frontend/src/components/dashboard/PerformanceReport.js",
+    "line": 1069,
+    "issue": "onSaved callback was calling setYoyUploadOpen(false) which unmounted the modal before the overlay could render",
+    "fix": "Changed onSaved to empty function, moved load() to onClose callback so data refresh happens after modal closes"
+  }
+}

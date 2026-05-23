@@ -34,6 +34,7 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
     "Yazılım & Abonelik", "Banka & Komisyon Ücretleri", "Diğer",
   ]);
   const [parseFailedFile, setParseFailedFile] = useState(null);
+  const [saveSuccess, setSaveSuccess] = useState(null); // {rows, expenses} after save
 
   // Download a ready-to-use CSV template so users have a known-good format.
   const downloadTemplate = () => {
@@ -200,8 +201,13 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
         description: "Performance Report'ta Yıllık Net Kâr ve Kategori Dağılımı güncellendi.",
         duration: 5000,
       });
+      // Show full-screen success overlay for 1.8s before closing the modal so
+      // the operator gets unmistakable confirmation (toasts get missed).
+      setSaveSuccess({ rows: r.data.saved_count, expenses: r.data.saved_expenses });
       if (onSaved) onSaved();
-      if (onClose) onClose();
+      setTimeout(() => {
+        if (onClose) onClose();
+      }, 1800);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Kayıt başarısız");
     } finally {
@@ -230,6 +236,26 @@ export const YoYUploadModal = ({ propertyId, onClose, onSaved, cur }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" data-testid="yoy-upload-modal">
+      {/* Full-screen success overlay — shown for 1.8s after save before modal closes */}
+      {saveSuccess && (
+        <div
+          className="absolute inset-0 z-10 bg-emerald-600/95 backdrop-blur-sm flex items-center justify-center animate-in fade-in duration-200"
+          data-testid="yoy-save-success-overlay"
+        >
+          <div className="text-center text-white px-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/20 mb-4 animate-in zoom-in duration-300">
+              <Check className="w-12 h-12 text-white stroke-[3]" />
+            </div>
+            <h2 className="text-3xl font-black mb-2">Kaydedildi!</h2>
+            <p className="text-lg font-bold text-emerald-50">
+              {saveSuccess.rows} ay gelir + {saveSuccess.expenses} gider
+            </p>
+            <p className="text-sm text-emerald-100/90 mt-2">
+              Performance Report otomatik güncellendi — YoY karşılaştırma ve Net Kâr şeridi görünecek.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-stone-200 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-violet-50">

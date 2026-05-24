@@ -3,6 +3,14 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-05-24 (iter 355 — Global 401 interceptor + CRA overlay suppression ✅ COMPLETE)
+- **Kullanıcı raporu**: "Uncaught runtime errors: Request failed with status code 401" — token süresi dolunca CRA dev overlay her 401 için kırmızı banner gösteriyordu.
+- **Fix** (`/app/frontend/src/App.js:MainApp`):
+  - Global `axios.interceptors.response` (mount/unmount lifecycle ile): 401 alınca `setUser(null)` + `setPermissions(null)` + Authorization header sil → otomatik login ekranına yönlendir.
+  - Hata objesine `__auth_expired = true` flag ekleniyor.
+  - `window.addEventListener("unhandledrejection")` handler: 401 işaretli rejection'ları `preventDefault()` ile yutuyor → CRA overlay açılmıyor. Component'ler kendi `.catch()` ile hala 401'i yakalayabiliyor.
+- **Doğrulama**: Bogus token enjekte edildi → reload → kırmızı overlay yok, login ekranına otomatik dönüş ✅, sonra başarılı login → dashboard yüklendi ✅.
+
 ### 2026-05-23 (iter 354 — YoY Save Success Overlay UX ✅ COMPLETE)
 - **Kullanıcı isteği**: "ok uygula next action and potansiyel iyilestirme" — kayıt sonrası tam-ekran yeşil onay overlay'i.
 - **Implementation** (`YoYUploadModal.js`):

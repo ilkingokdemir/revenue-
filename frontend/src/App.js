@@ -4905,6 +4905,40 @@ function MainApp() {
   const [authChecking, setAuthChecking] = useState(true);
   const [permissions, setPermissions] = useState(null); // { permissions:Set, menu_permissions:Set, is_legacy_admin:bool }
 
+  // Global axios 401 interceptor + unhandledrejection guard. When a token
+  // expires, every authenticated component fires a 401 and CRA's error
+  // overlay surfaces each one as a red runtime-error banner. Instead we:
+  //   1. Clear auth state on the first 401 so the user is sent to login.
+  //   2. Swallow CRA's unhandledrejection overlay for these specific errors
+  //      (regular .catch handlers still receive the rejection).
+  useEffect(() => {
+    const id = axios.interceptors.response.use(
+      (r) => r,
+      (error) => {
+        if (error?.response?.status === 401) {
+          delete axios.defaults.headers.common["Authorization"];
+          setUser(null);
+          setPermissions(null);
+          // Tag the error so the unhandledrejection guard below can recognise
+          // and suppress only auth-related rejections.
+          if (error && typeof error === "object") error.__auth_expired = true;
+        }
+        return Promise.reject(error);
+      },
+    );
+    const onUnhandled = (ev) => {
+      const reason = ev.reason;
+      if (reason?.__auth_expired || reason?.response?.status === 401) {
+        ev.preventDefault();
+      }
+    };
+    window.addEventListener("unhandledrejection", onUnhandled);
+    return () => {
+      axios.interceptors.response.eject(id);
+      window.removeEventListener("unhandledrejection", onUnhandled);
+    };
+  }, []);
+
   const fetchPermissions = async () => {
     try {
       const { data } = await axios.get(`${API}/rbac/me/permissions`);

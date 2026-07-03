@@ -3,6 +3,28 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-06-30 (iter 356 — Mews-parity Batch 1: AI Smart Tips + Duplicate Merge + BI AI Summary ✅ COMPLETE)
+- **Kullanıcı isteği**: Mews PMS'ten farklılaştırıcı olan özellikleri MVP'ye ekle, sırayla yap.
+- **Batch 1** (3 LLM-based feature, aynı altyapı):
+  1. **AI Smart Tips** — Guest profile'a göre personalized service önerileri (5 tip max). POST `/api/mews-ai/smart-tips` {guest_id | profile}. FE: `SmartTipsCard.js`, GuestProfilesPanel'e entegre.
+  2. **Duplicate Guest Auto-Merge** — Fuzzy email/phone/name+DOB match ile duplicate cluster detection + primary seçip merge (bookings re-point + duplicate delete + audit log). GET `/api/mews-ai/duplicate-guests`, POST `/api/mews-ai/merge-guests`. FE: `DuplicateGuestsPanel.js` (modal dialog).
+  3. **BI AI Summary** — Property KPI'larını LLM'e verip "bu ay ne değişti" Türkçe narrative üretme. POST `/api/mews-ai/bi-summary`. FE: `BiAiSummaryCard.js`, PerformanceReport sonuna entegre.
+- **Backend**: `/app/backend/routes/ai/mews_parity.py` (yeni, 300+ satır). LLM: emergentintegrations `gpt-4o-mini` + heuristic fallback.
+- **DB collections**: `mews_ai_smart_tips`, `mews_ai_merge_log`, `mews_ai_bi_summary` (audit trails).
+- **Test**: `/app/backend/tests/test_mews_parity.py` — Backend 16/16 PASSED. Frontend testing agent (iter 336): Smart Tips + Duplicate Merge %100 PASSED, BI Summary sadece navigation zorluğu (backend API verified).
+- **Bonus fix**: 401 runtime error overlay + Made with Emergent badge kaldırıldı (iter 355).
+
+### Batch 2-3 upcoming (Mews-parity sıralı):
+- **Batch 2 — Revenue diversification**:
+  - Hourly Booking Engine (day-use, meeting rooms)
+  - Spaces Monetization (parking, meeting room, coworking desk)
+- **Batch 3 — Distribution & Operations**:
+  - Marketplace v1 (integration hub)
+  - Self-Service Kiosk PWA
+  - Native Mobile Housekeeping
+  - Google Ads ↔ Booking outcome tracking
+  - Mews University tarzı e-learning
+
 ### 2026-05-24 (iter 355 — Global 401 interceptor + CRA overlay suppression ✅ COMPLETE)
 - **Kullanıcı raporu**: "Uncaught runtime errors: Request failed with status code 401" — token süresi dolunca CRA dev overlay her 401 için kırmızı banner gösteriyordu.
 - **Fix** (`/app/frontend/src/App.js:MainApp`):

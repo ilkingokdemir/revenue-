@@ -3,6 +3,26 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-03 (iter 358 — Mews-parity Batch 3 F1: Marketplace v1 + Spaces Smart Upsell ✅ COMPLETE)
+- **Kullanıcı isteği**: "sirayla devam et ve Potansiyel iyileştirme yap" — Batch 3'e devam + Batch 2 için akıllı upsell.
+- **Eklenen (potansiyel iyileştirme)** — Spaces Smart Upsell:
+  - `GET /api/spaces/{pid}/upsell-suggestions?booking_id=X&guest_count=N&nights=M`
+  - Rule-based motor: `has_car`, `has_ev`, `business_traveler`, `long_stay`, `group`, `vip` sinyalleri çıkarır (booking special_requests + guest_profile tags okur).
+  - 2-4 sıralı öneri döner: `{space_id, space_name, kind, rate, reason (emoji+TR), cta, matched_signal}`.
+- **Eklenen (Batch 3 F1)** — Marketplace v1 (integration hub):
+  - **Backend** (`/app/backend/routes/platform_ext/marketplace.py` — yeni): 20 curated app in 7 kategoride (distribution/payments/messaging/marketing/accounting/ai/automation). Endpoints: catalog / detail / installed / install / uninstall / toggle.
+  - **Persistent installations**: `marketplace_installed` collection, per-property config JSON, enabled flag, audit trail.
+  - **Frontend** (`MarketplacePanel.js` — yeni): search + 7 kategori tab + app grid (installed/available/coming_soon badge) + detail modal + config textarea + toggle switch. Fuchsia/Indigo tema.
+  - **Sidebar entry**: OPERATIONS → INVENTORY & ASSETS → "Marketplace (integrations)".
+- **Bonus fix**: Testing agent eski `IntegrationsMarketplace` view'un yeni `MarketplacePanel`'i override ettiğini fark etti → duplicate route kaldırıldı.
+- **Test**: Backend 9/9 PASSED, Frontend 5/5 PASSED. Stripe pre-installed, WhatsApp install/uninstall/refresh doğrulandı, Zapier "yakında" 400 döndü.
+
+### Batch 3 kalan (sırada):
+- Self-Service Kiosk PWA (tablet check-in)
+- Native Mobile Housekeeping (React Native)
+- Google Ads ↔ Booking outcome tracking
+- Mews University tarzı e-learning
+
 ### 2026-07-04 (iter 357 — Mews-parity Batch 2: Spaces Monetization + Hourly Booking ✅ COMPLETE)
 - **Kullanıcı isteği**: "sirayla devam et" — Mews parity Batch 2.
 - **Bulgular**: Backend zaten çoğu kısmı içeriyordu (2 rakip implementation: `pms/bookings.py` + `hotel_ops/spaces.py`), FE panel de vardı. Ana eksik: **hiç seed data yoktu**, UI'ı boş görünüyordu.

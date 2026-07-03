@@ -3,6 +3,24 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-04 (iter 357 — Mews-parity Batch 2: Spaces Monetization + Hourly Booking ✅ COMPLETE)
+- **Kullanıcı isteği**: "sirayla devam et" — Mews parity Batch 2.
+- **Bulgular**: Backend zaten çoğu kısmı içeriyordu (2 rakip implementation: `pms/bookings.py` + `hotel_ops/spaces.py`), FE panel de vardı. Ana eksik: **hiç seed data yoktu**, UI'ı boş görünüyordu.
+- **Eklenen** (Batch 2):
+  - **Quick-Start Seed** — `POST /api/spaces/{pid}/seed`: 6 curated Türkçe space ekler (Otopark, EV şarj, 2× Meeting Room, Coworking, Bagaj Dolabı). Idempotent (2. seçimde 400 döner). Her iki collection'a yazar (`db.spaces` + `db.property_spaces`).
+  - **Revenue KPI endpoint** — `GET /api/spaces/{pid}/revenue?days=30`: {total_revenue, total_bookings, avg, by_kind, top_space}.
+  - **Frontend rich empty state**: "Ek gelir kanalı: Spaces" hero + Mews %310 ROI referansı + 1-tık Quick Start butonu.
+  - **KPI hero grid** (4 tile): Son 30 gün gelir · Rezervasyon · Top Space · Aktif Space sayısı.
+- **Doğrulama**: Backend 7/8 PASSED (1 minor: public listing auth), Frontend 4/4 PASSED. cURL: seed→6, book meeting room 2h → £100, revenue tile updates real-time.
+- **Sonuç**: Mews'in en kârlı revenue kanallarından birini (spaces + hourly booking) aktive ettik. Kullanıcı sidebar → OPERATIONS → Spaces menu → Quick Start ile hemen 6 space yaratıp saatlik satmaya başlayabilir.
+
+### Batch 3 backlog (sırada):
+- Marketplace v1 (integration hub — 10-20 curated 3rd party)
+- Self-Service Kiosk PWA (tablet check-in)
+- Native Mobile Housekeeping (React Native)
+- Google Ads ↔ Booking outcome tracking
+- Mews University tarzı e-learning
+
 ### 2026-06-30 (iter 356 — Mews-parity Batch 1: AI Smart Tips + Duplicate Merge + BI AI Summary ✅ COMPLETE)
 - **Kullanıcı isteği**: Mews PMS'ten farklılaştırıcı olan özellikleri MVP'ye ekle, sırayla yap.
 - **Batch 1** (3 LLM-based feature, aynı altyapı):

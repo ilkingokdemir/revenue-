@@ -6,7 +6,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, Boxes, Plus, RefreshCw, Trash2, X, CheckCircle2 } from "lucide-react";
+import { Loader2, Boxes, Plus, RefreshCw, Trash2, X, CheckCircle2, Zap, TrendingUp, Calendar } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const KINDS = ["parking", "ev_charger", "meeting_room", "bicycle", "locker", "cabana", "kayak", "other"];
@@ -15,25 +15,28 @@ const fmt = (n) => `£${Number(n || 0).toFixed(2)}`;
 export default function SpacesPanel({ propertyId, hotelName = "" }) {
   const [spaces, setSpaces] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [revenue, setRevenue] = useState(null);
   const [editing, setEditing] = useState(null);
   const [book, setBook] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
     setLoading(true);
     try {
-      const [s, b] = await Promise.all([
+      const [s, b, r] = await Promise.all([
         axios.get(`${API}/spaces/${propertyId}`),
         axios.get(`${API}/space-bookings/${propertyId}?days=14`),
+        axios.get(`${API}/spaces/${propertyId}/revenue?days=30`).catch(() => ({ data: null })),
       ]);
-      setSpaces(s.data || []); setBookings(b.data || []);
+      setSpaces(s.data || []); setBookings(b.data || []); setRevenue(r.data);
     } catch { toast.error("Load failed"); }
     setLoading(false);
   }, [propertyId]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setSpaces([]); setBookings([]); }, [propertyId]);
+  useEffect(() => { setSpaces([]); setBookings([]); setRevenue(null); }, [propertyId]);
 
   const removeSpace = async (id) => {
     if (!window.confirm("Deactivate space?")) return;
@@ -42,6 +45,19 @@ export default function SpacesPanel({ propertyId, hotelName = "" }) {
   const cancelBk = async (id) => {
     if (!window.confirm("Cancel booking?")) return;
     await axios.post(`${API}/space-bookings/${id}/cancel`); toast.success("Cancelled"); load();
+  };
+  const seedStarter = async () => {
+    if (!window.confirm("6 örnek space (parking, meeting room, coworking, EV charger, locker) eklensin mi?")) return;
+    setSeeding(true);
+    try {
+      const r = await axios.post(`${API}/spaces/${propertyId}/seed`);
+      toast.success(`✅ ${r.data.seeded} space eklendi — düzenleyip fiyat/kapasite güncelleyebilirsiniz`);
+      await load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Seed failed");
+    } finally {
+      setSeeding(false);
+    }
   };
 
   return (
@@ -64,6 +80,45 @@ export default function SpacesPanel({ propertyId, hotelName = "" }) {
           </button>
         </div>
       </div>
+
+      {/* Revenue KPI hero tiles (30-day window) */}
+      {revenue && spaces.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3" data-testid="spaces-kpi-grid">
+          <div className="rounded-xl bg-gradient-to-br from-emerald-950/80 to-emerald-900/40 border border-emerald-700/40 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <p className="text-[10px] text-emerald-300/80 uppercase font-bold">Son 30 gün gelir</p>
+            </div>
+            <p className="text-2xl font-black text-emerald-200" data-testid="kpi-total-revenue">{fmt(revenue.total_revenue)}</p>
+          </div>
+          <div className="rounded-xl bg-gradient-to-br from-sky-950/80 to-sky-900/40 border border-sky-700/40 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Calendar className="w-4 h-4 text-sky-400" />
+              <p className="text-[10px] text-sky-300/80 uppercase font-bold">Rezervasyon</p>
+            </div>
+            <p className="text-2xl font-black text-sky-200">{revenue.total_bookings}</p>
+            <p className="text-[9px] text-sky-400/60 mt-0.5">avg {fmt(revenue.avg_per_booking)}/booking</p>
+          </div>
+          <div className="rounded-xl bg-gradient-to-br from-violet-950/80 to-violet-900/40 border border-violet-700/40 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap className="w-4 h-4 text-violet-400" />
+              <p className="text-[10px] text-violet-300/80 uppercase font-bold">Top Space</p>
+            </div>
+            <p className="text-sm font-black text-violet-200 truncate">{revenue.top_space?.name || "—"}</p>
+            {revenue.top_space && (
+              <p className="text-[9px] text-violet-400/70 mt-0.5">{fmt(revenue.top_space.revenue)} · {revenue.top_space.bookings} bookings</p>
+            )}
+          </div>
+          <div className="rounded-xl bg-gradient-to-br from-amber-950/80 to-amber-900/40 border border-amber-700/40 p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <Boxes className="w-4 h-4 text-amber-400" />
+              <p className="text-[10px] text-amber-300/80 uppercase font-bold">Aktif Space</p>
+            </div>
+            <p className="text-2xl font-black text-amber-200">{spaces.length}</p>
+            <p className="text-[9px] text-amber-400/70 mt-0.5">{revenue.by_kind.slice(0, 3).map(k => k.kind).join(" · ")}</p>
+          </div>
+        </div>
+      )}
 
       {loading ? <Loader2 className="w-6 h-6 animate-spin text-stone-500" /> : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -88,7 +143,35 @@ export default function SpacesPanel({ propertyId, hotelName = "" }) {
               </button>
             </div>
           ))}
-          {spaces.length === 0 && <div className="text-stone-500 text-sm col-span-full">No spaces yet.</div>}
+          {spaces.length === 0 && (
+            <div className="col-span-full rounded-2xl border-2 border-dashed border-teal-500/30 bg-gradient-to-br from-teal-950/30 to-stone-900/60 p-8 text-center" data-testid="spaces-empty-state">
+              <Boxes className="w-12 h-12 text-teal-400 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-teal-100 mb-2">Ek gelir kanalı: Spaces</h3>
+              <p className="text-sm text-stone-400 max-w-lg mx-auto mb-2">
+                Odalar dışındaki tüm satılabilir kaynakları (otopark, toplantı odası, EV şarj istasyonu, coworking masa, bagaj dolabı, EV bike) saatlik veya günlük olarak sat.
+              </p>
+              <p className="text-xs text-stone-500 max-w-lg mx-auto mb-6">
+                Mews&apos;in en yüksek ROI&apos;lu ürünlerinden biri (%310 3-yıl ROI iddiası). 6 örnek space ile başlayıp fiyat/kapasiteyi ihtiyacınıza göre düzenleyebilirsiniz.
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  onClick={seedStarter}
+                  disabled={seeding}
+                  data-testid="spaces-quickstart-btn"
+                  className="px-5 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-600 text-white text-sm font-bold shadow-lg disabled:opacity-50 inline-flex items-center gap-2"
+                >
+                  {seeding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  Quick Start · 6 örnek space ekle
+                </button>
+                <button
+                  onClick={() => setEditing({})}
+                  className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-sm font-bold border border-stone-700"
+                >
+                  Sıfırdan ekle
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

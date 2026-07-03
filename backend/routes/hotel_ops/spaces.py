@@ -75,6 +75,80 @@ def create_spaces_router(db, require_roles):
         await db.spaces.update_one({"id": space_id, "property_id": property_id}, {"$set": {"active": False}})
         return {"ok": True}
 
+    @router.post("/spaces/{property_id}/seed")
+    async def seed_starter_spaces(property_id: str,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        """One-click starter kit: creates 6 curated spaces (parking, meeting rooms,
+        coworking desk, EV charger, bike, locker) with sensible defaults so new
+        operators can immediately experiment with the Spaces revenue channel.
+
+        Writes to BOTH db.spaces (this router's list endpoint) AND db.property_spaces
+        (the pms/bookings.py list endpoint that the SpacesPanel FE actually hits)
+        so the seeded rows show up regardless of route resolution order."""
+        existing = await db.spaces.count_documents({"property_id": property_id})
+        existing_ps = await db.property_spaces.count_documents({"property_id": property_id})
+        if existing > 0 or existing_ps > 0:
+            raise HTTPException(400, f"Zaten {max(existing, existing_ps)} space var — silin veya devre dışı bırakın önce.")
+
+        starter = [
+            {"kind": "parking",      "name": "Otopark Yeri #1",           "code": "P-01",  "capacity": 5, "rate_per_unit": 3.0,  "unit_minutes": 60,  "open_hour": 0,  "close_hour": 24, "description": "Kapalı otopark, misafir aracı için saatlik."},
+            {"kind": "ev_charger",   "name": "Elektrikli Şarj İstasyonu", "code": "EV-01", "capacity": 2, "rate_per_unit": 5.0,  "unit_minutes": 60,  "open_hour": 6,  "close_hour": 23, "description": "Type 2 hızlı şarj, 22 kW."},
+            {"kind": "meeting_room", "name": "Executive Toplantı Odası",  "code": "MR-A",  "capacity": 8, "rate_per_unit": 50.0, "unit_minutes": 60,  "open_hour": 8,  "close_hour": 22, "description": "8 kişilik, projeksiyon + Wi-Fi, otel dışı misafir için de kiralık."},
+            {"kind": "meeting_room", "name": "Board Room",                "code": "MR-B",  "capacity": 12,"rate_per_unit": 90.0, "unit_minutes": 60,  "open_hour": 8,  "close_hour": 22, "description": "12 kişilik yönetim toplantı odası, catering opsiyonlu."},
+            {"kind": "cabana",       "name": "Co-working Desk",           "code": "CW-01", "capacity": 6, "rate_per_unit": 8.0,  "unit_minutes": 60,  "open_hour": 8,  "close_hour": 20, "description": "Ortak alanda yalıtılmış çalışma masası (day pass £45)."},
+            {"kind": "locker",       "name": "Bagaj Dolabı",              "code": "LK-01", "capacity": 12,"rate_per_unit": 5.0,  "unit_minutes": None,"open_hour": 0,  "close_hour": 24, "description": "Check-out sonrası gündelik bagaj emaneti."},
+        ]
+        now = datetime.now(timezone.utc).isoformat()
+        docs = []
+        for s in starter:
+            docs.append({
+                "id": str(uuid.uuid4()), "property_id": property_id, "active": True,
+                "is_active": True, "currency": "GBP", "created_at": now, "updated_at": now,
+                # Both schemas expected by the two spaces backends
+                "category": s["kind"], "icon": "boxes",
+                "hourly_rate": s["rate_per_unit"], "half_day_rate": 0, "full_day_rate": 0,
+                "amenities": [], "photos": [],
+                **s,
+            })
+        # Write to both collections so both list endpoints (whichever route wins)
+        # return the same seeded data.
+        await db.spaces.insert_many([dict(d) for d in docs])
+        await db.property_spaces.insert_many([dict(d) for d in docs])
+        for d in docs:
+            d.pop("_id", None)
+        return {"ok": True, "seeded": len(docs), "spaces": docs}
+
+    @router.get("/spaces/{property_id}/revenue")
+    async def spaces_revenue(property_id: str, days: int = 30,
+                              current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "fnb"))):
+        """Simple KPI aggregation: total revenue, bookings, top space by revenue
+        for the last `days` window. Used by the panel hero tiles."""
+        f = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        cursor = db.space_bookings.find(
+            {"property_id": property_id, "status": {"$ne": "cancelled"}, "start": {"$gte": f}},
+            {"_id": 0, "space_id": 1, "space_name": 1, "kind": 1, "price": 1, "start": 1},
+        )
+        rows = await cursor.to_list(2000)
+        total_rev = round(sum(r.get("price", 0) for r in rows), 2)
+        by_kind: Dict[str, float] = {}
+        by_space: Dict[str, Dict] = {}
+        for r in rows:
+            k = r.get("kind", "other")
+            by_kind[k] = round(by_kind.get(k, 0) + r.get("price", 0), 2)
+            sid = r.get("space_id", "")
+            s = by_space.setdefault(sid, {"name": r.get("space_name", "—"), "revenue": 0, "bookings": 0})
+            s["revenue"] = round(s["revenue"] + r.get("price", 0), 2)
+            s["bookings"] += 1
+        top_space = max(by_space.values(), key=lambda x: x["revenue"], default=None)
+        return {
+            "window_days": days,
+            "total_revenue": total_rev,
+            "total_bookings": len(rows),
+            "avg_per_booking": round(total_rev / len(rows), 2) if rows else 0,
+            "by_kind": [{"kind": k, "revenue": v} for k, v in sorted(by_kind.items(), key=lambda x: -x[1])],
+            "top_space": top_space,
+        }
+
     @router.get("/spaces/{property_id}/{space_id}/availability")
     async def availability(property_id: str, space_id: str,
                             from_dt: Optional[str] = None, to_dt: Optional[str] = None,

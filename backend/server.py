@@ -1164,6 +1164,10 @@ api_router.include_router(create_brand_voice_router(db, require_roles))
 from routes.ai.mews_parity import create_mews_parity_router
 api_router.include_router(create_mews_parity_router(db, require_roles))
 
+# ===== Marketplace v1 (Iter 358) — Integration Hub (20 curated 3rd-party apps) =====
+from routes.platform_ext.marketplace import create_marketplace_router
+api_router.include_router(create_marketplace_router(db, require_roles))
+
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))

@@ -16,7 +16,7 @@ Endpoints:
 """
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta, date
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import uuid
 
 
@@ -260,5 +260,117 @@ def create_spaces_router(db, require_roles):
             "cancelled_by": current_user.get("name", "Staff"),
         }})
         return {"ok": True}
+
+    @router.get("/spaces/{property_id}/upsell-suggestions")
+    async def upsell_suggestions(property_id: str,
+                                   booking_id: Optional[str] = None,
+                                   guest_count: int = 2,
+                                   nights: int = 1,
+                                   current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "fnb"))):
+        """Smart per-booking upsell recommendations. Reads the booking's own
+        signals (guest count, nights, special_requests, tags) + property
+        space inventory, returns 2-4 ranked add-ons the operator should offer
+        at check-in / pre-arrival email / mobile portal.
+
+        Rationale surfaces in the response so the receptionist can pitch it
+        confidently: e.g. 'Business traveler → 4h meeting room slot'.
+        """
+        signals: List[str] = []
+        booking: Dict[str, Any] = {}
+        if booking_id:
+            booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0}) or {}
+            if booking:
+                guest_count = int(booking.get("adults", guest_count)) + int(booking.get("children", 0))
+                try:
+                    from datetime import datetime as _dt
+                    ci = _dt.fromisoformat(booking["check_in"].split("T")[0])
+                    co = _dt.fromisoformat(booking["check_out"].split("T")[0])
+                    nights = max(1, (co - ci).days)
+                except Exception:
+                    pass
+                sr = (booking.get("special_requests") or "").lower()
+                if any(w in sr for w in ["car", "araç", "araba", "otopark", "parking"]):
+                    signals.append("has_car")
+                if any(w in sr for w in ["ev ", "elektrikli", "electric vehicle", "tesla"]):
+                    signals.append("has_ev")
+                if any(w in sr for w in ["business", "iş", "meeting", "toplantı", "conference"]):
+                    signals.append("business_traveler")
+                if any(w in sr for w in ["late", "geç", "après", "storage", "bagaj"]):
+                    signals.append("late_departure")
+                # Guest profile tags
+                gid = booking.get("guest_id")
+                if gid:
+                    gp = await db.guest_profiles.find_one({"id": gid}, {"_id": 0, "tags": 1}) or {}
+                    tags = [t.lower() for t in (gp.get("tags") or [])]
+                    if "business" in tags or "corporate" in tags:
+                        signals.append("business_traveler")
+                    if "vip" in tags:
+                        signals.append("vip")
+
+        # Baseline signals from stay properties
+        if nights >= 3:
+            signals.append("long_stay")
+        if guest_count >= 4:
+            signals.append("group")
+
+        # Fetch active spaces
+        spaces_a = await db.spaces.find({"property_id": property_id, "active": {"$ne": False}}, {"_id": 0}).to_list(50)
+        spaces_b = await db.property_spaces.find({"property_id": property_id, "is_active": {"$ne": False}}, {"_id": 0}).to_list(50)
+        # Dedupe by id
+        seen = set()
+        spaces: List[Dict] = []
+        for s in spaces_a + spaces_b:
+            sid = s.get("id")
+            if sid and sid not in seen:
+                seen.add(sid)
+                spaces.append(s)
+
+        def _rate(s: Dict) -> float:
+            return float(s.get("rate_per_unit") or s.get("hourly_rate") or 0)
+
+        RULES = [
+            # (predicate, kind_prefer, reason, cta_template)
+            (lambda sig: "has_ev" in sig,             "ev_charger",   "🔌 Elektrikli aracınız için oda gecesi başına şarj slotu",     "1 gece EV şarj için £{rate} slot ekleyin"),
+            (lambda sig: "has_car" in sig,             "parking",      "🚗 Rezervasyonunuzda araç bulunduğu belirtilmiş",              "Kapalı otopark rezerve et · £{rate}/saat"),
+            (lambda sig: "business_traveler" in sig,   "meeting_room", "💼 İş seyahatinde toplantı odası — misafir odasında olmayan ortam", "Öğleden sonra 4 saat toplantı odası · £{total} (4h × £{rate})"),
+            (lambda sig: "business_traveler" in sig,   "cabana",       "🧑‍💻 Ekstra çalışma masası — coworking alanı",                "Half-day coworking desk · £{half}"),
+            (lambda sig: "group" in sig,                "meeting_room", "👥 4+ misafir — grup için toplantı/rezerve alan",             "Grup için toplantı odası · £{rate}/h"),
+            (lambda sig: "long_stay" in sig,            "locker",       "🧳 Uzun konaklama — check-out sonrası bagaj emaneti",          "Check-out sonrası bagaj dolabı · günlük £{rate}"),
+            (lambda sig: True,                          "parking",      "🅿️ Genel öneri — misafir aracı sıkça sorulur",                 "Otopark rezervasyonu · £{rate}/saat"),
+        ]
+
+        suggestions: List[Dict] = []
+        used_ids = set()
+        for pred, prefer_kind, reason, cta_tpl in RULES:
+            if not pred(signals):
+                continue
+            # find first matching active space of that kind
+            match = next((s for s in spaces if s.get("kind") == prefer_kind or s.get("category") == prefer_kind), None)
+            if not match or match["id"] in used_ids:
+                continue
+            rate = _rate(match)
+            half = round(rate * 4, 2) if rate else 0
+            total4h = round(rate * 4, 2) if rate else 0
+            suggestions.append({
+                "space_id": match["id"],
+                "space_name": match.get("name"),
+                "kind": match.get("kind") or match.get("category"),
+                "rate": rate,
+                "reason": reason,
+                "cta": cta_tpl.format(rate=rate, half=half, total=total4h),
+                "matched_signal": next((s for s in signals if s in reason.lower() or s.replace("_", " ") in reason.lower()), signals[0] if signals else "generic"),
+            })
+            used_ids.add(match["id"])
+            if len(suggestions) >= 4:
+                break
+
+        return {
+            "booking_id": booking_id,
+            "signals": signals,
+            "guest_count": guest_count,
+            "nights": nights,
+            "suggestions": suggestions,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
 
     return router

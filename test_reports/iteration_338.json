@@ -1,0 +1,51 @@
+{
+  "summary": "Marketplace v1 + Spaces Smart Upsell testing complete. All 5 backend tests and 5 frontend tests passed. Fixed duplicate marketplace view issue in App.js.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketplace_upsell.py",
+    "/app/test_reports/pytest/pytest_iteration358_marketplace_upsell.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/frontend/src/App.js (removed duplicate marketplace view at line 4727-4729)"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests passed)",
+    "frontend": "100% (all 5 tests passed)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing Camden Apartments property",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Marketplace v1 with 20 curated apps is fully functional. Backend endpoints: GET /api/marketplace/catalog, POST /api/marketplace/install, POST /api/marketplace/uninstall. Spaces upsell endpoint: GET /api/spaces/{property_id}/upsell-suggestions. All data-testid attributes are in place for MarketplacePanel.",
+  "tests_executed": {
+    "backend": [
+      "Backend #1: GET /api/spaces/camden-suites/upsell-suggestions?guest_count=5&nights=4 - PASSED (signals: long_stay, group; 3 suggestions with Turkish reasons)",
+      "Backend #2: GET /api/marketplace/catalog?property_id=camden-suites - PASSED (7 categories, 20 apps, 6 featured)",
+      "Backend #3: POST /api/marketplace/install (whatsapp) - PASSED (ok:true, action:refreshed)",
+      "Backend #4: POST /api/marketplace/uninstall (whatsapp) - PASSED (ok:true, removed:1)",
+      "Backend #5: POST /api/marketplace/install (zapier) - PASSED (400 with 'yakında' message)"
+    ],
+    "frontend": [
+      "Frontend #6: Navigate to Marketplace via sidebar - PASSED (MarketplacePanel opens)",
+      "Frontend #7: Verify UI elements - PASSED (search, 7 category tabs, 20 app cards, installed count)",
+      "Frontend #8: Filter by category (Ödeme) - PASSED (3 payment apps shown)",
+      "Frontend #9: Open app detail modal - PASSED (Stripe modal with config textarea)",
+      "Frontend #10: Yakında apps disabled - PASSED (Zapier shows 'Yakında' label)"
+    ]
+  },
+  "bug_fixed": {
+    "issue": "Duplicate activeView === 'marketplace' condition in App.js caused old IntegrationsMarketplace to override new MarketplacePanel",
+    "fix": "Removed duplicate condition at lines 4726-4729",
+    "file": "/app/frontend/src/App.js"
+  }
+}

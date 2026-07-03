@@ -64,7 +64,7 @@ import {
   NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel,
   RoomQRPanel, TaxPresetsPanel, WalkInPanel, NoShowPanel, GuestPrefsPanel,
   CleaningChecklistsPanel, AttributionPanel, GroupRoomingImportPanel, OpsQuickActionsPanel,
-  TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, MultiPropertyRollupPanel,
+  TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, MarketplacePanel, MultiPropertyRollupPanel,
   CurrencyPanel, AgentsB2BPanel, SecurityOwnerPanel, PreAuthPanel, ChargebackPanel,
   WebPushPanel, PmsCrsSyncPanel, PmsProPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
   ABTestPanel, PreArrivalDripPanel, MenuEngineeringPanel, SRVoucherPanel, FolioSplitPanel,
@@ -198,6 +198,7 @@ import {
   Clock,
   QrCode,
   SquaresFour,
+  Storefront,
   CurrencyDollar,
   BookOpen,
   Warning,
@@ -2773,6 +2774,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "stock-management", icon: Package, name: t("nav.stock"), testId: "stock-management-btn" },
         { id: "low-stock", icon: Package, name: "Low-stock alerts", testId: "low-stock-btn" },
         { id: "spaces", icon: SquaresFour, name: "Spaces (parking, meet)", testId: "spaces-btn" },
+        { id: "marketplace", icon: Storefront, name: "Marketplace (integrations)", testId: "marketplace-btn" },
         { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
 
         { divider: true, label: "Staff" },
@@ -4212,6 +4214,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           </div>
         )}
 
+        {activeView === "marketplace" && (
+          <div className="p-6">
+            <MarketplacePanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
+        )}
+
         {activeView === "multi-rollup" && (
           <div className="p-6">
             <MultiPropertyRollupPanel hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""} />
@@ -4710,11 +4721,6 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Cash Flow Forecast */}
         {activeView === "cash-flow" && (
           <div className="p-6"><CashFlowForecast propertyId={activePropertyId} user={user} /></div>
-        )}
-
-        {/* Integrations Marketplace */}
-        {activeView === "marketplace" && (
-          <div className="p-6"><IntegrationsMarketplace propertyId={activePropertyId} user={user} /></div>
         )}
 
         {/* Arrivals Cockpit */}

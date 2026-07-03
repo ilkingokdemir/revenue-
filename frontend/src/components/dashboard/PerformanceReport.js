@@ -6,6 +6,7 @@ import { TrendingUp, TrendingDown, Zap, BarChart3, Calendar, Radar, PartyPopper,
 import useLivePolling, { LiveBadge } from "../../hooks/useLivePolling";
 import { makeCurrencyFormatter } from "../../lib/currency";
 import { YoYUploadModal } from "./YoYUploadModal";
+import { BiAiSummaryCard } from "./BiAiSummaryCard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -1058,6 +1059,11 @@ export const PerformanceReport = ({ propertyId }) => {
             </table>
           </div>
         </div>
+      )}
+
+      {/* AI BI Summary (Mews-parity iter 356) */}
+      {propertyId && propertyId !== "all" && (
+        <BiAiSummaryCard propertyId={propertyId} />
       )}
 
       {/* YoY historical-revenue upload modal */}

@@ -9,9 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Users, Star, Crown, Tag, ArrowsClockwise, MagnifyingGlass,
-  Envelope, Phone, CaretRight, CurrencyGbp, Bed, Eye, Plus, Note, ChatText, X,
+  Envelope, Phone, CaretRight, CurrencyGbp, Bed, Eye, Plus, Note, ChatText, X, Copy,
 } from "@phosphor-icons/react";
 import { CreditCard, Calendar, TrendingUp, Heart, Coffee, Sparkles, Globe, MessageSquare, FileText } from "lucide-react";
+import { SmartTipsCard } from "./SmartTipsCard";
+import { DuplicateGuestsPanel } from "./DuplicateGuestsPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -47,6 +49,7 @@ export function GuestProfilesPanel({ properties, activePropertyId }) {
   const [sortBy, setSortBy] = useState("last_stay");
   const [showPrefs, setShowPrefs] = useState(false);
   const [showAddNote, setShowAddNote] = useState(false);
+  const [showDupes, setShowDupes] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [filterTier, setFilterTier] = useState("all");
 
@@ -134,9 +137,19 @@ export function GuestProfilesPanel({ properties, activePropertyId }) {
           <div className="w-10 h-10 rounded-xl bg-violet-600 flex items-center justify-center"><Users size={18} className="text-white" weight="fill" /></div>
           <div><h2 className="text-lg font-bold text-stone-900" style={{ fontFamily: "Outfit, sans-serif" }}>Guest Profiles</h2><p className="text-[11px] text-stone-500">Unified guest history, preferences & CRM</p></div>
         </div>
-        <button onClick={syncProfiles} className="text-xs px-3 py-2 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 flex items-center gap-1" data-testid="sync-profiles-btn">
-          <ArrowsClockwise size={12} /> Sync from Bookings
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowDupes(true)}
+            className="text-xs px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center gap-1"
+            data-testid="open-duplicate-guests"
+            title="Aynı misafirin tekrarlı profillerini birleştir"
+          >
+            <Copy size={12} /> Duplicate Merge
+          </button>
+          <button onClick={syncProfiles} className="text-xs px-3 py-2 bg-violet-600 text-white rounded-xl font-bold hover:bg-violet-700 flex items-center gap-1" data-testid="sync-profiles-btn">
+            <ArrowsClockwise size={12} /> Sync from Bookings
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -267,8 +280,10 @@ export function GuestProfilesPanel({ properties, activePropertyId }) {
                 ))}
               </div>
 
+              {/* AI Smart Tips (Mews-parity iter 356) */}
+              <SmartTipsCard guestId={g.id} />
+
               <div className="grid grid-cols-2 gap-4">
-                {/* Preferences */}
                 <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-xs font-bold text-stone-800 flex items-center gap-1.5"><Heart size={13} className="text-pink-500" /> Preferences</h4>
@@ -395,6 +410,14 @@ export function GuestProfilesPanel({ properties, activePropertyId }) {
           <DialogHeader><DialogTitle>Add Staff Note</DialogTitle></DialogHeader>
           <Textarea value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="Note about this guest..." rows={3} data-testid="note-input" />
           <button onClick={addNote} className="w-full bg-violet-600 text-white py-2.5 rounded-xl text-sm font-bold" data-testid="save-note-btn">Save Note</button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Duplicate Guests Auto-Merge Dialog */}
+      <Dialog open={showDupes} onOpenChange={setShowDupes}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto" data-testid="duplicate-guests-dialog">
+          <DialogHeader><DialogTitle>Duplicate Guest Auto-Merge</DialogTitle></DialogHeader>
+          <DuplicateGuestsPanel />
         </DialogContent>
       </Dialog>
     </div>

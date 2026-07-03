@@ -1,0 +1,70 @@
+{
+  "summary": "Tested Mews-parity AI features (Batch 1): Smart Tips, Duplicate Guest Auto-Merge, BI AI Summary. Backend: 16/16 tests passed. Frontend: Smart Tips and Duplicate Merge UI verified working. BI Summary navigation issue - could not reach Market Robot Performance tab but API verified working via curl.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "BI AI Summary Card navigation",
+        "issue": "Could not navigate to Market Robot → Performance tab where BiAiSummaryCard is rendered. The Revenue & Rates hub doesn't show Market Robot as a searchable item. Navigation path unclear.",
+        "affected_selectors": ["[data-testid='bi-ai-summary-card']", "[data-testid='bi-ai-generate']"],
+        "priority": "MEDIUM"
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_mews_parity.py",
+    "/app/test_reports/pytest/pytest_iteration336_mews_parity.xml"
+  ],
+  "action_items": [
+    "Verify navigation path to Market Robot Performance tab - BiAiSummaryCard may not be accessible from current UI navigation",
+    "Consider adding Market Robot to Revenue & Rates hub search or sidebar"
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_mews_parity.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "66% (2/3 features verified - Smart Tips, Duplicate Merge working; BI Summary navigation issue)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None - used existing guest profiles",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 3 Mews-parity backend APIs working: POST /api/mews-ai/smart-tips, GET /api/mews-ai/duplicate-guests, POST /api/mews-ai/merge-guests, POST /api/mews-ai/bi-summary. Frontend Smart Tips card works in Guest Profiles panel (click guest → see AI Smart Tips card → click Öneri Üret). Duplicate Merge dialog works (Guest Profiles → Duplicate Merge button → dialog shows clusters). BI Summary card is in PerformanceReport.js which is rendered inside MarketRobot.js - navigation to this component was not successful via UI.",
+  "features_tested": {
+    "backend_1_smart_tips": {
+      "status": "PASSED",
+      "details": "POST /api/mews-ai/smart-tips returns tips array with icon/title/action, model=gpt-4o-mini, generated_at timestamp. Tested with VIP profile (5 tips), minimal profile (fallback), missing profile (400), nonexistent guest_id (404), unauthorized (401)"
+    },
+    "backend_2_duplicate_guests": {
+      "status": "PASSED",
+      "details": "GET /api/mews-ai/duplicate-guests returns total_guests_scanned, clusters_found, clusters array. Each cluster has cluster_id, reason (e.g. 'AYNI TELEFON'), size>=2, guests array"
+    },
+    "backend_3_merge_guests": {
+      "status": "PASSED",
+      "details": "POST /api/mews-ai/merge-guests with primary_id and duplicate_ids merges profiles. Returns ok=true, removed_dupes count, moved_bookings count. Tested validation (missing params, primary in duplicates, nonexistent primary)"
+    },
+    "backend_4_bi_summary": {
+      "status": "PASSED",
+      "details": "POST /api/mews-ai/bi-summary returns summary_md with Turkish text, emoji bullets, 'ÖNCELİK BU HAFTA' action line. Snapshot includes property stats. Model=gpt-4o-mini"
+    },
+    "frontend_5_smart_tips_card": {
+      "status": "PASSED",
+      "details": "Guest Profiles → click guest → AI Smart Tips card visible → click 'Öneri Üret' → tips list appears with 5 tips (Hoşgeldin Notu, Hediyelik İkram, Kahve Servisi, Gece İkramı, Özel İletişim)"
+    },
+    "frontend_6_duplicate_merge_dialog": {
+      "status": "PASSED",
+      "details": "Guest Profiles → Duplicate Merge button → dialog opens → shows '51 misafir tarandı, 7 potansiyel duplicate grup' → clusters with 'AYNI TELEFON' reason → Birleştir buttons"
+    },
+    "frontend_7_bi_ai_summary_card": {
+      "status": "NOT_VERIFIED",
+      "details": "Could not navigate to Market Robot Performance tab. BiAiSummaryCard is rendered in PerformanceReport.js inside MarketRobot.js. Backend API verified working via curl."
+    }
+  }
+}

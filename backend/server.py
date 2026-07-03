@@ -1160,6 +1160,10 @@ api_router.include_router(create_marketing_videos_router(db, require_roles))
 from routes.ai.brand_voice import create_brand_voice_router
 api_router.include_router(create_brand_voice_router(db, require_roles))
 
+# ===== Mews-parity AI features (Iter 356) — Smart Tips, Duplicate Guest Auto-Merge, BI AI Summary =====
+from routes.ai.mews_parity import create_mews_parity_router
+api_router.include_router(create_mews_parity_router(db, require_roles))
+
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))

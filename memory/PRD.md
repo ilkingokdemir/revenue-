@@ -3,6 +3,25 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-05 (iter 360 — Batch 3 F3: Housekeeping Mobile PWA + Kiosk QR Auto-Fill ✅ COMPLETE)
+- **Kullanıcı isteği**: "sirayla devam et ve Potansiyel iyileştirme yap" — Batch 3 F3 + QR iyileştirme.
+- **Eklenen (Batch 3 F3)** — Housekeeping Mobile PWA:
+  - Public route: `/hk-mobile/{property_id}`. Mobile-first responsive (tablet + phone), staff login (JWT via localStorage).
+  - **Screens**: Login → Dashboard (4 stats tile + filter) → Room list → Bottom sheet detail with status transition buttons.
+  - **Status transitions**: `dirty → in_progress → clean → inspected → dirty` cycle + `→ out_of_order` at any point. Backend `PUT /api/housekeeping/rooms/{id}/status` (mevcut endpoint).
+  - Big-tap buttons, emoji-forward (🧹 🧽 ✨ ✅), active:scale-95 haptic feedback, sticky header.
+  - React Native yerine PWA — hızlı deployment + tek kod tabanı + offline-tolerant (localStorage token).
+- **Eklenen (potansiyel iyileştirme)** — Kiosk QR Auto-Fill Lookup:
+  - Backend: `GET /api/kiosk/{pid}/qr-token/{booking_id}` (admin) — 24h TTL token üretir + `kiosk_url`.
+  - Backend: `POST /api/kiosk/{pid}/qr-redeem` (public) — token → booking auto-fetch.
+  - Frontend: `/kiosk/{pid}?token=...` URL'inden gelirse KioskPWA otomatik `confirm` step'ine atlıyor — 3 saniyede check-in başlıyor.
+  - `kiosk_qr_tokens` collection audit trail.
+- **Test**: Backend 6/6, Frontend 6/6 = %100. Full transition cycle + QR flow doğrulandı.
+
+### Batch 3 kalan (sırada):
+- Google Ads ↔ Booking outcome tracking
+- Mews University tarzı e-learning
+
 ### 2026-07-04 (iter 359 — Batch 3 F2: Kiosk PWA + Marketplace Featured Carousel ✅ COMPLETE)
 - **Kullanıcı isteği**: "devam et ve Potansiyel iyileştirme yap" — Batch 3'e devam + Marketplace geliştirme.
 - **Eklenen (Batch 3 F2)** — Self-Service Kiosk PWA:

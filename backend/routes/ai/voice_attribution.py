@@ -37,16 +37,16 @@ def _budget_suggestion(status: str, roas, cost: float, revenue: float,
     Returns {action, delta_pct, delta_amount, headline, reason} — no LLM,
     just a heuristic the operator can trust to be reproducible.
 
-    Rules (informed by media-buying rule-of-thumb):
-      • red   (ROAS <1x)         → cut 50%
-      • yellow (ROAS 1-1.5x)     → cut 30%
-      • yellow (ROAS 1.5-2.5x)   → hold / optimize
-      • yellow (ROAS 2.5-3x)     → +20% (approaching healthy)
-      • green (ROAS 3-6x)        → +30%
-      • green (ROAS 6-10x)       → +50%
-      • green (ROAS >10x)        → +100% (double down)
-      • no_cost + revenue        → "attribute cost" hint
-      • no_data                  → skip
+    Rules (informed by media-buying rule-of-thumb; break_even = 100/margin_pct
+    so at 60% margin BE≈1.67x, at 40% margin BE≈2.5x):
+      • ROAS < break_even         → cut 50%  (losing money)
+      • ROAS < 1.5×break_even     → cut 30%
+      • ROAS < 2.5×break_even     → hold (marginal, optimize)
+      • ROAS < 4×break_even       → +20% (healthy — scale slowly)
+      • ROAS < 8×break_even       → +50% (strong — scale hard)
+      • ROAS ≥ 8×break_even       → +100% (golden — double down)
+      • no_cost + revenue         → "attribute cost" hint
+      • no_data                   → skip
     """
     if status == "no_cost" and revenue > 0:
         return {

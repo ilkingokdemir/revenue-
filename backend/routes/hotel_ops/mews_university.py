@@ -26,7 +26,7 @@ Collections
                             quiz_score?}
 """
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import uuid
 
@@ -383,16 +383,26 @@ def create_university_router(db, require_roles):
         passed = answer == correct
         score = 100 if passed else 0
         email = current_user.get("email", "")
+        # If user already completed this lesson (correct answer earlier), keep completed_at
+        # so a wrong retry doesn't downgrade the record.
+        existing = await db.university_progress.find_one(
+            {"user_email": email, "lesson_id": lesson_id},
+            {"_id": 0, "completed_at": 1, "quiz_score": 1},
+        )
+        already_done = bool(existing and existing.get("completed_at"))
+        set_fields = {
+            "user_email": email,
+            "course_id":  lesson["course_id"],
+            "lesson_id":  lesson_id,
+            "quiz_score": max(score, (existing or {}).get("quiz_score") or 0),
+            "quiz_answered_at": _now(),
+        }
+        if passed and not already_done:
+            set_fields["completed_at"] = _now()
+
         await db.university_progress.update_one(
             {"user_email": email, "lesson_id": lesson_id},
-            {"$set": {
-                "user_email": email,
-                "course_id": lesson["course_id"],
-                "lesson_id": lesson_id,
-                "quiz_score": score,
-                "quiz_answered_at": _now(),
-                **({"completed_at": _now()} if passed else {}),
-            }, "$setOnInsert": {"id": str(uuid.uuid4())}},
+            {"$set": set_fields, "$setOnInsert": {"id": str(uuid.uuid4())}},
             upsert=True,
         )
         return {
@@ -462,15 +472,14 @@ def create_university_router(db, require_roles):
     async def leaderboard(days: int = 30,
                             _: dict = Depends(require_roles("admin", "manager"))):
         """Top-10 staff by lessons completed in the last N days."""
-        since = datetime.now(timezone.utc).timestamp() - days * 86400
+        cutoff_iso = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         rows = await db.university_progress.aggregate([
-            {"$match": {"completed_at": {"$exists": True, "$ne": None}}},
+            {"$match": {"completed_at": {"$gte": cutoff_iso}}},
             {"$group": {"_id": "$user_email", "lessons_done": {"$sum": 1},
                          "avg_quiz": {"$avg": "$quiz_score"}}},
             {"$sort": {"lessons_done": -1}},
             {"$limit": 10},
         ]).to_list(20)
-        _ = since  # kept for future date filter
         return {
             "window_days": days,
             "items": [

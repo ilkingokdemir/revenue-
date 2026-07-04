@@ -3,6 +3,22 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-06 (iter 364 — Mews University + ROAS Auto Budget Suggestion ✅ COMPLETE)
+- **Mews University (E-learning)** — `/app/backend/routes/hotel_ops/mews_university.py` + `/app/frontend/src/components/dashboard/MewsUniversityPanel.js`.
+  - Endpoints: `POST /api/university/courses/seed` (admin, idempotent), `GET /api/university/courses`, `GET /api/university/courses/{id}` (correct_index gizli), `POST /api/university/courses/{id}/enroll`, `PUT /api/university/lessons/{id}/complete`, `POST /api/university/lessons/{id}/quiz`, `GET /api/university/me`, `GET /api/university/leaderboard?days=N`.
+  - Collections: `university_courses`, `university_lessons`, `university_enrollments`, `university_progress`.
+  - 6 seed kurs (Front Desk Mastery, Housekeeping SOPs, Revenue Management 101, Guest Experience, Safety, PMS Power User) · 28 ders · Türkçe içerik · her kursta quiz.
+  - Frontend: catalog + category filters + course player (lesson list + MarkdownLite reader + inline quiz + retry + certificate badge) + "Devam Ettiklerin" hero + leaderboard (manager+).
+  - Sidebar nav: `Overview → Mews University`.
+- **ROAS Auto Budget Suggestion** — `/app/backend/routes/ai/voice_attribution.py::_budget_suggestion()`:
+  - Her kampanya satırına `suggestion: {action, delta_pct, delta_amount, headline, reason}` eklendi.
+  - Response'a `action_summary: {cut,hold,increase,double,info,skip counts, potential_savings, potential_increase}` eklendi.
+  - Rule-based (LLM yok) · margin-adjust break-even (100/margin%) · 6 tier: cut-50 → cut-30 → hold → +20 → +50 → +100.
+  - Frontend: `RoasCalculator.js` içine `ActionSummary` bar + tabloya `Öneri` sütunu (renk kodlu, tooltip'te tam neden).
+- **Fixes (post-test)**: (1) `leaderboard` `days` param'ı artık aggregation'a uygulanıyor (`$match: completed_at >= cutoff`). (2) Quiz retry artık `completed_at`'i overwrite etmiyor (guard: `already_done` → korunur) + quiz_score `max(new, existing)` ile monoton artıyor. (3) `_budget_suggestion` docstring break-even mantığını doğru yansıtıyor.
+- **Test**: iter 364 testing_agent — **backend 11/11 pytest passed**, frontend **100% success**. Kritik bug'lar (leaderboard `since` unused + quiz completed_at overwrite) fix edildi ve curl ile re-doğrulandı.
+
+
 ### 2026-07-06 (iter 362-363 — Native PWA + ROAS Calculator ✅ COMPLETE)
 - **Kullanıcı isteği**: "phone tablet uyumlu ve app hazırlanmalı" + "Potansiyel iyileştirme: ROAS Calculator"
 - **PWA Native-Feel Setup** (iter 362):

@@ -1168,6 +1168,10 @@ api_router.include_router(create_mews_parity_router(db, require_roles))
 from routes.platform_ext.marketplace import create_marketplace_router
 api_router.include_router(create_marketplace_router(db, require_roles))
 
+# ===== Kiosk PWA (Iter 359) — Self-service check-in for lobby tablets =====
+from routes.pms.kiosk import create_kiosk_router
+api_router.include_router(create_kiosk_router(db))
+
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))

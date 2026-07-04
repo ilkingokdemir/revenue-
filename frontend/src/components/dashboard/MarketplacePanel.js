@@ -151,6 +151,44 @@ export default function MarketplacePanel({ propertyId, hotelName = "" }) {
         <div className="text-center py-12"><Loader2 className="w-6 h-6 animate-spin text-stone-500 mx-auto" /></div>
       )}
 
+      {/* Featured apps carousel — top 3 highlighted */}
+      {!loading && category === "all" && !search && (data?.items || []).some(a => a.featured) && (
+        <div className="rounded-2xl bg-gradient-to-r from-fuchsia-900/40 via-indigo-900/40 to-violet-900/40 border border-fuchsia-500/20 p-4" data-testid="marketplace-featured-carousel">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <p className="text-xs font-black text-white/95 uppercase tracking-wider">Öne Çıkanlar</p>
+            <span className="text-[10px] text-fuchsia-200/70">· en çok tercih edilen entegrasyonlar</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {(data?.items || []).filter(a => a.featured).slice(0, 3).map(app => {
+              const st = STATUS_STYLES[app.status] || STATUS_STYLES.available;
+              const isInstalled = app.status === "installed" || app.status === "disabled";
+              return (
+                <button
+                  key={app.id}
+                  onClick={() => { setSelected(app); setConfigDraft(""); }}
+                  disabled={app.status === "coming_soon"}
+                  data-testid={`marketplace-featured-${app.id}`}
+                  className="text-left rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 p-4 hover:border-fuchsia-400/60 transition-all hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-12 h-12 rounded-xl bg-white/10 flex items-center justify-center text-3xl">
+                      {app.logo}
+                    </div>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold ${st.badge}`}>
+                      {isInstalled ? "✓ Yüklü" : st.label}
+                    </span>
+                  </div>
+                  <h4 className="text-sm font-black text-white">{app.name}</h4>
+                  <p className="text-[10px] text-fuchsia-200/80 mb-1.5">{app.provider}</p>
+                  <p className="text-xs text-stone-300 leading-snug line-clamp-2">{app.summary}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* App grid */}
       {!loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="marketplace-grid">

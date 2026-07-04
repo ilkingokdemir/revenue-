@@ -1,0 +1,70 @@
+{
+  "summary": "Kiosk PWA (Batch 3 F2) + Marketplace Featured Carousel testing complete. All 8 backend tests passed. All 5 frontend tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_kiosk_pwa.py",
+    "/app/test_reports/pytest/pytest_iteration359_kiosk_pwa.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% (all 5 tests passed)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Reset booking MHB-K13F3 status to 'confirmed' for full flow testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Kiosk PWA at /kiosk/{property_id} is fully functional. Test booking MHB-K13F3 (id: 5197869f-d887-4f76-b3d9-66444715ca25) at camden-suites. Marketplace has 20 apps with 6 featured (Booking.com, Airbnb, Stripe visible in carousel). All kiosk endpoints are PUBLIC (no auth required).",
+  "tests_executed": {
+    "backend": [
+      "Backend #1: GET /api/kiosk/camden-suites/config - PASSED (returns name='Camden Apartments', brand_color, checkin_time='15:00', currency='GBP')",
+      "Backend #2a: POST /api/kiosk/camden-suites/lookup with {} - PASSED (400 with 'En az bir kimlik bilgisi')",
+      "Backend #2b: POST /api/kiosk/camden-suites/lookup with {booking_ref:'MHB-K13F3'} - PASSED (count:1, guest_name:'Kiosk Test User', room_number:'204')",
+      "Backend #2c: POST /api/kiosk/camden-suites/lookup with {booking_ref:'ZZZ-FAKE'} - PASSED (404 with 'Rezervasyon bulunamadı')",
+      "Backend #3: POST /api/kiosk/camden-suites/checkin/{booking_id} - PASSED (ok:true, room_number:'204', door_code:4-digit, idempotent with already:true)",
+      "Backend #4: GET /api/kiosk/camden-suites/stats - PASSED (total_kiosk_checkins, today, lookup_misses)"
+    ],
+    "frontend": [
+      "Frontend #5: Marketplace Featured Carousel - PASSED ('Öne Çıkanlar' carousel visible with 3 featured cards: Booking.com, Airbnb, Stripe)",
+      "Frontend #6: Kiosk PWA Splash - PASSED (/kiosk/camden-suites loads with 'Hoş Geldiniz' + 'Check-in Başlat' button)",
+      "Frontend #7: Kiosk Lookup - PASSED (enter MHB-K13F3 → confirm step shows 'Kiosk Test User')",
+      "Frontend #8: Kiosk Full Flow - PASSED (sign screen → success screen with room 204 + door code 6523)",
+      "Frontend #9: Kiosk Reset - PASSED ('Baştan' and 'Bitir' buttons return to splash)"
+    ]
+  },
+  "kiosk_data_testids_verified": [
+    "kiosk-pwa",
+    "kiosk-splash",
+    "kiosk-start",
+    "kiosk-lookup",
+    "kiosk-input-ref",
+    "kiosk-lookup-btn",
+    "kiosk-confirm",
+    "kiosk-confirm-btn",
+    "kiosk-sign",
+    "kiosk-signature",
+    "kiosk-finalize",
+    "kiosk-success",
+    "kiosk-room-number",
+    "kiosk-door-code",
+    "kiosk-reset",
+    "kiosk-done"
+  ],
+  "marketplace_data_testids_verified": [
+    "marketplace-panel",
+    "marketplace-featured-carousel",
+    "marketplace-featured-booking-com",
+    "marketplace-featured-airbnb",
+    "marketplace-featured-stripe"
+  ]
+}

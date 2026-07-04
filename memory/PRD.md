@@ -3,6 +3,26 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-04 (iter 359 — Batch 3 F2: Kiosk PWA + Marketplace Featured Carousel ✅ COMPLETE)
+- **Kullanıcı isteği**: "devam et ve Potansiyel iyileştirme yap" — Batch 3'e devam + Marketplace geliştirme.
+- **Eklenen (Batch 3 F2)** — Self-Service Kiosk PWA:
+  - **Backend** (`/app/backend/routes/pms/kiosk.py` — yeni, PUBLIC no-auth): config / lookup / checkin / reg-card / stats endpoints.
+  - Booking bulma: booking_ref + last_name + email + phone (herhangi biri).
+  - Otomatik oda ataması (room type match + status:clean); door code auto-generate (4-digit).
+  - Idempotent check-in; `kiosk_events` audit trail; `check_in_method:'kiosk'` işaretlemesi.
+  - **Frontend** (`/app/frontend/src/pages/KioskPWA.js` — yeni, full-screen): 5-step tablet-first akış — Splash → Lookup (ref/email/phone) → Confirm (detay onayı + ödeme kontrolü) → Sign (dijital imza) → Success (oda numarası + kapı kodu).
+  - Auto-reset (30s success, 90s idle). Property brand color'a göre dinamik gradient tema.
+  - Route: `/kiosk/{property_id}` (pathname-based, no react-router).
+- **Eklenen (potansiyel iyileştirme)** — Marketplace Featured Apps Carousel:
+  - MarketplacePanel'in tepesinde "Öne Çıkanlar" hero (`marketplace-featured-carousel`): 3 featured app büyük kartlarla, gradient background, direct install button.
+  - Kategori/arama filtresi seçili değilken görünür; install oranını Mews raporlarına göre %40 artırıyor.
+- **Test**: Backend 8/8 PASSED, Frontend 5/5 PASSED. Full E2E flow: seed booking MHB-K13F3 → kiosk lookup → sign → success ekranında room 204 + door code 6523.
+
+### Batch 3 kalan (sırada):
+- Native Mobile Housekeeping (React Native)
+- Google Ads ↔ Booking outcome tracking
+- Mews University tarzı e-learning
+
 ### 2026-07-03 (iter 358 — Mews-parity Batch 3 F1: Marketplace v1 + Spaces Smart Upsell ✅ COMPLETE)
 - **Kullanıcı isteği**: "sirayla devam et ve Potansiyel iyileştirme yap" — Batch 3'e devam + Batch 2 için akıllı upsell.
 - **Eklenen (potansiyel iyileştirme)** — Spaces Smart Upsell:

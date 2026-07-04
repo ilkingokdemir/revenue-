@@ -196,6 +196,191 @@ def create_voice_and_attribution_router(db, require_roles):
             "generated_at": _now(),
         }
 
+    # ─── ROAS Calculator ────────────────────────────────────────────────
+    @router.get("/attribution/roas/template.csv", response_class=PlainTextResponse)
+    async def roas_template_csv():
+        """Downloadable CSV template so operators can paste Google Ads
+        campaign cost data in the expected column order."""
+        out = io.StringIO()
+        w = csv.writer(out)
+        w.writerow(["Campaign", "Cost", "Currency", "Clicks", "Impressions"])
+        w.writerow(["london-hotels-summer", "180.55", "GBP", "412", "18450"])
+        w.writerow(["brand-camden", "45.20", "GBP", "88", "3120"])
+        w.writerow(["retargeting-may", "62.00", "GBP", "154", "9800"])
+        return out.getvalue()
+
+    @router.post("/attribution/{property_id}/roas/cost")
+    async def upload_roas_cost(
+        property_id: str,
+        file: UploadFile = File(...),
+        _: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Ingest a Google Ads CSV export (Campaign, Cost, Currency, Clicks,
+        Impressions). Upserts per (property_id, campaign) so re-uploading the
+        same file just refreshes totals — no duplicates."""
+        raw = await file.read()
+        if len(raw) > 5 * 1024 * 1024:
+            raise HTTPException(413, "CSV 5MB üzerinde olamaz")
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1", errors="ignore")
+
+        reader = csv.DictReader(io.StringIO(text))
+        # Normalize header names (Google Ads uses "Campaign", "Cost", etc.)
+        def _norm(h: str) -> str:
+            return (h or "").strip().lower().replace(" ", "_")
+        # DictReader keys already come from the header row; rebuild with normalized keys
+        rows = []
+        for r in reader:
+            rows.append({_norm(k): (v or "").strip() for k, v in r.items()})
+
+        if not rows:
+            raise HTTPException(400, "CSV boş veya okunamıyor")
+
+        inserted = 0
+        skipped = 0
+        errors = []
+        for i, r in enumerate(rows, start=2):  # start=2 because row 1 is header
+            camp = r.get("campaign") or r.get("campaign_name") or ""
+            if not camp:
+                skipped += 1
+                continue
+            try:
+                cost = float((r.get("cost") or "0").replace(",", "").replace("£", "").replace("$", ""))
+            except ValueError:
+                errors.append(f"Satır {i}: geçersiz cost")
+                continue
+            doc = {
+                "property_id":   property_id,
+                "campaign":      camp,
+                "cost":          cost,
+                "currency":      (r.get("currency") or "GBP").upper(),
+                "clicks":        int(float(r.get("clicks") or 0)) if r.get("clicks") else 0,
+                "impressions":   int(float(r.get("impressions") or 0)) if r.get("impressions") else 0,
+                "uploaded_at":   _now(),
+            }
+            await db.campaign_costs.update_one(
+                {"property_id": property_id, "campaign": camp},
+                {"$set": doc},
+                upsert=True,
+            )
+            inserted += 1
+
+        return {
+            "ok": True,
+            "inserted_or_updated": inserted,
+            "skipped": skipped,
+            "errors": errors[:10],
+            "total_rows": len(rows),
+        }
+
+    @router.get("/attribution/{property_id}/roas")
+    async def compute_roas(
+        property_id: str,
+        days: int = 30,
+        margin_pct: float = 60.0,
+        _: dict = Depends(require_roles("admin", "manager")),
+    ):
+        """Compute Return on Ad Spend per campaign.
+
+        Revenue = sum(booking_attribution.value) grouped by utm_campaign in
+        the last `days` days.
+        Cost    = latest `campaign_costs` uploaded per campaign for this property.
+        ROAS    = revenue / cost.
+        Profit  = revenue * (margin_pct/100) - cost.
+        Status  = green (>3x), yellow (1-3x), red (<1x), no_data (no cost).
+        """
+        if margin_pct < 0 or margin_pct > 100:
+            raise HTTPException(400, "margin_pct 0-100 arasında olmalı")
+
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+        # Aggregate revenue + bookings per campaign
+        att_rows = await db.booking_attribution.find(
+            {"property_id": property_id, "created_at": {"$gte": since}}, {"_id": 0}
+        ).to_list(5000)
+        revenue_by_camp: dict[str, dict] = {}
+        for r in att_rows:
+            camp = r.get("utm_campaign") or "(no campaign)"
+            v = float(r.get("value") or 0)
+            b = revenue_by_camp.setdefault(camp, {"bookings": 0, "revenue": 0.0})
+            b["bookings"] += 1
+            b["revenue"] += v
+
+        # Cost catalogue for this property
+        costs = await db.campaign_costs.find(
+            {"property_id": property_id}, {"_id": 0}
+        ).to_list(2000)
+        cost_by_camp = {c["campaign"]: c for c in costs}
+
+        rows_out = []
+        totals = {"cost": 0.0, "revenue": 0.0, "profit": 0.0, "bookings": 0}
+        # Union of both sides — campaigns with cost OR bookings
+        all_camps = set(revenue_by_camp) | set(cost_by_camp)
+        for camp in all_camps:
+            r = revenue_by_camp.get(camp, {"bookings": 0, "revenue": 0.0})
+            c = cost_by_camp.get(camp)
+            cost = float(c["cost"]) if c else 0.0
+            revenue = r["revenue"]
+            bookings = r["bookings"]
+            profit = revenue * (margin_pct / 100.0) - cost
+            if cost <= 0:
+                roas = None
+                status = "no_cost" if revenue > 0 else "no_data"
+            else:
+                roas = round(revenue / cost, 2)
+                if roas >= 3:
+                    status = "green"
+                elif roas >= 1:
+                    status = "yellow"
+                else:
+                    status = "red"
+            rows_out.append({
+                "campaign":   camp,
+                "cost":       round(cost, 2),
+                "revenue":    round(revenue, 2),
+                "bookings":   bookings,
+                "roas":       roas,
+                "profit":     round(profit, 2),
+                "clicks":     (c or {}).get("clicks", 0),
+                "impressions":(c or {}).get("impressions", 0),
+                "cpa":        round(cost / bookings, 2) if bookings and cost else None,
+                "status":     status,
+                "currency":   (c or {}).get("currency", "GBP"),
+            })
+            totals["cost"] += cost
+            totals["revenue"] += revenue
+            totals["profit"] += profit
+            totals["bookings"] += bookings
+
+        # Sort by revenue desc
+        rows_out.sort(key=lambda x: x["revenue"], reverse=True)
+
+        overall_roas = round(totals["revenue"] / totals["cost"], 2) if totals["cost"] > 0 else None
+        return {
+            "window_days": days,
+            "margin_pct": margin_pct,
+            "campaigns": rows_out,
+            "totals": {
+                "cost":     round(totals["cost"], 2),
+                "revenue":  round(totals["revenue"], 2),
+                "profit":   round(totals["profit"], 2),
+                "bookings": totals["bookings"],
+                "roas":     overall_roas,
+            },
+            "generated_at": _now(),
+        }
+
+    @router.delete("/attribution/{property_id}/roas/cost/{campaign}")
+    async def delete_roas_cost(property_id: str, campaign: str,
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        """Remove a single campaign cost row (e.g. wrong upload)."""
+        res = await db.campaign_costs.delete_one(
+            {"property_id": property_id, "campaign": campaign}
+        )
+        return {"ok": True, "deleted": res.deleted_count}
+
     @router.get("/attribution/{property_id}/export.csv", response_class=PlainTextResponse)
     async def export_google_ads_csv(property_id: str, days: int = 90,
                                      _: dict = Depends(require_roles("admin", "manager"))):

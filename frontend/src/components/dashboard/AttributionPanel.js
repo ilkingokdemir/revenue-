@@ -8,6 +8,7 @@ import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Loader2, BarChart3, RefreshCw, Download, Zap } from "lucide-react";
+import RoasCalculator from "./RoasCalculator";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -185,6 +186,8 @@ export default function AttributionPanel({ propertyId, hotelName = "" }) {
           </div>
         </div>
       )}
+
+      <RoasCalculator propertyId={propertyId} />
     </div>
   );
 }

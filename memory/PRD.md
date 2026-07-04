@@ -3,6 +3,23 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-06 (iter 362-363 — Native PWA + ROAS Calculator ✅ COMPLETE)
+- **Kullanıcı isteği**: "phone tablet uyumlu ve app hazırlanmalı" + "Potansiyel iyileştirme: ROAS Calculator"
+- **PWA Native-Feel Setup** (iter 362):
+  - `/app/frontend/public/manifest.json` — 4 shortcut (HK-mobile, Kiosk, Arrivals, Morning Brief), maskable icon, standalone display.
+  - `/app/frontend/public/sw.js` — Precache app shell, stale-while-revalidate `/static/*`, network-first with 5s timeout for `/api/*`, offline navigation fallback.
+  - `/app/frontend/src/components/PWAInstall.js` — beforeinstallprompt UI (Chrome/Edge), iOS Safari hint (Paylaş → Ana Ekrana Ekle).
+  - `<PWAInstall />` mount edildi (AppWithLanguage).
+  - **Doğrulama**: SW `scope=/ active=true`, manifest fetch 200 (4 shortcut), sw.js 200. Chrome/Android'de "Uygulama olarak yükle" chip'i çıkıyor.
+- **ROAS Calculator** (iter 363) — `/app/backend/routes/ai/voice_attribution.py`:
+  - `GET /api/attribution/roas/template.csv` — Google Ads şablonu (Campaign, Cost, Currency, Clicks, Impressions).
+  - `POST /api/attribution/{pid}/roas/cost` — CSV upload → upsert `campaign_costs` collection (per property + campaign, idempotent).
+  - `GET /api/attribution/{pid}/roas?days=30&margin_pct=60` — Revenue (utm_campaign) + Cost join → ROAS, Net Kâr, CPA, Status (green ≥3x / yellow 1-3x / red <1x).
+  - `DELETE /api/attribution/{pid}/roas/cost/{campaign}` — Silme.
+  - Frontend: `/app/frontend/src/components/dashboard/RoasCalculator.js` — AttributionPanel'in altına eklendi. Marj %, days seçici, CSV upload (drag/click), template download, kampanya tablosu (cost/revenue/roas/net kâr renk kodlu), status badge (Ölçekle/İzle/Durdur), totals grid.
+- **Test**: Backend curl 4/4 (upload 3 kampanya, 9 booking, ROAS 4.79x-23.43x hesaplandı, totals doğru). Frontend smoke (Attribution panel'de RoasCalculator render, empty state + full state visible).
+
+
 ### 2026-07-05 (iter 361 — Batch 3 F4: Attribution + Google Ads Export + HK Voice Whisper ✅ COMPLETE)
 - **Kullanıcı isteği**: "sirayla devam et ve Potansiyel iyileştirme yap" — Batch 3 F4 + Whisper voice damage report.
 - **Eklenen (Batch 3 F4)** — Booking Attribution & Google Ads outcome tracking:

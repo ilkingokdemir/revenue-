@@ -1,13 +1,14 @@
 {
   "name": "Hotel PMS & Revenue Management",
   "short_name": "Hotel PMS",
-  "description": "Boutique hotel PMS / RMS for staff and managers — front desk, housekeeping, maintenance, revenue, and reports on the go.",
+  "description": "Otel PMS/RMS — resepsiyon, housekeeping, bakım, revenue ve raporlar. Mobil + tablet uyumlu.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "any",
   "background_color": "#0c0a09",
   "theme_color": "#1a3c5e",
+  "lang": "tr",
   "categories": ["business", "productivity", "travel"],
   "icons": [
     {
@@ -20,19 +21,43 @@
       "src": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=512&h=512&fit=crop",
       "sizes": "512x512",
       "type": "image/jpeg",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ],
   "shortcuts": [
     {
-      "name": "Today's arrivals",
+      "name": "Housekeeping (mobil)",
+      "short_name": "HK",
+      "url": "/hk-mobile/",
+      "description": "Personel için mobil housekeeping — oda temizliği + sesli arıza raporu"
+    },
+    {
+      "name": "Kiosk Check-in",
+      "short_name": "Kiosk",
+      "url": "/kiosk/",
+      "description": "Self-service tablet check-in ekranı"
+    },
+    {
+      "name": "Bugünün Girişleri",
+      "short_name": "Arrivals",
       "url": "/?view=arrivals",
-      "description": "Jump straight to today's arrivals list"
+      "description": "Bugünün check-in listesi"
     },
     {
       "name": "Morning Brief",
+      "short_name": "Brief",
       "url": "/?view=morning-brief",
-      "description": "8 AM digest"
+      "description": "08:00 günlük özet"
+    }
+  ],
+  "prefer_related_applications": false,
+  "display_override": ["window-controls-overlay", "standalone"],
+  "screenshots": [
+    {
+      "src": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1080&h=720&fit=crop",
+      "sizes": "1080x720",
+      "type": "image/jpeg",
+      "form_factor": "wide"
     }
   ]
 }

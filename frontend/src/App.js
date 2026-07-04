@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { LanguageProvider, useTranslation } from "@/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { PWAInstall } from "@/components/PWAInstall";
 import ReviewWidget from "./ReviewWidget";
 import BookingEngine from "./BookingEngine";
 import ReviewCollectionPage from "./ReviewCollectionPage";
@@ -5129,6 +5130,7 @@ function AppWithLanguage() {
   return (
     <LanguageProvider>
       <App />
+      <PWAInstall />
     </LanguageProvider>
   );
 }

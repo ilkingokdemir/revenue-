@@ -151,7 +151,7 @@ export default function SpacesPanel({ propertyId, hotelName = "" }) {
                 Odalar dışındaki tüm satılabilir kaynakları (otopark, toplantı odası, EV şarj istasyonu, coworking masa, bagaj dolabı, EV bike) saatlik veya günlük olarak sat.
               </p>
               <p className="text-xs text-stone-500 max-w-lg mx-auto mb-6">
-                Mews&apos;in en yüksek ROI&apos;lu ürünlerinden biri (%310 3-yıl ROI iddiası). 6 örnek space ile başlayıp fiyat/kapasiteyi ihtiyacınıza göre düzenleyebilirsiniz.
+                Toplantı odası ve otopark gibi non-room varlıklar sektörde en yüksek ROI&apos;lu ürünler arasında (%300+ 3-yıl ROI). 6 örnek space ile başlayıp fiyat/kapasiteyi ihtiyacınıza göre düzenleyebilirsiniz.
               </p>
               <div className="flex items-center justify-center gap-3">
                 <button

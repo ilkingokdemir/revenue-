@@ -469,8 +469,8 @@ def create_integrations_router(db, require_roles, resend):
         branding = await db.branding_settings.find_one({}, {"_id": 0})
         if not branding:
             branding = {
-                "app_name": "Hotel PMS & Revenue Management",
-                "subtitle": "Property management & revenue suite",
+                "app_name": "MyHotelBox & ReveniQ",
+                "subtitle": "Otel PMS & Revenue Management",
                 "primary_color": "#3E5245",
                 "accent_color": "#D4A373",
                 "logo_url": None,
@@ -492,8 +492,8 @@ def create_integrations_router(db, require_roles, resend):
             await db.branding_settings.update_one({}, {"$set": update_data})
         else:
             new_settings = {
-                "app_name": "Hotel PMS & Revenue Management",
-                "subtitle": "Property management & revenue suite",
+                "app_name": "MyHotelBox & ReveniQ",
+                "subtitle": "Otel PMS & Revenue Management",
                 "primary_color": "#3E5245",
                 "accent_color": "#D4A373",
                 "logo_url": None,
@@ -528,8 +528,8 @@ def create_integrations_router(db, require_roles, resend):
             await db.branding_settings.update_one({}, {"$set": {"logo_url": logo_url, "updated_at": datetime.now(timezone.utc).isoformat()}})
         else:
             await db.branding_settings.insert_one({
-                "app_name": "Hotel PMS & Revenue Management",
-                "subtitle": "Property management & revenue suite",
+                "app_name": "MyHotelBox & ReveniQ",
+                "subtitle": "Otel PMS & Revenue Management",
                 "primary_color": "#3E5245",
                 "accent_color": "#D4A373",
                 "logo_url": logo_url,

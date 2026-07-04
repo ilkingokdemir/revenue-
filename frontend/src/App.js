@@ -2674,7 +2674,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "morning-brief", icon: ChartLine, name: "Morning brief", testId: "morning-brief-btn" },
         { id: "nightly-recap", icon: Moon, name: "Nightly recap", testId: "nightly-recap-btn" },
         { id: "help-guide", icon: BookOpen, name: "Help & user guide", testId: "help-guide-btn" },
-        { id: "mews-university", icon: GraduationCap, name: "Mews University", testId: "mews-university-btn" },
+        { id: "mews-university", icon: GraduationCap, name: "HotelBox Academy", testId: "mews-university-btn" },
       ],
     },
     {
@@ -3237,7 +3237,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h1 className="text-sm font-semibold text-white truncate" data-testid="header-app-name">{branding?.app_name || "Hotel PMS & Revenue Management"}</h1>
+              <h1 className="text-sm font-semibold text-white truncate" data-testid="header-app-name">{branding?.app_name || "MyHotelBox & ReveniQ"}</h1>
               <p className="text-[10px] text-stone-500 truncate" data-testid="header-subtitle">{branding?.subtitle || "PMS & Revenue Suite"}</p>
             </div>
             {/* Close button for mobile */}

@@ -116,8 +116,8 @@ export default function MewsUniversityPanel({ userRole = "" }) {
               <GraduationCap className="w-7 h-7 text-indigo-300" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-stone-100">Mews University</h2>
-              <p className="text-sm text-stone-400">Ekibin self-training merkezi — SOP, RM, safety, PMS ve daha fazlası</p>
+              <h2 className="text-2xl font-bold text-stone-100">HotelBox Academy</h2>
+              <p className="text-sm text-stone-400">MyHotelBox &amp; ReveniQ ekibin için self-training — SOP, RM, safety, PMS ve daha fazlası</p>
             </div>
           </div>
           {isManager && courses.length === 0 && (

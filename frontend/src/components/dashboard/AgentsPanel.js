@@ -66,12 +66,12 @@ export default function AgentsPanel() {
   return (
     <div className="p-5 max-w-[1400px] mx-auto" data-testid="agents-panel">
       <div className="mb-5">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-1">Mews Agentic AI 2026</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-1">ReveniQ Agentic AI 2026</div>
         <h2 className="text-2xl font-semibold text-stone-900 inline-flex items-center gap-2">
           <Robot size={22} weight="fill" className="text-indigo-600" /> Otonom AI Agent'lar
         </h2>
         <p className="text-sm text-stone-500 mt-1">
-          Departmanlar arası iş akışlarını planlayan, yürüten ve onaylama bekleyen otonom ajanlar (Mews 2026 paritesi).
+          Departmanlar arası iş akışlarını planlayan, yürüten ve onaylama bekleyen otonom ajanlar.
         </p>
       </div>
 

@@ -23,8 +23,8 @@ const BrandingPanel = ({ isOpen, onClose, branding, onBrandingUpdate }) => {
   useEffect(() => {
     if (branding) {
       setForm({
-        app_name: branding.app_name || "Hotel PMS & Revenue Management",
-        subtitle: branding.subtitle || "Property management & revenue suite",
+        app_name: branding.app_name || "MyHotelBox & ReveniQ",
+        subtitle: branding.subtitle || "Otel PMS & Revenue Management",
         primary_color: branding.primary_color || "#3E5245",
         accent_color: branding.accent_color || "#D4A373",
         powered_by_text: branding.powered_by_text || "",
@@ -117,8 +117,8 @@ const BrandingPanel = ({ isOpen, onClose, branding, onBrandingUpdate }) => {
                 </div>
               )}
               <div>
-                <h3 className="text-sm font-semibold text-white font-['Work_Sans']">{form.app_name || "Hotel PMS & Revenue Management"}</h3>
-                <p className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{form.subtitle || "Property management & revenue suite"}</p>
+                <h3 className="text-sm font-semibold text-white font-['Work_Sans']">{form.app_name || "MyHotelBox & ReveniQ"}</h3>
+                <p className="text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{form.subtitle || "Otel PMS & Revenue Management"}</p>
               </div>
             </div>
           </div>
@@ -182,7 +182,7 @@ const BrandingPanel = ({ isOpen, onClose, branding, onBrandingUpdate }) => {
             <Input
               value={form.app_name}
               onChange={(e) => setForm(prev => ({ ...prev, app_name: e.target.value }))}
-              placeholder="Hotel PMS & Revenue Management"
+              placeholder="MyHotelBox & ReveniQ"
               className="border-stone-200"
               data-testid="branding-app-name"
             />
@@ -192,7 +192,7 @@ const BrandingPanel = ({ isOpen, onClose, branding, onBrandingUpdate }) => {
             <Input
               value={form.subtitle}
               onChange={(e) => setForm(prev => ({ ...prev, subtitle: e.target.value }))}
-              placeholder="Property management & revenue suite"
+              placeholder="Otel PMS & Revenue Management"
               className="border-stone-200"
               data-testid="branding-subtitle"
             />

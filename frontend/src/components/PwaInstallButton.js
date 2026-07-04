@@ -63,7 +63,7 @@ export default function PwaInstallButton() {
         <DeviceMobile size={22} weight="fill" className="text-emerald-400 shrink-0" />
         <div className="flex-1 text-sm">
           <div className="font-semibold">Cihazınıza yükleyin</div>
-          <div className="text-stone-300 text-xs">Hotel PMS'i ana ekrana ekleyin — daha hızlı, tarayıcısız.</div>
+          <div className="text-stone-300 text-xs">MyHotelBox&apos;u ana ekrana ekleyin — daha hızlı, tarayıcısız.</div>
         </div>
         <button
           onClick={install}

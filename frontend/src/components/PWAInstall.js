@@ -91,7 +91,7 @@ export function PWAInstall() {
           <div className="flex-1">
             <p className="text-sm font-bold mb-1">Ana ekrana ekle</p>
             <p className="text-xs text-white/70 leading-relaxed">
-              Safari&apos;de <b>Paylaş</b> ↗ ikonuna dokunun → <b>&quot;Ana Ekrana Ekle&quot;</b> → Hotel PMS gerçek bir app gibi açılır (offline, tam ekran).
+              Safari&apos;de <b>Paylaş</b> ↗ ikonuna dokunun → <b>&quot;Ana Ekrana Ekle&quot;</b> → MyHotelBox gerçek bir app gibi açılır (offline, tam ekran).
             </p>
           </div>
           <button

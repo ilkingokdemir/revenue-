@@ -169,7 +169,7 @@ export default function CommandPalette({ items = [], onSelect, recents = [], onA
             <kbd className="px-1 py-0.5 rounded bg-stone-800 border border-stone-700 font-mono">esc</kbd>{" "}
             kapat
           </span>
-          <span className="text-stone-600">Hotel PMS · Command</span>
+          <span className="text-stone-600">MyHotelBox · Command</span>
         </div>
       </CommandDialog>
     </>

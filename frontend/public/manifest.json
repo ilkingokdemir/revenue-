@@ -1,7 +1,7 @@
 {
-  "name": "Hotel PMS & Revenue Management",
-  "short_name": "Hotel PMS",
-  "description": "Otel PMS/RMS — resepsiyon, housekeeping, bakım, revenue ve raporlar. Mobil + tablet uyumlu.",
+  "name": "MyHotelBox & ReveniQ",
+  "short_name": "MyHotelBox",
+  "description": "MyHotelBox PMS + ReveniQ RMS — resepsiyon, housekeeping, bakım, revenue ve raporlar. Mobil + tablet uyumlu.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

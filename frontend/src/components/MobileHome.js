@@ -93,9 +93,9 @@ export default function MobileHome({ user, branding, onNavigate, kpis }) {
             <Buildings size={20} weight="fill" className="text-emerald-400" />
             <div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-stone-400">
-                {branding?.subtitle || "Property management"}
+                {branding?.subtitle || "PMS & Revenue"}
               </div>
-              <div className="text-base font-semibold">{branding?.app_name || "Hotel PMS"}</div>
+              <div className="text-base font-semibold">{branding?.app_name || "MyHotelBox"}</div>
             </div>
           </div>
           <div className="flex items-center gap-2">

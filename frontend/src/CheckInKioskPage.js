@@ -104,7 +104,7 @@ export default function CheckInKioskPage({ propertyId }) {
               <p className="text-lg font-medium">Tap anywhere to begin</p>
             </div>
           </motion.div>
-          <p className="text-white/30 text-xs mt-12">Powered by Hotel PMS &amp; Revenue Management</p>
+          <p className="text-white/30 text-xs mt-12">Powered by MyHotelBox &amp; ReveniQ</p>
         </motion.div>
       </div>
     );

@@ -73,7 +73,7 @@ const LoginPage = ({ onLogin }) => {
             <div className="w-14 h-14 bg-white/15 rounded-xl flex items-center justify-center mx-auto mb-3">
               <Buildings size={28} className="text-white" weight="fill" />
             </div>
-            <h1 className="text-xl font-semibold text-white">Hotel PMS &amp; Revenue Management</h1>
+            <h1 className="text-xl font-semibold text-white">MyHotelBox &amp; ReveniQ</h1>
             <p className="text-sm text-white/60 mt-1">Property Management & Revenue Suite</p>
           </div>
           

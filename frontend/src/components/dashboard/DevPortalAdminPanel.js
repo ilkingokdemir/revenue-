@@ -52,7 +52,7 @@ export default function DevPortalAdminPanel() {
   return (
     <div className="p-5 max-w-[1400px] mx-auto" data-testid="dev-portal-admin-panel">
       <div className="mb-5">
-        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-1">Mews Marketplace v2 parity</div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-1">Developer Platform v2 · MyHotelBox × ReveniQ</div>
         <h2 className="text-2xl font-semibold text-stone-900 inline-flex items-center gap-2">
           <Code size={22} weight="fill" className="text-emerald-600" /> Geliştirici Portalı Yönetimi
         </h2>

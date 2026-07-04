@@ -10,12 +10,12 @@
  *   Filter bar (dirty · in_progress · clean · all)
  *   Room list — tap → detail sheet with status transition buttons
  */
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast, Toaster } from "sonner";
 import {
   Loader2, ChevronRight, LogOut, RefreshCcw, CheckCircle2, Sparkles, Wrench,
-  ClipboardCheck, Bed, XCircle,
+  ClipboardCheck, Bed, XCircle, Mic, Square, Send,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -291,8 +291,141 @@ export default function HousekeepingMobilePWA() {
                   <Wrench className="w-4 h-4" /> Arıza / OOO
                 </button>
               )}
+
+              {/* Voice damage / maintenance report */}
+              <VoiceReporter
+                propertyId={propertyId}
+                roomNumber={selected.room_number}
+                onSubmitted={() => toast.success("Sesli arıza raporu kaydedildi")}
+              />
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * VoiceReporter — record a short audio message via MediaRecorder,
+ * POST to /api/hk/voice-report which will transcribe + create ticket.
+ */
+function VoiceReporter({ propertyId, roomNumber, onSubmitted }) {
+  const [state, setState] = useState("idle"); // idle | recording | preview | uploading | done
+  const [blob, setBlob] = useState(null);
+  const [transcript, setTranscript] = useState("");
+  const [duration, setDuration] = useState(0);
+  const mediaRecorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const timerRef = useRef(null);
+
+  const start = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+      const mimeType = mimeCandidates.find(m => window.MediaRecorder?.isTypeSupported?.(m)) || "audio/webm";
+      const mr = new MediaRecorder(stream, { mimeType });
+      chunksRef.current = [];
+      mr.ondataavailable = e => e.data.size > 0 && chunksRef.current.push(e.data);
+      mr.onstop = () => {
+        const b = new Blob(chunksRef.current, { type: mimeType });
+        setBlob(b);
+        setState("preview");
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(timerRef.current);
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setState("recording"); setDuration(0);
+      timerRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+      // Auto-stop after 60s to prevent runaway recordings
+      setTimeout(() => { if (mr.state === "recording") mr.stop(); }, 60000);
+    } catch (e) {
+      toast.error("Mikrofon erişimi reddedildi");
+    }
+  };
+
+  const stop = () => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const send = async () => {
+    if (!blob) return;
+    setState("uploading");
+    try {
+      const fd = new FormData();
+      fd.append("audio", blob, "voice-report.webm");
+      fd.append("property_id", propertyId);
+      fd.append("room_number", roomNumber || "");
+      fd.append("language", "tr");
+      const r = await axios.post(`${process.env.REACT_APP_BACKEND_URL}/api/hk/voice-report`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      setTranscript(r.data.transcript || "");
+      setState("done");
+      onSubmitted?.(r.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Ses kaydı gönderilemedi");
+      setState("preview");
+    }
+  };
+
+  const reset = () => { setState("idle"); setBlob(null); setTranscript(""); setDuration(0); };
+
+  return (
+    <div className="border-t border-stone-200 pt-3 mt-2" data-testid="hk-voice-reporter">
+      <p className="text-[10px] text-stone-500 font-bold uppercase mb-1.5">🎙️ Sesli Arıza Raporu (AI transcribe)</p>
+      {state === "idle" && (
+        <button
+          onClick={start}
+          data-testid="hk-voice-start"
+          className="w-full py-3 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-bold active:scale-[0.97] inline-flex items-center justify-center gap-2"
+        >
+          <Mic className="w-4 h-4" /> Kayda Başla
+        </button>
+      )}
+      {state === "recording" && (
+        <button
+          onClick={stop}
+          data-testid="hk-voice-stop"
+          className="w-full py-3 rounded-2xl bg-rose-600 text-white text-sm font-bold animate-pulse active:scale-[0.97] inline-flex items-center justify-center gap-2"
+        >
+          <Square className="w-4 h-4 fill-white" /> Durdur ({duration}s)
+        </button>
+      )}
+      {state === "preview" && (
+        <div className="space-y-2">
+          <audio controls src={blob && URL.createObjectURL(blob)} className="w-full h-8" data-testid="hk-voice-audio" />
+          <div className="flex gap-2">
+            <button onClick={reset} className="flex-1 py-2.5 rounded-xl bg-stone-200 text-stone-700 text-sm font-bold">
+              İptal
+            </button>
+            <button
+              onClick={send} data-testid="hk-voice-send"
+              className="flex-1 py-2.5 rounded-xl bg-emerald-500 text-white text-sm font-bold inline-flex items-center justify-center gap-1"
+            >
+              <Send className="w-3.5 h-3.5" /> Gönder
+            </button>
+          </div>
+        </div>
+      )}
+      {state === "uploading" && (
+        <div className="py-3 flex items-center justify-center gap-2 text-sm text-stone-600">
+          <Loader2 className="w-4 h-4 animate-spin" /> AI transcribe ediyor...
+        </div>
+      )}
+      {state === "done" && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3" data-testid="hk-voice-result">
+          <div className="flex items-center gap-1.5 mb-1">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <p className="text-xs font-bold text-emerald-800">Ticket oluşturuldu · AI transcript:</p>
+          </div>
+          <p className="text-xs text-stone-700 italic">&quot;{transcript}&quot;</p>
+          <button onClick={reset} className="mt-2 text-[11px] px-2 py-1 rounded bg-white border border-emerald-300 text-emerald-700 font-bold">
+            Yeni Kayıt
+          </button>
         </div>
       )}
     </div>

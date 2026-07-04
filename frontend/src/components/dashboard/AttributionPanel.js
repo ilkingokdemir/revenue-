@@ -7,7 +7,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, BarChart3, RefreshCw } from "lucide-react";
+import { Loader2, BarChart3, RefreshCw, Download, Zap } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -62,6 +62,49 @@ export default function AttributionPanel({ propertyId, hotelName = "" }) {
           <button data-testid="attr-refresh-btn" onClick={load}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-sm text-stone-100 border border-stone-700">
             <RefreshCw className="w-4 h-4" /> Refresh
+          </button>
+          <button
+            onClick={async () => {
+              try {
+                const r = await axios.get(`${API}/attribution/${propertyId}/export.csv?days=90`, { responseType: "blob" });
+                const url = URL.createObjectURL(r.data);
+                const a = document.createElement("a");
+                a.href = url; a.download = `google_ads_conversions_${propertyId}.csv`; a.click();
+                URL.revokeObjectURL(url);
+                toast.success("Google Ads CSV indirildi");
+              } catch { toast.error("Export failed"); }
+            }}
+            data-testid="attr-google-csv-btn"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-bold"
+            title="Google Ads Offline Conversions için CSV indir (son 90 gün gclid'li rezervasyonlar)"
+          >
+            <Download className="w-4 h-4" /> Google Ads CSV
+          </button>
+          <button
+            onClick={async () => {
+              if (!window.confirm("5 örnek attribution kaydı oluşturulsun mu?")) return;
+              try {
+                const samples = [
+                  { utm_source: "google-ads", utm_medium: "cpc", utm_campaign: "london-hotels-summer", gclid: "Cj0KCQjw" + Math.random().toString(36).slice(2, 12), value: 245 },
+                  { utm_source: "google-ads", utm_medium: "cpc", utm_campaign: "brand-camden",         gclid: "Cj0KCQjw" + Math.random().toString(36).slice(2, 12), value: 180 },
+                  { utm_source: "facebook",   utm_medium: "social", utm_campaign: "retargeting-may",   value: 320 },
+                  { utm_source: "direct",     value: 210 },
+                  { utm_source: "booking.com",utm_medium: "referral", value: 175 },
+                ];
+                for (const s of samples) {
+                  await axios.post(`${API}/attribution/track`, {
+                    booking_id: `demo-${Math.random().toString(36).slice(2, 10)}`,
+                    property_id: propertyId, ...s, currency: "GBP",
+                  });
+                }
+                toast.success("5 örnek attribution + Google Ads gclid oluşturuldu — CSV indirmeye hazır");
+                load();
+              } catch { toast.error("Seed failed"); }
+            }}
+            data-testid="attr-seed-demo"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-bold"
+          >
+            <Zap className="w-4 h-4" /> Demo Seed
           </button>
         </div>
       </div>

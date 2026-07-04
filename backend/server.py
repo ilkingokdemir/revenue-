@@ -1172,6 +1172,10 @@ api_router.include_router(create_marketplace_router(db, require_roles))
 from routes.pms.kiosk import create_kiosk_router
 api_router.include_router(create_kiosk_router(db))
 
+# ===== Voice HK reports + Booking attribution tracker (Iter 361) =====
+from routes.ai.voice_attribution import create_voice_and_attribution_router
+api_router.include_router(create_voice_and_attribution_router(db, require_roles))
+
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))

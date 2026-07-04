@@ -1,0 +1,72 @@
+{
+  "summary": "Batch 3 F4 (Booking Attribution / Google Ads) + HK Voice Damage Report testing complete. Backend: 8/8 tests passed. Frontend: Attribution Panel UI works but Demo Seed uses wrong API endpoint (data mismatch). HK Voice Reporter UI fully functional.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Attribution Panel Demo Seed",
+        "issue": "Demo Seed button calls /api/attribution/track (new endpoint) but panel displays data from /api/attribution/{propertyId}/report (existing endpoint). Data stored in different collections (booking_attribution vs attribution_touches). Seed succeeds but data doesn't appear in panel.",
+        "affected_selectors": ["[data-testid='attr-seed-demo']"],
+        "priority": "MEDIUM"
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_voice_attribution.py",
+    "/app/test_reports/pytest/pytest_iteration361_voice_attribution.xml"
+  ],
+  "action_items": [
+    "Fix Attribution Panel Demo Seed: Either (1) change Demo Seed to call /api/attribution/log instead of /api/attribution/track, OR (2) update panel to use new /api/attribution/{propertyId} endpoint instead of /report endpoint"
+  ],
+  "critical_code_review_comments": [
+    "Two attribution modules exist: /routes/ai/voice_attribution.py (new) and /routes/marketing/attribution.py (existing). They use different collections and API patterns. Demo Seed in AttributionPanel.js calls new /track endpoint but panel reads from old /report endpoint."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_voice_attribution.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "85% - Attribution Panel UI works, Demo Seed has data mismatch issue. HK Voice Reporter 100% working."
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Backend tests created attribution records in booking_attribution collection for testing",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Attribution Panel at GUESTS > Source attribution. Two attribution systems exist: (1) /api/attribution/log + /report + /funnel (marketing module, uses attribution_touches collection) and (2) /api/attribution/track + /{propertyId} + /export.csv (voice_attribution module, uses booking_attribution collection). Frontend Demo Seed calls (2) but displays data from (1). HK Voice Reporter at /hk-mobile/{propertyId} works correctly - VoiceReporter component renders with Kayda Başla button.",
+  "tests_executed": {
+    "backend": [
+      "Backend #1: POST /api/attribution/track - PASSED (idempotent upsert on booking_id)",
+      "Backend #2: GET /api/attribution/camden-suites?days=30 - PASSED (returns aggregates with by_source sorted by value desc)",
+      "Backend #3: GET /api/attribution/camden-suites/export.csv?days=90 - PASSED (returns Google Ads Offline Conversions CSV format)",
+      "Backend #4: POST /api/hk/voice-report - PASSED (creates maintenance ticket with source='voice', transcript field)"
+    ],
+    "frontend": [
+      "Frontend #5: Attribution Panel loads - PASSED (panel visible with days dropdown, refresh, Google Ads CSV, Demo Seed buttons)",
+      "Frontend #5b: Demo Seed button - PARTIAL (button works, API call succeeds, but data doesn't appear due to endpoint mismatch)",
+      "Frontend #6: Google Ads CSV button - PASSED (button visible and clickable)",
+      "Frontend #7: HK Voice Reporter widget - PASSED (widget visible with 'Sesli Arıza Raporu' label and 'Kayda Başla' button)"
+    ]
+  },
+  "data_testids_verified": {
+    "attribution_panel": [
+      "attribution-panel",
+      "attr-days",
+      "attr-refresh-btn",
+      "attr-google-csv-btn",
+      "attr-seed-demo"
+    ],
+    "hk_voice_reporter": [
+      "hk-voice-reporter",
+      "hk-voice-start",
+      "hk-detail-sheet",
+      "hk-mobile-pwa",
+      "hk-stats",
+      "hk-room-list"
+    ]
+  }
+}

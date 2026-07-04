@@ -15,7 +15,7 @@ Flow:
 All state changes create audit rows in `kiosk_events`.
 """
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import logging
 import secrets
@@ -205,6 +205,75 @@ def create_kiosk_router(db):
             "room_number": booking.get("room_number"),
             "signature": booking.get("kiosk_signature"),
             "signed_at": booking.get("checked_in_at"),
+        }
+
+    @router.get("/{property_id}/qr-token/{booking_id}")
+    async def qr_token(property_id: str, booking_id: str):
+        """Generate a short-lived kiosk lookup token that can be embedded in
+        the confirmation e-mail QR code. Guest scans on the lobby tablet →
+        one-touch check-in.
+        """
+        booking = await db.bookings.find_one(
+            {"id": booking_id, "property_id": property_id},
+            {"_id": 0, "id": 1, "booking_ref": 1, "guest_email": 1, "status": 1, "check_in": 1},
+        )
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+        if booking.get("status") in {"cancelled", "checked_out", "no_show"}:
+            raise HTTPException(400, "Bu rezervasyon check-in için uygun değil")
+        token = secrets.token_urlsafe(24)
+        # Store token → booking mapping (24h TTL)
+        await db.kiosk_qr_tokens.insert_one({
+            "token": token,
+            "property_id": property_id,
+            "booking_id": booking_id,
+            "booking_ref": booking.get("booking_ref"),
+            "created_at": _now(),
+            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+        })
+        return {
+            "token": token,
+            "kiosk_url": f"/kiosk/{property_id}?token={token}",
+            "expires_at": (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
+        }
+
+    @router.post("/{property_id}/qr-redeem")
+    async def qr_redeem(property_id: str, body: dict):
+        """Public: kiosk exchanges a QR token for the underlying booking."""
+        token = (body.get("token") or "").strip()
+        if not token:
+            raise HTTPException(400, "token required")
+        rec = await db.kiosk_qr_tokens.find_one({"token": token, "property_id": property_id}, {"_id": 0})
+        if not rec:
+            raise HTTPException(404, "Token geçersiz veya süresi dolmuş")
+        # TTL check
+        try:
+            if datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc):
+                await db.kiosk_qr_tokens.delete_one({"token": token})
+                raise HTTPException(410, "Token süresi dolmuş")
+        except ValueError:
+            pass
+        booking = await db.bookings.find_one({"id": rec["booking_id"]}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Rezervasyon bulunamadı")
+        return {
+            "booking": {
+                "id": booking.get("id"),
+                "booking_ref": booking.get("booking_ref"),
+                "guest_name": booking.get("guest_name"),
+                "guest_email": booking.get("guest_email"),
+                "check_in": booking.get("check_in"),
+                "check_out": booking.get("check_out"),
+                "adults": booking.get("adults"),
+                "children": booking.get("children"),
+                "room_type": booking.get("room_type") or booking.get("room_type_name"),
+                "room_number": booking.get("room_number") or booking.get("assigned_room"),
+                "status": booking.get("status"),
+                "payment_status": booking.get("payment_status"),
+                "total_price": booking.get("total_price") or booking.get("total"),
+                "currency": booking.get("currency", "GBP"),
+                "ready_for_checkin": booking.get("status") == "confirmed" and (booking.get("payment_status") in {"paid", "prepaid", "partial"}),
+            },
         }
 
     @router.get("/{property_id}/stats")

@@ -1,0 +1,78 @@
+{
+  "summary": "Housekeeping Mobile PWA (Batch 3 F3) + Kiosk QR Auto-fill testing complete. All 6 backend tests passed. All 6 frontend tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_hk_mobile_qr.py",
+    "/app/test_reports/pytest/pytest_iteration360_hk_mobile_qr.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_hk_mobile_qr.py"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 tests passed)",
+    "frontend": "100% (6/6 tests passed)"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Room 105 was transitioned during testing and reset back to dirty. Camden has 15 rooms: 8 clean, 5 dirty, 2 inspected.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "HK Mobile PWA at /hk-mobile/{property_id} is fully functional. Kiosk QR auto-fill at /kiosk/{pid}?token={token} works. Test booking MHB-K13F3 (id: 5197869f-d887-4f76-b3d9-66444715ca25) at camden-suites. QR token generation requires admin auth, QR redeem is public. HK endpoints require admin/manager/receptionist auth.",
+  "tests_executed": {
+    "backend": [
+      "Backend #1: GET /api/kiosk/camden-suites/qr-token/{booking_id} - PASSED (returns token, kiosk_url, expires_at)",
+      "Backend #2a: POST /api/kiosk/camden-suites/qr-redeem with valid token - PASSED (returns booking with guest_name:'Kiosk Test User', room_number:'204')",
+      "Backend #2b: POST /api/kiosk/camden-suites/qr-redeem with invalid token - PASSED (404 with 'Token geçersiz veya süresi dolmuş')",
+      "Backend #3: GET /api/housekeeping/rooms/camden-suites/stats - PASSED (total:15, clean:8, dirty:5, inspected:2, in_progress:0, out_of_order:0)",
+      "Backend #4a: PUT /api/housekeeping/rooms/{room_id}/status dirty→in_progress - PASSED",
+      "Backend #4b: Full transition cycle dirty→in_progress→clean→inspected - PASSED (last_cleaned_at and last_cleaned_by set on clean transition)"
+    ],
+    "frontend": [
+      "Frontend #5: Kiosk QR auto-fill - PASSED (/kiosk/camden-suites?token={valid} auto-jumps to confirm step showing 'Kiosk Test User')",
+      "Frontend #6: Kiosk invalid token - PASSED (shows 'Token geçersiz veya süresi dolmuş' error, manual lookup still accessible)",
+      "Frontend #7: HK Mobile PWA login - PASSED (login screen with data-testid='hk-mobile-login', credentials work, moves to dashboard)",
+      "Frontend #8: HK Mobile dashboard - PASSED (sticky header, 4 stats tiles, 'Tümü (15)' chip, room list, refresh/logout buttons)",
+      "Frontend #9: HK Mobile transition - PASSED (room card click → detail sheet → 'Temizliğe Başla' → toast 'Oda 105 → Temizleniyor' + dirty count decreased)",
+      "Frontend #10: HK Mobile filter - PASSED (click 'clean' tile → shows 8 clean rooms, click 'Tümü' → shows all 15 rooms)"
+    ]
+  },
+  "hk_mobile_data_testids_verified": [
+    "hk-mobile-login",
+    "hk-mobile-pwa",
+    "hk-login-email",
+    "hk-login-password",
+    "hk-login-btn",
+    "hk-refresh",
+    "hk-logout",
+    "hk-stats",
+    "hk-filter-dirty",
+    "hk-filter-in_progress",
+    "hk-filter-clean",
+    "hk-filter-inspected",
+    "hk-filter-all",
+    "hk-room-list",
+    "hk-room-{number}",
+    "hk-detail-sheet",
+    "hk-close-sheet",
+    "hk-transitions",
+    "hk-transition-in_progress"
+  ],
+  "kiosk_qr_data_testids_verified": [
+    "kiosk-pwa",
+    "kiosk-confirm",
+    "kiosk-lookup",
+    "kiosk-input-ref",
+    "kiosk-input-email",
+    "kiosk-input-phone",
+    "kiosk-lookup-btn"
+  ]
+}

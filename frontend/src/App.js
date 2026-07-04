@@ -11,6 +11,7 @@ import BookingEngine from "./BookingEngine";
 import ReviewCollectionPage from "./ReviewCollectionPage";
 import SelfCheckInPage from "./SelfCheckInPage";
 import KioskPWA from "./pages/KioskPWA";
+import HousekeepingMobilePWA from "./pages/HousekeepingMobilePWA";
 import SelfCheckInV2Page from "./SelfCheckInV2Page";
 import TipPage from "./TipPage";
 import OwnerSelfServiceApp from "./components/owner/OwnerSelfServiceApp";
@@ -5055,6 +5056,9 @@ function App() {
   }
   if (window.location.pathname.startsWith("/kiosk/")) {
     return <KioskPWA />;
+  }
+  if (window.location.pathname.startsWith("/hk-mobile/")) {
+    return <HousekeepingMobilePWA />;
   }
   if (window.location.pathname === "/checkin") {
     return <SelfCheckInPage />;

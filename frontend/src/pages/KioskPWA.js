@@ -36,6 +36,16 @@ export default function KioskPWA() {
     if (!propertyId) return;
     axios.get(`${API}/kiosk/${propertyId}/config`).then(r => setConfig(r.data))
       .catch(() => setErr("Kiosk yapılandırması yüklenemedi."));
+    // Auto-redeem QR token if arriving via /kiosk/{pid}?token=...
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    if (token) {
+      setBusy(true);
+      axios.post(`${API}/kiosk/${propertyId}/qr-redeem`, { token })
+        .then(r => { setCandidate(r.data.booking); setStep("confirm"); })
+        .catch(e => setErr(e.response?.data?.detail || "QR token geçersiz."))
+        .finally(() => setBusy(false));
+    }
   }, [propertyId]);
 
   // Auto-reset if inactive on non-splash screens

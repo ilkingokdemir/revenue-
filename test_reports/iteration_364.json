@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 364 testing — Mews University (8 endpoints) + ROAS Auto Budget Suggestion (backend logic + frontend UI). Backend: 11/11 pytest passed. Frontend: Mews University panel loads with 6 course cards, category filters work, course player opens with lesson list, mark-complete works, quiz submit/retry flow works, back button returns to catalog. ROAS Calculator renders Otomatik Bütçe Önerisi section + action-summary + Öneri column per campaign + potential-increase pill.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Attribution/ROAS panel", "issues": ["Minor React hydration warning: <span> cannot be a child of <option> — non-blocking but should be cleaned up in a select component."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter364_university_roas.py",
+    "/app/test_reports/pytest/pytest_iter364.xml"
+  ],
+  "action_items": [
+    "(Nice-to-have) Fix hydration warning where a <span> is nested inside <option> in one of the select components on the Attribution/ROAS page (visible in console).",
+    "(Doc) The review-request spec for suggestion tiers had one internal inconsistency (roas 1.8x at margin 60 → code returns 'cut -30%' per implementation, not 'hold' as the prose example claimed). Implementation is self-consistent; if 'hold' at 1.8x is the intended UX, adjust the ≤break_even*1.5 tier bound."
+  ],
+  "critical_code_review_comments": [
+    "mews_university.py leaderboard: `since` variable is computed but never applied to the aggregation ($match). The docstring says 'last N days' but the query returns all-time completions — the `days` param is effectively ignored.",
+    "university progress upsert uses `$setOnInsert: {id}` correctly, but when a quiz is answered a second time with wrong answer AFTER already passing, the wrong result overwrites completed_at because it's inside $set. Consider guarding: don't reset completed_at once true.",
+    "voice_attribution._budget_suggestion tiers are documented in the docstring using bare ROAS thresholds (1x,3x,6x,10x) but the code actually uses break_even multiples (correct for margin-aware logic). Update docstring to prevent confusion."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter364_university_roas.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Backend test creates TEST_roas_<uid> property with 3 campaigns (TEST_red_camp, TEST_yellow_camp, TEST_green_camp) + 6 booking_attribution docs. Front-end used pre-existing 'default' property demo data (retargeting-may, brand-camden, london-hotels-summer).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "All Mews University endpoints verified (seed idempotency, courses list with progress, correct_index hidden in course detail, enroll idempotency, complete lesson, quiz right/wrong path, /me aggregation, leaderboard role-gated). ROAS suggestion object + action_summary verified for red (cut -50), green >8×be (double +100), and yellow tier presence. Frontend selectors confirmed: mews-university-btn, mews-university-panel, mu-course-grid (6 cards), mu-course-card, mu-filter-Reception, mu-course-player, mu-lesson-list, mu-lesson-0..5, mu-back-btn, mu-complete-btn, mu-quiz-area, mu-quiz-opt-0..3, mu-quiz-submit, mu-quiz-retry, roas-action-summary, roas-suggestion, roas-potential-increase. NOTE: roas-potential-savings is conditionally rendered (only when a 'cut' action exists) — this is correct behavior; the 'default' property demo bookings are all green so savings pill is hidden. Verified via demo data seeded in Attribution panel.",
+  "rca of the issue": "N/A — no bugs found."
+}

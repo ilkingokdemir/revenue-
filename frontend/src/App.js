@@ -66,7 +66,7 @@ import {
   ConciergeInboxPanel, GroupRequestsPanel, SustainabilityPanel, HousekeepingRoutePanel,
   NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel,
   RoomQRPanel, TaxPresetsPanel, WalkInPanel, NoShowPanel, GuestPrefsPanel,
-  CleaningChecklistsPanel, AttributionPanel, GroupRoomingImportPanel, OpsQuickActionsPanel,
+  CleaningChecklistsPanel, AttributionPanel, MewsUniversityPanel, GroupRoomingImportPanel, OpsQuickActionsPanel,
   TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, MarketplacePanel, MultiPropertyRollupPanel,
   CurrencyPanel, AgentsB2BPanel, SecurityOwnerPanel, PreAuthPanel, ChargebackPanel,
   WebPushPanel, PmsCrsSyncPanel, PmsProPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
@@ -204,6 +204,7 @@ import {
   Storefront,
   CurrencyDollar,
   BookOpen,
+  GraduationCap,
   Warning,
   Stack,
   Umbrella,
@@ -2673,6 +2674,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "morning-brief", icon: ChartLine, name: "Morning brief", testId: "morning-brief-btn" },
         { id: "nightly-recap", icon: Moon, name: "Nightly recap", testId: "nightly-recap-btn" },
         { id: "help-guide", icon: BookOpen, name: "Help & user guide", testId: "help-guide-btn" },
+        { id: "mews-university", icon: GraduationCap, name: "Mews University", testId: "mews-university-btn" },
       ],
     },
     {
@@ -4178,6 +4180,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
               hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
             />
+          </div>
+        )}
+
+        {activeView === "mews-university" && (
+          <div className="p-6">
+            <MewsUniversityPanel userRole={user?.role || ""} />
           </div>
         )}
 

@@ -12,6 +12,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Calculator, UploadCloud, FileDown, Loader2, RefreshCw, Trash2, TrendingUp,
+  TrendingDown, Sparkles, ArrowUp, ArrowDown, Minus,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -22,6 +23,15 @@ const STATUS_META = {
   red:     { label: "Durdur",      dot: "bg-rose-500",     text: "text-rose-300",    ring: "ring-rose-500/30" },
   no_cost: { label: "Cost yok",     dot: "bg-sky-500",      text: "text-sky-300",     ring: "ring-sky-500/30" },
   no_data: { label: "Veri yok",     dot: "bg-stone-500",    text: "text-stone-300",   ring: "ring-stone-500/20" },
+};
+
+const ACTION_META = {
+  cut:      { icon: TrendingDown, cls: "bg-rose-500/10 border-rose-500/30 text-rose-200",       arrowIcon: ArrowDown },
+  hold:     { icon: Minus,         cls: "bg-stone-700/40 border-stone-600 text-stone-200",        arrowIcon: Minus },
+  increase: { icon: TrendingUp,    cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-200", arrowIcon: ArrowUp },
+  double:   { icon: Sparkles,      cls: "bg-fuchsia-500/10 border-fuchsia-500/30 text-fuchsia-200", arrowIcon: ArrowUp },
+  info:     { icon: Sparkles,      cls: "bg-sky-500/10 border-sky-500/30 text-sky-200",           arrowIcon: Minus },
+  skip:     { icon: Minus,         cls: "bg-stone-800 border-stone-700 text-stone-500",           arrowIcon: Minus },
 };
 
 export default function RoasCalculator({ propertyId, currency = "GBP" }) {
@@ -175,6 +185,11 @@ export default function RoasCalculator({ propertyId, currency = "GBP" }) {
         <TotalCard label="Ortalama ROAS" value={totals.roas ? `${totals.roas}x` : "—"} highlight={(totals.roas || 0) >= 3} />
       </div>
 
+      {/* Action summary — auto budget hint */}
+      {data?.action_summary && rows.length > 0 && (
+        <ActionSummary summary={data.action_summary} fmt={fmt} />
+      )}
+
       {/* Table */}
       {loading ? (
         <div className="flex items-center justify-center py-8 text-stone-500">
@@ -195,6 +210,7 @@ export default function RoasCalculator({ propertyId, currency = "GBP" }) {
                 <th className="text-right px-3 py-2">ROAS</th>
                 <th className="text-right px-3 py-2">Net Kâr</th>
                 <th className="text-center px-3 py-2">Durum</th>
+                <th className="text-left px-3 py-2">Öneri</th>
                 <th className="px-2 py-2"></th>
               </tr>
             </thead>
@@ -202,6 +218,9 @@ export default function RoasCalculator({ propertyId, currency = "GBP" }) {
               {rows.map((r) => {
                 const meta = STATUS_META[r.status] || STATUS_META.no_data;
                 const hasCost = r.cost > 0;
+                const sug = r.suggestion;
+                const sMeta = (sug && ACTION_META[sug.action]) || ACTION_META.skip;
+                const SArrow = sMeta.arrowIcon;
                 return (
                   <tr key={r.campaign} className="border-t border-stone-800 hover:bg-stone-800/30" data-testid="roas-row">
                     <td className="px-3 py-2 text-stone-100 font-medium">{r.campaign}</td>
@@ -220,6 +239,16 @@ export default function RoasCalculator({ propertyId, currency = "GBP" }) {
                         <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
                         {meta.label}
                       </span>
+                    </td>
+                    <td className="px-3 py-2" data-testid="roas-suggestion">
+                      {sug && (
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] max-w-[200px] ${sMeta.cls}`} title={sug.reason}>
+                          <SArrow className="w-3 h-3 flex-shrink-0" />
+                          <span className="font-semibold truncate">
+                            {sug.delta_pct !== 0 ? `${sug.delta_pct > 0 ? "+" : ""}${sug.delta_pct}% · ` : ""}{sug.headline}
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-2 py-2 text-right">
                       {hasCost && (
@@ -261,6 +290,47 @@ function TotalCard({ label, value, highlight = false, negative = false }) {
     <div className={`p-2.5 rounded-lg border ${cls}`}>
       <div className="text-[10px] uppercase tracking-wider text-stone-400 mb-0.5">{label}</div>
       <div className="text-base font-bold">{value}</div>
+    </div>
+  );
+}
+
+function ActionSummary({ summary, fmt }) {
+  const rows = [
+    { key: "double",   label: "2× Ölçekle",   count: summary.double,   cls: "text-fuchsia-300 bg-fuchsia-500/10 border-fuchsia-500/30" },
+    { key: "increase", label: "Artır",         count: summary.increase, cls: "text-emerald-300 bg-emerald-500/10 border-emerald-500/30" },
+    { key: "hold",     label: "Sabit",         count: summary.hold,     cls: "text-stone-200 bg-stone-700/40 border-stone-600" },
+    { key: "cut",      label: "Azalt",          count: summary.cut,      cls: "text-rose-300 bg-rose-500/10 border-rose-500/30" },
+    { key: "info",     label: "Cost eksik",    count: summary.info,     cls: "text-sky-300 bg-sky-500/10 border-sky-500/30" },
+  ].filter((r) => r.count > 0);
+
+  const hasIncrease = summary.potential_increase > 0;
+  const hasSavings = summary.potential_savings > 0;
+  if (!rows.length && !hasIncrease && !hasSavings) return null;
+
+  return (
+    <div className="rounded-lg border border-indigo-500/30 bg-gradient-to-r from-indigo-500/10 via-fuchsia-500/5 to-transparent p-3" data-testid="roas-action-summary">
+      <div className="flex items-center gap-2 mb-2">
+        <Sparkles className="w-4 h-4 text-fuchsia-300" />
+        <h4 className="text-sm font-bold text-stone-100">Otomatik Bütçe Önerisi</h4>
+        <span className="text-[10px] text-stone-500">Marj-adjust · rule-based</span>
+      </div>
+      <div className="flex flex-wrap gap-2 items-center">
+        {rows.map((r) => (
+          <div key={r.key} className={`px-2 py-1 rounded-full text-xs border ${r.cls}`}>
+            <b>{r.count}</b> · {r.label}
+          </div>
+        ))}
+        {hasIncrease && (
+          <div className="ml-auto flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-200 font-semibold" data-testid="roas-potential-increase">
+            <ArrowUp className="w-3 h-3" /> +{fmt(summary.potential_increase)} önerilen artış
+          </div>
+        )}
+        {hasSavings && (
+          <div className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/40 text-rose-200 font-semibold" data-testid="roas-potential-savings">
+            <ArrowDown className="w-3 h-3" /> −{fmt(summary.potential_savings)} tasarruf
+          </div>
+        )}
+      </div>
     </div>
   );
 }

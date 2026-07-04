@@ -30,6 +30,85 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _budget_suggestion(status: str, roas, cost: float, revenue: float,
+                        bookings: int, margin_pct: float) -> dict:
+    """Deterministic budget recommendation for a campaign row.
+
+    Returns {action, delta_pct, delta_amount, headline, reason} — no LLM,
+    just a heuristic the operator can trust to be reproducible.
+
+    Rules (informed by media-buying rule-of-thumb):
+      • red   (ROAS <1x)         → cut 50%
+      • yellow (ROAS 1-1.5x)     → cut 30%
+      • yellow (ROAS 1.5-2.5x)   → hold / optimize
+      • yellow (ROAS 2.5-3x)     → +20% (approaching healthy)
+      • green (ROAS 3-6x)        → +30%
+      • green (ROAS 6-10x)       → +50%
+      • green (ROAS >10x)        → +100% (double down)
+      • no_cost + revenue        → "attribute cost" hint
+      • no_data                  → skip
+    """
+    if status == "no_cost" and revenue > 0:
+        return {
+            "action": "info",
+            "delta_pct": 0,
+            "delta_amount": 0,
+            "headline": "Cost verisi eksik",
+            "reason": f"Bu kampanyadan {bookings} rezervasyon ve £{round(revenue,0)} gelir geldi ama cost yüklenmemiş. CSV yükleyin.",
+        }
+    if status == "no_data" or roas is None or cost <= 0:
+        return {
+            "action": "skip",
+            "delta_pct": 0,
+            "delta_amount": 0,
+            "headline": "Öneri yok",
+            "reason": "Yeterli veri yok.",
+        }
+
+    # Break-even ROAS depends on margin: revenue*margin = cost → ROAS_be = 100/margin
+    break_even = 100.0 / max(1.0, margin_pct)
+
+    if roas < break_even:
+        pct = -50
+        headline = "Bütçeyi %50 azalt veya durdur"
+        reason = f"ROAS {roas}x break-even ({round(break_even,1)}x) altında — her £ zarar getiriyor."
+        action = "cut"
+    elif roas < break_even * 1.5:
+        pct = -30
+        headline = "Bütçeyi %30 azalt"
+        reason = f"ROAS {roas}x marjinal — %30 kısıp verimlilik ara."
+        action = "cut"
+    elif roas < break_even * 2.5:
+        pct = 0
+        headline = "Sabit tut · Optimize et"
+        reason = f"ROAS {roas}x sağlıklı sınırda. Landing page / keyword iyileştir."
+        action = "hold"
+    elif roas < break_even * 4:
+        pct = 20
+        headline = "Bütçeyi %20 artır"
+        reason = f"ROAS {roas}x iyi. Ölçekleyip volume artırılabilir."
+        action = "increase"
+    elif roas < break_even * 8:
+        pct = 50
+        headline = "Bütçeyi %50 artır — Ölçekle"
+        reason = f"ROAS {roas}x çok güçlü. Hızlıca ölçekleyin — genelde 2 haftada CPM artar."
+        action = "increase"
+    else:
+        pct = 100
+        headline = "Bütçeyi 2× artır — Golden campaign"
+        reason = f"ROAS {roas}x olağanüstü. Cost {round(cost,0)} £ → gelir {round(revenue,0)} £. Rakiplerden önce agressif ölçekle."
+        action = "double"
+
+    delta_amount = round(cost * pct / 100.0, 2)
+    return {
+        "action": action,
+        "delta_pct": pct,
+        "delta_amount": delta_amount,
+        "headline": headline,
+        "reason": reason,
+    }
+
+
 async def _transcribe_audio(audio_bytes: bytes, filename: str,
                               language: str = "tr") -> Optional[str]:
     """Best-effort Whisper transcription. Returns None on failure so the
@@ -348,6 +427,7 @@ def create_voice_and_attribution_router(db, require_roles):
                 "cpa":        round(cost / bookings, 2) if bookings and cost else None,
                 "status":     status,
                 "currency":   (c or {}).get("currency", "GBP"),
+                "suggestion": _budget_suggestion(status, roas, cost, revenue, bookings, margin_pct),
             })
             totals["cost"] += cost
             totals["revenue"] += revenue
@@ -358,6 +438,19 @@ def create_voice_and_attribution_router(db, require_roles):
         rows_out.sort(key=lambda x: x["revenue"], reverse=True)
 
         overall_roas = round(totals["revenue"] / totals["cost"], 2) if totals["cost"] > 0 else None
+
+        # Aggregate action counts for the summary bar
+        action_counts = {"cut": 0, "hold": 0, "increase": 0, "double": 0, "info": 0, "skip": 0}
+        potential_increase = 0.0
+        potential_savings = 0.0
+        for r in rows_out:
+            act = r["suggestion"]["action"]
+            action_counts[act] = action_counts.get(act, 0) + 1
+            if act in ("increase", "double"):
+                potential_increase += max(0, r["suggestion"]["delta_amount"])
+            elif act == "cut":
+                potential_savings += abs(r["suggestion"]["delta_amount"])
+
         return {
             "window_days": days,
             "margin_pct": margin_pct,
@@ -368,6 +461,11 @@ def create_voice_and_attribution_router(db, require_roles):
                 "profit":   round(totals["profit"], 2),
                 "bookings": totals["bookings"],
                 "roas":     overall_roas,
+            },
+            "action_summary": {
+                **action_counts,
+                "potential_savings":   round(potential_savings, 2),
+                "potential_increase":  round(potential_increase, 2),
             },
             "generated_at": _now(),
         }

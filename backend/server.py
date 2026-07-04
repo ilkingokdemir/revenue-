@@ -1176,6 +1176,9 @@ api_router.include_router(create_kiosk_router(db))
 from routes.ai.voice_attribution import create_voice_and_attribution_router
 api_router.include_router(create_voice_and_attribution_router(db, require_roles))
 
+from routes.hotel_ops.mews_university import create_university_router
+api_router.include_router(create_university_router(db, require_roles))
+
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))

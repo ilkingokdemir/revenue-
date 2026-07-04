@@ -80,6 +80,7 @@ export const NoShowPanel = L(() => import("./components/dashboard/NoShowPanel"))
 export const GuestPrefsPanel = L(() => import("./components/dashboard/GuestPrefsPanel"));
 export const CleaningChecklistsPanel = L(() => import("./components/dashboard/CleaningChecklistsPanel"));
 export const AttributionPanel = L(() => import("./components/dashboard/AttributionPanel"));
+export const MewsUniversityPanel = L(() => import("./components/dashboard/MewsUniversityPanel"));
 export const GroupRoomingImportPanel = L(() => import("./components/dashboard/GroupRoomingImportPanel"));
 export const OpsQuickActionsPanel = L(() => import("./components/dashboard/OpsQuickActionsPanel"));
 export const TimeSlotsPanel = L(() => import("./components/dashboard/TimeSlotsPanel"));

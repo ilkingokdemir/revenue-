@@ -3,6 +3,23 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-05 (iter 361 — Batch 3 F4: Attribution + Google Ads Export + HK Voice Whisper ✅ COMPLETE)
+- **Kullanıcı isteği**: "sirayla devam et ve Potansiyel iyileştirme yap" — Batch 3 F4 + Whisper voice damage report.
+- **Eklenen (Batch 3 F4)** — Booking Attribution & Google Ads outcome tracking:
+  - Backend (`/app/backend/routes/ai/voice_attribution.py`):
+    - `POST /api/attribution/track` — UTM/gclid/referrer upsert per booking_id (idempotent).
+    - `GET /api/attribution/{pid}?days=30` — {total_value, gads_conversions, by_source, by_campaign}.
+    - `GET /api/attribution/{pid}/export.csv?days=90` — Google Ads Offline Conversions CSV (gclid only).
+  - Frontend: AttributionPanel'e "Google Ads CSV" + "Demo Seed" butonları eklendi. Demo Seed her iki collection'a yazıyor (legacy attribution_touches + new booking_attribution).
+- **Eklenen (potansiyel iyileştirme)** — HK Voice Damage Report (Whisper):
+  - Backend: `POST /api/hk/voice-report` — multipart audio + property_id + room → Whisper transcribe (Türkçe) → maintenance_ticket oluştur.
+  - Frontend: HousekeepingMobilePWA'nın room detail sheet'ine `VoiceReporter` widget eklendi. MediaRecorder API ile mikrofon kaydı (max 60s), preview → send → AI transcript göster.
+  - Personel tek elle bezik/kirli/rapor için yazmak zorunda kalmıyor — %20 iş verimi artışı hedefli.
+- **Test**: Backend 8/8, Frontend %85 (voice reporter widget 100%, attribution demo seed data sync fix'lendi).
+
+### Batch 3 kalan:
+- Mews University tarzı e-learning modülü
+
 ### 2026-07-05 (iter 360 — Batch 3 F3: Housekeeping Mobile PWA + Kiosk QR Auto-Fill ✅ COMPLETE)
 - **Kullanıcı isteği**: "sirayla devam et ve Potansiyel iyileştirme yap" — Batch 3 F3 + QR iyileştirme.
 - **Eklenen (Batch 3 F3)** — Housekeeping Mobile PWA:

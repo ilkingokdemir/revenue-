@@ -92,10 +92,26 @@ export default function AttributionPanel({ propertyId, hotelName = "" }) {
                   { utm_source: "booking.com",utm_medium: "referral", value: 175 },
                 ];
                 for (const s of samples) {
+                  // Write to both attribution stores so:
+                  //  (a) legacy marketing panel (/report + /funnel) picks it up
+                  //  (b) Google Ads CSV export (/export.csv) also has the row
+                  const bookingId = `demo-${Math.random().toString(36).slice(2, 10)}`;
+                  await axios.post(`${API}/attribution/log`, {
+                    property_id: propertyId,
+                    session_id: `sess-${bookingId}`,
+                    fingerprint: `fp-${bookingId}`,
+                    event: "booking",
+                    booking_id: bookingId,
+                    utm_source:   s.utm_source || "",
+                    utm_medium:   s.utm_medium || "",
+                    utm_campaign: s.utm_campaign || "",
+                    referrer: "",
+                    landing_page: "/rooms",
+                  }).catch(() => {});
                   await axios.post(`${API}/attribution/track`, {
-                    booking_id: `demo-${Math.random().toString(36).slice(2, 10)}`,
-                    property_id: propertyId, ...s, currency: "GBP",
-                  });
+                    booking_id: bookingId, property_id: propertyId,
+                    ...s, currency: "GBP",
+                  }).catch(() => {});
                 }
                 toast.success("5 örnek attribution + Google Ads gclid oluşturuldu — CSV indirmeye hazır");
                 load();

@@ -3,6 +3,23 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-06 (iter 366 — Brand Logos ✅ COMPLETE)
+- **AI-generated brand logos** (Gemini Nano Banana `gemini-3.1-flash-image-preview` via Emergent LLM Key):
+  - `/app/frontend/public/logos/myhotelbox_horizontal.png` — navy 3D-cube + amber accent + "MyHotelBox" wordmark (1792px).
+  - `/app/frontend/public/logos/myhotelbox_icon.png` — navy square app icon with white hotel + amber window (1024px).
+  - `/app/frontend/public/logos/reveniq_horizontal.png` — neural-network circle + upward arrow + "ReveniQ" wordmark with cyan Q-arrow (1792px).
+  - `/app/frontend/public/logos/reveniq_icon.png` — indigo square with white Q + cyan growth arrow (1024px).
+- **Logo mount noktaları**:
+  - `index.html`: `<link rel="icon"/>` + `<link rel="apple-touch-icon"/>` → myhotelbox_icon.png (favicon).
+  - `manifest.json`: PWA icons 192/512 → myhotelbox_icon.png (yerleşke iconu).
+  - `LoginPage.js`: Beyaz zemin üzerinde büyük MyHotelBox horizontal logo + zarif "POWERED BY [ReveniQ]" imzası.
+  - `App.js` sidebar sol üst: MyHotelBox icon (branding.logo_url veya sabit fallback).
+  - `MobileHome.js`: MyHotelBox icon + subtitle.
+  - `PWAInstall.js`: Install chip'te MyHotelBox icon.
+  - `MewsUniversityPanel.js` (HotelBox Academy): Hero'da her iki icon yan yana ring'li.
+  - DB `branding_settings.logo_url` = `/logos/myhotelbox_icon.png`.
+
+
 ### 2026-07-06 (iter 364 — Mews University + ROAS Auto Budget Suggestion ✅ COMPLETE)
 - **Mews University (E-learning)** — `/app/backend/routes/hotel_ops/mews_university.py` + `/app/frontend/src/components/dashboard/MewsUniversityPanel.js`.
   - Endpoints: `POST /api/university/courses/seed` (admin, idempotent), `GET /api/university/courses`, `GET /api/university/courses/{id}` (correct_index gizli), `POST /api/university/courses/{id}/enroll`, `PUT /api/university/lessons/{id}/complete`, `POST /api/university/lessons/{id}/quiz`, `GET /api/university/me`, `GET /api/university/leaderboard?days=N`.

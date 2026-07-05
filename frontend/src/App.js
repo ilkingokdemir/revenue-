@@ -3232,9 +3232,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             {branding?.logo_url ? (
               <img src={branding.logo_url} alt="Logo" className="w-8 h-8 rounded-lg object-cover" data-testid="header-logo" />
             ) : (
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: branding?.primary_color || "#3E5245" }}>
-                <Buildings size={16} className="text-white" weight="fill" />
-              </div>
+              <img src="/logos/myhotelbox_icon.png" alt="MyHotelBox" className="w-8 h-8 rounded-lg object-cover" data-testid="header-logo-default" />
             )}
             <div className="min-w-0 flex-1">
               <h1 className="text-sm font-semibold text-white truncate" data-testid="header-app-name">{branding?.app_name || "MyHotelBox & ReveniQ"}</h1>

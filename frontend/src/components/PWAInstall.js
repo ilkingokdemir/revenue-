@@ -55,11 +55,11 @@ export function PWAInstall() {
     return (
       <div
         data-testid="pwa-install-chip"
-        className="fixed bottom-4 right-4 z-[9999] bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white rounded-2xl shadow-2xl border border-white/10 pl-4 pr-2 py-2 flex items-center gap-3 max-w-xs"
+        className="fixed bottom-4 right-4 z-[9999] bg-gradient-to-r from-indigo-600 to-fuchsia-600 text-white rounded-2xl shadow-2xl border border-white/10 pl-2 pr-2 py-2 flex items-center gap-2 max-w-xs"
       >
-        <Download className="w-4 h-4 flex-shrink-0" />
+        <img src="/logos/myhotelbox_icon.png" alt="" className="w-8 h-8 rounded-lg ring-2 ring-white/20" />
         <div className="flex-1">
-          <p className="text-xs font-bold leading-tight">Uygulama olarak yükle</p>
+          <p className="text-xs font-bold leading-tight">MyHotelBox&apos;u yükle</p>
           <p className="text-[10px] text-white/70 leading-tight">Ana ekrana ekle · offline kullan</p>
         </div>
         <button

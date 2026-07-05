@@ -111,8 +111,12 @@ export default function MewsUniversityPanel({ userRole = "" }) {
       {/* Hero */}
       <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-600/10 via-fuchsia-600/5 to-transparent p-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-indigo-500/20">
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-3 pr-4 border-r border-white/10">
+              <img src="/logos/myhotelbox_icon.png" alt="MyHotelBox" className="w-11 h-11 rounded-xl shadow-lg" />
+              <img src="/logos/reveniq_icon.png" alt="ReveniQ" className="w-11 h-11 rounded-xl shadow-lg" />
+            </div>
+            <div className="p-3 rounded-xl bg-indigo-500/20 md:hidden">
               <GraduationCap className="w-7 h-7 text-indigo-300" />
             </div>
             <div>

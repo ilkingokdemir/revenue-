@@ -69,13 +69,26 @@ const LoginPage = ({ onLogin }) => {
         className="w-full max-w-md"
       >
         <div className="bg-white rounded-2xl shadow-card border border-stone-200/80 overflow-hidden">
-          <div className="bg-[#3E5245] p-8 text-center">
-            <div className="w-14 h-14 bg-white/15 rounded-xl flex items-center justify-center mx-auto mb-3">
-              <Buildings size={28} className="text-white" weight="fill" />
-            </div>
-            <h1 className="text-xl font-semibold text-white">MyHotelBox &amp; ReveniQ</h1>
-            <p className="text-sm text-white/60 mt-1">Property Management & Revenue Suite</p>
+        <div className="bg-gradient-to-br from-white via-stone-50 to-stone-100 p-10 text-center border-b border-stone-200">
+          <img
+            src="/logos/myhotelbox_horizontal.png"
+            alt="MyHotelBox"
+            className="h-14 mx-auto object-contain"
+            data-testid="login-logo-myhotelbox"
+          />
+          <div className="mt-5 flex items-center justify-center gap-2.5">
+            <span className="h-px w-8 bg-stone-300" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-stone-400">Powered by</span>
+            <img
+              src="/logos/reveniq_horizontal.png"
+              alt="ReveniQ"
+              className="h-4 object-contain"
+              data-testid="login-logo-reveniq"
+            />
+            <span className="h-px w-8 bg-stone-300" />
           </div>
+          <p className="text-xs text-stone-500 mt-3 tracking-wide">Otel PMS &amp; AI Revenue Management</p>
+        </div>
           
           <form onSubmit={handleSubmit} className="p-8 space-y-5">
             {error && (

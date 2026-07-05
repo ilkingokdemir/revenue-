@@ -12,15 +12,15 @@
   "categories": ["business", "productivity", "travel"],
   "icons": [
     {
-      "src": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=192&h=192&fit=crop",
+      "src": "/logos/myhotelbox_icon.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=512&h=512&fit=crop",
+      "src": "/logos/myhotelbox_icon.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],

@@ -90,7 +90,7 @@ export default function MobileHome({ user, branding, onNavigate, kpis }) {
       <div className="bg-stone-900 text-white px-5 pt-12 pb-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <Buildings size={20} weight="fill" className="text-emerald-400" />
+            <img src="/logos/myhotelbox_icon.png" alt="MyHotelBox" className="w-8 h-8 rounded-lg object-cover" />
             <div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-stone-400">
                 {branding?.subtitle || "PMS & Revenue"}

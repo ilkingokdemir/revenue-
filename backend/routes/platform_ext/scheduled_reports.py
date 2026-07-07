@@ -71,13 +71,22 @@ class SubscriptionCreate(BaseModel):
     email:       str
     property_id: Optional[str] = None
     filters:     Optional[dict] = None  # e.g. {days: 30, margin_pct: 60}
+    channels:    Optional[list[str]] = None   # ["email", "whatsapp", "slack"] · default ["email"]
+    whatsapp_to: Optional[str] = None          # E.164 phone (+90...)
+    slack_webhook: Optional[str] = None        # https://hooks.slack.com/services/...
 
 
 class SubscriptionUpdate(BaseModel):
-    frequency:   Optional[str] = None
-    enabled:     Optional[bool] = None
-    email:       Optional[str] = None
-    filters:     Optional[dict] = None
+    frequency:     Optional[str] = None
+    enabled:       Optional[bool] = None
+    email:         Optional[str] = None
+    filters:       Optional[dict] = None
+    channels:      Optional[list[str]] = None
+    whatsapp_to:   Optional[str] = None
+    slack_webhook: Optional[str] = None
+
+
+ALLOWED_CHANNELS = {"email", "whatsapp", "slack"}
 
 
 def _next_run(frequency: str, base: Optional[datetime] = None) -> str:
@@ -254,22 +263,32 @@ def create_reports_router(db, require_roles):
             raise HTTPException(400, "Bilinmeyen report_key")
         if body.frequency not in FREQUENCIES:
             raise HTTPException(400, "frequency: daily|weekly|monthly")
+        channels = body.channels or ["email"]
+        bad = set(channels) - ALLOWED_CHANNELS
+        if bad:
+            raise HTTPException(400, f"Bilinmeyen kanal: {list(bad)}")
+        if "whatsapp" in channels and not body.whatsapp_to:
+            raise HTTPException(400, "WhatsApp kanalı için whatsapp_to gerekli (+90...)")
+        if "slack" in channels and not body.slack_webhook:
+            raise HTTPException(400, "Slack kanalı için slack_webhook gerekli")
         doc = {
-            "id":           str(uuid.uuid4()),
-            "report_key":   body.report_key,
-            "frequency":    body.frequency,
-            "email":        body.email,
-            "property_id":  body.property_id,
-            "filters":      body.filters or {},
-            "enabled":      True,
-            "created_by":   current_user.get("email", ""),
-            "created_at":   _now(),
-            "next_run_at":  _now(),  # first run happens on next tick
-            "last_run_at":  None,
+            "id":            str(uuid.uuid4()),
+            "report_key":    body.report_key,
+            "frequency":     body.frequency,
+            "email":         body.email,
+            "channels":      channels,
+            "whatsapp_to":   body.whatsapp_to,
+            "slack_webhook": body.slack_webhook,
+            "property_id":   body.property_id,
+            "filters":       body.filters or {},
+            "enabled":       True,
+            "created_by":    current_user.get("email", ""),
+            "created_at":    _now(),
+            "next_run_at":   _now(),
+            "last_run_at":   None,
             "last_snapshot_id": None,
         }
         await db.report_subscriptions.insert_one(doc)
-        # Return a copy without the injected _id
         doc.pop("_id", None)
         return doc
 
@@ -287,6 +306,15 @@ def create_reports_router(db, require_roles):
             updates["email"] = body.email
         if body.filters is not None:
             updates["filters"] = body.filters
+        if body.channels is not None:
+            bad = set(body.channels) - ALLOWED_CHANNELS
+            if bad:
+                raise HTTPException(400, f"Bilinmeyen kanal: {list(bad)}")
+            updates["channels"] = body.channels
+        if body.whatsapp_to is not None:
+            updates["whatsapp_to"] = body.whatsapp_to
+        if body.slack_webhook is not None:
+            updates["slack_webhook"] = body.slack_webhook
         if not updates:
             return {"ok": True, "unchanged": True}
         r = await db.report_subscriptions.update_one({"id": sub_id}, {"$set": updates})
@@ -312,28 +340,45 @@ def create_reports_router(db, require_roles):
         if not gen:
             raise HTTPException(500, f"Generator missing for {sub['report_key']}")
         payload, mime = await gen(db, sub.get("filters") or {}, sub.get("property_id"))
+        # Simulate delivery to each configured channel
+        channels = sub.get("channels") or ["email"]
+        delivery_log = []
+        for ch in channels:
+            if ch == "email":
+                delivery_log.append({"channel": "email", "to": sub.get("email"),
+                                      "status": "mocked_sent", "at": _now()})
+            elif ch == "whatsapp":
+                delivery_log.append({"channel": "whatsapp", "to": sub.get("whatsapp_to"),
+                                      "status": "mocked_sent", "at": _now(),
+                                      "note": "Twilio WhatsApp entegrasyonu gerekli"})
+            elif ch == "slack":
+                delivery_log.append({"channel": "slack", "to": "webhook",
+                                      "status": "mocked_sent", "at": _now(),
+                                      "note": "Slack webhook entegrasyonu gerekli"})
         snap = {
-            "id":           str(uuid.uuid4()),
+            "id":              str(uuid.uuid4()),
             "subscription_id": sub["id"],
-            "report_key":   sub["report_key"],
-            "property_id":  sub.get("property_id"),
-            "email":        sub.get("email"),
-            "payload":      payload,
-            "mime_type":    mime,
-            "size_bytes":   len(payload.encode("utf-8")),
-            "created_at":   _now(),
-            "delivery_status": "mocked_email_sent",  # TODO: swap for Resend
+            "report_key":      sub["report_key"],
+            "property_id":     sub.get("property_id"),
+            "email":           sub.get("email"),
+            "payload":         payload,
+            "mime_type":       mime,
+            "size_bytes":      len(payload.encode("utf-8")),
+            "created_at":      _now(),
+            "delivery_status": "mocked_email_sent",
+            "delivery_log":    delivery_log,
+            "channels":        channels,
         }
         await db.report_snapshots.insert_one(snap)
-        # Update the sub's next_run + last-run bookkeeping
         await db.report_subscriptions.update_one(
             {"id": sub["id"]},
             {"$set": {
-                "last_run_at":   _now(),
+                "last_run_at":      _now(),
                 "last_snapshot_id": snap["id"],
-                "next_run_at":   _next_run(sub["frequency"]),
+                "next_run_at":      _next_run(sub["frequency"]),
             }},
         )
+        snap.pop("_id", None)
         return snap
 
     @router.get("/snapshots")

@@ -1185,6 +1185,9 @@ api_router.include_router(create_scheduled_checkout_router(db, require_roles))
 from routes.platform_ext.scheduled_reports import create_reports_router
 api_router.include_router(create_reports_router(db, require_roles))
 
+from routes.platform_ext.custom_dashboards import create_dashboards_router
+api_router.include_router(create_dashboards_router(db, require_roles))
+
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))

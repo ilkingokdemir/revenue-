@@ -67,7 +67,7 @@ import {
   ConciergeInboxPanel, GroupRequestsPanel, SustainabilityPanel, HousekeepingRoutePanel,
   NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel,
   RoomQRPanel, TaxPresetsPanel, WalkInPanel, NoShowPanel, GuestPrefsPanel,
-  CleaningChecklistsPanel, AttributionPanel, MewsUniversityPanel, ScheduledReportsPanel, GroupRoomingImportPanel, OpsQuickActionsPanel,
+  CleaningChecklistsPanel, AttributionPanel, MewsUniversityPanel, ScheduledReportsPanel, CustomDashboardBuilder, GroupRoomingImportPanel, OpsQuickActionsPanel,
   TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, MarketplacePanel, MultiPropertyRollupPanel,
   CurrencyPanel, AgentsB2BPanel, SecurityOwnerPanel, PreAuthPanel, ChargebackPanel,
   WebPushPanel, PmsCrsSyncPanel, PmsProPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
@@ -207,6 +207,7 @@ import {
   BookOpen,
   GraduationCap,
   FileArrowDown,
+  GridFour,
   Warning,
   Stack,
   Umbrella,
@@ -2678,6 +2679,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "help-guide", icon: BookOpen, name: "Help & user guide", testId: "help-guide-btn" },
         { id: "mews-university", icon: GraduationCap, name: "HotelBox Academy", testId: "mews-university-btn" },
         { id: "scheduled-reports", icon: FileArrowDown, name: "Planlı Raporlar", testId: "scheduled-reports-btn" },
+        { id: "custom-dashboard", icon: GridFour, name: "Custom Dashboard", testId: "custom-dashboard-btn" },
       ],
     },
     {
@@ -4195,6 +4197,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             <ScheduledReportsPanel
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : null}
               userEmail={user?.email || ""}
+            />
+          </div>
+        )}
+
+        {activeView === "custom-dashboard" && (
+          <div className="p-6">
+            <CustomDashboardBuilder
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : null}
             />
           </div>
         )}

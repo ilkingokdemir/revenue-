@@ -3,6 +3,33 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-07 (iter 369 — Custom Dashboard Builder + Multi-Channel Reports ✅ MEWS PARITY)
+
+**A) Multi-Channel Report Delivery** (potansiyel iyileştirme)
+- `scheduled_reports.py` genişletildi: `SubscriptionCreate/Update` modellerine `channels: list[str]` (email/whatsapp/slack) + `whatsapp_to` (+E.164) + `slack_webhook` alanları eklendi.
+- `_generate_and_store()` her kanal için `delivery_log` üretir (mocked). Snapshot'a `channels` + `delivery_log` alanları kaydedilir.
+- Validation: WhatsApp seçilirse `whatsapp_to` zorunlu, Slack seçilirse `slack_webhook` zorunlu.
+- Frontend `ScheduledReportsPanel` — Add form'a "Teslim Kanalları" chip'leri (email/whatsapp/slack toggle), conditional input alanları, subscription row'da renkli channel badge'leri.
+- **Test**: curl multi-channel sub oluşturuldu (email+whatsapp) → run-now → `delivery_log` 2 entry döndü (email + whatsapp with Twilio note). ✓
+
+**B) Custom Dashboard Builder** (Mews eksiği)
+- Backend `/app/backend/routes/platform_ext/custom_dashboards.py` — 8 endpoint:
+  - `GET /widget-catalog` (10 widget tipi), `GET /mine`, `POST /`, `GET/PUT/DELETE /{id}`, `POST /{id}/widgets`, `DELETE /{id}/widgets/{wid}`, `GET /widget-data/{type}`.
+  - **10 widget tipi**: kpi_occupancy · kpi_adr · kpi_revpar · kpi_pace · kpi_pickup · kpi_roas · alerts_board · spark_revenue · hk_summary · quick_actions.
+  - Auth: owner-only update/delete, admin bypass. Shared flag (property-wide görünürlük).
+  - Widget data endpoint dispatchs per-type (daily_snapshots, bookings, attribution, rooms, alerts).
+- Frontend `CustomDashboardBuilder.js`:
+  - Dashboard tabs (kendi + shared), Yeni Dashboard butonu (prompt-based).
+  - Widget Ekle → 10 katalog kartı grid.
+  - `WidgetHost` her widget için data fetch + type-specific render (KpiCard, SparkRevenue bar chart, HkSummary status list, AlertsBoard, QuickActions).
+  - Grid: 12-col x auto-rows-70px, her widget kendi w/h span'i (kpi 3×2, chart 6×3, board 6×4).
+  - Hover'da widget silme butonu belirir.
+  - Nav: `Overview → Custom Dashboard` (id: custom-dashboard).
+- **Test**: 
+  - curl: widget-catalog 10 tipi ✓ · dashboard oluştur ✓ · 2 widget ekle ✓ · dashboard fetch full layout ✓ · kpi_occupancy + spark_revenue data ✓.
+  - Screenshot: sidebar'da "Custom Dashboard" nav, "Test Dashboard" tab, 2 widget render (KPI kartı + Spark chart, veri null olduğu için "—%" gösterildi çünkü daily_snapshots collection'ı boş).
+
+
 ### 2026-07-07 (iter 368 — Scheduled Report Delivery ✅ MEWS PARITY)
 - **Backend** `/app/backend/routes/platform_ext/scheduled_reports.py` — 9 endpoint + 5 rapor generator + background tick worker:
   - Endpoints: `GET /catalog`, `POST/GET/PUT/DELETE /subscriptions`, `POST /subscriptions/{id}/run-now`, `GET /snapshots`, `GET /snapshots/{id}/download`, `POST /tick`, `POST /preview/{key}` (admin).

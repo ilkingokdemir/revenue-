@@ -145,6 +145,13 @@ export default function ScheduledReportsPanel({ propertyId, userEmail = "" }) {
                     <div className="text-xs text-stone-500 flex items-center gap-3 flex-wrap">
                       <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{s.email}</span>
                       <span className="px-1.5 py-0.5 rounded bg-stone-800 text-stone-300 text-[10px] uppercase">{s.frequency}</span>
+                      {(s.channels || ["email"]).map((ch) => (
+                        <span key={ch} className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          ch === "email" ? "bg-sky-500/15 text-sky-300" :
+                          ch === "whatsapp" ? "bg-emerald-500/15 text-emerald-300" :
+                          "bg-fuchsia-500/15 text-fuchsia-300"
+                        }`}>{ch}</span>
+                      ))}
                       <span className="flex items-center gap-1"><Clock className="w-3 h-3" />
                         Next: {new Date(s.next_run_at).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" })}
                       </span>
@@ -227,23 +234,42 @@ function AddSubscriptionForm({ catalog, defaultEmail, propertyId, onCancel, onCr
   const [reportKey, setReportKey] = useState(catalog.items[0]?.key || "");
   const [frequency, setFrequency] = useState("weekly");
   const [email, setEmail] = useState(defaultEmail);
+  const [channels, setChannels] = useState(["email"]);
+  const [whatsappTo, setWhatsappTo] = useState("");
+  const [slackWebhook, setSlackWebhook] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const toggleChannel = (ch) => {
+    setChannels((prev) => prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch]);
+  };
+
   const submit = async () => {
-    if (!email) { toast.error("Email girin"); return; }
+    if (channels.includes("email") && !email) { toast.error("Email girin"); return; }
+    if (channels.includes("whatsapp") && !whatsappTo) { toast.error("WhatsApp numarası girin"); return; }
+    if (channels.includes("slack") && !slackWebhook) { toast.error("Slack webhook URL'i girin"); return; }
+    if (channels.length === 0) { toast.error("En az bir kanal seçin"); return; }
     setSubmitting(true);
     try {
       await axios.post(`${API}/reports/subscriptions`, {
-        report_key:  reportKey,
+        report_key:    reportKey,
         frequency,
         email,
-        property_id: propertyId,
-        filters:     { days: 30, margin_pct: 60 },
+        channels,
+        whatsapp_to:   whatsappTo || null,
+        slack_webhook: slackWebhook || null,
+        property_id:   propertyId,
+        filters:       { days: 30, margin_pct: 60 },
       });
       toast.success("Abonelik oluşturuldu");
       onCreated();
     } catch (e) { toast.error(e?.response?.data?.detail || "Ekleme başarısız"); }
     setSubmitting(false);
+  };
+
+  const CHANNEL_META = {
+    email:    { label: "Email",    cls: "bg-sky-500/15 border-sky-500/40 text-sky-200" },
+    whatsapp: { label: "WhatsApp", cls: "bg-emerald-500/15 border-emerald-500/40 text-emerald-200" },
+    slack:    { label: "Slack",    cls: "bg-fuchsia-500/15 border-fuchsia-500/40 text-fuchsia-200" },
   };
 
   return (
@@ -278,6 +304,48 @@ function AddSubscriptionForm({ catalog, defaultEmail, propertyId, onCancel, onCr
           data-testid="add-sub-email"
         />
       </div>
+
+      {/* Delivery channels */}
+      <div>
+        <div className="text-xs font-semibold text-stone-400 mb-1.5">Teslim Kanalları</div>
+        <div className="flex gap-2 flex-wrap">
+          {Object.entries(CHANNEL_META).map(([key, m]) => {
+            const active = channels.includes(key);
+            return (
+              <button
+                key={key}
+                onClick={() => toggleChannel(key)}
+                data-testid={`add-sub-ch-${key}`}
+                className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                  active ? m.cls : "bg-stone-800 border-stone-700 text-stone-500 hover:text-stone-300"
+                }`}
+              >
+                {active ? "✓ " : ""}{m.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {channels.includes("whatsapp") && (
+        <input
+          value={whatsappTo}
+          onChange={(e) => setWhatsappTo(e.target.value)}
+          placeholder="+905551234567 (E.164)"
+          className="w-full px-3 py-2 rounded-lg bg-stone-900 border border-emerald-500/40 text-stone-100 text-sm"
+          data-testid="add-sub-whatsapp"
+        />
+      )}
+      {channels.includes("slack") && (
+        <input
+          value={slackWebhook}
+          onChange={(e) => setSlackWebhook(e.target.value)}
+          placeholder="https://hooks.slack.com/services/..."
+          className="w-full px-3 py-2 rounded-lg bg-stone-900 border border-fuchsia-500/40 text-stone-100 text-sm"
+          data-testid="add-sub-slack"
+        />
+      )}
+
       <div className="flex gap-2">
         <button
           onClick={submit}

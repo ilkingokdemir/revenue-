@@ -3,6 +3,31 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+
+### 2026-07-07 (iter 372 — OTA Auto Room Assign ✅)
+
+**Otomatik Room Auto-Assign for OTA Inbound**
+- Yeni helper: `_auto_assign_room()` in `/app/backend/routes/integrations_pkg/ota_inbound.py`
+- Skor tabanlı seçim: housekeeping (clean +100, dirty +20, out_of_order skip), room_type exact match (+200), view_preference match (+50), loyalty tier bonusu (diamond 40 / platinum 30 / gold 20 / silver 10) + floor bonusu (elite üyeler için yüksek kat).
+- Tarih çakışması filtresi: `check_in < co && check_out > ci && status ∈ {confirmed, pending, checked_in}` olan odalar hariç tutulur.
+- Platinum/Diamond upgrade: aynı `room_type_id` odada yoksa üst kategoriye upgrade — sadece bu tier'lar için.
+- Değişiklikler:
+  - `InboundReservation` modeline `room_type_id`, `view_preference` alanları eklendi.
+  - `receive_reservation`: OTA `room_number` göndermezse auto-assign devreye girer; booking'e `auto_assigned`, `assigned_room_id`, `assigned_score`, `assigned_upgrade`, `room_assignment_status` yazılır.
+  - Yeni endpoint: `POST /api/ota-inbound/auto-assign/{booking_id}` — front-desk retry.
+  - Yeni endpoint: `GET  /api/ota-inbound/unassigned` — unassigned booking listesi (admin/manager/front_desk).
+- **Test** (curl 9 senaryo — hepsi geçti):
+  - Basit auto-assign → `Standard 04` seçildi ✓
+  - Platinum loyalty (test_stripe@example.com) → tier bonus uygulandı ✓
+  - Explicit room_number geldi → auto-assign devreye girmedi (`auto_assigned: false`) ✓
+  - Geçersiz room_type_id + non-elite → `unassigned` ✓
+  - Geçersiz property_id → `unassigned` ✓
+  - `GET /unassigned` → 2 booking listelendi ✓
+  - Retry endpoint → düzeltilen property_id ile başarılı assign (score 312) ✓
+  - Retry when already assigned → `already_assigned` no-op ✓
+  - Retry non-existent → 404 "Booking bulunamadı" ✓
+
+
 ### 2026-07-07 (iter 371 — 4 Mews-Parity Eksiği Tamamlandı ✅✅✅✅)
 
 **A) Drag-Drop Widget Reorder** (Custom Dashboard Builder — mevcut olan büyütüldü)

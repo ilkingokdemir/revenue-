@@ -14,6 +14,8 @@ import SelfCheckInPage from "./SelfCheckInPage";
 import KioskPWA from "./pages/KioskPWA";
 import HousekeepingMobilePWA from "./pages/HousekeepingMobilePWA";
 import SelfCheckoutPage from "./SelfCheckoutPage";
+import DashboardSharePage from "./DashboardSharePage";
+import RoomKeyPage from "./RoomKeyPage";
 import SelfCheckInV2Page from "./SelfCheckInV2Page";
 import TipPage from "./TipPage";
 import OwnerSelfServiceApp from "./components/owner/OwnerSelfServiceApp";
@@ -5091,6 +5093,12 @@ function App() {
   }
   if (window.location.pathname === "/checkout" || window.location.pathname.startsWith("/checkout/")) {
     return <SelfCheckoutPage />;
+  }
+  if (window.location.pathname.startsWith("/dashboard-share/")) {
+    return <DashboardSharePage />;
+  }
+  if (window.location.pathname === "/room-key" || window.location.pathname.startsWith("/room-key/")) {
+    return <RoomKeyPage />;
   }
   if (window.location.pathname === "/checkin") {
     return <SelfCheckInPage />;

@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   LayoutDashboard, Plus, Trash2, Loader2, RefreshCw,
   Percent, DollarSign, TrendingUp, Bell, Zap, Sparkles,
-  ArrowUp, ArrowDown, Minus,
+  ArrowUp, ArrowDown, Minus, Share2, Copy, X,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -37,7 +37,7 @@ export default function CustomDashboardBuilder({ propertyId }) {
       }
     } catch { toast.error("Yüklenemedi"); }
     setLoading(false);
-  }, [activeDash]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeDash]);    
 
   const loadDash = async (id) => {
     try {
@@ -46,7 +46,7 @@ export default function CustomDashboardBuilder({ propertyId }) {
     } catch { toast.error("Dashboard açılamadı"); }
   };
 
-  useEffect(() => { loadDashboards(); /* eslint-disable-line */ }, []);
+  useEffect(() => { loadDashboards();   }, []);
 
   const createDash = async () => {
     const name = window.prompt("Yeni dashboard adı:", "Benim Dashboardum");
@@ -86,6 +86,53 @@ export default function CustomDashboardBuilder({ propertyId }) {
     } catch { toast.error("Kaldırılamadı"); }
   };
 
+  const [shareModal, setShareModal] = useState(null);
+  const createShare = async () => {
+    const daysStr = window.prompt("Kaç gün geçerli olsun? (0 = süresiz)", "30");
+    if (daysStr === null) return;
+    const days = parseInt(daysStr, 10) || 0;
+    try {
+      const r = await axios.post(`${API}/dashboards/${activeDash.id}/share`, { expires_in_days: days });
+      const fullUrl = `${window.location.origin}/dashboard-share/${r.data.share_token}`;
+      setShareModal({ url: fullUrl, expires: r.data.share_expires_at });
+      loadDash(activeDash.id);
+      toast.success("Public link oluşturuldu");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Başarısız"); }
+  };
+  const revokeShare = async () => {
+    if (!window.confirm("Public link iptal edilsin mi? Mevcut link geçersizleşir.")) return;
+    try {
+      await axios.delete(`${API}/dashboards/${activeDash.id}/share`);
+      toast.success("Link iptal edildi");
+      setShareModal(null);
+      loadDash(activeDash.id);
+    } catch { toast.error("İptal başarısız"); }
+  };
+
+  // ─── Drag-and-drop reorder ───────────────────────────────────────
+  const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
+  const persistOrder = async (newWidgets) => {
+    try {
+      await axios.put(`${API}/dashboards/${activeDash.id}`, { widgets: newWidgets });
+    } catch { toast.error("Sıra kaydedilemedi"); }
+  };
+  const onDragStart = (id) => setDragId(id);
+  const onDragOver  = (id) => setOverId(id);
+  const onDrop = (targetId) => {
+    if (!dragId || dragId === targetId) { setDragId(null); setOverId(null); return; }
+    const widgets = [...(activeDash.widgets || [])];
+    const fromIdx = widgets.findIndex((w) => w.id === dragId);
+    const toIdx   = widgets.findIndex((w) => w.id === targetId);
+    if (fromIdx < 0 || toIdx < 0) return;
+    const [moved] = widgets.splice(fromIdx, 1);
+    widgets.splice(toIdx, 0, moved);
+    setActiveDash({ ...activeDash, widgets });
+    persistOrder(widgets);
+    setDragId(null); setOverId(null);
+    toast.success("Sıra güncellendi");
+  };
+
   return (
     <div className="space-y-4" data-testid="custom-dashboard-builder">
       {/* Header */}
@@ -96,7 +143,7 @@ export default function CustomDashboardBuilder({ propertyId }) {
           </div>
           <div>
             <h2 className="text-2xl font-bold text-stone-100">Custom Dashboards</h2>
-            <p className="text-sm text-stone-400">Kendi widget'larından oluşan panelini kur — istediğini ekle, sil, düzenle.</p>
+            <p className="text-sm text-stone-400">Kendi widget&apos;larından oluşan panelini kur — istediğini ekle, sil, düzenle.</p>
           </div>
         </div>
         <button
@@ -140,7 +187,7 @@ export default function CustomDashboardBuilder({ propertyId }) {
             className="px-4 py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-sm font-bold"
             data-testid="dash-empty-create-btn"
           >
-            İlk Dashboard'unu Oluştur
+            İlk Dashboard&apos;unu Oluştur
           </button>
         </div>
       ) : (
@@ -154,6 +201,19 @@ export default function CustomDashboardBuilder({ propertyId }) {
                 data-testid="add-widget-btn"
               >
                 <Plus className="w-3.5 h-3.5" /> Widget Ekle
+              </button>
+              <button
+                onClick={createShare}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border ${
+                  activeDash.share_token
+                    ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/30"
+                    : "bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700"
+                }`}
+                title={activeDash.share_token ? "Aktif · Yenilemek için tıkla" : "Public link üret"}
+                data-testid="dash-share-btn"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                {activeDash.share_token ? "Paylaşımlı" : "Paylaş"}
               </button>
               <button
                 onClick={() => loadDash(activeDash.id)}
@@ -205,7 +265,7 @@ export default function CustomDashboardBuilder({ propertyId }) {
                 onClick={() => setShowAddWidget(true)}
                 className="px-3 py-1.5 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-700 text-white text-xs font-bold"
               >
-                İlk Widget'ını Ekle
+                İlk Widget&apos;ını Ekle
               </button>
             </div>
           ) : (
@@ -216,20 +276,82 @@ export default function CustomDashboardBuilder({ propertyId }) {
                   widget={w}
                   propertyId={propertyId}
                   onRemove={() => removeWidget(w.id)}
+                  onDragStart={onDragStart}
+                  onDragOver={onDragOver}
+                  onDrop={onDrop}
+                  isDragging={dragId === w.id}
                 />
               ))}
             </div>
           )}
         </>
       )}
+
+      {shareModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setShareModal(null)} data-testid="share-modal">
+          <div className="bg-stone-900 border border-emerald-500/40 rounded-2xl max-w-lg w-full p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Share2 className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-lg font-bold text-stone-100">Public Share Link</h3>
+              </div>
+              <button onClick={() => setShareModal(null)} className="text-stone-500 hover:text-stone-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="text-sm text-stone-400">
+              Bu link&apos;i açan herkes dashboard&apos;u <b>salt okunur</b> görebilir. Giriş gerekmez.
+              Guest widgets (Pace, ROAS, HK) public görünümde gizlenir.
+            </p>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={shareModal.url}
+                className="flex-1 px-3 py-2 rounded-lg bg-stone-800 border border-stone-700 text-stone-100 text-sm font-mono"
+                data-testid="share-url-input"
+                onFocus={(e) => e.target.select()}
+              />
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(shareModal.url).then(() => toast.success("Kopyalandı"));
+                }}
+                className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold"
+                data-testid="share-copy-btn"
+              >
+                <Copy className="w-4 h-4" />
+              </button>
+            </div>
+            {shareModal.expires && (
+              <div className="text-xs text-amber-300">
+                ⏱ Süre: <b>{new Date(shareModal.expires).toLocaleDateString("tr-TR")}</b>&apos;e kadar
+              </div>
+            )}
+            <div className="flex gap-2 pt-2 border-t border-stone-800">
+              <button
+                onClick={revokeShare}
+                className="px-3 py-2 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-sm font-bold"
+                data-testid="share-revoke-btn"
+              >
+                Link&apos;i İptal Et
+              </button>
+              <button
+                onClick={() => setShareModal(null)}
+                className="px-3 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-sm ml-auto"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ────────────────────────────────────────────────────────────────
-// Widget host — fetches data and renders appropriate visual
+// Widget host — fetches data, renders visual, supports drag reorder
 // ────────────────────────────────────────────────────────────────
-function WidgetHost({ widget, propertyId, onRemove }) {
+function WidgetHost({ widget, propertyId, onRemove, onDragStart, onDragOver, onDrop, isDragging }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -247,13 +369,19 @@ function WidgetHost({ widget, propertyId, onRemove }) {
   const style = {
     gridColumn:  `span ${Math.min(12, widget.w || 3)} / span ${Math.min(12, widget.w || 3)}`,
     gridRow:     `span ${widget.h || 2} / span ${widget.h || 2}`,
+    opacity: isDragging ? 0.4 : 1,
+    cursor: "grab",
   };
 
   return (
     <div
       style={style}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; onDragStart(widget.id); }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOver(widget.id); }}
+      onDrop={(e) => { e.preventDefault(); onDrop(widget.id); }}
       data-testid={`widget-${widget.type}`}
-      className="relative rounded-xl border border-stone-800 bg-stone-900/60 p-4 group hover:border-fuchsia-500/40"
+      className="relative rounded-xl border border-stone-800 bg-stone-900/60 p-4 group hover:border-fuchsia-500/40 transition"
     >
       <button
         onClick={onRemove}
@@ -262,6 +390,8 @@ function WidgetHost({ widget, propertyId, onRemove }) {
       >
         <Trash2 className="w-3 h-3" />
       </button>
+      {/* Drag handle indicator */}
+      <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-40 text-stone-500 text-[10px] font-mono">⋮⋮</div>
       {loading ? (
         <div className="h-full flex items-center justify-center"><Loader2 className="w-4 h-4 animate-spin text-stone-500" /></div>
       ) : data?.error ? (

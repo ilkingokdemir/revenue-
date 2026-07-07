@@ -279,6 +279,44 @@ def create_currency_fx_router(db):
             "base_currency": settings["base_currency"],
         }
 
+    # ----- DCC quote (iter 371) -----
+    # Dynamic Currency Conversion: guest pays in their home currency, hotel
+    # applies a markup that becomes DCC revenue. Standard industry markup is
+    # 2.5-5% on top of the mid-market rate.
+    @router.post("/dcc-quote")
+    async def dcc_quote(
+        data: dict,
+        current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any")),
+    ):
+        """body: {amount, from_currency, to_currency, markup_pct?}
+        Returns three lines: mid-market, DCC (with markup), fee earned."""
+        amount = float(data.get("amount") or 0)
+        src = (data.get("from_currency") or "GBP").upper()
+        tgt = (data.get("to_currency") or "USD").upper()
+        markup_pct = float(data.get("markup_pct") or 3.5)   # sensible default
+        if markup_pct < 0 or markup_pct > 10:
+            raise HTTPException(400, "markup_pct 0-10 arasında olmalı")
+        settings = await _get_settings(db)
+        rates = await _get_rate_map(db)
+        mid = _convert(amount, src, tgt, rates, settings["base_currency"])
+        dcc_amount = round(mid * (1 + markup_pct / 100.0), 2)
+        # Fee is what the guest pays extra, expressed in the TARGET currency,
+        # AND converted back to base for accounting.
+        fee_target = round(dcc_amount - mid, 2)
+        fee_base = _convert(fee_target, tgt, settings["base_currency"], rates, settings["base_currency"])
+        return {
+            "amount":        amount,
+            "from_currency": src,
+            "to_currency":   tgt,
+            "mid_market":    mid,
+            "dcc_amount":    dcc_amount,
+            "markup_pct":    markup_pct,
+            "fee_target":    fee_target,
+            "fee_base":      fee_base,
+            "base_currency": settings["base_currency"],
+            "disclaimer":    f"Bu quote {markup_pct}% DCC komisyonu içerir. Misafire açıkça bildirilmelidir.",
+        }
+
     # ----- consolidated AR aging (city ledger) -----
     @router.get("/ar-aging")
     async def ar_aging(

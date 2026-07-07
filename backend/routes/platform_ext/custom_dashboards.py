@@ -33,6 +33,7 @@ Widget types (v1)
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -76,6 +77,10 @@ class WidgetAdd(BaseModel):
     w:        Optional[int] = None
     h:        Optional[int] = None
     settings: Optional[dict] = None
+
+
+class ShareBody(BaseModel):
+    expires_in_days: Optional[int] = 30   # 0 or None = no expiry
 
 
 def create_dashboards_router(db, require_roles):
@@ -281,5 +286,102 @@ def create_dashboards_router(db, require_roles):
             ]}
 
         raise HTTPException(404, f"Bilinmeyen widget tipi: {widget_type}")
+
+    # ─── Public Share Link (iter 370) ─────────────────────────────────
+    @router.post("/{dash_id}/share")
+    async def create_share(dash_id: str, body: ShareBody,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        d = await db.custom_dashboards.find_one({"id": dash_id}, {"_id": 0})
+        if not d:
+            raise HTTPException(404, "Dashboard bulunamadı")
+        if d["owner_email"] != current_user.get("email") and (current_user.get("role") or "").lower() != "admin":
+            raise HTTPException(403, "Sadece sahibi share link üretebilir")
+        token = secrets.token_urlsafe(16)   # 128-bit entropy
+        expires = None
+        if body.expires_in_days and body.expires_in_days > 0:
+            expires = (datetime.now(timezone.utc) + timedelta(days=body.expires_in_days)).isoformat()
+        await db.custom_dashboards.update_one(
+            {"id": dash_id},
+            {"$set": {"share_token": token, "share_expires_at": expires,
+                       "share_view_count": 0, "share_created_at": _now()}},
+        )
+        return {"ok": True, "share_token": token, "share_expires_at": expires,
+                "share_url_path": f"/dashboard-share/{token}"}
+
+    @router.delete("/{dash_id}/share")
+    async def revoke_share(dash_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        d = await db.custom_dashboards.find_one({"id": dash_id}, {"_id": 0, "owner_email": 1})
+        if not d:
+            raise HTTPException(404, "Dashboard bulunamadı")
+        if d["owner_email"] != current_user.get("email") and (current_user.get("role") or "").lower() != "admin":
+            raise HTTPException(403, "Sadece sahibi revoke edebilir")
+        await db.custom_dashboards.update_one(
+            {"id": dash_id},
+            {"$unset": {"share_token": "", "share_expires_at": "",
+                         "share_created_at": "", "share_view_count": ""}},
+        )
+        return {"ok": True, "revoked": True}
+
+    @router.get("/public/{share_token}")
+    async def public_view(share_token: str):
+        """Public read-only dashboard fetch.  No auth required.  Expiry-safe."""
+        d = await db.custom_dashboards.find_one({"share_token": share_token}, {"_id": 0})
+        if not d:
+            raise HTTPException(404, "Bu link geçersiz veya iptal edildi")
+        expires = d.get("share_expires_at")
+        if expires and expires < _now():
+            raise HTTPException(410, "Bu link'in süresi dolmuş")
+        # Best-effort view counter
+        await db.custom_dashboards.update_one(
+            {"share_token": share_token}, {"$inc": {"share_view_count": 1}}
+        )
+        # Strip owner_email + share metadata that shouldn't leak publicly
+        for k in ("owner_email", "share_token", "share_created_at"):
+            d.pop(k, None)
+        d["is_public_share"] = True
+        return d
+
+    @router.get("/public/widget-data/{share_token}/{widget_type}")
+    async def public_widget_data(share_token: str, widget_type: str,
+                                    property_id: Optional[str] = None):
+        """Public widget data — expiry-guarded, no auth. Uses same
+        dispatch logic as the private endpoint."""
+        d = await db.custom_dashboards.find_one({"share_token": share_token},
+                                                 {"_id": 0, "share_expires_at": 1, "property_id": 1})
+        if not d:
+            raise HTTPException(404, "Link geçersiz")
+        expires = d.get("share_expires_at")
+        if expires and expires < _now():
+            raise HTTPException(410, "Süresi dolmuş")
+        # Reuse widget_data by manually calling the same logic — inline dispatch
+        pid = property_id or d.get("property_id")
+        prop_q = {"property_id": pid} if pid and pid != "all" else {}
+        today = datetime.now(timezone.utc).date()
+        yesterday = today - timedelta(days=1)
+
+        async def latest_snapshot(date_iso: str):
+            return await db.daily_snapshots.find_one({**prop_q, "date": date_iso}, {"_id": 0})
+
+        if widget_type in {"kpi_occupancy", "kpi_adr", "kpi_revpar"}:
+            snap_t = await latest_snapshot(today.isoformat()) or {}
+            snap_y = await latest_snapshot(yesterday.isoformat()) or {}
+            field = {"kpi_occupancy": "occupancy_pct", "kpi_adr": "adr", "kpi_revpar": "revpar"}[widget_type]
+            v, vy = snap_t.get(field), snap_y.get(field)
+            delta = round((float(v) - float(vy)) / float(vy) * 100, 1) if v is not None and vy else None
+            return {"value": v, "yesterday": vy, "delta_pct": delta,
+                    "unit": "%" if widget_type == "kpi_occupancy" else "GBP",
+                    "label": widget_type.split("_")[-1].upper()}
+        if widget_type == "spark_revenue":
+            data = []
+            for i in range(6, -1, -1):
+                d0 = (today - timedelta(days=i)).isoformat()
+                snap = await latest_snapshot(d0) or {}
+                data.append({"date": d0, "revenue": snap.get("revenue") or 0})
+            return {"series": data}
+        # Public view only supports "safe" widgets — hide guest-list / ops widgets
+        if widget_type in {"kpi_pace", "kpi_pickup", "kpi_roas", "hk_summary"}:
+            raise HTTPException(403, "Bu widget public share'de görüntülenemez")
+        raise HTTPException(404, "Bilinmeyen widget tipi")
 
     return router

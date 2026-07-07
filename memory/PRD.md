@@ -3,6 +3,68 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-07 (iter 371 — 4 Mews-Parity Eksiği Tamamlandı ✅✅✅✅)
+
+**A) Drag-Drop Widget Reorder** (Custom Dashboard Builder — mevcut olan büyütüldü)
+- CustomDashboardBuilder.js'e native HTML5 `draggable/onDragStart/onDragOver/onDrop` eklendi.
+- Widget kartlarına drag handle (⋮⋮ hover'da görünür), cursor: grab.
+- `persistOrder()` widgets array'ini `PUT /dashboards/{id}` ile server'a kaydeder.
+- 3rd party lib yok — bundle temiz.
+
+**B) DCC (Dynamic Currency Conversion) Layer** (currency_fx.py'a eklendi)
+- `POST /api/currency-fx/dcc-quote` — body: `{amount, from_currency, to_currency, markup_pct?}` (default 3.5%, 0-10 arası guard).
+- Response: mid_market + dcc_amount + fee_target + fee_base + disclaimer.
+- **Test**: £100 GBP → $131.01 USD (mid $126.58 + 3.5% markup) → fee $4.43 = £3.50 hotel DCC revenue.
+
+**C) Digital Keys MVP** (yeni: `/app/backend/routes/pms/digital_keys.py`)
+- Rotating QR (30sn bucket + SHA256 signature, ± 1 bucket clock skew tolerance) + 4-digit backup PIN.
+- Endpoints:
+  - `POST /api/digital-keys/issue` — staff (30dk-168h duration, secrets.token_urlsafe 24)
+  - `GET  /api/digital-keys/token/{token}` — **public**, guest phone auto-refresh
+  - `GET  /api/digital-keys/verify/{qr}` — **public**, door lock hardware endpoint
+  - `DELETE /api/digital-keys/{id}` — revoke
+  - `GET  /api/digital-keys/list` — active keys board
+- Frontend `/app/frontend/src/RoomKeyPage.js` — public `/room-key?token=xxx` sayfası, MyHotelBox logo header, misafir + oda kartı, api.qrserver.com üretimi QR (280×280, 30sn countdown), Backup PIN mono font, Türkçe talimatlar.
+- **Test**: Issue key → rotating QR (`hb:-oFDu8rb:59448157:fe0f247b097f`) → hardware verify döndü `{ok:true, room:305, guest:Liam Miller}`. Screenshot: RoomKeyPage tam çalışıyor.
+
+**D) OTA Inbound Webhook** (yeni: `/app/backend/routes/integrations_pkg/ota_inbound.py`)
+- Channel Manager 2-way sync inbound tarafı (outbound sync_queue zaten var).
+- Endpoints:
+  - `POST /api/ota-inbound/{channel}/reservation` — idempotent per (channel, channel_reference), upserts `bookings`.
+  - `POST /api/ota-inbound/{channel}/cancellation` — status→cancelled + reason.
+  - `GET  /api/ota-inbound/log` — event history (staff).
+- HMAC signature stub (`OTA_WEBHOOK_SECRET_{CHANNEL}` env vars ile prod'da aktif).
+- Supported channels: booking_com, expedia, airbnb.
+- **Test**: booking_com reservation create ✓ · repeat = "updated" (idempotent) ✓ · cancellation ✓ · log 3 event.
+
+**F&B POS Envanter Düzeltmesi** (önceki iterasyondaki hata):
+- Kullanıcı uyardı — F&B POS zaten mevcut (POSPanel, FnbPosHubPanel, BanquetOrders, BeachPos, MenuEngineering, hotel_ops/pos.py, menu_engineering.py, recipe_cogs.py, bi_feed.py outlet/table/party_size). Rakip parite ✅.
+
+
+### 2026-07-07 (iter 370 — Dashboard Public Share Link ✅ + F&B POS Envanter Düzeltmesi)
+
+**F&B POS Envanter Düzeltmesi** (kullanıcı uyarısı ile keşfedildi):
+- Önceki iterasyonda F&B POS'u eksik olarak listelemiştim — **YANLIŞ**.
+- Gerçek durum: **F&B POS zaten mevcut ve kapsamlı**:
+  - Backend: `hotel_ops/pos.py` (menu items CRUD + POS orders), `menu_engineering.py`, `recipe_cogs.py`, `finance_ext/payments.py::pos-checkout`, `bi_feed.py` (outlet/table_number/party_size).
+  - Frontend: `POSPanel.js` (main POS), `FnbPosHubPanel.js` (hub), `BanquetOrdersPanel.js`, `BeachPosPanel.js`, `MenuEngineeringPanel.js`.
+- Mews-parity tablosu güncellendi: F&B POS ✅ (rakiple aynı seviyede).
+
+**Public Share Link for Custom Dashboards** (potansiyel iyileştirme):
+- Backend genişletme (`custom_dashboards.py`):
+  - `POST /api/dashboards/{id}/share` — `secrets.token_urlsafe(16)` ile 128-bit token, opsiyonel expiry (`expires_in_days`).
+  - `DELETE /api/dashboards/{id}/share` — revoke, tüm share alanlarını `$unset`.
+  - `GET /api/dashboards/public/{share_token}` — **NO AUTH**, expiry-guarded (410 Gone), `owner_email` sızmıyor.
+  - `GET /api/dashboards/public/widget-data/{token}/{widget_type}` — safe-only widgets (kpi_occupancy/adr/revpar + spark_revenue). Ops widget'ları (kpi_pace, kpi_pickup, kpi_roas, hk_summary) `403 Forbidden` ile korunuyor.
+  - View counter (`$inc share_view_count`), sadece owner düzenleyebilir/revoke edebilir.
+- Frontend:
+  - `CustomDashboardBuilder.js`: "Paylaş" butonu (share aktifse yeşil "Paylaşımlı"), modal — kopyalanabilir URL, expiry uyarısı, revoke butonu.
+  - `DashboardSharePage.js` (yeni): public `/dashboard-share/:token` sayfası — MyHotelBox logo header, Read-only + expiry rozetleri, widget grid (spark chart + KPI kartları), restricted widget "gizlenmiş" mesajı.
+- **Test**:
+  - curl: create share → 128-bit token ✓, public view returns 2 widgets + `is_public_share:true`, `owner_email` YOK ✓.
+  - Screenshot: fresh browser session ile `/dashboard-share/8BX-e9JFNAc0TyqIVx311w` açıldı — Test Dashboard, Read-only rozeti, 2 widget render, "06.08.2026'e kadar" expiry pill'i, MyHotelBox logo & footer görünüyor.
+
+
 ### 2026-07-07 (iter 369 — Custom Dashboard Builder + Multi-Channel Reports ✅ MEWS PARITY)
 
 **A) Multi-Channel Report Delivery** (potansiyel iyileştirme)

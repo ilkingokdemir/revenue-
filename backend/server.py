@@ -1188,6 +1188,12 @@ api_router.include_router(create_reports_router(db, require_roles))
 from routes.platform_ext.custom_dashboards import create_dashboards_router
 api_router.include_router(create_dashboards_router(db, require_roles))
 
+from routes.pms.digital_keys import create_digital_keys_router
+api_router.include_router(create_digital_keys_router(db, require_roles))
+
+from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
+api_router.include_router(create_ota_inbound_router(db, require_roles))
+
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))

@@ -35,7 +35,7 @@ export default function ForecastV2Panel({ propertyId }) {
           Uzun Vadeli Talep Tahmini
         </h1>
         <p className="text-sm text-stone-500 mt-1 max-w-2xl">
-          24 aya kadar aylık tahmin, 90-365 günlük talep takvimi, pickup eğrisi — rakiplerde ayrı modül, bizde dahili.
+          24 aya kadar aylık tahmin, 2 yıla kadar talep takvimi, pickup eğrisi, 2-yıl executive özet — rakiplerde ayrı modül, bizde dahili.
         </p>
       </div>
 
@@ -52,11 +52,16 @@ export default function ForecastV2Panel({ propertyId }) {
           <Lightning size={14} className="inline mr-1.5" />
           Pickup Eğrisi
         </TabBtn>
+        <TabBtn active={tab === "two-year"} onClick={() => setTab("two-year")} testId="fcv2-tab-two-year">
+          <TrendUp size={14} className="inline mr-1.5" />
+          2-Yıl Özet
+        </TabBtn>
       </div>
 
       {tab === "horizon" && <HorizonTab propertyId={propertyId} />}
       {tab === "calendar" && <CalendarTab propertyId={propertyId} />}
       {tab === "pickup" && <PickupTab propertyId={propertyId} />}
+      {tab === "two-year" && <TwoYearTab propertyId={propertyId} />}
     </div>
   );
 }
@@ -264,7 +269,7 @@ function CalendarTab({ propertyId }) {
 
       <div className="flex items-center gap-2">
         <label className="text-xs text-stone-600">Aralık:</label>
-        {[30, 60, 90, 180, 365].map((d) => (
+        {[30, 60, 90, 180, 365, 730].map((d) => (
           <button
             key={d}
             onClick={() => setDays(d)}
@@ -436,6 +441,146 @@ function PickupChart({ actual, historical }) {
       <div className="flex gap-4 text-xs mt-2">
         <span className="inline-flex items-center gap-1.5"><span className="inline-block w-5 h-0.5 bg-violet-500" /> Bu hedef</span>
         <span className="inline-flex items-center gap-1.5"><span className="inline-block w-5 h-0.5 bg-stone-400 border-dashed" style={{ borderTop: "1.5px dashed #a1a1aa", backgroundColor: "transparent" }} /> Geçmiş ortalama</span>
+      </div>
+    </div>
+  );
+}
+
+/* ==================== 2-YEAR SUMMARY (iter 372) ==================== */
+function TwoYearTab({ propertyId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!propertyId) return;
+    setLoading(true);
+    try {
+      const r = await axios.get(`${API}/api/forecast-v2/two-year-summary/${propertyId}`, { withCredentials: true });
+      setData(r.data);
+    } catch (e) {
+      toast.error("2-yıl özeti yüklenemedi");
+    } finally {
+      setLoading(false);
+    }
+  }, [propertyId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <div className="text-sm text-stone-400" data-testid="fcv2-2y-loading">Yükleniyor…</div>;
+  if (!data) return null;
+
+  const fmt = (n) => (typeof n === "number" ? n.toLocaleString("tr-TR", { maximumFractionDigits: 0 }) : "-");
+  const y1 = data.year_1_total || {};
+  const y2 = data.year_2_total || {};
+  const growthColor = (data.yoy_growth_pct || 0) >= 0 ? "text-emerald-600" : "text-rose-600";
+  const monthly = data.monthly || [];
+  const maxRev = Math.max(...monthly.map(m => m.revenue_high || m.revenue || 0), 1);
+
+  return (
+    <div className="space-y-6" data-testid="fcv2-two-year">
+      {/* Executive KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Kpi label="Yıl 1 Gelir" value={`£${fmt(y1.revenue)}`} color="violet" testId="fcv2-2y-y1" />
+        <Kpi label="Yıl 2 Gelir" value={`£${fmt(y2.revenue)}`} color="sky" testId="fcv2-2y-y2" />
+        <Kpi label="YoY Büyüme" value={`${data.yoy_growth_pct ?? "-"}%`} color={((data.yoy_growth_pct || 0) >= 0) ? "emerald" : "rose"} testId="fcv2-2y-yoy" />
+        <Kpi label="Toplam Rez." value={fmt((y1.bookings || 0) + (y2.bookings || 0))} color="amber" testId="fcv2-2y-bk" />
+      </div>
+
+      {/* Confidence bands note */}
+      <div className="bg-violet-50 border border-violet-200 rounded-lg p-3 text-xs text-violet-900 flex items-start gap-2">
+        <Info size={16} weight="fill" className="mt-0.5 flex-shrink-0" />
+        <div>
+          <b>Güven Aralıkları:</b> Düşük (±30%) £{fmt(y1.revenue_low + y2.revenue_low)} · Beklenen £{fmt(y1.revenue + y2.revenue)} · Yüksek £{fmt(y1.revenue_high + y2.revenue_high)}.
+          Model: son 12 ay + sezon ağırlıkları × YoY {data.assumptions?.yoy_growth_pct}% × ADR £{data.assumptions?.avg_adr}.
+        </div>
+      </div>
+
+      {/* Monthly bar chart with confidence bands */}
+      <div className="bg-white border border-stone-200 rounded-lg p-4">
+        <div className="text-sm font-semibold text-stone-800 mb-3">24 Aylık Gelir Tahmini (güven aralıklı)</div>
+        <div className="flex items-end gap-1 h-56 overflow-x-auto" data-testid="fcv2-2y-chart">
+          {monthly.map((m, i) => {
+            const barH = (m.revenue / maxRev) * 200;
+            const lowH = (m.revenue_low / maxRev) * 200;
+            const highH = (m.revenue_high / maxRev) * 200;
+            const isY2 = m.year_offset === 2;
+            return (
+              <div key={m.period} className="flex flex-col items-center gap-1 min-w-[26px]" title={`${m.label} · £${fmt(m.revenue)} (${m.confidence}%)`}>
+                <div className="relative flex items-end justify-center w-full" style={{ height: "200px" }}>
+                  {/* Confidence band */}
+                  <div className="absolute w-1 bg-stone-200 rounded" style={{ bottom: `${lowH}px`, height: `${highH - lowH}px` }} />
+                  {/* Expected value bar */}
+                  <div className={`w-4 rounded-t ${isY2 ? "bg-sky-500" : "bg-violet-500"}`} style={{ height: `${barH}px` }} />
+                </div>
+                <div className="text-[9px] text-stone-500 whitespace-nowrap" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
+                  {m.label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex gap-4 text-[10px] text-stone-600 mt-2">
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-3 bg-violet-500 rounded-sm" /> Yıl 1</span>
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-3 bg-sky-500 rounded-sm" /> Yıl 2</span>
+          <span className="inline-flex items-center gap-1.5"><span className="inline-block w-1.5 h-3 bg-stone-300 rounded-sm" /> Güven bandı ±30%</span>
+        </div>
+      </div>
+
+      {/* Peak / Bottom months */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="bg-white border border-stone-200 rounded-lg p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-2">🏆 Peak 5 Ay</div>
+          <ul className="space-y-1.5 text-sm">
+            {(data.top_5_months || []).map(m => (
+              <li key={m.label} className="flex justify-between text-stone-700">
+                <span>{m.label}</span>
+                <span className="font-semibold text-emerald-700">£{fmt(m.revenue)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-lg p-4">
+          <div className="text-xs font-semibold uppercase tracking-wider text-rose-700 mb-2">⬇️ Trough 5 Ay</div>
+          <ul className="space-y-1.5 text-sm">
+            {(data.bottom_5_months || []).map(m => (
+              <li key={m.label} className="flex justify-between text-stone-700">
+                <span>{m.label}</span>
+                <span className="font-semibold text-rose-700">£{fmt(m.revenue)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Quarterly table */}
+      <div className="bg-white border border-stone-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 text-sm font-semibold text-stone-800 border-b border-stone-200 bg-stone-50">Çeyrek Bazlı</div>
+        <table className="w-full text-xs" data-testid="fcv2-2y-quarterly">
+          <thead className="bg-stone-50 text-stone-500 uppercase tracking-wider text-[10px]">
+            <tr>
+              <th className="px-3 py-2 text-left">Çeyrek</th>
+              <th className="px-3 py-2 text-right">Rezervasyon</th>
+              <th className="px-3 py-2 text-right">Düşük</th>
+              <th className="px-3 py-2 text-right">Beklenen</th>
+              <th className="px-3 py-2 text-right">Yüksek</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-stone-100">
+            {(data.quarterly || []).map(q => (
+              <tr key={q.label} className={q.year_offset === 2 ? "bg-sky-50/30" : ""}>
+                <td className="px-3 py-2 font-medium">{q.label}</td>
+                <td className="px-3 py-2 text-right">{fmt(q.bookings)}</td>
+                <td className="px-3 py-2 text-right text-stone-500">£{fmt(q.revenue_low)}</td>
+                <td className="px-3 py-2 text-right font-semibold text-stone-800">£{fmt(q.revenue)}</td>
+                <td className="px-3 py-2 text-right text-stone-500">£{fmt(q.revenue_high)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="text-[11px] text-stone-400 flex items-center gap-1.5">
+        <ArrowsClockwise size={11} /> Oluşturuldu: {new Date(data.generated_at).toLocaleString("tr-TR")} · YoY büyüme: <span className={`font-semibold ${growthColor}`}>{data.yoy_growth_pct}%</span>
       </div>
     </div>
   );

@@ -150,17 +150,44 @@ def create_forecast_v2_router(db, require_roles):
         }
 
     # ========== DAILY DEMAND CALENDAR ==========
+    # iter 372: extended horizon to 730 days (2 years) with hybrid modeling —
+    # OTB-based for near-term (< 365d), fully synthetic (season × DOW × yoy) beyond.
     @router.get("/forecast-v2/demand-calendar/{property_id}")
     async def demand_calendar(property_id: str, start: Optional[str] = None, days: int = 90,
                               current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
-        if days < 7 or days > 365:
-            raise HTTPException(400, "days must be 7..365")
+        if days < 7 or days > 730:
+            raise HTTPException(400, "days must be 7..730")
         start_date = date.fromisoformat(start) if start else date.today()
         end_date = start_date + timedelta(days=days - 1)
 
         # Get total rooms for occupancy base
         rooms_count = await db.rooms.count_documents({"property_id": property_id})
         rooms_count = max(rooms_count, 1)
+
+        # ---- Historical baseline for far-future forecasting (iter 372) ----
+        # Compute average daily occupancy per (month, dow) from last 12 months.
+        today = date.today()
+        one_yr_ago = today - timedelta(days=365)
+        hist_bks = await db.bookings.find({
+            "property_id": property_id,
+            "check_in":  {"$gte": one_yr_ago.isoformat(), "$lte": today.isoformat()},
+            "status": {"$ne": "cancelled"},
+        }, {"_id": 0, "check_in": 1, "check_out": 1}).to_list(20000)
+
+        # Build (month, dow) -> [otb counts]
+        hist_bucket: dict = {}
+        for i in range(365):
+            d = one_yr_ago + timedelta(days=i)
+            otb = 0
+            for b in hist_bks:
+                ci = b.get("check_in")
+                co = b.get("check_out")
+                if ci and co and ci <= d.isoformat() < co:
+                    otb += 1
+            hist_bucket.setdefault((d.month, d.weekday()), []).append(otb)
+        hist_avg = {k: (sum(v) / len(v) if v else 0) for k, v in hist_bucket.items()}
+        # If no history at all, fall back to modeled synthetic (rooms_count * season * dow * 0.5)
+        has_history = any(hist_bucket.values())
 
         # Load bookings overlapping window
         bookings = await db.bookings.find({
@@ -181,13 +208,34 @@ def create_forecast_v2_router(db, require_roles):
                 if ci and co and ci <= d.isoformat() < co:
                     on_the_books += 1
 
-            occupancy = min(100, round(on_the_books / rooms_count * 100, 1))
+            # Days-out from today — used to blend OTB with forecast baseline
+            days_from_today = (d - today).days
             dow = d.weekday()
             dow_w = DOW_WEIGHTS[dow]
             season_w = SEASON_WEIGHTS.get(d.month, 1.0)
 
-            # demand score 0-100: otb occupancy contributes 40%, DOW 30%, season 30%
-            score = round((occupancy / 100) * 40 + ((dow_w - 0.7) / 0.6) * 30 + ((season_w - 0.7) / 0.65) * 30, 1)
+            # Baseline from historical (month, dow) bucket; synthetic if no history
+            if has_history:
+                baseline = hist_avg.get((d.month, dow), 0)
+            else:
+                baseline = rooms_count * 0.5 * season_w * dow_w
+
+            # Forecast OTB: OTB dominates near-term; baseline dominates far-term.
+            # Blend weight = 1 when d = today, linearly to 0 at day 180+.
+            if days_from_today <= 0:
+                blend = 1.0
+            elif days_from_today >= 180:
+                blend = 0.0
+            else:
+                blend = 1 - (days_from_today / 180.0)
+            forecast_otb = round(on_the_books * blend + baseline * (1 - blend), 1)
+
+            # occupancy fields: 'occupancy_pct' remains OTB-based for compatibility.
+            occupancy = min(100, round(on_the_books / rooms_count * 100, 1))
+            forecast_occupancy_pct = min(100, round(forecast_otb / rooms_count * 100, 1))
+
+            # demand score 0-100: forecast_occ contributes 40%, DOW 30%, season 30%
+            score = round((forecast_occupancy_pct / 100) * 40 + ((dow_w - 0.7) / 0.6) * 30 + ((season_w - 0.7) / 0.65) * 30, 1)
             score = max(0, min(100, score))
 
             # Holiday overlay
@@ -206,16 +254,23 @@ def create_forecast_v2_router(db, require_roles):
             else:
                 tier, tier_label = "trough", "Trough · Fiyat -20%"
 
+            # Confidence: near-term (real OTB) = high, far-term (model) = decays
+            confidence = max(35, 100 - abs(days_from_today) // 10) if days_from_today > 0 else 95
+
             days_out.append({
                 "date": d.isoformat(),
                 "dow": ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"][dow],
                 "occupancy_pct": occupancy,
+                "forecast_occupancy_pct": forecast_occupancy_pct,
                 "otb": on_the_books,
+                "forecast_otb": forecast_otb,
                 "demand_score": score,
+                "confidence": confidence,
                 "tier": tier,
                 "tier_label": tier_label,
                 "holiday": holiday,
                 "is_weekend": dow >= 4,
+                "is_forecast": days_from_today > 60,
             })
 
         # Aggregates
@@ -233,6 +288,132 @@ def create_forecast_v2_router(db, require_roles):
             "peak_days_count": len(peak_days),
             "trough_days_count": len(trough_days),
             "peak_days": peak_days[:20],
+        }
+
+    # ========== 2-YEAR (24-MONTH) SUMMARY (iter 372) ==========
+    # RMS Atomize parity: quarterly aggregates + YoY chart + confidence bands.
+    @router.get("/forecast-v2/two-year-summary/{property_id}")
+    async def two_year_summary(property_id: str,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Executive-level 24-month forward summary with quarterly breakdown,
+        Year-1 vs Year-2 comparison, and low/mid/high revenue confidence bands."""
+        today = date.today()
+
+        # Build historical monthly stats (last 12 months) — same logic as horizon()
+        historical: Dict[str, Dict] = {}
+        for i in range(12, 0, -1):
+            ref_y = today.year
+            ref_m = today.month - i
+            while ref_m <= 0:
+                ref_m += 12
+                ref_y -= 1
+            fm, lm = _month_range(ref_y, ref_m)
+            bks = await db.bookings.find({
+                "property_id": property_id,
+                "check_in": {"$gte": fm.isoformat(), "$lte": lm.isoformat()},
+                "status": {"$ne": "cancelled"},
+            }, {"_id": 0, "total_price": 1, "nights": 1}).to_list(5000)
+            n = len(bks)
+            rev = sum((b.get("total_price") or 0) for b in bks)
+            nights = sum((b.get("nights") or 1) for b in bks)
+            historical[f"{ref_y:04d}-{ref_m:02d}"] = {
+                "bookings": n, "revenue": round(rev, 2),
+                "adr": round(rev / nights, 2) if nights else 0,
+                "avg_los": round(nights / n, 2) if n else 0,
+            }
+
+        last_12 = list(historical.values())
+        avg_bk = sum(x["bookings"] for x in last_12) / max(len(last_12), 1)
+        avg_adr = sum(x["adr"] for x in last_12 if x["adr"] > 0) / max(sum(1 for x in last_12 if x["adr"] > 0), 1) or 120
+        avg_los = sum(x["avg_los"] for x in last_12 if x["avg_los"] > 0) / max(sum(1 for x in last_12 if x["avg_los"] > 0), 1) or 2.0
+
+        keys_sorted = sorted(historical.keys())
+        recent_6 = keys_sorted[-6:] if len(keys_sorted) >= 6 else keys_sorted
+        prior_6 = keys_sorted[-12:-6] if len(keys_sorted) >= 12 else []
+        r6 = sum(historical[k]["bookings"] for k in recent_6) or 1
+        p6 = sum(historical[k]["bookings"] for k in prior_6) or r6
+        yoy = max(0.7, min(1.5, r6 / p6 if p6 else 1.0))
+
+        # Build 24-month forecast
+        monthly: List[Dict] = []
+        for i in range(24):
+            fy = today.year
+            fm = today.month + i
+            while fm > 12:
+                fm -= 12
+                fy += 1
+            season = SEASON_WEIGHTS.get(fm, 1.0)
+            base_bk = avg_bk * season * yoy
+            # For year-2, apply compound yoy again
+            if i >= 12:
+                base_bk *= yoy
+            revenue = base_bk * avg_adr * avg_los
+            # Confidence bands (±15% mid, ±30% low/high)
+            confidence = max(35, 95 - i * 2)
+            monthly.append({
+                "period": f"{fy:04d}-{fm:02d}",
+                "label": f"{calendar.month_abbr[fm]} {fy}",
+                "year_offset": 1 if i < 12 else 2,
+                "quarter": (fm - 1) // 3 + 1,
+                "bookings": int(round(base_bk)),
+                "revenue": round(revenue, 2),
+                "revenue_low": round(revenue * 0.70, 2),
+                "revenue_high": round(revenue * 1.30, 2),
+                "adr": round(avg_adr, 2),
+                "los": round(avg_los, 2),
+                "confidence": confidence,
+                "season_factor": round(season, 2),
+            })
+
+        # Yearly + quarterly aggregates
+        y1 = [m for m in monthly if m["year_offset"] == 1]
+        y2 = [m for m in monthly if m["year_offset"] == 2]
+
+        def _agg(rows):
+            return {
+                "bookings":     sum(r["bookings"] for r in rows),
+                "revenue":      round(sum(r["revenue"] for r in rows), 2),
+                "revenue_low":  round(sum(r["revenue_low"] for r in rows), 2),
+                "revenue_high": round(sum(r["revenue_high"] for r in rows), 2),
+            }
+
+        year1 = _agg(y1)
+        year2 = _agg(y2)
+        yoy_growth = round((year2["revenue"] - year1["revenue"]) / year1["revenue"] * 100, 1) if year1["revenue"] else None
+
+        # Quarterly aggregates for chart
+        quarterly: List[Dict] = []
+        for yr_off, rows in [(1, y1), (2, y2)]:
+            for q in range(1, 5):
+                qrows = [r for r in rows if r["quarter"] == q]
+                if qrows:
+                    quarterly.append({
+                        "label": f"Y{yr_off} Q{q}",
+                        "year_offset": yr_off,
+                        "quarter": q,
+                        **_agg(qrows),
+                    })
+
+        # Peak/trough months
+        top_5 = sorted(monthly, key=lambda x: x["revenue"], reverse=True)[:5]
+        bottom_5 = sorted(monthly, key=lambda x: x["revenue"])[:5]
+
+        return {
+            "property_id":  property_id,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "assumptions":  {
+                "avg_adr":         round(avg_adr, 2),
+                "avg_los":         round(avg_los, 2),
+                "yoy_growth_pct":  round((yoy - 1) * 100, 1),
+                "historical_months": len(last_12),
+            },
+            "year_1_total":  year1,
+            "year_2_total":  year2,
+            "yoy_growth_pct": yoy_growth,
+            "monthly":       monthly,
+            "quarterly":     quarterly,
+            "top_5_months":  [{"label": m["label"], "revenue": m["revenue"]} for m in top_5],
+            "bottom_5_months": [{"label": m["label"], "revenue": m["revenue"]} for m in bottom_5],
         }
 
     # ========== PICKUP CURVE ==========

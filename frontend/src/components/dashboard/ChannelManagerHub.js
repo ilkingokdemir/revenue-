@@ -37,6 +37,7 @@ const PANELS = [
   { key: "stop-sell",       label: "Stop-Sell",       icon: Ban },
   { key: "publish-jobs",    label: "Publish Jobs",    icon: UploadCloud },
   { key: "audit-logs",      label: "Audit Logs",      icon: ScrollText },
+  { key: "unassigned",      label: "Unassigned OTA",  icon: AlertTriangle },
   { key: "profiles",        label: "Profiles",        icon: FileCode2 },
   { key: "overrides",       label: "Overrides",       icon: Percent },
 ];
@@ -1085,6 +1086,137 @@ const StopSellPanel = ({ pid }) => {
   );
 };
 
+/* ═══════════ UNASSIGNED OTA BOOKINGS (iter 372) ═══════════ */
+const UnassignedOTAPanel = ({ pid }) => {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [retrying, setRetrying] = useState({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await axios.get(`${API}/ota-inbound/unassigned?limit=100`);
+      const items = (r.data?.items || []).filter(x => !pid || !x.property_id || x.property_id === pid || pid === "aldgate-flats");
+      setRows(items);
+    } catch (e) {
+      toast.error("Yüklenemedi: " + (e.response?.data?.detail || e.message));
+    }
+    setLoading(false);
+  }, [pid]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const retry = async (bid) => {
+    setRetrying(prev => ({ ...prev, [bid]: true }));
+    try {
+      const r = await axios.post(`${API}/ota-inbound/auto-assign/${bid}`);
+      if (r.data?.ok) {
+        toast.success(`Oda atandı: ${r.data.room_number}${r.data.upgrade ? " (upgrade!)" : ""} · skor ${r.data.score}`);
+        await load();
+      } else {
+        toast.warning(`Atanamadı: ${r.data?.reason || "unknown"}`);
+      }
+    } catch (e) {
+      toast.error("Retry başarısız: " + (e.response?.data?.detail || e.message));
+    }
+    setRetrying(prev => ({ ...prev, [bid]: false }));
+  };
+
+  return (
+    <div className="space-y-4" data-testid="unassigned-ota-panel">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xl font-bold text-stone-900 flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-600" />
+            Unassigned OTA Bookings
+          </div>
+          <div className="text-sm text-stone-500 mt-1">
+            OTA&apos;dan gelen ama otomatik oda ataması yapılamayan rezervasyonlar. Odaları manuel atayabilir veya auto-assign&apos;ı yeniden deneyebilirsiniz.
+          </div>
+        </div>
+        <button onClick={load} disabled={loading}
+          className="px-3 py-1.5 text-sm rounded-md bg-white border border-stone-300 hover:bg-stone-50 flex items-center gap-2 disabled:opacity-50"
+          data-testid="unassigned-refresh-btn">
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          Yenile
+        </button>
+      </div>
+
+      {loading && rows.length === 0 && (
+        <div className="p-8 text-center text-stone-400 border border-dashed rounded-lg" data-testid="unassigned-loading">
+          Yükleniyor…
+        </div>
+      )}
+
+      {!loading && rows.length === 0 && (
+        <div className="p-10 text-center border border-dashed rounded-lg bg-emerald-50/50" data-testid="unassigned-empty">
+          <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-600 mb-2" />
+          <div className="text-stone-700 font-semibold">Harika — atanmamış OTA rezervasyonu yok!</div>
+          <div className="text-xs text-stone-500 mt-1">Tüm OTA rezervasyonları otomatik olarak atanmış durumda.</div>
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="overflow-x-auto border rounded-lg bg-white">
+          <table className="w-full text-sm" data-testid="unassigned-table">
+            <thead className="bg-stone-50 text-stone-600 text-xs uppercase tracking-wide">
+              <tr>
+                <th className="px-3 py-2 text-left">Kanal</th>
+                <th className="px-3 py-2 text-left">Ref</th>
+                <th className="px-3 py-2 text-left">Misafir</th>
+                <th className="px-3 py-2 text-left">Property</th>
+                <th className="px-3 py-2 text-left">Room Type</th>
+                <th className="px-3 py-2 text-left">Check-in</th>
+                <th className="px-3 py-2 text-left">Nights</th>
+                <th className="px-3 py-2 text-left">Sebep</th>
+                <th className="px-3 py-2 text-right">Aksiyon</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {rows.map(b => {
+                const nights = (() => {
+                  try {
+                    const ci = new Date(b.check_in); const co = new Date(b.check_out);
+                    return Math.max(1, Math.round((co - ci) / 86400000));
+                  } catch { return "-"; }
+                })();
+                const isRetrying = !!retrying[b.id];
+                return (
+                  <tr key={b.id} data-testid={`unassigned-row-${b.id}`}>
+                    <td className="px-3 py-2">
+                      <Badge variant="outline" className="text-xs uppercase">{b.channel || b.source?.replace("ota:", "") || "-"}</Badge>
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-stone-600">{b.channel_reference || "-"}</td>
+                    <td className="px-3 py-2 font-medium text-stone-800">{b.guest_name || "-"}</td>
+                    <td className="px-3 py-2 text-xs text-stone-600">{b.property_id || "-"}</td>
+                    <td className="px-3 py-2 text-xs text-stone-600">{b.room_type_id || "—"}</td>
+                    <td className="px-3 py-2 text-xs text-stone-600">{b.check_in || "-"}</td>
+                    <td className="px-3 py-2 text-xs">{nights}</td>
+                    <td className="px-3 py-2 text-xs text-amber-700">
+                      {b.unassigned_reason === "no_available_room" ? "Uygun oda yok" : (b.unassigned_reason || "—")}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button onClick={() => retry(b.id)} disabled={isRetrying}
+                        className="px-3 py-1.5 text-xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-wait inline-flex items-center gap-1.5"
+                        data-testid={`unassigned-retry-${b.id}`}>
+                        {isRetrying ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
+                        {isRetrying ? "…" : "Retry"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div className="px-3 py-2 text-xs text-stone-500 bg-stone-50 border-t">
+            Toplam <b>{rows.length}</b> unassigned booking · Retry&apos;lar auto-assign skorunu kullanır (loyalty tier, view preference, room_type match, housekeeping).
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 /* ═══════════ MAIN HUB ═══════════ */
 export const ChannelManagerHub = ({ activePropertyId, initialPanel }) => {
   const pid = activePropertyId || "aldgate-flats";
@@ -1123,6 +1255,7 @@ export const ChannelManagerHub = ({ activePropertyId, initialPanel }) => {
       {panel === "stop-sell"      && <StopSellPanel pid={pid} />}
       {panel === "publish-jobs"   && <PublishJobsPanel pid={pid} />}
       {panel === "audit-logs"     && <AuditLogsPanel pid={pid} />}
+      {panel === "unassigned"     && <UnassignedOTAPanel pid={pid} />}
       {panel === "profiles"       && <ProfilesPanel pid={pid} />}
       {panel === "overrides"      && <OverridesPanel pid={pid} />}
     </div>

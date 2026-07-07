@@ -3,6 +3,34 @@
 ## Original Problem Statement
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
+### 2026-07-07 (iter 368 — Scheduled Report Delivery ✅ MEWS PARITY)
+- **Backend** `/app/backend/routes/platform_ext/scheduled_reports.py` — 9 endpoint + 5 rapor generator + background tick worker:
+  - Endpoints: `GET /catalog`, `POST/GET/PUT/DELETE /subscriptions`, `POST /subscriptions/{id}/run-now`, `GET /snapshots`, `GET /snapshots/{id}/download`, `POST /tick`, `POST /preview/{key}` (admin).
+  - Rapor tipleri: `occupancy_daily`, `revenue_daily`, `attribution_roas` (ROAS + auto budget action), `housekeeping_status`, `morning_brief` (HTML digest).
+  - Frequency: daily / weekly / monthly. Filters (days, margin_pct) opsiyonel.
+  - Background worker (`server.py` startup task): her 5dk `pending` subscription'ları çeker, generator çağırır, `report_snapshots`'a kaydeder, `next_run_at`'i günceller.
+  - Email delivery: **MOCKED** (delivery_status="mocked_email_sent"). Resend/SendGrid entegrasyonu için hazır.
+- **Frontend** `ScheduledReportsPanel.js` — nav: `Overview → Planlı Raporlar` (sidebar id: scheduled-reports).
+  - Toggle enabled/disabled, "Şimdi çalıştır" tek tıkla test, delete, add subscription form (report_key + frequency + email seçici), son 15 snapshot listesi + İndir butonu.
+- **Test**: 
+  - Backend curl: catalog ✓ · create sub ✓ · run-now (206B ROAS CSV) ✓ · download ✓ (`campaign,cost,revenue,bookings,roas,profit,action` header ile 3 kampanya) · delete ✓.
+  - Frontend smoke: 2 sub listede, 3 snapshot download-able, amber MOCKED banner görünüyor.
+
+
+### 2026-07-07 (iter 367 — Scheduled Online Check-out ✅ MEWS PARITY)
+- **Backend** `/app/backend/routes/pms/scheduled_checkout.py` — 6 endpoint + background tick worker:
+  - Public: `POST /api/checkout/schedule`, `GET /api/checkout/schedule/{id}`, `DELETE /api/checkout/schedule/{id}`, `GET /api/checkout/booking/{id}/snapshot` (guest portal için light booking snapshot).
+  - Staff: `GET /api/checkout/scheduled/today` (departures board), `POST /api/checkout/scheduled/{id}/execute-now`, `POST /api/checkout/scheduled/tick` (idempotent).
+  - Guardrails: geçmiş tarih reddedilir · max 48h ilerisi · idempotent upsert per booking.
+  - Auto-tick worker: `server.py` startup task her 5dk `pending` kayıtları flush eder → booking `status=checked_out`, `checkout_channel=scheduled_self_service`.
+- **Frontend**:
+  - `SelfCheckoutPage.js` — public `/checkout?booking={id}&email={e}` mobil-first sayfa. MyHotelBox logo + rezervasyon snapshot + `ScheduleCheckoutWidget`.
+  - `ScheduleCheckoutWidget.js` — half-hour slot grid (bugün + yarın 14:00), notes text area, mevcut planlı checkout gösterimi + iptal.
+  - `DeparturesBoard.js` — Today Hub içine eklendi. Kalan dakika countdown'u, ≤60dk sarı/≥0 kırmızı, "Şimdi" execute butonu, 30sn auto-refresh.
+- **Test**: curl 5/5 endpoint ✓ (schedule + snapshot + board + execute + tick). Guardrail testleri (past date reject, 48h+ reject) ✓. Mobil `/checkout?booking=...` sayfası ekran görüntüsüyle doğrulandı — planlı check-out kartı "Sabah taksisi" notu ile göründü.
+- **Bilinen eksik**: `room_number` bookings collection'ında null olabiliyor (property_id + guest_name var, room atama sonradan yapılıyor). UI'da "—" olarak gösteriliyor, bug değil.
+
+
 ### 2026-07-06 (iter 366 — Brand Logos ✅ COMPLETE)
 - **AI-generated brand logos** (Gemini Nano Banana `gemini-3.1-flash-image-preview` via Emergent LLM Key):
   - `/app/frontend/public/logos/myhotelbox_horizontal.png` — navy 3D-cube + amber accent + "MyHotelBox" wordmark (1792px).

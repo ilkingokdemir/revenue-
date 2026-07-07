@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
+import DeparturesBoard from "./DeparturesBoard";
 import {
   Sparkle,
   ArrowRight,
@@ -350,6 +351,11 @@ export default function TodayHub({ propertyId, hotelName, onNavigate }) {
             Morning Brief'e git
           </button>
         </div>
+      </div>
+
+      {/* Scheduled Departures Board (Mews parity) */}
+      <div className="mt-5">
+        <DeparturesBoard propertyId={propertyId} />
       </div>
 
       {loading && !brief && (

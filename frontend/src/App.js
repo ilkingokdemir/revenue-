@@ -13,6 +13,7 @@ import ReviewCollectionPage from "./ReviewCollectionPage";
 import SelfCheckInPage from "./SelfCheckInPage";
 import KioskPWA from "./pages/KioskPWA";
 import HousekeepingMobilePWA from "./pages/HousekeepingMobilePWA";
+import SelfCheckoutPage from "./SelfCheckoutPage";
 import SelfCheckInV2Page from "./SelfCheckInV2Page";
 import TipPage from "./TipPage";
 import OwnerSelfServiceApp from "./components/owner/OwnerSelfServiceApp";
@@ -66,7 +67,7 @@ import {
   ConciergeInboxPanel, GroupRequestsPanel, SustainabilityPanel, HousekeepingRoutePanel,
   NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel,
   RoomQRPanel, TaxPresetsPanel, WalkInPanel, NoShowPanel, GuestPrefsPanel,
-  CleaningChecklistsPanel, AttributionPanel, MewsUniversityPanel, GroupRoomingImportPanel, OpsQuickActionsPanel,
+  CleaningChecklistsPanel, AttributionPanel, MewsUniversityPanel, ScheduledReportsPanel, GroupRoomingImportPanel, OpsQuickActionsPanel,
   TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, MarketplacePanel, MultiPropertyRollupPanel,
   CurrencyPanel, AgentsB2BPanel, SecurityOwnerPanel, PreAuthPanel, ChargebackPanel,
   WebPushPanel, PmsCrsSyncPanel, PmsProPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
@@ -205,6 +206,7 @@ import {
   CurrencyDollar,
   BookOpen,
   GraduationCap,
+  FileArrowDown,
   Warning,
   Stack,
   Umbrella,
@@ -2675,6 +2677,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "nightly-recap", icon: Moon, name: "Nightly recap", testId: "nightly-recap-btn" },
         { id: "help-guide", icon: BookOpen, name: "Help & user guide", testId: "help-guide-btn" },
         { id: "mews-university", icon: GraduationCap, name: "HotelBox Academy", testId: "mews-university-btn" },
+        { id: "scheduled-reports", icon: FileArrowDown, name: "Planlı Raporlar", testId: "scheduled-reports-btn" },
       ],
     },
     {
@@ -4187,6 +4190,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           </div>
         )}
 
+        {activeView === "scheduled-reports" && (
+          <div className="p-6">
+            <ScheduledReportsPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : null}
+              userEmail={user?.email || ""}
+            />
+          </div>
+        )}
+
         {activeView === "timeslots" && (
           <div className="p-6">
             <TimeSlotsPanel
@@ -5066,6 +5078,9 @@ function App() {
   }
   if (window.location.pathname.startsWith("/hk-mobile/")) {
     return <HousekeepingMobilePWA />;
+  }
+  if (window.location.pathname === "/checkout" || window.location.pathname.startsWith("/checkout/")) {
+    return <SelfCheckoutPage />;
   }
   if (window.location.pathname === "/checkin") {
     return <SelfCheckInPage />;

@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { Loader2, RefreshCw, Calendar, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import ChartLegend from "./ChartLegend";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v) => v == null ? "—" : `£${Number(v).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;

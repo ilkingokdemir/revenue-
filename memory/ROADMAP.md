@@ -41,6 +41,7 @@
 - App.js refactor (5200 satır → görünüm bazlı alt dosyalar; davranış değişmeden)
 - server.py tick worker'larını ayrı worker modülüne taşı
 - React linter uyarıları temizliği (App.js unescaped entities)
+- Legacy modal görünümlerini (analytics/templates/integrations/alerts) inline panele çevirme (UX iyileştirme, şu an modal olarak çalışıyorlar)
 
 ## P2
 - PCI-DSS / SOC 2 hazırlık dokümantasyonu

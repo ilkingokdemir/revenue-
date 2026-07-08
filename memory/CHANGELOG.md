@@ -1792,3 +1792,21 @@ Kullanıcı şikayeti üzerine tüm yazılım tarandı (2202 route, 285 prefix):
 - PRD.md yeniden yazıldı (kısa) + ROADMAP.md (kanonik backlog + YAPILDI envanteri) +
   CHANGELOG.md (bu dosya) oluşturuldu
 - Test: backend 9/9 regresyon + frontend %100 (iteration_377.json)
+
+## Iter 378 (2026-07-08) — "Her Şey Çalışsın" Tam Tarama & Onarım
+Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansın, mükerrer olmasın.
+- KRİTİK KEŞİF: Market Robot auto-scan 16.785 birikmiş asyncio görevi ile event loop'u
+  boğuyordu (49 tesis × 365 gün × saatlik) → uygulama genelinde yavaşlık/timeout'ların kökü.
+  Çözüm: global semaphore(2), otomatik taramada 30 gün sınırı, auto-bootstrap varsayılanı
+  KAPALI, DB configleri onarıldı (40 config kapatıldı). Görev sayısı 15'e, CPU %0'a indi.
+- N+1 asılmaları düzeltildi (<2s): crm/segments, crm/winback, loyalty-tiers/members,
+  pms-crs/conflicts, revenue/heatmap, revenue/yoy-tables (aggregation'a çevrildi)
+- reports/preview 500 düzeltildi (get_review_stats_internal NameError → inline hesap)
+- 17 MongoDB index eklendi; GET /api/admin/diagnostics/tasks tanılama endpoint'i eklendi
+- Backend tam tarama: 979 GET endpoint → 0 hata
+- Ölü kod: group_bookings.py (mükerrer) silindi; AvailabilityCalendar.js CANLANDIRILDI
+  (sidebar Overview → "Müsaitlik Takvimi")
+- Frontend tam tarama (testing agent): 227 sidebar butonu → 6 kırık bulundu, HEPSİ düzeltildi:
+  parity-heatmap (ChartLegend import), branding (X icon import), analytics/templates/
+  integrations/notification-settings (modal olarak açıldıkları doğrulandı)
+- Sonuç: 227/227 buton işlevsel, 0 route çakışması, 0 endpoint hatası

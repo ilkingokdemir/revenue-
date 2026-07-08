@@ -7,6 +7,53 @@ import { Calendar } from "./components/ui/calendar";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v, c) => `${c === "GBP" ? "£" : c === "EUR" ? "€" : c === "USD" ? "$" : c}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
+function SocialProofBadge({ propertyId }) {
+  const [messages, setMessages] = useState([]);
+  const [idx, setIdx] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    axios.get(`${API}/booking-widget/social-proof/${propertyId}`).then(({ data }) => {
+      if (!mounted) return;
+      const msgs = [];
+      if (data.bookings_24h > 0) msgs.push({ icon: "🔥", text: `${data.bookings_24h} booking${data.bookings_24h > 1 ? "s" : ""} in the last 24 hours` });
+      else if (data.bookings_7d > 0) msgs.push({ icon: "🔥", text: `${data.bookings_7d} booking${data.bookings_7d > 1 ? "s" : ""} this week` });
+      if (data.last_booking_minutes_ago != null) {
+        const m = data.last_booking_minutes_ago;
+        const ago = m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} hour${Math.round(m / 60) > 1 ? "s" : ""} ago` : `${Math.round(m / 1440)} day${Math.round(m / 1440) > 1 ? "s" : ""} ago`;
+        msgs.push({ icon: "🛎️", text: `Last booking made ${ago}` });
+      }
+      if (data.viewing_now > 1) msgs.push({ icon: "👀", text: `${data.viewing_now} people viewed this hotel in the last 30 min` });
+      if (data.review_snippet?.text) msgs.push({ icon: "⭐", text: `"${data.review_snippet.text}${data.review_snippet.text.length >= 110 ? "…" : ""}" — ${data.review_snippet.guest_name}` });
+      setMessages(msgs);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, [propertyId]);
+
+  useEffect(() => {
+    if (messages.length < 2) return;
+    const t = setInterval(() => setIdx((i) => (i + 1) % messages.length), 7000);
+    return () => clearInterval(t);
+  }, [messages]);
+
+  if (dismissed || messages.length === 0) return null;
+  const m = messages[idx];
+  return (
+    <div className="fixed bottom-4 left-4 z-40 max-w-xs" data-testid="be-social-proof-badge">
+      <AnimatePresence mode="wait">
+        <motion.div key={idx} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.35 }}
+          className="bg-white/95 backdrop-blur border border-stone-200 shadow-lg rounded-xl px-4 py-3 flex items-start gap-2.5">
+          <span className="text-lg leading-none mt-0.5">{m.icon}</span>
+          <p className="text-xs text-stone-700 leading-snug flex-1">{m.text}</p>
+          <button onClick={() => setDismissed(true)} data-testid="be-social-proof-dismiss"
+            className="text-stone-300 hover:text-stone-500 text-sm leading-none" aria-label="Dismiss">×</button>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export default function BookingWidgetPage({ propertyId }) {
   const [hotel, setHotel] = useState({ hotel_name: "Hotel", rooms: [], currency: "GBP", logo_url: "", reviews: [], avg_rating: 0, review_count: 0, theme: {} });
   const [step, setStep] = useState("home");
@@ -848,6 +895,7 @@ export default function BookingWidgetPage({ propertyId }) {
         {step === "confirmed" && <motion.div key="confirmed" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ConfirmationPage /></motion.div>}
       </AnimatePresence>
       <Lightbox />
+      {!isEmbed && step !== "confirmed" && <SocialProofBadge propertyId={propertyId} />}
       {!isEmbed && (
         <ConciergeChat
           propertyId={propertyId}

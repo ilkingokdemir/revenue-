@@ -90,3 +90,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Bulunan tek eksik ve FIX: `/checkin/{slug}` rotası eşleşmiyordu (yalnızca `/checkin` exact match) →
   `startsWith("/checkin/")` eklendi; artık dostane "Geçersiz check-in bağlantısı" ekranı gösteriliyor
   (dikkat: `/checkin-kiosk/` rotasını yutmamak için `/checkin/` slash'lı prefix kullanıldı).
+
+## Son Durum (Iter 384, 2026-07-08) — Sosyal Kanıt Widget'ı (Booking Widget dönüşüm artırıcı)
+- YENİ PUBLIC ENDPOINT: `GET /api/booking-widget/social-proof/{pid}` (auth yok)
+  → gerçek veriden: son 24s/7g rezervasyon sayısı, son rezervasyon kaç dk önce,
+  son 30 dk görüntüleyen sayısı (widget_views koleksiyonu, 24s'ten eski kayıtlar otomatik silinir),
+  en yeni 4+ puanlı yorum snippet'i (boş metinler filtrelenir).
+- UI: `BookingWidgetPage.js` → `SocialProofBadge` bileşeni — sol altta 7 sn'de bir dönen
+  animasyonlu rozet (🔥 rezervasyon / 🛎️ son rezervasyon / 👀 görüntüleyen / ⭐ yorum),
+  kapatılabilir, embed modda ve onay sayfasında gizli. testid: be-social-proof-badge.

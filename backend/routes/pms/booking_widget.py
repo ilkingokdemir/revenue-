@@ -2,7 +2,7 @@
 Online Booking Widget — Public booking form for hotel websites
 """
 from fastapi import APIRouter, Depends, HTTPException, Request
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict
 import uuid
 import logging
@@ -403,6 +403,51 @@ def create_booking_widget_router(db, require_roles):
         return {"status": "uploaded", "url": photo_url}
 
     # ==================== ADMIN: GUEST REVIEWS CRUD ====================
+
+    @router.get("/booking-widget/social-proof/{property_id}")
+    async def social_proof(property_id: str):
+        """Public: live activity signals for conversion (real data only)."""
+        now = datetime.now(timezone.utc)
+        # record this view + count viewers in last 30 min (real, view-based)
+        await db.widget_views.insert_one({"property_id": property_id, "ts": now.isoformat()})
+        await db.widget_views.delete_many({"ts": {"$lt": (now - timedelta(hours=24)).isoformat()}})
+        cutoff_30m = (now - timedelta(minutes=30)).isoformat()
+        viewing_now = await db.widget_views.count_documents({"property_id": property_id, "ts": {"$gte": cutoff_30m}})
+
+        base_q = {"property_id": property_id, "status": {"$nin": ["cancelled", "no_show"]}}
+        cutoff_24h = (now - timedelta(hours=24)).isoformat()
+        cutoff_7d = (now - timedelta(days=7)).isoformat()
+        bookings_24h = await db.bookings.count_documents({**base_q, "created_at": {"$gte": cutoff_24h}})
+        bookings_7d = await db.bookings.count_documents({**base_q, "created_at": {"$gte": cutoff_7d}})
+
+        last_b = await db.bookings.find_one(base_q, {"_id": 0, "created_at": 1}, sort=[("created_at", -1)])
+        last_minutes = None
+        if last_b and last_b.get("created_at"):
+            try:
+                dt = datetime.fromisoformat(last_b["created_at"].replace("Z", "+00:00"))
+                last_minutes = max(1, int((now - dt).total_seconds() // 60))
+            except Exception:
+                pass
+
+        snippet = None
+        top = await db.reviews.find_one(
+            {"property_id": property_id, "rating": {"$gte": 4},
+             "review_text": {"$nin": ["", None]}},
+            {"_id": 0, "guest_name": 1, "rating": 1, "review_text": 1},
+            sort=[("review_date", -1)])
+        if not top:
+            top = await db.guest_reviews.find_one(
+                {"property_id": property_id, "rating": {"$gte": 4},
+                 "comment": {"$nin": ["", None]}},
+                {"_id": 0, "guest_name": 1, "rating": 1, "comment": 1},
+                sort=[("created_at", -1)])
+        if top:
+            text = (top.get("review_text") or top.get("comment") or "")[:110]
+            snippet = {"guest_name": top.get("guest_name", "Guest"), "rating": top.get("rating"), "text": text}
+
+        return {"property_id": property_id, "viewing_now": viewing_now,
+                "bookings_24h": bookings_24h, "bookings_7d": bookings_7d,
+                "last_booking_minutes_ago": last_minutes, "review_snippet": snippet}
 
     @router.get("/booking-widget/reviews/{property_id}")
     async def list_reviews(property_id: str, current_user: dict = Depends(require_roles("admin", "manager"))):

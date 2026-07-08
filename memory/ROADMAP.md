@@ -21,6 +21,7 @@
 | AI Pricing LRV Guardrail | `ai_pricing_engine.py` + hurdle toggle | iter 382 DONE |
 | Segment Forecast (Duetto tarzı) | `forecast_v2.py /segments` + Segmentler sekmesi | iter 382 DONE |
 | Tahminsel HK → Vardiya önerisi | `predictive_hk.py /suggest-shifts` + buton | iter 382 DONE |
+| Sosyal Kanıt Widget'ı (booking widget) | `booking_widget.py /social-proof` + SocialProofBadge | iter 384 DONE |
 | OTA Commission Dashboard | `integrations_pkg/ota_commission.py` | iter 374 DONE |
 | 2-Year Forecast | `revenue_ext/forecast_v2.py` | DONE |
 | External Loyalty (Marriott/Hilton) | `integrations_pkg/external_loyalty.py` | DONE |

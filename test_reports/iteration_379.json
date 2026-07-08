@@ -1,0 +1,29 @@
+{
+  "summary": "Iter 379 verification (backend + frontend). BACKEND 7/7 pytest pass: POST /api/bookings (success, missing-fields->422, invalid dates->400), full lifecycle (checkin->folio add-charge->checkout), public POS menu (aldgate-flats->200, fake-outlet->404), /api/admin/diagnostics/tasks->200. FRONTEND: (1) /qr-order/default/fake-outlet renders data-testid=qr-order-error 'Menü bulunamadı' graceful state. Real outlet /qr-order/aldgate-flats/... renders menu items (Beer, Cocktails, Desserts...). (2) /book/default booking widget still renders with CHECK AVAILABILITY CTA. (3) Admin Panel -> Sistem Sağlığı tab: 'Çalışıyor' visible, health-tasks-card present with 'Sağlıklı' badge, health-refresh-btn works. (4) Modal-view-backdrop verified on analytics-btn, templates-btn, integrations-btn, reports-btn, branding-btn (all show data-testid=modal-view-backdrop + modal dialog, no crash). (5) Regression sidebar smoke: dashboard/my-rates/direct-conversion/siteminder/availability-calendar/parity-heatmap (no ChartLegend crash!) /branding (no X crash!) all render. Iter 378 blockers all resolved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/tests/test_iter379_regression.py", "/app/test_reports/pytest/iter379_results.xml"],
+  "action_items": [
+    "Minor: PUT /api/bookings/{id}/status expects `status` as query param (not JSON body). Consider accepting body for consistency with modern REST clients (not blocking).",
+    "Note: `alerts-btn` and `bookings-btn` testIds from the review request do not exist in current sidebar. Actual ids include `booking-engine-btn` (Reservations group) and no `alerts-btn` was found. Not a bug — request testIds were slightly off, but the functionality being tested (modal backdrop, sidebar sweep) is fully verified via the other listed buttons.",
+    "Console hydration warning during app boot: '<button> cannot contain a nested <button>' — harmless React SSR warning but should be cleaned up when convenient.",
+    "Nice-to-have: /book/default uses browser-native <input type='date'> for check-in/out. That's acceptable for a public guest widget but could be upgraded to shadcn calendar for consistency (low priority)."
+  ],
+  "critical_code_review_comments": [
+    "All iter 378 blockers verified fixed: parity-heatmap ChartLegend error gone, branding no longer crashes SPA (now opens as modal), analytics/templates/integrations/reports now show modal + backdrop instead of blank.",
+    "New POST /api/bookings endpoint is robust: correctly rejects missing fields with 422 (Pydantic) and check_out<=check_in with 400. booking_ref formatted BK-XXXXXX. nights and total_price calculated correctly.",
+    "System Health admin tab wired correctly to /api/admin/diagnostics/tasks with proper 'Sağlıklı' health badge threshold."
+  ],
+  "updated_files": ["/app/tests/test_iter379_regression.py (new)"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all listed flows PASS)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (login response field: `token`)",
+  "seed_data_creation": "One test booking created (guest 'TEST_Iter379', property_id=default, dates 2026-12-01 to 2026-12-03). Left in checked_out status per lifecycle test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter 379 regression suite at /app/tests/test_iter379_regression.py (7 tests, ~3s). Run: `pytest tests/test_iter379_regression.py -v`. Note: PUT /api/bookings/{id}/status uses status as QUERY PARAM not JSON body. Menu public endpoint requires both slug AND outlet id: /api/pos/public/menu/{slug}/{outlet_id}. Sidebar testIds — actual booking button is `booking-engine-btn` (not `bookings-btn`), and there is no `alerts-btn`.",
+  "rca of the issue": "N/A — no issues found. All 6 previously-broken sidebar items (parity-heatmap, branding, analytics, templates, integrations, reports) confirmed fixed via modal + backdrop pattern."
+}

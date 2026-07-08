@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Shield, Users, Settings, Plus, Trash2, Save, ChevronDown, ChevronRight, Check, X, Package, FileText, ShoppingCart, CreditCard, BarChart3, MessageSquare, Star, UserCheck, Zap, LayoutDashboard, ClipboardList, Truck } from "lucide-react";
+import { Shield, Users, Settings, Plus, Trash2, Save, ChevronDown, ChevronRight, Check, X, Package, FileText, ShoppingCart, CreditCard, BarChart3, MessageSquare, Star, UserCheck, Zap, LayoutDashboard, ClipboardList, Truck, Activity, RefreshCw } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -101,6 +101,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
     { id: "users", label: "Team Members", icon: Users },
     { id: "module-settings", label: "Module Settings", icon: Settings },
     { id: "purchase-orders", label: "Purchase Orders", icon: Truck },
+    { id: "system-health", label: "Sistem Sağlığı", icon: Activity },
   ];
 
   if (loading) return <div className="flex items-center justify-center h-96"><div className="w-8 h-8 border-3 border-stone-300 border-t-[#2C4C3B] rounded-full animate-spin" /></div>;
@@ -288,6 +289,9 @@ export function AdminPanel({ properties, user, activePropertyId }) {
           </div>
         )}
 
+        {/* ========== SİSTEM SAĞLIĞI (iter 379) ========== */}
+        {tab === "system-health" && <SystemHealthTab />}
+
         {/* ========== PURCHASE ORDERS ========== */}
         {tab === "purchase-orders" && (
           <div className="max-w-5xl mx-auto space-y-4" data-testid="purchase-orders-tab">
@@ -437,3 +441,78 @@ const SurveySettings = ({ settings: s, onChange }) => (
     <SettingRow label="Allow Anonymous"><Switch checked={s.anonymous_allowed !== false} onCheckedChange={v => onChange({ anonymous_allowed: v })} /></SettingRow>
   </div>
 );
+
+/* ========== Sistem Sağlığı Sekmesi (iter 379) ========== */
+const SystemHealthTab = () => {
+  const [health, setHealth] = useState(null);
+  const [tasks, setTasks] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const [h, t] = await Promise.all([
+        axios.get(`${API}/health`),
+        axios.get(`${API}/admin/diagnostics/tasks`),
+      ]);
+      setHealth(h.data);
+      setTasks(t.data);
+    } catch (e) { toast.error("Sağlık verisi alınamadı"); }
+    setRefreshing(false);
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const taskCount = tasks?.total_tasks ?? 0;
+  const taskStatus = taskCount < 100 ? { label: "Sağlıklı", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" }
+    : taskCount < 500 ? { label: "Yüksek", cls: "bg-amber-50 text-amber-700 border-amber-200" }
+    : { label: "Kritik", cls: "bg-red-50 text-red-700 border-red-200" };
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-4" data-testid="system-health-tab">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-bold text-stone-900">Sistem Sağlığı</h3>
+          <p className="text-xs text-stone-500">Backend durumu ve asyncio görev envanteri — anormal artış performans sorununun erken işaretidir</p>
+        </div>
+        <button onClick={load} disabled={refreshing} data-testid="health-refresh-btn"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-stone-200 rounded-lg hover:bg-stone-50 disabled:opacity-50">
+          <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} /> Yenile
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="health-status-card">
+          <div className="text-xs text-stone-500 mb-1">Backend</div>
+          <div className={`text-lg font-bold ${health?.status === "ok" ? "text-emerald-600" : "text-red-600"}`}>
+            {health?.status === "ok" ? "● Çalışıyor" : "● Sorun"}
+          </div>
+          <div className="text-[10px] text-stone-400 mt-1">v{health?.version || "-"} · uptime {Math.floor((health?.uptime_sec || 0) / 60)} dk</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="health-tasks-card">
+          <div className="text-xs text-stone-500 mb-1">Aktif Görev Sayısı</div>
+          <div className="text-lg font-bold text-stone-900">{taskCount}</div>
+          <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium border ${taskStatus.cls}`}>{taskStatus.label}</span>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4">
+          <div className="text-xs text-stone-500 mb-1">Farklı Görev Tipi</div>
+          <div className="text-lg font-bold text-stone-900">{tasks ? Object.keys(tasks.by_coro || {}).length : "-"}</div>
+          <div className="text-[10px] text-stone-400 mt-1">arkaplan worker + istek görevleri</div>
+        </div>
+      </div>
+
+      {tasks && (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 bg-stone-50 text-xs font-semibold text-stone-600 border-b border-stone-200">Görev Dağılımı</div>
+          <div className="divide-y divide-stone-100">
+            {Object.entries(tasks.by_coro || {}).slice(0, 15).map(([name, count]) => (
+              <div key={name} className="flex items-center justify-between px-4 py-2 text-xs">
+                <span className="font-mono text-stone-600 truncate mr-4">{name}</span>
+                <span className={`font-bold ${count > 50 ? "text-red-600" : "text-stone-800"}`}>{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

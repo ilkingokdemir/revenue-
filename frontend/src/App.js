@@ -476,6 +476,7 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
     if (review && !review.response_text) {
       detectLanguage();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [review?.id]);
 
   const detectLanguage = async () => {
@@ -2492,6 +2493,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     } catch (error) {
       console.error("Error fetching stats:", error);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const seedReviews = useCallback(async () => {
@@ -2527,6 +2529,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       setIsLoading(false);
     };
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -3913,6 +3916,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         )}
 
         {/* Analytics View */}
+        {/* Modal tabanlı araç görünümleri için arka plan bilgisi (iter 379) */}
+        {["analytics", "templates", "integrations", "alerts", "reports", "branding"].includes(activeView) && (
+          <div className="flex items-center justify-center min-h-[50vh] text-stone-400 text-sm" data-testid="modal-view-backdrop">
+            Araç penceresi açık — kapatınca Reviews görünümüne dönersiniz.
+          </div>
+        )}
+
         {activeView === "analytics" && (
           <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
             <AnalyticsPanel isOpen={true} onClose={() => setActiveView("reviews")} />

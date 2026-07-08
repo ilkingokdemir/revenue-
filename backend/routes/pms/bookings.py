@@ -1479,6 +1479,60 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         return {"status": "deleted"}
 
     # Admin: Bookings management
+    @router.post("/bookings")
+    async def create_manual_booking(data: Dict,
+                                    current_user: dict = Depends(require_perm("view_bookings"))):
+        """Personel manuel rezervasyon oluşturma (iter 379 — eksik endpoint tamamlandı)."""
+        required = ["property_id", "guest_name", "check_in", "check_out"]
+        missing = [f for f in required if not data.get(f)]
+        if missing:
+            raise HTTPException(400, f"Eksik alanlar: {', '.join(missing)}")
+        try:
+            ci = datetime.strptime(data["check_in"], "%Y-%m-%d")
+            co = datetime.strptime(data["check_out"], "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(400, "Tarih formatı YYYY-MM-DD olmalı")
+        nights = (co - ci).days
+        if nights < 1:
+            raise HTTPException(400, "check_out, check_in'den sonra olmalı")
+        rate = float(data.get("rate") or 0)
+        total = float(data.get("total_price") or (rate * nights * int(data.get("rooms", 1) or 1)))
+        now = datetime.now(timezone.utc).isoformat()
+        booking = {
+            "id": str(uuid.uuid4()),
+            "booking_ref": f"BK-{str(uuid.uuid4())[:6].upper()}",
+            "property_id": data["property_id"],
+            "room_type_id": data.get("room_type_id"),
+            "room_type": data.get("room_type"),
+            "room_id": data.get("room_id"),
+            "room_number": data.get("room_number"),
+            "guest_name": data["guest_name"],
+            "guest_email": data.get("guest_email", ""),
+            "guest_phone": data.get("guest_phone", ""),
+            "check_in": data["check_in"],
+            "check_out": data["check_out"],
+            "nights": nights,
+            "adults": int(data.get("adults", 2) or 2),
+            "children": int(data.get("children", 0) or 0),
+            "rooms": int(data.get("rooms", 1) or 1),
+            "rate": rate,
+            "total_price": total,
+            "currency": data.get("currency", "GBP"),
+            "status": data.get("status", "confirmed"),
+            "payment_status": data.get("payment_status", "pending"),
+            "source": data.get("source", "manual"),
+            "channel": data.get("channel", "direct"),
+            "notes": data.get("notes", ""),
+            "created_by": current_user.get("name", ""),
+            "created_at": now,
+            "updated_at": now,
+        }
+        booking = {k: v for k, v in booking.items() if v is not None}
+        await db.bookings.insert_one(dict(booking))
+        booking.pop("_id", None)
+        asyncio.create_task(fire_webhooks(db, "booking.created", booking))
+        return booking
+
     @router.get("/bookings")
     async def list_bookings(property_id: str = "", status: str = "", current_user: dict = Depends(require_perm("view_bookings"))):
         """List bookings with optional filters, enriched with live folio balance."""

@@ -15,6 +15,7 @@ export default function QROrderPage({ propertyId, outletId }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   const urlParams = new URLSearchParams(window.location.search);
   const tableNum = urlParams.get("table") || "";
@@ -22,7 +23,7 @@ export default function QROrderPage({ propertyId, outletId }) {
   useEffect(() => {
     axios.get(`${API}/pos/public/menu/${propertyId}/${outletId}?table=${tableNum}`)
       .then(r => setMenu(r.data))
-      .catch(() => {})
+      .catch(() => setLoadError(true))
       .finally(() => setLoading(false));
   }, [propertyId, outletId, tableNum]);
 
@@ -59,6 +60,16 @@ export default function QROrderPage({ propertyId, outletId }) {
   if (loading) return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center">
       <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
+
+  if (loadError || !menu) return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center p-6" data-testid="qr-order-error">
+      <div className="text-center max-w-sm">
+        <div className="text-4xl mb-3">🍽️</div>
+        <h1 className="text-lg font-bold text-stone-900 mb-1">Menü bulunamadı</h1>
+        <p className="text-sm text-stone-500">Bu QR kod geçersiz veya outlet artık aktif değil. Lütfen personelden yeni bir QR kod isteyin.</p>
+      </div>
     </div>
   );
 

@@ -81,7 +81,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -2837,6 +2837,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         { divider: true, label: "Tools" },
         { id: "rev-protection", icon: ShieldCheck, name: "Revenue protection", testId: "rev-protection-btn" },
+        { id: "hurdle-lrv", icon: ShieldCheck, name: "Hurdle rate & LRV", testId: "hurdle-lrv-btn" },
         { id: "rm-lab", icon: ChartLine, name: "RM Lab", testId: "rm-lab-btn" },
         { id: "late-checkout-offer", icon: Clock, name: "Late checkout offers", testId: "late-checkout-offer-btn" },
         { id: "site-feasibility", icon: ChartLineUp, name: "Site feasibility & investor", testId: "site-feasibility-btn" },
@@ -3032,6 +3033,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "timeslots-btn":          "operations_reception_view",
     "staff-ops-btn":          "operations_reception_view",
     "rev-protection-btn":     "revenue_forecasting_view",
+    "hurdle-lrv-btn":         "revenue_forecasting_view",
     "spaces-btn":             "operations_reception_view",
     "multi-rollup-btn":       "revenue_forecasting_view",
     "currency-btn":           "view_bookings",
@@ -3506,6 +3508,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
           />
+        )}
+
+        {/* Yield Guard — Hurdle Rate & Last Room Value */}
+        {activeView === "hurdle-lrv" && (
+          <HurdleLrvPanel propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")} />
         )}
 
         {/* KDS — Kitchen Display + 86 List + Recipes */}

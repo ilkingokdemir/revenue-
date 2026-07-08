@@ -913,6 +913,9 @@ api_router.include_router(create_group_blocks_router(db, require_roles))
 from routes.revenue_ext.smart_rate_control import create_smart_rate_control_router
 api_router.include_router(create_smart_rate_control_router(db, require_roles))
 
+from routes.revenue_ext.hurdle_lrv import create_hurdle_lrv_router
+api_router.include_router(create_hurdle_lrv_router(db, require_roles))
+
 from routes.pms.late_checkout import create_late_checkout_router
 api_router.include_router(create_late_checkout_router(db, require_roles))
 

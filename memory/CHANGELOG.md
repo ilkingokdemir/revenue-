@@ -1810,3 +1810,17 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
   parity-heatmap (ChartLegend import), branding (X icon import), analytics/templates/
   integrations/notification-settings (modal olarak açıldıkları doğrulandı)
 - Sonuç: 227/227 buton işlevsel, 0 route çakışması, 0 endpoint hatası
+
+## Iter 379 (2026-07-08) — Detaylı Tarama 2. Tur: Public Sayfalar + İş Akışları
+- Public route taraması (25 sayfa): 24 OK; /qr-order'a zarif hata ekranı eklendi
+  ("Menü bulunamadı") — geçersiz outlet artık boş sayfa göstermiyor
+- EKSİK ENDPOINT TAMAMLANDI: POST /api/bookings (personel manuel rezervasyon) —
+  405 dönüyordu, OnboardingWizard kırıktı. Tam yaşam döngüsü doğrulandı
+  (create → check-in → folio charge → check-out)
+- Modal tabanlı araç görünümleri (analytics/templates/integrations/alerts/reports/branding)
+  arkasında bilgi metni (modal-view-backdrop) — beyaz boş ekran görünümü giderildi
+- YENİ: Admin Panel → "Sistem Sağlığı" sekmesi (backend durumu + asyncio görev envanteri,
+  Sağlıklı/Yüksek/Kritik rozeti, /api/admin/diagnostics/tasks)
+- App.js'teki son 3 React lint uyarısı temizlendi → webpack SIFIR uyarıyla derleniyor
+- Test: testing agent backend 7/7 + frontend %100; kalıcı regresyon suite:
+  /app/tests/test_iter379_regression.py

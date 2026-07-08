@@ -40,7 +40,7 @@
 - sw.js offline stratejisini genişlet (route cache + offline fallback sayfası)
 - App.js refactor (5200 satır → görünüm bazlı alt dosyalar; davranış değişmeden)
 - server.py tick worker'larını ayrı worker modülüne taşı
-- React linter uyarıları temizliği (App.js unescaped entities)
+- ~~React linter uyarıları~~ YAPILDI (iter 379, sıfır uyarı)
 - Legacy modal görünümlerini (analytics/templates/integrations/alerts) inline panele çevirme (UX iyileştirme, şu an modal olarak çalışıyorlar)
 
 ## P2

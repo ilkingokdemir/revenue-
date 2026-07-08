@@ -1,0 +1,32 @@
+{
+  "summary": "Iter 383 FULL-SYSTEM audit per E1 review request. BACKEND 55/55 pass (~9s) — auth, dashboard KPIs, bookings create/list, ALL NEW endpoints (predictive HK forecast+generate+suggest-shifts w/ dedupe, hurdle-LRV forecast+config w/ 422 validation, AI-pricing LRV guardrail clamping suggested_rate=30 → floor >30, segment forecast /forecast-v2/segments/all + property variant), plus 35-endpoint smoke sweep covering revenue/HK/CRM/finance/CM/marketing/admin — ZERO 5xx errors. FRONTEND: login OK; sidebar groups expand; ALL new UI panels present and populated — hk-hub-tab-predictive → predictive-hk-panel with 8 day cards + gen-btn + suggest-shifts-btn; hurdle-lrv-panel with hurdle-table + hurdle-min-rate-input + hurdle-save-config-btn; forecast-v2 Segmentler tab with fcv2-segments-table rendering direct/OTA/diğer columns and history+forecast rows. Public booking widget /book/aldgate-flats renders full page with hero, dates, CHECK AVAILABILITY CTA. No global ErrorBoundary triggered anywhere.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/test_iter383_full_audit.py",
+    "/app/test_reports/pytest/iter383_results.xml"
+  ],
+  "action_items": [
+    "Nice-to-have: /checkin/{property_slug} returns near-empty body (~137 chars) when hit without a booking token — expected behavior since guest self-check-in needs a token in URL, but a friendly 'invalid/expired link' state would be better UX. Low priority.",
+    "Sanity: E1 review request wrote `GET /api/forecast-v2/segments/all?months=6` — the route is `/forecast-v2/segments/{property_id}` and accepts `all` as a literal value; that works fine. No action needed, just noting for future clarity.",
+    "Predictive HK suggest-shifts requires housekeeper users in DB. On aldgate-flats it worked (housekeepers exist). If a property has no housekeepers, endpoint returns 400 with clear Turkish message — good behavior."
+  ],
+  "critical_code_review_comments": [
+    "LRV guardrail integration is clean: /api/revenue/ai-pricing/{pid}/accept + run-auto-apply + _internal_auto_apply all lazy-import compute_lrv_floor and clamp before writing rate_overrides. Response includes lrv_clamped counter — verified >=1 in test with suggested_rate=30 vs computed floor ~136. Rationale is annotated with '· LRV guardrail: fiyat £X tabanına yükseltildi'.",
+    "Predictive HK is idempotent by design (dup check on property_id+due_date+room_number+task_subtype+auto_generated). suggest-shifts also idempotent per (property, date, staff_id, role).",
+    "Hurdle config validates min_rate >= 0 and 0 <= overbooking_cap <= 20 with 422 — verified via invalid cap=999 test.",
+    "Segment forecast endpoint correctly returns 12-month history bounded by current month and N forecast months; graceful fallback when a segment has no LY data (uses segment monthly avg)."
+  ],
+  "updated_files": ["/app/tests/test_iter383_full_audit.py (new)"],
+  "success_rate": {"backend": "100% (55/55)", "frontend": "100% (all new panels + public widget render)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (token field 'token')",
+  "seed_data_creation": "1 booking created (TEST_Iter383, aldgate-flats, +45d/+48d). ai_pricing_decisions upserted for city-gate LRV guardrail test (1 row). hurdle_config upserted for city-gate. housekeeping_tasks auto_generated for aldgate-flats +2d (auto-dedup on rerun). shift_entries for same date if housekeepers present.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter 383 audit suite at /app/tests/test_iter383_full_audit.py — 55 tests, ~9s. Covers all new iter 375-382 endpoints + 35-endpoint smoke sweep. Run: `pytest tests/test_iter383_full_audit.py -v`. Key gotchas: (1) there is NO /api/dashboard — dashboard KPIs come from /api/analytics/dashboard and other widget endpoints. (2) /forecast-v2/segments/{pid} — pass 'all' as literal pid for cross-property. (3) LRV guardrail requires hurdle_config.pricing_guardrail=True (default) — verify config first. (4) Predictive HK generate has 14-day window; suggest-shifts needs housekeepers.",
+  "rca of the issue": "N/A — no bugs found. Full-system audit clean."
+}

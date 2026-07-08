@@ -54,7 +54,7 @@ import {
   ChannelManagerHub, GroupBlocksPanel, LaundrySettingsPanel,
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
-  KDSPanel, LoyaltyV2Panel, ExternalLoyaltyPanel, OTACommissionPanel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
+  KDSPanel, LoyaltyV2Panel, ExternalLoyaltyPanel, OTACommissionPanel, DirectConversionPanel, SiteMinderPanel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
   OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, TeamChatPanel, GuestCRM360Panel, ChannelManagerV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
@@ -3048,6 +3048,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "late-checkout-offer-btn":"operations_reception_view",
     "ota-forecast-btn":       "operations_reception_view",
     "ota-commission-btn":     "operations_reception_view",
+    "direct-conversion-btn":  "operations_reception_view",
+    "siteminder-btn":         "operations_reception_view",
     "external-loyalty-btn":   "operations_reception_view",
     "msg-templates-btn":      "operations_reception_view",
     "birthday-btn":           "operations_reception_view",
@@ -3525,6 +3527,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* OTA Commission Dashboard — net revenue per channel */}
         {activeView === "ota-commission" && (
           <OTACommissionPanel activePropertyId={activePropertyId} />
+        )}
+
+        {/* Direct Booking Conversion Engine — OTA→Direct kupon motoru */}
+        {activeView === "direct-conversion" && <DirectConversionPanel />}
+
+        {/* SiteMinder Middleware Translator Adapter */}
+        {activeView === "siteminder" && (
+          <SiteMinderPanel activePropertyId={activePropertyId} />
         )}
 
         {/* Sentiment Heatmap — Cross-channel guest voice */}
@@ -5191,3 +5201,4 @@ function AppWithLanguage() {
 }
 
 export default AppWithLanguage;
+

@@ -1585,6 +1585,12 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
                 # Mark room housekeeping status as dirty
                 await db.rooms.update_one({"id": updated["room_id"]}, {"$set": {"housekeeping": "dirty"}})
             asyncio.create_task(fire_webhooks(db, "booking.checked_out", wh_data))
+            # Direct Booking Conversion Engine — OTA misafirine kupon gönder (iter 375)
+            try:
+                from routes.integrations_pkg.direct_conversion import process_checkout_conversion
+                asyncio.create_task(process_checkout_conversion(db, updated))
+            except Exception:
+                pass
 
         return updated
 

@@ -1,0 +1,39 @@
+{
+  "summary": "Iter 375 testing — Direct Booking Conversion Engine + SiteMinder Middleware Adapter. Backend: 15/15 pytest passed + checkout hook verified end-to-end (OTA booking → checked_out → coupon auto-created with email_status='mocked'). Frontend: BROKEN — both new panels (DirectConversionPanel, SiteMinderPanel) render conditions exist in App.js switch (activeView === 'direct-conversion'/'siteminder') and RBAC map (lines 3051-3052), BUT no menu entries were added to the sidebar 'System' group items list (lines 2942-2992). Result: no 'direct-conversion-btn' or 'siteminder-btn' exists anywhere in the DOM, no card in System hub grid, and command palette (⌘K search 'direct') returns 0 matching results. Users cannot reach either panel through the UI at all.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js sidebar SYSTEM group (menuSections)", "issue": "Missing menu items for 'direct-conversion' and 'siteminder' — panels are rendered in the activeView switch but no sidebar entry / hub card / command-palette entry exists. Both new features are 100% unreachable via UI.", "selector": "[data-testid='direct-conversion-btn'], [data-testid='siteminder-btn']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Access Direct Booking Conversion & SiteMinder", "issue": "No entry points in sidebar/hub/palette; testids referenced in review request don't exist in DOM", "affected_selectors": ["[data-testid='direct-conversion-btn']", "[data-testid='siteminder-btn']", "[data-testid='direct-conversion-panel']", "[data-testid='siteminder-panel']"]}
+    ],
+    "design_issues": [
+      {"screen": "System hub (grid) & sidebar", "issues": ["Two new 'System' features missing from the visible cards; user cannot discover or launch them"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter375_direct_conversion_siteminder.py", "/app/test_reports/pytest/pytest_iter375.xml"],
+  "action_items": [
+    "Add sidebar menu entries in App.js menuSections 'System' group items array (~line 2942-2992) for both features, e.g. `{ id: 'direct-conversion', icon: Funnel, name: 'Direct Booking Conversion', testId: 'direct-conversion-btn' }` and `{ id: 'siteminder', icon: PlugsConnected, name: 'SiteMinder adapter', testId: 'siteminder-btn' }`. Once added they will auto-appear as System hub cards (SectionHub component iterates section.items) and in the ⌘K command palette.",
+    "After adding, re-run frontend smoke to verify panels open, KPIs (dcv-kpi-*), scan/save/redeem interactions and SiteMinder mapping + log tabs work end-to-end."
+  ],
+  "critical_code_review_comments": [
+    "SITEMINDER: _resolve_channel falls back to 'booking_com' for unknown codes — silently misroutes reservations from unknown OTAs. Consider returning None + rejecting the webhook or logging a warning instead of defaulting to BDC.",
+    "DIRECT-CONVERSION: /redeem is public (by design for booking widget) but has no rate limiting or CAPTCHA — potential brute-force enumeration of DIRECT-XXXXXX coupon codes (36^6 = ~2.1B, still feasible with parallel scans). Consider a per-IP rate limit or lockout after N invalid attempts.",
+    "DIRECT-CONVERSION scan endpoint iterates all offered_ids by streaming db.direct_conversion_offers.find() into a set — with 100k+ offers this becomes memory-heavy; use existence check `find_one({booking_id, ..})` inside loop or aggregate approach.",
+    "SITEMINDER _parse_ota_xml uses ET.fromstring on external body — vulnerable to XXE / XML bomb. Use defusedxml.ElementTree instead.",
+    "DIRECT-CONVERSION _send_offer_email awaits nothing for resend.emails.send (synchronous library) — blocks event loop on real send. Wrap in asyncio.to_thread when a real key is used."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter375_direct_conversion_siteminder.py"],
+  "success_rate": {"backend": "100% (15/15 + checkout hook)", "frontend": "0% (features unreachable — no UI entry point)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (token field: 'token')",
+  "seed_data_creation": "Created 1 test booking via SiteMinder webhook (rid=HOOK-*) and its direct-conversion offer (mocked email). ~105 direct_conversion_offers now in DB. Also inserted 1 override mapping HRS→expedia via PUT /api/siteminder/mappings.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend features fully working — do not re-run heavy scan tests, they take ~4-5s each. After main agent adds sidebar entries for direct-conversion + siteminder in menuSections SYSTEM group, verify: (1) both testids appear in DOM, (2) KPIs dcv-kpi-* render numeric values, (3) dcv-scan-btn triggers /api/direct-conversion/scan and returns immediately, (4) offers table populates with existing ~105 offers, (5) settings save shows toast, (6) SiteMinder mapping add/test-webhook works and log tab shows entries.",
+  "rca of the issue": "Main agent implemented backend + React components + render switch + RBAC map for both features but forgot to register the two new items in the sidebar `menuSections` System group (App.js ~2942-2992). Because the System hub grid and command palette both auto-generate from menuSections[].items, both features are completely invisible to end users. Fix: add two `{id, icon, name, testId}` entries to the System group items array. No backend changes needed."
+}

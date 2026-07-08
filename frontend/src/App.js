@@ -42,7 +42,7 @@ import { ContractSigningPage } from "./components/public/ContractSigningPage";
 
 // ---------- LAZY-LOADED dashboard panels (code-split per panel chunk) ----------
 import {
-  IntegrationsPanel, IntegrationsMarketplace, ArrivalsCockpit, StaffContractsPanel, StaffOnboardingAdminPanel,
+  IntegrationsPanel, ArrivalsCockpit, StaffContractsPanel, StaffOnboardingAdminPanel,
   PayrollRateMatrix, CityLedgerPanel, TaxConfigPanel, DepositPolicyPanel, CurrencyFxPanel, RateStructurePanel,
   GroupBookingsPanel, GdprPanel,
   NightAuditClosePanel, DepositLedgerPanel, CommissionReconPanel, GiftCardsPanel,

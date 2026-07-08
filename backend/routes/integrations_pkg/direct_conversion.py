@@ -79,6 +79,16 @@ async def _get_settings(db) -> dict:
 
 
 def _build_email_html(offer: dict, hotel_name: str) -> str:
+    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    book_url = f"{base}/book/{offer.get('property_id') or 'default'}?coupon={offer['coupon_code']}"
+    cta = ""
+    if base:
+        cta = f"""
+      <a href="{book_url}" style="display:block;background:#1a3c5e;color:#fff;text-align:center;
+         padding:14px;margin:16px 0;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
+        Şimdi Rezervasyon Yap — %{offer['discount_pct']} İndirimle →
+      </a>
+      <p style="color:#a8a29e;font-size:11px;text-align:center;">Kupon otomatik uygulanır</p>"""
     return f"""
     <div style="font-family:Georgia,serif;max-width:560px;margin:0 auto;padding:32px;background:#faf9f7;border:1px solid #e7e2da;">
       <h2 style="color:#1c1917;margin:0 0 8px;">Bizi tercih ettiğiniz için teşekkürler, {offer['guest_name']}!</h2>
@@ -89,7 +99,7 @@ def _build_email_html(offer: dict, hotel_name: str) -> str:
       <div style="background:#065f46;color:#fff;text-align:center;padding:20px;margin:24px 0;border-radius:8px;">
         <div style="font-size:12px;letter-spacing:2px;opacity:.8;">KUPON KODUNUZ</div>
         <div style="font-size:28px;font-weight:bold;letter-spacing:3px;margin-top:6px;">{offer['coupon_code']}</div>
-      </div>
+      </div>{cta}
       <p style="color:#78716c;font-size:13px;">
         Geçerlilik: {offer['valid_until'][:10]} tarihine kadar · Sadece direkt rezervasyonlarda geçerlidir.
       </p>

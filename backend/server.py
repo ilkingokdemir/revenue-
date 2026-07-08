@@ -134,7 +134,6 @@ from routes.hotel_ops.laundry import create_laundry_router
 from routes.finance_ext.payroll import create_payroll_router
 from routes.finance_ext.expenses import create_expenses_router
 from routes.finance_ext.cashflow import create_cashflow_router
-from routes.integrations_pkg.marketplace import create_marketplace_router
 from routes.pms.arrivals import create_arrivals_router
 from routes.finance_ext.contracts import create_contracts_router
 from routes.security.legal_documents import create_legal_documents_router
@@ -322,43 +321,9 @@ async def get_status_checks():
 
 stripe_api_key = os.environ.get("STRIPE_API_KEY", "")
 
-@app.post("/api/webhook/stripe")
-async def stripe_webhook(request: Request):
-    """Handle Stripe webhook events"""
-    try:
-        body = await request.body()
-        signature = request.headers.get("Stripe-Signature", "")
-        
-        host_url = str(request.base_url).rstrip("/")
-        webhook_url = f"{host_url}api/webhook/stripe"
-        stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url=webhook_url)
-        
-        webhook_response = await stripe_checkout.handle_webhook(body, signature)
-        
-        if webhook_response.payment_status == "paid":
-            # Update transaction
-            await db.payment_transactions.update_one(
-                {"session_id": webhook_response.session_id},
-                {"$set": {"payment_status": "paid", "status": "complete", "updated_at": datetime.now(timezone.utc).isoformat()}}
-            )
-            # Update booking
-            booking_id = webhook_response.metadata.get("booking_id", "")
-            if booking_id:
-                await db.bookings.update_one(
-                    {"id": booking_id},
-                    {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
-                )
-            # Tip? mark as paid
-            if webhook_response.metadata.get("type") == "tip":
-                await db.tips.update_one(
-                    {"session_id": webhook_response.session_id},
-                    {"$set": {"status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
-                )
-        
-        return {"status": "ok"}
-    except Exception as e:
-        logger.error(f"Stripe webhook error: {e}")
-        return {"status": "error", "message": str(e)}
+# NOT (iter 377): Stripe webhook handler'ı payments.py'ye taşındı (tek kanonik handler).
+# Eski app-level mükerrer handler kaldırıldı — booking confirm + email log + tip
+# işleme artık routes/finance_ext/payments.py POST /webhook/stripe içinde.
 
 # Wire up extracted route modules
 messaging_router = create_messaging_router(db, require_roles, LlmChat, UserMessage, resend)
@@ -644,8 +609,7 @@ expenses_router = create_expenses_router(db, require_roles)
 api_router.include_router(expenses_router)
 cashflow_router = create_cashflow_router(db, require_roles)
 api_router.include_router(cashflow_router)
-marketplace_router = create_marketplace_router(db, require_roles, LlmChat, UserMessage)
-api_router.include_router(marketplace_router)
+# NOT (iter 377): integrations_pkg/marketplace kaldırıldı — platform_ext/marketplace tek kanonik modül
 arrivals_router = create_arrivals_router(db, require_roles)
 api_router.include_router(arrivals_router)
 contracts_router = create_contracts_router(db, require_roles)

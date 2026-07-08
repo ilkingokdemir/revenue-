@@ -742,9 +742,9 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         from models import SPACE_TYPES
         return SPACE_TYPES
 
-    @router.get("/spaces/{property_id}")
+    @router.get("/spaces/public/{property_id}")
     async def get_property_spaces(property_id: str):
-        """Public: Get available spaces for a property"""
+        """Public: Get available spaces for a property (hourly rental templates)"""
         spaces = await db.property_spaces.find({"property_id": property_id, "is_active": True}, {"_id": 0}).to_list(50)
         return spaces
 

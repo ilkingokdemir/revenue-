@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 377 REGRESSION test: route-collision cleanup + Stripe webhook dedup + spaces path split + coupon deep-link. Ran 9 backend regression tests (test_iter377_regression.py) — all 9 PASS. Frontend deep-link auto-apply verified end-to-end (Booking Summary shows 'DIRECT-WYUUSY -15%' → Total £200→£170 on aldgate-flats). Staff dashboard smoke: Marketplace, Spaces, Direct Conversion & SiteMinder panels all load correctly with real data; no import errors for deleted IntegrationsMarketplace/SpaceBookingsPanel components.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "backend reloader", "issue": "uvicorn reloader occasionally shuts down but does not restart the child worker after WatchFiles triggers (observed twice). Required manual `supervisorctl restart backend`. Root cause: `Smart Scanner error: Cannot use MongoClient after close` loops keep the process from cleanly re-launching. Not iter-377 specific but visible during testing."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Dashboard initial load", "issue": "6 transient 503 errors from '/api/reviews/stats' and similar review-summary endpoints right after login → 'Failed to load reviews' banner briefly visible. Endpoints recover on subsequent calls. Likely backend cold-start after reload.", "affected_selectors": [".error banner (reviews)"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter377_regression.py",
+    "/app/test_reports/pytest/iter377_results.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: harden Smart Scanner Mongo client re-init on uvicorn reload (`Cannot use MongoClient after close` loop).",
+    "OPTIONAL: add data-testid on Booking Widget coupon-applied line so future e2e can assert without regex scraping."
+  ],
+  "critical_code_review_comments": [
+    "Route-collision audit is now clean (verified via passing /api/spaces/{property_id} staff vs /api/spaces/public/{property_id} public tests).",
+    "Stripe webhook single-handler in payments.py returns 200 + {status: error} on invalid payload (Stripe-compliant ACK) — no 500 crash.",
+    "IntegrationsMarketplace & SpaceBookingsPanel component deletions do NOT leave stale imports (0 console import errors on dashboard smoke)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter377_regression.py (new)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (deep-link + 4 panel smoke)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (token field 'token'). Deep-link coupon used: DIRECT-WYUUSY on property aldgate-flats (all 50 sent coupons are for aldgate-flats; none exist for 'default' hotel so /book/default?coupon=... could not be exercised — used aldgate-flats which the spec still allows via /book/{property}?coupon=CODE).",
+  "seed_data_creation": "None; used existing DIRECT-WYUUSY coupon (still redeemable, was not consumed in test - no PROCEED TO PAYMENT clicked).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 377 regression suite lives at /app/backend/tests/test_iter377_regression.py. Reuse for future regressions on: /api/finance/expenses/{pid}, /api/spaces/{pid} staff, /api/spaces/public/{pid}, /api/marketplace/catalog, /api/webhook/stripe (Stripe ACKs 200 even on bad sig), /api/reviews. For frontend deep-link: coupons only exist for property aldgate-flats. Sidebar groups are collapsed by default — click 'System' and 'Operations' text (case-insensitive) to reveal direct-conversion-btn, siteminder-btn, spaces-btn, marketplace-btn testids.",
+  "rca of the issue": "N/A — this iteration is a cleanup/regression pass; no new bugs surfaced. Only transient 503s on '/api/reviews/stats' shortly after backend cold-start; retries succeed."
+}

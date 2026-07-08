@@ -140,39 +140,6 @@ def create_finance_pl_router(db, require_roles):
 
         return {"trend": trend, "months": months}
 
-    @router.get("/finance/expenses/{property_id}")
-    async def get_expenses(property_id: str, month: str = "",
-                           current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Monthly expenses list."""
-        now = datetime.now(timezone.utc)
-        if not month:
-            month = f"{now.year}-{now.month:02d}"
-
-        expenses = await db.expenses.find({"month": month}, {"_id": 0}).sort("created_at", -1).to_list(200)
-        total = round(sum(float(e.get("amount", 0)) for e in expenses), 2)
-        paid = round(sum(float(e.get("amount", 0)) for e in expenses if e.get("status") == "paid"), 2)
-        pending = round(total - paid, 2)
-
-        return {"month": month, "expenses": expenses, "total": total, "paid": paid, "pending": pending}
-
-    @router.post("/finance/expenses/{property_id}")
-    async def add_expense(property_id: str, data: Dict,
-                          current_user: dict = Depends(require_roles("admin", "manager"))):
-        """Add an expense."""
-        now = datetime.now(timezone.utc)
-        expense = {
-            "id": str(uuid.uuid4()),
-            "property_id": property_id,
-            "category": data.get("category", "Other"),
-            "description": data.get("description", ""),
-            "amount": float(data.get("amount", 0)),
-            "status": data.get("status", "pending"),
-            "month": data.get("month", now.strftime("%Y-%m")),
-            "recurring": data.get("recurring", False),
-            "created_at": now.isoformat(),
-            "created_by": current_user.get("name", ""),
-        }
-        await db.expenses.insert_one(dict(expense))
-        return expense
+    # NOT: /finance/expenses CRUD finance.py'de — buradaki mükerrer kopya kaldırıldı (iter 377)
 
     return router

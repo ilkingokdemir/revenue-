@@ -166,7 +166,6 @@ export const BrandVoicePanel = L(() => import("./components/dashboard/BrandVoice
 
 // ---------- NAMED exports ----------
 export const IntegrationsPanel = N(() => import("./components/dashboard/IntegrationsPanel"), "IntegrationsPanel");
-export const IntegrationsMarketplace = N(() => import("./components/dashboard/IntegrationsMarketplace"), "IntegrationsMarketplace");
 export const ArrivalsCockpit = N(() => import("./components/dashboard/ArrivalsCockpit"), "ArrivalsCockpit");
 export const StaffContractsPanel = N(() => import("./components/dashboard/StaffContractsPanel"), "StaffContractsPanel");
 export const StaffOnboardingAdminPanel = N(() => import("./components/dashboard/StaffOnboardingAdminPanel"), "StaffOnboardingAdminPanel");

@@ -26,10 +26,10 @@ export default function BookingWidgetPage({ propertyId }) {
   const [carbonOffset, setCarbonOffset] = useState({ opt_in: false, total_fee: 0, co2_kg: 0 });
   const [coupon, setCoupon] = useState({ code: "", applied: null, checking: false, error: null });
 
-  const applyCoupon = async () => {
-    const code = coupon.code.trim();
+  const applyCoupon = async (codeOverride) => {
+    const code = (codeOverride || coupon.code).trim();
     if (!code) return;
-    setCoupon(p => ({ ...p, checking: true, error: null }));
+    setCoupon(p => ({ ...p, code, checking: true, error: null }));
     try {
       const { data } = await axios.post(`${API}/direct-conversion/validate`, { coupon_code: code });
       if (data.ok) setCoupon(p => ({ ...p, applied: data, checking: false, error: null }));
@@ -39,6 +39,14 @@ export default function BookingWidgetPage({ propertyId }) {
         error: e.response?.data?.detail || "Coupon could not be validated" }));
     }
   };
+
+  // Deep-link: /book/{property}?coupon=DIRECT-XXX → kuponu otomatik uygula (iter 377)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const c = (params.get("coupon") || "").trim().toUpperCase();
+    if (c) applyCoupon(c);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchCarbonOffset = async (n, r) => {
     if (!ecoBadge?.show_badge) return;

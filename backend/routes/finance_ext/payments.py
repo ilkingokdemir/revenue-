@@ -251,7 +251,8 @@ def create_payments_router(db, require_roles):
                 if tx and tx.get("payment_status") != "paid":
                     await db.payment_transactions.update_one(
                         {"session_id": event.session_id},
-                        {"$set": {"payment_status": "paid", "paid_at": datetime.now(timezone.utc).isoformat()}}
+                        {"$set": {"payment_status": "paid", "status": "complete",
+                                  "paid_at": datetime.now(timezone.utc).isoformat()}}
                     )
                     # Auto-confirm booking + send confirmation email when payment lands
                     if tx.get("type") == "booking" and tx.get("reference_id"):
@@ -283,6 +284,21 @@ def create_payments_router(db, require_roles):
                                 "📧 Booking confirmation email MOCKED — booking %s, guest %s",
                                 booking.get("booking_ref"), booking.get("guest_email"),
                             )
+                # Metadata fallback: booking_id direkt metadata'da olabilir (eski akış)
+                meta = event.metadata or {}
+                if meta.get("booking_id"):
+                    await db.bookings.update_one(
+                        {"id": meta["booking_id"], "payment_status": {"$ne": "paid"}},
+                        {"$set": {"payment_status": "paid", "status": "confirmed",
+                                  "paid_at": datetime.now(timezone.utc).isoformat()}}
+                    )
+                # Tip ödemesi ise tips koleksiyonunu güncelle
+                if meta.get("type") == "tip":
+                    await db.tips.update_one(
+                        {"session_id": event.session_id},
+                        {"$set": {"status": "paid",
+                                  "paid_at": datetime.now(timezone.utc).isoformat()}}
+                    )
             return {"status": "ok"}
         except Exception as e:
             logger.error(f"Webhook error: {e}")

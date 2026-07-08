@@ -1353,24 +1353,8 @@ def create_integrations_router(db, require_roles, resend):
             "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
-    async def fire_webhooks(db, event: str, data: dict):
-        """Fire active webhooks for an event"""
-        clean_data = {k: v for k, v in data.items() if k != "_id"}
-        webhooks = await db.webhooks.find({"is_active": True}, {"_id": 0}).to_list(50)
-        for wh in webhooks:
-            if wh.get("events") and event not in wh["events"]:
-                continue
-            try:
-                async with httpx.AsyncClient(timeout=5.0) as c:
-                    await c.post(wh["url"], json={"event": event, "data": clean_data, "timestamp": datetime.now(timezone.utc).isoformat()},
-                        headers={"X-Webhook-Secret": wh.get("secret", ""), "X-Webhook-Event": event})
-                await db.webhook_deliveries.insert_one({
-                    "id": str(uuid.uuid4()), "webhook_id": wh["id"], "event": event,
-                    "url": wh["url"], "status_code": 200, "success": True,
-                    "response_time_ms": 0, "timestamp": datetime.now(timezone.utc).isoformat()
-                })
-            except Exception:
-                pass
+    # NOT (iter 377): fire_webhooks mükerrer closure kaldırıldı — kanonik: routes/helpers.py
+    from routes.helpers import fire_webhooks
 
     @router.get("/sync-logs")
     async def get_sync_logs(request: Request, current_user: dict = Depends(require_roles("admin", "manager"))):

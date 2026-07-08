@@ -1222,6 +1222,14 @@ async def _start_journey_engine():
     import asyncio as _asyncio
     _asyncio.create_task(_journey_engine_loop(db, interval_seconds=60))
 
+# ===== Nightly Insights cron (Iter 376) — gece fiyat pattern analizi + bildirim =====
+from routes.revenue_ext.rates_grid import nightly_insights_loop as _nightly_insights_loop
+
+@app.on_event("startup")
+async def _start_nightly_insights():
+    import asyncio as _asyncio
+    _asyncio.create_task(_nightly_insights_loop(db))
+
 app.include_router(api_router)
 
 # Serve uploaded files (guest IDs etc)

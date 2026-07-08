@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend E2E testing of iter376 features: (1) Booking widget coupon field on /book/default, (2) MyRates per-day AI Status toggle. Found & fixed a CRITICAL TDZ crash in BookingWidgetPage.js (const 'nights' used inside useEffect before its declaration -> whole page unusable). After the one-line reorder fix, both features work end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BookingWidgetPage", "issue": "ReferenceError: Cannot access 'nights' before initialization — the useEffect at ~L77 that depends on `nights` was declared BEFORE `const nights = ...` at L83, causing TDZ crash and rendering the whole /book/default page as an error boundary ('Bir şeyler ters gitti' ref ERR-UB460FAG). Fixed by moving the `const nights = ...` line above the useEffect that references it.", "selector": "/book/default (entire page)", "priority": "CRITICAL (fixed by tester)"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Verify the BookingWidgetPage.js fix (moved `const nights` above the useEffect that depends on it) is retained and covered by lint/tests. Consider adding an ESLint rule (no-use-before-define) to catch this class of TDZ regressions.",
+    "Confirm the tester-applied fix in /app/frontend/src/BookingWidgetPage.js (line ~77-83 reorder) is desired; no other logic changed."
+  ],
+  "critical_code_review_comments": [
+    "BookingWidgetPage.js: hooks referencing a const declared later triggers TDZ crash — enable eslint `no-use-before-define` / `react-hooks/exhaustive-deps` strictness.",
+    "BookingWidgetPage.js at 822 lines is above the 700-line guideline; consider splitting home/results/details/confirmed subpages into separate files.",
+    "Coupon apply button has no data-testid for the loading state; consider a `coupon-apply-loading` indicator for e2e tests.",
+    "MyRates: numerous testids exist and work well; toast text is Turkish only — acceptable given app locale."
+  ],
+  "updated_files": ["/app/frontend/src/BookingWidgetPage.js"],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% after tester fix"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (token field: token)",
+  "seed_data_creation": "Used one existing 'sent' coupon (DIRECT-0DGDWY) which is now redeemed/used by booking WEB-9C8A916D on Franziskaner by Centra (default hotel). Other 9 unused coupons remain available for future testing (DIRECT-WYUUSY, -FTVORE, -6K423F, -MNAUNT, ...).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Frontend booking widget lives at /book/default (no auth). MyRates panel: login -> sidebar 'Revenue & rates' -> 'My Rates (Daily Grid)'. Must pick a specific hotel (e.g. 'default' = Franziskaner by Centra) instead of 'Tüm oteller' before ai-status-toggle-{YYYY-MM-DD} testids render. Valid coupon fetch: GET /api/direct-conversion/offers?status=sent (Bearer admin token). BookingWidgetPage.js line ordering must keep `const nights` above the useEffect referencing it.",
+  "rca of the issue": "RCA: BookingWidgetPage.js declared `useEffect(() => { ... }, [selected, nights, roomCount, ecoBadge])` at lines 77-81 BEFORE the `const nights = (...)()` declaration at line 83. JavaScript `const` is subject to the temporal dead zone: any reference (even inside a hook callback captured earlier in evaluation order, and specifically the dependency-array `nights` identifier read during render) prior to the declaration line throws 'Cannot access nights before initialization' at the first render of BookingWidgetPage. This crashed the entire /book/default route via error boundary. Reproduction: open /book/default -> error card with ref ERR-UB460FAG shows message 'Cannot access nights before initialization'. Mitigation: moved the `const nights = ...` declaration above the useEffect that depends on it (a purely structural fix, no behavior change)."
+}

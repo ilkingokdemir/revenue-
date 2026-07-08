@@ -201,6 +201,19 @@ def create_booking_widget_router(db, require_roles):
 
         rate = float(data.get("rate", 0))
         total = round(rate * nights * int(data.get("rooms", 1)), 2)
+
+        # Direct conversion kuponu (iter 376) — total üzerinden indirim
+        coupon_code = (data.get("coupon_code") or "").strip().upper()
+        coupon_info = None
+        if coupon_code:
+            from routes.integrations_pkg.direct_conversion import redeem_coupon_for_booking
+            coupon_info = await redeem_coupon_for_booking(
+                db, coupon_code, total, guest_email=data["guest_email"],
+                booking_ref=booking_ref)
+            if not coupon_info.get("ok"):
+                raise HTTPException(400, coupon_info.get("reason", "Kupon geçersiz"))
+            total = round(total - coupon_info["discount_amount"], 2)
+
         pay_now = bool(data.get("pay_now", True)) and total > 0
         currency = (data.get("currency", "GBP") or "GBP").upper()
 
@@ -227,6 +240,13 @@ def create_booking_widget_router(db, require_roles):
             "guests": int(data.get("guests", 1)),
             "created_at": now,
         }
+        if coupon_info:
+            booking.update({
+                "coupon_code": coupon_code,
+                "coupon_discount_pct": coupon_info["discount_pct"],
+                "coupon_discount_amount": coupon_info["discount_amount"],
+                "coupon_commission_saved": coupon_info["commission_saved"],
+            })
         await db.bookings.insert_one(booking)
         booking.pop("_id", None)
 

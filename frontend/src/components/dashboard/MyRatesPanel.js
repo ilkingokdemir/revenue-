@@ -103,6 +103,22 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
     });
   };
 
+  const toggleAiStatus = useCallback(async (date, current) => {
+    const next = current === "manual" ? "sentinel" : "manual";
+    try {
+      await axios.post(`${API}/rates/grid/ai-status`, {
+        property_id: propertyId, room_type_id: roomTypeId, date,
+        status: next, manual_days: 7,
+      }, { withCredentials: true });
+      toast.success(next === "manual"
+        ? `${date} → MANUAL (7 gün sonra otomatik AI'a döner)`
+        : `${date} → SENTINEL AI aktif`);
+      reload();
+    } catch (e) {
+      toast.error("AI status değiştirilemedi: " + (e?.response?.data?.detail || e.message));
+    }
+  }, [propertyId, roomTypeId, reload]);
+
   async function submitChanges() {
     if (pendingCount === 0) return;
     setSubmitting(true);
@@ -461,7 +477,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
                 <td className="px-3 py-2.5 sticky left-0 bg-stone-950 text-stone-300 font-medium">{col.label}</td>
                 {rows.map(r => (
                   <td key={r.date} className="px-1 py-1 text-center">
-                    <Cell row={r} col={col} pending={pending} editPending={editPending} />
+                    <Cell row={r} col={col} pending={pending} editPending={editPending} onToggleAI={toggleAiStatus} />
                   </td>
                 ))}
               </tr>
@@ -540,7 +556,7 @@ export const MyRatesPanel = ({ properties, activePropertyId }) => {
   );
 };
 
-function Cell({ row, col, pending, editPending }) {
+function Cell({ row, col, pending, editPending, onToggleAI }) {
   const key = `${row.date}::${col.id}`;
   const pendingVal = pending[key];
   const value = pendingVal !== undefined ? pendingVal : row[col.id];
@@ -548,11 +564,23 @@ function Cell({ row, col, pending, editPending }) {
 
   if (col.type === "badge") {
     return (
-      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${
-        value === "sentinel" ? "text-emerald-400" : "text-amber-400"
-      }`}>
-        {value || "—"}
-      </span>
+      <button
+        onClick={() => onToggleAI && onToggleAI(row.date, value)}
+        title="Tıkla: SENTINEL ↔ MANUAL (manual 7 gün sonra otomatik AI'a döner)"
+        data-testid={`ai-status-toggle-${row.date}`}
+        className="cursor-pointer hover:scale-110 transition-transform"
+      >
+        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wider ${
+          value === "sentinel" ? "text-emerald-400 hover:bg-emerald-500/10" : "text-amber-400 hover:bg-amber-500/10"
+        }`}>
+          {value || "—"}
+        </span>
+        {value === "manual" && row.manual_until && (
+          <div className="text-[8px] text-stone-500" data-testid={`manual-until-${row.date}`}>
+            ↩ {row.manual_until.slice(5)}
+          </div>
+        )}
+      </button>
     );
   }
   if (col.type === "occ") {

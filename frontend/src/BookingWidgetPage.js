@@ -24,6 +24,21 @@ export default function BookingWidgetPage({ propertyId }) {
   const [loyaltyChecking, setLoyaltyChecking] = useState(false);
   const [ecoBadge, setEcoBadge] = useState(null);  // { score, grade, show_badge, highlight_initiatives[] }
   const [carbonOffset, setCarbonOffset] = useState({ opt_in: false, total_fee: 0, co2_kg: 0 });
+  const [coupon, setCoupon] = useState({ code: "", applied: null, checking: false, error: null });
+
+  const applyCoupon = async () => {
+    const code = coupon.code.trim();
+    if (!code) return;
+    setCoupon(p => ({ ...p, checking: true, error: null }));
+    try {
+      const { data } = await axios.post(`${API}/direct-conversion/validate`, { coupon_code: code });
+      if (data.ok) setCoupon(p => ({ ...p, applied: data, checking: false, error: null }));
+      else setCoupon(p => ({ ...p, applied: null, checking: false, error: data.reason || "Invalid coupon" }));
+    } catch (e) {
+      setCoupon(p => ({ ...p, applied: null, checking: false,
+        error: e.response?.data?.detail || "Coupon could not be validated" }));
+    }
+  };
 
   const fetchCarbonOffset = async (n, r) => {
     if (!ecoBadge?.show_badge) return;
@@ -59,13 +74,14 @@ export default function BookingWidgetPage({ propertyId }) {
     setCheckOut(co.toISOString().split("T")[0]);
   }, [propertyId]);
 
+  const nights = (() => { try { return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)); } catch { return 1; } })();
+
   useEffect(() => {
     if (selected && nights > 0 && roomCount > 0 && ecoBadge?.show_badge) {
       fetchCarbonOffset(nights, roomCount);
     }
   }, [selected, nights, roomCount, ecoBadge]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const nights = (() => { try { return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)); } catch { return 1; } })();
   const fmtDate = (d) => { try { return new Date(d + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }); } catch { return d; } };
 
   const [paymentMode, setPaymentMode] = useState("pay_now"); // "pay_now" | "pay_at_property"
@@ -142,6 +158,7 @@ export default function BookingWidgetPage({ propertyId }) {
         carbon_offset_opt_in: !!carbonOffset.opt_in,
         carbon_offset_fee: carbonOffset.opt_in ? carbonOffset.total_fee : 0,
         carbon_offset_co2_kg: carbonOffset.opt_in ? carbonOffset.co2_kg : 0,
+        coupon_code: coupon.applied ? coupon.applied.coupon_code : null,
         origin_url: window.location.origin,
       });
       // Stripe path → redirect immediately (state lost on redirect; OK because effect picks
@@ -647,6 +664,37 @@ export default function BookingWidgetPage({ propertyId }) {
                     <span>−{loyalty.discount_pct}%</span>
                   </div>
                 )}
+                {/* Direct booking coupon (iter 376) */}
+                <div className="mb-2" data-testid="coupon-section">
+                  {coupon.applied ? (
+                    <div className="flex justify-between items-center text-xs text-emerald-700 font-bold" data-testid="coupon-applied-line">
+                      <span>🎟 {coupon.applied.coupon_code}</span>
+                      <span className="flex items-center gap-2">
+                        −{coupon.applied.discount_pct}%
+                        <button onClick={() => setCoupon({ code: "", applied: null, checking: false, error: null })}
+                          className="text-stone-400 hover:text-red-500 font-normal" data-testid="coupon-remove-btn">✕</button>
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-1.5">
+                        <input value={coupon.code}
+                          onChange={e => setCoupon(p => ({ ...p, code: e.target.value.toUpperCase(), error: null }))}
+                          placeholder="Coupon code (DIRECT-...)"
+                          className="flex-1 min-w-0 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                          data-testid="coupon-input" />
+                        <button onClick={applyCoupon} disabled={coupon.checking || !coupon.code.trim()}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-40"
+                          style={{ backgroundColor: ac }} data-testid="coupon-apply-btn">
+                          {coupon.checking ? "..." : "Apply"}
+                        </button>
+                      </div>
+                      {coupon.error && (
+                        <div className="text-[10px] text-red-500 mt-1" data-testid="coupon-error">{coupon.error}</div>
+                      )}
+                    </>
+                  )}
+                </div>
                 {ecoBadge?.show_badge && carbonOffset.total_fee > 0 && (
                   <div className="flex items-center justify-between text-xs text-emerald-700 font-bold mb-1" data-testid="carbon-offset-row">
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -662,6 +710,7 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div className="flex justify-between"><span className="text-stone-500 font-medium">Total</span><span className="text-2xl font-bold" style={{ color: ac }}>{(() => {
                   let t = selected?.total_rate || 0;
                   if (loyalty?.is_member && loyalty.discount_pct > 0) t = Number((t * (1 - loyalty.discount_pct / 100)).toFixed(2));
+                  if (coupon.applied?.discount_pct) t = Number((t * (1 - coupon.applied.discount_pct / 100)).toFixed(2));
                   if (carbonOffset.opt_in) t += carbonOffset.total_fee;
                   return cur(t, cc);
                 })()}</span></div>

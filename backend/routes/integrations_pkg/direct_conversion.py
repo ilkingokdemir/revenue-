@@ -189,6 +189,47 @@ async def process_checkout_conversion(db, booking: dict) -> Optional[dict]:
         return None
 
 
+async def validate_coupon(db, code: str) -> dict:
+    """Kupon doğrulama (redeem etmeden) — booking widget kullanır."""
+    code = (code or "").strip().upper()
+    offer = await db.direct_conversion_offers.find_one({"coupon_code": code}, {"_id": 0})
+    if not offer:
+        return {"ok": False, "reason": "Kupon bulunamadı"}
+    if offer.get("status") == "redeemed":
+        return {"ok": False, "reason": "Kupon daha önce kullanılmış"}
+    if offer.get("valid_until", "9") < _now():
+        return {"ok": False, "reason": "Kupon süresi dolmuş"}
+    return {"ok": True, "coupon_code": code,
+            "discount_pct": offer["discount_pct"],
+            "channel": offer.get("channel"),
+            "valid_until": offer.get("valid_until")}
+
+
+async def redeem_coupon_for_booking(db, code: str, booking_value: float,
+                                    guest_email: Optional[str] = None,
+                                    booking_ref: Optional[str] = None) -> dict:
+    """Kuponu kullan + komisyon tasarrufunu hesapla. Widget booking çağırır."""
+    v = await validate_coupon(db, code)
+    if not v["ok"]:
+        return v
+    code = v["coupon_code"]
+    rate = _COMMISSION_RATES.get(v.get("channel") or "", 0.15)
+    saved = round(float(booking_value or 0) * rate, 2)
+    discount_amount = round(float(booking_value or 0) * v["discount_pct"] / 100, 2)
+    await db.direct_conversion_offers.update_one(
+        {"coupon_code": code},
+        {"$set": {"status": "redeemed",
+                  "redeemed_at": _now(),
+                  "redeemed_booking_value": float(booking_value or 0),
+                  "redeemed_by_email": guest_email,
+                  "redeemed_booking_ref": booking_ref,
+                  "commission_saved_actual": saved}})
+    return {"ok": True, "coupon_code": code,
+            "discount_pct": v["discount_pct"],
+            "discount_amount": discount_amount,
+            "commission_saved": saved}
+
+
 class SettingsUpdate(BaseModel):
     enabled: Optional[bool] = None
     discount_pct: Optional[int] = None
@@ -307,6 +348,20 @@ def create_direct_conversion_router(db, require_roles):
             raise HTTPException(400, "Uygun değil (OTA kaynaklı değil, email yok veya engine kapalı)")
         return {"ok": True, "offer": offer}
 
+    @router.post("/validate")
+    async def validate(body: RedeemRequest, request: Request):
+        """Public kupon ön-doğrulama (redeem etmez) — booking widget kullanır."""
+        ip = (request.client.host if request.client else "?")
+        now_ts = time.time()
+        attempts = [t for t in _redeem_fails.get(ip, []) if now_ts - t < 900]
+        if len(attempts) >= 10:
+            raise HTTPException(429, "Çok fazla hatalı deneme — 15 dk sonra tekrar deneyin")
+        _redeem_fails[ip] = attempts
+        result = await validate_coupon(db, body.coupon_code)
+        if not result["ok"]:
+            _redeem_fails[ip].append(now_ts)
+        return result
+
     @router.post("/redeem")
     async def redeem(body: RedeemRequest, request: Request):
         """Booking widget / front desk kupon doğrulama + kullanım."""
@@ -318,34 +373,12 @@ def create_direct_conversion_router(db, require_roles):
             raise HTTPException(429, "Çok fazla hatalı deneme — 15 dk sonra tekrar deneyin")
         _redeem_fails[ip] = attempts
 
-        def _fail(status: int, msg: str):
+        result = await redeem_coupon_for_booking(
+            db, body.coupon_code, body.booking_value, guest_email=body.guest_email)
+        if not result["ok"]:
             _redeem_fails[ip].append(now_ts)
-            raise HTTPException(status, msg)
-
-        code = body.coupon_code.strip().upper()
-        offer = await db.direct_conversion_offers.find_one({"coupon_code": code}, {"_id": 0})
-        if not offer:
-            _fail(404, "Kupon bulunamadı")
-        if offer.get("status") == "redeemed":
-            _fail(400, "Kupon daha önce kullanılmış")
-        if offer.get("valid_until", "9") < _now():
-            await db.direct_conversion_offers.update_one(
-                {"coupon_code": code}, {"$set": {"status": "expired"}})
-            _fail(400, "Kupon süresi dolmuş")
-
-        rate = _COMMISSION_RATES.get(offer.get("channel", ""), 0.15)
-        saved = round(float(body.booking_value or 0) * rate, 2)
-        discount_amount = round(float(body.booking_value or 0) * offer["discount_pct"] / 100, 2)
-        await db.direct_conversion_offers.update_one(
-            {"coupon_code": code},
-            {"$set": {"status": "redeemed",
-                      "redeemed_at": _now(),
-                      "redeemed_booking_value": float(body.booking_value or 0),
-                      "redeemed_by_email": body.guest_email,
-                      "commission_saved_actual": saved}})
-        return {"ok": True, "coupon_code": code,
-                "discount_pct": offer["discount_pct"],
-                "discount_amount": discount_amount,
-                "commission_saved": saved}
+            reason = result.get("reason", "Kupon geçersiz")
+            raise HTTPException(404 if reason == "Kupon bulunamadı" else 400, reason)
+        return result
 
     return router

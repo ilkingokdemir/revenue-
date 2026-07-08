@@ -83,3 +83,10 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 3. TAHMİNSEL HK → VARDİYA: `POST /api/housekeeping/predictive/{pid}/suggest-shifts {date}`
    → staff_needed kadar housekeeper'a "planned" shift_entries (dedupe'lu).
    UI: PredictiveHkPanel "Vardiya Önerisi (N)" butonu.
+
+## Son Durum (Iter 383, 2026-07-08) — TAM SİSTEM DENETİMİ (kullanıcı talebi)
+- Test ajanı FULL AUDIT: Backend 55/55 PASS, frontend tüm paneller PASS, SIFIR 5xx.
+- Test suite: `/app/tests/test_iter383_full_audit.py` (pytest, ~9sn, 55 test).
+- Bulunan tek eksik ve FIX: `/checkin/{slug}` rotası eşleşmiyordu (yalnızca `/checkin` exact match) →
+  `startsWith("/checkin/")` eklendi; artık dostane "Geçersiz check-in bağlantısı" ekranı gösteriliyor
+  (dikkat: `/checkin-kiosk/` rotasını yutmamak için `/checkin/` slash'lı prefix kullanıldı).

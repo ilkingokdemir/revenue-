@@ -5152,7 +5152,7 @@ function App() {
   if (window.location.pathname === "/room-key" || window.location.pathname.startsWith("/room-key/")) {
     return <RoomKeyPage />;
   }
-  if (window.location.pathname === "/checkin") {
+  if (window.location.pathname === "/checkin" || window.location.pathname.startsWith("/checkin/")) {
     return <SelfCheckInPage />;
   }
   if (window.location.pathname.startsWith("/selfcheckin-v2/")) {

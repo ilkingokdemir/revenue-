@@ -44,7 +44,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 
-ALLOWED_CHANNELS = {"booking_com", "expedia", "airbnb"}
+ALLOWED_CHANNELS = {"booking_com", "expedia", "airbnb", "agoda", "trip_com"}
 # Loyalty tier -> upgrade eligibility (True = eligible for one-tier free upgrade)
 _TIER_UPGRADE = {"platinum": True, "diamond": True, "gold": False,
                  "silver": False, "bronze": False}
@@ -181,6 +181,21 @@ async def _get_loyalty_tier(db, guest_email: Optional[str]) -> Optional[str]:
     return (m or {}).get("tier")
 
 
+async def _get_external_elite(db, guest_email: Optional[str]) -> list:
+    """Return list of external loyalty programs where the guest is elite tier.
+    Used by _auto_assign_room to boost score for Bonvoy Platinum, Hilton Diamond, etc.
+    """
+    if not guest_email:
+        return []
+    q = {"$or": [{"guest_id": guest_email.lower()},
+                  {"guest_id": guest_email}],
+         "is_elite": True}
+    rows = await db.external_loyalty_links.find(
+        q, {"_id": 0, "program": 1, "tier": 1}
+    ).to_list(10)
+    return rows
+
+
 async def _auto_assign_room(db, property_id: str, room_type_id: Optional[str],
                               check_in: str, check_out: str,
                               guest_email: Optional[str] = None,
@@ -234,6 +249,12 @@ async def _auto_assign_room(db, property_id: str, room_type_id: Optional[str],
     tier_bonus = _TIER_SCORE.get((tier or "").lower(), 0)
     upgrade_eligible = _TIER_UPGRADE.get((tier or "").lower(), False)
 
+    # External loyalty (Marriott Bonvoy, Hilton Honors, etc.) — Elite bonus (iter 373b)
+    ext_elite = await _get_external_elite(db, guest_email)
+    ext_bonus = 50 * len(ext_elite) if ext_elite else 0   # +50 per elite program
+    if ext_elite:
+        upgrade_eligible = True   # Any chain elite qualifies for upgrade
+
     # Score candidates
     scored: list[dict] = []
     for r in rooms:
@@ -269,6 +290,11 @@ async def _auto_assign_room(db, property_id: str, room_type_id: Optional[str],
         floor = int(r.get("floor") or 0)
         score += tier_bonus + (floor * 2 if tier_bonus >= 30 else floor)
 
+        # External chain-loyalty elite bonus (iter 373b)
+        if ext_bonus:
+            score += ext_bonus
+            score += floor   # extra floor bonus for chain elite
+
         # Exact room_type match wins over upgrades
         if room_type_id and r.get("room_type_id") == room_type_id:
             score += 200
@@ -285,7 +311,11 @@ async def _auto_assign_room(db, property_id: str, room_type_id: Optional[str],
     if not scored:
         return None
     scored.sort(key=lambda x: x["_score"], reverse=True)
-    return scored[0]
+    best = scored[0]
+    # Attach elite info for logging
+    if ext_elite:
+        best["_chain_elite"] = [{"program": e.get("program"), "tier": e.get("tier")} for e in ext_elite]
+    return best
 
 
 def create_ota_inbound_router(db, require_roles):
@@ -341,6 +371,7 @@ def create_ota_inbound_router(db, require_roles):
                 room_id = picked.get("id")
                 room_number = picked.get("name") or picked.get("id")
                 is_upgrade = bool(picked.get("_upgrade"))
+                chain_elite = picked.get("_chain_elite") or []
                 assignment_info = {
                     "auto_assigned":   True,
                     "assigned_room_id": room_id,
@@ -348,7 +379,9 @@ def create_ota_inbound_router(db, require_roles):
                     "assigned_upgrade": is_upgrade,
                     "assigned_at":      _now(),
                 }
-                notif_kind = "upgrade" if is_upgrade else "success"
+                if chain_elite:
+                    assignment_info["chain_elite"] = chain_elite
+                notif_kind = "upgrade" if (is_upgrade or chain_elite) else "success"
             else:
                 assignment_info = {
                     "auto_assigned":         False,

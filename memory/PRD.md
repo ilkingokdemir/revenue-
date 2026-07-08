@@ -4,6 +4,20 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-08 (iter 373b — Loyalty × Auto-Assign Fusion + Agoda/Trip.com ✅)
+
+**A) Chain Loyalty × OTA Auto-Assign birleştirme (Potansiyel iyileştirme)**
+- `ota_inbound.py`: Yeni helper `_get_external_elite()` — guest_email için `external_loyalty_links` collection'ından elite tier'ları çeker.
+- Scoring: her elite program için **+50 skor bonusu** + ek floor bonusu. Any-chain elite artık upgrade_eligible'a otomatik dahil.
+- Booking'e `chain_elite` metadata yazılıyor: `[{program, tier}]` array.
+- Notification: chain_elite varsa `upgrade` kind ile Slack + in-app bildirim.
+- **Test doğrulandı**: Diamond Hilton üyesi → skor **364**, non-elite → **312**, delta **+52** ✓
+
+**B) Agoda + Trip.com OTA Inbound Support**
+- `ALLOWED_CHANNELS` → 5 kanal: booking_com, expedia, airbnb, agoda, trip_com
+- Channel Manager Hub UI'da yeni kanallar dropdown'a eklendi
+- **Test**: Agoda reservation ✓, Trip.com reservation ✓, unknown channel 400 ✓
+
 ### 2026-07-08 (iter 373 — Notifications + External Loyalty + Real Delivery + Lock Providers ✅)
 
 **A) OTA Auto-Assign Notifications**

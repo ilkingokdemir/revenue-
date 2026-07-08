@@ -284,6 +284,8 @@ const ChannelsPanel = ({ pid }) => {
               <option value="expedia">Expedia</option>
               <option value="airbnb">Airbnb</option>
               <option value="agoda">Agoda</option>
+              <option value="trip_com">Trip.com</option>
+              <option value="agoda">Agoda</option>
               <option value="hotels_com">Hotels.com</option>
               <option value="trip_com">Trip.com</option>
             </select>

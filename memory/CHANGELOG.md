@@ -1824,3 +1824,14 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
 - App.js'teki son 3 React lint uyarısı temizlendi → webpack SIFIR uyarıyla derleniyor
 - Test: testing agent backend 7/7 + frontend %100; kalıcı regresyon suite:
   /app/tests/test_iter379_regression.py
+
+## Iter 380 (2026-07-08) — Detaylı Tarama 3. Tur: API Sözleşmesi + Takvim
+- Frontend↔Backend API sözleşme taraması: 1416 frontend API çağrısı backend route
+  tablosuyla otomatik eşleştirildi → GERÇEK UYUMSUZLUK YOK (adaylar prefix'li API
+  const'ları ve query-string artefaktları çıktı)
+- Çalışma zamanı logları tarandı: gerçek 500 yok
+- AdminPanel'deki geçersiz iç içe <button> DOM hatası düzeltildi (hydration uyarısı)
+- POTANSİYEL İYİLEŞTİRME: Booking widget'a çift aylı range takvimi (shadcn Calendar)
+  — native date input yerine şık seçici; testId'ler korundu (be-checkin/be-checkout
+  gizli input olarak duruyor, eski test akışları kırılmadı). E2E doğrulandı:
+  seçim → otomatik kapanış → 14 gece → oda sonuçları.

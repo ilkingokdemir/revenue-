@@ -153,7 +153,7 @@ export function AdminPanel({ properties, user, activePropertyId }) {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-stone-400">{Object.values(role.permissions || {}).flat().length} permissions</span>
-                    {!role.is_builtin && <button onClick={(e) => { e.stopPropagation(); deleteRole(role.id); }} className="text-stone-300 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>}
+                    {!role.is_builtin && <span role="button" tabIndex={0} onClick={(e) => { e.stopPropagation(); deleteRole(role.id); }} className="text-stone-300 hover:text-red-500 transition-colors cursor-pointer" data-testid={`delete-role-${role.id}`}><Trash2 size={14} /></span>}
                     {expandedRole === role.id ? <ChevronDown size={14} className="text-stone-400" /> : <ChevronRight size={14} className="text-stone-400" />}
                   </div>
                 </button>

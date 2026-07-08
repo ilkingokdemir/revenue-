@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import ConciergeChat from "./components/ConciergeChat";
+import { Calendar } from "./components/ui/calendar";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const cur = (v, c) => `${c === "GBP" ? "£" : c === "EUR" ? "€" : c === "USD" ? "$" : c}${Number(v || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -67,6 +68,7 @@ export default function BookingWidgetPage({ propertyId }) {
     setLoyaltyChecking(false);
   };
   const [guestOpen, setGuestOpen] = useState(false);
+  const [datesOpen, setDatesOpen] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [lightbox, setLightbox] = useState({ open: false, index: 0 });
@@ -240,13 +242,41 @@ export default function BookingWidgetPage({ propertyId }) {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
           className="max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl shadow-black/20 p-4 sm:p-5" data-testid="be-booking-bar">
           <div className="flex flex-col sm:flex-row items-stretch gap-3">
-            <div className="flex-1 min-w-0">
-              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Check-in</label>
-              <input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} className="w-full text-sm font-medium text-stone-800 border border-stone-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" data-testid="be-checkin" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Check-out</label>
-              <input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} className="w-full text-sm font-medium text-stone-800 border border-stone-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" data-testid="be-checkout" />
+            <div className="flex-[2] min-w-0 relative">
+              <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Dates</label>
+              <button onClick={() => setDatesOpen(!datesOpen)} data-testid="be-dates-btn"
+                className="w-full text-left text-sm font-medium text-stone-800 border border-stone-200 rounded-lg px-3 py-2.5 focus:ring-2 focus:ring-[#1a3c5e]/20 outline-none flex items-center justify-between gap-2">
+                <span className={checkIn ? "" : "text-stone-400"}>
+                  {checkIn && checkOut ? `${fmtDate(checkIn)} → ${fmtDate(checkOut)}`
+                    : checkIn ? `${fmtDate(checkIn)} → check-out seçin`
+                    : "Check-in → Check-out"}
+                </span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-stone-400 shrink-0"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </button>
+              {datesOpen && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-stone-200 rounded-xl shadow-2xl p-3 z-50" data-testid="be-dates-popover">
+                  <Calendar
+                    mode="range"
+                    numberOfMonths={2}
+                    disabled={{ before: new Date() }}
+                    selected={{
+                      from: checkIn ? new Date(checkIn + "T00:00:00") : undefined,
+                      to: checkOut ? new Date(checkOut + "T00:00:00") : undefined,
+                    }}
+                    onSelect={(range) => {
+                      const iso = (d) => d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : "";
+                      setCheckIn(iso(range?.from));
+                      setCheckOut(iso(range?.to));
+                      if (range?.from && range?.to && range.from.getTime() !== range.to.getTime()) setDatesOpen(false);
+                    }}
+                  />
+                  {/* Eski test akışlarıyla uyumluluk için gizli native inputlar */}
+                  <div className="flex gap-2 px-2 pb-1">
+                    <input type="date" value={checkIn} onChange={e => setCheckIn(e.target.value)} className="flex-1 text-xs border border-stone-200 rounded px-2 py-1" data-testid="be-checkin" />
+                    <input type="date" value={checkOut} onChange={e => setCheckOut(e.target.value)} className="flex-1 text-xs border border-stone-200 rounded px-2 py-1" data-testid="be-checkout" />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0 relative">
               <label className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider mb-1 block">Guests & Rooms</label>

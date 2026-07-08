@@ -1,9 +1,10 @@
 import { useState, lazy, Suspense } from "react";
-import { Broom, Sparkle, MapTrifold, CheckSquare, Camera, QrCode, TShirt, Gear } from "@phosphor-icons/react";
+import { Broom, Sparkle, MapTrifold, CheckSquare, Camera, QrCode, TShirt, Gear, CalendarCheck } from "@phosphor-icons/react";
 
 // Lazy-load each sub-panel to keep the hub light
 const HousekeepingPanel = lazy(() => import("./HousekeepingPanel").then(m => ({ default: m.HousekeepingPanel })));
 const HkTurnoverPanel = lazy(() => import("./HkTurnoverPanel"));
+const PredictiveHkPanel = lazy(() => import("./PredictiveHkPanel"));
 const HousekeepingRoutePanel = lazy(() => import("./HousekeepingRoutePanel"));
 const CleaningChecklistsPanel = lazy(() => import("./CleaningChecklistsPanel"));
 const ImageAIPanel = lazy(() => import("./ImageAIPanel"));
@@ -14,6 +15,7 @@ const LaundrySettingsPanel = lazy(() => import("./LaundrySettingsPanel"));
 const TABS = [
   { id: "rooms", label: "Oda Durumu", icon: Broom },
   { id: "turnover", label: "Devir / Board", icon: Sparkle },
+  { id: "predictive", label: "Tahminsel Plan", icon: CalendarCheck },
   { id: "route", label: "Temizlik Rotası", icon: MapTrifold },
   { id: "checklists", label: "Kontrol Listeleri", icon: CheckSquare },
   { id: "ai-score", label: "AI Temizlik Skoru", icon: Camera },
@@ -75,6 +77,7 @@ export default function HousekeepingHubPanel({ properties, activePropertyId, use
             <HousekeepingPanel properties={properties} activePropertyId={activePropertyId} />
           )}
           {tab === "turnover" && <HkTurnoverPanel propertyId={propertyId} />}
+          {tab === "predictive" && <PredictiveHkPanel propertyId={propertyId} />}
           {tab === "route" && <HousekeepingRoutePanel propertyId={propertyId} hotelName={hotelName} />}
           {tab === "checklists" && <CleaningChecklistsPanel propertyId={propertyId} hotelName={hotelName} />}
           {tab === "ai-score" && <ImageAIPanel propertyId={propertyId} />}

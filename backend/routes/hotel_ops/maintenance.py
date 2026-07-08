@@ -254,6 +254,8 @@ def create_maintenance_router(db, require_roles):
 
         await db.maintenance_issues.update_one({"id": issue_id}, {"$set": updates})
         doc = await db.maintenance_issues.find_one({"id": issue_id}, {"_id": 0})
+        if doc is None:
+            raise HTTPException(status_code=404, detail="Arıza kaydı bulunamadı")
 
         # Auto-unblock room when issue is resolved or closed
         if new_status in ("resolved", "verified", "closed") and doc and doc.get("room_blocked") and doc.get("room_id"):

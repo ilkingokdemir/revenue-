@@ -45,3 +45,17 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Spaces çakışması: public endpoint `/api/spaces/public/{property_id}` olarak ayrıldı.
 - Kupon deep-link: `/book/{property}?coupon=DIRECT-XXX` otomatik uygular; promo
   e-postasına "Şimdi Rezervasyon Yap" CTA butonu eklendi (PUBLIC_BASE_URL env).
+
+## Son Durum (Iter 380, 2026-07-08) — Nihai API Denetimi & Tahminsel Housekeeping
+- 500 Hata Denetimi TAMAMLANDI: 2187 endpoint mutasyon taramasıyla test edildi.
+  - `server.py`'ye global `bson.errors.InvalidId` + `BSONError` handler eklendi (400 döner).
+  - `guests/profiles PUT` ve `maintenance/issues PUT` — olmayan ID'de None.get() crash → 404 düzeltildi.
+  - Sonuç: SIFIR 500 hatası (mutasyon scripti: `/app/backend/tests/mutation_sweep.py`).
+- YENİ MODÜL: Tahminsel Housekeeping (`routes/hotel_ops/predictive_hk.py` + `PredictiveHkPanel.js`)
+  - `GET /api/housekeeping/predictive/{pid}?days=7` → günlük çıkış/varış/konaklama sayıları,
+    iş yükü (dk/saat), gerekli personel tahmini, en yoğun gün.
+  - `POST /api/housekeeping/predictive/{pid}/generate {date}` → otomatik görev üretimi
+    (checkout_clean 45dk / stayover_refresh 20dk / arrival_inspection 10dk),
+    kat görevlilerine round-robin atama, kopya engelleme (auto_generated + room + date + subtype).
+  - UI: Housekeeping Hub → "Tahminsel Plan" sekmesi (7 günlük bar grafiği + gün detayı + tek tık görev üretimi).
+- Not: AI Upsell Engine ve RFM Segmentasyon ZATEN MEVCUT (upsell_engine.py, guest_rfm.py) — kopya iş yapılmadı.

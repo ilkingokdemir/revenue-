@@ -227,6 +227,36 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+# ==================== GLOBAL VALIDATION HATA YAKALAYICILAR (iter 381) ====================
+# Handler'lar içinde manuel Pydantic model kurulumu / data["x"] erişimi 500 yerine 4xx dönsün
+from pydantic import ValidationError as _PydanticValidationError
+from fastapi.responses import JSONResponse as _JSONResponse
+
+@app.exception_handler(_PydanticValidationError)
+async def _pydantic_error_handler(request, exc):
+    errs = [{"field": ".".join(str(l) for l in e.get("loc", [])), "msg": e.get("msg", "")}
+            for e in exc.errors()[:10]]
+    return _JSONResponse(status_code=422, content={"detail": "Doğrulama hatası", "errors": errs})
+
+@app.exception_handler(KeyError)
+async def _keyerror_handler(request, exc):
+    return _JSONResponse(status_code=400, content={"detail": f"Eksik alan: {exc}"})
+
+@app.exception_handler(ValueError)
+async def _valueerror_handler(request, exc):
+    return _JSONResponse(status_code=400, content={"detail": f"Geçersiz değer: {str(exc)[:200]}"})
+
+from bson.errors import InvalidId as _BsonInvalidId, BSONError as _BSONError
+
+@app.exception_handler(_BsonInvalidId)
+async def _invalid_bson_id_handler(request, exc):
+    return _JSONResponse(status_code=400, content={"detail": "Geçersiz ID formatı."})
+
+@app.exception_handler(_BSONError)
+async def _bson_error_handler(request, exc):
+    return _JSONResponse(status_code=400, content={"detail": f"Geçersiz veri formatı: {str(exc)[:200]}"})
+
+
 # ==================== HELPER FUNCTIONS ====================
 
 def serialize_review(review: dict) -> dict:
@@ -361,6 +391,9 @@ api_router.include_router(calendar_gss_router)
 
 housekeeping_router = create_housekeeping_router(db, require_roles)
 api_router.include_router(housekeeping_router)
+
+from routes.hotel_ops.predictive_hk import create_predictive_hk_router
+api_router.include_router(create_predictive_hk_router(db, require_roles))
 
 guest_profiles_router = create_guest_profiles_router(db, require_roles)
 api_router.include_router(guest_profiles_router)

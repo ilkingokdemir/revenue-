@@ -85,8 +85,10 @@ def create_guest_profiles_router(db, require_roles):
         updates.pop("_id", None)
         updates.pop("id", None)
         updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-        await db.guest_profiles.update_one({"id": guest_id}, {"$set": updates})
+        result = await db.guest_profiles.update_one({"id": guest_id}, {"$set": updates})
         doc = await db.guest_profiles.find_one({"id": guest_id}, {"_id": 0})
+        if doc is None:
+            raise HTTPException(status_code=404, detail="Misafir profili bulunamadı")
         if "vip" in updates:
             asyncio.create_task(fire_webhooks(db, "guest.vip_changed", {"guest_id": guest_id, "name": doc.get("name", ""), "vip": updates["vip"]}))
             await log_sync(db, "guest-profiles", "internal", "success", f"VIP {'set' if updates['vip'] else 'removed'}: {doc.get('name', '')}", guest_id)

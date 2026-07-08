@@ -73,6 +73,29 @@ export default function BookingWidgetPage({ propertyId }) {
   const [ecoBadge, setEcoBadge] = useState(null);  // { score, grade, show_badge, highlight_initiatives[] }
   const [carbonOffset, setCarbonOffset] = useState({ opt_in: false, total_fee: 0, co2_kg: 0 });
   const [coupon, setCoupon] = useState({ code: "", applied: null, checking: false, error: null });
+  const [ab, setAb] = useState({ assigned: false, variant: null, experiment_id: null, show_badge: true });
+
+  const abSessionId = (() => {
+    let sid = localStorage.getItem("be_session_id");
+    if (!sid) { sid = crypto.randomUUID(); localStorage.setItem("be_session_id", sid); }
+    return sid;
+  })();
+
+  useEffect(() => {
+    axios.post(`${API}/ab/assign`, { property_id: propertyId, key: "social_proof_badge", session_id: abSessionId })
+      .then(({ data }) => {
+        if (data.assigned) {
+          setAb({ assigned: true, variant: data.variant, experiment_id: data.experiment_id, show_badge: data.payload?.show !== false });
+          localStorage.setItem("be_ab_social_proof_variant", data.variant);
+        }
+      }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
+
+  const abTrack = (event, value = 0) => {
+    if (!ab.assigned) return;
+    axios.post(`${API}/ab/track`, { experiment_id: ab.experiment_id, session_id: abSessionId, variant: ab.variant, event, value }).catch(() => {});
+  };
 
   const applyCoupon = async (codeOverride) => {
     const code = (codeOverride || coupon.code).trim();
@@ -157,6 +180,8 @@ export default function BookingWidgetPage({ propertyId }) {
         try {
           const { data } = await axios.get(`${API}/booking-widget/payment-status/${ref}`);
           if (data.status === "confirmed") {
+            const abv = localStorage.getItem("be_ab_social_proof_variant");
+            if (abv) axios.post(`${API}/ab/track`, { key: "social_proof_badge", session_id: localStorage.getItem("be_session_id") || "", variant: abv, event: "booking_completed", value: Number(data.total_price || 0) }).catch(() => {});
             setConfirmation({
               status: "confirmed",
               booking_ref: ref,
@@ -189,6 +214,7 @@ export default function BookingWidgetPage({ propertyId }) {
   const search = async () => {
     if (!checkIn || !checkOut) return;
     setSearching(true);
+    abTrack("check_availability");
     try {
       const { data } = await axios.post(`${API}/booking-widget/check-availability`, { property_id: propertyId, check_in: checkIn, check_out: checkOut });
       setAvailable(data.available_rooms || []);
@@ -225,6 +251,7 @@ export default function BookingWidgetPage({ propertyId }) {
         return;
       }
       // Pay-at-property or fallback path → show confirmation in-place
+      abTrack("booking_completed", Number(data?.booking?.total_price || finalRate || 0));
       setConfirmation(data);
       setStep("confirmed");
     } catch { /* silent */ }
@@ -895,7 +922,7 @@ export default function BookingWidgetPage({ propertyId }) {
         {step === "confirmed" && <motion.div key="confirmed" initial={{ opacity: 0 }} animate={{ opacity: 1 }}><ConfirmationPage /></motion.div>}
       </AnimatePresence>
       <Lightbox />
-      {!isEmbed && step !== "confirmed" && <SocialProofBadge propertyId={propertyId} />}
+      {!isEmbed && step !== "confirmed" && ab.show_badge && <SocialProofBadge propertyId={propertyId} />}
       {!isEmbed && (
         <ConciergeChat
           propertyId={propertyId}

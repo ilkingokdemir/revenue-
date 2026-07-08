@@ -22,6 +22,7 @@
 | Segment Forecast (Duetto tarzı) | `forecast_v2.py /segments` + Segmentler sekmesi | iter 382 DONE |
 | Tahminsel HK → Vardiya önerisi | `predictive_hk.py /suggest-shifts` + buton | iter 382 DONE |
 | Sosyal Kanıt Widget'ı (booking widget) | `booking_widget.py /social-proof` + SocialProofBadge | iter 384 DONE |
+| Sosyal Kanıt A/B Testi (rozet açık/kapalı) | `ab_test.py` entegrasyonu + 5 tesiste deney seed | iter 385 DONE |
 | OTA Commission Dashboard | `integrations_pkg/ota_commission.py` | iter 374 DONE |
 | 2-Year Forecast | `revenue_ext/forecast_v2.py` | DONE |
 | External Loyalty (Marriott/Hilton) | `integrations_pkg/external_loyalty.py` | DONE |
@@ -42,7 +43,7 @@
 - Gerçek compset rate scanner (OTA Insight / Lighthouse anahtarı; şu an mock pool)
 
 ## P1 — Anahtar gerektirmeden yapılabilir GERÇEK eksikler
-- Webhook dispatcher'a retry + HMAC-SHA256 imza + exponential backoff
+- ~~Webhook dispatcher'a retry + HMAC-SHA256 imza + exponential backoff~~ YAPILDI (helpers.py fire_webhooks: 3 deneme + imza; iter 384'te doğrulandı)
 - sw.js offline stratejisini genişlet (route cache + offline fallback sayfası)
 - App.js refactor (5200 satır → görünüm bazlı alt dosyalar; davranış değişmeden)
 - server.py tick worker'larını ayrı worker modülüne taşı

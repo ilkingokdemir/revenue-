@@ -99,3 +99,14 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - UI: `BookingWidgetPage.js` → `SocialProofBadge` bileşeni — sol altta 7 sn'de bir dönen
   animasyonlu rozet (🔥 rezervasyon / 🛎️ son rezervasyon / 👀 görüntüleyen / ⭐ yorum),
   kapatılabilir, embed modda ve onay sayfasında gizli. testid: be-social-proof-badge.
+
+## Son Durum (Iter 385, 2026-07-08) — Sosyal Kanıt A/B Testi Entegrasyonu
+- BookingWidgetPage → mevcut A/B motoruna bağlandı (`/api/ab/assign` + `/api/ab/track`):
+  - Kalıcı session (localStorage `be_session_id`), deterministik varyant ataması.
+  - `badge_on` (payload.show=true) / `badge_off` — rozet varyanta göre gösterilir/gizlenir.
+  - Dönüşüm takibi: `check_availability` event + `booking_completed` (value=toplam fiyat);
+    Stripe redirect dönüşünde de localStorage'daki varyantla track edilir.
+- 5 tesiste "social_proof_badge" deneyi seed edildi (50/50, goal: booking_completed).
+- Sonuçlar: A/B Testing panelinden (Wilson lower bound ile lider işaretleme mevcut motorda).
+- E2E doğrulandı: assign deterministik ✓, track ✓, results ✓, frontend varyant-rozet tutarlılığı ✓.
+- Not: Webhook retry + HMAC ROADMAP'te eksik görünüyordu ama kodda ZATEN VARDI (fire_webhooks) — ROADMAP düzeltildi.

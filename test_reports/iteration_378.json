@@ -1,0 +1,37 @@
+{
+  "summary": "Iter 378 both-side verification. BACKEND: 8/8 pass — all 6 perf endpoints (crm/segments, crm/winback/candidates, loyalty-tiers/members, pms-crs/conflicts, revenue/heatmap, revenue/yoy-tables) return 200 in <5s (all <2s actually). GET /api/reports/preview returns {html: ...} 200. GET /api/admin/diagnostics/tasks returns total_tasks well under 100 (task-leak fix confirmed). FRONTEND FULL SIDEBAR SWEEP (227 testIds across 10 groups): 220 PASS / 4 BLANK / 2 CRASH / 1 empty-state (PASS per spec). Revived availability-calendar-panel renders correctly with month grid.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Revenue → Parity heatmap", "issue": "Clicking parity-heatmap-btn triggers global ErrorBoundary: 'chartLegend is not defined' (Ref: ERR-ZPXK3AF5 / ERR-1EYWGMO6). Crash removes entire sidebar until Ana Sayfa click / reload. Likely missing import of chartLegend (recharts Legend?) in ParityHeatmap component.", "selector": "[data-testid='parity-heatmap-btn']", "priority": "CRITICAL"},
+      {"component": "System → Branding", "issue": "Clicking branding-btn triggers global ErrorBoundary (Ref: ERR-TIBDU7AQ). Full-page crash — takes down the whole SPA.", "selector": "[data-testid='branding-btn']", "priority": "CRITICAL"},
+      {"component": "Reports & analytics → Analytics", "issue": "analytics-btn renders 0-char blank main content (no panel component wired to activeView='analytics'). No error boundary — silent no-render.", "selector": "[data-testid='analytics-btn']", "priority": "HIGH"},
+      {"component": "System → Notification settings", "issue": "notification-settings-btn renders 0-char blank main content. Missing activeView case.", "selector": "[data-testid='notification-settings-btn']", "priority": "HIGH"},
+      {"component": "Reports & analytics → Response templates", "issue": "templates-btn is a NO-OP: click does not update main view (stays on whatever was previously displayed, e.g. Reviews page content). activeView='templates' has no mapped panel.", "selector": "[data-testid='templates-btn']", "priority": "HIGH"},
+      {"component": "System → Integrations", "issue": "integrations-btn is a NO-OP: click does not update main view (previous view content persists). activeView='integrations' has no mapped panel.", "selector": "[data-testid='integrations-btn']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/tests/test_iter378_regression.py", "/app/test_reports/pytest/iter378_results.xml"],
+  "action_items": [
+    "URGENT: Fix chartLegend ReferenceError in ParityHeatmap component (Revenue → Parity heatmap) — either import Legend from recharts or remove the reference. Crash currently kills whole SPA via ErrorBoundary.",
+    "URGENT: Fix Branding panel runtime crash (Ref: ERR-TIBDU7AQ). Reproduce by clicking sidebar 'Branding' (data-testid=branding-btn). Whole-app ErrorBoundary triggers.",
+    "Wire missing activeView cases in App.js render switch for: 'analytics', 'notification-settings', 'templates', 'integrations'. Currently 4 sidebar buttons are dead — click yields empty/stale main area.",
+    "Backend supervisor reloader still stalls on backend.err.log 'Cannot use MongoClient after close' loop when WatchFiles triggers on backend/tests/*.py. I moved the new test file to /app/tests/ to avoid re-triggering that loop, but the underlying reloader hang persists (already noted in iter 377). Consider excluding backend/tests/ from uvicorn --reload-dir.",
+    "Note: chatbot-automation-btn shows empty-state message 'Chatbot Automations için lütfen bir otel seçin.' — that is a legit empty state (PASS per spec)."
+  ],
+  "critical_code_review_comments": [
+    "230-testId sidebar sweep: 220/227 fully render, 2 crash the entire SPA via ErrorBoundary (parity-heatmap, branding) and 4 are dead routes (analytics, notification-settings, templates, integrations). All non-crash panels renders within 6s.",
+    "Global ErrorBoundary is doing its job (catches ReferenceError gracefully with Turkish message + Ref code), but two named buttons still take down the shell. A route-level ErrorBoundary would prevent whole-app takedown.",
+    "Backend perf fixes verified: all 6 previously-slow endpoints now <2s (target was <15s)."
+  ],
+  "updated_files": ["/app/tests/test_iter378_regression.py (new — moved out of /app/backend/tests to avoid uvicorn reloader stall)"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "97% (220/227 sidebar buttons functional; 6 broken buttons remain)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (token field 'token' per /api/auth/login)",
+  "seed_data_creation": "None.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iter 378 regression suite lives at /app/tests/test_iter378_regression.py (not /app/backend/tests/ — the latter triggers uvicorn WatchFiles which stalls the backend). Run with `REACT_APP_BACKEND_URL=<url> pytest tests/test_iter378_regression.py`. Full sidebar sweep methodology: (1) login admin, (2) localStorage.setItem('nav-open-<sectionLabel>','1') for each of 10 sections, (3) reload, (4) iterate all 227 testIds — click, wait 1.2s (retry with 3.5s), check main.innerText length + Turkish crash text 'Bir şeyler ters gitti'. If crash detected, click 'Ana Sayfa' button and reload to recover. On this run: parity-heatmap-btn AND branding-btn were confirmed crashes; analytics-btn, notification-settings-btn are blank; templates-btn, integrations-btn are no-op (view doesn't change).",
+  "rca of the issue": "parity-heatmap: 'chartLegend is not defined' — a variable/import missing in ParityHeatmap component (likely `Legend` was renamed but a stray `chartLegend` identifier remains). branding: separate ReferenceError (ref ERR-TIBDU7AQ — need to check /var/log or console during click to capture the actual message). analytics/notification-settings/templates/integrations: their `id`s are defined in menuSections but there is no corresponding case in App.js's activeView renderer switch, so main<> renders nothing (or keeps prior render for templates/integrations where they land after a previously-rendered view)."
+}

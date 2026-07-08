@@ -85,21 +85,26 @@ def create_revenue_router(db, require_roles):
             dates.append(d.strftime("%Y-%m-%d"))
 
         result = []
+        end_date = dates[-1]
         for p in props:
             pid = p.get("id", "")
             pname = p.get("name", pid)
             total_rooms = await db.rooms.count_documents({"property_id": pid})
             if total_rooms == 0:
                 total_rooms = 10
+            # Pencere içindeki tüm bookingleri tek sorguda çek (iter 378 perf)
+            window_bks = await db.bookings.find(
+                {"property_id": pid, "check_in": {"$lte": end_date},
+                 "check_out": {"$gt": dates[0]}, "status": {"$ne": "cancelled"}},
+                {"_id": 0, "check_in": 1, "check_out": 1, "total_price": 1, "nights": 1}
+            ).to_list(5000)
             daily = []
             for dt in dates:
-                booked = await db.bookings.count_documents({
-                    "property_id": pid, "check_in": {"$lte": dt}, "check_out": {"$gt": dt},
-                    "status": {"$ne": "cancelled"}
-                })
+                day_bks = [b for b in window_bks
+                           if (b.get("check_in") or "") <= dt < (b.get("check_out") or "")]
+                booked = len(day_bks)
                 occ = min(100, round((booked / total_rooms) * 100))
-                bks = await db.bookings.find({"property_id": pid, "check_in": {"$lte": dt}, "check_out": {"$gt": dt}}, {"_id": 0, "total_price": 1, "nights": 1}).to_list(100)
-                rev = sum(float(b.get("total_price", 0) or 0) / max(int(b.get("nights", 1) or 1), 1) for b in bks)
+                rev = sum(float(b.get("total_price", 0) or 0) / max(int(b.get("nights", 1) or 1), 1) for b in day_bks)
                 adr = round(rev / max(booked, 1), 2) if booked > 0 else 0
                 daily.append({"date": dt, "occupancy": occ, "adr": adr, "booked": booked, "available": max(0, total_rooms - booked)})
             result.append({"property_id": pid, "name": pname, "total_rooms": total_rooms, "daily": daily})
@@ -116,13 +121,21 @@ def create_revenue_router(db, require_roles):
         for p in props:
             pid = p.get("id", "")
             total_rooms = await db.rooms.count_documents({"property_id": pid}) or 10
+            # Yıl pencerelerini tek seferde çek (iter 378 perf: ay başına sorgu yerine)
+            cy_bks = await db.bookings.find(
+                {"property_id": pid, "check_in": {"$lte": f"{now.year}-06-30"},
+                 "check_out": {"$gte": f"{now.year}-01-01"}}, {"_id": 0}).to_list(3000)
+            ly_bks = await db.bookings.find(
+                {"property_id": pid, "check_in": {"$lte": f"{now.year - 1}-06-30"},
+                 "check_out": {"$gte": f"{now.year - 1}-01-01"}}, {"_id": 0}).to_list(3000)
             months = []
             for m in range(1, 7):
                 # Current year
                 first = f"{now.year}-{m:02d}-01"
                 last_day = calendar.monthrange(now.year, m)[1]
                 last = f"{now.year}-{m:02d}-{last_day}"
-                bks = await db.bookings.find({"property_id": pid, "check_in": {"$lte": last}, "check_out": {"$gte": first}}, {"_id": 0}).to_list(500)
+                bks = [b for b in cy_bks
+                       if (b.get("check_in") or "") <= last and (b.get("check_out") or "") >= first]
                 rev = sum(float(b.get("total_price", 0) or 0) for b in bks)
                 nights = sum(max(1, int(b.get("nights", 1) or 1)) for b in bks)
                 occ = min(100, round((nights / max(total_rooms * last_day, 1)) * 100))
@@ -130,7 +143,8 @@ def create_revenue_router(db, require_roles):
                 # Last year
                 first_ly = f"{now.year - 1}-{m:02d}-01"
                 last_ly = f"{now.year - 1}-{m:02d}-{last_day}"
-                bks_ly = await db.bookings.find({"property_id": pid, "check_in": {"$lte": last_ly}, "check_out": {"$gte": first_ly}}, {"_id": 0}).to_list(500)
+                bks_ly = [b for b in ly_bks
+                          if (b.get("check_in") or "") <= last_ly and (b.get("check_out") or "") >= first_ly]
                 rev_ly = sum(float(b.get("total_price", 0) or 0) for b in bks_ly)
                 var_pct = round(((rev - rev_ly) / max(rev_ly, 1)) * 100, 1) if rev_ly > 0 else (100 if rev > 0 else 0)
                 months.append({

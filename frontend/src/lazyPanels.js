@@ -31,6 +31,7 @@ export const KDSPanel = L(() => import("./components/dashboard/KDSPanel"));
 export const LoyaltyV2Panel = L(() => import("./components/dashboard/LoyaltyV2Panel"));
 export const ExternalLoyaltyPanel = L(() => import("./components/dashboard/ExternalLoyaltyPanel"));
 export const OTACommissionPanel = L(() => import("./components/dashboard/OTACommissionPanel"));
+export const AvailabilityCalendarPanel = N(() => import("./components/dashboard/AvailabilityCalendar"), "AvailabilityCalendar");
 export const DirectConversionPanel = L(() => import("./components/dashboard/DirectConversionPanel"));
 export const SiteMinderPanel = L(() => import("./components/dashboard/SiteMinderPanel"));
 export const SentimentHeatmapPanel = L(() => import("./components/dashboard/SentimentHeatmapPanel"));

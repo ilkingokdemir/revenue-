@@ -85,7 +85,13 @@ def create_integrations_router(db, require_roles, resend):
 
         # Competitor benchmark
         competitors = await db.competitors.find({}, {"_id": 0}).to_list(100)
-        our_stats = await get_review_stats_internal()
+        # Review istatistikleri (iter 378: eksik closure referansı inline hesaplamayla düzeltildi)
+        _total_reviews = await db.reviews.count_documents({})
+        _agg = await db.reviews.aggregate(
+            [{"$group": {"_id": None, "avg_rating": {"$avg": "$rating"}}}]).to_list(1)
+        _avg = _agg[0]["avg_rating"] if _agg and _agg[0].get("avg_rating") else 0
+        our_stats = {"total_reviews": _total_reviews,
+                     "average_rating": round(_avg, 1) if _avg else 0}
 
         # Calculate ranking
         all_ratings = [our_stats.get("average_rating", 0)] + [c.get("avg_rating", 0) for c in competitors]

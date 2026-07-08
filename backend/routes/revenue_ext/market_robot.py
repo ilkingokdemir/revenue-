@@ -20,6 +20,10 @@ SCRAPE_RUNNING_GEO = False  # legacy global flag
 # Key: property_id, Value: True if a scan is in flight for that property.
 SCRAPE_LOCKS: dict = {}
 SCRAPE_LOCKS_GEO: dict = {}
+# Iter 378: event loop'u boğmayı önleyen global tarama limitleri
+GLOBAL_SCAN_SEM: "asyncio.Semaphore" = None  # lazy-init (event loop gerekli)
+MAX_CONCURRENT_SCANS = 2
+AUTO_SCAN_MAX_DAYS = 30  # otomatik taramada gün üst sınırı (manuel taramada 365'e kadar)
 
 
 async def _internal_close_gap(db, property_id: str, strategy: str = "half",
@@ -8794,7 +8798,14 @@ Date range: {date_from} to {date_to}."""
         new process will re-fire the scan — so we demote it to INFO.
         """
         try:
-            await _do_scan(pid, payload)
+            global GLOBAL_SCAN_SEM
+            if GLOBAL_SCAN_SEM is None:
+                GLOBAL_SCAN_SEM = asyncio.Semaphore(MAX_CONCURRENT_SCANS)
+            async with GLOBAL_SCAN_SEM:
+                # Otomatik taramalarda gün sayısını sınırla (manuel HTTP taraması etkilenmez)
+                payload = {**payload, "days_ahead": min(
+                    int(payload.get("days_ahead") or AUTO_SCAN_MAX_DAYS), AUTO_SCAN_MAX_DAYS)}
+                await _do_scan(pid, payload)
         except Exception as e:
             msg = str(e)
             if "MongoClient after close" in msg or "Event loop is closed" in msg:
@@ -8848,22 +8859,24 @@ Date range: {date_from} to {date_to}."""
                             if existing_ is None:
                                 await db.market_robot_config.insert_one({
                                     "property_id": pid_,
-                                    "enabled": True,
+                                    # Iter 378: yeni tesisler için varsayılan KAPALI —
+                                    # 49 tesis × 365 gün otomatik tarama event loop'u boğuyordu.
+                                    "enabled": False,
                                     "scan_interval_minutes": 60,
                                     "city": pp.get("city") or "London",
                                     "language": "en-gb",
                                     "auto_pricing": False,
-                                    "days_ahead": 365,
+                                    "days_ahead": 30,
                                     "total_scans": 0,
                                     "created_at": now_iso,
                                     "created_by": "auto-bootstrap-loop",
                                 })
-                                logger.info(f"🌱 Auto-bootstrapped market_robot_config for {pid_}")
+                                logger.info(f"🌱 Auto-bootstrapped market_robot_config for {pid_} (disabled by default)")
                             elif existing_.get("enabled") is None or existing_.get("scan_interval_minutes") is None:
                                 await db.market_robot_config.update_one(
                                     {"property_id": pid_},
                                     {"$set": {
-                                        "enabled": True if existing_.get("enabled") is None else existing_.get("enabled"),
+                                        "enabled": False if existing_.get("enabled") is None else existing_.get("enabled"),
                                         "scan_interval_minutes": existing_.get("scan_interval_minutes") or 60,
                                         "updated_at": now_iso,
                                         "updated_by": "auto-bootstrap-loop",

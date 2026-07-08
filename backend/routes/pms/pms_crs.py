@@ -188,9 +188,12 @@ def create_pms_crs_router(db, require_roles):
         i.e. there's an unflagged divergence (network blip, partial sync)."""
         q: Dict = {} if not property_id else {"property_id": property_id}
         bookings = await db.bookings.find(q, {"_id": 0}).to_list(20000)
+        # CRS index'i tek sorguda çek (N+1 yerine — iter 378)
+        crs_map = {c["booking_id"]: c async for c in db.crs_index.find(
+            {}, {"_id": 0}) if c.get("booking_id")}
         conflicts: List[dict] = []
         for b in bookings:
-            crs = await db.crs_index.find_one({"booking_id": b["id"]}, {"_id": 0})
+            crs = crs_map.get(b["id"])
             if not crs:
                 conflicts.append({"booking_id": b["id"], "kind": "missing_in_crs"})
                 continue

@@ -310,6 +310,10 @@ class SmartScanner:
             except asyncio.CancelledError:
                 break
             except Exception as e:
+                if "after close" in str(e):
+                    # Reload sonrası bayat Mongo client — döngüyü sonlandır, yeni süreç temiz başlar
+                    logger.info("Smart Scanner: stale Mongo client after reload, stopping loop")
+                    break
                 logger.error(f"Smart Scanner error: {e}")
 
             # Sleep 1 minute between checks

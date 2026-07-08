@@ -72,14 +72,31 @@ def create_loyalty_tiers_router(db, require_roles):
     async def list_members(_: dict = Depends(require_roles("admin", "manager"))):
         cfg = await db.loyalty_tier_config.find_one({"id": "global"}, {"_id": 0})
         tiers = (cfg or {}).get("tiers", DEFAULT_TIERS)
-        emails = await db.bookings.distinct(
-            "guest_email",
-            {"status": {"$in": ["confirmed", "checked_in", "checked_out", "completed"]}}
-        )
+        # Tek aggregation — email başına N+1 sorgu yerine (iter 378)
+        rows = await db.bookings.aggregate([
+            {"$match": {"status": {"$in": ["confirmed", "checked_in", "checked_out", "completed"]},
+                        "guest_email": {"$nin": [None, ""]}}},
+            {"$group": {
+                "_id": "$guest_email",
+                "total_stays": {"$sum": 1},
+                "total_spend": {"$sum": {"$convert": {
+                    "input": {"$ifNull": ["$total_price", 0]},
+                    "to": "double", "onError": 0, "onNull": 0}}},
+            }},
+        ]).to_list(5000)
         members: list = []
         by_tier: dict = {"Silver": 0, "Gold": 0, "Platinum": 0, "None": 0}
-        for em in [e for e in emails if e][:500]:
-            m = await _compute_member_tier(db, em, tiers)
+        tiers_sorted = sorted(tiers, key=lambda x: x.get("min_stays", 0))
+        for r in rows:
+            total_stays, total_spend = r["total_stays"], round(float(r["total_spend"]), 2)
+            qualified = None
+            for t in tiers_sorted:
+                if total_stays >= t.get("min_stays", 0) and total_spend >= t.get("min_spend", 0):
+                    qualified = t
+            m = {"guest_email": r["_id"],
+                 "tier": qualified["name"] if qualified else None,
+                 "benefits": qualified["benefits"] if qualified else [],
+                 "total_stays": total_stays, "total_spend": total_spend}
             members.append(m)
             t = m["tier"] or "None"
             by_tier[t] = by_tier.get(t, 0) + 1

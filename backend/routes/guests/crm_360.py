@@ -104,6 +104,74 @@ async def _profile(db, guest_email: str) -> dict:
     }
 
 
+async def _bulk_profiles(db) -> list:
+    """Tüm misafir istatistikleri tek aggregation'da (N+1 sorgu yerine — iter 378)."""
+    rows = await db.bookings.aggregate([
+        {"$match": {"status": {"$in": ["confirmed", "checked_in", "checked_out", "completed"]},
+                    "guest_email": {"$nin": [None, ""]}}},
+        {"$group": {
+            "_id": "$guest_email",
+            "total_stays": {"$sum": 1},
+            "lifetime_value": {"$sum": {"$convert": {
+                "input": {"$ifNull": ["$total_price", 0]},
+                "to": "double", "onError": 0, "onNull": 0}}},
+            "last_stay": {"$max": "$check_in"},
+            "first_stay": {"$min": "$check_in"},
+            "guest_name": {"$last": "$guest_name"},
+        }},
+    ]).to_list(5000)
+    ratings = {r["_id"]: r for r in await db.reviews.aggregate([
+        {"$match": {"guest_email": {"$nin": [None, ""]}}},
+        {"$group": {"_id": "$guest_email",
+                    "avg_rating": {"$avg": "$rating"}, "n": {"$sum": 1}}},
+    ]).to_list(5000)}
+    today = datetime.now(timezone.utc).date()
+    out = []
+    for r in rows:
+        em = r["_id"]
+        total_stays = r["total_stays"]
+        ltv = round(float(r.get("lifetime_value") or 0), 2)
+        last_stay = str(r.get("last_stay") or "")[:10]
+        days_since = None
+        if last_stay:
+            try:
+                days_since = (today - datetime.strptime(last_stay, "%Y-%m-%d").date()).days
+            except Exception:
+                pass
+        if total_stays == 1:
+            lifecycle = "first-time"
+        elif total_stays >= CHAMPION_STAYS:
+            lifecycle = "champion"
+        elif total_stays >= REPEAT_STAYS:
+            lifecycle = "repeat"
+        else:
+            lifecycle = "guest"
+        segs = []
+        if ltv >= VIP_LIFETIME_VALUE:
+            segs.append("vip")
+        if days_since is not None and days_since > LAPSED_DAYS:
+            segs.append("lapsed")
+        elif days_since is not None and days_since > DORMANT_DAYS:
+            segs.append("dormant")
+        rt = ratings.get(em)
+        avg_rating = round(rt["avg_rating"], 2) if rt and rt.get("avg_rating") is not None else None
+        if avg_rating and avg_rating >= 4.5:
+            segs.append("advocate")
+        if avg_rating and avg_rating <= 3.0:
+            segs.append("at-risk")
+        out.append({
+            "guest_email": em,
+            "guest_name": r.get("guest_name") or "",
+            "lifecycle": lifecycle,
+            "segments": segs,
+            "total_stays": total_stays,
+            "lifetime_value": ltv,
+            "last_stay": last_stay,
+            "days_since_last_stay": days_since,
+        })
+    return out
+
+
 def create_crm360_router(db, require_roles):
     router = APIRouter(prefix="/crm")
 
@@ -114,26 +182,19 @@ def create_crm360_router(db, require_roles):
 
     @router.get("/segments")
     async def list_segments(_: dict = Depends(require_roles("admin", "manager"))):
-        emails = await db.bookings.distinct(
-            "guest_email",
-            {"status": {"$in": ["confirmed", "checked_in", "checked_out", "completed"]}}
-        )
+        profiles = await _bulk_profiles(db)
         buckets: dict = {
             "vip": [], "champion": [], "advocate": [], "repeat": [],
             "first-time": [], "lapsed": [], "dormant": [], "at-risk": [],
         }
-        total = 0
-        # Limit to first 500 emails for performance
-        for em in [e for e in emails if e][:500]:
-            p = await _profile(db, em)
-            total += 1
+        for p in profiles:
             mini = {
-                "guest_email": em,
+                "guest_email": p["guest_email"],
                 "guest_name": p["guest_name"],
                 "lifecycle": p["lifecycle"],
-                "lifetime_value": p["stats"]["lifetime_value"],
-                "last_stay": p["stats"]["last_stay"],
-                "total_stays": p["stats"]["total_stays"],
+                "lifetime_value": p["lifetime_value"],
+                "last_stay": p["last_stay"],
+                "total_stays": p["total_stays"],
             }
             for seg in p["segments"]:
                 if seg in buckets:
@@ -141,26 +202,22 @@ def create_crm360_router(db, require_roles):
             if p["lifecycle"] in buckets:
                 buckets[p["lifecycle"]].append(mini)
         return {
-            "total_guests_scanned": total,
+            "total_guests_scanned": len(profiles),
             "segments": {k: {"count": len(v), "members": v[:50]} for k, v in buckets.items()},
         }
 
     @router.get("/winback/candidates")
     async def winback_candidates(days_inactive: int = 90,
                                  _: dict = Depends(require_roles("admin", "manager"))):
-        emails = await db.bookings.distinct(
-            "guest_email",
-            {"status": {"$in": ["confirmed", "checked_in", "checked_out", "completed"]}}
-        )
+        profiles = await _bulk_profiles(db)
         candidates = []
-        for em in [e for e in emails if e][:1000]:
-            p = await _profile(db, em)
-            days = p["stats"]["days_since_last_stay"]
+        for p in profiles:
+            days = p["days_since_last_stay"]
             if days and days >= days_inactive:
                 candidates.append({
-                    "guest_email": em, "guest_name": p["guest_name"],
-                    "days_inactive": days, "lifetime_value": p["stats"]["lifetime_value"],
-                    "total_stays": p["stats"]["total_stays"], "lifecycle": p["lifecycle"],
+                    "guest_email": p["guest_email"], "guest_name": p["guest_name"],
+                    "days_inactive": days, "lifetime_value": p["lifetime_value"],
+                    "total_stays": p["total_stays"], "lifecycle": p["lifecycle"],
                 })
         candidates.sort(key=lambda c: c["lifetime_value"], reverse=True)
         return {"count": len(candidates), "candidates": candidates[:200]}

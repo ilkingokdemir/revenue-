@@ -325,6 +325,18 @@ stripe_api_key = os.environ.get("STRIPE_API_KEY", "")
 # Eski app-level mükerrer handler kaldırıldı — booking confirm + email log + tip
 # işleme artık routes/finance_ext/payments.py POST /webhook/stripe içinde.
 
+# Diagnostics — çalışan asyncio görev envanteri (iter 378)
+@app.get("/api/admin/diagnostics/tasks")
+async def diag_tasks(current_user: dict = Depends(require_roles("admin"))):
+    import asyncio as _a
+    from collections import Counter
+    names = Counter()
+    for t in _a.all_tasks():
+        coro = t.get_coro()
+        names[getattr(coro, "__qualname__", str(coro))[:80]] += 1
+    return {"total_tasks": sum(names.values()),
+            "by_coro": dict(sorted(names.items(), key=lambda x: -x[1]))}
+
 # Wire up extracted route modules
 messaging_router = create_messaging_router(db, require_roles, LlmChat, UserMessage, resend)
 api_router.include_router(messaging_router)

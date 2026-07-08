@@ -54,7 +54,7 @@ import {
   ChannelManagerHub, GroupBlocksPanel, LaundrySettingsPanel,
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
-  KDSPanel, LoyaltyV2Panel, ExternalLoyaltyPanel, OTACommissionPanel, DirectConversionPanel, SiteMinderPanel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
+  KDSPanel, LoyaltyV2Panel, ExternalLoyaltyPanel, OTACommissionPanel, DirectConversionPanel, SiteMinderPanel, AvailabilityCalendarPanel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
   OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, TeamChatPanel, GuestCRM360Panel, ChannelManagerV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
@@ -2675,6 +2675,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "dashboard", icon: House, name: t("nav.dashboard"), testId: "dashboard-btn" },
         { id: "my-tasks", icon: Target, name: "My tasks", testId: "my-tasks-btn" },
         { id: "calendar", icon: CalendarBlank, name: "Calendar", testId: "sidebar-calendar" },
+        { id: "availability-calendar", icon: CalendarBlank, name: "Müsaitlik Takvimi", testId: "availability-calendar-btn" },
         { id: "tier1-dashboard", icon: ChartBar, name: "Master dashboard", testId: "tier1-dashboard-btn" },
         { id: "morning-brief", icon: ChartLine, name: "Morning brief", testId: "morning-brief-btn" },
         { id: "nightly-recap", icon: Moon, name: "Nightly recap", testId: "nightly-recap-btn" },
@@ -3050,6 +3051,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "late-checkout-offer-btn":"operations_reception_view",
     "ota-forecast-btn":       "operations_reception_view",
     "ota-commission-btn":     "operations_reception_view",
+    "availability-calendar-btn": "operations_reception_view",
     "direct-conversion-btn":  "operations_reception_view",
     "siteminder-btn":         "operations_reception_view",
     "external-loyalty-btn":   "operations_reception_view",
@@ -3537,6 +3539,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* SiteMinder Middleware Translator Adapter */}
         {activeView === "siteminder" && (
           <SiteMinderPanel activePropertyId={activePropertyId} />
+        )}
+
+        {/* Müsaitlik Takvimi — aylık doluluk ısı haritası (iter 378'de canlandırıldı) */}
+        {activeView === "availability-calendar" && (
+          <AvailabilityCalendarPanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Sentiment Heatmap — Cross-channel guest voice */}

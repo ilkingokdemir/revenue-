@@ -1775,3 +1775,20 @@ Admin: admin@hotelbox.com / HotelAdmin2026!
   - Manuel tetik: `POST /api/rates/grid/insights/run-nightly`
 - Testing agent tarafından BookingWidgetPage'de TDZ crash bulundu ve düzeltildi (const nights, useEffect üstüne taşındı)
 - Test: backend curl 8/8 + frontend testing agent %100 (iteration_376.json)
+
+## Iter 377 (2026-07-08) — Kod Denetimi, Konsolidasyon & Deep-Link
+Kullanıcı şikayeti üzerine tüm yazılım tarandı (2202 route, 285 prefix):
+- 7 route çakışması bulundu → 0'a indirildi (otomatik tarama scripti ile doğrulandı)
+- Silinen ölü/mükerrer kod: integrations_pkg/marketplace.py, IntegrationsMarketplace.js,
+  SpaceBookingsPanel.js, reviews.py mükerrer /+/status, finance_pl.py mükerrer expenses CRUD,
+  integrations.py mükerrer fire_webhooks closure
+- BUG FIX: Stripe webhook 2 kez tanımlıydı; eksik kopya kazanıyordu → payments.py'de tek
+  kanonik handler (booking confirm + tip + metadata fallback + email log)
+- Spaces çakışması: public endpoint /api/spaces/public/{property_id} olarak ayrıldı
+- Webhook dispatcher: HMAC-SHA256 imza (X-Webhook-Signature) + 3 retry + delivery audit
+- Kupon deep-link: /book/{property}?coupon=CODE otomatik uygular; e-postaya CTA butonu
+  (PUBLIC_BASE_URL env eklendi)
+- Smart Scanner reload fix: bayat Mongo client'ta döngü sonlanıyor
+- PRD.md yeniden yazıldı (kısa) + ROADMAP.md (kanonik backlog + YAPILDI envanteri) +
+  CHANGELOG.md (bu dosya) oluşturuldu
+- Test: backend 9/9 regresyon + frontend %100 (iteration_377.json)

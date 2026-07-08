@@ -483,11 +483,18 @@ def create_ai_pricing_router(db, require_roles):
             payload = await _build_suggestions(property_id, int(cfg.get("days_horizon", 30)), use_llm=False)
             items = [s for s in payload["suggestions"] if s["auto_apply_eligible"] and s["status"] == "pending"]
 
-        applied = 0
+        from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
+        lrv_map = await compute_lrv_floor(db, property_id, int(cfg.get("days_horizon", 30)))
+        applied, lrv_clamped = 0, 0
         for it in items:
+            floor = lrv_map.get(it.get("date", ""))
+            if floor and float(it["suggested_rate"]) < floor:
+                it["suggested_rate"] = floor
+                it["rationale"] = (it.get("rationale") or "") + f" · LRV guardrail: fiyat £{floor} tabanına yükseltildi"
+                lrv_clamped += 1
             await _apply_one(property_id, it, source="ai-pricing-manual", rationale=it.get("rationale"))
             applied += 1
-        return {"accepted": applied}
+        return {"accepted": applied, "lrv_clamped": lrv_clamped}
 
     @router.post("/revenue/ai-pricing/{property_id}/reject")
     async def reject_suggestion(property_id: str, data: Dict,
@@ -526,7 +533,10 @@ def create_ai_pricing_router(db, require_roles):
 
         days = int(cfg.get("days_horizon", 30))
         payload = await _build_suggestions(property_id, days, use_llm=False)
+        from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
+        lrv_map = await compute_lrv_floor(db, property_id, days)
         applied = 0
+        lrv_clamped = 0
         for s in payload["suggestions"]:
             if s["status"] != "pending":
                 continue
@@ -535,6 +545,11 @@ def create_ai_pricing_router(db, require_roles):
             # extra guardrail: don't bother if the change is < 0.5%
             if abs(s["delta_vs_current_pct"]) < 0.5:
                 continue
+            floor = lrv_map.get(s.get("date", ""))
+            if floor and float(s["suggested_rate"]) < floor:
+                s["suggested_rate"] = floor
+                s["rationale"] = (s.get("rationale") or "") + f" · LRV guardrail: fiyat £{floor} tabanına yükseltildi"
+                lrv_clamped += 1
             await _apply_one(property_id, s, source="ai-pricing-auto", rationale=s.get("rationale"))
             applied += 1
 
@@ -548,7 +563,7 @@ def create_ai_pricing_router(db, require_roles):
             }},
             upsert=True,
         )
-        return {"applied": applied, "summary": payload["summary"], "run_at": now_iso}
+        return {"applied": applied, "lrv_clamped": lrv_clamped, "summary": payload["summary"], "run_at": now_iso}
 
     @router.get("/revenue/ai-pricing/{property_id}/history")
     async def history(property_id: str, limit: int = 200,
@@ -567,6 +582,8 @@ def create_ai_pricing_router(db, require_roles):
             return {"applied": 0, "skipped_reason": "auto_apply disabled"}
         days = int(cfg.get("days_horizon", 30))
         payload = await _build_suggestions(property_id, days, use_llm=False)
+        from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
+        lrv_map = await compute_lrv_floor(db, property_id, days)
         applied = 0
         for s in payload["suggestions"]:
             if s["status"] != "pending":
@@ -575,6 +592,10 @@ def create_ai_pricing_router(db, require_roles):
                 continue
             if abs(s["delta_vs_current_pct"]) < 0.5:
                 continue
+            floor = lrv_map.get(s.get("date", ""))
+            if floor and float(s["suggested_rate"]) < floor:
+                s["suggested_rate"] = floor
+                s["rationale"] = (s.get("rationale") or "") + f" · LRV guardrail: fiyat £{floor} tabanına yükseltildi"
             await _apply_one(property_id, s, source="ai-pricing-auto", rationale=s.get("rationale"))
             applied += 1
         now_iso = datetime.now(timezone.utc).isoformat()

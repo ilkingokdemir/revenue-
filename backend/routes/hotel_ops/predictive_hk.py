@@ -138,4 +138,55 @@ def create_predictive_hk_router(db, require_roles):
         return {"date": target, "created": len(created), "skipped_duplicates": skipped,
                 "tasks": created}
 
+    @router.post("/housekeeping/predictive/{property_id}/suggest-shifts")
+    async def suggest_shifts(property_id: str, data: Dict,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Create planned housekeeper shift entries matching the forecasted staff need."""
+        target = data.get("date", "")
+        try:
+            date.fromisoformat(target)
+        except Exception:
+            raise HTTPException(status_code=422, detail="Geçerli bir tarih gerekli (YYYY-MM-DD)")
+        if property_id == "all":
+            raise HTTPException(status_code=400, detail="Vardiya önerisi için tek bir tesis seçin")
+        today = datetime.now(timezone.utc).date()
+        offset = (date.fromisoformat(target) - today).days
+        if offset < 0 or offset > 13:
+            raise HTTPException(status_code=400, detail="Tarih bugünden itibaren 14 gün içinde olmalı")
+
+        day_list, housekeepers = await _forecast_days(property_id, offset + 1)
+        need = day_list[offset]["staff_needed"]
+        if need == 0:
+            return {"date": target, "created": 0, "staff_needed": 0, "message": "Bu gün için personel ihtiyacı yok"}
+        if not housekeepers:
+            raise HTTPException(status_code=400, detail="Sistemde kat görevlisi (housekeeper) kullanıcı yok")
+
+        d = date.fromisoformat(target)
+        week_start = (d - timedelta(days=d.weekday())).isoformat()
+        now = datetime.now(timezone.utc).isoformat()
+        created, skipped = [], 0
+        for hk in housekeepers[:need]:
+            dup = await db.shift_entries.find_one({
+                "property_id": property_id, "date": target,
+                "staff_id": hk.get("id", ""), "role": "housekeeper"}, {"_id": 0, "id": 1})
+            if dup:
+                skipped += 1
+                continue
+            entry = {
+                "id": str(uuid.uuid4()), "property_id": property_id,
+                "staff_id": hk.get("id", ""), "staff_name": hk.get("name", ""),
+                "role": "housekeeper", "date": target, "week_start": week_start,
+                "start_time": "09:00", "end_time": "17:00", "hours_worked": 8.0,
+                "status": "planned",
+                "notes": f"Tahminsel HK önerisi — iş yükü {day_list[offset]['workload_hours']} saat",
+                "pay_type": "daily", "pay_rate": 0.0, "earned_amount": 0.0,
+                "auto_suggested": True,
+                "created_by": "Tahminsel HK", "created_at": now,
+            }
+            await db.shift_entries.insert_one(entry)
+            entry.pop("_id", None)
+            created.append(entry)
+        return {"date": target, "staff_needed": need, "created": len(created),
+                "skipped_existing": skipped, "shifts": created}
+
     return router

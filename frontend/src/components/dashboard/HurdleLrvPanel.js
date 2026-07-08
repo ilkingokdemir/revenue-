@@ -19,6 +19,7 @@ export default function HurdleLrvPanel({ propertyId }) {
   const [loading, setLoading] = useState(true);
   const [minRate, setMinRate] = useState("");
   const [obCap, setObCap] = useState("");
+  const [guardrail, setGuardrail] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -28,6 +29,7 @@ export default function HurdleLrvPanel({ propertyId }) {
       setData(res.data);
       setMinRate(String(res.data.config?.min_rate ?? 0));
       setObCap(String(res.data.config?.overbooking_cap ?? 3));
+      setGuardrail(res.data.config?.pricing_guardrail !== false);
     } catch (e) {
       toast.error("Hurdle verisi yüklenemedi");
     } finally {
@@ -43,6 +45,7 @@ export default function HurdleLrvPanel({ propertyId }) {
       await axios.post(`${API}/api/revenue/hurdle/${propertyId}/config`, {
         min_rate: parseFloat(minRate) || 0,
         overbooking_cap: parseInt(obCap) || 3,
+        pricing_guardrail: guardrail,
       });
       toast.success("Konfigürasyon kaydedildi");
       load();
@@ -95,6 +98,14 @@ export default function HurdleLrvPanel({ propertyId }) {
           <label className="text-[10px] uppercase tracking-wide text-stone-500 block">Overbooking Limiti</label>
           <input value={obCap} onChange={(e) => setObCap(e.target.value)} data-testid="hurdle-ob-cap-input"
             className="w-20 text-sm font-medium text-stone-900 outline-none" />
+        </div>
+        <div className="bg-white border border-stone-200 rounded-lg px-4 py-2 flex items-center gap-2">
+          <input type="checkbox" checked={guardrail} onChange={(e) => setGuardrail(e.target.checked)}
+            data-testid="hurdle-guardrail-toggle" className="accent-violet-600 w-4 h-4" id="guardrail-cb" />
+          <label htmlFor="guardrail-cb" className="text-xs text-stone-700 select-none">
+            <span className="font-medium">AI Pricing Guardrail</span>
+            <span className="block text-[10px] text-stone-500">Otomatik fiyat LRV altına inemez</span>
+          </label>
         </div>
         <button onClick={saveConfig} disabled={saving} data-testid="hurdle-save-config-btn"
           className="inline-flex items-center gap-1.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg px-4 py-2.5 transition-colors">

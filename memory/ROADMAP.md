@@ -18,6 +18,9 @@
 | Direct Booking Conversion Engine | `integrations_pkg/direct_conversion.py` | iter 375-377 DONE |
 | Tahminsel Housekeeping | `hotel_ops/predictive_hk.py` + PredictiveHkPanel | iter 380 DONE |
 | Hurdle Rate & LRV (Yield Guard) | `revenue_ext/hurdle_lrv.py` + HurdleLrvPanel | iter 381 DONE |
+| AI Pricing LRV Guardrail | `ai_pricing_engine.py` + hurdle toggle | iter 382 DONE |
+| Segment Forecast (Duetto tarzı) | `forecast_v2.py /segments` + Segmentler sekmesi | iter 382 DONE |
+| Tahminsel HK → Vardiya önerisi | `predictive_hk.py /suggest-shifts` + buton | iter 382 DONE |
 | OTA Commission Dashboard | `integrations_pkg/ota_commission.py` | iter 374 DONE |
 | 2-Year Forecast | `revenue_ext/forecast_v2.py` | DONE |
 | External Loyalty (Marriott/Hilton) | `integrations_pkg/external_loyalty.py` | DONE |
@@ -47,8 +50,6 @@
 
 ## P2
 - PCI-DSS / SOC 2 hazırlık dokümantasyonu
-- Segment bazlı forecast kırılımı (transient/corporate/group — Duetto tarzı)
-- Tahminsel HK personel ihtiyacı → RotaPro vardiya önerisi entegrasyonu
 - Native Mobile App (React Native) — kullanıcı talimatıyla backlog'da
 - Kupon dönüşüm A/B ölçümü (farklı indirim oranlarını test et)
 

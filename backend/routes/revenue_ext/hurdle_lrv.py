@@ -20,93 +20,108 @@ DEFAULT_MULTIPLIERS = [
 DOW_TR = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
 
 
+async def get_hurdle_config(db, property_id: str) -> dict:
+    cfg = await db.hurdle_config.find_one({"property_id": property_id}, {"_id": 0})
+    return cfg or {"property_id": property_id, "min_rate": 0.0, "overbooking_cap": 3,
+                   "pricing_guardrail": True, "multipliers": DEFAULT_MULTIPLIERS}
+
+
+async def compute_lrv_days(db, property_id: str, days: int):
+    """Shared LRV computation. Returns (day_list, meta)."""
+    cfg = await get_hurdle_config(db, property_id)
+    today = datetime.now(timezone.utc).date()
+    end = today + timedelta(days=days)
+
+    room_types = await db.room_types.find(
+        {"property_id": property_id}, {"_id": 0, "id": 1, "total_rooms": 1, "base_price": 1}).to_list(50)
+    capacity = sum(int(rt.get("total_rooms", 0) or 0) for rt in room_types) or 20
+    weighted = [(int(rt.get("total_rooms", 0) or 1), float(rt.get("base_price", 0) or 0)) for rt in room_types]
+    base_adr = (sum(n * p for n, p in weighted) / sum(n for n, _ in weighted)) if weighted else 100.0
+
+    bookings = await db.bookings.find({
+        "property_id": property_id,
+        "status": {"$nin": ["cancelled", "no_show"]},
+        "check_in": {"$lt": end.isoformat()},
+        "check_out": {"$gt": today.isoformat()},
+    }, {"_id": 0, "check_in": 1, "check_out": 1, "created_at": 1}).to_list(20000)
+
+    # no-show rate by day-of-week (last 365 days history)
+    yr_ago = (today - timedelta(days=365)).isoformat()
+    hist = await db.bookings.find({
+        "property_id": property_id, "check_in": {"$gte": yr_ago},
+        "status": {"$in": ["no_show", "checked_out", "checked_in", "confirmed"]},
+    }, {"_id": 0, "check_in": 1, "status": 1}).to_list(50000)
+    dow_tot, dow_ns = [0] * 7, [0] * 7
+    for h in hist:
+        try:
+            dw = datetime.fromisoformat(h["check_in"][:10]).weekday()
+        except Exception:
+            continue
+        dow_tot[dw] += 1
+        if h.get("status") == "no_show":
+            dow_ns[dw] += 1
+    noshow_by_dow = [round(dow_ns[i] / dow_tot[i], 3) if dow_tot[i] >= 5 else 0.05 for i in range(7)]
+
+    recent_cut = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    mults = sorted(cfg.get("multipliers", DEFAULT_MULTIPLIERS), key=lambda m: m["max_occ"])
+    out = []
+    for i in range(days):
+        d = today + timedelta(days=i)
+        ds = d.isoformat()
+        occ_cnt, pickup7 = 0, 0
+        for b in bookings:
+            if b.get("check_in", "") <= ds < b.get("check_out", ""):
+                occ_cnt += 1
+                if (b.get("created_at") or "") >= recent_cut:
+                    pickup7 += 1
+        occ = min(occ_cnt / capacity, 1.0)
+        band = next((m for m in mults if occ < m["max_occ"]), mults[-1])
+        pickup_boost = 1.0 + min(pickup7 / max(capacity, 1), 0.25)
+        lrv = max(round(base_adr * band["factor"] * pickup_boost, 2), float(cfg.get("min_rate", 0) or 0))
+        ns_rate = noshow_by_dow[d.weekday()]
+        ob_suggest = min(int(round(capacity * ns_rate * 0.8)), int(cfg.get("overbooking_cap", 3)))
+        actions = []
+        if occ >= 0.90:
+            actions.append("Tüm indirimli segmentleri kapat — sadece BAR/direkt satış")
+        elif occ >= 0.80:
+            actions.append("OTA mobil/genius indirimlerini kapat, LRV altı talepleri reddet")
+        elif occ < 0.40 and i <= 14:
+            actions.append("Talep düşük — kampanya/flash sale değerlendir")
+        if ob_suggest > 0 and occ >= 0.85:
+            actions.append(f"No-show tahmini %{round(ns_rate*100,1)} — {ob_suggest} oda overbooking güvenli")
+        out.append({
+            "date": ds, "dow": DOW_TR[d.weekday()],
+            "occupancy": round(occ * 100, 1), "rooms_sold": occ_cnt,
+            "rooms_left": max(capacity - occ_cnt, 0),
+            "pickup_7d": pickup7,
+            "band": band["band"], "lrv": lrv,
+            "noshow_rate": ns_rate,
+            "overbooking_suggested": ob_suggest if occ >= 0.85 else 0,
+            "actions": actions,
+        })
+    meta = {"capacity": capacity, "base_adr": round(base_adr, 2),
+            "noshow_by_dow": {DOW_TR[i]: noshow_by_dow[i] for i in range(7)}, "config": cfg}
+    return out, meta
+
+
+async def compute_lrv_floor(db, property_id: str, days: int = 90) -> dict:
+    """Returns {date_str: lrv} for pricing guardrails. Empty dict if guardrail disabled."""
+    cfg = await get_hurdle_config(db, property_id)
+    if not cfg.get("pricing_guardrail", True):
+        return {}
+    day_list, _ = await compute_lrv_days(db, property_id, min(max(days, 1), 90))
+    return {d["date"]: d["lrv"] for d in day_list}
+
+
 def create_hurdle_lrv_router(db, require_roles):
     router = APIRouter()
-
-    async def _get_config(property_id: str) -> dict:
-        cfg = await db.hurdle_config.find_one({"property_id": property_id}, {"_id": 0})
-        return cfg or {"property_id": property_id, "min_rate": 0.0,
-                       "overbooking_cap": 3, "multipliers": DEFAULT_MULTIPLIERS}
 
     @router.get("/revenue/hurdle/{property_id}")
     async def hurdle_forecast(property_id: str, days: int = 30,
                               current_user: dict = Depends(require_roles("admin", "manager"))):
         days = min(max(days, 7), 90)
-        cfg = await _get_config(property_id)
-        today = datetime.now(timezone.utc).date()
-        end = today + timedelta(days=days)
-
-        room_types = await db.room_types.find(
-            {"property_id": property_id}, {"_id": 0, "id": 1, "total_rooms": 1, "base_price": 1}).to_list(50)
-        capacity = sum(int(rt.get("total_rooms", 0) or 0) for rt in room_types) or 20
-        weighted = [(int(rt.get("total_rooms", 0) or 1), float(rt.get("base_price", 0) or 0)) for rt in room_types]
-        base_adr = (sum(n * p for n, p in weighted) / sum(n for n, _ in weighted)) if weighted else 100.0
-
-        bookings = await db.bookings.find({
-            "property_id": property_id,
-            "status": {"$nin": ["cancelled", "no_show"]},
-            "check_in": {"$lt": end.isoformat()},
-            "check_out": {"$gt": today.isoformat()},
-        }, {"_id": 0, "check_in": 1, "check_out": 1, "created_at": 1}).to_list(20000)
-
-        # no-show rate by day-of-week (last 365 days history)
-        yr_ago = (today - timedelta(days=365)).isoformat()
-        hist = await db.bookings.find({
-            "property_id": property_id, "check_in": {"$gte": yr_ago},
-            "status": {"$in": ["no_show", "checked_out", "checked_in", "confirmed"]},
-        }, {"_id": 0, "check_in": 1, "status": 1}).to_list(50000)
-        dow_tot, dow_ns = [0] * 7, [0] * 7
-        for h in hist:
-            try:
-                dw = datetime.fromisoformat(h["check_in"][:10]).weekday()
-            except Exception:
-                continue
-            dow_tot[dw] += 1
-            if h.get("status") == "no_show":
-                dow_ns[dw] += 1
-        noshow_by_dow = [round(dow_ns[i] / dow_tot[i], 3) if dow_tot[i] >= 5 else 0.05 for i in range(7)]
-
-        recent_cut = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-        mults = sorted(cfg.get("multipliers", DEFAULT_MULTIPLIERS), key=lambda m: m["max_occ"])
-        out = []
-        for i in range(days):
-            d = today + timedelta(days=i)
-            ds = d.isoformat()
-            occ_cnt, pickup7 = 0, 0
-            for b in bookings:
-                if b.get("check_in", "") <= ds < b.get("check_out", ""):
-                    occ_cnt += 1
-                    if (b.get("created_at") or "") >= recent_cut:
-                        pickup7 += 1
-            occ = min(occ_cnt / capacity, 1.0)
-            band = next((m for m in mults if occ < m["max_occ"]), mults[-1])
-            pickup_boost = 1.0 + min(pickup7 / max(capacity, 1), 0.25)
-            lrv = max(round(base_adr * band["factor"] * pickup_boost, 2), float(cfg.get("min_rate", 0) or 0))
-            ns_rate = noshow_by_dow[d.weekday()]
-            ob_suggest = min(int(round(capacity * ns_rate * 0.8)), int(cfg.get("overbooking_cap", 3)))
-            actions = []
-            if occ >= 0.90:
-                actions.append("Tüm indirimli segmentleri kapat — sadece BAR/direkt satış")
-            elif occ >= 0.80:
-                actions.append("OTA mobil/genius indirimlerini kapat, LRV altı talepleri reddet")
-            elif occ < 0.40 and i <= 14:
-                actions.append("Talep düşük — kampanya/flash sale değerlendir")
-            if ob_suggest > 0 and occ >= 0.85:
-                actions.append(f"No-show tahmini %{round(ns_rate*100,1)} — {ob_suggest} oda overbooking güvenli")
-            out.append({
-                "date": ds, "dow": DOW_TR[d.weekday()],
-                "occupancy": round(occ * 100, 1), "rooms_sold": occ_cnt,
-                "rooms_left": max(capacity - occ_cnt, 0),
-                "pickup_7d": pickup7,
-                "band": band["band"], "lrv": lrv,
-                "noshow_rate": ns_rate,
-                "overbooking_suggested": ob_suggest if occ >= 0.85 else 0,
-                "actions": actions,
-            })
-        return {"property_id": property_id, "capacity": capacity,
-                "base_adr": round(base_adr, 2), "days": out,
-                "noshow_by_dow": {DOW_TR[i]: noshow_by_dow[i] for i in range(7)},
-                "config": cfg}
+        out, meta = await compute_lrv_days(db, property_id, days)
+        return {"property_id": property_id, "days": out, **meta}
 
     @router.post("/revenue/hurdle/{property_id}/config")
     async def save_config(property_id: str, data: Dict,
@@ -115,6 +130,7 @@ def create_hurdle_lrv_router(db, require_roles):
             "property_id": property_id,
             "min_rate": float(data.get("min_rate", 0) or 0),
             "overbooking_cap": int(data.get("overbooking_cap", 3) or 3),
+            "pricing_guardrail": bool(data.get("pricing_guardrail", True)),
             "multipliers": data.get("multipliers") or DEFAULT_MULTIPLIERS,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }

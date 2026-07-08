@@ -14,6 +14,7 @@ export default function PredictiveHkPanel({ propertyId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState("");
+  const [suggesting, setSuggesting] = useState("");
   const [selected, setSelected] = useState(null);
 
   const load = useCallback(async () => {
@@ -41,6 +42,22 @@ export default function PredictiveHkPanel({ propertyId }) {
       toast.error(e.response?.data?.detail || "Görev üretimi başarısız");
     } finally {
       setGenerating("");
+    }
+  };
+
+  const suggestShifts = async (date) => {
+    setSuggesting(date);
+    try {
+      const res = await axios.post(`${API}/api/housekeeping/predictive/${propertyId}/suggest-shifts`, { date });
+      if (res.data.created === 0 && res.data.staff_needed === 0) {
+        toast.info(res.data.message || "Personel ihtiyacı yok");
+      } else {
+        toast.success(`${res.data.created} vardiya oluşturuldu (ihtiyaç: ${res.data.staff_needed})${res.data.skipped_existing ? `, ${res.data.skipped_existing} mevcut` : ""}`);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Vardiya önerisi başarısız");
+    } finally {
+      setSuggesting("");
     }
   };
 
@@ -111,12 +128,20 @@ export default function PredictiveHkPanel({ propertyId }) {
                 {sel.existing_auto_tasks > 0 && <span className="text-emerald-600"> · {sel.existing_auto_tasks} otomatik görev mevcut</span>}
               </p>
             </div>
-            <button onClick={() => generate(sel.date)} disabled={generating === sel.date || propertyId === "all"}
-              data-testid="predictive-generate-btn"
-              className="inline-flex items-center gap-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg px-4 py-2 transition-colors">
-              <MagicWand size={14} />
-              {generating === sel.date ? "Oluşturuluyor…" : "Görevleri Otomatik Oluştur"}
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => suggestShifts(sel.date)} disabled={suggesting === sel.date || propertyId === "all"}
+                data-testid="predictive-suggest-shifts-btn"
+                className="inline-flex items-center gap-1.5 border border-cyan-600 text-cyan-700 hover:bg-cyan-50 disabled:opacity-50 text-xs font-medium rounded-lg px-4 py-2 transition-colors">
+                <UsersThree size={14} />
+                {suggesting === sel.date ? "Oluşturuluyor…" : `Vardiya Önerisi (${sel.staff_needed})`}
+              </button>
+              <button onClick={() => generate(sel.date)} disabled={generating === sel.date || propertyId === "all"}
+                data-testid="predictive-generate-btn"
+                className="inline-flex items-center gap-1.5 bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white text-xs font-medium rounded-lg px-4 py-2 transition-colors">
+                <MagicWand size={14} />
+                {generating === sel.date ? "Oluşturuluyor…" : "Görevleri Otomatik Oluştur"}
+              </button>
+            </div>
           </div>
           <div className="grid md:grid-cols-3 gap-4">
             {[["Check-out Temizliği", sel.departures, "text-rose-600"],

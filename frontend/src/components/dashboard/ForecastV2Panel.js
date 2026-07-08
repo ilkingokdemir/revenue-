@@ -56,18 +56,22 @@ export default function ForecastV2Panel({ propertyId }) {
           <TrendUp size={14} className="inline mr-1.5" />
           2-Yıl Özet
         </TabBtn>
+        <TabBtn active={tab === "segments"} onClick={() => setTab("segments")} testId="fcv2-tab-segments">
+          <ChartLine size={14} className="inline mr-1.5" />
+          Segmentler
+        </TabBtn>
       </div>
 
       {tab === "horizon" && <HorizonTab propertyId={propertyId} />}
       {tab === "calendar" && <CalendarTab propertyId={propertyId} />}
       {tab === "pickup" && <PickupTab propertyId={propertyId} />}
       {tab === "two-year" && <TwoYearTab propertyId={propertyId} />}
+      {tab === "segments" && <SegmentsTab propertyId={propertyId} />}
     </div>
   );
 }
 
-function TabBtn({ active, onClick, children, testId }) {
-  return (
+function TabBtn({ active, onClick, children, testId }) {  return (
     <button
       onClick={onClick}
       data-testid={testId}
@@ -581,6 +585,100 @@ function TwoYearTab({ propertyId }) {
 
       <div className="text-[11px] text-stone-400 flex items-center gap-1.5">
         <ArrowsClockwise size={11} /> Oluşturuldu: {new Date(data.generated_at).toLocaleString("tr-TR")} · YoY büyüme: <span className={`font-semibold ${growthColor}`}>{data.yoy_growth_pct}%</span>
+      </div>
+    </div>
+  );
+}
+
+/* ==================== SEGMENT FORECAST ==================== */
+const SEG_COLORS = {
+  "Direkt": "bg-emerald-500", "OTA": "bg-sky-500", "Acente": "bg-amber-500",
+  "Kurumsal": "bg-violet-500", "Diğer": "bg-stone-400",
+};
+
+function SegmentsTab({ propertyId }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [metric, setMetric] = useState("bookings");
+
+  const load = useCallback(async () => {
+    if (!propertyId) return;
+    setLoading(true);
+    try {
+      const r = await axios.get(`${API}/api/forecast-v2/segments/${propertyId}?months=6`, { withCredentials: true });
+      setData(r.data);
+    } catch (e) {
+      toast.error("Segment tahmini yüklenemedi");
+    } finally {
+      setLoading(false);
+    }
+  }, [propertyId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading || !data) return <div className="p-8 text-stone-400 text-sm" data-testid="fcv2-segments-loading">Segment kırılımı hesaplanıyor…</div>;
+
+  const rows = [...data.history, ...data.forecast];
+  const maxVal = Math.max(...rows.flatMap((r) => data.segments.map((s) => r[s]?.[metric] || 0)), 1);
+
+  return (
+    <div className="space-y-4" data-testid="fcv2-segments-tab">
+      <div className="flex items-center gap-3">
+        <div className="flex gap-1 bg-stone-100 rounded-lg p-1">
+          {[["bookings", "Rezervasyon"], ["revenue", "Gelir"]].map(([k, lbl]) => (
+            <button key={k} onClick={() => setMetric(k)} data-testid={`fcv2-seg-metric-${k}`}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${metric === k ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"}`}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 ml-auto">
+          {data.segments.map((s) => (
+            <span key={s} className="inline-flex items-center gap-1.5 text-[11px] text-stone-600">
+              <span className={`w-2.5 h-2.5 rounded-sm ${SEG_COLORS[s] || "bg-stone-400"}`} />{s}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-lg overflow-x-auto">
+        <table className="w-full text-xs" data-testid="fcv2-segments-table">
+          <thead>
+            <tr className="border-b border-stone-200 text-left text-[10px] uppercase tracking-wide text-stone-500">
+              <th className="px-3 py-2.5">Ay</th>
+              {data.segments.map((s) => <th key={s} className="px-3 py-2.5">{s}</th>)}
+              <th className="px-3 py-2.5">Dağılım</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const total = data.segments.reduce((a, s) => a + (r[s]?.[metric] || 0), 0);
+              return (
+                <tr key={r.month} className={`border-b border-stone-100 ${r.type === "forecast" ? "bg-violet-50/40" : ""}`}>
+                  <td className="px-3 py-2 font-medium text-stone-800">
+                    {r.month}
+                    {r.type === "forecast" && <span className="ml-1.5 text-[9px] uppercase text-violet-600 font-semibold">Tahmin</span>}
+                  </td>
+                  {data.segments.map((s) => (
+                    <td key={s} className="px-3 py-2 text-stone-700">
+                      {metric === "revenue" ? `£${(r[s]?.revenue || 0).toLocaleString("en-GB")}` : (r[s]?.bookings || 0)}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2 w-52">
+                    <div className="flex h-2 rounded-full overflow-hidden bg-stone-100 w-48">
+                      {data.segments.map((s) => {
+                        const v = r[s]?.[metric] || 0;
+                        return total > 0 ? (
+                          <div key={s} className={SEG_COLORS[s] || "bg-stone-400"} style={{ width: `${(v / total) * 100}%` }} />
+                        ) : null;
+                      })}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

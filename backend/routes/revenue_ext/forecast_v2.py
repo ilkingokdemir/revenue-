@@ -59,8 +59,108 @@ def _month_range(y: int, m: int):
     return first, last
 
 
+SEGMENT_MAP = {
+    "booking.com": "OTA", "expedia": "OTA", "agoda": "OTA", "airbnb": "OTA",
+    "hotels.com": "OTA", "google": "OTA", "affiliate": "OTA",
+    "direct": "Direkt", "website": "Direkt", "phone": "Direkt", "walk-in": "Direkt",
+    "agency": "Acente", "corporate": "Kurumsal",
+}
+
+
+def _segment_of(source: str) -> str:
+    s = (source or "").strip().lower()
+    if s in SEGMENT_MAP:
+        return SEGMENT_MAP[s]
+    if "agency" in s or "travel" in s or "acente" in s:
+        return "Acente"
+    if "corp" in s:
+        return "Kurumsal"
+    return "Diğer"
+
+
 def create_forecast_v2_router(db, require_roles):
     router = APIRouter()
+
+    # ========== SEGMENT FORECAST (Duetto-style breakdown) ==========
+    @router.get("/forecast-v2/segments/{property_id}")
+    async def segment_forecast(property_id: str, months: int = 6,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        """12-month segment history (Direkt/OTA/Acente/Kurumsal/Diğer) + N-month forecast per segment."""
+        months = min(max(months, 3), 12)
+        today = datetime.now(timezone.utc).date()
+        hist_start = (today.replace(day=1) - timedelta(days=370)).replace(day=1)
+        pq = {} if property_id == "all" else {"property_id": property_id}
+        bookings = await db.bookings.find({
+            **pq, "status": {"$nin": ["cancelled", "no_show"]},
+            "check_in": {"$gte": hist_start.isoformat()},
+        }, {"_id": 0, "check_in": 1, "source": 1, "total_price": 1}).to_list(100000)
+
+        # monthly history per segment
+        hist = {}
+        for b in bookings:
+            ci = b.get("check_in", "")[:7]
+            if not ci:
+                continue
+            seg = _segment_of(b.get("source", ""))
+            key = (ci, seg)
+            e = hist.setdefault(key, {"bookings": 0, "revenue": 0.0})
+            e["bookings"] += 1
+            e["revenue"] += float(b.get("total_price", 0) or 0)
+
+        segments = sorted({seg for _, seg in hist.keys()}) or ["Direkt", "OTA"]
+        cur_month = today.strftime("%Y-%m")
+        history_months = sorted({m for m, _ in hist.keys() if m <= cur_month})[-12:]
+        history = []
+        for m in history_months:
+            row = {"month": m, "type": "actual"}
+            for seg in segments:
+                e = hist.get((m, seg), {"bookings": 0, "revenue": 0.0})
+                row[seg] = {"bookings": e["bookings"], "revenue": round(e["revenue"], 2)}
+            history.append(row)
+
+        # forecast: same-month-last-year × yoy trend (per segment)
+        seg_recent, seg_prior = {}, {}
+        for (m, seg), e in hist.items():
+            idx = history_months.index(m) if m in history_months else -1
+            if idx < 0:
+                continue
+            (seg_recent if idx >= len(history_months) - 6 else seg_prior).setdefault(seg, 0)
+            if idx >= len(history_months) - 6:
+                seg_recent[seg] += e["bookings"]
+            else:
+                seg_prior[seg] += e["bookings"]
+
+        forecast = []
+        cur = today.replace(day=1)
+        for i in range(1, months + 1):
+            y, mo = cur.year + (cur.month + i - 1) // 12, (cur.month + i - 1) % 12 + 1
+            ms = f"{y:04d}-{mo:02d}"
+            lym = f"{y-1:04d}-{mo:02d}"
+            row = {"month": ms, "type": "forecast"}
+            for seg in segments:
+                base = hist.get((lym, seg), {}).get("bookings", 0)
+                base_rev = hist.get((lym, seg), {}).get("revenue", 0.0)
+                if base == 0:  # fallback: segment monthly avg
+                    seg_months = [hist[(m2, seg)]["bookings"] for m2 in history_months if (m2, seg) in hist]
+                    base = round(sum(seg_months) / len(seg_months)) if seg_months else 0
+                    seg_revs = [hist[(m2, seg)]["revenue"] for m2 in history_months if (m2, seg) in hist]
+                    base_rev = (sum(seg_revs) / len(seg_revs)) if seg_revs else 0.0
+                trend = 1.0
+                if seg_prior.get(seg, 0) >= 5:
+                    trend = max(0.7, min(1.5, seg_recent.get(seg, 0) / seg_prior[seg]))
+                fb = round(base * trend)
+                fr = round(base_rev * trend, 2)
+                otb = hist.get((ms, seg), {})
+                fb = max(fb, otb.get("bookings", 0))
+                fr = max(fr, round(otb.get("revenue", 0.0), 2))
+                row[seg] = {"bookings": fb, "revenue": fr}
+            forecast.append(row)
+
+        totals = {seg: {"hist_bookings": sum(hist.get((m, seg), {}).get("bookings", 0) for m in history_months),
+                        "hist_revenue": round(sum(hist.get((m, seg), {}).get("revenue", 0.0) for m in history_months), 2)}
+                  for seg in segments}
+        return {"property_id": property_id, "segments": segments,
+                "history": history, "forecast": forecast, "totals": totals}
 
     # ========== 24-MONTH HORIZON ==========
     @router.get("/forecast-v2/horizon/{property_id}")

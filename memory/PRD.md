@@ -110,3 +110,10 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Sonuçlar: A/B Testing panelinden (Wilson lower bound ile lider işaretleme mevcut motorda).
 - E2E doğrulandı: assign deterministik ✓, track ✓, results ✓, frontend varyant-rozet tutarlılığı ✓.
 - Not: Webhook retry + HMAC ROADMAP'te eksik görünüyordu ama kodda ZATEN VARDI (fire_webhooks) — ROADMAP düzeltildi.
+
+## Son Durum (Iter 386, 2026-07-08) — App.js Refactor (Faz 1: Navigasyon)
+- App.js 5230 → 4665 satır. Davranış DEĞİŞMEDİ (regresyon: 55/55 pytest + nav ekran testleri geçti).
+- Yeni dosyalar: `src/navigation/menuSections.js` (buildMenuSections(t, user) — sidebar menü tanımı),
+  `src/navigation/permMap.js` (SIDEBAR_PERM_MAP — testId → izin anahtarı).
+- 64 kullanılmayan phosphor icon import'u App.js'ten temizlendi (110 → 46).
+- Sonraki refactor fazları (backlog): görünüm render bloklarının alt dosyalara taşınması, public route dispatcher ayrımı.

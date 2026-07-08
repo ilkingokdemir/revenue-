@@ -54,7 +54,7 @@ import {
   ChannelManagerHub, GroupBlocksPanel, LaundrySettingsPanel,
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
-  KDSPanel, LoyaltyV2Panel, ExternalLoyaltyPanel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
+  KDSPanel, LoyaltyV2Panel, ExternalLoyaltyPanel, OTACommissionPanel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
   OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, TeamChatPanel, GuestCRM360Panel, ChannelManagerV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
@@ -2940,6 +2940,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       color: "text-stone-500",
       items: [
         { id: "chmgr-hub", icon: Lightning, name: "Channel manager hub", testId: "chmgr-hub-btn" },
+        { id: "ota-commission", icon: Lightning, name: "OTA Komisyon & Net Gelir", testId: "ota-commission-btn" },
         { id: "channel-map-matrix", icon: Buildings, name: "Channel mappings", testId: "channel-map-matrix-btn" },
         { id: "channel-restrictions", icon: Lock, name: "Restrictions", testId: "channel-restrictions-btn" },
         { id: "channel-inbound", icon: Link, name: "Inbound reservations", testId: "channel-inbound-btn" },
@@ -3046,6 +3047,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     "loyalty-auto-btn":       "operations_reception_view",
     "late-checkout-offer-btn":"operations_reception_view",
     "ota-forecast-btn":       "operations_reception_view",
+    "ota-commission-btn":     "operations_reception_view",
+    "external-loyalty-btn":   "operations_reception_view",
     "msg-templates-btn":      "operations_reception_view",
     "birthday-btn":           "operations_reception_view",
     "low-stock-btn":          "operations_reception_view",
@@ -3517,6 +3520,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <ExternalLoyaltyPanel
             activePropertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
+        )}
+
+        {/* OTA Commission Dashboard — net revenue per channel */}
+        {activeView === "ota-commission" && (
+          <OTACommissionPanel activePropertyId={activePropertyId} />
         )}
 
         {/* Sentiment Heatmap — Cross-channel guest voice */}

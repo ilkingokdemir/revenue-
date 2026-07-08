@@ -4,6 +4,27 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-08 (iter 374 — OTA Commission Dashboard + Net Revenue Analytics ✅)
+
+**OTA Commission Dashboard (Potansiyel iyileştirme + P2)** — NEW `/app/backend/routes/integrations_pkg/ota_commission.py`
+- Sektör standardı komisyon oranları: Booking 15%, Expedia 18%, Airbnb 3%, Agoda 17%, Trip.com 15%, Direct 0%
+- `ota_commission_rates` collection: property-specific + global override
+- Endpoints:
+  - `GET /rates` — mevcut oranlar + override durumu
+  - `PUT /rates` — admin override (0-0.5 validation)
+  - `GET /summary` — date range için gross/commission/net per channel + totals + blended %
+  - `GET /leaderboard` — net-revenue bazında kanal sıralaması (rank field)
+- `_detect_channel(bk)`: booking source'undan canonical channel key çıkarır
+- Frontend: `OTACommissionPanel.js` — Summary & Leaderboard tab (4 KPI + görsel gross/net bar) + Rates tab (per-channel rate editor with property override)
+- Sidebar: **"OTA Komisyon & Net Gelir"** (chmgr-hub yanında)
+- **Test (5 senaryo geçti)**:
+  - `/rates` → 6 kanal, default rates ✓
+  - Override Booking → 18%, persisted ✓
+  - `/summary` → 1179 direct £254k net, 87 Booking £34.8k net (£7.6k commission) ✓
+  - `/leaderboard` → rank field, sorted by net ✓
+  - Invalid rate (0.85) → 400 "0..0.5" ✓
+
+
 ### 2026-07-08 (iter 373b — Loyalty × Auto-Assign Fusion + Agoda/Trip.com ✅)
 
 **A) Chain Loyalty × OTA Auto-Assign birleştirme (Potansiyel iyileştirme)**

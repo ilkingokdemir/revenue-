@@ -20,13 +20,15 @@ Endpoints
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import asyncio
 import logging
 import os
 import secrets
 import string
+import time
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 try:
@@ -114,7 +116,7 @@ async def _send_offer_email(db, offer: dict) -> str:
     html = _build_email_html(offer, hotel_name)
     try:
         sender = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-        resend.emails.send({
+        await asyncio.to_thread(resend.emails.send, {
             "from": sender,
             "to": [offer["guest_email"]],
             "subject": subject,
@@ -202,6 +204,7 @@ class RedeemRequest(BaseModel):
 
 def create_direct_conversion_router(db, require_roles):
     router = APIRouter(prefix="/direct-conversion", tags=["direct-conversion"])
+    _redeem_fails: dict = {}
 
     @router.get("/settings")
     async def get_settings(_: dict = Depends(require_roles("admin", "manager"))):
@@ -305,18 +308,30 @@ def create_direct_conversion_router(db, require_roles):
         return {"ok": True, "offer": offer}
 
     @router.post("/redeem")
-    async def redeem(body: RedeemRequest):
+    async def redeem(body: RedeemRequest, request: Request):
         """Booking widget / front desk kupon doğrulama + kullanım."""
+        # Brute-force koruması: IP başına 15 dk'da max 10 hatalı deneme
+        ip = (request.client.host if request.client else "?")
+        now_ts = time.time()
+        attempts = [t for t in _redeem_fails.get(ip, []) if now_ts - t < 900]
+        if len(attempts) >= 10:
+            raise HTTPException(429, "Çok fazla hatalı deneme — 15 dk sonra tekrar deneyin")
+        _redeem_fails[ip] = attempts
+
+        def _fail(status: int, msg: str):
+            _redeem_fails[ip].append(now_ts)
+            raise HTTPException(status, msg)
+
         code = body.coupon_code.strip().upper()
         offer = await db.direct_conversion_offers.find_one({"coupon_code": code}, {"_id": 0})
         if not offer:
-            raise HTTPException(404, "Kupon bulunamadı")
+            _fail(404, "Kupon bulunamadı")
         if offer.get("status") == "redeemed":
-            raise HTTPException(400, "Kupon daha önce kullanılmış")
+            _fail(400, "Kupon daha önce kullanılmış")
         if offer.get("valid_until", "9") < _now():
             await db.direct_conversion_offers.update_one(
                 {"coupon_code": code}, {"$set": {"status": "expired"}})
-            raise HTTPException(400, "Kupon süresi dolmuş")
+            _fail(400, "Kupon süresi dolmuş")
 
         rate = _COMMISSION_RATES.get(offer.get("channel", ""), 0.15)
         saved = round(float(body.booking_value or 0) * rate, 2)

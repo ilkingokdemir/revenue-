@@ -1747,3 +1747,16 @@ See `/app/memory/COMPETITIVE_ANALYSIS_v4.md` — superseded by v5.
 
 ## Test Credentials
 Admin: admin@hotelbox.com / HotelAdmin2026!
+
+## Iter 375 (2026-07-08) — Direct Booking Conversion Engine + SiteMinder Adapter
+- **Direct Booking Conversion Engine** (`routes/integrations_pkg/direct_conversion.py`, `DirectConversionPanel.js`):
+  - Checkout hook (bookings.py checked_out) OTA misafirine otomatik kupon (DIRECT-XXXXXX) + promo email (Resend, mock fallback)
+  - Endpoints: GET/PUT /api/direct-conversion/settings, GET /offers, GET /stats, POST /scan (idempotent), POST /trigger/{id}, POST /redeem (public, IP rate-limited 10/15dk)
+  - UI: Funnel & KPI'lar, teklif tablosu, ayarlar (System sidebar grubu, testId: direct-conversion-btn)
+- **SiteMinder Middleware Translator** (`routes/distribution/siteminder_adapter.py`, `SiteMinderPanel.js`):
+  - POST /api/siteminder/webhook — JSON veya OTA_HotelResNotifRQ XML kabul eder (defusedxml, XXE korumalı)
+  - Kanal kodu çevirisi (BDC→booking_com vb., override: GET/PUT /mappings), bilinmeyen kod 400 ile reddedilir
+  - Auto room-assign pipeline'a besler, cancellation destekli, çeviri logu (GET /log)
+  - UI: eşleme tablosu + test webhook + log (testId: siteminder-btn)
+- Test: backend 15/15 pytest + curl E2E; frontend screenshot ile doğrulandı (iteration_375.json)
+- NOT: P1 "SiteMinder middleware translator adapter" görevi TAMAMLANDI.

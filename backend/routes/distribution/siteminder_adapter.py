@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Optional
 import logging
 import uuid
-import xml.etree.ElementTree as ET
+from defusedxml import ElementTree as ET
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -44,12 +44,15 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def _resolve_channel(db, code: str) -> str:
+async def _resolve_channel(db, code: str) -> Optional[str]:
     code_u = (code or "").strip().upper()
     row = await db.siteminder_channel_map.find_one({"code": code_u}, {"_id": 0, "channel": 1})
     if row:
         return row["channel"]
-    return DEFAULT_CHANNEL_MAP.get(code_u, "booking_com")
+    ch = DEFAULT_CHANNEL_MAP.get(code_u)
+    if not ch:
+        logger.warning(f"SiteMinder: bilinmeyen kanal kodu '{code_u}' — webhook reddedildi")
+    return ch
 
 
 def _parse_ota_xml(raw: str) -> dict:
@@ -203,6 +206,8 @@ def create_siteminder_router(db, require_roles):
             raise HTTPException(400, f"Payload çözümlenemedi: {e}")
 
         channel = await _resolve_channel(db, payload.channel_code)
+        if not channel:
+            raise HTTPException(400, f"Bilinmeyen kanal kodu: {payload.channel_code} — /api/siteminder/mappings ile eşleme ekleyin")
         event_id = str(uuid.uuid4())
         log_doc = {
             "id": event_id, "event": payload.event,

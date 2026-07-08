@@ -2941,6 +2941,8 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       items: [
         { id: "chmgr-hub", icon: Lightning, name: "Channel manager hub", testId: "chmgr-hub-btn" },
         { id: "ota-commission", icon: Lightning, name: "OTA Komisyon & Net Gelir", testId: "ota-commission-btn" },
+        { id: "direct-conversion", icon: Sparkle, name: "Direct Booking Conversion", testId: "direct-conversion-btn" },
+        { id: "siteminder", icon: PlugsConnected, name: "SiteMinder adapter", testId: "siteminder-btn" },
         { id: "channel-map-matrix", icon: Buildings, name: "Channel mappings", testId: "channel-map-matrix-btn" },
         { id: "channel-restrictions", icon: Lock, name: "Restrictions", testId: "channel-restrictions-btn" },
         { id: "channel-inbound", icon: Link, name: "Inbound reservations", testId: "channel-inbound-btn" },

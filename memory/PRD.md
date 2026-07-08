@@ -1760,3 +1760,18 @@ Admin: admin@hotelbox.com / HotelAdmin2026!
   - UI: eşleme tablosu + test webhook + log (testId: siteminder-btn)
 - Test: backend 15/15 pytest + curl E2E; frontend screenshot ile doğrulandı (iteration_375.json)
 - NOT: P1 "SiteMinder middleware translator adapter" görevi TAMAMLANDI.
+
+## Iter 376 (2026-07-08) — Widget Kupon + AI Status Toggle + Nightly Insights
+- **Booking widget kupon alanı** (`BookingWidgetPage.js`, `booking_widget.py`, `direct_conversion.py`):
+  - Public `POST /api/direct-conversion/validate` (redeem etmeden doğrulama, IP rate-limited)
+  - Widget checkout'ta kupon input → indirim satırı → total düşer; redeem server-side booking anında (`redeem_coupon_for_booking`)
+  - Kullanılmış/geçersiz kupon 400 ile reddedilir; booking doc'a coupon_code/discount/commission_saved yazılır
+- **AI Status günlük toggle** (`rates_grid.py`, `MyRatesPanel.js`):
+  - `POST /api/rates/grid/ai-status` — sentinel ↔ manual; manual → manual_until (varsayılan +7 gün)
+  - Grid okumada auto-revert: süresi dolan manual otomatik sentinel'e döner (updated_by: auto-revert)
+  - UI: AI Status badge tıklanabilir (testId: ai-status-toggle-{date}), manual'da ↩ tarih gösterir
+- **Nightly Insights cron** (`rates_grid.py` compute_insights/run_nightly_insights/nightly_insights_loop, `server.py` startup):
+  - Her gece 03:00 UTC sonrası tüm oteller için pattern analizi; snapshot (`nightly_insights_snapshots`) + manager bildirimi
+  - Manuel tetik: `POST /api/rates/grid/insights/run-nightly`
+- Testing agent tarafından BookingWidgetPage'de TDZ crash bulundu ve düzeltildi (const nights, useEffect üstüne taşındı)
+- Test: backend curl 8/8 + frontend testing agent %100 (iteration_376.json)

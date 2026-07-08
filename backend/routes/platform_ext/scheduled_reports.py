@@ -31,17 +31,125 @@ stores a snapshot, and reschedules `next_run_at`.
 from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import base64
 import csv
 import io
+import logging
+import os
 import uuid
+
+import httpx
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# ═══════════ REAL DELIVERY ADAPTERS (iter 373) ═══════════
+async def _deliver_slack(webhook_url: str, subject: str, summary: str,
+                          download_url: Optional[str] = None) -> dict:
+    """Post a nicely formatted message to a Slack incoming webhook."""
+    if not webhook_url or not webhook_url.startswith("http"):
+        return {"status": "error", "note": "Geçersiz webhook URL"}
+    blocks = [
+        {"type": "header", "text": {"type": "plain_text", "text": f"📊 {subject}"}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": summary}},
+    ]
+    if download_url:
+        blocks.append({"type": "actions", "elements": [
+            {"type": "button",
+             "text": {"type": "plain_text", "text": "📥 Raporu İndir"},
+             "url": download_url, "style": "primary"},
+        ]})
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.post(webhook_url,
+                                    json={"text": subject, "blocks": blocks})
+        if r.status_code < 300:
+            return {"status": "sent", "at": _now()}
+        return {"status": "error",
+                 "note": f"HTTP {r.status_code}: {r.text[:200]}"}
+    except Exception as e:
+        return {"status": "error", "note": str(e)[:200]}
+
+
+async def _deliver_whatsapp(to_e164: str, subject: str, summary: str,
+                              download_url: Optional[str] = None) -> dict:
+    """Send WhatsApp via Twilio HTTP API. Requires env:
+       TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM."""
+    sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    tok = os.environ.get("TWILIO_AUTH_TOKEN")
+    frm = os.environ.get("TWILIO_WHATSAPP_FROM")   # e.g. "whatsapp:+14155238886"
+    if not (sid and tok and frm):
+        return {"status": "mocked_sent",
+                 "note": "Twilio creds yok — TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_FROM ekleyin"}
+    if not to_e164:
+        return {"status": "error", "note": "Alıcı telefon (E.164) gerekli"}
+    to = to_e164 if to_e164.startswith("whatsapp:") else f"whatsapp:{to_e164}"
+    body_text = f"*{subject}*\n{summary}"
+    if download_url:
+        body_text += f"\n\n📥 İndir: {download_url}"
+    try:
+        auth = base64.b64encode(f"{sid}:{tok}".encode()).decode()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+                headers={"Authorization": f"Basic {auth}"},
+                data={"From": frm, "To": to, "Body": body_text},
+            )
+        if r.status_code < 300:
+            data = r.json() if r.text else {}
+            return {"status": "sent", "at": _now(),
+                     "twilio_sid": data.get("sid")}
+        return {"status": "error",
+                 "note": f"HTTP {r.status_code}: {r.text[:200]}"}
+    except Exception as e:
+        return {"status": "error", "note": str(e)[:200]}
+
+
+async def _deliver_email(to_email: str, subject: str, summary: str,
+                          attachment_bytes: Optional[bytes] = None,
+                          attachment_filename: Optional[str] = None,
+                          attachment_mime: Optional[str] = None) -> dict:
+    """Send email via Resend HTTP API. Requires env: RESEND_API_KEY, FROM_EMAIL."""
+    key = os.environ.get("RESEND_API_KEY")
+    frm = os.environ.get("RESEND_FROM_EMAIL") or os.environ.get("FROM_EMAIL")
+    if not (key and frm):
+        return {"status": "mocked_sent",
+                 "note": "Resend creds yok — RESEND_API_KEY + FROM_EMAIL ekleyin"}
+    if not to_email:
+        return {"status": "error", "note": "Alıcı email gerekli"}
+    payload: dict = {
+        "from":    frm,
+        "to":      [to_email],
+        "subject": subject,
+        "html":    f"<h2>{subject}</h2><p>{summary.replace(chr(10), '<br/>')}</p>",
+    }
+    if attachment_bytes and attachment_filename:
+        payload["attachments"] = [{
+            "filename": attachment_filename,
+            "content":  base64.b64encode(attachment_bytes).decode(),
+        }]
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post("https://api.resend.com/emails",
+                                    headers={"Authorization": f"Bearer {key}",
+                                              "Content-Type": "application/json"},
+                                    json=payload)
+        if r.status_code < 300:
+            data = r.json() if r.text else {}
+            return {"status": "sent", "at": _now(),
+                     "resend_id": data.get("id")}
+        return {"status": "error",
+                 "note": f"HTTP {r.status_code}: {r.text[:200]}"}
+    except Exception as e:
+        return {"status": "error", "note": str(e)[:200]}
 
 
 FREQUENCIES = {
@@ -340,23 +448,56 @@ def create_reports_router(db, require_roles):
         if not gen:
             raise HTTPException(500, f"Generator missing for {sub['report_key']}")
         payload, mime = await gen(db, sub.get("filters") or {}, sub.get("property_id"))
-        # Simulate delivery to each configured channel
+        # Build snapshot id early so we can compose download URL
+        snap_id = str(uuid.uuid4())
+        base_url = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("REACT_APP_BACKEND_URL")
+        download_url = f"{base_url}/api/reports/snapshots/{snap_id}/download" if base_url else None
+
+        # Compose delivery subject & summary
+        prop = sub.get("property_id") or "all"
+        subject = f"{sub['report_key'].replace('_', ' ').title()} · {prop}"
+        payload_lines = payload.count("\n")
+        size_kb = round(len(payload.encode('utf-8')) / 1024, 1)
+        summary = (f"Otomatik rapor teslim edildi.\n"
+                   f"• Format: {mime}\n"
+                   f"• Boyut: {size_kb} KB · {payload_lines} satır\n"
+                   f"• Property: {prop} · Frekans: {sub.get('frequency', '-')}")
+
+        # Real delivery per channel (iter 373)
         channels = sub.get("channels") or ["email"]
         delivery_log = []
         for ch in channels:
             if ch == "email":
-                delivery_log.append({"channel": "email", "to": sub.get("email"),
-                                      "status": "mocked_sent", "at": _now()})
+                res = await _deliver_email(
+                    sub.get("email") or "",
+                    subject,
+                    summary,
+                    attachment_bytes=payload.encode("utf-8"),
+                    attachment_filename=f"{sub['report_key']}-{_now()[:10]}.{'html' if 'html' in mime else 'csv'}",
+                    attachment_mime=mime,
+                )
+                delivery_log.append({"channel": "email", "to": sub.get("email"), **res})
             elif ch == "whatsapp":
-                delivery_log.append({"channel": "whatsapp", "to": sub.get("whatsapp_to"),
-                                      "status": "mocked_sent", "at": _now(),
-                                      "note": "Twilio WhatsApp entegrasyonu gerekli"})
+                res = await _deliver_whatsapp(sub.get("whatsapp_to") or "",
+                                                 subject, summary, download_url)
+                delivery_log.append({"channel": "whatsapp",
+                                       "to": sub.get("whatsapp_to"), **res})
             elif ch == "slack":
-                delivery_log.append({"channel": "slack", "to": "webhook",
-                                      "status": "mocked_sent", "at": _now(),
-                                      "note": "Slack webhook entegrasyonu gerekli"})
+                res = await _deliver_slack(sub.get("slack_webhook") or "",
+                                              subject, summary, download_url)
+                delivery_log.append({"channel": "slack", "to": "webhook", **res})
+
+        # Overall status: sent if any channel sent, else mocked/error
+        statuses = {d.get("status") for d in delivery_log}
+        if "sent" in statuses:
+            overall = "sent"
+        elif "mocked_sent" in statuses:
+            overall = "mocked_sent"
+        else:
+            overall = "error"
+
         snap = {
-            "id":              str(uuid.uuid4()),
+            "id":              snap_id,
             "subscription_id": sub["id"],
             "report_key":      sub["report_key"],
             "property_id":     sub.get("property_id"),
@@ -365,7 +506,7 @@ def create_reports_router(db, require_roles):
             "mime_type":       mime,
             "size_bytes":      len(payload.encode("utf-8")),
             "created_at":      _now(),
-            "delivery_status": "mocked_email_sent",
+            "delivery_status": overall,
             "delivery_log":    delivery_log,
             "channels":        channels,
         }

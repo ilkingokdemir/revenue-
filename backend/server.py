@@ -1194,6 +1194,12 @@ api_router.include_router(create_digital_keys_router(db, require_roles))
 from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
 api_router.include_router(create_ota_inbound_router(db, require_roles))
 
+from routes.integrations_pkg.external_loyalty import create_external_loyalty_router
+api_router.include_router(create_external_loyalty_router(db, require_roles))
+
+from routes.pms.digital_lock_providers import create_lock_providers_router
+api_router.include_router(create_lock_providers_router(db, require_roles))
+
 # ===== Booking.com Premier prototype (Iter 290 - XML push, pre-cert ready) =====
 from routes.distribution.booking_com import create_booking_com_router
 api_router.include_router(create_booking_com_router(db, require_roles))

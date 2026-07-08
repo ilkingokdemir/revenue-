@@ -25,17 +25,26 @@ Signature verification is stubbed — production must verify HMAC per OTA.
 from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
+import asyncio
 import hashlib
 import hmac
+import json
+import logging
 import os
 import uuid
+
+try:
+    import httpx   # already installed for other integrations
+except Exception:
+    httpx = None
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 
 ALLOWED_CHANNELS = {"booking_com", "expedia", "airbnb"}
-
 # Loyalty tier -> upgrade eligibility (True = eligible for one-tier free upgrade)
 _TIER_UPGRADE = {"platinum": True, "diamond": True, "gold": False,
                  "silver": False, "bronze": False}
@@ -55,6 +64,86 @@ def _verify_signature(raw_body: bytes, sig: Optional[str], channel: str) -> bool
         return True   # accept in dev; production must configure
     computed = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(computed, sig)
+
+
+async def _send_slack(text: str, blocks: Optional[list] = None) -> bool:
+    """Post to Slack via SLACK_WEBHOOK_URL_OTA (fire-and-forget)."""
+    url = os.environ.get("SLACK_WEBHOOK_URL_OTA") or os.environ.get("SLACK_WEBHOOK_URL")
+    if not url or not httpx:
+        return False
+    try:
+        payload = {"text": text}
+        if blocks:
+            payload["blocks"] = blocks
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.post(url, json=payload)
+        return r.status_code < 300
+    except Exception as e:
+        logger.warning(f"Slack webhook failed: {e}")
+        return False
+
+
+async def _notify_auto_assign(db, kind: str, booking: dict, extra: Optional[dict] = None) -> None:
+    """Create an in-app notification + optional Slack alert for auto-assign events.
+
+    kind: "success" (informational), "unassigned" (high priority — needs action),
+          "upgrade" (loyalty upgrade — informational).
+    """
+    extra = extra or {}
+    channel = booking.get("channel", booking.get("source", "ota").replace("ota:", ""))
+    guest = booking.get("guest_name", "-")
+    ref = booking.get("channel_reference", "-")
+    ci = booking.get("check_in", "-")
+    room = booking.get("room_number") or extra.get("room_number") or "?"
+
+    if kind == "success":
+        title = f"OTA oda otomatik atandı: {room}"
+        message = f"{channel.upper()} · {guest} · Ref {ref} · Check-in {ci}"
+        priority = "low"
+        link = "chmgr-hub:unassigned"
+    elif kind == "upgrade":
+        title = f"🎁 Loyalty upgrade: {guest} → {room}"
+        message = f"{channel.upper()} · Elite üye üst kategori odaya yükseltildi (Ref {ref})"
+        priority = "normal"
+        link = "chmgr-hub:unassigned"
+    else:  # unassigned
+        title = f"⚠️ Auto-assign başarısız: {guest}"
+        message = f"{channel.upper()} · Ref {ref} · Check-in {ci} — front desk manuel oda atamalı"
+        priority = "high"
+        link = "chmgr-hub:unassigned"
+
+    try:
+        await db.notifications.insert_one({
+            "id":           str(uuid.uuid4()),
+            "type":         f"ota_auto_assign_{kind}",
+            "title":        title,
+            "message":      message,
+            "property_id":  booking.get("property_id"),
+            "target_role":  "front_desk",
+            "link_to":      link,
+            "priority":     priority,
+            "read":         False,
+            "created_by":   "OTA Auto-Assign",
+            "created_at":   _now(),
+            "meta":         {
+                "booking_id":         booking.get("id"),
+                "channel":            channel,
+                "channel_reference":  ref,
+                "room_number":        room,
+                **extra,
+            },
+        })
+    except Exception as e:
+        logger.warning(f"Notification insert failed: {e}")
+
+    # Slack (fire-and-forget, non-blocking)
+    slack_text = f"{title}\n{message}"
+    asyncio.create_task(_send_slack(slack_text))
+
+
+def _verify_signature_wrapper(*args, **kwargs):
+    """Placeholder — unused, kept for backward compat."""
+    return _verify_signature(*args, **kwargs)
 
 
 class InboundReservation(BaseModel):
@@ -232,6 +321,7 @@ def create_ota_inbound_router(db, require_roles):
         #  (a) OTA did not send a room_number, AND
         #  (b) booking has no room assigned yet
         assignment_info: dict = {}
+        notif_kind: Optional[str] = None
         room_number = body.room_number
         room_id = None
         already_assigned = bool(existing and (existing.get("room_id") or
@@ -250,13 +340,15 @@ def create_ota_inbound_router(db, require_roles):
             if picked:
                 room_id = picked.get("id")
                 room_number = picked.get("name") or picked.get("id")
+                is_upgrade = bool(picked.get("_upgrade"))
                 assignment_info = {
                     "auto_assigned":   True,
                     "assigned_room_id": room_id,
                     "assigned_score":   picked.get("_score"),
-                    "assigned_upgrade": picked.get("_upgrade", False),
+                    "assigned_upgrade": is_upgrade,
                     "assigned_at":      _now(),
                 }
+                notif_kind = "upgrade" if is_upgrade else "success"
             else:
                 assignment_info = {
                     "auto_assigned":         False,
@@ -264,6 +356,7 @@ def create_ota_inbound_router(db, require_roles):
                     "unassigned_reason":     "no_available_room",
                     "assigned_at":           _now(),
                 }
+                notif_kind = "unassigned"
         # ---------------------------------------------------------------
 
         doc = {
@@ -293,6 +386,14 @@ def create_ota_inbound_router(db, require_roles):
         await db.bookings.update_one(
             {"channel_key": booking_key}, {"$set": doc}, upsert=True
         )
+
+        # Fire notification (in-app + Slack) for auto-assign result
+        if notif_kind:
+            await _notify_auto_assign(db, notif_kind, doc, extra={
+                "score":   assignment_info.get("assigned_score"),
+                "upgrade": assignment_info.get("assigned_upgrade", False),
+            })
+
         return {
             "ok":              True,
             "action":          "updated" if existing else "created",
@@ -377,6 +478,16 @@ def create_ota_inbound_router(db, require_roles):
                        "assigned_at":   _now(),
                        "room_assignment_status": "auto_assigned",
                        "updated_at":    _now()}}
+        )
+        # Notify success (or upgrade)
+        bk["room_number"] = picked.get("name") or picked.get("id")
+        await _notify_auto_assign(
+            db,
+            "upgrade" if picked.get("_upgrade") else "success",
+            bk,
+            extra={"score": picked.get("_score"),
+                   "upgrade": picked.get("_upgrade", False),
+                   "via": "retry"},
         )
         return {"ok": True, "booking_id": booking_id,
                  "room_id": picked.get("id"),

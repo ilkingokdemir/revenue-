@@ -54,7 +54,7 @@ import {
   ChannelManagerHub, GroupBlocksPanel, LaundrySettingsPanel,
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
-  KDSPanel, LoyaltyV2Panel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
+  KDSPanel, LoyaltyV2Panel, ExternalLoyaltyPanel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
   OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, TeamChatPanel, GuestCRM360Panel, ChannelManagerV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
@@ -2749,6 +2749,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         { id: "loyalty-tier", icon: Trophy, name: "Tier engine", testId: "loyalty-tier-btn" },
         { id: "loyalty-tiers-v2", icon: Crown, name: "Sadakat seviyeleri (Silver/Gold/Plat)", testId: "loyalty-tiers-v2-btn" },
         { id: "loyalty-v2", icon: Crown, name: "Loyalty referrals & packages", testId: "loyalty-v2-btn" },
+        { id: "external-loyalty", icon: Crown, name: "Zincir Loyalty (Bonvoy/Honors)", testId: "external-loyalty-btn" },
         { id: "loyalty-auto", icon: Crown, name: "Loyalty auto-tier", testId: "loyalty-auto-btn" },
         { id: "birthday", icon: Sparkle, name: "Birthday discounts", testId: "birthday-btn" },
         { id: "service-recovery", icon: Notebook, name: "Service recovery", testId: "service-recovery-btn" },
@@ -3508,6 +3509,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <LoyaltyV2Panel
             propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
             hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
+          />
+        )}
+
+        {/* External Loyalty — Marriott Bonvoy, Hilton, IHG, Accor, Hyatt, Wyndham, BW */}
+        {activeView === "external-loyalty" && (
+          <ExternalLoyaltyPanel
+            activePropertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
           />
         )}
 

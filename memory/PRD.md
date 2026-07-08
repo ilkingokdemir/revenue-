@@ -4,6 +4,37 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-08 (iter 373 — Notifications + External Loyalty + Real Delivery + Lock Providers ✅)
+
+**A) OTA Auto-Assign Notifications**
+- `ota_inbound.py`: `_notify_auto_assign()` — success (low), upgrade (normal), unassigned (high) → in-app `notifications` collection + Slack webhook (SLACK_WEBHOOK_URL_OTA env, fire-and-forget)
+- **Test**: booking_com auto-assign → low-priority notification ✓, airbnb unassigned → high-priority notification ✓
+
+**B) External Loyalty Integrations** — NEW `/app/backend/routes/integrations_pkg/external_loyalty.py`
+- 7 zincir loyalty programı: Marriott Bonvoy, Hilton Honors, IHG One Rewards, Accor ALL, Hyatt World, Wyndham Rewards, Best Western Rewards
+- `_MockProviderAdapter`: deterministic mock (SHA1-seeded) for tier/points; PROD path ready with env-driven API key + prod URL
+- Endpoints: `/programs`, `/link`, `/guest/{gid}`, `/sync/{link}`, `/earn/{link}` (idempotent), `/link/{link}` DELETE, `/elite-arrivals`
+- Format validation per program (Marriott 9-12 digits, Hilton 9-11, etc.)
+- Elite tier tespiti + Auto-Assign skorunda kullanılabilir
+- Frontend: `ExternalLoyaltyPanel.js` — Directory + Elite Arrivals + Programs tabs (sidebar: **"Zincir Loyalty (Bonvoy/Honors)"**)
+- **Test (10 senaryo geçti)**: list 7 programs ✓, link Marriott (Gold) ✓, link Hilton (Gold, ELITE) ✓, invalid format 400 ✓, list guest links ✓, sync ✓, earn 6750 pts ✓, duplicate earn no-op ✓, elite-arrivals ✓, unlink ✓
+
+**C) Real Report Delivery (Slack + WhatsApp + Email)** — `platform_ext/scheduled_reports.py`
+- `_deliver_slack()`: real webhook POST with formatted blocks + download button
+- `_deliver_whatsapp()`: Twilio REST API (TWILIO_ACCOUNT_SID/AUTH_TOKEN/WHATSAPP_FROM env) → graceful mock fallback
+- `_deliver_email()`: Resend REST API (RESEND_API_KEY + RESEND_FROM_EMAIL env) with base64 attachment → graceful mock fallback
+- `_generate_and_store()` yeniden yazıldı: her kanala gerçek çağrı yapılır, per-channel status log tutulur (`sent` / `mocked_sent` / `error`)
+- **Test**: Slack webhook (fake URL) → real HTTP call, 404 as expected ✓, email → mocked_sent (Resend creds yok) ✓
+
+**D) Digital Lock Providers (Assa Abloy, Salto, dormakaba, Onity)** — NEW `/app/backend/routes/pms/digital_lock_providers.py`
+- 4 provider: Assa Abloy VingCard, Salto KS, dormakaba, Onity DirectKey
+- `_provision()`, `_revoke()`: HTTP calls to vendor API (env-driven URL + key) → mock fallback with `mocked_provisioned` / `mocked_revoked`
+- Endpoints: `GET /lock-providers`, `POST /provision/{key_id}`, `POST /revoke/{key_id}`, `GET /status/{key_id}`
+- `lock_provider_events` collection: audit log
+- Digital key doc'a `vendor_provider`, `vendor_key_id`, `vendor_provisioned_at` alanları eklenir
+- **Test**: provision Assa Abloy (mocked, ASS-28137898) ✓, status shows event log ✓, revoke ✓
+
+
 ### 2026-07-07 (iter 372 — OTA Auto Room Assign + 2-Year Forecast + Unassigned OTA UI ✅)
 
 **A) Otomatik Room Auto-Assign for OTA Inbound**

@@ -29,6 +29,7 @@ export const AIPredictionsPanel = L(() => import("./components/dashboard/AIPredi
 export const ChannelRevenuePanel = L(() => import("./components/dashboard/ChannelRevenuePanel"));
 export const KDSPanel = L(() => import("./components/dashboard/KDSPanel"));
 export const LoyaltyV2Panel = L(() => import("./components/dashboard/LoyaltyV2Panel"));
+export const ExternalLoyaltyPanel = L(() => import("./components/dashboard/ExternalLoyaltyPanel"));
 export const SentimentHeatmapPanel = L(() => import("./components/dashboard/SentimentHeatmapPanel"));
 export const SelfCheckInPipelinePanel = L(() => import("./components/dashboard/SelfCheckInPipelinePanel"));
 export const BrandPortalPanel = L(() => import("./components/dashboard/BrandPortalPanel"));

@@ -260,3 +260,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   son geçerlilik tarihi (offer-deadline) + "Son 30 günde X misafir kabul etti" (offer-social-proof).
 - E2E DOĞRULANDI: £80 → £72 accept, folio £72 + doğru açıklama, social_count=3 (seed),
   UI screenshot tüm elementler render. Test verisi temizlendi.
+
+## Son Durum (Iter 399, 2026-07-09) — ROI Haftalık Trend + Kabul Hunisi TAMAMLANDI
+- `GET /api/automation/roi/{pid}/trend?weeks=8`: haftalık kova bazında kupon geliri
+  (direct_conversion_offers.redeemed_at) + upsell geliri (upsell_log, property için bookings join).
+- `GET /api/automation/funnel/{pid}?days=30`: Kupon hunisi (gönderilen→tıklanan→kullanılan, oranlarla)
+  + Upsell hunisi (gönderilen→görüntülenen→kabul, viewed_at artık public GET'te bir kez loglanıyor).
+- AutomationRoiPanel: recharts stacked BarChart (kupon yeşil / upsell amber) + 2 FunnelCard bileşeni.
+- E2E DOĞRULANDI: curl trend (£1,400 son hafta) + funnel (655 kupon, %0.6 redeem) gerçek veri;
+  UI screenshot: roi-trend-chart, roi-funnel, funnel-coupon, funnel-upsell hepsi render.

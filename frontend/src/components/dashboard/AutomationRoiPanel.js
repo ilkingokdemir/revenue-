@@ -1,11 +1,39 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench } from "@phosphor-icons/react";
+import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel } from "@phosphor-icons/react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const ICONS = { rebook: EnvelopeSimple, comeback: ShoppingCartSimple, direct_conversion: Storefront, upsell: Lightning, ai_pricing: Robot };
 const fmt = (v) => `£${Number(v || 0).toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
+
+function FunnelCard({ title, stages, color, testId }) {
+  const max = Math.max(...stages.map((s) => s.value), 1);
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid={testId}>
+      <div className="flex items-center gap-2 mb-4">
+        <Funnel size={16} weight="fill" className="text-stone-500" />
+        <h3 className="text-sm font-semibold text-stone-900">{title}</h3>
+      </div>
+      <div className="space-y-3">
+        {stages.map((s) => (
+          <div key={s.label}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="text-stone-500">{s.label}</span>
+              <span className="font-semibold text-stone-800">
+                {s.value}{s.rate !== undefined && <span className="text-stone-400 font-normal ml-1.5">%{s.rate}</span>}
+              </span>
+            </div>
+            <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.round((s.value / max) * 100)}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [data, setData] = useState(null);
@@ -13,16 +41,22 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
   const [fixing, setFixing] = useState(false);
+  const [trend, setTrend] = useState(null);
+  const [funnel, setFunnel] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, o] = await Promise.all([
+      const [r, o, t, f] = await Promise.all([
         axios.get(`${API}/api/automation/roi/${propertyId}?days=${days}`),
         axios.get(`${API}/api/automation/opportunities/${propertyId}`),
+        axios.get(`${API}/api/automation/roi/${propertyId}/trend?weeks=8`),
+        axios.get(`${API}/api/automation/funnel/${propertyId}?days=30`),
       ]);
       setData(r.data);
       setOpps(o.data);
+      setTrend(t.data);
+      setFunnel(f.data);
     } catch { toast.error("ROI verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId, days]);
@@ -119,6 +153,46 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
           );
         })}
       </div>
+
+      {trend?.buckets?.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="roi-trend-chart">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendUp size={16} weight="fill" className="text-emerald-600" />
+            <h3 className="text-sm font-semibold text-stone-900">Haftalık trend — atfedilen gelir (8 hafta)</h3>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={trend.buckets} barCategoryGap="25%">
+              <XAxis dataKey="week" tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "#78716c" }} axisLine={false} tickLine={false} tickFormatter={(v) => `£${v}`} width={50} />
+              <Tooltip formatter={(v, n) => [fmt(v), n === "coupon" ? "Kupon geliri" : "Upsell geliri"]}
+                contentStyle={{ borderRadius: 12, border: "1px solid #e7e5e4", fontSize: 12 }} />
+              <Bar dataKey="coupon" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+              <Bar dataKey="upsell" stackId="a" fill="#f59e0b" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="flex items-center gap-4 mt-2 text-[11px] text-stone-500">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block" /> Kupon (rebook · sepet · OTA→direkt)</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-amber-500 inline-block" /> Upsell</span>
+          </div>
+        </div>
+      )}
+
+      {funnel && (
+        <div className="grid md:grid-cols-2 gap-4" data-testid="roi-funnel">
+          <FunnelCard title="Kupon hunisi (30 gün)" testId="funnel-coupon"
+            stages={[
+              { label: "Gönderilen", value: funnel.coupon.sent },
+              { label: "Tıklanan", value: funnel.coupon.clicked, rate: funnel.coupon.click_rate },
+              { label: "Kullanılan", value: funnel.coupon.redeemed, rate: funnel.coupon.redeem_rate },
+            ]} color="bg-emerald-500" />
+          <FunnelCard title="Upsell hunisi (30 gün)" testId="funnel-upsell"
+            stages={[
+              { label: "Gönderilen", value: funnel.upsell.sent },
+              { label: "Görüntülenen", value: funnel.upsell.viewed, rate: funnel.upsell.view_rate },
+              { label: "Kabul edilen", value: funnel.upsell.accepted, rate: funnel.upsell.accept_rate },
+            ]} color="bg-amber-500" />
+        </div>
+      )}
 
       {opps && (
         <div className="space-y-3" data-testid="opportunity-radar">

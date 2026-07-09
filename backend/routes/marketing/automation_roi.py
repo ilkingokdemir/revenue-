@@ -200,6 +200,76 @@ def create_automation_roi_router(db, require_roles, runners=None):
         return {"property_id": property_id, "rows": rows,
                 "total_potential": round(sum(r["potential"] for r in rows), 2)}
 
+    @router.get("/automation/roi/{property_id}/trend")
+    async def roi_trend(property_id: str, weeks: int = 8,
+                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        weeks = min(max(weeks, 4), 26)
+        now = datetime.now(timezone.utc)
+        pq = {} if property_id == "all" else {"property_id": property_id}
+        since = (now - timedelta(weeks=weeks)).isoformat()
+
+        offers = await db.direct_conversion_offers.find(
+            {**pq, "status": "redeemed", "redeemed_at": {"$gte": since}},
+            {"_id": 0, "redeemed_at": 1, "redeemed_booking_value": 1}).to_list(5000)
+        logs = await db.upsell_log.find(
+            {"accepted_at": {"$gte": since}},
+            {"_id": 0, "accepted_at": 1, "revenue": 1, "booking_id": 1}).to_list(5000)
+        if property_id != "all" and logs:
+            bids = list({l.get("booking_id") for l in logs if l.get("booking_id")})
+            bs = await db.bookings.find(
+                {"id": {"$in": bids}, "property_id": property_id},
+                {"_id": 0, "id": 1}).to_list(len(bids))
+            ok = {b["id"] for b in bs}
+            logs = [l for l in logs if l.get("booking_id") in ok]
+
+        buckets = []
+        for i in range(weeks - 1, -1, -1):
+            start = now - timedelta(weeks=i + 1)
+            end = now - timedelta(weeks=i)
+            s, e = start.isoformat(), end.isoformat()
+            coupon_rev = sum(float(o.get("redeemed_booking_value") or 0)
+                             for o in offers if s <= (o.get("redeemed_at") or "") < e)
+            upsell_rev = sum(float(l.get("revenue") or 0)
+                             for l in logs if s <= (l.get("accepted_at") or "") < e)
+            buckets.append({"week": end.strftime("%d %b"),
+                            "coupon": round(coupon_rev, 2), "upsell": round(upsell_rev, 2)})
+        return {"property_id": property_id, "weeks": weeks, "buckets": buckets}
+
+    @router.get("/automation/funnel/{property_id}")
+    async def funnel(property_id: str, days: int = 30,
+                     current_user: dict = Depends(require_roles("admin", "manager"))):
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        pq = {} if property_id == "all" else {"property_id": property_id}
+
+        # coupon funnel (rebook + comeback + direct conversion)
+        coupons = await db.direct_conversion_offers.find(
+            {**pq, "created_at": {"$gte": since}}, {"_id": 0, "status": 1}).to_list(10000)
+        coupon_sent = len(coupons)
+        coupon_redeemed = sum(1 for c in coupons if c.get("status") == "redeemed")
+        dispatches = await db.rebook_dispatches.find(
+            {**pq, "scheduled_for": {"$gte": since}}, {"_id": 0, "clicked": 1}).to_list(10000)
+        coupon_clicked = sum(1 for d in dispatches if d.get("clicked"))
+
+        # upsell funnel (autopilot offers)
+        ups = await db.upsell_offers.find(
+            {**pq, "source": "autopilot", "created_at": {"$gte": since}},
+            {"_id": 0, "status": 1, "viewed_at": 1}).to_list(10000)
+        up_sent = len(ups)
+        up_viewed = sum(1 for u in ups if u.get("viewed_at"))
+        up_accepted = sum(1 for u in ups if u.get("status") == "accepted")
+        up_declined = sum(1 for u in ups if u.get("status") == "declined")
+
+        def rate(a, b): return round(a * 100 / max(b, 1), 1)
+        return {"property_id": property_id, "days": days,
+                "coupon": {"sent": coupon_sent, "clicked": coupon_clicked,
+                           "redeemed": coupon_redeemed,
+                           "click_rate": rate(coupon_clicked, coupon_sent),
+                           "redeem_rate": rate(coupon_redeemed, coupon_sent)},
+                "upsell": {"sent": up_sent, "viewed": up_viewed,
+                           "accepted": up_accepted, "declined": up_declined,
+                           "view_rate": rate(up_viewed, up_sent),
+                           "accept_rate": rate(up_accepted, up_sent)}}
+
     @router.post("/automation/opportunities/{property_id}/auto-fix")
     async def auto_fix(property_id: str, body: dict = None,
                        current_user: dict = Depends(require_roles("admin", "manager"))):

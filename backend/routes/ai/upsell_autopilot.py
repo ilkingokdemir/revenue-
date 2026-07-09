@@ -197,6 +197,9 @@ def create_upsell_autopilot_router(db, require_roles):
         o = await db.upsell_offers.find_one({"accept_token": token}, {"_id": 0})
         if not o:
             raise HTTPException(404, "Offer not found")
+        if not o.get("viewed_at"):
+            await db.upsell_offers.update_one(
+                {"accept_token": token}, {"$set": {"viewed_at": _now()}})
         b = await db.bookings.find_one({"id": o["booking_id"]}, {"_id": 0}) or {}
         title, pitch = CATEGORY_TR.get(o.get("category"), ("Özel Teklif", ""))
         prop = await db.properties.find_one({"id": o.get("property_id")}, {"_id": 0, "name": 1}) or {}

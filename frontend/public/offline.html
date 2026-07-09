@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Çevrimdışı — MyHotelBox</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #1c1917; color: #fafaf9;
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card { max-width: 420px; text-align: center; }
+    .icon {
+      width: 72px; height: 72px; margin: 0 auto 24px;
+      border: 2px solid #57534e; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 32px;
+    }
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 12px; }
+    p { font-size: 14px; color: #a8a29e; line-height: 1.6; margin-bottom: 24px; }
+    button {
+      background: #06b6d4; color: #fff; border: 0; border-radius: 10px;
+      padding: 12px 28px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    button:hover { background: #0891b2; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📶</div>
+    <h1>İnternet bağlantısı yok</h1>
+    <p>MyHotelBox çevrimdışı modda. Son yüklenen veriler önbellekte saklanıyor —
+       bağlantı geri geldiğinde kaldığınız yerden devam edebilirsiniz.</p>
+    <button onclick="location.reload()">Tekrar Dene</button>
+  </div>
+</body>
+</html>

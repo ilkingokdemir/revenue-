@@ -44,7 +44,7 @@
 
 ## P1 — Anahtar gerektirmeden yapılabilir GERÇEK eksikler
 - ~~Webhook dispatcher'a retry + HMAC-SHA256 imza + exponential backoff~~ YAPILDI (helpers.py fire_webhooks: 3 deneme + imza; iter 384'te doğrulandı)
-- sw.js offline stratejisini genişlet (route cache + offline fallback sayfası)
+- ~~sw.js offline stratejisini genişlet (route cache + offline fallback sayfası)~~ YAPILDI (iter 387: API cache + offline.html + OfflineBanner)
 - ~~App.js refactor (5200 satır → görünüm bazlı alt dosyalar; davranış değişmeden)~~ FAZ 1 YAPILDI (iter 386: navigasyon config + perm map ayrıldı, 5230→4665 satır). Kalan fazlar: görünüm render blokları + public route dispatcher
 - server.py tick worker'larını ayrı worker modülüne taşı
 - ~~React linter uyarıları~~ YAPILDI (iter 379, sıfır uyarı)

@@ -117,3 +117,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   `src/navigation/permMap.js` (SIDEBAR_PERM_MAP — testId → izin anahtarı).
 - 64 kullanılmayan phosphor icon import'u App.js'ten temizlendi (110 → 46).
 - Sonraki refactor fazları (backlog): görünüm render bloklarının alt dosyalara taşınması, public route dispatcher ayrımı.
+
+## Son Durum (Iter 387, 2026-07-09) — PWA Offline Güçlendirme
+- `sw.js` v2: GET /api/* network-first + başarılı yanıtlar API_CACHE'e kopyalanır (300 kayıt cap),
+  bağlantı yokken son kopyayı `X-Served-From: sw-cache` header'ıyla sunar.
+  Hassas yollar cache DIŞI: /api/auth/, /api/payments, /api/stripe, /api/ab/, social-proof.
+- `offline.html`: markalı çevrimdışı fallback sayfası (navigasyon: cached index → offline.html).
+- `OfflineBanner.js`: online/offline event dinleyicili üst banner ("Çevrimdışı mod" amber /
+  "Bağlantı geri geldi" yeşil 4sn). App.js köküne eklendi. testid: offline-banner.
+- Test: SW v2 kontrolde ✓, offline'da dashboard cached veriyle render ✓, banner iki yön ✓.

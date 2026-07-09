@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LanguageProvider, useTranslation } from "@/i18n";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { PWAInstall } from "@/components/PWAInstall";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import ReviewWidget from "./ReviewWidget";
 import BookingEngine from "./BookingEngine";
 import ReviewCollectionPage from "./ReviewCollectionPage";
@@ -4647,6 +4648,7 @@ function AppWithLanguage() {
     <LanguageProvider>
       <App />
       <PWAInstall />
+      <OfflineBanner />
     </LanguageProvider>
   );
 }

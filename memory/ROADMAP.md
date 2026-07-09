@@ -49,7 +49,7 @@
 - ~~App.js refactor (5200 satır → görünüm bazlı alt dosyalar; davranış değişmeden)~~ FAZ 1 YAPILDI (iter 386: navigasyon config + perm map ayrıldı, 5230→4665 satır). Kalan fazlar: görünüm render blokları + public route dispatcher
 - server.py tick worker'larını ayrı worker modülüne taşı
 - ~~React linter uyarıları~~ YAPILDI (iter 379, sıfır uyarı)
-- Legacy modal görünümlerini (analytics/templates/integrations/alerts) inline panele çevirme (UX iyileştirme, şu an modal olarak çalışıyorlar)
+- ~~Legacy modal görünümlerini (analytics/templates/integrations/alerts/reports/branding/approvals) inline panele çevir~~ YAPILDI (iter 389, test ajanı 7/7 PASS)
 
 ## P2
 - PCI-DSS / SOC 2 hazırlık dokümantasyonu

@@ -138,3 +138,14 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   → DB'de task status gerçekten 'in_progress' oldu ✓.
 - Bilinen sınır: offline'dayken DAHA ÖNCE ZİYARET EDİLMEMİŞ lazy chunk yüklenemez (ErrorBoundary
   dostane hata gösterir; SW ziyaret edilen chunk'ları cache'ler — production'da normal davranış).
+
+## Son Durum (Iter 389, 2026-07-09) — Legacy Modal Görünümleri → Inline Panel
+- 7 modal görünüm inline sayfa paneline çevrildi: analytics, templates, integrations,
+  alerts (NotificationSettings), reports, branding, approvals.
+- Yöntem: App.js'e InlineContent/InlineHeader/InlineTitle shell'leri eklendi; App.js içi
+  bileşenler (NotificationSettings, TemplatesManager, ApprovalQueuePanel) scoped replace ile
+  çevrildi; 4 dashboard dosyasında (AnalyticsPanel, IntegrationsPanel, BrandingPanel,
+  ReportsSettings) Dialog importları lokal inline shell'lerle değiştirildi (iç içerik değişmedi).
+- Dialog sarmalayıcıları ve "Araç penceresi açık" backdrop placeholder'ı App.js'ten kaldırıldı.
+- Test ajanı frontend regresyonu: 7/7 PASS, gerçek Dialog'lar hâlâ çalışıyor, scroll kilidi yok.
+- Test ajanı notu (backlog): App.js içi bileşenleri kendi dosyalarına taşı (Refactor Faz 2 ile).

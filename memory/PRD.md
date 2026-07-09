@@ -269,3 +269,15 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - AutomationRoiPanel: recharts stacked BarChart (kupon yeşil / upsell amber) + 2 FunnelCard bileşeni.
 - E2E DOĞRULANDI: curl trend (£1,400 son hafta) + funnel (655 kupon, %0.6 redeem) gerçek veri;
   UI screenshot: roi-trend-chart, roi-funnel, funnel-coupon, funnel-upsell hepsi render.
+
+## Son Durum (Iter 400, 2026-07-09) — Akıllı Hatırlatma (Email Nudge) TAMAMLANDI
+- `routes/marketing/nudge.py`: Açılmamış upsell tekliflerine 24s sonra (erken kabul indirimi
+  dolmadan, kırmızı "son fırsat" şablonu) ve tıklanmamış rebook kuponlarına 72s sonra
+  farklı konu satırıyla MAX 1 hatırlatma (nudged_at dedupe).
+- Endpoint'ler: POST /api/automation/nudge/run, GET /api/automation/nudge/stats/{pid}
+  (nudge sonrası geri kazanım: viewed/accepted/clicked > nudged_at → recovery_rate).
+- `JOB_HANDLERS["email_nudge"]` + 5 tesiste scheduler AKTİF (günlük 10:00).
+- AutomationRoiPanel: Nudge kartı (istatistikler + "Hatırlatmaları Gönder" butonu, nudge-run-btn).
+- E2E DOĞRULANDI: 30s eski teklif + 96s eski kupon seed → nudge 1+1 gönderildi (mock) →
+  rerun dedupe 0 → nudge sonrası görüntüleme → recovery %100 stats doğru → UI kart render.
+  Test verisi temizlendi.

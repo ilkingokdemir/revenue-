@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel } from "@phosphor-icons/react";
+import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel, BellRinging } from "@phosphor-icons/react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -43,20 +43,34 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [fixing, setFixing] = useState(false);
   const [trend, setTrend] = useState(null);
   const [funnel, setFunnel] = useState(null);
+  const [nudge, setNudge] = useState(null);
+  const [nudging, setNudging] = useState(false);
+
+  const runNudge = async () => {
+    setNudging(true);
+    try {
+      const r = await axios.post(`${API}/api/automation/nudge/run`, { property_id: propertyId });
+      toast.success(`Hatırlatmalar gönderildi: ${r.data.upsell_nudged} upsell, ${r.data.coupon_nudged} kupon`);
+      load();
+    } catch { toast.error("Hatırlatma gönderimi başarısız"); }
+    finally { setNudging(false); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, o, t, f] = await Promise.all([
+      const [r, o, t, f, n] = await Promise.all([
         axios.get(`${API}/api/automation/roi/${propertyId}?days=${days}`),
         axios.get(`${API}/api/automation/opportunities/${propertyId}`),
         axios.get(`${API}/api/automation/roi/${propertyId}/trend?weeks=8`),
         axios.get(`${API}/api/automation/funnel/${propertyId}?days=30`),
+        axios.get(`${API}/api/automation/nudge/stats/${propertyId}?days=30`),
       ]);
       setData(r.data);
       setOpps(o.data);
       setTrend(t.data);
       setFunnel(f.data);
+      setNudge(n.data);
     } catch { toast.error("ROI verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId, days]);
@@ -191,6 +205,31 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
               { label: "Görüntülenen", value: funnel.upsell.viewed, rate: funnel.upsell.view_rate },
               { label: "Kabul edilen", value: funnel.upsell.accepted, rate: funnel.upsell.accept_rate },
             ]} color="bg-amber-500" />
+        </div>
+      )}
+
+      {nudge && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4" data-testid="nudge-card">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-cyan-50 border border-cyan-100 flex items-center justify-center shrink-0">
+              <BellRinging size={18} className="text-cyan-600" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-stone-900">Akıllı Hatırlatma (Nudge)</div>
+              <div className="text-xs text-stone-500 mt-0.5">
+                Açılmamış tekliflere (24s) ve tıklanmamış kuponlara (72s) farklı konu satırıyla tek hatırlatma
+              </div>
+              <div className="flex gap-4 mt-2 text-xs text-stone-600" data-testid="nudge-stats">
+                <span>Upsell: <b>{nudge.upsell.nudged}</b> gönderildi · <b className="text-emerald-700">{nudge.upsell.recovered}</b> geri kazanıldı (%{nudge.upsell.recovery_rate})</span>
+                <span>Kupon: <b>{nudge.coupon.nudged}</b> gönderildi · <b className="text-emerald-700">{nudge.coupon.recovered}</b> geri kazanıldı (%{nudge.coupon.recovery_rate})</span>
+              </div>
+            </div>
+          </div>
+          <button onClick={runNudge} disabled={nudging} data-testid="nudge-run-btn"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-700 disabled:opacity-60 rounded-lg px-3 py-1.5 transition-colors">
+            <BellRinging size={14} weight="fill" />
+            {nudging ? "Gönderiliyor…" : "Hatırlatmaları Gönder"}
+          </button>
         </div>
       )}
 

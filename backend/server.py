@@ -1087,6 +1087,18 @@ async def _job_upsell_autopilot(property_id: str) -> dict:
 
 JOB_HANDLERS["upsell_autopilot"] = _job_upsell_autopilot
 
+from routes.marketing.nudge import create_nudge_router
+nudge_router = create_nudge_router(db, require_roles)
+api_router.include_router(nudge_router)
+
+async def _job_email_nudge(property_id: str) -> dict:
+    try:
+        return await nudge_router.run_nudge_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["email_nudge"] = _job_email_nudge
+
 from routes.marketing.automation_roi import create_automation_roi_router
 api_router.include_router(create_automation_roi_router(db, require_roles, runners={
     "rebook_sweep": lambda pid, d: rebook_router.run_sweep_internal(property_id=pid, days_after=d),

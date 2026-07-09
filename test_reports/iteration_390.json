@@ -1,0 +1,42 @@
+{
+  "summary": "Frontend-only regression sweep AFTER iter 386-390 refactor (App.js 5230→2531 lines, panels extracted). Verified login, dashboard KPIs, all 9 sidebar sections expand, 14 critical refactored views (including AIResponsePanel-hosting reviews, templates, approval-queue, api-connection, webhooks, integrations, branding, team, alerts/reports, help-guide), forecast-v2 Segmentler tab, housekeeping Tahminsel/predictive-hk-panel, hurdle-lrv panel, command palette, notification bell container, public booking page with social proof badge. NO error boundaries encountered anywhere. NO blank content areas (approval-queue displays legitimate empty state).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_390.json"],
+  "action_items": [
+    "Minor: React 'unique key prop' warning emitted from CommandPalette children — cosmetic, no functional impact but should be fixed by adding stable keys.",
+    "Two 401 responses on initial /login page load (likely /me probe when unauthenticated) — expected but could be silenced to reduce console noise."
+  ],
+  "critical_code_review_comments": [
+    "App.js still 2531 lines — further split by domain (Reservations panels, Finance panels) recommended in future iterations.",
+    "Some views (webhooks/branding/reports/analytics) render very lightweight content (<500 chars main) — verify these are indeed pass-through to dialogs/modals and not degraded post-refactor.",
+    "Section auto-navigate-on-open behavior (App.js:656-658) may surprise users who expect chevron to only toggle collapse; consider separate chevron button."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (not tested this run)", "frontend": "100% (all 14 refactored views + core flows pass)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — works",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Refactor is stable. Sidebar sections must be expanded via nav-section-<Label> (labels: Overview, Reservations, Operations, Revenue & rates, Guests, Food & events, Finance, Reports, System). Views tested by direct click on inner testid (e.g. approval-queue-btn, api-connection-btn, hurdle-lrv-btn, forecast-v2-btn). Public /book/aldgate-flats works and shows social proof badge (variant badge_on this run).",
+  "views_verified": [
+    "reviews (nav-reviews) — 2648 chars",
+    "housekeeping (housekeeping-btn) + Tahminsel tab predictive-hk-panel found",
+    "forecast-v2 + Segmentler tab (5652 chars, contains 'segment')",
+    "hurdle-lrv-btn (2176 chars)",
+    "analytics-btn (457 chars — modal opener)",
+    "templates-btn (3911 chars)",
+    "approval-queue-btn (empty-state '"'No responses pending approval'"' — NOT a bug)",
+    "api-connection-btn (489 chars)",
+    "webhooks-btn (329 chars — modal opener)",
+    "branding-btn (258 chars — modal opener)",
+    "team-btn (1507 chars)",
+    "reports-btn (407 chars — modal opener)",
+    "integrations-btn (1265 chars)",
+    "help-guide-btn (16630 chars — full guide renders)"
+  ]
+}

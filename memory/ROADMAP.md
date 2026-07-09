@@ -46,7 +46,7 @@
 - ~~Webhook dispatcher'a retry + HMAC-SHA256 imza + exponential backoff~~ YAPILDI (helpers.py fire_webhooks: 3 deneme + imza; iter 384'te doğrulandı)
 - ~~sw.js offline stratejisini genişlet (route cache + offline fallback sayfası)~~ YAPILDI (iter 387: API cache + offline.html + OfflineBanner)
 - ~~Offline aksiyon kuyruğu (HK görev/oda durumu yazmaları)~~ YAPILDI (iter 388: offlineQueue.js + banner sayacı)
-- ~~App.js refactor (5200 satır → görünüm bazlı alt dosyalar; davranış değişmeden)~~ FAZ 1 YAPILDI (iter 386: navigasyon config + perm map ayrıldı, 5230→4665 satır). Kalan fazlar: görünüm render blokları + public route dispatcher
+- ~~App.js refactor (5200 satır → görünüm bazlı alt dosyalar; davranış değişmeden)~~ FAZ 1+2 YAPILDI (iter 386+390: navigasyon config + perm map + 8 büyük panel bileşeni ayrıldı, 5230→2531 satır). Kalan opsiyonel faz: Dashboard render bloklarının ayrıştırılması
 - server.py tick worker'larını ayrı worker modülüne taşı
 - ~~React linter uyarıları~~ YAPILDI (iter 379, sıfır uyarı)
 - ~~Legacy modal görünümlerini (analytics/templates/integrations/alerts/reports/branding/approvals) inline panele çevir~~ YAPILDI (iter 389, test ajanı 7/7 PASS)

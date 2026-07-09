@@ -149,3 +149,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Dialog sarmalayıcıları ve "Araç penceresi açık" backdrop placeholder'ı App.js'ten kaldırıldı.
 - Test ajanı frontend regresyonu: 7/7 PASS, gerçek Dialog'lar hâlâ çalışıyor, scroll kilidi yok.
 - Test ajanı notu (backlog): App.js içi bileşenleri kendi dosyalarına taşı (Refactor Faz 2 ile).
+
+## Son Durum (Iter 390, 2026-07-09) — App.js Refactor Faz 2 TAMAMLANDI
+- App.js 4645 → 2531 satır (Faz 1+2 toplam: 5230 → 2531, %52 küçülme).
+- Yeni dosyalar:
+  - `src/panels/InlineShell.js` (InlineContent/Header/Title shell'leri)
+  - `src/panels/ReviewToolsPanels.js` (AIResponsePanel, NotificationSettings, TemplatesManager, ApprovalQueuePanel)
+  - `src/panels/SystemToolsPanels.js` (UserManagementPanel, ApiConnectionPanel, WebhooksPanel, IntegrationGuidePanel)
+  - StarRating/PlatformBadge/StatsCard/ReviewCard artık `components/dashboard/ReviewComponents.jsx`'ten import ediliyor (App.js'teki kopyalar silindi).
+- DİKKAT (ders): İlk deneme regex tabanlı import pruner stale-offset yüzünden dosyaları bozdu →
+  git checkout ile geri alınıp marker-tabanlı temiz extraction yapıldı. Import pruning YAPILMADI
+  (panel dosyalarında kullanılmayan importlar var — zararsız, webpack temiz derliyor).
+- Regresyon: babel parse 4/4 OK, webpack temiz, 6 görünüm canlı test edildi (analytics/templates/
+  approvals/api-connection/webhooks/integrations) → hepsi hatasız render.

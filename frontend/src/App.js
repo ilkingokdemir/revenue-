@@ -84,7 +84,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, AutomationRoiPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -980,6 +980,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         )}
         {activeView === "partner-webhooks" && <PartnerWebhooksPanel />}
         {activeView === "automation-analytics" && <AutomationAnalyticsPanel />}
+        {activeView === "automation-roi" && (
+          <AutomationRoiPanel propertyId={activePropertyId || "all"} onNavigate={navigate} />
+        )}
         {activeView === "meetings-sales" && (
           <MeetingsSalesPanel propertyId={activePropertyId || "all"} />
         )}

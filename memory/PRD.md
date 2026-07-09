@@ -202,3 +202,17 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   convert → recovered=True, panel %100 kurtarma oranı gösterdi. Rerun eligible=0 (dedupe).
 - Not: Eski booking_engine_v2 /cart/track aynı koleksiyonu kullanıyordu (sadece listeleme, döngü yoktu) —
   stats endpoint'i legacy doc'lara .get() ile uyumlu.
+
+## Son Durum (Iter 394, 2026-07-09) — Otomasyon ROI + Fırsat Radarı TAMAMLANDI
+- ROI panosu bug'ı ÇÖZÜLDÜ: kod hatası yoktu — önceki test kapalı akordeon menüyü ("Revenue & rates")
+  açmadan `automation-roi-btn`'e ulaşmaya çalışıyordu. Doğru akışla (bölüm başlığına tıkla → buton) UI doğrulandı.
+- `GET /api/automation/roi/{property_id}?days=` — atfedilen gelir: rebook, comeback (sepet), OTA→direkt
+  (komisyon tasarrufu dahil), upsell, AI fiyatlama (tahmini). E2E doğrulandı (£1,930 gerçek veri).
+- YENİ: `GET /api/automation/opportunities/{property_id}` — Fırsat Radarı ("masada kalan para"):
+  1) Rebook gönderilmemiş checked-out misafirler (son 90g, %6 dönüşüm varsayımı)
+  2) E-postalanmamış terk sepetler (son 14g, %10 kurtarma) — şema uyumu: total_price/rate + email_sent_at
+  3) Upsell teklifi almamış yaklaşan varışlar (14g, gecelik %12)
+  4) Kuponlanmamış OTA misafirleri (%18 komisyon riski × %20 tekrar olasılığı)
+- AutomationRoiPanel'e "Fırsat Radarı" bölümü eklendi: potansiyel gelir kartları + aksiyon butonları
+  (onNavigate ile rebook / ai-predictions / direct-conversion panellerine derin bağlantı).
+- E2E DOĞRULANDI: curl (388 rebook fırsatı, ~£12,534 toplam potansiyel) + screenshot (radar + aksiyon butonları görünür).

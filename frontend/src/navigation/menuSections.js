@@ -1,5 +1,6 @@
 // Sidebar menu sections — extracted from App.js (iter 386 refactor). Behavior unchanged.
 import {
+  Coins,
   AddressBook,
   ArrowSquareOut,
   ArrowsClockwise,
@@ -257,6 +258,7 @@ export function buildMenuSections(t, user) {
         { id: "late-checkout-offer", icon: Clock, name: "Late checkout offers", testId: "late-checkout-offer-btn" },
         { id: "site-feasibility", icon: ChartLineUp, name: "Site feasibility & investor", testId: "site-feasibility-btn" },
         { id: "automation-analytics", icon: ChartBar, name: "Otomasyon analitiği", testId: "automation-analytics-btn" },
+        { id: "automation-roi", icon: Coins, name: "Otomasyon ROI", testId: "automation-roi-btn" },
       ],
     },
     {

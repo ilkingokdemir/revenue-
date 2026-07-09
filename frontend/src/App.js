@@ -880,6 +880,13 @@ const AIResponsePanel = ({ review, onResponseSubmit, isLoading, templateText, on
 };
 
 // Notification Settings Component
+// iter 389: inline panel shells (legacy modal views converted to inline pages)
+const InlineContent = ({ children, className = "", ...rest }) => (
+  <div className={`bg-white border border-stone-200/80 rounded-xl shadow-card p-6 w-full ${className}`} {...rest}>{children}</div>
+);
+const InlineHeader = ({ children, className = "" }) => <div className={`mb-4 ${className}`}>{children}</div>;
+const InlineTitle = ({ children, className = "" }) => <h2 className={`text-lg font-semibold ${className}`}>{children}</h2>;
+
 const NotificationSettings = ({ isOpen, onClose }) => {
   const [settings, setSettings] = useState({
     email: "",
@@ -932,13 +939,13 @@ const NotificationSettings = ({ isOpen, onClose }) => {
   };
 
   return (
-    <DialogContent className="sm:max-w-[500px]" data-testid="notification-settings-dialog">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
+    <InlineContent className="sm:max-w-[500px]" data-testid="notification-settings-dialog">
+      <InlineHeader>
+        <InlineTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
           <Bell size={20} weight="fill" className="text-[#3E5245]" />
           Email Notifications
-        </DialogTitle>
-      </DialogHeader>
+        </InlineTitle>
+      </InlineHeader>
       
       <div className="space-y-6 py-4">
         {/* Enable/Disable Toggle */}
@@ -1031,7 +1038,7 @@ const NotificationSettings = ({ isOpen, onClose }) => {
           </button>
         </div>
       </div>
-    </DialogContent>
+    </InlineContent>
   );
 };
 
@@ -1138,13 +1145,13 @@ const TemplatesManager = ({ isOpen, onClose, onSelectTemplate }) => {
     : templates.filter(t => t.category === selectedCategory);
 
   return (
-    <DialogContent className="sm:max-w-[700px] max-h-[85vh]" data-testid="templates-dialog">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
+    <InlineContent className="sm:max-w-[700px] max-h-[85vh]" data-testid="templates-dialog">
+      <InlineHeader>
+        <InlineTitle className="flex items-center gap-2 text-[#1C1917] font-['Work_Sans']">
           <FileText size={20} weight="fill" className="text-[#3E5245]" />
           Response Templates
-        </DialogTitle>
-      </DialogHeader>
+        </InlineTitle>
+      </InlineHeader>
 
       <Tabs defaultValue="browse" className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-4">
@@ -1356,7 +1363,7 @@ const TemplatesManager = ({ isOpen, onClose, onSelectTemplate }) => {
           </div>
         </TabsContent>
       </Tabs>
-    </DialogContent>
+    </InlineContent>
   );
 };
 
@@ -1551,9 +1558,9 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
   };
 
   return (
-    <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto" data-testid="approval-queue-dialog">
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 text-stone-900">
+    <InlineContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto" data-testid="approval-queue-dialog">
+      <InlineHeader>
+        <InlineTitle className="flex items-center gap-2 text-stone-900">
           <ShieldCheck size={20} className="text-[#3E5245]" />
           Approval Queue
           {pendingReviews.length > 0 && (
@@ -1561,8 +1568,8 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
               {pendingReviews.length} pending
             </span>
           )}
-        </DialogTitle>
-      </DialogHeader>
+        </InlineTitle>
+      </InlineHeader>
 
       {isLoading ? (
         <div className="py-8 text-center">
@@ -1627,7 +1634,7 @@ const ApprovalQueuePanel = ({ onReviewUpdate }) => {
           ))}
         </div>
       )}
-    </DialogContent>
+    </InlineContent>
   );
 };
 
@@ -3351,38 +3358,23 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         )}
 
         {/* Analytics View */}
-        {/* Modal tabanlı araç görünümleri için arka plan bilgisi (iter 379) */}
-        {["analytics", "templates", "integrations", "alerts", "reports", "branding"].includes(activeView) && (
-          <div className="flex items-center justify-center min-h-[50vh] text-stone-400 text-sm" data-testid="modal-view-backdrop">
-            Araç penceresi açık — kapatınca Reviews görünümüne dönersiniz.
-          </div>
-        )}
-
         {activeView === "analytics" && (
-          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
-            <AnalyticsPanel isOpen={true} onClose={() => setActiveView("reviews")} />
-          </Dialog>
+          <AnalyticsPanel isOpen={true} onClose={() => setActiveView("reviews")} />
         )}
 
         {/* Templates View */}
         {activeView === "templates" && (
-          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
-            <TemplatesManager isOpen={true} onClose={() => setActiveView("reviews")} onSelectTemplate={handleApplyTemplate} />
-          </Dialog>
+          <TemplatesManager isOpen={true} onClose={() => setActiveView("reviews")} onSelectTemplate={handleApplyTemplate} />
         )}
 
         {/* Approvals View */}
         {activeView === "approvals" && (
-          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
-            <ApprovalQueuePanel onReviewUpdate={() => { fetchReviews(); fetchStats(); }} />
-          </Dialog>
+          <ApprovalQueuePanel onReviewUpdate={() => { fetchReviews(); fetchStats(); }} />
         )}
 
         {/* Integrations View */}
         {activeView === "integrations" && (
-          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
-            <IntegrationsPanel isOpen={true} onClose={() => setActiveView("reviews")} onSyncComplete={handleSyncComplete} />
-          </Dialog>
+          <IntegrationsPanel isOpen={true} onClose={() => setActiveView("reviews")} onSyncComplete={handleSyncComplete} />
         )}
 
         {/* API Connection View */}
@@ -3402,23 +3394,17 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Alerts View */}
         {activeView === "alerts" && (
-          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
-            <NotificationSettings isOpen={true} onClose={() => setActiveView("reviews")} />
-          </Dialog>
+          <NotificationSettings isOpen={true} onClose={() => setActiveView("reviews")} />
         )}
 
         {/* Reports View */}
         {activeView === "reports" && (
-          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
-            <ReportsSettings isOpen={true} onClose={() => setActiveView("reviews")} />
-          </Dialog>
+          <ReportsSettings isOpen={true} onClose={() => setActiveView("reviews")} />
         )}
 
         {/* Branding View */}
         {activeView === "branding" && (
-          <Dialog open={true} onOpenChange={() => setActiveView("reviews")}>
-            <BrandingPanel isOpen={true} onClose={() => setActiveView("reviews")} branding={branding} onBrandingUpdate={(updated) => setBranding(updated)} />
-          </Dialog>
+          <BrandingPanel isOpen={true} onClose={() => setActiveView("reviews")} branding={branding} onBrandingUpdate={(updated) => setBranding(updated)} />
         )}
 
         {/* Team View - Enhanced Staff Management */}

@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend regression for iteration 389 (modal→inline conversion of 7 views). Logged in as admin, navigated to each converted view via sidebar (expanded Reports & System groups). All 7 panels render INLINE (testid present) with NO [role=dialog] overlay, NO error boundary, body scroll not locked. Regression: switching back to Reviews works cleanly. 7/7 PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_389.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "App.js is 4646 lines — recommend splitting inline panels (NotificationSettings, TemplatesManager, ApprovalQueuePanel) into their own files under /components/dashboard/",
+    "Two 401 errors at initial load prior to login are expected (auth-gated endpoints) but should be silenced or gated on auth state to reduce console noise"
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100% (7/7 views verified inline, regression PASS)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from request; /app/memory/test_credentials.md not consulted since credentials were provided)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sidebar nav sections are collapsible. testId `nav-section-<Label>` toggles them. The 7 converted views are: analytics-btn, templates-btn, notification-settings-btn (alerts), reports-btn, approval-queue-btn, integrations-btn, branding-btn. Their inline containers use testids ending in -dialog (kept for backward compatibility with existing tests). Verified no <Dialog> wrapping remains around these seven activeView branches (App.js ~3360-3420).",
+  "verified_views": {
+    "analytics": "PASS - analytics-dialog inline, no role=dialog",
+    "templates": "PASS - templates-dialog inline, no role=dialog",
+    "alerts": "PASS - notification-settings-dialog inline, no role=dialog",
+    "reports": "PASS - reports-settings-dialog inline, no role=dialog",
+    "approvals": "PASS - approval-queue-dialog inline, no role=dialog",
+    "integrations": "PASS - integrations-dialog inline, no role=dialog",
+    "branding": "PASS - branding-dialog inline, no role=dialog"
+  }
+}

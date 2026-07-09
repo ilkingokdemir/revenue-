@@ -7,7 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+// iter 389: converted from modal to inline page panel (Dialog imports replaced by shells)
+const DialogContent = ({ children, className = "", ...rest }) => (
+  <div className={`bg-white border border-stone-200/80 rounded-xl shadow-card p-6 w-full ${className}`} {...rest}>{children}</div>
+);
+const DialogHeader = ({ children, className = "" }) => <div className={`mb-4 ${className}`}>{children}</div>;
+const DialogTitle = ({ children, className = "" }) => <h2 className={`text-lg font-semibold ${className}`}>{children}</h2>;
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { ScrollArea } from "@/components/ui/scroll-area";

@@ -249,3 +249,14 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: autopilot teklif üretti (£80 room_upgrade) → public GET → accept → folio charge +
   upsell_log kaydı → ROI panosu upsell £80 GERÇEK gelir gösterdi → tekrar accept idempotent →
   UI screenshot: sayfa render + kabul akışı çalıştı. Test verisi temizlendi.
+
+## Son Durum (Iter 398, 2026-07-09) — Teklif Sayfası Dönüşüm Artırıcıları TAMAMLANDI
+- Erken kabul indirimi: teklif oluşturulduktan sonra 48 saat içinde kabulde %10 indirim
+  (_early_bird helper, created_at bazlı — migration gerekmez). Accept endpoint'i indirimli tutarı
+  folio + upsell_log'a yazar, folyo açıklamasına "erken kabul -%10" ekler, charged_amount saklanır.
+- Sosyal kanıt: public GET aynı tesis+kategori için son 30 günde kabul edilen teklif sayısını döner.
+- E-posta şablonu: buton indirimli fiyatı gösterir + "48 saat içinde %10 indirim" notu.
+- UpsellOfferPage: üstü çizili orijinal fiyat + indirimli fiyat + "-%10 erken kabul" rozeti +
+  son geçerlilik tarihi (offer-deadline) + "Son 30 günde X misafir kabul etti" (offer-social-proof).
+- E2E DOĞRULANDI: £80 → £72 accept, folio £72 + doğru açıklama, social_count=3 (seed),
+  UI screenshot tüm elementler render. Test verisi temizlendi.

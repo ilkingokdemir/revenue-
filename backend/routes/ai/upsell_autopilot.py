@@ -67,10 +67,11 @@ async def _send_email(to_email: str, subject: str, html: str) -> str:
 
 def _email_html(guest_name: str, check_in: str, cat_key: str, price: float = 0, accept_url: str = "") -> str:
     title, pitch = CATEGORY_TR.get(cat_key, ("Özel Teklif", ""))
-    btn = (f"""<p style="text-align:center;margin:20px 0;">
+    btn = (f"""<p style="text-align:center;margin:20px 0 6px;">
         <a href="{accept_url}" style="background:#b45309;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;display:inline-block;">
-          Tek Tıkla Kabul Et — £{price:.0f}
-        </a></p>""" if accept_url else
+          Tek Tıkla Kabul Et — £{price * 0.9:.0f}
+        </a></p>
+        <p style="text-align:center;font-size:12px;color:#b45309;">48 saat içinde kabul ederseniz %10 erken kabul indirimi (normal fiyat £{price:.0f})</p>""" if accept_url else
         '<p style="font-size:13px;">Resepsiyona yanıt vererek veya check-in sırasında talep edebilirsiniz.</p>')
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#292524;">
@@ -84,6 +85,24 @@ def _email_html(guest_name: str, check_in: str, cat_key: str, price: float = 0, 
       {btn}
     </div>
     """
+
+
+EARLY_BIRD_PCT = 10.0
+EARLY_BIRD_HOURS = 48
+
+
+def _early_bird(o: dict):
+    """Returns (final_price, discount_active, expires_at_iso)."""
+    price = float(o.get("price") or 0)
+    created = o.get("created_at") or ""
+    try:
+        created_dt = datetime.fromisoformat(created)
+    except Exception:
+        return price, False, ""
+    expires = created_dt + timedelta(hours=EARLY_BIRD_HOURS)
+    if datetime.now(timezone.utc) < expires:
+        return round(price * (1 - EARLY_BIRD_PCT / 100), 2), True, expires.isoformat()
+    return price, False, expires.isoformat()
 
 
 def create_upsell_autopilot_router(db, require_roles):
@@ -181,8 +200,18 @@ def create_upsell_autopilot_router(db, require_roles):
         b = await db.bookings.find_one({"id": o["booking_id"]}, {"_id": 0}) or {}
         title, pitch = CATEGORY_TR.get(o.get("category"), ("Özel Teklif", ""))
         prop = await db.properties.find_one({"id": o.get("property_id")}, {"_id": 0, "name": 1}) or {}
+        final_price, discount_active, expires_at = _early_bird(o)
+        since30 = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        social_q: Dict = {"category": o.get("category"), "status": "accepted",
+                          "accepted_at": {"$gte": since30}}
+        if o.get("property_id"):
+            social_q["property_id"] = o["property_id"]
+        social_count = await db.upsell_offers.count_documents(social_q)
         return {"status": o.get("status"), "category": o.get("category"),
                 "title": title, "pitch": pitch, "price": o.get("price", 0),
+                "final_price": final_price, "discount_active": discount_active,
+                "discount_pct": EARLY_BIRD_PCT if discount_active else 0,
+                "expires_at": expires_at, "social_count": social_count,
                 "guest_name": b.get("guest_name", ""), "check_in": b.get("check_in", ""),
                 "check_out": b.get("check_out", ""), "room_type": b.get("room_type_name", ""),
                 "hotel_name": prop.get("name", "")}
@@ -197,16 +226,17 @@ def create_upsell_autopilot_router(db, require_roles):
         if o.get("status") == "declined":
             raise HTTPException(400, "Offer already declined")
         now = _now()
-        price = float(o.get("price") or 0)
-        title, _ = CATEGORY_TR.get(o.get("category"), ("Özel Teklif", ""))
+        price, discount_active, _ = _early_bird(o)
+        title, _t = CATEGORY_TR.get(o.get("category"), ("Özel Teklif", ""))
         await db.upsell_offers.update_one(
             {"accept_token": token},
-            {"$set": {"status": "accepted", "accepted_at": now, "accepted_by": "guest-selfservice"}})
+            {"$set": {"status": "accepted", "accepted_at": now, "accepted_by": "guest-selfservice",
+                      "charged_amount": price, "early_bird_applied": discount_active}})
         await db.folio_items.insert_one({
             "id": str(uuid.uuid4()), "booking_id": o["booking_id"],
             "property_id": o.get("property_id"),
             "type": "charge", "category": "upsell",
-            "description": f"Upsell (autopilot) · {title}",
+            "description": f"Upsell (autopilot) · {title}" + (" · erken kabul -%10" if discount_active else ""),
             "quantity": 1, "unit_price": price, "amount": price,
             "currency": "GBP", "created_at": now, "created_by": "guest-selfservice"})
         await db.upsell_log.insert_one({

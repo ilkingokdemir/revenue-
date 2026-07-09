@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { CheckCircle, XCircle, Sparkle, CalendarBlank, Bed } from "@phosphor-icons/react";
+import { CheckCircle, XCircle, Sparkle, CalendarBlank, Bed, UsersThree } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -60,8 +60,30 @@ export default function UpsellOfferPage({ token }) {
               <Bed size={16} className="text-amber-600" /> {offer.room_type}
             </div>
           )}
-          <div className="text-2xl font-semibold text-stone-900 pt-1" data-testid="offer-price">£{Number(offer.price || 0).toFixed(0)}</div>
+          <div className="text-2xl font-semibold text-stone-900 pt-1" data-testid="offer-price">
+            {offer.discount_active ? (
+              <>
+                <span className="line-through text-stone-400 text-lg mr-2">£{Number(offer.price || 0).toFixed(0)}</span>
+                £{Number(offer.final_price || 0).toFixed(0)}
+                <span className="ml-2 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-0.5 align-middle">-%{offer.discount_pct} erken kabul</span>
+              </>
+            ) : (
+              <>£{Number(offer.final_price ?? offer.price ?? 0).toFixed(0)}</>
+            )}
+          </div>
+          {offer.discount_active && offer.expires_at && (
+            <div className="text-xs text-amber-700" data-testid="offer-deadline">
+              İndirim {new Date(offer.expires_at).toLocaleString("tr-TR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })} tarihine kadar geçerli
+            </div>
+          )}
         </div>
+
+        {offer.social_count > 0 && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-stone-500" data-testid="offer-social-proof">
+            <UsersThree size={16} className="text-amber-600" />
+            Son 30 günde <span className="font-semibold text-stone-700">{offer.social_count} misafir</span> bu teklifi kabul etti
+          </div>
+        )}
 
         {done === "accepted" ? (
           <div className="mt-6 flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl p-4 text-sm font-medium" data-testid="offer-accepted">

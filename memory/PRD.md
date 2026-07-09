@@ -162,3 +162,13 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   (panel dosyalarında kullanılmayan importlar var — zararsız, webpack temiz derliyor).
 - Regresyon: babel parse 4/4 OK, webpack temiz, 6 görünüm canlı test edildi (analytics/templates/
   approvals/api-connection/webhooks/integrations) → hepsi hatasız render.
+
+## Son Durum (Iter 391, 2026-07-09) — Refactor Sonrası TAM SİSTEM DENETİMİ
+- Backend: 55/55 pytest audit GEÇTİ (7.5sn; ilk koşudaki tek fail geçici yüktü, izole geçti).
+- Frontend (test ajanı, iteration_390.json): %100 — 9 sidebar bölümü, 14 refactor'lu görünüm,
+  forecast Segmentler, predictive HK, hurdle LRV, komut paleti, public booking + sosyal kanıt.
+  SIFIR error boundary, SIFIR boş içerik.
+- Minör düzeltme: CommandPalette CommandItem key'i `${group}-${it.id}` yapıldı (duplicate key uyarısı).
+- Bilinçli bırakılan: login öncesi 2× 401 console isteği (/me auth probe — beklenen davranış).
+- Test ajanı gelecek önerisi (backlog): App.js kalan 2531 satırı domain bazlı bölme (opsiyonel Faz 3),
+  sidebar bölüm başlığına tıklayınca otomatik görünüm açma davranışını chevron'dan ayırma (UX tercihi).

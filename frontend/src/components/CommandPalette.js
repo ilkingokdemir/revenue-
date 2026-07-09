@@ -140,7 +140,7 @@ export default function CommandPalette({ items = [], onSelect, recents = [], onA
               <CommandGroup key={group} heading={group}>
                 {list.map((it) => (
                   <CommandItem
-                    key={it.id}
+                    key={`${group}-${it.id}`}
                     value={`${it.name} ${it.keywords || ""} ${it.id}`}
                     onSelect={() => pick(it.id)}
                     data-testid={`command-palette-item-${it.id}`}

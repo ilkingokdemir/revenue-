@@ -6,10 +6,11 @@ manual loop in the automation stack.
 import os
 import logging
 import uuid
+import secrets
 from datetime import datetime, timezone, timedelta, date
 from typing import Dict, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from routes.ai.ai_predictions import _score_upsell_propensity
 
@@ -27,6 +28,20 @@ CATEGORY_TR = {
     "spa": ("Spa & Wellness", "Kendinize bir mola verin — spa seansınız hazır."),
     "transport": ("Havalimanı Transferi", "Kapıdan kapıya konforlu özel transfer."),
 }
+
+# (unit price GBP, per_night?)
+CATEGORY_PRICE = {
+    "room_upgrade": (40.0, True),
+    "late_checkout": (25.0, False),
+    "breakfast": (15.0, True),
+    "spa": (20.0, True),
+    "transport": (45.0, False),
+}
+
+
+def _offer_price(cat: str, nights: int) -> float:
+    unit, per_night = CATEGORY_PRICE.get(cat, (25.0, False))
+    return round(unit * (max(nights, 1) if per_night else 1), 2)
 
 
 def _now() -> str:
@@ -50,18 +65,23 @@ async def _send_email(to_email: str, subject: str, html: str) -> str:
         return "failed"
 
 
-def _email_html(guest_name: str, check_in: str, cat_key: str) -> str:
+def _email_html(guest_name: str, check_in: str, cat_key: str, price: float = 0, accept_url: str = "") -> str:
     title, pitch = CATEGORY_TR.get(cat_key, ("Özel Teklif", ""))
+    btn = (f"""<p style="text-align:center;margin:20px 0;">
+        <a href="{accept_url}" style="background:#b45309;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;display:inline-block;">
+          Tek Tıkla Kabul Et — £{price:.0f}
+        </a></p>""" if accept_url else
+        '<p style="font-size:13px;">Resepsiyona yanıt vererek veya check-in sırasında talep edebilirsiniz.</p>')
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#292524;">
       <h2 style="color:#b45309;">Konaklamanıza özel: {title}</h2>
       <p>Merhaba {guest_name or 'değerli misafirimiz'},</p>
       <p>{check_in} tarihli konaklamanız yaklaşıyor. Size özel hazırladığımız teklif:</p>
       <div style="background:#fffbeb;border:1px dashed #f59e0b;border-radius:12px;padding:18px;margin:18px 0;">
-        <div style="font-size:16px;font-weight:bold;">{title}</div>
+        <div style="font-size:16px;font-weight:bold;">{title} — £{price:.0f}</div>
         <div style="font-size:13px;color:#57534e;margin-top:6px;">{pitch}</div>
       </div>
-      <p style="font-size:13px;">Resepsiyona yanıt vererek veya check-in sırasında talep edebilirsiniz.</p>
+      {btn}
     </div>
     """
 
@@ -98,19 +118,26 @@ def create_upsell_autopilot_router(db, require_roles):
                 skipped_low += 1
                 continue
             cat = r["top_recommendation"]
+            nights = max(int(b.get("nights") or 1), 1)
+            price = _offer_price(cat, nights)
+            token = secrets.token_urlsafe(20)
+            base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+            accept_url = f"{base}/offer/{token}" if base else ""
             email_result = "no_email"
             if b.get("guest_email"):
                 title, _ = CATEGORY_TR.get(cat, ("Özel Teklif", ""))
                 email_result = await _send_email(
                     b["guest_email"],
                     f"Konaklamanıza özel teklif: {title}",
-                    _email_html(b.get("guest_name", ""), b.get("check_in", ""), cat))
+                    _email_html(b.get("guest_name", ""), b.get("check_in", ""), cat, price, accept_url))
             await db.upsell_offers.insert_one({
                 "id": f"UP-{b['id'][:6].upper()}-{cat[:3].upper()}",
                 "booking_id": b["id"],
                 "property_id": b.get("property_id"),
                 "category": cat,
                 "score": r["top_score"],
+                "price": price,
+                "accept_token": token,
                 "status": "sent" if email_result in ("sent", "mock") else "queued",
                 "source": "autopilot",
                 "email_result": email_result,
@@ -145,6 +172,59 @@ def create_upsell_autopilot_router(db, require_roles):
             by_cat[r.get("category", "?")] = by_cat.get(r.get("category", "?"), 0) + 1
         return {"property_id": property_id, "days": days, "total_sent": len(rows),
                 "by_category": by_cat, "recent": rows[:50]}
+
+    @router.get("/public/upsell-offer/{token}")
+    async def public_offer(token: str):
+        o = await db.upsell_offers.find_one({"accept_token": token}, {"_id": 0})
+        if not o:
+            raise HTTPException(404, "Offer not found")
+        b = await db.bookings.find_one({"id": o["booking_id"]}, {"_id": 0}) or {}
+        title, pitch = CATEGORY_TR.get(o.get("category"), ("Özel Teklif", ""))
+        prop = await db.properties.find_one({"id": o.get("property_id")}, {"_id": 0, "name": 1}) or {}
+        return {"status": o.get("status"), "category": o.get("category"),
+                "title": title, "pitch": pitch, "price": o.get("price", 0),
+                "guest_name": b.get("guest_name", ""), "check_in": b.get("check_in", ""),
+                "check_out": b.get("check_out", ""), "room_type": b.get("room_type_name", ""),
+                "hotel_name": prop.get("name", "")}
+
+    @router.post("/public/upsell-offer/{token}/accept")
+    async def public_accept(token: str):
+        o = await db.upsell_offers.find_one({"accept_token": token}, {"_id": 0})
+        if not o:
+            raise HTTPException(404, "Offer not found")
+        if o.get("status") == "accepted":
+            return {"ok": True, "status": "accepted", "already": True}
+        if o.get("status") == "declined":
+            raise HTTPException(400, "Offer already declined")
+        now = _now()
+        price = float(o.get("price") or 0)
+        title, _ = CATEGORY_TR.get(o.get("category"), ("Özel Teklif", ""))
+        await db.upsell_offers.update_one(
+            {"accept_token": token},
+            {"$set": {"status": "accepted", "accepted_at": now, "accepted_by": "guest-selfservice"}})
+        await db.folio_items.insert_one({
+            "id": str(uuid.uuid4()), "booking_id": o["booking_id"],
+            "property_id": o.get("property_id"),
+            "type": "charge", "category": "upsell",
+            "description": f"Upsell (autopilot) · {title}",
+            "quantity": 1, "unit_price": price, "amount": price,
+            "currency": "GBP", "created_at": now, "created_by": "guest-selfservice"})
+        await db.upsell_log.insert_one({
+            "id": str(uuid.uuid4()), "booking_id": o["booking_id"],
+            "type": o.get("category"), "revenue": price,
+            "accepted_at": now, "accepted_by": "guest-selfservice"})
+        return {"ok": True, "status": "accepted", "amount": price}
+
+    @router.post("/public/upsell-offer/{token}/decline")
+    async def public_decline(token: str):
+        o = await db.upsell_offers.find_one({"accept_token": token}, {"_id": 0})
+        if not o:
+            raise HTTPException(404, "Offer not found")
+        if o.get("status") not in ("accepted",):
+            await db.upsell_offers.update_one(
+                {"accept_token": token},
+                {"$set": {"status": "declined", "declined_at": _now()}})
+        return {"ok": True, "status": "declined"}
 
     router.run_autopilot_internal = _autopilot_core
     return router

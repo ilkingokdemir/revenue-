@@ -105,6 +105,7 @@ import { SIDEBAR_PERM_MAP } from "./navigation/permMap";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
 import GuestSurveyPage from "./GuestSurveyPage";
+import UpsellOfferPage from "./UpsellOfferPage";
 import GuestRegistrationPage from "./GuestRegistrationPage";
 import GuestFeedbackPage from "./GuestFeedbackPage";
 import CheckInKioskPage from "./CheckInKioskPage";
@@ -2500,6 +2501,10 @@ function App() {
   if (window.location.pathname.startsWith("/room-help/")) {
     const parts = window.location.pathname.split("/room-help/")[1].split("/");
     return <GuestMaintenancePage propertyId={parts[0]} roomId={parts[1] || "unknown"} />;
+  }
+  if (window.location.pathname.startsWith("/offer/")) {
+    const token = window.location.pathname.split("/offer/")[1];
+    return <UpsellOfferPage token={token} />;
   }
   if (window.location.pathname.startsWith("/book/")) {
     const propertyId = window.location.pathname.split("/book/")[1];

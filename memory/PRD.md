@@ -238,3 +238,14 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: test rezervasyonu (honeymoon/standard/direct, skor 68) → radar 1 fırsat →
   autopilot 1 teklif (room_upgrade, mock e-posta) → rerun dedupe 0 → stats doğru. Test verisi temizlendi.
 - 4 otomasyon döngüsünün tamamı artık tam otonom: rebook, sepet kurtarma, OTA→direkt, upsell.
+
+## Son Durum (Iter 397, 2026-07-09) — Misafir Teklif Kabul Sayfası TAMAMLANDI
+- Autopilot teklifleri artık fiyatlı (kategori bazlı: upgrade £40/gece, breakfast £15/gece, spa £20/gece,
+  late_checkout £25, transfer £45) + `accept_token` + e-postada "Tek Tıkla Kabul Et" butonu (/offer/{token}).
+- Public endpoint'ler (auth yok): GET /api/public/upsell-offer/{token},
+  POST .../accept (idempotent; folio_items'a charge + upsell_log'a gerçek gelir), POST .../decline.
+- Frontend: `UpsellOfferPage.js` (yeni public sayfa, /offer/{token} rotası App.js'e eklendi) —
+  teklif kartı, Kabul Et / Hayır butonları, kabul/red durum ekranları.
+- E2E DOĞRULANDI: autopilot teklif üretti (£80 room_upgrade) → public GET → accept → folio charge +
+  upsell_log kaydı → ROI panosu upsell £80 GERÇEK gelir gösterdi → tekrar accept idempotent →
+  UI screenshot: sayfa render + kabul akışı çalıştı. Test verisi temizlendi.

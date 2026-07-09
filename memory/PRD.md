@@ -187,3 +187,18 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: sweep 8 misafir → 8 kupon + 8 mock e-posta; kupon validate OK (%12);
   token resolve coupon_code döner; rerun dedupe 0; panel 8 satır + %12.5 tıklama gösterdi.
 - NOT: E-posta MOCK modda (RESEND_API_KEY yok) — key gelince otomatik gerçek gönderime geçer.
+
+## Son Durum (Iter 393, 2026-07-09) — Terk Edilmiş Rezervasyon Kurtarma
+- `routes/pms/abandoned_recovery.py`: capture (public, e-posta+arama bağlamı upsert),
+  convert (public, rezervasyon tamamlanınca; email_sent ise recovered=True),
+  run-recovery (admin) + `JOB_HANDLERS["abandoned_recovery"]` (5 tesiste scheduler AKTİF).
+  Kurtarma: 1-48 saat arası terk edilmiş sepetlere %5 COMEBACK-XXXXXX kuponu (direct_conversion_offers,
+  7 gün geçerli) + devam linki `/book/{pid}?coupon=..&checkin=..&checkout=..` (Resend/mock e-posta).
+- Widget: guest details adımında e-posta 1.5sn debounce ile otomatik yakalanır (blur güvenilmezdi);
+  booking success her iki yolda (pay-at-property + Stripe dönüşü) convert çağrılır;
+  ?checkin=&checkout= deep-link tarihleri uygular (default tarih effect'i URL paramına saygılı).
+- DirectConversionPanel: yeni "Terk Edilmiş Kurtarma" sekmesi (4 stat kartı + tablo + "Şimdi Tara & Gönder").
+- E2E DOĞRULANDI: capture → 2h yaşlandırma → recovery (1 e-posta mock + kupon) → kupon validate %5 →
+  convert → recovered=True, panel %100 kurtarma oranı gösterdi. Rerun eligible=0 (dedupe).
+- Not: Eski booking_engine_v2 /cart/track aynı koleksiyonu kullanıyordu (sadece listeleme, döngü yoktu) —
+  stats endpoint'i legacy doc'lara .get() ile uyumlu.

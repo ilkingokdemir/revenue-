@@ -97,6 +97,24 @@ export default function BookingWidgetPage({ propertyId }) {
     axios.post(`${API}/ab/track`, { experiment_id: ab.experiment_id, session_id: abSessionId, variant: ab.variant, event, value }).catch(() => {});
   };
 
+  const captureAbandoned = (email) => {
+    if (!email || !email.includes("@") || !email.includes(".")) return;
+    axios.post(`${API}/booking-widget/abandoned/capture`, {
+      session_id: abSessionId, property_id: propertyId,
+      guest_email: email, guest_name: form.guest_name,
+      check_in: checkIn, check_out: checkOut,
+      room_type_id: selected?.room_type_id || selected?.id || "",
+      rate: selected?.base_rate || 0,
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    if (step !== "details") return;
+    const t = setTimeout(() => captureAbandoned(form.guest_email), 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.guest_email, form.guest_name, step]);
+
   const applyCoupon = async (codeOverride) => {
     const code = (codeOverride || coupon.code).trim();
     if (!code) return;
@@ -149,11 +167,17 @@ export default function BookingWidgetPage({ propertyId }) {
     axios.get(`${API}/booking-widget/info/${propertyId}`).then(r => setHotel(r.data)).catch(() => {});
     axios.get(`${API}/booking-widget/gallery/${propertyId}`).then(r => setGallery(r.data)).catch(() => {});
     axios.get(`${API}/esg/${propertyId}/public-badge`).then(r => setEcoBadge(r.data)).catch(() => {});
-    const today = new Date();
-    const ci = new Date(today); ci.setDate(ci.getDate() + 1);
-    const co = new Date(today); co.setDate(co.getDate() + 3);
-    setCheckIn(ci.toISOString().split("T")[0]);
-    setCheckOut(co.toISOString().split("T")[0]);
+    const urlp = new URLSearchParams(window.location.search);
+    const pci = urlp.get("checkin"), pco = urlp.get("checkout");
+    if (pci && pco && /^\d{4}-\d{2}-\d{2}$/.test(pci) && /^\d{4}-\d{2}-\d{2}$/.test(pco)) {
+      setCheckIn(pci); setCheckOut(pco);
+    } else {
+      const today = new Date();
+      const ci = new Date(today); ci.setDate(ci.getDate() + 1);
+      const co = new Date(today); co.setDate(co.getDate() + 3);
+      setCheckIn(ci.toISOString().split("T")[0]);
+      setCheckOut(co.toISOString().split("T")[0]);
+    }
   }, [propertyId]);
 
   const nights = (() => { try { return Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000)); } catch { return 1; } })();
@@ -182,6 +206,7 @@ export default function BookingWidgetPage({ propertyId }) {
         try {
           const { data } = await axios.get(`${API}/booking-widget/payment-status/${ref}`);
           if (data.status === "confirmed") {
+            axios.post(`${API}/booking-widget/abandoned/convert`, { session_id: localStorage.getItem("be_session_id") || "" }).catch(() => {});
             const abv = localStorage.getItem("be_ab_social_proof_variant");
             if (abv) axios.post(`${API}/ab/track`, { key: "social_proof_badge", session_id: localStorage.getItem("be_session_id") || "", variant: abv, event: "booking_completed", value: Number(data.total_price || 0) }).catch(() => {});
             setConfirmation({
@@ -254,6 +279,7 @@ export default function BookingWidgetPage({ propertyId }) {
       }
       // Pay-at-property or fallback path → show confirmation in-place
       abTrack("booking_completed", Number(data?.booking?.total_price || finalRate || 0));
+      axios.post(`${API}/booking-widget/abandoned/convert`, { session_id: abSessionId }).catch(() => {});
       setConfirmation(data);
       setStep("confirmed");
     } catch { /* silent */ }
@@ -702,7 +728,7 @@ export default function BookingWidgetPage({ propertyId }) {
                 <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Full Name *</label>
                   <input value={form.guest_name} onChange={e => setForm({ ...form, guest_name: e.target.value })} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="John Smith" data-testid="be-guest-name" /></div>
                 <div><label className="text-xs font-semibold text-stone-500 mb-1 block">Email Address *</label>
-                  <input type="email" value={form.guest_email} onChange={e => setForm({ ...form, guest_email: e.target.value })} onBlur={e => checkLoyalty(e.target.value)} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="john@example.com" data-testid="be-guest-email" />
+                  <input type="email" value={form.guest_email} onChange={e => setForm({ ...form, guest_email: e.target.value })} onBlur={e => { checkLoyalty(e.target.value); captureAbandoned(e.target.value); }} className="w-full border border-stone-200 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#1a3c5e]/20 focus:border-[#1a3c5e] outline-none" placeholder="john@example.com" data-testid="be-guest-email" />
                   {loyaltyChecking && <p className="text-[10px] text-stone-400 mt-1">Checking membership…</p>}
                   {loyalty?.is_member && (
                     <div className="mt-2 rounded-lg bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-300 p-3" data-testid="loyalty-banner">

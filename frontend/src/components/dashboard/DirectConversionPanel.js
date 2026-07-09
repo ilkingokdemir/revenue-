@@ -39,11 +39,15 @@ export default function DirectConversionPanel() {
         <TabBtn active={tab === "settings"} onClick={() => setTab("settings")} testId="dcv-tab-settings">
           <Settings className="w-4 h-4 inline mr-1.5" /> Ayarlar
         </TabBtn>
+        <TabBtn active={tab === "abandoned"} onClick={() => setTab("abandoned")} testId="dcv-tab-abandoned">
+          <Clock className="w-4 h-4 inline mr-1.5" /> Terk Edilmiş Kurtarma
+        </TabBtn>
       </div>
 
       {tab === "stats" && <StatsTab />}
       {tab === "offers" && <OffersTab />}
       {tab === "settings" && <SettingsTab />}
+      {tab === "abandoned" && <AbandonedTab />}
     </div>
   );
 }
@@ -303,3 +307,84 @@ const Field = ({ label, hint, children }) => (
     {hint && <p className="text-xs text-stone-400 mt-1">{hint}</p>}
   </div>
 );
+
+/* ═══════════ ABANDONED RECOVERY TAB (iter 393) ═══════════ */
+const AbandonedTab = () => {
+  const [data, setData] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  const load = useCallback(() => {
+    axios.get(`${API}/booking-widget/abandoned/stats/all?days=30`)
+      .then((r) => setData(r.data)).catch(() => toast.error("İstatistik yüklenemedi"));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const runNow = async () => {
+    setRunning(true);
+    try {
+      const { data: r } = await axios.post(`${API}/booking-widget/abandoned/run-recovery`, {});
+      toast.success(`${r.emails_sent} kurtarma e-postası gönderildi (${r.eligible} uygun sepet)`);
+      load();
+    } catch (e) {
+      toast.error("Kurtarma çalıştırılamadı");
+    } finally { setRunning(false); }
+  };
+
+  if (!data) return <div className="p-8 text-stone-400 text-sm" data-testid="dcv-abandoned-loading">Yükleniyor…</div>;
+
+  return (
+    <div className="space-y-5" data-testid="dcv-abandoned-tab">
+      <div className="flex items-start justify-between gap-4">
+        <p className="text-sm text-stone-500 max-w-xl">
+          Widget'ta e-postasını girip rezervasyonu tamamlamayan misafirlere 1 saat sonra
+          %5 kuponlu hatırlatma e-postası gider. Saatlik otomatik tarama aktiftir (Scheduler → abandoned_recovery).
+        </p>
+        <button onClick={runNow} disabled={running} data-testid="dcv-run-recovery-btn"
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-700 text-white text-sm font-semibold rounded-lg hover:bg-emerald-800 disabled:opacity-50 transition-colors shrink-0">
+          <Send className="w-4 h-4" /> {running ? "Çalışıyor…" : "Şimdi Tara & Gönder"}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[["Yakalanan (30g)", data.total_captured], ["E-posta Gönderilen", data.emailed],
+          ["Kurtarılan", data.recovered], ["Kurtarma Oranı", `${data.recovery_rate}%`]].map(([l, v]) => (
+          <div key={l} className="bg-white border border-stone-200 rounded-xl p-4">
+            <div className="text-2xl font-semibold text-stone-900">{v}</div>
+            <div className="text-xs text-stone-500 mt-1">{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto">
+        <table className="w-full text-xs" data-testid="dcv-abandoned-table">
+          <thead>
+            <tr className="border-b border-stone-200 text-left text-[10px] uppercase tracking-wide text-stone-500">
+              <th className="px-3 py-2.5">Misafir</th><th className="px-3 py-2.5">Tarihler</th>
+              <th className="px-3 py-2.5">Tutar</th><th className="px-3 py-2.5">Kupon</th>
+              <th className="px-3 py-2.5">Durum</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data.recent || []).map((c) => (
+              <tr key={c.session_id} className="border-b border-stone-100">
+                <td className="px-3 py-2 text-stone-800">{c.guest_email}</td>
+                <td className="px-3 py-2 text-stone-600">{c.check_in} → {c.check_out}</td>
+                <td className="px-3 py-2 text-stone-600">{c.rate ? `£${fmt(c.rate)}` : "—"}</td>
+                <td className="px-3 py-2 font-mono text-[11px] text-cyan-700">{c.coupon_code || "—"}</td>
+                <td className="px-3 py-2">
+                  {c.recovered ? <span className="text-emerald-600 font-medium">kurtarıldı ✓</span>
+                    : c.status === "converted" ? <span className="text-emerald-600">tamamlandı</span>
+                    : c.email_sent ? <span className="text-amber-600">e-posta gönderildi</span>
+                    : <span className="text-stone-400">bekliyor</span>}
+                </td>
+              </tr>
+            ))}
+            {(data.recent || []).length === 0 && (
+              <tr><td colSpan={5} className="px-3 py-6 text-center text-stone-400">Henüz terk edilmiş sepet yok</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};

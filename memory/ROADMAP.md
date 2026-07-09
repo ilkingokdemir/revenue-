@@ -24,6 +24,7 @@
 | Sosyal Kanıt Widget'ı (booking widget) | `booking_widget.py /social-proof` + SocialProofBadge | iter 384 DONE |
 | Sosyal Kanıt A/B Testi (rozet açık/kapalı) | `ab_test.py` entegrasyonu + 5 tesiste deney seed | iter 385 DONE |
 | Rebook Kampanya Döngüsü (kupon+e-posta+scheduler) | `guests/rebook.py` + RebookPanel | iter 392 DONE |
+| Terk Edilmiş Rezervasyon Kurtarma | `pms/abandoned_recovery.py` + DCV "Terk Edilmiş" sekmesi | iter 393 DONE |
 | OTA Commission Dashboard | `integrations_pkg/ota_commission.py` | iter 374 DONE |
 | 2-Year Forecast | `revenue_ext/forecast_v2.py` | DONE |
 | External Loyalty (Marriott/Hilton) | `integrations_pkg/external_loyalty.py` | DONE |

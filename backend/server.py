@@ -1063,6 +1063,18 @@ async def _job_rebook_sweep(property_id: str) -> dict:
 
 JOB_HANDLERS["rebook_sweep"] = _job_rebook_sweep
 
+from routes.pms.abandoned_recovery import create_abandoned_recovery_router
+abandoned_router = create_abandoned_recovery_router(db, require_roles)
+api_router.include_router(abandoned_router)
+
+async def _job_abandoned_recovery(property_id: str) -> dict:
+    try:
+        return await abandoned_router.run_recovery_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["abandoned_recovery"] = _job_abandoned_recovery
+
 from routes.pms.stay_ext import create_stay_ext_router
 api_router.include_router(create_stay_ext_router(db, require_roles))
 

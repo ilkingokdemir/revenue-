@@ -1099,6 +1099,18 @@ async def _job_email_nudge(property_id: str) -> dict:
 
 JOB_HANDLERS["email_nudge"] = _job_email_nudge
 
+from routes.marketing.daily_pulse import create_daily_pulse_router
+daily_pulse_router = create_daily_pulse_router(db, require_roles)
+api_router.include_router(daily_pulse_router)
+
+async def _job_daily_pulse(property_id: str) -> dict:
+    try:
+        return await daily_pulse_router.run_pulse_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["daily_pulse"] = _job_daily_pulse
+
 from routes.marketing.automation_roi import create_automation_roi_router
 api_router.include_router(create_automation_roi_router(db, require_roles, runners={
     "rebook_sweep": lambda pid, d: rebook_router.run_sweep_internal(property_id=pid, days_after=d),

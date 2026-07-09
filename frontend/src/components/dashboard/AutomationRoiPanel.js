@@ -45,6 +45,19 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [funnel, setFunnel] = useState(null);
   const [nudge, setNudge] = useState(null);
   const [nudging, setNudging] = useState(false);
+  const [pulse, setPulse] = useState(null);
+  const [sendingPulse, setSendingPulse] = useState(false);
+
+  const sendPulse = async () => {
+    setSendingPulse(true);
+    try {
+      const r = await axios.post(`${API}/api/automation/daily-pulse/send`, {
+        property_id: propertyId === "all" ? "default" : propertyId, force: true,
+      });
+      toast.success(`Günlük Nabız ${r.data.sent_to ?? 0} yöneticiye gönderildi`);
+    } catch { toast.error("Günlük Nabız gönderilemedi"); }
+    finally { setSendingPulse(false); }
+  };
 
   const runNudge = async () => {
     setNudging(true);
@@ -59,18 +72,20 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, o, t, f, n] = await Promise.all([
+      const [r, o, t, f, n, p] = await Promise.all([
         axios.get(`${API}/api/automation/roi/${propertyId}?days=${days}`),
         axios.get(`${API}/api/automation/opportunities/${propertyId}`),
         axios.get(`${API}/api/automation/roi/${propertyId}/trend?weeks=8`),
         axios.get(`${API}/api/automation/funnel/${propertyId}?days=30`),
         axios.get(`${API}/api/automation/nudge/stats/${propertyId}?days=30`),
+        axios.get(`${API}/api/automation/daily-pulse/preview/${propertyId === "all" ? "default" : propertyId}`),
       ]);
       setData(r.data);
       setOpps(o.data);
       setTrend(t.data);
       setFunnel(f.data);
       setNudge(n.data);
+      setPulse(p.data);
     } catch { toast.error("ROI verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId, days]);
@@ -230,6 +245,49 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
             <BellRinging size={14} weight="fill" />
             {nudging ? "Gönderiliyor…" : "Hatırlatmaları Gönder"}
           </button>
+        </div>
+      )}
+
+      {pulse && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="daily-pulse-card">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                <EnvelopeSimple size={18} className="text-indigo-600" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-stone-900">Günlük Nabız — GM özet e-postası</div>
+                <div className="text-xs text-stone-500 mt-0.5">Her sabah 08:00'de yöneticilere otomatik gönderilir</div>
+              </div>
+            </div>
+            <button onClick={sendPulse} disabled={sendingPulse} data-testid="pulse-send-btn"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 rounded-lg px-3 py-1.5 transition-colors">
+              <EnvelopeSimple size={14} weight="fill" />
+              {sendingPulse ? "Gönderiliyor…" : "Şimdi Gönder"}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 text-center" data-testid="pulse-preview">
+            {[
+              { label: "Varış", value: pulse.today.arrivals },
+              { label: "Çıkış", value: pulse.today.departures },
+              { label: "Konaklayan", value: pulse.today.in_house },
+              { label: "Doluluk", value: pulse.today.occupancy_pct != null ? `%${pulse.today.occupancy_pct}` : "—" },
+              { label: "Dün rezervasyon", value: fmt(pulse.yesterday.booked_revenue) },
+              { label: "Dün otomasyon", value: fmt(pulse.yesterday.automation_revenue) },
+            ].map((s) => (
+              <div key={s.label} className="bg-stone-50 border border-stone-100 rounded-lg p-3">
+                <div className="text-base font-semibold text-stone-900">{s.value}</div>
+                <div className="text-[11px] text-stone-500 mt-0.5">{s.label}</div>
+              </div>
+            ))}
+          </div>
+          {(pulse.risks.open_logbook > 0 || pulse.risks.unanswered_reviews > 0) && (
+            <div className="mt-3 text-xs text-rose-600" data-testid="pulse-risks">
+              ⚠ {pulse.risks.open_logbook > 0 && `${pulse.risks.open_logbook} açık logbook kaydı`}
+              {pulse.risks.open_logbook > 0 && pulse.risks.unanswered_reviews > 0 && " · "}
+              {pulse.risks.unanswered_reviews > 0 && `${pulse.risks.unanswered_reviews} yanıtlanmamış yorum`}
+            </div>
+          )}
         </div>
       )}
 

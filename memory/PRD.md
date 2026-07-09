@@ -281,3 +281,15 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: 30s eski teklif + 96s eski kupon seed → nudge 1+1 gönderildi (mock) →
   rerun dedupe 0 → nudge sonrası görüntüleme → recovery %100 stats doğru → UI kart render.
   Test verisi temizlendi.
+
+## Son Durum (Iter 401, 2026-07-09) — Günlük Nabız (Daily Pulse) TAMAMLANDI
+- `routes/marketing/daily_pulse.py`: GM özet e-postası — bugünkü varış/çıkış/konaklayan/doluluk,
+  dünkü yeni rezervasyon geliri, dünkü otomasyon kazancı (kupon+upsell), riskler (açık logbook,
+  yanıtlanmamış yorum). TR HTML tablo şablonu. Alıcılar: admin/manager (test hesapları hariç).
+- Günde 1 gönderim dedupe (`daily_pulse_log`), `force:true` ile manuel tekrar mümkün.
+- Endpoint'ler: GET /api/automation/daily-pulse/preview/{pid}, POST /api/automation/daily-pulse/send.
+- `JOB_HANDLERS["daily_pulse"]` + 5 tesiste scheduler AKTİF (08:00) — scheduler config sonrası
+  otomatik ilk gönderimi kendisi yaptı (dedupe bunu doğruladı).
+- ROI paneline "Günlük Nabız" kartı: 6 metrik önizleme + risk satırı + "Şimdi Gönder" (pulse-send-btn).
+- E2E DOĞRULANDI: preview gerçek veri (%66.7 doluluk, £91,188 dün), scheduler otomatik gönderdi,
+  force resend sent_to=1 (mock log doğrulandı), UI kart render.

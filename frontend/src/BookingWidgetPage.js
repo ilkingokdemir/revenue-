@@ -116,6 +116,8 @@ export default function BookingWidgetPage({ propertyId }) {
     const params = new URLSearchParams(window.location.search);
     const c = (params.get("coupon") || "").trim().toUpperCase();
     if (c) applyCoupon(c);
+    const rb = (params.get("rebook") || "").trim();
+    if (rb) axios.get(`${API}/rebook/token/${rb}`).catch(() => {}); // click tracking
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

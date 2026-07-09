@@ -1052,7 +1052,16 @@ from routes.hotel_ops.low_stock import create_low_stock_router
 api_router.include_router(create_low_stock_router(db, require_roles))
 
 from routes.guests.rebook import create_rebook_router
-api_router.include_router(create_rebook_router(db, require_roles))
+rebook_router = create_rebook_router(db, require_roles)
+api_router.include_router(rebook_router)
+
+async def _job_rebook_sweep(property_id: str) -> dict:
+    try:
+        return await rebook_router.run_sweep_internal(property_id=property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["rebook_sweep"] = _job_rebook_sweep
 
 from routes.pms.stay_ext import create_stay_ext_router
 api_router.include_router(create_stay_ext_router(db, require_roles))

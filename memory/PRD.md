@@ -172,3 +172,18 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Bilinçli bırakılan: login öncesi 2× 401 console isteği (/me auth probe — beklenen davranış).
 - Test ajanı gelecek önerisi (backlog): App.js kalan 2531 satırı domain bazlı bölme (opsiyonel Faz 3),
   sidebar bölüm başlığına tıklayınca otomatik görünüm açma davranışını chevron'dan ayırma (UX tercihi).
+
+## Son Durum (Iter 392, 2026-07-09) — Rebook Kampanya Döngüsü TAMAMLANDI
+- `routes/guests/rebook.py` yeniden yazıldı (iskelet → tam döngü):
+  - Sweep artık GERÇEK tek kullanımlık kupon üretir (REBOOK-XXXXXX, direct_conversion_offers'a
+    yazılır → widget /direct-conversion/validate ile doğrular, redeem edilir).
+  - E-posta gönderimi: Resend (RESEND_API_KEY yoksa MOCK log) — markalı HTML şablon,
+    deep-link: /book/{pid}?coupon=CODE&rebook=TOKEN.
+  - Dispatches endpoint'i redeemed + conversion_rate döner.
+  - `router.run_sweep_internal` + server.py JOB_HANDLERS["rebook_sweep"] → günlük otomatik tarama;
+    5 tesiste scheduler config AKTİF edildi.
+- Widget: ?rebook=token parametresi tıklama takibini tetikler (GET /rebook/token/{t}).
+- RebookPanel: kupon kolonu + durum (gönderildi/mock) + Redeemed/Conversion kartları.
+- E2E DOĞRULANDI: sweep 8 misafir → 8 kupon + 8 mock e-posta; kupon validate OK (%12);
+  token resolve coupon_code döner; rerun dedupe 0; panel 8 satır + %12.5 tıklama gösterdi.
+- NOT: E-posta MOCK modda (RESEND_API_KEY yok) — key gelince otomatik gerçek gönderime geçer.

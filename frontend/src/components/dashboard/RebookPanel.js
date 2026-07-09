@@ -38,14 +38,15 @@ export default function RebookPanel({ propertyId, hotelName = "" }) {
     <div className="space-y-6" data-testid="rebook-panel">
       <div>
         <h2 className="text-2xl font-semibold text-stone-100">Quick Re-booking CTA</h2>
-        <p className="text-sm text-stone-400 mt-1">{hotelName ? `${hotelName} · ` : ""}30 days after checkout, send a "stay again" email with their last room pre-filled and a small loyalty discount.</p>
+        <p className="text-sm text-stone-400 mt-1">{hotelName ? `${hotelName} · ` : ""}Check-out'tan N gün sonra misafire tek kullanımlık kuponlu "tekrar bekliyoruz" e-postası gönderilir. Günlük otomatik tarama aktif (Scheduler → rebook_sweep).</p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="Dispatches (60d)" value={data.count} />
         <Stat label="Clicks" value={data.clicked} highlight />
         <Stat label="Click rate" value={`${data.click_rate}%`} highlight={data.click_rate >= 15} />
-        <Stat label="Outstanding" value={data.count - data.clicked} />
+        <Stat label="Redeemed" value={data.redeemed || 0} highlight={(data.redeemed || 0) > 0} />
+        <Stat label="Conversion" value={`${data.conversion_rate || 0}%`} highlight={(data.conversion_rate || 0) > 0} />
       </div>
 
       <div className="rounded-xl border border-stone-800 bg-stone-900/60 p-4 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -58,16 +59,20 @@ export default function RebookPanel({ propertyId, hotelName = "" }) {
       <div className="rounded-xl border border-stone-800 bg-stone-900/60 overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="text-left text-[10px] uppercase tracking-wider text-stone-500 border-b border-stone-800">
-            <tr><th className="px-3 py-2">Sent</th><th className="px-3 py-2">Guest</th><th className="px-3 py-2">Last room</th><th className="px-3 py-2 text-right">Disc %</th><th className="px-3 py-2">Token / link</th><th className="px-3 py-2">Clicked</th></tr>
+            <tr><th className="px-3 py-2">Sent</th><th className="px-3 py-2">Guest</th><th className="px-3 py-2">Coupon</th><th className="px-3 py-2 text-right">Disc %</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Clicked</th></tr>
           </thead>
           <tbody>
             {data.items.map((d) => (
               <tr key={d.id} className="border-t border-stone-800/60 text-stone-200" data-testid="rb-row">
                 <td className="px-3 py-2 text-xs text-stone-400">{(d.scheduled_for || "").slice(0, 16)}</td>
                 <td className="px-3 py-2"><div>{d.guest_name}</div><div className="text-[10px] text-stone-500">{d.guest_email}</div></td>
-                <td className="px-3 py-2 text-xs">{d.last_room_type}</td>
+                <td className="px-3 py-2 font-mono text-[11px] text-cyan-300">{d.coupon_code || `/rebook/${d.token?.slice(0, 12)}…`}</td>
                 <td className="px-3 py-2 text-right">{d.loyalty_discount_pct}%</td>
-                <td className="px-3 py-2 font-mono text-[10px] text-cyan-300">/rebook/{d.token?.slice(0, 16)}…</td>
+                <td className="px-3 py-2 text-xs">
+                  {d.status === "sent" ? <span className="text-emerald-300">gönderildi{d.email_result === "mock" ? " (mock)" : ""}</span>
+                    : d.status === "failed" ? <span className="text-rose-300">hata</span>
+                    : <span className="text-stone-400">bekliyor</span>}
+                </td>
                 <td className="px-3 py-2">{d.clicked ? <span className="text-emerald-300 flex items-center gap-1 text-xs"><MousePointer className="w-3 h-3" /> {(d.clicked_at || "").slice(11, 16)}</span> : <span className="text-xs text-stone-500">—</span>}</td>
               </tr>
             ))}

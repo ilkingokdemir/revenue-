@@ -35,7 +35,8 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
       const res = r.data.results || {};
       const rb = res.rebook || {};
       const cb = res.comeback || {};
-      toast.success(`Otomatik düzeltme tamam: ${rb.queued ?? 0} rebook kuponu (${rb.sent ?? 0} e-posta), ${cb.emails_sent ?? 0} sepet kurtarma e-postası`);
+      const up = res.upsell || {};
+      toast.success(`Otomatik düzeltme tamam: ${rb.queued ?? 0} rebook kuponu, ${cb.emails_sent ?? 0} sepet kurtarma, ${up.offers_sent ?? 0} upsell teklifi gönderildi`);
       load();
     } catch { toast.error("Otomatik düzeltme başarısız"); }
     finally { setFixing(false); }

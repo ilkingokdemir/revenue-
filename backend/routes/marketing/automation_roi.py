@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends
 from datetime import datetime, timezone, timedelta
 import logging
 
+from routes.ai.ai_predictions import _score_upsell_propensity
+
 logger = logging.getLogger(__name__)
 
 
@@ -143,7 +145,7 @@ def create_automation_roi_router(db, require_roles, runners=None):
         arrivals = await db.bookings.find(
             {**pq, "status": {"$in": ["confirmed", "checked_in", "pending_payment"]},
              "check_in": {"$gte": today, "$lte": horizon}},
-            {"_id": 0, "id": 1, "total_price": 1, "nights": 1}).to_list(2000)
+            {"_id": 0}).to_list(2000)
         offered = set()
         if arrivals:
             offs = await db.upsell_offers.find(
@@ -151,6 +153,13 @@ def create_automation_roi_router(db, require_roles, runners=None):
                 {"_id": 0, "booking_id": 1}).to_list(2000)
             offered = {o["booking_id"] for o in offs}
         no_offer = [b for b in arrivals if b["id"] not in offered]
+        # only high-propensity (score>=60) arrivals — aligned with autopilot
+        high = []
+        for b in no_offer:
+            guest = await db.guest_profiles.find_one({"id": b.get("guest_id")}, {"_id": 0}) or {}
+            if _score_upsell_propensity(b, guest)["top_score"] >= 60:
+                high.append(b)
+        no_offer = high
         nightly = [float(b.get("total_price") or 0) / max(int(b.get("nights") or 1), 1) for b in no_offer]
         upsell_potential = sum(nightly) * 0.12  # ~12% of nightly rate per accepted upsell
 
@@ -179,7 +188,7 @@ def create_automation_roi_router(db, require_roles, runners=None):
              "count": len(carts), "potential": round(cart_potential, 2),
              "action": "Kurtarma e-postalarını gönder", "view": "rebook"},
             {"key": "upsell", "name": "Tekliflendirilmemiş Varışlar",
-             "desc": "Önümüzdeki 14 gün içinde gelen, upsell teklifi almamış rezervasyonlar",
+             "desc": "Yüksek upsell potansiyelli (skor ≥60) teklif almamış yaklaşan varışlar",
              "count": len(no_offer), "potential": round(upsell_potential, 2),
              "action": "Upsell skorlarını gör", "view": "ai-predictions"},
             {"key": "direct_conversion", "name": "Dönüştürülmemiş OTA Misafirleri",
@@ -195,7 +204,7 @@ def create_automation_roi_router(db, require_roles, runners=None):
     async def auto_fix(property_id: str, body: dict = None,
                        current_user: dict = Depends(require_roles("admin", "manager"))):
         """One-click: backfill rebook sweep (7-90d checkouts) + abandoned cart recovery."""
-        actions = (body or {}).get("actions") or ["rebook", "comeback"]
+        actions = (body or {}).get("actions") or ["rebook", "comeback", "upsell"]
         pid = "" if property_id == "all" else property_id
         results = {}
 
@@ -216,6 +225,13 @@ def create_automation_roi_router(db, require_roles, runners=None):
                 results["comeback"] = {k: r.get(k) for k in ("eligible", "emails_sent") if k in r} or r
             except Exception as e:
                 results["comeback"] = {"error": str(e)}
+
+        if "upsell" in actions and runners.get("upsell_autopilot"):
+            try:
+                r = await runners["upsell_autopilot"](pid)
+                results["upsell"] = {k: r.get(k) for k in ("scanned", "offers_sent", "skipped_low_score") if k in r} or r
+            except Exception as e:
+                results["upsell"] = {"error": str(e)}
 
         await db.automation_fix_runs.insert_one({
             "property_id": property_id, "actions": actions, "results": results,

@@ -226,3 +226,15 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: 388 fırsat → auto-fix (367 kupon + 1 sepet e-postası, <1sn) → rebook 0, sepet 0,
   direct_conversion 0; rerun dedupe queued=0. UI: buton tıklandı, radar yenilendi (~£668 sadece upsell kaldı).
 - Düzeltilen bug: `fixing` state tanımı eksikti ("fixing is not defined" crash) → eklendi, doğrulandı.
+
+## Son Durum (Iter 396, 2026-07-09) — Upsell Auto-Pilot TAMAMLANDI
+- `routes/ai/upsell_autopilot.py`: yüksek skorlu (top_score>=60, _score_upsell_propensity) yaklaşan
+  varışlara (14g) otomatik markalı upsell e-postası (TR şablon, kategori bazlı; Resend/mock).
+  Teklifler `upsell_offers`'a source:"autopilot" ile yazılır (dedupe: booking_id bazlı).
+- Endpoint'ler: POST /api/ai-predictions/upsell/autopilot/run, GET .../autopilot/stats/{pid}.
+- `JOB_HANDLERS["upsell_autopilot"]` + 5 tesiste scheduler_config AKTİF (her gün 09:00).
+- Auto-Fix artık 3 aksiyonu kapsıyor: rebook + comeback + upsell (toast güncellendi).
+- Radar upsell sayımı autopilot ile hizalandı (sadece skor>=60 sayılıyor).
+- E2E DOĞRULANDI: test rezervasyonu (honeymoon/standard/direct, skor 68) → radar 1 fırsat →
+  autopilot 1 teklif (room_upgrade, mock e-posta) → rerun dedupe 0 → stats doğru. Test verisi temizlendi.
+- 4 otomasyon döngüsünün tamamı artık tam otonom: rebook, sepet kurtarma, OTA→direkt, upsell.

@@ -1075,10 +1075,23 @@ async def _job_abandoned_recovery(property_id: str) -> dict:
 
 JOB_HANDLERS["abandoned_recovery"] = _job_abandoned_recovery
 
+from routes.ai.upsell_autopilot import create_upsell_autopilot_router
+upsell_autopilot_router = create_upsell_autopilot_router(db, require_roles)
+api_router.include_router(upsell_autopilot_router)
+
+async def _job_upsell_autopilot(property_id: str) -> dict:
+    try:
+        return await upsell_autopilot_router.run_autopilot_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["upsell_autopilot"] = _job_upsell_autopilot
+
 from routes.marketing.automation_roi import create_automation_roi_router
 api_router.include_router(create_automation_roi_router(db, require_roles, runners={
     "rebook_sweep": lambda pid, d: rebook_router.run_sweep_internal(property_id=pid, days_after=d),
     "abandoned_recovery": abandoned_router.run_recovery_internal,
+    "upsell_autopilot": upsell_autopilot_router.run_autopilot_internal,
 }))
 
 from routes.pms.stay_ext import create_stay_ext_router

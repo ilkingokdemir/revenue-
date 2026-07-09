@@ -216,3 +216,13 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - AutomationRoiPanel'e "Fırsat Radarı" bölümü eklendi: potansiyel gelir kartları + aksiyon butonları
   (onNavigate ile rebook / ai-predictions / direct-conversion panellerine derin bağlantı).
 - E2E DOĞRULANDI: curl (388 rebook fırsatı, ~£12,534 toplam potansiyel) + screenshot (radar + aksiyon butonları görünür).
+
+## Son Durum (Iter 395, 2026-07-09) — Fırsat Radarı "Hepsini Düzelt" (Auto-Fix) TAMAMLANDI
+- `POST /api/automation/opportunities/{pid}/auto-fix`: tek tıkla rebook backfill taraması
+  (7-90 gün önceki check-out'lar, run_sweep_internal döngüsü) + terk sepet kurtarma
+  (run_recovery_internal). server.py runners dict ile enjekte edildi. Sonuç `automation_fix_runs`'a loglanıyor.
+- Radar rebook sorgusu 7 gün eşiğine hizalandı (auto-fix kapsamıyla tutarlı).
+- AutomationRoiPanel: "Hepsini Düzelt" butonu (auto-fix-btn) + sonuç toast'u + otomatik yenileme.
+- E2E DOĞRULANDI: 388 fırsat → auto-fix (367 kupon + 1 sepet e-postası, <1sn) → rebook 0, sepet 0,
+  direct_conversion 0; rerun dedupe queued=0. UI: buton tıklandı, radar yenilendi (~£668 sadece upsell kaldı).
+- Düzeltilen bug: `fixing` state tanımı eksikti ("fixing is not defined" crash) → eklendi, doğrulandı.

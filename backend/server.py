@@ -1076,7 +1076,10 @@ async def _job_abandoned_recovery(property_id: str) -> dict:
 JOB_HANDLERS["abandoned_recovery"] = _job_abandoned_recovery
 
 from routes.marketing.automation_roi import create_automation_roi_router
-api_router.include_router(create_automation_roi_router(db, require_roles))
+api_router.include_router(create_automation_roi_router(db, require_roles, runners={
+    "rebook_sweep": lambda pid, d: rebook_router.run_sweep_internal(property_id=pid, days_after=d),
+    "abandoned_recovery": abandoned_router.run_recovery_internal,
+}))
 
 from routes.pms.stay_ext import create_stay_ext_router
 api_router.include_router(create_stay_ext_router(db, require_roles))

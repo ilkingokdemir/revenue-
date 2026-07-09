@@ -10,8 +10,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def create_automation_roi_router(db, require_roles):
+def create_automation_roi_router(db, require_roles, runners=None):
     router = APIRouter()
+    runners = runners or {}
 
     @router.get("/automation/roi/{property_id}")
     async def roi(property_id: str, days: int = 30,
@@ -111,10 +112,11 @@ def create_automation_roi_router(db, require_roles):
         today = now.date().isoformat()
         pq = {} if property_id == "all" else {"property_id": property_id}
 
-        # 1. Rebook: checked-out guests (last 90d) without a rebook dispatch
+        # 1. Rebook: checked-out guests (7-90d ago) without a rebook dispatch
         since90 = (now - timedelta(days=90)).date().isoformat()
+        until7 = (now - timedelta(days=7)).date().isoformat()
         outs = await db.bookings.find(
-            {**pq, "status": "checked_out", "check_out": {"$gte": since90, "$lt": today}},
+            {**pq, "status": "checked_out", "check_out": {"$gte": since90, "$lt": until7}},
             {"_id": 0, "id": 1, "total_price": 1}).to_list(5000)
         dispatched = set()
         if outs:
@@ -188,5 +190,37 @@ def create_automation_roi_router(db, require_roles):
         ]
         return {"property_id": property_id, "rows": rows,
                 "total_potential": round(sum(r["potential"] for r in rows), 2)}
+
+    @router.post("/automation/opportunities/{property_id}/auto-fix")
+    async def auto_fix(property_id: str, body: dict = None,
+                       current_user: dict = Depends(require_roles("admin", "manager"))):
+        """One-click: backfill rebook sweep (7-90d checkouts) + abandoned cart recovery."""
+        actions = (body or {}).get("actions") or ["rebook", "comeback"]
+        pid = "" if property_id == "all" else property_id
+        results = {}
+
+        if "rebook" in actions and runners.get("rebook_sweep"):
+            queued = sent = 0
+            for d in range(7, 91):
+                try:
+                    r = await runners["rebook_sweep"](pid, d)
+                    queued += int(r.get("queued") or 0)
+                    sent += int(r.get("emails_sent") or 0)
+                except Exception as e:
+                    logger.warning(f"auto-fix rebook day {d}: {e}")
+            results["rebook"] = {"queued": queued, "sent": sent}
+
+        if "comeback" in actions and runners.get("abandoned_recovery"):
+            try:
+                r = await runners["abandoned_recovery"](pid)
+                results["comeback"] = {k: r.get(k) for k in ("eligible", "emails_sent") if k in r} or r
+            except Exception as e:
+                results["comeback"] = {"error": str(e)}
+
+        await db.automation_fix_runs.insert_one({
+            "property_id": property_id, "actions": actions, "results": results,
+            "run_by": current_user.get("email"),
+            "run_at": datetime.now(timezone.utc).isoformat()})
+        return {"ok": True, "results": results}
 
     return router

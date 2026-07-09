@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight } from "@phosphor-icons/react";
+import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 const ICONS = { rebook: EnvelopeSimple, comeback: ShoppingCartSimple, direct_conversion: Storefront, upsell: Lightning, ai_pricing: Robot };
@@ -12,6 +12,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [opps, setOpps] = useState(null);
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
+  const [fixing, setFixing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -26,6 +27,19 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
     finally { setLoading(false); }
   }, [propertyId, days]);
   useEffect(() => { load(); }, [load]);
+
+  const autoFix = async () => {
+    setFixing(true);
+    try {
+      const r = await axios.post(`${API}/api/automation/opportunities/${propertyId}/auto-fix`, {});
+      const res = r.data.results || {};
+      const rb = res.rebook || {};
+      const cb = res.comeback || {};
+      toast.success(`Otomatik düzeltme tamam: ${rb.queued ?? 0} rebook kuponu (${rb.sent ?? 0} e-posta), ${cb.emails_sent ?? 0} sepet kurtarma e-postası`);
+      load();
+    } catch { toast.error("Otomatik düzeltme başarısız"); }
+    finally { setFixing(false); }
+  };
 
   if (loading) return <div className="p-8 text-stone-400 text-sm" data-testid="automation-roi-loading">Hesaplanıyor…</div>;
   if (!data) return <div className="p-8 text-stone-400 text-sm">Veri yok</div>;
@@ -112,8 +126,15 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
               <Crosshair size={16} weight="fill" className="text-rose-500" />
               <h3 className="text-sm font-semibold text-stone-900">Fırsat Radarı — masada kalan para</h3>
             </div>
-            <div className="text-sm font-semibold text-rose-600" data-testid="opportunity-total">
-              ~{fmt(opps.total_potential)} potansiyel
+            <div className="flex items-center gap-3">
+              <div className="text-sm font-semibold text-rose-600" data-testid="opportunity-total">
+                ~{fmt(opps.total_potential)} potansiyel
+              </div>
+              <button onClick={autoFix} disabled={fixing} data-testid="auto-fix-btn"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-60 rounded-lg px-3 py-1.5 transition-colors">
+                <Wrench size={14} weight="fill" />
+                {fixing ? "Çalışıyor…" : "Hepsini Düzelt"}
+              </button>
             </div>
           </div>
           <div className="grid md:grid-cols-2 gap-3">

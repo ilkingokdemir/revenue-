@@ -126,3 +126,15 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - `OfflineBanner.js`: online/offline event dinleyicili üst banner ("Çevrimdışı mod" amber /
   "Bağlantı geri geldi" yeşil 4sn). App.js köküne eklendi. testid: offline-banner.
 - Test: SW v2 kontrolde ✓, offline'da dashboard cached veriyle render ✓, banner iki yön ✓.
+
+## Son Durum (Iter 388, 2026-07-09) — Offline Aksiyon Kuyruğu
+- `src/lib/offlineQueue.js`: axios response interceptor — network hatasında whitelist'teki
+  yazma istekleri (housekeeping tasks/rooms status/maintenance, maintenance issues) localStorage
+  kuyruğuna alınır, sentetik 202 {queued:true} döner (UI kırılmaz).
+- Online olunca otomatik flush: başarılı → toast "N işlem senkronize edildi"; 4xx → drop; ağ/5xx → kuyrukta kalır.
+- OfflineBanner kuyruğu gösterir: "· N işlem kuyrukta" (offline-queue-changed event).
+- Debug/test kancası: window.__offlineQueue {flushQueue, getQueueCount, axios}.
+- E2E DOĞRULANDI: offline PUT → 202 queued + banner "1 işlem kuyrukta" → online flush → kuyruk 0
+  → DB'de task status gerçekten 'in_progress' oldu ✓.
+- Bilinen sınır: offline'dayken DAHA ÖNCE ZİYARET EDİLMEMİŞ lazy chunk yüklenemez (ErrorBoundary
+  dostane hata gösterir; SW ziyaret edilen chunk'ları cache'ler — production'da normal davranış).

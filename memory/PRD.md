@@ -320,3 +320,17 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   → "Gelir sızıntısı denetçisi" (leakage-audit-btn).
 - E2E DOĞRULANDI: 90 günde £15,531 gerçek sızıntı bulundu (54 no-show tahsil edilmemiş,
   2 açık folyo £498, 37 sıfır fiyatlı rezervasyon); UI 30 gün £1,175 + detay açılımı çalışıyor.
+
+## Son Durum (Iter 404, 2026-07-10) — No-Show Toplu Tahsilat TAMAMLANDI
+- `POST /api/revenue/leakage/{pid}/charge-noshows` body {policy: first_night|full, days}:
+  tahsil edilmemiş no-show'lara folio charge (category: no_show) yazar, booking'e
+  no_show_charged/no_show_fee/no_show_collected işaretler; kayıtlı vault kartı + STRIPE_API_KEY
+  varsa off-session PaymentIntent dener (başarılıysa folio payment kaydı da düşer).
+- Sızıntı taraması no_show_charged=True kayıtları artık hariç tutuyor (dedupe).
+- LeakagePanel: no-show kartına aksiyon barı — İlk gece / Tam tutar politika seçici +
+  "N No-Show'u Folyoya İşle & Tahsil Et" butonu (noshow-charge-btn), sonuç toast + otomatik yenile.
+- E2E DOĞRULANDI: 30 günde 2 no-show → charge (first_night, £235 folyoya işlendi, kart yok) →
+  tarama 0'a düştü → rerun dedupe posted=0 → folio kayıtları doğru → UI aksiyon barı 90 günde
+  52 kayıtla render.
+- NOT: Paralel search_replace aynı dosyada yine kayboldu (import + endpoint edit'leri) —
+  sırayla tekrar uygulandı. AYNI DOSYAYA PARALEL EDİT YAPMA.

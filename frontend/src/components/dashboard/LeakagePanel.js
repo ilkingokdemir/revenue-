@@ -12,6 +12,19 @@ export default function LeakagePanel({ propertyId }) {
   const [days, setDays] = useState(30);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(null);
+  const [policy, setPolicy] = useState("first_night");
+  const [charging, setCharging] = useState(false);
+
+  const chargeNoshows = async () => {
+    setCharging(true);
+    try {
+      const r = await axios.post(`${API}/api/revenue/leakage/${propertyId}/charge-noshows`, { policy, days });
+      const d = r.data;
+      toast.success(`${d.posted} no-show ücreti folyoya işlendi (£${d.total_posted}) · ${d.collected_via_card} karttan tahsil edildi · ${d.no_card_on_file} kayıtlı kart yok`);
+      load();
+    } catch { toast.error("No-show tahsilatı başarısız"); }
+    finally { setCharging(false); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -93,6 +106,23 @@ export default function LeakagePanel({ propertyId }) {
                       <span className="font-semibold text-stone-800 shrink-0 ml-3">{fmt(it.amount)}</span>
                     </div>
                   ))}
+                </div>
+              )}
+              {r.key === "noshow_uncharged" && r.count > 0 && (
+                <div className="mt-4 border-t border-stone-100 pt-3 flex flex-wrap items-center gap-2" data-testid="noshow-action-bar">
+                  <div className="flex rounded-lg border border-stone-200 overflow-hidden text-xs">
+                    {[["first_night", "İlk gece"], ["full", "Tam tutar"]].map(([v, l]) => (
+                      <button key={v} onClick={() => setPolicy(v)} data-testid={`noshow-policy-${v}`}
+                        className={`px-3 py-1.5 font-medium transition-colors ${policy === v ? "bg-stone-900 text-white" : "bg-white text-stone-600 hover:bg-stone-50"}`}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={chargeNoshows} disabled={charging} data-testid="noshow-charge-btn"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 disabled:opacity-60 rounded-lg px-3 py-1.5 transition-colors">
+                    <Wallet size={14} weight="fill" />
+                    {charging ? "İşleniyor…" : `${r.count} No-Show'u Folyoya İşle & Tahsil Et`}
+                  </button>
                 </div>
               )}
             </div>

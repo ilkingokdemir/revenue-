@@ -293,3 +293,17 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - ROI paneline "Günlük Nabız" kartı: 6 metrik önizleme + risk satırı + "Şimdi Gönder" (pulse-send-btn).
 - E2E DOĞRULANDI: preview gerçek veri (%66.7 doluluk, £91,188 dün), scheduler otomatik gönderdi,
   force resend sent_to=1 (mock log doğrulandı), UI kart render.
+
+## Son Durum (Iter 402, 2026-07-10) — Otomasyon Sağlık İzleyici (Watchdog) TAMAMLANDI
+- `compute_automation_health(db, pid)` (automation_roi.py): scheduler_config (enabled) +
+  scheduler_history üzerinden her job/tesis için durum: healthy / stale (>26s çalışmamış) /
+  failing (son çalışma hatalı; error alanı veya result.ok=False) / pending (hiç çalışmamış).
+  Ardışık hata sayısı (consecutive_failures) + son hata mesajı da dönülür.
+- `GET /api/automation/health/{pid}` endpoint'i eklendi.
+- Günlük Nabız risklerine `failing_automations` (job TR etiketleri) eklendi — GM e-postasında
+  "Otomasyon HATALI: X" maddesi çıkar.
+- ROI paneline "Otomasyon sağlığı" kartı: özet sayaçlar + job bazlı renkli durum chip'leri
+  (tesisler arası en kötü durum gösterilir, tooltip'te son çalışma/hata).
+- E2E DOĞRULANDI: 27 job-tesis sağlıklı; sahte hata kaydıyla failing=1 + pulse risks
+  ['Rebook Taraması'] doğru tespit; seed temizlendi; UI kart + chip'ler render.
+- NOT: İlk JSX düzenlemesi paralel edit çakışmasıyla dosyaya yazılmamıştı — insert_text ile eklendi.

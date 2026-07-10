@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel, BellRinging } from "@phosphor-icons/react";
+import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel, BellRinging, Heartbeat } from "@phosphor-icons/react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -47,6 +47,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [nudging, setNudging] = useState(false);
   const [pulse, setPulse] = useState(null);
   const [sendingPulse, setSendingPulse] = useState(false);
+  const [health, setHealth] = useState(null);
 
   const sendPulse = async () => {
     setSendingPulse(true);
@@ -72,13 +73,14 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, o, t, f, n, p] = await Promise.all([
+      const [r, o, t, f, n, p, h] = await Promise.all([
         axios.get(`${API}/api/automation/roi/${propertyId}?days=${days}`),
         axios.get(`${API}/api/automation/opportunities/${propertyId}`),
         axios.get(`${API}/api/automation/roi/${propertyId}/trend?weeks=8`),
         axios.get(`${API}/api/automation/funnel/${propertyId}?days=30`),
         axios.get(`${API}/api/automation/nudge/stats/${propertyId}?days=30`),
         axios.get(`${API}/api/automation/daily-pulse/preview/${propertyId === "all" ? "default" : propertyId}`),
+        axios.get(`${API}/api/automation/health/${propertyId}`),
       ]);
       setData(r.data);
       setOpps(o.data);
@@ -86,6 +88,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
       setFunnel(f.data);
       setNudge(n.data);
       setPulse(p.data);
+      setHealth(h.data);
     } catch { toast.error("ROI verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId, days]);
@@ -247,6 +250,44 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
           </button>
         </div>
       )}
+
+      {health && health.rows.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="automation-health-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Heartbeat size={16} weight="fill" className={health.summary.failing > 0 ? "text-rose-500" : "text-emerald-600"} />
+              <h3 className="text-sm font-semibold text-stone-900">Otomasyon sağlığı</h3>
+            </div>
+            <div className="flex items-center gap-3 text-xs" data-testid="health-summary">
+              <span className="text-emerald-700">● {health.summary.healthy} sağlıklı</span>
+              {health.summary.stale > 0 && <span className="text-amber-600">● {health.summary.stale} bayat</span>}
+              {health.summary.pending > 0 && <span className="text-stone-400">● {health.summary.pending} bekliyor</span>}
+              {health.summary.failing > 0 && <span className="text-rose-600 font-semibold">● {health.summary.failing} HATALI</span>}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(() => {
+              const byJob = {};
+              const rank = { failing: 3, stale: 2, pending: 1, healthy: 0 };
+              for (const r of health.rows) {
+                const cur = byJob[r.job];
+                if (!cur || rank[r.status] > rank[cur.status]) byJob[r.job] = r;
+              }
+              const dot = { healthy: "bg-emerald-500", stale: "bg-amber-500", pending: "bg-stone-300", failing: "bg-rose-500" };
+              return Object.values(byJob).map((r) => (
+                <div key={r.job} className="inline-flex items-center gap-2 border border-stone-200 rounded-full px-3 py-1.5 text-xs text-stone-700"
+                  data-testid={`health-${r.job}`}
+                  title={r.status === "failing" ? r.last_error : (r.last_run_at ? `Son çalışma: ${r.last_run_at.slice(0, 16).replace("T", " ")}` : "Henüz çalışmadı")}>
+                  <span className={`w-2 h-2 rounded-full ${dot[r.status]}`} />
+                  {r.label}
+                  {r.consecutive_failures > 1 && <span className="text-rose-600 font-semibold">×{r.consecutive_failures}</span>}
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
 
       {pulse && (
         <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="daily-pulse-card">

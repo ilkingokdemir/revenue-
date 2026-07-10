@@ -10,6 +10,7 @@ from typing import Dict, Optional
 from fastapi import APIRouter, Depends
 
 from routes.ai.upsell_autopilot import _send_email
+from routes.marketing.automation_roi import compute_automation_health
 
 logger = logging.getLogger(__name__)
 
@@ -57,13 +58,16 @@ def create_daily_pulse_router(db, require_roles):
 
         open_log = await db.logbook_entries.count_documents({**pq, "status": "open"})
         unanswered = await db.reviews.count_documents({**pq, "responded": {"$ne": True}})
+        health = await compute_automation_health(db, property_id)
+        failing_jobs = [f"{r['label']}" for r in health["rows"] if r["status"] == "failing"]
 
         return {"property_id": property_id, "date": today_iso,
                 "today": {"arrivals": arrivals, "departures": departures,
                           "in_house": in_house, "occupancy_pct": occupancy},
                 "yesterday": {"new_bookings": booked["count"], "booked_revenue": booked["revenue"],
                               "automation_revenue": auto_rev},
-                "risks": {"open_logbook": open_log, "unanswered_reviews": unanswered}}
+                "risks": {"open_logbook": open_log, "unanswered_reviews": unanswered,
+                          "failing_automations": failing_jobs}}
 
     def _pulse_html(d: dict, hotel_name: str) -> str:
         t, y, r = d["today"], d["yesterday"], d["risks"]
@@ -73,6 +77,8 @@ def create_daily_pulse_router(db, require_roles):
             risk_items.append(f"<li>{r['open_logbook']} açık logbook kaydı</li>")
         if r["unanswered_reviews"]:
             risk_items.append(f"<li>{r['unanswered_reviews']} yanıtlanmamış yorum</li>")
+        for j in r.get("failing_automations") or []:
+            risk_items.append(f"<li>Otomasyon HATALI: {j}</li>")
         risks_html = f"<ul style='margin:6px 0;padding-left:18px;color:#b91c1c;font-size:13px;'>{''.join(risk_items)}</ul>" if risk_items else "<p style='font-size:13px;color:#15803d;'>Dikkat gerektiren risk yok ✓</p>"
         cell = "padding:10px 14px;border-radius:10px;background:#fafaf9;border:1px solid #e7e5e4;"
         return f"""

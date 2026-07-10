@@ -11,6 +11,72 @@ from routes.ai.ai_predictions import _score_upsell_propensity
 
 logger = logging.getLogger(__name__)
 
+JOB_LABELS_TR = {
+    "rebook_sweep": "Rebook Taraması",
+    "abandoned_recovery": "Sepet Kurtarma",
+    "upsell_autopilot": "Upsell Auto-Pilot",
+    "email_nudge": "Akıllı Hatırlatma",
+    "daily_pulse": "Günlük Nabız",
+    "ai_pricing_auto_apply": "AI Fiyatlama",
+    "auto_deposit_capture": "Otomatik Depozito",
+    "sync_queue_tick": "Kanal Senkronu",
+    "nightly_dry_publish": "Gece Yayını",
+    "fleet_geo_validate": "Fleet Geo Doğrulama",
+    "fleet_vision_enrich": "Fleet Vision",
+    "fleet_competitor_price_scan": "Rakip Fiyat Taraması",
+}
+
+STALE_HOURS = 26
+
+
+async def compute_automation_health(db, property_id: str) -> dict:
+    q = {"enabled": True}
+    if property_id != "all":
+        q["property_id"] = property_id
+    configs = await db.scheduler_config.find(q, {"_id": 0}).to_list(500)
+    now = datetime.now(timezone.utc)
+    rows = []
+    for cfg in configs:
+        job, pid = cfg.get("job"), cfg.get("property_id")
+        if not job or not pid:
+            continue
+        hist = await db.scheduler_history.find(
+            {"job": job, "property_id": pid},
+            {"_id": 0, "ran_at": 1, "result": 1, "error": 1}
+        ).sort("ran_at", -1).to_list(5)
+
+        def failed(h):
+            return bool(h.get("error")) or (isinstance(h.get("result"), dict) and h["result"].get("ok") is False)
+
+        consecutive = 0
+        for h in hist:
+            if failed(h):
+                consecutive += 1
+            else:
+                break
+        last_run = cfg.get("last_run_at") or (hist[0]["ran_at"] if hist else "")
+        last_err = ""
+        if hist and failed(hist[0]):
+            last_err = hist[0].get("error") or (hist[0].get("result") or {}).get("error", "")
+        if hist and failed(hist[0]):
+            status = "failing"
+        elif not last_run:
+            status = "pending"
+        else:
+            try:
+                age_h = (now - datetime.fromisoformat(last_run)).total_seconds() / 3600
+                status = "stale" if age_h > STALE_HOURS else "healthy"
+            except Exception:
+                status = "stale"
+        rows.append({"job": job, "label": JOB_LABELS_TR.get(job, job), "property_id": pid,
+                     "status": status, "last_run_at": last_run,
+                     "consecutive_failures": consecutive, "last_error": last_err[:200]})
+
+    summary = {"healthy": 0, "stale": 0, "failing": 0, "pending": 0}
+    for r in rows:
+        summary[r["status"]] += 1
+    return {"property_id": property_id, "rows": rows, "summary": summary}
+
 
 def create_automation_roi_router(db, require_roles, runners=None):
     router = APIRouter()
@@ -269,6 +335,11 @@ def create_automation_roi_router(db, require_roles, runners=None):
                            "accepted": up_accepted, "declined": up_declined,
                            "view_rate": rate(up_viewed, up_sent),
                            "accept_rate": rate(up_accepted, up_sent)}}
+
+    @router.get("/automation/health/{property_id}")
+    async def automation_health(property_id: str,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await compute_automation_health(db, property_id)
 
     @router.post("/automation/opportunities/{property_id}/auto-fix")
     async def auto_fix(property_id: str, body: dict = None,

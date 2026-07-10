@@ -1111,6 +1111,9 @@ async def _job_daily_pulse(property_id: str) -> dict:
 
 JOB_HANDLERS["daily_pulse"] = _job_daily_pulse
 
+from routes.revenue_ext.leakage import create_leakage_router
+api_router.include_router(create_leakage_router(db, require_roles))
+
 from routes.marketing.automation_roi import create_automation_roi_router
 api_router.include_router(create_automation_roi_router(db, require_roles, runners={
     "rebook_sweep": lambda pid, d: rebook_router.run_sweep_internal(property_id=pid, days_after=d),

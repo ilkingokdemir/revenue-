@@ -307,3 +307,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: 27 job-tesis sağlıklı; sahte hata kaydıyla failing=1 + pulse risks
   ['Rebook Taraması'] doğru tespit; seed temizlendi; UI kart + chip'ler render.
 - NOT: İlk JSX düzenlemesi paralel edit çakışmasıyla dosyaya yazılmamıştı — insert_text ile eklendi.
+
+## Son Durum (Iter 403, 2026-07-10) — Gelir Sızıntısı Denetçisi TAMAMLANDI
+- `routes/revenue_ext/leakage.py`: GET /api/revenue/leakage/{pid}?days= — 4 sızıntı taraması:
+  1) Ödenmemiş folyolar (checked_out; folio charges - payments > 0.5, aggregate pipeline)
+  2) Folyoya işlenmemiş kabul edilmiş upsell'ler (upsell_offers accepted vs folio category upsell)
+  3) Tahsil edilmemiş no-show'lar (status no_show, folio payment yok, total_price > 0)
+  4) Sıfır fiyatlı aktif rezervasyonlar (veri hatası)
+  Her satır: count, leaked (£), ilk 10 kayıt detayı; toplam sızıntı ve kayıt sayısı.
+- Frontend: `LeakagePanel.js` (lazy) — 30/90/180 gün filtre, koyu özet bandı, genişleyebilir
+  kategori kartları (kayıt detayları: ref, misafir, tutar). Menü: Revenue & rates → Tools
+  → "Gelir sızıntısı denetçisi" (leakage-audit-btn).
+- E2E DOĞRULANDI: 90 günde £15,531 gerçek sızıntı bulundu (54 no-show tahsil edilmemiş,
+  2 açık folyo £498, 37 sıfır fiyatlı rezervasyon); UI 30 gün £1,175 + detay açılımı çalışıyor.

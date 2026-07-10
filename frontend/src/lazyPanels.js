@@ -149,6 +149,7 @@ export const ReviewAgentPanel = L(() => import("./components/dashboard/ReviewAge
 export const OpenPricingPanel = L(() => import("./components/dashboard/OpenPricingPanel"));
 export const HurdleLrvPanel = L(() => import("./components/dashboard/HurdleLrvPanel"));
 export const AutomationRoiPanel = L(() => import("./components/dashboard/AutomationRoiPanel"));
+export const LeakagePanel = L(() => import("./components/dashboard/LeakagePanel"));
 export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
 export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
 

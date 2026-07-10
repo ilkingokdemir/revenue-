@@ -259,6 +259,7 @@ export function buildMenuSections(t, user) {
         { id: "site-feasibility", icon: ChartLineUp, name: "Site feasibility & investor", testId: "site-feasibility-btn" },
         { id: "automation-analytics", icon: ChartBar, name: "Otomasyon analitiği", testId: "automation-analytics-btn" },
         { id: "automation-roi", icon: Coins, name: "Otomasyon ROI", testId: "automation-roi-btn" },
+        { id: "leakage-audit", icon: ShieldCheck, name: "Gelir sızıntısı denetçisi", testId: "leakage-audit-btn" },
       ],
     },
     {

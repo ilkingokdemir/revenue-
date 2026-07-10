@@ -1,0 +1,115 @@
+"""
+Revenue Leakage Auditor (iter 403) — scans for money silently leaking:
+unpaid folio balances, accepted upsells never posted to folio,
+uncharged no-shows and zero-rate bookings.
+"""
+from fastapi import APIRouter, Depends
+from datetime import datetime, timezone, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def create_leakage_router(db, require_roles):
+    router = APIRouter()
+
+    @router.get("/revenue/leakage/{property_id}")
+    async def leakage(property_id: str, days: int = 30,
+                      current_user: dict = Depends(require_roles("admin", "manager"))):
+        days = min(max(days, 7), 180)
+        now = datetime.now(timezone.utc)
+        today = now.date().isoformat()
+        since = (now.date() - timedelta(days=days)).isoformat()
+        pq = {} if property_id == "all" else {"property_id": property_id}
+
+        # 1. Unpaid folio balances on checked-out stays
+        outs = await db.bookings.find(
+            {**pq, "status": "checked_out", "check_out": {"$gte": since, "$lte": today}},
+            {"_id": 0, "id": 1, "booking_ref": 1, "guest_name": 1}).to_list(3000)
+        out_map = {b["id"]: b for b in outs}
+        unpaid_items = []
+        if out_map:
+            pipeline = [
+                {"$match": {"booking_id": {"$in": list(out_map.keys())}}},
+                {"$group": {"_id": "$booking_id",
+                            "charges": {"$sum": {"$cond": [{"$eq": ["$type", "payment"]}, 0, "$amount"]}},
+                            "payments": {"$sum": {"$cond": [{"$eq": ["$type", "payment"]}, "$amount", 0]}}}},
+            ]
+            async for g in db.folio_items.aggregate(pipeline):
+                bal = round(float(g.get("charges") or 0) - float(g.get("payments") or 0), 2)
+                if bal > 0.5:
+                    b = out_map.get(g["_id"], {})
+                    unpaid_items.append({"booking_id": g["_id"], "ref": b.get("booking_ref", ""),
+                                         "guest_name": b.get("guest_name", ""), "amount": bal,
+                                         "detail": "Folyo bakiyesi ödenmemiş"})
+        unpaid_items.sort(key=lambda x: -x["amount"])
+
+        # 2. Accepted upsells never posted to folio
+        since_iso = (now - timedelta(days=days)).isoformat()
+        accepted = await db.upsell_offers.find(
+            {**pq, "status": "accepted", "accepted_at": {"$gte": since_iso}},
+            {"_id": 0, "booking_id": 1, "category": 1, "price": 1, "charged_amount": 1}).to_list(2000)
+        missing_upsell = []
+        if accepted:
+            bids = list({a["booking_id"] for a in accepted})
+            posted = await db.folio_items.find(
+                {"booking_id": {"$in": bids}, "category": "upsell"},
+                {"_id": 0, "booking_id": 1}).to_list(5000)
+            posted_ids = {p["booking_id"] for p in posted}
+            for a in accepted:
+                if a["booking_id"] not in posted_ids:
+                    amt = float(a.get("charged_amount") or a.get("price") or 0)
+                    missing_upsell.append({"booking_id": a["booking_id"], "ref": "",
+                                           "guest_name": "", "amount": round(amt, 2),
+                                           "detail": f"Upsell ({a.get('category', '?')}) folyoya işlenmemiş"})
+
+        # 3. No-shows never charged
+        noshows = await db.bookings.find(
+            {**pq, "status": "no_show", "check_in": {"$gte": since, "$lte": today},
+             "total_price": {"$gt": 0}},
+            {"_id": 0, "id": 1, "booking_ref": 1, "guest_name": 1, "total_price": 1}).to_list(2000)
+        noshow_items = []
+        if noshows:
+            ids = [b["id"] for b in noshows]
+            pays = await db.folio_items.find(
+                {"booking_id": {"$in": ids}, "type": "payment"},
+                {"_id": 0, "booking_id": 1}).to_list(5000)
+            paid_ids = {p["booking_id"] for p in pays}
+            for b in noshows:
+                if b["id"] not in paid_ids:
+                    noshow_items.append({"booking_id": b["id"], "ref": b.get("booking_ref", ""),
+                                         "guest_name": b.get("guest_name", ""),
+                                         "amount": round(float(b["total_price"]), 2),
+                                         "detail": "No-show ücreti tahsil edilmemiş"})
+        noshow_items.sort(key=lambda x: -x["amount"])
+
+        # 4. Zero-rate active bookings (data errors)
+        zero = await db.bookings.find(
+            {**pq, "status": {"$in": ["confirmed", "checked_in", "checked_out"]},
+             "check_in": {"$gte": since},
+             "$or": [{"total_price": {"$in": [0, None]}}, {"total_price": {"$exists": False}}]},
+            {"_id": 0, "id": 1, "booking_ref": 1, "guest_name": 1, "room_type_name": 1}).to_list(2000)
+        zero_items = [{"booking_id": b["id"], "ref": b.get("booking_ref", ""),
+                       "guest_name": b.get("guest_name", ""), "amount": 0,
+                       "detail": f"Sıfır fiyatlı rezervasyon ({b.get('room_type_name') or 'oda'})"}
+                      for b in zero]
+
+        def row(key, name, desc, items):
+            return {"key": key, "name": name, "desc": desc, "count": len(items),
+                    "leaked": round(sum(i["amount"] for i in items), 2), "items": items[:10]}
+
+        rows = [
+            row("unpaid_folio", "Ödenmemiş Folyolar",
+                "Check-out olmuş ama folyo bakiyesi kapanmamış konaklamalar", unpaid_items),
+            row("missing_upsell", "Folyoya İşlenmemiş Upsell'ler",
+                "Misafir kabul etti ama ücret folyoya hiç yansımadı", missing_upsell),
+            row("noshow_uncharged", "Tahsil Edilmemiş No-Show'lar",
+                "Gelmeyen misafirlerden hiç ödeme alınmamış", noshow_items),
+            row("zero_rate", "Sıfır Fiyatlı Rezervasyonlar",
+                "Fiyatı 0 veya boş görünen aktif rezervasyonlar (veri hatası)", zero_items),
+        ]
+        return {"property_id": property_id, "days": days, "rows": rows,
+                "total_leaked": round(sum(r["leaked"] for r in rows), 2),
+                "total_items": sum(r["count"] for r in rows)}
+
+    return router

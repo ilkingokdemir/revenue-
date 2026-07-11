@@ -1,0 +1,24 @@
+{
+  "summary": "Iteration 408 regression sweep of automation / revenue-leakage / guest-risk stack passed. Backend: 15/15 tests PASS, 1 SKIP (public upsell offer flow — no upsell_offers with accept_token in DB, autopilot ran but current offers are 'queued' without token yet; not a bug, just no seed data). Frontend: all 8 automation-roi panels (opportunity-radar, auto-fix-btn, roi-trend-chart, roi-funnel, nudge-card, daily-pulse-card, automation-health-card, pulse-send-btn) render; leakage-panel + leak-total + 4 leak-rows + leak-days-90 filter + noshow-action-bar + noshow-charge-btn all visible; guest-risk-panel + risk-high-count + risk-days-30 + 4 arrival rows with 'Depozito İste' (3) and 'İstendi' (1) buttons all rendered.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration408_automation_regression.py",
+    "/app/test_reports/pytest/iter408.xml"
+  ],
+  "action_items": [
+    "Optional: seed at least one upsell_offer with accept_token so the public offer accept flow can be regression-tested (currently skipped because no matching doc exists in DB)."
+  ],
+  "critical_code_review_comments": [
+    "Automation ROI endpoint uses total_attributed/total_estimated/commission_saved instead of a single 'total' — response shape is documented and stable; frontend already consumes it correctly.",
+    "Nudge stats returns nested {upsell:{nudged,recovered,recovery_rate}, coupon:{...}} — schema is fine, just document in API contract; some testers may assume flat keys."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration408_automation_regression.py"],
+  "success_rate": {"backend": "100% (15/15 passed, 1 skipped due to missing seed data)", "frontend": "100% (all requested testids and interactions verified)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — works",
+  "seed_data_creation": "none — deposit-request test performs cleanup via mongosh unset + deleteMany after each run",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints verified: /api/automation/roi/{pid}, /api/automation/opportunities/{pid}, /api/automation/opportunities/all/auto-fix (idempotent), /api/automation/roi/all/trend, /api/automation/funnel/all, /api/automation/health/all (leakage_sweep/upsell_autopilot/email_nudge/daily_pulse jobs present), /api/ai-predictions/upsell/autopilot/run+stats/all, /api/automation/nudge/run+stats/all (nested by channel), /api/automation/daily-pulse/preview/{pid}+send (dedupe + force), /api/revenue/leakage/all + sweep-log, /api/guests/risk/arrivals/all + single-guest + request-deposit (idempotent, produces Stripe checkout URL) + deposit-status (pending on mock). Deposit test cleans up mongodb after itself. Public upsell-offer/{token}/accept flow currently untested — DB lacks upsell_offers with accept_token; autopilot creates queued offers without tokens in current state. All UI testids referenced in AutomationRoiPanel, LeakagePanel, GuestRiskPanel are present and clickable via sidebar accordion expansion (nav-section-Revenue & rates, nav-section-Guests).",
+  "rca of the issue": "No unresolved issues."
+}

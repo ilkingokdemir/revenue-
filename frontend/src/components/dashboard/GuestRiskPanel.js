@@ -16,6 +16,27 @@ export default function GuestRiskPanel({ propertyId }) {
   const [days, setDays] = useState(14);
   const [loading, setLoading] = useState(true);
   const [showLow, setShowLow] = useState(false);
+  const [busy, setBusy] = useState("");
+
+  const requestDeposit = async (id) => {
+    setBusy(id);
+    try {
+      const r = await axios.post(`${API}/api/guests/risk/${id}/request-deposit`);
+      toast.success(`Depozito talebi gönderildi (£${r.data.amount})`);
+      load();
+    } catch { toast.error("Depozito talebi başarısız"); }
+    finally { setBusy(""); }
+  };
+
+  const checkDeposit = async (id) => {
+    setBusy(id);
+    try {
+      const r = await axios.post(`${API}/api/guests/risk/${id}/deposit-status`);
+      if (r.data.status === "paid") { toast.success(`Depozito ödendi (£${r.data.amount}) — folyoya işlendi`); load(); }
+      else toast.info("Ödeme henüz yapılmadı");
+    } catch { toast.error("Durum sorgulanamadı"); }
+    finally { setBusy(""); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,8 +122,27 @@ export default function GuestRiskPanel({ propertyId }) {
                     <div className={`h-full rounded-full ${L.bar}`} style={{ width: `${r.score}%` }} />
                   </div>
                 </div>
-                <div className="text-xs font-medium text-stone-700 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 shrink-0">
-                  {r.action}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="text-xs font-medium text-stone-700 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2">
+                    {r.action}
+                  </div>
+                  {r.level !== "low" && (
+                    r.deposit_paid ? (
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2" data-testid={`deposit-paid-${r.id}`}>
+                        Depozito alındı ✓
+                      </span>
+                    ) : r.deposit_requested ? (
+                      <button onClick={() => checkDeposit(r.id)} disabled={busy === r.id} data-testid={`deposit-check-${r.id}`}
+                        className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 hover:bg-amber-100 disabled:opacity-60 rounded-lg px-3 py-2 transition-colors">
+                        {busy === r.id ? "…" : "İstendi · Durumu kontrol et"}
+                      </button>
+                    ) : (
+                      <button onClick={() => requestDeposit(r.id)} disabled={busy === r.id} data-testid={`deposit-request-${r.id}`}
+                        className="text-xs font-semibold text-white bg-stone-900 hover:bg-stone-700 disabled:opacity-60 rounded-lg px-3 py-2 transition-colors">
+                        {busy === r.id ? "Gönderiliyor…" : "Depozito İste"}
+                      </button>
+                    )
+                  )}
                 </div>
               </div>
             );

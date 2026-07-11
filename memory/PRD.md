@@ -361,3 +361,21 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   Menü: Guests → "Misafir risk radarı" (guest-risk-btn).
 - E2E DOĞRULANDI: emily.williams 2 no-show → skor 40 medium "Depozito isteyin"; 30 günde 4 orta
   riskli varış £760 risk değeri; UI screenshot tüm elementler render.
+
+## Son Durum (Iter 407, 2026-07-11) — Tek Tık Depozito Talebi (Stripe Checkout) TAMAMLANDI
+- risk_score.py'ye eklendi (emergentintegrations StripeCheckout, playbook'a uygun):
+  - POST /api/guests/risk/{booking_id}/request-deposit: ilk gece tutarı kadar GBP Checkout Session
+    oluşturur (gerçek checkout.stripe.com URL), deposit_requests + payment_transactions (pending)
+    kaydı, misafire ödeme linkli e-posta (mock), booking.deposit_requested=True (dedupe).
+  - POST /api/guests/risk/{booking_id}/deposit-status: önce webhook-güncellemeli
+    payment_transactions'a bakar, sonra best-effort get_checkout_status dener (proxy'de
+    'No such session' verirse pending döner — ödeme onayı /api/webhook/stripe üzerinden gelir).
+    Paid ise idempotent şekilde folio deposit payment + booking.deposit_paid=True.
+- GuestRiskPanel: orta/yüksek risk satırlarında "Depozito İste" → "İstendi · Durumu kontrol et" →
+  "Depozito alındı ✓" durum akışı (deposit-request-/deposit-check-/deposit-paid- testid'leri).
+- E2E DOĞRULANDI: session oluştu (£104.98, gerçek Stripe test URL), dedupe already:true,
+  status pending → webhook simülasyonu → paid + folio 1 kayıt (idempotent, 2. çağrıda çift kayıt yok),
+  arrivals flag'leri döndü, UI toast + durum geçişi çalıştı. Simülasyon verisi temizlendi.
+- NOT: emergentintegrations get_checkout_status bu ortamda 'No such checkout.session' veriyor —
+  ödeme onayı webhook'a dayanıyor (payments.py'deki mevcut /api/webhook/stripe handler'ı
+  payment_transactions'ı güncelliyor). Raw Stripe API sk_test_emergent ile ÇALIŞMAZ.

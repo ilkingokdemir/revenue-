@@ -408,11 +408,13 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
               </div>
             ))}
           </div>
-          {(pulse.risks.open_logbook > 0 || pulse.risks.unanswered_reviews > 0) && (
+          {(pulse.risks.open_logbook > 0 || pulse.risks.unanswered_reviews > 0 || pulse.risks.reviews_awaiting_approval > 0) && (
             <div className="mt-3 text-xs text-rose-600" data-testid="pulse-risks">
-              ⚠ {pulse.risks.open_logbook > 0 && `${pulse.risks.open_logbook} açık logbook kaydı`}
-              {pulse.risks.open_logbook > 0 && pulse.risks.unanswered_reviews > 0 && " · "}
-              {pulse.risks.unanswered_reviews > 0 && `${pulse.risks.unanswered_reviews} yanıtlanmamış yorum`}
+              ⚠ {[
+                pulse.risks.open_logbook > 0 && `${pulse.risks.open_logbook} açık logbook kaydı`,
+                pulse.risks.unanswered_reviews > 0 && `${pulse.risks.unanswered_reviews} yanıtlanmamış yorum`,
+                pulse.risks.reviews_awaiting_approval > 0 && `${pulse.risks.reviews_awaiting_approval} AI yanıt taslağı onay bekliyor`,
+              ].filter(Boolean).join(" · ")}
             </div>
           )}
         </div>

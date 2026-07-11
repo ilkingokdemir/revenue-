@@ -415,3 +415,17 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   (report-send-btn).
 - E2E DOĞRULANDI: preview £1,635 (kupon £1,400 + no-show £235 + sızıntı £100), gün koruması skip,
   force send sent_to=1 (mock e-posta log), UI kart + döküm render.
+
+## Son Durum (Iter 411, 2026-07-11) — Yorum Yanıt Autopilot TAMAMLANDI
+- `routes/guests/review_autopilot.py`: bekleyen (response_status: pending) yorumları günlük tarar
+  (max 10/çalıştırma, LLM maliyet kontrolü): 4-5★ → AI yanıtı DOĞRUDAN YAYINLAR
+  (response_method: ai_autopilot, yorum dilinde, kişiselleştirilmiş, gpt-5.2 Emergent LLM key);
+  ≤3★ → taslak üretip MEVCUT onay kuyruğuna düşürür (response_status: pending_approval —
+  ReviewToolsPanels'daki Approval Queue UI'ı ve /api/reviews/{id}/approve endpoint'i zaten vardı).
+- Endpoint'ler: POST /api/reviews/autopilot/run, GET /api/reviews/autopilot/stats.
+- `JOB_HANDLERS["review_autopilot"]` + 5 tesiste scheduler (08:30) + watchdog "Yorum Yanıt Autopilot".
+- Günlük Nabız risks güncellendi: unanswered_reviews artık sadece 'pending' sayar +
+  yeni reviews_awaiting_approval alanı (e-posta + UI'da "X AI yanıt taslağı onay bekliyor").
+- E2E DOĞRULANDI: scheduler kendisi çalıştırdı — 7 bekleyen yorum → 4 olumlu otomatik yayınlandı
+  (gerçek kişiselleştirilmiş AI yanıtı doğrulandı), 3 olumsuz onay kuyruğunda; stats 4/3/0;
+  pulse risks doğru; watchdog healthy; UI screenshot tüm elementler render.

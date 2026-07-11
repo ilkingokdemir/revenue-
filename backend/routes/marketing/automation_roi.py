@@ -21,6 +21,7 @@ JOB_LABELS_TR = {
     "leakage_sweep": "Sızıntı Taraması",
     "cancel_save": "İptal Kurtarma",
     "monthly_report_card": "Aylık Karne",
+    "review_autopilot": "Yorum Yanıt Autopilot",
     "auto_deposit_capture": "Otomatik Depozito",
     "sync_queue_tick": "Kanal Senkronu",
     "nightly_dry_publish": "Gece Yayını",

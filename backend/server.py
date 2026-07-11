@@ -1123,6 +1123,18 @@ async def _job_leakage_sweep(property_id: str) -> dict:
 
 JOB_HANDLERS["leakage_sweep"] = _job_leakage_sweep
 
+from routes.ai.cancel_save_autopilot import create_cancel_save_router
+cancel_save_router = create_cancel_save_router(db, require_roles)
+api_router.include_router(cancel_save_router)
+
+async def _job_cancel_save(property_id: str) -> dict:
+    try:
+        return await cancel_save_router.run_cancel_save_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["cancel_save"] = _job_cancel_save
+
 from routes.guests.risk_score import create_guest_risk_router
 api_router.include_router(create_guest_risk_router(db, require_roles))
 

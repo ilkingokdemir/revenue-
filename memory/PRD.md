@@ -379,3 +379,26 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - NOT: emergentintegrations get_checkout_status bu ortamda 'No such checkout.session' veriyor —
   ödeme onayı webhook'a dayanıyor (payments.py'deki mevcut /api/webhook/stripe handler'ı
   payment_transactions'ı güncelliyor). Raw Stripe API sk_test_emergent ile ÇALIŞMAZ.
+
+## Son Durum (Iter 408, 2026-07-11) — KAPSAMLI REGRESYON DENETİMİ GEÇTİ ✅
+- Testing agent ile son 10 iterasyonun tamamı denetlendi: BACKEND 15/15 PASS,
+  FRONTEND %100 (tüm testid'ler ve etkileşimler doğrulandı). Kritik/minör sorun YOK.
+- Kapsam: ROI + fırsatlar + auto-fix (idempotent) + trend + funnel + health,
+  upsell autopilot run/stats, nudge run/stats, daily-pulse preview/send (dedupe+force),
+  leakage scan/sweep-log, guest risk arrivals/single/request-deposit (Stripe URL)/deposit-status.
+  UI: AutomationRoiPanel 8 kart, LeakagePanel filtre+aksiyon barı, GuestRiskPanel butonları.
+- 1 SKIP: public upsell-offer token akışı — DB'deki 2 eski teklif token özelliğinden önce
+  oluşturulmuş (veri koşulu, kod hatası değil; akış iter 397-398'de gerçek e2e ile doğrulanmıştı).
+- Rapor: /app/test_reports/iteration_408.json + /app/backend/tests/test_iteration408_automation_regression.py
+
+## Son Durum (Iter 409, 2026-07-11) — İptal Kurtarma Autopilot (Cancel-Save) TAMAMLANDI
+- `routes/ai/cancel_save_autopilot.py`: 3-45 gün içindeki confirmed/pending_payment rezervasyonları
+  _score_cancel_risk ile tarar; skor ≥65 olanlara %10 tutundurma kuponu (STAY-XXXXXX) + TR e-posta
+  (ücretsiz tarih değişikliği vurgusu). save_offers'a source:autopilot yazar; booking'e
+  save_offer_sent_at (dedupe). Mevcut manuel save-offer altyapısıyla uyumlu.
+- Endpoint'ler: POST /api/ai-predictions/cancel-save/run, GET /api/ai-predictions/cancel-save/stats/{pid}
+  (offers_sent / saved+saved_revenue / pending / cancelled_anyway / save_rate — booking durumuna göre).
+- `JOB_HANDLERS["cancel_save"]` + 5 tesiste scheduler AKTİF (günlük 11:00) + watchdog etiketi "İptal Kurtarma".
+- ROI paneline teal "İptal Kurtarma" kartı: istatistikler + "Şimdi Tara" (cancel-save-run-btn).
+- E2E DOĞRULANDI: 138 tarandı → 4 kupon gönderildi (mock e-posta), rerun dedupe 0, stats 4/4 pending,
+  watchdog chip görünür, UI kart + istatistikler render.

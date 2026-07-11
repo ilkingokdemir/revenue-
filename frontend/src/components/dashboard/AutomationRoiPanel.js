@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel, BellRinging, Heartbeat } from "@phosphor-icons/react";
+import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel, BellRinging, Heartbeat, Lifebuoy as LifebuoyIcon } from "@phosphor-icons/react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -48,6 +48,18 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [pulse, setPulse] = useState(null);
   const [sendingPulse, setSendingPulse] = useState(false);
   const [health, setHealth] = useState(null);
+  const [cancelSave, setCancelSave] = useState(null);
+  const [savingRun, setSavingRun] = useState(false);
+
+  const runCancelSave = async () => {
+    setSavingRun(true);
+    try {
+      const r = await axios.post(`${API}/api/ai-predictions/cancel-save/run`, { property_id: propertyId });
+      toast.success(`İptal kurtarma: ${r.data.scanned} rezervasyon tarandı, ${r.data.offers_sent} tutundurma kuponu gönderildi`);
+      load();
+    } catch { toast.error("İptal kurtarma taraması başarısız"); }
+    finally { setSavingRun(false); }
+  };
 
   const sendPulse = async () => {
     setSendingPulse(true);
@@ -73,7 +85,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, o, t, f, n, p, h] = await Promise.all([
+      const [r, o, t, f, n, p, h, cs] = await Promise.all([
         axios.get(`${API}/api/automation/roi/${propertyId}?days=${days}`),
         axios.get(`${API}/api/automation/opportunities/${propertyId}`),
         axios.get(`${API}/api/automation/roi/${propertyId}/trend?weeks=8`),
@@ -81,6 +93,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
         axios.get(`${API}/api/automation/nudge/stats/${propertyId}?days=30`),
         axios.get(`${API}/api/automation/daily-pulse/preview/${propertyId === "all" ? "default" : propertyId}`),
         axios.get(`${API}/api/automation/health/${propertyId}`),
+        axios.get(`${API}/api/ai-predictions/cancel-save/stats/${propertyId}?days=30`),
       ]);
       setData(r.data);
       setOpps(o.data);
@@ -89,6 +102,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
       setNudge(n.data);
       setPulse(p.data);
       setHealth(h.data);
+      setCancelSave(cs.data);
     } catch { toast.error("ROI verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId, days]);
@@ -223,6 +237,34 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
               { label: "Görüntülenen", value: funnel.upsell.viewed, rate: funnel.upsell.view_rate },
               { label: "Kabul edilen", value: funnel.upsell.accepted, rate: funnel.upsell.accept_rate },
             ]} color="bg-amber-500" />
+        </div>
+      )}
+
+      {cancelSave && (
+        <div className="bg-white border border-stone-200 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4" data-testid="cancel-save-card">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-teal-50 border border-teal-100 flex items-center justify-center shrink-0">
+              <LifebuoyIcon size={18} className="text-teal-600" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-stone-900">İptal Kurtarma (Cancel-Save)</div>
+              <div className="text-xs text-stone-500 mt-0.5">
+                Yüksek iptal riskli (skor ≥65) rezervasyonlara otomatik tutundurma kuponu (%10) — günlük 11:00
+              </div>
+              <div className="flex gap-4 mt-2 text-xs text-stone-600" data-testid="cancel-save-stats">
+                <span><b>{cancelSave.offers_sent}</b> kupon gönderildi</span>
+                <span className="text-emerald-700"><b>{cancelSave.saved}</b> kurtarıldı ({fmt(cancelSave.saved_revenue)})</span>
+                <span className="text-stone-500"><b>{cancelSave.pending}</b> bekliyor</span>
+                <span className="text-rose-600"><b>{cancelSave.cancelled_anyway}</b> yine de iptal</span>
+                {cancelSave.saved + cancelSave.cancelled_anyway > 0 && <span>kurtarma oranı %{cancelSave.save_rate}</span>}
+              </div>
+            </div>
+          </div>
+          <button onClick={runCancelSave} disabled={savingRun} data-testid="cancel-save-run-btn"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 disabled:opacity-60 rounded-lg px-3 py-1.5 transition-colors">
+            <LifebuoyIcon size={14} weight="fill" />
+            {savingRun ? "Taranıyor…" : "Şimdi Tara"}
+          </button>
         </div>
       )}
 

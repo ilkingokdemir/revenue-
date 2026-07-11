@@ -1123,6 +1123,9 @@ async def _job_leakage_sweep(property_id: str) -> dict:
 
 JOB_HANDLERS["leakage_sweep"] = _job_leakage_sweep
 
+from routes.guests.risk_score import create_guest_risk_router
+api_router.include_router(create_guest_risk_router(db, require_roles))
+
 from routes.marketing.automation_roi import create_automation_roi_router
 api_router.include_router(create_automation_roi_router(db, require_roles, runners={
     "rebook_sweep": lambda pid, d: rebook_router.run_sweep_internal(property_id=pid, days_after=d),

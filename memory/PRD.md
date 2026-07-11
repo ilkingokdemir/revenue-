@@ -348,3 +348,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   folio created_by=leakage-sweep; pulse leakage_closed_7d=100; sweep-log 1 kayıt;
   watchdog chip 'pending' (haftalık, henüz zamanı gelmedi); UI'da £100 stat görünür. Test verisi temizlendi.
 - BUG FIX: daily_pulse'ta 'now' tanımsızdı (NameError) → datetime.now() ile düzeltildi.
+
+## Son Durum (Iter 406, 2026-07-11) — Misafir Risk Radarı TAMAMLANDI
+- `routes/guests/risk_score.py`: misafir e-postasından geçmiş analizi — no-show (×30, cap 60),
+  iptal (×10, cap 30), chargeback (×30, cap 60), tahsil edilememiş no-show ücreti (×10, cap 20),
+  sorunsuz konaklama (-5, cap -20). Skor 0-100; seviye low/medium(30+)/high(60+); önerilen aksiyon
+  (standart / depozito iste / ön ödeme zorunlu).
+- Endpoint'ler: GET /api/guests/risk/arrivals/{pid}?days_ahead= (yaklaşan varışlar risk sıralı,
+  summary + value_at_risk), GET /api/guests/risk/{guest_email} (tekil, receptionist dahil).
+- Frontend: `GuestRiskPanel.js` (lazy) — 7/14/30 gün filtre, koyu özet bandı (yüksek/orta sayısı +
+  risk altındaki değer), risk kartları (rozet, skor barı, nedenler, aksiyon), "düşük riskleri göster" toggle.
+  Menü: Guests → "Misafir risk radarı" (guest-risk-btn).
+- E2E DOĞRULANDI: emily.williams 2 no-show → skor 40 medium "Depozito isteyin"; 30 günde 4 orta
+  riskli varış £760 risk değeri; UI screenshot tüm elementler render.

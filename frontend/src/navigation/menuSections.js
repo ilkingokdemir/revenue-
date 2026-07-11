@@ -62,6 +62,7 @@ import {
   Scales,
   Scroll,
   ShieldCheck,
+  ShieldWarning,
   SignIn,
   Smiley,
   Sparkle,
@@ -161,6 +162,7 @@ export function buildMenuSections(t, user) {
       items: [
         { id: "guest-profiles", icon: AddressBook, name: t("nav.guest_profiles"), testId: "guest-profiles-btn" },
         { id: "crm-360", icon: Users, name: "Guest CRM 360", testId: "crm-360-btn" },
+        { id: "guest-risk", icon: ShieldWarning, name: "Misafir risk radarı", testId: "guest-risk-btn" },
         { id: "guest-journey", icon: SignIn, name: t("nav.guest_journey"), testId: "guest-journey-btn" },
         { id: "guest-rfm", icon: Target, name: "RFM segmentation", testId: "guest-rfm-btn" },
         { id: "guest-prefs", icon: Heart, name: "Guest preferences", testId: "guest-prefs-btn" },

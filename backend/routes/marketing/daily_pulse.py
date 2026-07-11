@@ -61,11 +61,17 @@ def create_daily_pulse_router(db, require_roles):
         health = await compute_automation_health(db, property_id)
         failing_jobs = [f"{r['label']}" for r in health["rows"] if r["status"] == "failing"]
 
+        week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        sweeps = await db.leakage_sweep_log.find(
+            {**pq, "ran_at": {"$gte": week_ago}}, {"_id": 0, "closed_total": 1}).to_list(100)
+        leakage_closed_7d = round(sum(float(s.get("closed_total") or 0) for s in sweeps), 2)
+
         return {"property_id": property_id, "date": today_iso,
                 "today": {"arrivals": arrivals, "departures": departures,
                           "in_house": in_house, "occupancy_pct": occupancy},
                 "yesterday": {"new_bookings": booked["count"], "booked_revenue": booked["revenue"],
                               "automation_revenue": auto_rev},
+                "leakage_closed_7d": leakage_closed_7d,
                 "risks": {"open_logbook": open_log, "unanswered_reviews": unanswered,
                           "failing_automations": failing_jobs}}
 
@@ -98,6 +104,7 @@ def create_daily_pulse_router(db, require_roles):
             <tr>
               <td style="{cell}"><div style="font-size:18px;font-weight:bold;">£{y['booked_revenue']:.0f}</div><div style="font-size:12px;color:#78716c;">{y['new_bookings']} yeni rezervasyon</div></td>
               <td style="{cell}"><div style="font-size:18px;font-weight:bold;color:#b45309;">£{y['automation_revenue']:.0f}</div><div style="font-size:12px;color:#78716c;">Otomasyon kazancı (kupon + upsell)</div></td>
+              <td style="{cell}"><div style="font-size:18px;font-weight:bold;color:#0e7490;">£{d.get('leakage_closed_7d', 0):.0f}</div><div style="font-size:12px;color:#78716c;">Kapatılan sızıntı (7 gün)</div></td>
             </tr>
           </table>
           <h3 style="font-size:14px;margin-top:18px;">Dikkat gerektirenler</h3>

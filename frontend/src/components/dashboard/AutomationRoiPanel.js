@@ -315,6 +315,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
               { label: "Doluluk", value: pulse.today.occupancy_pct != null ? `%${pulse.today.occupancy_pct}` : "—" },
               { label: "Dün rezervasyon", value: fmt(pulse.yesterday.booked_revenue) },
               { label: "Dün otomasyon", value: fmt(pulse.yesterday.automation_revenue) },
+              ...(pulse.leakage_closed_7d > 0 ? [{ label: "Sızıntı kapatıldı (7g)", value: fmt(pulse.leakage_closed_7d) }] : []),
             ].map((s) => (
               <div key={s.label} className="bg-stone-50 border border-stone-100 rounded-lg p-3">
                 <div className="text-base font-semibold text-stone-900">{s.value}</div>

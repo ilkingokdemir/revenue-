@@ -1112,7 +1112,16 @@ async def _job_daily_pulse(property_id: str) -> dict:
 JOB_HANDLERS["daily_pulse"] = _job_daily_pulse
 
 from routes.revenue_ext.leakage import create_leakage_router
-api_router.include_router(create_leakage_router(db, require_roles))
+leakage_router = create_leakage_router(db, require_roles)
+api_router.include_router(leakage_router)
+
+async def _job_leakage_sweep(property_id: str) -> dict:
+    try:
+        return await leakage_router.run_leakage_sweep_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["leakage_sweep"] = _job_leakage_sweep
 
 from routes.marketing.automation_roi import create_automation_roi_router
 api_router.include_router(create_automation_roi_router(db, require_roles, runners={

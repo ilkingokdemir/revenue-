@@ -20,6 +20,9 @@ def create_leakage_router(db, require_roles):
     @router.get("/revenue/leakage/{property_id}")
     async def leakage(property_id: str, days: int = 30,
                       current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await _scan_core(property_id, days)
+
+    async def _scan_core(property_id: str, days: int = 30) -> dict:
         days = min(max(days, 7), 180)
         now = datetime.now(timezone.utc)
         today = now.date().isoformat()
@@ -121,8 +124,13 @@ def create_leakage_router(db, require_roles):
                              current_user: dict = Depends(require_roles("admin", "manager"))):
         """Bulk-post no-show fees to folio; attempt Stripe charge when a vault card exists."""
         body = data or {}
-        policy = body.get("policy") if body.get("policy") in ("first_night", "full") else "first_night"
-        days = min(max(int(body.get("days") or 30), 7), 180)
+        return await _charge_core(
+            property_id,
+            body.get("policy") if body.get("policy") in ("first_night", "full") else "first_night",
+            min(max(int(body.get("days") or 30), 7), 180),
+            current_user.get("email", "system"))
+
+    async def _charge_core(property_id: str, policy: str, days: int, actor: str) -> dict:
         now = datetime.now(timezone.utc)
         today = now.date().isoformat()
         since = (now.date() - timedelta(days=days)).isoformat()
@@ -154,7 +162,7 @@ def create_leakage_router(db, require_roles):
                 "property_id": b.get("property_id"),
                 "type": "charge", "category": "no_show", "description": desc,
                 "quantity": 1, "unit_price": fee, "amount": fee, "currency": "GBP",
-                "created_at": now_iso, "created_by": current_user.get("email", "system")})
+                "created_at": now_iso, "created_by": actor})
             charged_ok = False
             card = await db.vault_cards.find_one(
                 {"booking_id": b["id"], "status": "active"}, {"_id": 0}) if stripe_key else None
@@ -191,4 +199,29 @@ def create_leakage_router(db, require_roles):
                 "total_posted": round(total_posted, 2),
                 "collected_via_card": collected, "no_card_on_file": no_card}
 
+    async def _sweep_core(property_id: str = "") -> dict:
+        """Weekly autonomous sweep: scan → auto-charge no-shows (first night) → log."""
+        pid = property_id or "default"
+        before = await _scan_core(pid, 30)
+        charge = await _charge_core(pid, "first_night", 30, "leakage-sweep")
+        after = await _scan_core(pid, 30)
+        entry = {
+            "id": str(uuid.uuid4()), "property_id": pid,
+            "ran_at": datetime.now(timezone.utc).isoformat(),
+            "found_total": before["total_leaked"], "found_items": before["total_items"],
+            "closed_total": charge["total_posted"], "closed_items": charge["posted"],
+            "collected_via_card": charge["collected_via_card"],
+            "remaining_total": after["total_leaked"], "remaining_items": after["total_items"],
+        }
+        await db.leakage_sweep_log.insert_one(dict(entry))
+        return {"ok": True, **{k: v for k, v in entry.items() if k != "id"}}
+
+    @router.get("/revenue/leakage/{property_id}/sweep-log")
+    async def sweep_log(property_id: str, limit: int = 10,
+                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        q = {} if property_id == "all" else {"property_id": property_id}
+        rows = await db.leakage_sweep_log.find(q, {"_id": 0}).sort("ran_at", -1).to_list(int(limit))
+        return {"rows": rows}
+
+    router.run_leakage_sweep_internal = _sweep_core
     return router

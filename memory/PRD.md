@@ -334,3 +334,17 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   52 kayıtla render.
 - NOT: Paralel search_replace aynı dosyada yine kayboldu (import + endpoint edit'leri) —
   sırayla tekrar uygulandı. AYNI DOSYAYA PARALEL EDİT YAPMA.
+
+## Son Durum (Iter 405, 2026-07-11) — Otonom Sızıntı Taraması TAMAMLANDI
+- leakage.py refactor: `_scan_core` / `_charge_core(actor)` core fonksiyonlara ayrıldı (endpoint'ler ince).
+- `_sweep_core`: tara → no-show'ları otomatik işle (first_night, actor: leakage-sweep) → tekrar tara →
+  `leakage_sweep_log`'a kaydet (found/closed/remaining). `router.run_leakage_sweep_internal` +
+  `JOB_HANDLERS["leakage_sweep"]` + 5 tesiste HAFTALIK scheduler (Pazartesi 07:00, cron_dow=0).
+- `GET /api/revenue/leakage/{pid}/sweep-log` endpoint'i.
+- Günlük Nabız: `leakage_closed_7d` (son 7 gün kapatılan sızıntı) — hem JSON hem e-posta şablonu
+  hem UI pulse kartında (koşullu stat) gösteriliyor.
+- Watchdog: JOB_LABELS_TR'ye "Sızıntı Taraması" eklendi — sağlık panosunda chip görünür.
+- E2E DOĞRULANDI: test no-show £200 → sweep found 200/closed 100 (ilk gece)/remaining 0,
+  folio created_by=leakage-sweep; pulse leakage_closed_7d=100; sweep-log 1 kayıt;
+  watchdog chip 'pending' (haftalık, henüz zamanı gelmedi); UI'da £100 stat görünür. Test verisi temizlendi.
+- BUG FIX: daily_pulse'ta 'now' tanımsızdı (NameError) → datetime.now() ile düzeltildi.

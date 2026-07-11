@@ -18,6 +18,7 @@ JOB_LABELS_TR = {
     "email_nudge": "Akıllı Hatırlatma",
     "daily_pulse": "Günlük Nabız",
     "ai_pricing_auto_apply": "AI Fiyatlama",
+    "leakage_sweep": "Sızıntı Taraması",
     "auto_deposit_capture": "Otomatik Depozito",
     "sync_queue_tick": "Kanal Senkronu",
     "nightly_dry_publish": "Gece Yayını",

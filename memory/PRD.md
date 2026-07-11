@@ -402,3 +402,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - ROI paneline teal "İptal Kurtarma" kartı: istatistikler + "Şimdi Tara" (cancel-save-run-btn).
 - E2E DOĞRULANDI: 138 tarandı → 4 kupon gönderildi (mock e-posta), rerun dedupe 0, stats 4/4 pending,
   watchdog chip görünür, UI kart + istatistikler render.
+
+## Son Durum (Iter 410, 2026-07-11) — Aylık Otomasyon Karnesi TAMAMLANDI
+- `routes/marketing/report_card.py`: 6 bölümlü konsolide rapor — kupon (gönderilen/kullanılan/gelir),
+  upsell autopilot, iptal kurtarma (kurtarılan gelir), no-show tahsilatı, sızıntı kapatma, nudge sayısı;
+  grand_total ("platform size £X kazandırdı"). Koyu temalı TR e-posta şablonu.
+- Endpoint'ler: GET /api/automation/report-card/preview/{pid}?days=, POST /api/automation/report-card/send
+  (ayın 1'i değilse skip: not_first_of_month; ay bazlı dedupe report_card_log; force:true ile manuel).
+- `JOB_HANDLERS["monthly_report_card"]` + 5 tesiste scheduler (günlük 09:30, kendi kendine ayın 1'ini bekler)
+  + watchdog etiketi "Aylık Karne".
+- ROI paneline koyu "Otomasyon Karnesi" kartı: grand total + 5 kalem döküm + "Karneyi Şimdi Gönder"
+  (report-send-btn).
+- E2E DOĞRULANDI: preview £1,635 (kupon £1,400 + no-show £235 + sızıntı £100), gün koruması skip,
+  force send sent_to=1 (mock e-posta log), UI kart + döküm render.

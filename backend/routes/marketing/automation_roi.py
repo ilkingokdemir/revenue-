@@ -20,6 +20,7 @@ JOB_LABELS_TR = {
     "ai_pricing_auto_apply": "AI Fiyatlama",
     "leakage_sweep": "Sızıntı Taraması",
     "cancel_save": "İptal Kurtarma",
+    "monthly_report_card": "Aylık Karne",
     "auto_deposit_capture": "Otomatik Depozito",
     "sync_queue_tick": "Kanal Senkronu",
     "nightly_dry_publish": "Gece Yayını",

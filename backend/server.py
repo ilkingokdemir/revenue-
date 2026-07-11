@@ -1135,6 +1135,18 @@ async def _job_cancel_save(property_id: str) -> dict:
 
 JOB_HANDLERS["cancel_save"] = _job_cancel_save
 
+from routes.marketing.report_card import create_report_card_router
+report_card_router = create_report_card_router(db, require_roles)
+api_router.include_router(report_card_router)
+
+async def _job_report_card(property_id: str) -> dict:
+    try:
+        return await report_card_router.run_report_card_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["monthly_report_card"] = _job_report_card
+
 from routes.guests.risk_score import create_guest_risk_router
 api_router.include_router(create_guest_risk_router(db, require_roles))
 

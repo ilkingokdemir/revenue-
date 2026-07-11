@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel, BellRinging, Heartbeat, Lifebuoy as LifebuoyIcon } from "@phosphor-icons/react";
+import { Coins, ArrowsClockwise, EnvelopeSimple, ShoppingCartSimple, Lightning, Robot, Storefront, Crosshair, ArrowRight, Wrench, TrendUp, Funnel, BellRinging, Heartbeat, Lifebuoy as LifebuoyIcon, ChartBar } from "@phosphor-icons/react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -50,6 +50,19 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [health, setHealth] = useState(null);
   const [cancelSave, setCancelSave] = useState(null);
   const [savingRun, setSavingRun] = useState(false);
+  const [report, setReport] = useState(null);
+  const [sendingReport, setSendingReport] = useState(false);
+
+  const sendReport = async () => {
+    setSendingReport(true);
+    try {
+      const r = await axios.post(`${API}/api/automation/report-card/send`, {
+        property_id: propertyId === "all" ? "default" : propertyId, force: true,
+      });
+      toast.success(`Otomasyon Karnesi ${r.data.sent_to ?? 0} yöneticiye gönderildi (£${r.data.grand_total ?? 0})`);
+    } catch { toast.error("Karne gönderilemedi"); }
+    finally { setSendingReport(false); }
+  };
 
   const runCancelSave = async () => {
     setSavingRun(true);
@@ -85,7 +98,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, o, t, f, n, p, h, cs] = await Promise.all([
+      const [r, o, t, f, n, p, h, cs, rc] = await Promise.all([
         axios.get(`${API}/api/automation/roi/${propertyId}?days=${days}`),
         axios.get(`${API}/api/automation/opportunities/${propertyId}`),
         axios.get(`${API}/api/automation/roi/${propertyId}/trend?weeks=8`),
@@ -94,6 +107,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
         axios.get(`${API}/api/automation/daily-pulse/preview/${propertyId === "all" ? "default" : propertyId}`),
         axios.get(`${API}/api/automation/health/${propertyId}`),
         axios.get(`${API}/api/ai-predictions/cancel-save/stats/${propertyId}?days=30`),
+        axios.get(`${API}/api/automation/report-card/preview/${propertyId}?days=30`),
       ]);
       setData(r.data);
       setOpps(o.data);
@@ -103,6 +117,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
       setPulse(p.data);
       setHealth(h.data);
       setCancelSave(cs.data);
+      setReport(rc.data);
     } catch { toast.error("ROI verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId, days]);
@@ -237,6 +252,34 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
               { label: "Görüntülenen", value: funnel.upsell.viewed, rate: funnel.upsell.view_rate },
               { label: "Kabul edilen", value: funnel.upsell.accepted, rate: funnel.upsell.accept_rate },
             ]} color="bg-amber-500" />
+        </div>
+      )}
+
+      {report && (
+        <div className="bg-stone-900 text-white rounded-xl p-5 flex flex-wrap items-center justify-between gap-4" data-testid="report-card">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-lg bg-stone-800 border border-stone-700 flex items-center justify-center shrink-0">
+              <ChartBar size={18} className="text-emerald-400" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold">Otomasyon Karnesi — son {report.days} gün</div>
+              <div className="text-2xl font-semibold text-emerald-400 mt-1" data-testid="report-grand-total">
+                {fmt(report.grand_total)} <span className="text-xs font-normal text-stone-400">kazandırıldı / kurtarıldı</span>
+              </div>
+              <div className="flex flex-wrap gap-3 mt-2 text-[11px] text-stone-400" data-testid="report-breakdown">
+                <span>Kupon {fmt(report.sections.coupons.revenue)}</span>
+                <span>Upsell {fmt(report.sections.upsell.revenue)}</span>
+                <span>İptal kurtarma {fmt(report.sections.cancel_save.revenue)}</span>
+                <span>No-show {fmt(report.sections.noshow.posted)}</span>
+                <span>Sızıntı {fmt(report.sections.leakage.closed)}</span>
+              </div>
+            </div>
+          </div>
+          <button onClick={sendReport} disabled={sendingReport} data-testid="report-send-btn"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-stone-900 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-60 rounded-lg px-3 py-1.5 transition-colors">
+            <ChartBar size={14} weight="fill" />
+            {sendingReport ? "Gönderiliyor…" : "Karneyi Şimdi Gönder"}
+          </button>
         </div>
       )}
 

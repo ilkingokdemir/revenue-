@@ -1160,7 +1160,16 @@ async def _job_review_autopilot(property_id: str) -> dict:
 JOB_HANDLERS["review_autopilot"] = _job_review_autopilot
 
 from routes.guests.risk_score import create_guest_risk_router
-api_router.include_router(create_guest_risk_router(db, require_roles))
+guest_risk_router = create_guest_risk_router(db, require_roles)
+api_router.include_router(guest_risk_router)
+
+async def _job_deposit_autopilot(property_id: str) -> dict:
+    try:
+        return await guest_risk_router.run_deposit_autopilot_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["deposit_autopilot"] = _job_deposit_autopilot
 
 from routes.marketing.automation_roi import create_automation_roi_router
 api_router.include_router(create_automation_roi_router(db, require_roles, runners={

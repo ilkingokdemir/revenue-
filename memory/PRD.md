@@ -441,3 +441,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   (_drafts_html). Preview JSON'a pending_drafts alanı eklendi (max 3).
 - E2E DOĞRULANDI: preview 3 taslak+token; force pulse gönderimi; public link ile yayın →
   DB responded ✓; ikinci ziyaret idempotent; geçersiz token hata sayfası; kalan taslak 3→2.
+
+## Son Durum (Iter 413, 2026-07-12) — Depozito Autopilot TAMAMLANDI
+- risk_score.py: request-deposit endpoint'i `_request_deposit_core(booking_id, actor)` olarak
+  ayrıldı; YENİ `_deposit_autopilot_core`: 14 gün içindeki varışlardan risk seviyesi HIGH (skor≥60)
+  olanlara otomatik depozito talebi (Stripe Checkout + e-posta), medium'lar manuel bırakılır.
+- POST /api/guests/risk/deposit-autopilot/run + `JOB_HANDLERS["deposit_autopilot"]` +
+  5 tesiste scheduler (günlük 12:00) + watchdog "Depozito Autopilot" (healthy).
+- GuestRiskPanel başlığına otomasyonu açıklayan alt satır eklendi.
+- E2E DOĞRULANDI: yüksek riskli test varışı (2 no-show + 1 chargeback) → autopilot 1 talep
+  (£120, created_by: deposit-autopilot) → rerun dedupe 0 → manuel endpoint regresyonu OK
+  (Stripe URL üretiyor) → watchdog healthy. Test verisi temizlendi.
+- OPERASYONEL NOT: risk_score.py hot-reload sırasında backend uzun süre kapalı kaldı
+  (ağır startup görevleri) → `sudo supervisorctl restart backend` ile çözüldü.

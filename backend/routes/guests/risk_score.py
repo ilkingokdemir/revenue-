@@ -105,6 +105,9 @@ def create_guest_risk_router(db, require_roles):
     @router.post("/guests/risk/{booking_id}/request-deposit")
     async def request_deposit(booking_id: str,
                               current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        return await _request_deposit_core(booking_id, current_user.get("email", "system"))
+
+    async def _request_deposit_core(booking_id: str, actor: str) -> dict:
         b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
         if not b:
             raise HTTPException(404, "Booking not found")
@@ -128,7 +131,7 @@ def create_guest_risk_router(db, require_roles):
             "id": req_id, "booking_id": booking_id, "property_id": b.get("property_id"),
             "amount": amount, "currency": "GBP", "checkout_session_id": sess.session_id,
             "checkout_url": sess.url, "status": "sent",
-            "created_at": now, "created_by": current_user.get("email", "system")})
+            "created_at": now, "created_by": actor})
         await db.payment_transactions.insert_one({
             "id": str(uuid.uuid4()), "session_id": sess.session_id,
             "booking_id": booking_id, "property_id": b.get("property_id"),
@@ -199,4 +202,40 @@ def create_guest_risk_router(db, require_roles):
                     {"id": booking_id}, {"$set": {"deposit_paid": True, "deposit_paid_at": now}})
         return {"ok": True, "status": "paid" if paid else "pending", "amount": req["amount"]}
 
+    async def _deposit_autopilot_core(property_id: str = "") -> dict:
+        """Auto-request deposits from HIGH risk (score>=60) arrivals within 14 days."""
+        today = date.today().isoformat()
+        horizon = (date.today() + timedelta(days=14)).isoformat()
+        pq = {} if not property_id or property_id == "all" else {"property_id": property_id}
+        arrivals = await db.bookings.find(
+            {**pq, "status": {"$in": ["confirmed", "pending_payment", "pending"]},
+             "check_in": {"$gte": today, "$lte": horizon},
+             "deposit_requested": {"$ne": True},
+             "guest_email": {"$nin": [None, ""]}},
+            {"_id": 0, "id": 1, "guest_email": 1}).to_list(1000)
+        scanned, requested = len(arrivals), 0
+        total_requested = 0.0
+        cache = {}
+        for b in arrivals:
+            email = (b.get("guest_email") or "").lower()
+            if email not in cache:
+                cache[email] = await _risk_for(email)
+            if cache[email]["level"] != "high":
+                continue
+            try:
+                r = await _request_deposit_core(b["id"], "deposit-autopilot")
+                if r.get("ok") and not r.get("already"):
+                    requested += 1
+                    total_requested += float(r.get("amount") or 0)
+            except Exception as e:
+                logger.warning(f"deposit autopilot {b['id']}: {e}")
+        return {"ok": True, "scanned": scanned, "requested": requested,
+                "total_requested": round(total_requested, 2)}
+
+    @router.post("/guests/risk/deposit-autopilot/run")
+    async def run_deposit_autopilot(data: dict = None,
+                                    current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await _deposit_autopilot_core((data or {}).get("property_id", ""))
+
+    router.run_deposit_autopilot_internal = _deposit_autopilot_core
     return router

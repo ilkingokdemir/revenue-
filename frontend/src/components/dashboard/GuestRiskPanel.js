@@ -62,6 +62,7 @@ export default function GuestRiskPanel({ propertyId }) {
             <span>Misafir Risk Radarı</span>
           </div>
           <h2 className="text-xl font-semibold text-stone-900">Yaklaşan varışlarda riskli misafirler</h2>
+          <p className="text-xs text-stone-500 mt-1">Yüksek riskli (skor ≥60) varışlara depozito talebi her gün 12:00'de otomatik gönderilir — orta riskliler manuel kararınıza bırakılır.</p>
         </div>
         <div className="flex items-center gap-2">
           {[7, 14, 30].map((d) => (

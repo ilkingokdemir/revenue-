@@ -22,6 +22,7 @@ JOB_LABELS_TR = {
     "cancel_save": "İptal Kurtarma",
     "monthly_report_card": "Aylık Karne",
     "review_autopilot": "Yorum Yanıt Autopilot",
+    "deposit_autopilot": "Depozito Autopilot",
     "auto_deposit_capture": "Otomatik Depozito",
     "sync_queue_tick": "Kanal Senkronu",
     "nightly_dry_publish": "Gece Yayını",

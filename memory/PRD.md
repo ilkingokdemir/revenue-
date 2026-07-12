@@ -454,3 +454,20 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   (Stripe URL üretiyor) → watchdog healthy. Test verisi temizlendi.
 - OPERASYONEL NOT: risk_score.py hot-reload sırasında backend uzun süre kapalı kaldı
   (ağır startup görevleri) → `sudo supervisorctl restart backend` ile çözüldü.
+
+## Son Durum (Iter 414, 2026-07-12) — Otomasyon Ayarları Paneli TAMAMLANDI
+- YENİ backend: routes/platform_ext/automation_settings.py — JOB_REGISTRY (11 motor: upsell,
+  nudge, daily_pulse, leakage, cancel_save, deposit, review, report_card, rebook, abandoned,
+  ai_pricing[varsayılan kapalı]); GET /api/automation/settings (eksik config'leri auto-seed,
+  son çalışma + params merge) ve PUT /api/automation/settings/{job} (enabled/cron/params,
+  min-max validasyonlu). get_params() helper ile motorlar canlı parametre okuyor.
+- Dinamik parametre bağlanan motorlar: cancel_save (risk_threshold, discount_pct),
+  email_nudge (upsell/coupon nudge saatleri), review_autopilot (max_per_run),
+  deposit_autopilot (days_ahead), upsell_autopilot (min_score, days_ahead).
+- YENİ frontend: components/dashboard/AutomationSettingsPanel.js — kategori gruplu kart
+  görünümü, aç/kapat anahtarı, genişletilebilir ayarlar (saat/dakika/gün + eşikler),
+  son çalışma sonucu/hatası, "Şimdi çalıştır" (scheduler/trigger/all/{job}).
+  Menü: Revenue & rates > Tools > "Otomasyon ayarları" (automation-settings-btn).
+- E2E DOĞRULANDI: GET 11 motor listeledi; PUT param (threshold 70) → trigger sonucu
+  threshold:70 döndü (canlı etki kanıtı); toggle on/off; 400 range validasyonu;
+  404 bilinmeyen job; UI screenshot — panel, genişletilmiş kart, 10/11 aktif rozeti OK.

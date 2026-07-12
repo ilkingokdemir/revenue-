@@ -56,12 +56,18 @@ def create_nudge_router(db, require_roles):
     router = APIRouter()
 
     async def _nudge_core(property_id: str = "") -> dict:
+        from routes.platform_ext.automation_settings import get_params
+        cfg = await get_params(db, "email_nudge",
+                               {"upsell_nudge_hours": UPSELL_NUDGE_HOURS,
+                                "coupon_nudge_hours": COUPON_NUDGE_HOURS})
+        upsell_hours = int(cfg["upsell_nudge_hours"])
+        coupon_hours = int(cfg["coupon_nudge_hours"])
         now = datetime.now(timezone.utc)
         base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
         pq: Dict = {} if not property_id or property_id == "all" else {"property_id": property_id}
 
         # 1. Upsell offers: sent, unviewed, older than 24h, never nudged
-        up_cutoff = (now - timedelta(hours=UPSELL_NUDGE_HOURS)).isoformat()
+        up_cutoff = (now - timedelta(hours=upsell_hours)).isoformat()
         offers = await db.upsell_offers.find(
             {**pq, "source": "autopilot", "status": "sent",
              "created_at": {"$lt": up_cutoff},
@@ -85,7 +91,7 @@ def create_nudge_router(db, require_roles):
             upsell_nudged += 1
 
         # 2. Rebook dispatches: sent, unclicked, older than 72h, never nudged
-        cp_cutoff = (now - timedelta(hours=COUPON_NUDGE_HOURS)).isoformat()
+        cp_cutoff = (now - timedelta(hours=coupon_hours)).isoformat()
         dispatches = await db.rebook_dispatches.find(
             {**pq, "status": "sent", "clicked": False,
              "scheduled_for": {"$lt": cp_cutoff},

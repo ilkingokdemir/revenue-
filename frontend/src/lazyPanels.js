@@ -151,6 +151,7 @@ export const HurdleLrvPanel = L(() => import("./components/dashboard/HurdleLrvPa
 export const AutomationRoiPanel = L(() => import("./components/dashboard/AutomationRoiPanel"));
 export const LeakagePanel = L(() => import("./components/dashboard/LeakagePanel"));
 export const GuestRiskPanel = L(() => import("./components/dashboard/GuestRiskPanel"));
+export const AutomationSettingsPanel = L(() => import("./components/dashboard/AutomationSettingsPanel"));
 export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
 export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
 

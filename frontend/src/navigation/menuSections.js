@@ -259,6 +259,7 @@ export function buildMenuSections(t, user) {
         { id: "rm-lab", icon: ChartLine, name: "RM Lab", testId: "rm-lab-btn" },
         { id: "late-checkout-offer", icon: Clock, name: "Late checkout offers", testId: "late-checkout-offer-btn" },
         { id: "site-feasibility", icon: ChartLineUp, name: "Site feasibility & investor", testId: "site-feasibility-btn" },
+        { id: "automation-settings", icon: Gear, name: "Otomasyon ayarları", testId: "automation-settings-btn" },
         { id: "automation-analytics", icon: ChartBar, name: "Otomasyon analitiği", testId: "automation-analytics-btn" },
         { id: "automation-roi", icon: Coins, name: "Otomasyon ROI", testId: "automation-roi-btn" },
         { id: "leakage-audit", icon: ShieldCheck, name: "Gelir sızıntısı denetçisi", testId: "leakage-audit-btn" },

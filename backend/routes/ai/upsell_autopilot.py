@@ -108,8 +108,12 @@ def _early_bird(o: dict):
 def create_upsell_autopilot_router(db, require_roles):
     router = APIRouter()
 
-    async def _autopilot_core(property_id: str = "", min_score: int = 60,
-                              days_ahead: int = 14) -> dict:
+    async def _autopilot_core(property_id: str = "", min_score: int = None,
+                              days_ahead: int = None) -> dict:
+        from routes.platform_ext.automation_settings import get_params
+        cfg = await get_params(db, "upsell_autopilot", {"min_score": 60, "days_ahead": 14})
+        min_score = int(min_score) if min_score is not None else int(cfg["min_score"])
+        days_ahead = int(days_ahead) if days_ahead is not None else int(cfg["days_ahead"])
         today = date.today().isoformat()
         horizon = (date.today() + timedelta(days=days_ahead)).isoformat()
         q: Dict = {"status": {"$in": ["confirmed", "checked_in", "pending_payment"]},
@@ -175,8 +179,8 @@ def create_upsell_autopilot_router(db, require_roles):
         body = data or {}
         return await _autopilot_core(
             property_id=body.get("property_id", ""),
-            min_score=int(body.get("min_score") or 60),
-            days_ahead=int(body.get("days_ahead") or 14))
+            min_score=int(body["min_score"]) if body.get("min_score") else None,
+            days_ahead=int(body["days_ahead"]) if body.get("days_ahead") else None)
 
     @router.get("/ai-predictions/upsell/autopilot/stats/{property_id}")
     async def stats(property_id: str, days: int = 30,

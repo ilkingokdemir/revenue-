@@ -203,9 +203,11 @@ def create_guest_risk_router(db, require_roles):
         return {"ok": True, "status": "paid" if paid else "pending", "amount": req["amount"]}
 
     async def _deposit_autopilot_core(property_id: str = "") -> dict:
-        """Auto-request deposits from HIGH risk (score>=60) arrivals within 14 days."""
+        """Auto-request deposits from HIGH risk (score>=60) arrivals within N days."""
+        from routes.platform_ext.automation_settings import get_params
+        cfg = await get_params(db, "deposit_autopilot", {"days_ahead": 14})
         today = date.today().isoformat()
-        horizon = (date.today() + timedelta(days=14)).isoformat()
+        horizon = (date.today() + timedelta(days=int(cfg["days_ahead"]))).isoformat()
         pq = {} if not property_id or property_id == "all" else {"property_id": property_id}
         arrivals = await db.bookings.find(
             {**pq, "status": {"$in": ["confirmed", "pending_payment", "pending"]},

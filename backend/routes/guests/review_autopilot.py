@@ -46,7 +46,9 @@ Review: {review.get('review_text', '')}"""
         q: Dict = {"response_status": "pending"}
         if property_id and property_id != "all":
             q["property_id"] = property_id
-        pending = await db.reviews.find(q, {"_id": 0}).sort("created_at", -1).to_list(MAX_PER_RUN)
+        from routes.platform_ext.automation_settings import get_params
+        cfg = await get_params(db, "review_autopilot", {"max_per_run": MAX_PER_RUN})
+        pending = await db.reviews.find(q, {"_id": 0}).sort("created_at", -1).to_list(int(cfg["max_per_run"]))
         published, drafted, errors = 0, 0, 0
         now = datetime.now(timezone.utc).isoformat()
         for r in pending:

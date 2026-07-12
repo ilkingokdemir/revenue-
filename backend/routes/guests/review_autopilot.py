@@ -5,11 +5,13 @@ existing approval queue (response_status: pending_approval).
 """
 import os
 import uuid
+import secrets
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import HTMLResponse
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +69,8 @@ Review: {review.get('review_text', '')}"""
             else:
                 await db.reviews.update_one({"id": r["id"]}, {"$set": {
                     "response_text": text, "response_status": "pending_approval",
-                    "draft_generated_at": now, "response_method": "ai_autopilot_draft"}})
+                    "draft_generated_at": now, "response_method": "ai_autopilot_draft",
+                    "approve_token": secrets.token_urlsafe(20)}})
                 drafted += 1
         return {"ok": True, "scanned": len(pending), "published": published,
                 "drafted_for_approval": drafted, "errors": errors}
@@ -87,6 +90,28 @@ Review: {review.get('review_text', '')}"""
         still_pending = await db.reviews.count_documents({"response_status": "pending"})
         return {"days": days, "auto_published": published,
                 "awaiting_approval": awaiting, "still_pending": still_pending}
+
+    @router.get("/public/review-approve/{token}")
+    async def public_approve(token: str):
+        def page(title, msg, color="#15803d"):
+            return HTMLResponse(f"""<!doctype html><html lang="tr"><head><meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1"><title>{title}</title></head>
+            <body style="font-family:Arial,sans-serif;background:#f5f5f4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;">
+            <div style="background:#fff;border:1px solid #e7e5e4;border-radius:16px;padding:36px;max-width:440px;text-align:center;">
+            <h2 style="color:{color};margin-top:0;">{title}</h2><p style="color:#57534e;font-size:14px;">{msg}</p>
+            </div></body></html>""")
+        r = await db.reviews.find_one({"approve_token": token}, {"_id": 0})
+        if not r:
+            return page("Bağlantı geçersiz", "Bu onay bağlantısı bulunamadı veya süresi dolmuş.", "#b91c1c")
+        if r.get("response_status") == "responded":
+            return page("Zaten yayınlandı ✓", "Bu yanıt daha önce onaylanıp yayınlanmıştı.")
+        now = datetime.now(timezone.utc).isoformat()
+        await db.reviews.update_one({"approve_token": token}, {"$set": {
+            "response_status": "responded", "responded": True,
+            "response_date": now, "response_by": "E-posta onayı",
+            "response_method": "ai_autopilot_email_approved"}})
+        return page("Yanıt yayınlandı ✓",
+                    f"{r.get('guest_name', 'Misafir')} adlı misafirin {r.get('rating', '?')}★ yorumuna AI yanıtı onaylandı ve yayınlandı.")
 
     router.run_review_autopilot_internal = _autopilot_core
     return router

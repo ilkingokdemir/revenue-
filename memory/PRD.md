@@ -429,3 +429,15 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: scheduler kendisi çalıştırdı — 7 bekleyen yorum → 4 olumlu otomatik yayınlandı
   (gerçek kişiselleştirilmiş AI yanıtı doğrulandı), 3 olumsuz onay kuyruğunda; stats 4/3/0;
   pulse risks doğru; watchdog healthy; UI screenshot tüm elementler render.
+
+## Son Durum (Iter 412, 2026-07-11) — E-postadan Tek Tık "Onayla & Yayınla" TAMAMLANDI
+- review_autopilot.py: olumsuz yorum taslakları artık approve_token ile üretiliyor;
+  mevcut 3 taslağa token backfill yapıldı.
+- YENİ public endpoint: GET /api/public/review-approve/{token} — taslağı yayınlar
+  (response_method: ai_autopilot_email_approved), şık TR HTML onay sayfası döner;
+  idempotent ("Zaten yayınlandı"), geçersiz token güvenli hata sayfası.
+- Günlük Nabız e-postasına "Onay bekleyen AI yanıt taslakları" bölümü eklendi: her taslak için
+  misafir+yıldız, yorum özeti, AI taslak özeti ve turuncu "Onayla & Yayınla ⚡" butonu
+  (_drafts_html). Preview JSON'a pending_drafts alanı eklendi (max 3).
+- E2E DOĞRULANDI: preview 3 taslak+token; force pulse gönderimi; public link ile yayın →
+  DB responded ✓; ikinci ziyaret idempotent; geçersiz token hata sayfası; kalan taslak 3→2.

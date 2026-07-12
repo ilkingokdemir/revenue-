@@ -67,12 +67,18 @@ def create_daily_pulse_router(db, require_roles):
             {**pq, "ran_at": {"$gte": week_ago}}, {"_id": 0, "closed_total": 1}).to_list(100)
         leakage_closed_7d = round(sum(float(s.get("closed_total") or 0) for s in sweeps), 2)
 
+        drafts = await db.reviews.find(
+            {**pq, "response_status": "pending_approval", "approve_token": {"$exists": True}},
+            {"_id": 0, "guest_name": 1, "rating": 1, "review_text": 1,
+             "response_text": 1, "approve_token": 1}).sort("draft_generated_at", -1).to_list(3)
+
         return {"property_id": property_id, "date": today_iso,
                 "today": {"arrivals": arrivals, "departures": departures,
                           "in_house": in_house, "occupancy_pct": occupancy},
                 "yesterday": {"new_bookings": booked["count"], "booked_revenue": booked["revenue"],
                               "automation_revenue": auto_rev},
                 "leakage_closed_7d": leakage_closed_7d,
+                "pending_drafts": drafts,
                 "risks": {"open_logbook": open_log, "unanswered_reviews": unanswered,
                           "reviews_awaiting_approval": awaiting_approval,
                           "failing_automations": failing_jobs}}
@@ -113,8 +119,30 @@ def create_daily_pulse_router(db, require_roles):
           </table>
           <h3 style="font-size:14px;margin-top:18px;">Dikkat gerektirenler</h3>
           {risks_html}
+          {_drafts_html(d)}
         </div>
         """
+
+    def _drafts_html(d: dict) -> str:
+        import os as _os
+        drafts = d.get("pending_drafts") or []
+        if not drafts:
+            return ""
+        base = _os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+        items = []
+        for r in drafts:
+            review_snip = (r.get("review_text") or "")[:120]
+            draft_snip = (r.get("response_text") or "")[:160]
+            items.append(f"""
+            <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px;margin:8px 0;">
+              <div style="font-size:12px;color:#9a3412;font-weight:bold;">{r.get('guest_name', 'Misafir')} · {r.get('rating', '?')}★</div>
+              <div style="font-size:12px;color:#57534e;margin:6px 0;">"{review_snip}…"</div>
+              <div style="font-size:12px;color:#292524;background:#fff;border-radius:8px;padding:8px;margin:6px 0;">AI taslağı: {draft_snip}…</div>
+              <a href="{base}/api/public/review-approve/{r.get('approve_token', '')}"
+                 style="display:inline-block;background:#ea580c;color:#fff;text-decoration:none;padding:8px 18px;border-radius:8px;font-size:12px;font-weight:bold;">
+                 Onayla & Yayınla ⚡</a>
+            </div>""")
+        return f"""<h3 style="font-size:14px;margin-top:18px;">Onay bekleyen AI yanıt taslakları ({len(drafts)})</h3>{''.join(items)}"""
 
     async def _pulse_core(property_id: str = "") -> dict:
         pid = property_id or "default"

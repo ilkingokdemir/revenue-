@@ -483,3 +483,22 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   (hedef/taranan, £ tahmin, detay metni, mini histogram barları). Kaydetmeden önce denenebilir.
 - E2E DOĞRULANDI: 5 motor simülasyonu; eşik hassasiyeti kanıtı (40→70 hedef, 65→4, 80→1);
   404 desteklenmeyen job; UI'da eşik 40 girilip simüle edildi → 70/137 + histogram render OK.
+
+## Son Durum (Iter 416, 2026-07-12) — Misafir Segment Motoru TAMAMLANDI
+- YENİ backend: routes/guests/segments.py — 7 segment (vip, riskli, sadik, aile, is, yeni,
+  standart); _classify: vip bayrağı/£3000+ harcama → VIP, risk high → Riskli, 3+ konaklama →
+  Sadık, ort. 3+ kişi → Aile, hafta içi kısa konaklama ≥%60 → İş, ≤1 konaklama → Yeni.
+  Endpoints: GET summary (aggregate gelir/sayı), GET list?segment=, GET/PUT strategy/{segment},
+  POST refresh. guest_profiles.segment alanına yazar + guest_segments_summary.
+- segment_allows(db, email, motor): motorlar göndermeden önce kontrol eder. Entegre motorlar:
+  cancel_save, upsell_autopilot, deposit_autopilot, email_nudge (nudge iki döngüde de).
+  Varsayılan strateji: VIP'e kupon+depozito YOK, Riskli'ye upsell+nudge YOK.
+  ÖNEMLİ FIX: kısmi strateji kaydı defaults'u ezmesin diye merge mantığı (DEFAULT ∪ saved).
+- Scheduler: JOB_HANDLERS["segment_refresh"] + JOB_REGISTRY (05:00, guest kategorisi) →
+  Otomasyon Ayarları panelinde 12. motor olarak görünür.
+- YENİ frontend: GuestSegmentsPanel.js — 7 segment kartı (sayı+gelir), Segment×Autopilot
+  strateji matrisi (tık ile aç/kapat), segment misafir listesi, "Segmentleri yenile".
+  Menü: Guests > "Segment motoru" (guest-segments-btn). menuSections'a UsersThree import fix.
+- E2E DOĞRULANDI: 182 misafir sınıflandı (18 vip, 29 sadık, 29 iş, 101 yeni, 5 standart);
+  segment_allows VIP: cancel_save=False, deposit=False, upsell=True ✓; strateji PUT+merge ✓;
+  scheduler trigger ✓; cancel_save regresyonu ✓; UI screenshot (kartlar, matris, liste, toast) ✓.

@@ -56,6 +56,11 @@ JOB_REGISTRY = {
             {"key": "days_ahead", "label": "Varış ufku", "type": "number", "min": 1, "max": 30, "default": 14, "suffix": "gün"},
         ],
     },
+    "segment_refresh": {
+        "label": "Segment Motoru", "category": "guest",
+        "description": "Misafirleri her gece otomatik segmentlere ayırır (VIP, sadık, riskli, aile, iş).",
+        "default_cron": (5, 0), "default_enabled": True, "params": [],
+    },
     "review_autopilot": {
         "label": "Yorum Yanıt Autopilot", "category": "guest",
         "description": "Bekleyen misafir yorumlarına AI yanıtı üretir; pozitifler yayınlanır, negatifler onaya düşer.",

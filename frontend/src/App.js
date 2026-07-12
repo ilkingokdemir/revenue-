@@ -84,7 +84,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, AutomationRoiPanel, LeakagePanel, GuestRiskPanel, AutomationSettingsPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, AutomationRoiPanel, LeakagePanel, GuestRiskPanel, AutomationSettingsPanel, GuestSegmentsPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -991,6 +991,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <GuestRiskPanel propertyId={activePropertyId || "all"} />
         )}
         {activeView === "automation-settings" && <AutomationSettingsPanel />}
+        {activeView === "guest-segments" && <GuestSegmentsPanel />}
         {activeView === "meetings-sales" && (
           <MeetingsSalesPanel propertyId={activePropertyId || "all"} />
         )}

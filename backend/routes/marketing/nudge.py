@@ -74,10 +74,13 @@ def create_nudge_router(db, require_roles):
              "viewed_at": {"$in": [None, ""]},
              "nudged_at": {"$exists": False}},
             {"_id": 0}).to_list(1000)
+        from routes.guests.segments import segment_allows
         upsell_nudged = 0
         for o in offers:
             b = await db.bookings.find_one({"id": o["booking_id"]}, {"_id": 0, "guest_email": 1, "guest_name": 1}) or {}
             if not b.get("guest_email") or not o.get("accept_token"):
+                continue
+            if not await segment_allows(db, b["guest_email"], "email_nudge"):
                 continue
             price, _, _ = _early_bird(o)
             title, _p = CATEGORY_TR.get(o.get("category"), ("Özel Teklif", ""))
@@ -100,6 +103,8 @@ def create_nudge_router(db, require_roles):
         coupon_nudged = 0
         for d in dispatches:
             if not d.get("guest_email") or not d.get("coupon_code"):
+                continue
+            if not await segment_allows(db, d["guest_email"], "email_nudge"):
                 continue
             book_url = f"{base}/book/{d.get('property_id') or 'default'}?coupon={d['coupon_code']}&rebook={d.get('token', '')}"
             result = await _send_email(

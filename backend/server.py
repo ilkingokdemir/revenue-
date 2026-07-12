@@ -1171,6 +1171,18 @@ async def _job_deposit_autopilot(property_id: str) -> dict:
 
 JOB_HANDLERS["deposit_autopilot"] = _job_deposit_autopilot
 
+from routes.guests.segments import create_segments_router
+segments_router = create_segments_router(db, require_roles, guest_risk_router.risk_for_internal)
+api_router.include_router(segments_router)
+
+async def _job_segment_refresh(property_id: str) -> dict:
+    try:
+        return await segments_router.run_segment_refresh_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["segment_refresh"] = _job_segment_refresh
+
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))
 

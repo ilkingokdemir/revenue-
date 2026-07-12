@@ -152,6 +152,7 @@ export const AutomationRoiPanel = L(() => import("./components/dashboard/Automat
 export const LeakagePanel = L(() => import("./components/dashboard/LeakagePanel"));
 export const GuestRiskPanel = L(() => import("./components/dashboard/GuestRiskPanel"));
 export const AutomationSettingsPanel = L(() => import("./components/dashboard/AutomationSettingsPanel"));
+export const GuestSegmentsPanel = L(() => import("./components/dashboard/GuestSegmentsPanel"));
 export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
 export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
 

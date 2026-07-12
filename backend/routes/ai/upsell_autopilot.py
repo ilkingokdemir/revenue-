@@ -134,6 +134,9 @@ def create_upsell_autopilot_router(db, require_roles):
         for b in bookings:
             if b["id"] in offered:
                 continue
+            from routes.guests.segments import segment_allows
+            if not await segment_allows(db, b.get("guest_email"), "upsell_autopilot"):
+                continue
             guest = await db.guest_profiles.find_one(
                 {"id": b.get("guest_id")}, {"_id": 0}) or {}
             r = _score_upsell_propensity(b, guest)

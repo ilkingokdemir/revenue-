@@ -220,6 +220,9 @@ def create_guest_risk_router(db, require_roles):
         cache = {}
         for b in arrivals:
             email = (b.get("guest_email") or "").lower()
+            from routes.guests.segments import segment_allows
+            if not await segment_allows(db, email, "deposit_autopilot"):
+                continue
             if email not in cache:
                 cache[email] = await _risk_for(email)
             if cache[email]["level"] != "high":

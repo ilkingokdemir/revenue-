@@ -68,6 +68,9 @@ def create_cancel_save_router(db, require_roles):
 
         scanned, sent = len(bookings), 0
         for b in bookings:
+            from routes.guests.segments import segment_allows
+            if not await segment_allows(db, b.get("guest_email"), "cancel_save"):
+                continue
             guest = await db.guest_profiles.find_one({"id": b.get("guest_id")}, {"_id": 0}) or {}
             r = _score_cancel_risk(b, guest, avg_rate)
             if r["score"] < RISK_THRESHOLD:

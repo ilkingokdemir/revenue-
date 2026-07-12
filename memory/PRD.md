@@ -471,3 +471,15 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: GET 11 motor listeledi; PUT param (threshold 70) → trigger sonucu
   threshold:70 döndü (canlı etki kanıtı); toggle on/off; 400 range validasyonu;
   404 bilinmeyen job; UI screenshot — panel, genişletilmiş kart, 10/11 aktif rozeti OK.
+
+## Son Durum (Iter 415, 2026-07-12) — Otomasyon Etki Simülatörü TAMAMLANDI
+- YENİ backend: routes/platform_ext/automation_simulator.py — POST /api/automation/simulate/{job}:
+  parametrelerle dry-run "kaç misafir hedeflenirdi?" analizi, hiçbir şey göndermeden.
+  Desteklenen: cancel_save (risk eşiği + kupon maliyet tahmini), upsell_autopilot (potansiyel
+  gelir), deposit_autopilot (güvence tutarı), email_nudge (bekleyen hatırlatmalar),
+  review_autopilot (işlenecek yorum). Skor histogramı (5 bucket) döner.
+- risk_score.py: router.risk_for_internal expose edildi (simülatör için).
+- Frontend: AutomationSettingsPanel kartlarına "Etkiyi simüle et" butonu + cyan sonuç kutusu
+  (hedef/taranan, £ tahmin, detay metni, mini histogram barları). Kaydetmeden önce denenebilir.
+- E2E DOĞRULANDI: 5 motor simülasyonu; eşik hassasiyeti kanıtı (40→70 hedef, 65→4, 80→1);
+  404 desteklenmeyen job; UI'da eşik 40 girilip simüle edildi → 70/137 + histogram render OK.

@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   GearSix, ArrowsClockwise, CaretDown, CaretUp, Play, Lightning,
-  CheckCircle, WarningCircle, Clock, Coins, Megaphone, Heart, ShieldWarning, ChartBar,
+  CheckCircle, WarningCircle, Clock, Coins, Megaphone, Heart, ShieldWarning, ChartBar, Target,
 } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -37,12 +37,16 @@ function Toggle({ on, busy, onChange, testId }) {
   );
 }
 
+const SIMULATABLE = new Set(["cancel_save", "upsell_autopilot", "deposit_autopilot", "email_nudge", "review_autopilot"]);
+
 function MotorCard({ job, onToggle, onSave, onTrigger, busyKey }) {
   const [open, setOpen] = useState(false);
   const [hour, setHour] = useState(job.cron_hour);
   const [minute, setMinute] = useState(job.cron_minute);
   const [dow, setDow] = useState(job.cron_dow === null || job.cron_dow === undefined ? "" : String(job.cron_dow));
   const [vals, setVals] = useState(() => Object.fromEntries((job.params || []).map((p) => [p.key, p.value])));
+  const [sim, setSim] = useState(null);
+  const [simBusy, setSimBusy] = useState(false);
 
   const busy = busyKey === job.job;
   const hasErr = !!job.last_run_error;
@@ -53,6 +57,15 @@ function MotorCard({ job, onToggle, onSave, onTrigger, busyKey }) {
     cron_dow: dow === "" ? null : Number(dow),
     params: vals,
   });
+
+  const simulate = async () => {
+    setSimBusy(true);
+    try {
+      const r = await axios.post(`${API}/api/automation/simulate/${job.job}`, { params: vals });
+      setSim(r.data);
+    } catch { toast.error("Simülasyon başarısız"); }
+    finally { setSimBusy(false); }
+  };
 
   return (
     <div data-testid={`motor-card-${job.job}`}
@@ -142,11 +155,46 @@ function MotorCard({ job, onToggle, onSave, onTrigger, busyKey }) {
             </div>
           )}
 
+          {sim && (
+            <div className="bg-cyan-50 border border-cyan-200 rounded-lg px-3 py-2.5 space-y-2" data-testid={`motor-sim-result-${job.job}`}>
+              <div className="flex items-center gap-1.5 text-xs font-medium text-cyan-800">
+                <Target size={13} weight="fill" />
+                <span>Etki simülasyonu: {sim.targets}/{sim.scanned} hedeflenir</span>
+                {sim.value_estimate > 0 && <span className="text-cyan-600">· ~£{Number(sim.value_estimate).toLocaleString("en-GB", { maximumFractionDigits: 0 })}</span>}
+              </div>
+              <p className="text-[11px] text-cyan-700 leading-relaxed">{sim.detail}</p>
+              {sim.histogram && (
+                <div className="flex items-end gap-1.5 pt-1">
+                  {sim.histogram.map((h) => {
+                    const max = Math.max(...sim.histogram.map((x) => x.count), 1);
+                    return (
+                      <div key={h.bucket} className="flex-1 text-center">
+                        <div className="h-10 flex items-end justify-center">
+                          <div className="w-full max-w-[36px] bg-cyan-400/70 rounded-t" style={{ height: `${(h.count / max) * 100}%`, minHeight: h.count > 0 ? 3 : 0 }} />
+                        </div>
+                        <div className="text-[9px] text-cyan-600 mt-0.5">{h.bucket}</div>
+                        <div className="text-[10px] font-medium text-cyan-800">{h.count}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2">
-            <button onClick={() => onTrigger(job.job)} disabled={busy} data-testid={`motor-trigger-${job.job}`}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-600 border border-stone-200 rounded-lg px-3 py-1.5 bg-white hover:border-stone-300 disabled:opacity-50">
-              <Play size={13} weight="fill" /> Şimdi çalıştır
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => onTrigger(job.job)} disabled={busy} data-testid={`motor-trigger-${job.job}`}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-600 border border-stone-200 rounded-lg px-3 py-1.5 bg-white hover:border-stone-300 disabled:opacity-50">
+                <Play size={13} weight="fill" /> Şimdi çalıştır
+              </button>
+              {SIMULATABLE.has(job.job) && (
+                <button onClick={simulate} disabled={simBusy} data-testid={`motor-simulate-${job.job}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-700 border border-cyan-200 rounded-lg px-3 py-1.5 bg-cyan-50 hover:border-cyan-300 disabled:opacity-50">
+                  <Target size={13} weight="fill" /> {simBusy ? "Hesaplanıyor…" : "Etkiyi simüle et"}
+                </button>
+              )}
+            </div>
             <button onClick={save} disabled={busy} data-testid={`motor-save-${job.job}`}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-white bg-stone-900 rounded-lg px-4 py-1.5 hover:bg-stone-800 disabled:opacity-50">
               Ayarları kaydet

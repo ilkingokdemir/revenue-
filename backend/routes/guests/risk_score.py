@@ -240,4 +240,5 @@ def create_guest_risk_router(db, require_roles):
         return await _deposit_autopilot_core((data or {}).get("property_id", ""))
 
     router.run_deposit_autopilot_internal = _deposit_autopilot_core
+    router.risk_for_internal = _risk_for
     return router

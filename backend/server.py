@@ -1171,6 +1171,9 @@ async def _job_deposit_autopilot(property_id: str) -> dict:
 
 JOB_HANDLERS["deposit_autopilot"] = _job_deposit_autopilot
 
+from routes.platform_ext.automation_simulator import create_automation_simulator_router
+api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))
+
 from routes.platform_ext.automation_settings import create_automation_settings_router
 api_router.include_router(create_automation_settings_router(db, require_roles))
 

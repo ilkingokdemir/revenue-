@@ -502,3 +502,17 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: 182 misafir sınıflandı (18 vip, 29 sadık, 29 iş, 101 yeni, 5 standart);
   segment_allows VIP: cancel_save=False, deposit=False, upsell=True ✓; strateji PUT+merge ✓;
   scheduler trigger ✓; cancel_save regresyonu ✓; UI screenshot (kartlar, matris, liste, toast) ✓.
+
+## Son Durum (Iter 417, 2026-07-13) — Segment Bazlı Kişiselleştirilmiş Upsell TAMAMLANDI
+- segments.py: SEGMENT_OFFER_PROFILES (vip/sadik/aile/is/yeni — selamlama, giriş, kapanış
+  metinleri + category_boost) ve apply_segment_boost(scores, segment) helper eklendi.
+  Boost örnekleri: VIP → room_upgrade+15/spa+10, İş → late_checkout+15/breakfast+10,
+  Aile → breakfast+15/transport+10.
+- upsell_autopilot.py: _email_html artık seg_profile alıyor (segment'e özel selamlama/giriş/
+  kapanış); _autopilot_core segment lookup (guest_id yoksa email fallback) + boost'lu skor
+  ile kategori seçiyor; offer doc'a segment alanı, sonuca by_segment sayacı eklendi.
+- automation_simulator.py: _sim_upsell aynı boost mantığıyla tutarlı hale getirildi.
+- E2E DOĞRULANDI: aynı ham skorlarla VIP→oda yükseltme, İş→geç çıkış, Aile→kahvaltı seçimi;
+  VIP test misafiri → autopilot 1 teklif (skor 68, segment:vip, by_segment raporu, mock email);
+  HTML'de "Değerli VIP misafirimiz"+"önceliğiniz garanti" / aile metinleri assert edildi;
+  test verisi temizlendi; simulator + nudge regresyonu OK.

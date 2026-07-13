@@ -22,6 +22,51 @@ SEGMENTS = {
 
 MOTORS = ["cancel_save", "upsell_autopilot", "deposit_autopilot", "email_nudge"]
 
+SEGMENT_OFFER_PROFILES = {
+    "vip": {
+        "greeting": "Değerli VIP misafirimiz",
+        "intro": "Sizin gibi seçkin bir misafiri yeniden ağırlamak bizim için ayrıcalık. Konaklamanız için özel olarak ayırdığımız teklif:",
+        "closing": "VIP misafirimiz olarak bu teklifte önceliğiniz garanti altındadır.",
+        "category_boost": {"room_upgrade": 15, "spa": 10},
+    },
+    "sadik": {
+        "greeting": "Sevgili sadık misafirimiz",
+        "intro": "Bizi yeniden tercih ettiğiniz için teşekkürler! Sadakatinize küçük bir jest olarak bu teklifi hazırladık:",
+        "closing": "Tekrar aramızda olmanız bizim için çok değerli.",
+        "category_boost": {"late_checkout": 10, "breakfast": 5},
+    },
+    "aile": {
+        "greeting": "Merhaba",
+        "intro": "Aileniz için konforlu bir konaklama olsun istedik. Çocuklarınızla birlikte keyif alacağınız teklif:",
+        "closing": "Ailecek harika bir konaklama dileriz!",
+        "category_boost": {"breakfast": 15, "transport": 10},
+    },
+    "is": {
+        "greeting": "Merhaba",
+        "intro": "Yoğun programınıza uyum sağlayacak, iş seyahatinizi kolaylaştıran bir teklif hazırladık:",
+        "closing": "Verimli ve konforlu bir konaklama dileriz.",
+        "category_boost": {"late_checkout": 15, "breakfast": 10},
+    },
+    "yeni": {
+        "greeting": "Hoş geldiniz",
+        "intro": "İlk konaklamanızı unutulmaz kılmak istiyoruz. Size özel karşılama teklifi:",
+        "closing": "Umarız ilk konaklamanız uzun bir dostluğun başlangıcı olur.",
+        "category_boost": {"breakfast": 5},
+    },
+}
+
+
+def apply_segment_boost(scores: Dict, segment: str):
+    """Returns (boosted_scores, top_cat, top_score) with segment category boosts."""
+    profile = SEGMENT_OFFER_PROFILES.get(segment or "")
+    boosted = dict(scores)
+    if profile:
+        for cat, boost in profile["category_boost"].items():
+            if cat in boosted and boosted[cat] > 0:
+                boosted[cat] = min(100, boosted[cat] + boost)
+    top = max(boosted, key=boosted.get)
+    return boosted, top, boosted[top]
+
 DEFAULT_STRATEGY = {
     "vip":      {"cancel_save": False, "upsell_autopilot": True,  "deposit_autopilot": False, "email_nudge": True},
     "riskli":   {"cancel_save": True,  "upsell_autopilot": False, "deposit_autopilot": True,  "email_nudge": False},

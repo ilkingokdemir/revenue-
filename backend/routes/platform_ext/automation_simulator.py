@@ -59,6 +59,7 @@ def create_automation_simulator_router(db, require_roles, risk_for):
                           f"(risk altındaki gelir ~£{value:,.0f}, maks. kupon maliyeti ~£{value * discount / 100:,.0f})"}
 
     async def _sim_upsell(pq: Dict, params: Dict) -> Dict:
+        from routes.guests.segments import apply_segment_boost
         min_score = int(params.get("min_score", 60))
         days_ahead = int(params.get("days_ahead", 14))
         today = date.today().isoformat()
@@ -70,11 +71,15 @@ def create_automation_simulator_router(db, require_roles, risk_for):
         scores, targets, value = [], 0, 0.0
         for b in bookings:
             guest = await db.guest_profiles.find_one({"id": b.get("guest_id")}, {"_id": 0}) or {}
+            if not guest and b.get("guest_email"):
+                guest = await db.guest_profiles.find_one(
+                    {"email": (b["guest_email"] or "").lower()}, {"_id": 0}) or {}
             r = _score_upsell_propensity(b, guest)
-            scores.append(r["top_score"])
-            if r["top_score"] >= min_score:
+            _, cat, top_score = apply_segment_boost(r["scores"], guest.get("segment") or "standart")
+            scores.append(top_score)
+            if top_score >= min_score:
                 targets += 1
-                value += _offer_price(r["top_recommendation"], max(int(b.get("nights") or 1), 1))
+                value += _offer_price(cat, max(int(b.get("nights") or 1), 1))
         return {"targets": targets, "scanned": len(bookings),
                 "value_estimate": round(value, 2), "cost_estimate": 0,
                 "histogram": _histogram(scores),

@@ -65,8 +65,14 @@ async def _send_email(to_email: str, subject: str, html: str) -> str:
         return "failed"
 
 
-def _email_html(guest_name: str, check_in: str, cat_key: str, price: float = 0, accept_url: str = "") -> str:
+def _email_html(guest_name: str, check_in: str, cat_key: str, price: float = 0,
+                accept_url: str = "", seg_profile: dict = None) -> str:
     title, pitch = CATEGORY_TR.get(cat_key, ("Özel Teklif", ""))
+    greeting = (seg_profile or {}).get("greeting", "Merhaba")
+    intro = (seg_profile or {}).get("intro",
+             f"{check_in} tarihli konaklamanız yaklaşıyor. Size özel hazırladığımız teklif:")
+    closing = (seg_profile or {}).get("closing", "")
+    closing_html = f'<p style="font-size:13px;color:#78716c;">{closing}</p>' if closing else ""
     btn = (f"""<p style="text-align:center;margin:20px 0 6px;">
         <a href="{accept_url}" style="background:#b45309;color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;display:inline-block;">
           Tek Tıkla Kabul Et — £{price * 0.9:.0f}
@@ -76,13 +82,14 @@ def _email_html(guest_name: str, check_in: str, cat_key: str, price: float = 0, 
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#292524;">
       <h2 style="color:#b45309;">Konaklamanıza özel: {title}</h2>
-      <p>Merhaba {guest_name or 'değerli misafirimiz'},</p>
-      <p>{check_in} tarihli konaklamanız yaklaşıyor. Size özel hazırladığımız teklif:</p>
+      <p>{greeting} {guest_name or 'değerli misafirimiz'},</p>
+      <p>{intro}</p>
       <div style="background:#fffbeb;border:1px dashed #f59e0b;border-radius:12px;padding:18px;margin:18px 0;">
         <div style="font-size:16px;font-weight:bold;">{title} — £{price:.0f}</div>
         <div style="font-size:13px;color:#57534e;margin-top:6px;">{pitch}</div>
       </div>
       {btn}
+      {closing_html}
     </div>
     """
 
@@ -131,19 +138,25 @@ def create_upsell_autopilot_router(db, require_roles):
 
         scanned, sent, skipped_low = len(bookings), 0, 0
         by_cat: Dict[str, int] = {}
+        by_segment: Dict[str, int] = {}
+        from routes.guests.segments import segment_allows, apply_segment_boost, SEGMENT_OFFER_PROFILES
         for b in bookings:
             if b["id"] in offered:
                 continue
-            from routes.guests.segments import segment_allows
             if not await segment_allows(db, b.get("guest_email"), "upsell_autopilot"):
                 continue
             guest = await db.guest_profiles.find_one(
                 {"id": b.get("guest_id")}, {"_id": 0}) or {}
+            if not guest and b.get("guest_email"):
+                guest = await db.guest_profiles.find_one(
+                    {"email": (b["guest_email"] or "").lower()}, {"_id": 0}) or {}
+            segment = guest.get("segment") or "standart"
+            seg_profile = SEGMENT_OFFER_PROFILES.get(segment)
             r = _score_upsell_propensity(b, guest)
-            if r["top_score"] < min_score:
+            _, cat, top_score = apply_segment_boost(r["scores"], segment)
+            if top_score < min_score:
                 skipped_low += 1
                 continue
-            cat = r["top_recommendation"]
             nights = max(int(b.get("nights") or 1), 1)
             price = _offer_price(cat, nights)
             token = secrets.token_urlsafe(20)
@@ -155,13 +168,15 @@ def create_upsell_autopilot_router(db, require_roles):
                 email_result = await _send_email(
                     b["guest_email"],
                     f"Konaklamanıza özel teklif: {title}",
-                    _email_html(b.get("guest_name", ""), b.get("check_in", ""), cat, price, accept_url))
+                    _email_html(b.get("guest_name", ""), b.get("check_in", ""), cat, price,
+                                accept_url, seg_profile))
             await db.upsell_offers.insert_one({
                 "id": f"UP-{b['id'][:6].upper()}-{cat[:3].upper()}",
                 "booking_id": b["id"],
                 "property_id": b.get("property_id"),
                 "category": cat,
-                "score": r["top_score"],
+                "score": top_score,
+                "segment": segment,
                 "price": price,
                 "accept_token": token,
                 "status": "sent" if email_result in ("sent", "mock") else "queued",
@@ -171,9 +186,11 @@ def create_upsell_autopilot_router(db, require_roles):
                 "created_by": "autopilot",
             })
             by_cat[cat] = by_cat.get(cat, 0) + 1
+            by_segment[segment] = by_segment.get(segment, 0) + 1
             sent += 1
         return {"ok": True, "scanned": scanned, "offers_sent": sent,
                 "skipped_low_score": skipped_low, "by_category": by_cat,
+                "by_segment": by_segment,
                 "min_score": min_score, "window_days": days_ahead}
 
     @router.post("/ai-predictions/upsell/autopilot/run")

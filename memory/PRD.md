@@ -533,3 +533,19 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   renk kodlu (≥%30 yeşil, ≥%10 turuncu, altı kırmızı). Veri yoksa bölüm tamamen gizlenir.
 - E2E DOĞRULANDI: test teklifleriyle preview + force send → log'da segment_performance
   (VIP %50 £90); boş veri durumunda bölüm gizli; test verisi temizlendi; pulse regresyonu OK.
+
+## Son Durum (Iter 420, 2026-07-13) — Kanal Sağlık Merkezi + OTA Senkron Watchdog TAMAMLANDI
+- YENİ backend: routes/distribution/channel_health.py — kanal başına 24s senkron sağlığı
+  (başarı oranı, bekleyen, dead-letter, son başarı, gecikme saati; status: healthy/warning/
+  critical/no_data). Watchdog: dead-letter görevleri otomatik requeue (görev başına maks 2,
+  çalışma başına max_requeue), stale/dead-letter için ota_sync_alerts (open/resolved yaşam
+  döngüsü). Endpoints: GET /channel-health/{pid}, POST /channel-health/heal.
+- Motor: JOB_HANDLERS["ota_sync_watchdog"] + registry (06:30, YENİ "distribution" kategorisi,
+  params: stale_hours 24, max_requeue 10) → Otomasyon Ayarları'nda 13. motor.
+- Daily Pulse: risks.ota_sync_alerts (açık uyarı sayısı) + e-posta risk satırı.
+- YENİ frontend: ChannelHealthPanel.js — kanal kartları grid (durum rozetleri), açık uyarı
+  banner'ı, dead-letter tablosu (tek tık yeniden dene), "Şimdi iyileştir". Menü: System >
+  "Kanal sağlık merkezi" (channel-health-btn). AutomationSettingsPanel'e distribution kategorisi.
+- E2E DOĞRULANDI: booking_com stale (2024s) → critical + otomatik alert; 2 test dead-letter →
+  watchdog 2 requeue → run-tick işledi → expedia healthy %100; alert yaşam döngüsü; Daily Pulse
+  preview ota_sync_alerts:1; 13 motor listesi; scheduler trigger; UI screenshot OK. Test verisi silindi.

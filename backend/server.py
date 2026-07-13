@@ -1183,6 +1183,18 @@ async def _job_segment_refresh(property_id: str) -> dict:
 
 JOB_HANDLERS["segment_refresh"] = _job_segment_refresh
 
+from routes.distribution.channel_health import create_channel_health_router
+channel_health_router = create_channel_health_router(db, require_roles)
+api_router.include_router(channel_health_router)
+
+async def _job_ota_sync_watchdog(property_id: str) -> dict:
+    try:
+        return await channel_health_router.run_watchdog_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["ota_sync_watchdog"] = _job_ota_sync_watchdog
+
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))
 

@@ -61,6 +61,7 @@ def create_daily_pulse_router(db, require_roles):
         awaiting_approval = await db.reviews.count_documents({**pq, "response_status": "pending_approval"})
         health = await compute_automation_health(db, property_id)
         failing_jobs = [f"{r['label']}" for r in health["rows"] if r["status"] == "failing"]
+        ota_alerts = await db.ota_sync_alerts.count_documents({"status": "open"})
 
         week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
         sweeps = await db.leakage_sweep_log.find(
@@ -104,6 +105,7 @@ def create_daily_pulse_router(db, require_roles):
                 "segment_performance": segment_performance,
                 "risks": {"open_logbook": open_log, "unanswered_reviews": unanswered,
                           "reviews_awaiting_approval": awaiting_approval,
+                          "ota_sync_alerts": ota_alerts,
                           "failing_automations": failing_jobs}}
 
     def _pulse_html(d: dict, hotel_name: str) -> str:
@@ -116,6 +118,8 @@ def create_daily_pulse_router(db, require_roles):
             risk_items.append(f"<li>{r['unanswered_reviews']} yanıtlanmamış yorum</li>")
         if r.get("reviews_awaiting_approval"):
             risk_items.append(f"<li>{r['reviews_awaiting_approval']} AI yanıt taslağı onay bekliyor</li>")
+        if r.get("ota_sync_alerts"):
+            risk_items.append(f"<li>{r['ota_sync_alerts']} açık OTA senkron uyarısı (Kanal Sağlık Merkezi'ne bakın)</li>")
         for j in r.get("failing_automations") or []:
             risk_items.append(f"<li>Otomasyon HATALI: {j}</li>")
         risks_html = f"<ul style='margin:6px 0;padding-left:18px;color:#b91c1c;font-size:13px;'>{''.join(risk_items)}</ul>" if risk_items else "<p style='font-size:13px;color:#15803d;'>Dikkat gerektiren risk yok ✓</p>"

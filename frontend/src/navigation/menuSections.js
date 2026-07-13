@@ -376,6 +376,7 @@ export function buildMenuSections(t, user) {
         { id: "channel-inbound", icon: Link, name: "Inbound reservations", testId: "channel-inbound-btn" },
         { id: "channel-parity", icon: Scales, name: "Parity monitor", testId: "channel-parity-btn" },
         { id: "ota-health", icon: Heart, name: "OTA health", testId: "ota-health-btn" },
+        { id: "channel-health", icon: Heart, name: "Kanal sağlık merkezi", testId: "channel-health-btn" },
         { id: "channel-sync-queue", icon: ArrowsClockwise, name: "Sync queue", testId: "channel-sync-queue-btn" },
         { id: "channel-settings", icon: Gear, name: t("nav.channel_settings"), testId: "channel-settings-btn" },
         { id: "pms-crs", icon: ArrowsClockwise, name: "PMS-CRS sync", testId: "pms-crs-btn" },

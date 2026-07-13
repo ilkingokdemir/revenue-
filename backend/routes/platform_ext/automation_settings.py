@@ -89,6 +89,15 @@ JOB_REGISTRY = {
         "description": "AI fiyat önerilerini gece otomatik uygular (hassas — varsayılan kapalı).",
         "default_cron": (2, 0), "default_enabled": False, "params": [],
     },
+    "ota_sync_watchdog": {
+        "label": "OTA Senkron Watchdog", "category": "distribution",
+        "description": "Kalıcı başarısız OTA güncellemelerini otomatik yeniden dener, geciken kanallar için uyarı açar.",
+        "default_cron": (6, 30), "default_enabled": True,
+        "params": [
+            {"key": "stale_hours", "label": "Gecikme eşiği", "type": "number", "min": 4, "max": 96, "default": 24, "suffix": "saat"},
+            {"key": "max_requeue", "label": "Çalışma başına maks. yeniden kuyruk", "type": "number", "min": 1, "max": 50, "default": 10, "suffix": "adet"},
+        ],
+    },
 }
 
 CATEGORY_META = {
@@ -97,6 +106,7 @@ CATEGORY_META = {
     "guest": "Misafir Deneyimi",
     "risk": "Risk & Güvence",
     "reporting": "Raporlama",
+    "distribution": "Dağıtım & OTA",
 }
 
 

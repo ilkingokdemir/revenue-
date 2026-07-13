@@ -9,7 +9,7 @@ import {
 const API = process.env.REACT_APP_BACKEND_URL;
 
 const CAT_ICON = {
-  revenue: Coins, marketing: Megaphone, guest: Heart, risk: ShieldWarning, reporting: ChartBar,
+  revenue: Coins, marketing: Megaphone, guest: Heart, risk: ShieldWarning, reporting: ChartBar, distribution: Lightning,
 };
 const CAT_COLOR = {
   revenue: "text-emerald-600 bg-emerald-50 border-emerald-200",
@@ -17,6 +17,7 @@ const CAT_COLOR = {
   guest: "text-rose-600 bg-rose-50 border-rose-200",
   risk: "text-amber-600 bg-amber-50 border-amber-200",
   reporting: "text-violet-600 bg-violet-50 border-violet-200",
+  distribution: "text-cyan-600 bg-cyan-50 border-cyan-200",
 };
 
 const fmtTime = (iso) => {
@@ -258,7 +259,7 @@ export default function AutomationSettingsPanel() {
   const activeCount = jobs.filter((j) => j.enabled).length;
   const grouped = {};
   jobs.forEach((j) => { (grouped[j.category] = grouped[j.category] || []).push(j); });
-  const order = ["revenue", "marketing", "guest", "risk", "reporting"];
+  const order = ["revenue", "marketing", "guest", "risk", "distribution", "reporting"];
 
   return (
     <div className="space-y-6" data-testid="automation-settings-panel">

@@ -4,7 +4,7 @@ Guest Segmentation Engine (iter 416) — auto-classifies guests into segments
 motor target segments differently via a strategy matrix.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict
 import logging
 
@@ -212,6 +212,44 @@ def create_segments_router(db, require_roles, risk_for):
                       "updated_by": current_user.get("name", "")}},
             upsert=True)
         return {"ok": True, "segment": segment}
+
+    @router.get("/guests/segments/performance")
+    async def performance(days: int = 90,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        since = (datetime.now(timezone.utc) - timedelta(days=int(days))).isoformat()
+        offers = await db.upsell_offers.find(
+            {"created_at": {"$gte": since}}, {"_id": 0}).to_list(5000)
+        seg_cache: Dict[str, str] = {}
+        stats = {k: {"sent": 0, "viewed": 0, "accepted": 0, "revenue": 0.0} for k in SEGMENTS}
+        for o in offers:
+            seg = o.get("segment")
+            if not seg:
+                bid = o.get("booking_id")
+                if bid not in seg_cache:
+                    b = await db.bookings.find_one({"id": bid}, {"_id": 0, "guest_email": 1}) or {}
+                    email = (b.get("guest_email") or "").lower()
+                    g = await db.guest_profiles.find_one({"email": email}, {"_id": 0, "segment": 1}) if email else None
+                    seg_cache[bid] = (g or {}).get("segment") or "standart"
+                seg = seg_cache[bid]
+                await db.upsell_offers.update_one(
+                    {"id": o["id"], "booking_id": o.get("booking_id")},
+                    {"$set": {"segment": seg}})
+            if seg not in stats:
+                seg = "standart"
+            stats[seg]["sent"] += 1
+            if o.get("viewed_at"):
+                stats[seg]["viewed"] += 1
+            if o.get("status") == "accepted":
+                stats[seg]["accepted"] += 1
+                stats[seg]["revenue"] += float(o.get("final_price") or o.get("price") or 0)
+        out = []
+        for key, m in SEGMENTS.items():
+            s = stats[key]
+            out.append({"segment": key, "label": m["label"], "color": m["color"], **s,
+                        "revenue": round(s["revenue"], 2),
+                        "acceptance_rate": round(s["accepted"] / s["sent"] * 100, 1) if s["sent"] else 0,
+                        "view_rate": round(s["viewed"] / s["sent"] * 100, 1) if s["sent"] else 0})
+        return {"days": days, "total_offers": len(offers), "segments": out}
 
     @router.post("/guests/segments/refresh")
     async def refresh(data: Dict = None,

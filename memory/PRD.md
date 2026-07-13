@@ -516,3 +516,12 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   VIP test misafiri → autopilot 1 teklif (skor 68, segment:vip, by_segment raporu, mock email);
   HTML'de "Değerli VIP misafirimiz"+"önceliğiniz garanti" / aile metinleri assert edildi;
   test verisi temizlendi; simulator + nudge regresyonu OK.
+
+## Son Durum (Iter 418, 2026-07-13) — Segment Performans Raporu TAMAMLANDI
+- segments.py: GET /guests/segments/performance?days=90 — upsell_offers'ı segmente göre
+  toplar (gönderilen/görüntülenen/kabul/kabul oranı/gelir); segment alanı olmayan eski
+  tekliflere otomatik backfill (booking→guest_email→profil segmenti, DB'ye kalıcı yazılır).
+- GuestSegmentsPanel: strateji matrisi altına "Segment performansı" tablosu — kabul oranı
+  progress bar, görüntülenme yüzdesi, kabul geliri; veri yoksa bilgilendirici boş durum.
+- E2E DOĞRULANDI: 9 çeşitli test teklifi ile matematik (vip 2/3=%66.7 £81, yeni %16.7)
+  + 2 gerçek teklifin backfill'i kanıtlandı; UI screenshot (tablo + barlar) OK; test verisi silindi.

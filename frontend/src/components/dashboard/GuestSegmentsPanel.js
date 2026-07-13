@@ -29,6 +29,7 @@ const MOTOR_TR = {
 export default function GuestSegmentsPanel() {
   const [data, setData] = useState(null);
   const [strategy, setStrategy] = useState(null);
+  const [perf, setPerf] = useState(null);
   const [selected, setSelected] = useState("");
   const [guests, setGuests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,12 +37,14 @@ export default function GuestSegmentsPanel() {
 
   const load = useCallback(async () => {
     try {
-      const [s, st] = await Promise.all([
+      const [s, st, pf] = await Promise.all([
         axios.get(`${API}/api/guests/segments/summary`),
         axios.get(`${API}/api/guests/segments/strategy`),
+        axios.get(`${API}/api/guests/segments/performance?days=90`),
       ]);
       setData(s.data);
       setStrategy(st.data);
+      setPerf(pf.data);
     } catch { toast.error("Segment verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, []);
@@ -155,6 +158,49 @@ export default function GuestSegmentsPanel() {
           </tbody>
         </table>
       </div>
+
+      {perf && (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="segment-performance">
+          <div className="px-4 py-3 border-b border-stone-100">
+            <h3 className="text-sm font-semibold text-stone-900">Segment performansı — upsell teklifleri (son {perf.days} gün)</h3>
+            <p className="text-[11px] text-stone-500 mt-0.5">{perf.total_offers} teklif analiz edildi. Düşük kabul oranlı segmentlerin stratejisini gözden geçirin.</p>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-stone-400 border-b border-stone-100">
+                <th className="text-left px-4 py-2 font-medium">Segment</th>
+                <th className="text-right px-2 py-2 font-medium">Gönderilen</th>
+                <th className="text-right px-2 py-2 font-medium">Görüntülenen</th>
+                <th className="text-right px-2 py-2 font-medium">Kabul</th>
+                <th className="text-left px-4 py-2 font-medium w-48">Kabul oranı</th>
+                <th className="text-right px-4 py-2 font-medium">Gelir</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perf.segments.filter((s) => s.sent > 0).map((s) => (
+                <tr key={s.segment} className="border-b border-stone-50 last:border-0" data-testid={`perf-row-${s.segment}`}>
+                  <td className="px-4 py-2.5 font-medium text-stone-800">{s.label}</td>
+                  <td className="px-2 py-2.5 text-right text-stone-600">{s.sent}</td>
+                  <td className="px-2 py-2.5 text-right text-stone-600">{s.viewed} <span className="text-[10px] text-stone-400">(%{s.view_rate})</span></td>
+                  <td className="px-2 py-2.5 text-right font-medium text-emerald-600">{s.accepted}</td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(s.acceptance_rate, 100)}%` }} />
+                      </div>
+                      <span className="text-xs font-medium text-stone-700 w-10 text-right">%{s.acceptance_rate}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-medium text-stone-800">{fmt(s.revenue)}</td>
+                </tr>
+              ))}
+              {perf.segments.every((s) => s.sent === 0) && (
+                <tr><td colSpan={6} className="px-4 py-5 text-xs text-stone-400">Bu dönemde teklif gönderilmedi — Upsell Auto-Pilot çalıştıkça veriler burada birikecek.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {selected && (
         <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="segment-guest-list">

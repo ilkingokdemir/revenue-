@@ -525,3 +525,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   progress bar, görüntülenme yüzdesi, kabul geliri; veri yoksa bilgilendirici boş durum.
 - E2E DOĞRULANDI: 9 çeşitli test teklifi ile matematik (vip 2/3=%66.7 £81, yeni %16.7)
   + 2 gerçek teklifin backfill'i kanıtlandı; UI screenshot (tablo + barlar) OK; test verisi silindi.
+
+## Son Durum (Iter 419, 2026-07-13) — Daily Pulse'a Segment Performans Özeti TAMAMLANDI
+- daily_pulse.py: _pulse_data artık son 30 günün upsell tekliflerini segmente göre toplayıp
+  segment_performance alanı döndürüyor (en çok gönderilen 5 segment: sent/accepted/oran/gelir).
+- _segment_html: e-postaya "Segment performansı — upsell (30 gün)" tablosu — kabul oranı
+  renk kodlu (≥%30 yeşil, ≥%10 turuncu, altı kırmızı). Veri yoksa bölüm tamamen gizlenir.
+- E2E DOĞRULANDI: test teklifleriyle preview + force send → log'da segment_performance
+  (VIP %50 £90); boş veri durumunda bölüm gizli; test verisi temizlendi; pulse regresyonu OK.

@@ -72,6 +72,28 @@ def create_daily_pulse_router(db, require_roles):
             {"_id": 0, "guest_name": 1, "rating": 1, "review_text": 1,
              "response_text": 1, "approve_token": 1}).sort("draft_generated_at", -1).to_list(3)
 
+        # segment performance (30d upsell offers)
+        from routes.guests.segments import SEGMENTS
+        month_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        offers_30d = await db.upsell_offers.find(
+            {"created_at": {"$gte": month_ago}},
+            {"_id": 0, "segment": 1, "status": 1, "final_price": 1, "price": 1}).to_list(5000)
+        seg_stats: Dict = {}
+        for o in offers_30d:
+            seg = o.get("segment") or "standart"
+            s = seg_stats.setdefault(seg, {"sent": 0, "accepted": 0, "revenue": 0.0})
+            s["sent"] += 1
+            if o.get("status") == "accepted":
+                s["accepted"] += 1
+                s["revenue"] += float(o.get("final_price") or o.get("price") or 0)
+        segment_performance = sorted(
+            [{"segment": k, "label": SEGMENTS.get(k, {}).get("label", k),
+              "sent": v["sent"], "accepted": v["accepted"],
+              "acceptance_rate": round(v["accepted"] / v["sent"] * 100, 1),
+              "revenue": round(v["revenue"], 2)}
+             for k, v in seg_stats.items()],
+            key=lambda x: x["sent"], reverse=True)[:5]
+
         return {"property_id": property_id, "date": today_iso,
                 "today": {"arrivals": arrivals, "departures": departures,
                           "in_house": in_house, "occupancy_pct": occupancy},
@@ -79,6 +101,7 @@ def create_daily_pulse_router(db, require_roles):
                               "automation_revenue": auto_rev},
                 "leakage_closed_7d": leakage_closed_7d,
                 "pending_drafts": drafts,
+                "segment_performance": segment_performance,
                 "risks": {"open_logbook": open_log, "unanswered_reviews": unanswered,
                           "reviews_awaiting_approval": awaiting_approval,
                           "failing_automations": failing_jobs}}
@@ -119,9 +142,31 @@ def create_daily_pulse_router(db, require_roles):
           </table>
           <h3 style="font-size:14px;margin-top:18px;">Dikkat gerektirenler</h3>
           {risks_html}
+          {_segment_html(d)}
           {_drafts_html(d)}
         </div>
         """
+
+    def _segment_html(d: dict) -> str:
+        rows = d.get("segment_performance") or []
+        if not rows:
+            return ""
+        trs = []
+        for s in rows:
+            rate = s["acceptance_rate"]
+            color = "#15803d" if rate >= 30 else ("#b45309" if rate >= 10 else "#b91c1c")
+            trs.append(f"""
+            <tr>
+              <td style="padding:6px 10px;font-size:12px;font-weight:bold;color:#292524;">{s['label']}</td>
+              <td style="padding:6px 10px;font-size:12px;color:#57534e;text-align:right;">{s['sent']} teklif</td>
+              <td style="padding:6px 10px;font-size:12px;font-weight:bold;color:{color};text-align:right;">%{rate} kabul</td>
+              <td style="padding:6px 10px;font-size:12px;color:#57534e;text-align:right;">£{s['revenue']:.0f}</td>
+            </tr>""")
+        return f"""
+        <h3 style="font-size:14px;margin-top:18px;">Segment performansı — upsell (30 gün)</h3>
+        <table style="width:100%;border-collapse:collapse;background:#fafaf9;border:1px solid #e7e5e4;border-radius:10px;">
+          {''.join(trs)}
+        </table>"""
 
     def _drafts_html(d: dict) -> str:
         import os as _os

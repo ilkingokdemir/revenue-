@@ -549,3 +549,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: booking_com stale (2024s) → critical + otomatik alert; 2 test dead-letter →
   watchdog 2 requeue → run-tick işledi → expedia healthy %100; alert yaşam döngüsü; Daily Pulse
   preview ota_sync_alerts:1; 13 motor listesi; scheduler trigger; UI screenshot OK. Test verisi silindi.
+
+## Son Durum (Iter 421, 2026-07-13) — Gerçek Zamanlı Kritik Kanal Uyarıları TAMAMLANDI
+- channel_health.py: _notify_alert(msg) — yeni watchdog uyarısı açıldığında (upsert) anında:
+  (1) uygulama içi bildirim (db.notifications, category: ota_sync, priority: high, zil sayacına
+  düşer), (2) isteğe bağlı Slack uyumlu webhook POST {"text": "🚨 ..."} (httpx, 8s timeout,
+  teslim durumu last_delivery_status'ta izlenir, hata durumunda graceful log).
+- Endpoints: GET /channel-health/webhook-config/get, PUT /channel-health/webhook-config,
+  POST /channel-health/webhook-test (in-app + webhook test uyarısı).
+- ChannelHealthPanel: "Anlık uyarı ayarları" bölümü — webhook URL input, Kaydet, Test uyarısı
+  gönder, son teslim durumu göstergesi.
+- E2E DOĞRULANDI: lokal HTTP dinleyici ile gerçek webhook teslimi (Slack formatı, 200);
+  watchdog yeni alert → bildirim + webhook zinciri; geçersiz URL graceful error izleme;
+  boş config'de sadece in-app; test verisi/config temizlendi; UI screenshot OK.

@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import logging
+import uuid
+import httpx
 
 from routes.platform_ext.automation_settings import get_params
 
@@ -22,6 +24,30 @@ MAX_AUTO_REQUEUE_PER_TASK = 2
 
 def create_channel_health_router(db, require_roles):
     router = APIRouter()
+
+    async def _notify_alert(msg: str):
+        """In-app notification + optional Slack-compatible webhook."""
+        now = datetime.now(timezone.utc).isoformat()
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "type": "warning",
+            "title": "OTA Senkron Uyarısı", "message": msg,
+            "category": "ota_sync", "target_user": "", "target_role": "manager",
+            "link_to": "channel-health", "priority": "high",
+            "read": False, "created_by": "OTA Watchdog", "created_at": now})
+        cfg = await db.alert_webhook_config.find_one({"scope": "ota_sync"}, {"_id": 0}) or {}
+        url = (cfg.get("webhook_url") or "").strip()
+        if url:
+            try:
+                async with httpx.AsyncClient(timeout=8) as client:
+                    resp = await client.post(url, json={"text": f"🚨 OTA Senkron Uyarısı: {msg}"})
+                await db.alert_webhook_config.update_one(
+                    {"scope": "ota_sync"},
+                    {"$set": {"last_delivery_at": now, "last_delivery_status": resp.status_code}})
+            except Exception as e:
+                logger.warning(f"OTA alert webhook failed: {e}")
+                await db.alert_webhook_config.update_one(
+                    {"scope": "ota_sync"},
+                    {"$set": {"last_delivery_at": now, "last_delivery_status": f"error: {e}"}})
 
     async def _channel_stats(pq: Dict, stale_hours: int):
         now = datetime.now(timezone.utc)
@@ -108,6 +134,7 @@ def create_channel_health_router(db, require_roles):
                     upsert=True)
                 if res.upserted_id:
                     alerts_opened += 1
+                    await _notify_alert(msg)
             if not problems:
                 res = await db.ota_sync_alerts.update_many(
                     {"channel": ch, "status": "open"},
@@ -141,6 +168,32 @@ def create_channel_health_router(db, require_roles):
     async def heal_now(data: Dict = None,
                        current_user: dict = Depends(require_roles("admin", "manager"))):
         return await _watchdog_core((data or {}).get("property_id", ""))
+
+    @router.get("/channel-health/webhook-config/get")
+    async def get_webhook_config(current_user: dict = Depends(require_roles("admin", "manager"))):
+        cfg = await db.alert_webhook_config.find_one({"scope": "ota_sync"}, {"_id": 0}) or {}
+        return {"webhook_url": cfg.get("webhook_url", ""),
+                "last_delivery_at": cfg.get("last_delivery_at"),
+                "last_delivery_status": cfg.get("last_delivery_status")}
+
+    @router.put("/channel-health/webhook-config")
+    async def set_webhook_config(data: Dict,
+                                 current_user: dict = Depends(require_roles("admin", "manager"))):
+        url = (data.get("webhook_url") or "").strip()
+        await db.alert_webhook_config.update_one(
+            {"scope": "ota_sync"},
+            {"$set": {"scope": "ota_sync", "webhook_url": url,
+                      "updated_at": datetime.now(timezone.utc).isoformat(),
+                      "updated_by": current_user.get("name", "")}},
+            upsert=True)
+        return {"ok": True}
+
+    @router.post("/channel-health/webhook-test")
+    async def test_webhook(current_user: dict = Depends(require_roles("admin", "manager"))):
+        await _notify_alert("Test uyarısı — Kanal Sağlık Merkezi anlık bildirim yapılandırması çalışıyor ✓")
+        cfg = await db.alert_webhook_config.find_one({"scope": "ota_sync"}, {"_id": 0}) or {}
+        return {"ok": True, "webhook_configured": bool(cfg.get("webhook_url")),
+                "last_delivery_status": cfg.get("last_delivery_status")}
 
     router.run_watchdog_internal = _watchdog_core
     return router

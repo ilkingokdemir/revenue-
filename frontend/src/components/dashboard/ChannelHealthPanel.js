@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   HeartStraight, ArrowsClockwise, Wrench, WarningCircle, CheckCircle,
-  CloudSlash, Clock, ArrowCounterClockwise,
+  CloudSlash, Clock, ArrowCounterClockwise, BellRinging, PaperPlaneTilt,
 } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -25,15 +25,41 @@ export default function ChannelHealthPanel({ propertyId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
+  const [webhook, setWebhook] = useState("");
+  const [webhookInfo, setWebhookInfo] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const r = await axios.get(`${API}/api/channel-health/${propertyId}`);
+      const [r, w] = await Promise.all([
+        axios.get(`${API}/api/channel-health/${propertyId}`),
+        axios.get(`${API}/api/channel-health/webhook-config/get`),
+      ]);
       setData(r.data);
+      setWebhook(w.data.webhook_url || "");
+      setWebhookInfo(w.data);
     } catch { toast.error("Kanal sağlık verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId]);
   useEffect(() => { load(); }, [load]);
+
+  const saveWebhook = async () => {
+    setBusy("webhook");
+    try {
+      await axios.put(`${API}/api/channel-health/webhook-config`, { webhook_url: webhook });
+      toast.success(webhook ? "Webhook kaydedildi" : "Webhook kaldırıldı");
+    } catch { toast.error("Kaydetme başarısız"); }
+    finally { setBusy(""); }
+  };
+
+  const testWebhook = async () => {
+    setBusy("webhook-test");
+    try {
+      const r = await axios.post(`${API}/api/channel-health/webhook-test`);
+      toast.success(`Test uyarısı gönderildi (uygulama içi bildirim${r.data.webhook_configured ? " + webhook" : ""})`);
+      await load();
+    } catch { toast.error("Test başarısız"); }
+    finally { setBusy(""); }
+  };
 
   const heal = async () => {
     setBusy("heal");
@@ -139,6 +165,35 @@ export default function ChannelHealthPanel({ propertyId }) {
             </div>
           );
         })}
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="alert-webhook-config">
+        <div className="flex items-center gap-2 mb-1">
+          <BellRinging size={15} weight="fill" className="text-cyan-600" />
+          <h3 className="text-sm font-semibold text-stone-900">Anlık uyarı ayarları</h3>
+        </div>
+        <p className="text-[11px] text-stone-500 mb-3">
+          Kritik kanal uyarıları anında uygulama içi bildirim merkezine düşer. İsteğe bağlı: Slack uyumlu webhook URL'i girin (Slack Incoming Webhook, Mattermost, Discord /slack uçları desteklenir).
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input type="url" value={webhook} onChange={(e) => setWebhook(e.target.value)}
+            placeholder="https://hooks.slack.com/services/…"
+            data-testid="webhook-url-input"
+            className="flex-1 min-w-[260px] text-sm border border-stone-200 rounded-lg px-3 py-2 bg-white" />
+          <button onClick={saveWebhook} disabled={busy === "webhook"} data-testid="webhook-save-btn"
+            className="text-xs font-medium text-white bg-stone-900 rounded-lg px-4 py-2 hover:bg-stone-800 disabled:opacity-50">
+            Kaydet
+          </button>
+          <button onClick={testWebhook} disabled={busy === "webhook-test"} data-testid="webhook-test-btn"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-700 border border-cyan-200 rounded-lg px-3 py-2 bg-cyan-50 hover:border-cyan-300 disabled:opacity-50">
+            <PaperPlaneTilt size={13} weight="fill" /> Test uyarısı gönder
+          </button>
+        </div>
+        {webhookInfo?.last_delivery_at && (
+          <p className="text-[11px] text-stone-400 mt-2">
+            Son webhook teslimi: {fmtTime(webhookInfo.last_delivery_at)} — durum: <span className={String(webhookInfo.last_delivery_status).startsWith("2") ? "text-emerald-600" : "text-rose-600"}>{String(webhookInfo.last_delivery_status)}</span>
+          </p>
+        )}
       </div>
 
       <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="dead-letter-table">

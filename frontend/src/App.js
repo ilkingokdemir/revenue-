@@ -58,7 +58,7 @@ import {
   OnboardingWizard, UnifiedInboxPanel,
   TRCompliancePanel, EUCompliancePanel, AIPredictionsPanel, ChannelRevenuePanel,
   KDSPanel, LoyaltyV2Panel, ExternalLoyaltyPanel, OTACommissionPanel, DirectConversionPanel, SiteMinderPanel, AvailabilityCalendarPanel, SentimentHeatmapPanel, SelfCheckInPipelinePanel, BrandPortalPanel,
-  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, AutomationRulesPanel, TeamChatPanel, GuestCRM360Panel, ChannelManagerV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
+  OpsV2Panel, HousekeepingHubPanel, GlitchLogPanel, SopsPanel, TeamChatPanel, GuestCRM360Panel, ChannelManagerV2Panel, ForecastV2Panel, AnomalyPanel, TippingPanel, GuestPortalV2Panel,
   ConferenceSCPanel, CopilotLibraryPanel, ImageAIPanel, FnbTabsPanel, BiFeedPanel, HkTurnoverPanel,
   PricingExplainPanel, LoyaltyTierPanel, BanquetOrdersPanel, HelpGuidePanel, SiteFeasibilityPanel, SelfCheckinAutoPanel, LockSDKPanel, RecipeCogsPanel, VoiceConciergePanel, WhatsAppVoicePanel,
   BugTrackerPanel, AuditTrailPanel, CollisionsPanel, ProfitOSPanel, RolesPermissionsPanel,
@@ -81,10 +81,10 @@ import {
   MsgTemplatesPanel, BirthdayPanel, LowStockPanel, RebookPanel, StayExtPanel, LongStayPanel,
   CancelInsurancePanel, GroupRoomingWizPanel, TaxReportsV2Panel, CISlotsPanel, Tier1DashboardPanel,
   BookingEngineV2Panel, OwnerPortalPanel, SpaActivitiesPanel, LoyaltyTiersPanel,
-  BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel, AutomationAnalyticsPanel,
+  BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, AutomationRoiPanel, LeakagePanel, GuestRiskPanel, AutomationSettingsPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -921,8 +921,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         )}
 
         {/* Automation Rules (event-driven workflows) */}
-        {activeView === "automation-rules" && (
-          <AutomationRulesPanel propertyId={activePropertyId || "all"} user={user} />
+        {["automation-hub", "automation-rules"].includes(activeView) && (
+          <AutomationHubPanel key={activeView} initialView={activeView}
+            propertyId={activePropertyId || "all"} user={user} onNavigate={navigate} />
         )}
 
         {/* Team Chat (multi-channel internal communication) */}
@@ -980,9 +981,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           />
         )}
         {activeView === "partner-webhooks" && <PartnerWebhooksPanel />}
-        {activeView === "automation-analytics" && <AutomationAnalyticsPanel />}
-        {activeView === "automation-roi" && (
-          <AutomationRoiPanel propertyId={activePropertyId || "all"} onNavigate={navigate} />
+        {["automation-analytics", "automation-roi", "automation-settings"].includes(activeView) && (
+          <AutomationHubPanel key={activeView} initialView={activeView}
+            propertyId={activePropertyId || "all"} user={user} onNavigate={navigate} />
         )}
         {activeView === "leakage-audit" && (
           <LeakagePanel propertyId={activePropertyId || "all"} />
@@ -990,7 +991,6 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "guest-risk" && (
           <GuestRiskPanel propertyId={activePropertyId || "all"} />
         )}
-        {activeView === "automation-settings" && <AutomationSettingsPanel />}
         {activeView === "guest-segments" && <GuestSegmentsPanel />}
         {activeView === "channel-health" && (
           <ChannelHealthPanel propertyId={activePropertyId || "all"} />

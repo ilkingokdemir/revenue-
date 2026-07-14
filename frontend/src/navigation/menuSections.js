@@ -225,7 +225,6 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Quality Assurance" },
         { id: "glitch-log", icon: Warning, name: "Glitch log & devir", testId: "glitch-log-btn" },
         { id: "sops", icon: BookOpen, name: "SOP kütüphanesi", testId: "sops-btn" },
-        { id: "automation-rules", icon: Lightning, name: "Otomasyon kuralları", testId: "automation-rules-btn" },
       ],
     },
     {
@@ -263,9 +262,7 @@ export function buildMenuSections(t, user) {
         { id: "rm-lab", icon: ChartLine, name: "RM Lab", testId: "rm-lab-btn" },
         { id: "late-checkout-offer", icon: Clock, name: "Late checkout offers", testId: "late-checkout-offer-btn" },
         { id: "site-feasibility", icon: ChartLineUp, name: "Site feasibility & investor", testId: "site-feasibility-btn" },
-        { id: "automation-settings", icon: Gear, name: "Otomasyon ayarları", testId: "automation-settings-btn" },
-        { id: "automation-analytics", icon: ChartBar, name: "Otomasyon analitiği", testId: "automation-analytics-btn" },
-        { id: "automation-roi", icon: Coins, name: "Otomasyon ROI", testId: "automation-roi-btn" },
+        { id: "automation-hub", icon: Gear, name: "Otomasyon merkezi", testId: "automation-hub-btn" },
         { id: "leakage-audit", icon: ShieldCheck, name: "Gelir sızıntısı denetçisi", testId: "leakage-audit-btn" },
       ],
     },

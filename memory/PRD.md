@@ -602,3 +602,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   noktalı virgül ayraçlı — Excel uyumlu). KeyFiguresPanel'e "CSV" indirme butonu (blob download).
 - E2E DOĞRULANDI: preview deltaları, send (1 alıcı, 2026-W29), dedupe skip, scheduler trigger,
   14 motor + dow=0, CSV çıktı, UI screenshot OK.
+
+## Son Durum (Iter 425, 2026-07-14) — Otomasyon Merkezi Konsolidasyonu (Refactoring) TAMAMLANDI
+- YENİ: components/dashboard/AutomationHubPanel.js — 4 sekmeli tek çatı: Ayarlar & Motorlar
+  (AutomationSettingsPanel), ROI (AutomationRoiPanel), Analitik (AutomationAnalyticsPanel),
+  Kurallar (AutomationRulesPanel). initialView prop'u ile eski view id'lerinden doğru sekme açılır.
+- Menü sadeleştirme: "Otomasyon ayarları"+"Otomasyon analitiği"+"Otomasyon ROI" (Tools) ve
+  "Otomasyon kuralları" (Quality Assurance) girişleri kaldırıldı → tek "Otomasyon merkezi"
+  (automation-hub-btn, Revenue & rates > Tools).
+- App.js: 4 ayrı render bloğu 2 hub bloğuna indirildi; eski activeView id'leri
+  (automation-settings/analytics/roi/rules) geriye dönük uyumlu şekilde hub'a yönlenir
+  (key={activeView} ile remount). Kullanılmayan importlar temizlendi.
+- E2E DOĞRULANDI: eski menü girişleri kalktı (0 adet), hub 4 sekme de içerik render ediyor
+  (Ayarlar 14 motor, ROI, Analitik 37 kural, Kurallar paneli), konsol hatasız.

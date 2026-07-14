@@ -562,3 +562,20 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: lokal HTTP dinleyici ile gerçek webhook teslimi (Slack formatı, 200);
   watchdog yeni alert → bildirim + webhook zinciri; geçersiz URL graceful error izleme;
   boş config'de sadece in-app; test verisi/config temizlendi; UI screenshot OK.
+
+## Son Durum (Iter 422, 2026-07-14) — Anahtar Göstergeler (eviivo Key Figures paritesi) TAMAMLANDI
+- Kullanıcı eviivo "Key Figures" ekran görüntüsü paylaştı; birebir karşılık geliştirildi.
+- YENİ backend: routes/revenue_ext/key_figures.py — GET /key-figures/{pid}?start&end&basis
+  (staying: tarih aralığına kırpılmış gece/gelir payı; booked: created_at bazlı).
+  12 metrik: satılan/satılmayan gece, doluluk, ADR, rezervasyon penceresi, ort. konaklama,
+  toplam online %, kendi site %, misafir, toplam gelir, iptal/no-show %, komisyon maliyeti
+  (ota_commission_rates + DEFAULT_RATES). Döküm: oda geliri, oda dışı (folio kategorileri),
+  no-show ücretleri, turizm vergisi, komisyonlar, tahsil edilen depozitolar.
+- YENİ frontend: KeyFiguresPanel.js — eviivo tarzı amber ikonlu 12 kutu + sağda gelir dökümü
+  kartı; tarih aralığı seçici, hızlı aralıklar (Bu ay/Son 30 gün/Son 12 ay/Gelecek 12 ay),
+  konaklama/rezervasyon bazı toggle. Menü: Overview > "Anahtar göstergeler" (key-figures-btn).
+- E2E DOĞRULANDI: 12 aylık staying (2893 gece, %13.4, ADR £137, £397K, komisyon £20.2K);
+  booked bazı; 400 tarih validasyonu; UI screenshot (tüm kutular + döküm) OK.
+- NOT: Uluslararası misafir % metriği veri modelinde uyruk alanı olmadığı için yerine
+  "İptal/no-show oranı" kutusu kondu. Kart ücretleri takip edilmiyor (0 varsayım, gösterilmiyor).
+- ERTELENEN: Otomasyon sekmeleri konsolidasyon refactoring'i (kullanıcı eviivo paritesine yönlendirdi).

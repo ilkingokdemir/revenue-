@@ -154,6 +154,7 @@ export const GuestRiskPanel = L(() => import("./components/dashboard/GuestRiskPa
 export const AutomationSettingsPanel = L(() => import("./components/dashboard/AutomationSettingsPanel"));
 export const GuestSegmentsPanel = L(() => import("./components/dashboard/GuestSegmentsPanel"));
 export const ChannelHealthPanel = L(() => import("./components/dashboard/ChannelHealthPanel"));
+export const KeyFiguresPanel = L(() => import("./components/dashboard/KeyFiguresPanel"));
 export const BeachPosPanel = L(() => import("./components/dashboard/BeachPosPanel"));
 export const PublicEventsPanel = L(() => import("./components/dashboard/PublicEventsPanel"));
 

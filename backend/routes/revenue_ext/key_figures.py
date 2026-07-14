@@ -1,10 +1,9 @@
 """
-Key Figures Report (iter 422) — eviivo-style consolidated KPI report for a
-date range: nights sold/unsold, occupancy, ADR, booking window, stay length,
-online share, guests, revenue breakdown, commission costs, deposits.
+Key Figures Report (iter 422/423) — eviivo-style consolidated KPI report with
+period comparison (previous period / same period last year) and delta values.
 """
 from fastapi import APIRouter, Depends, HTTPException
-from datetime import datetime, date, timedelta
+from datetime import date, timedelta
 from typing import Dict
 import logging
 
@@ -25,18 +24,8 @@ def _d(s: str) -> date:
 def create_key_figures_router(db, require_roles):
     router = APIRouter()
 
-    @router.get("/key-figures/{property_id}")
-    async def key_figures(property_id: str, start: str, end: str, basis: str = "staying",
-                          current_user: dict = Depends(require_roles("admin", "manager"))):
-        try:
-            d_start, d_end = _d(start), _d(end)
-        except ValueError:
-            raise HTTPException(status_code=400, detail="start/end YYYY-MM-DD olmalı")
-        if d_end < d_start:
-            raise HTTPException(status_code=400, detail="end >= start olmalı")
+    async def _compute(pq: Dict, d_start: date, d_end: date, basis: str) -> Dict:
         days = (d_end - d_start).days + 1
-        pq: Dict = {} if property_id == "all" else {"property_id": property_id}
-
         active = {"status": {"$nin": ["cancelled", "no_show"]}}
         if basis == "booked":
             q = {**pq, **active,
@@ -47,12 +36,13 @@ def create_key_figures_router(db, require_roles):
                  "check_out": {"$gt": d_start.isoformat()}}
         bookings = await db.bookings.find(
             q, {"_id": 0, "id": 1, "check_in": 1, "check_out": 1, "created_at": 1,
-                "total_price": 1, "guest_count": 1, "channel": 1, "nights": 1}).to_list(20000)
+                "total_price": 1, "guest_count": 1, "channel": 1}).to_list(20000)
 
         cancelled = await db.bookings.count_documents(
             {**pq, "status": {"$in": ["cancelled", "no_show"]},
              ("created_at" if basis == "booked" else "check_in"):
-                 {"$gte": d_start.isoformat(), "$lte": d_end.isoformat() + ("T99" if basis == "booked" else "")}})
+                 {"$gte": d_start.isoformat(),
+                  "$lte": d_end.isoformat() + ("T99" if basis == "booked" else "")}})
 
         rates_saved = {r["channel"]: float(r["rate"]) for r in
                        await db.ota_commission_rates.find({}, {"_id": 0}).to_list(100)}
@@ -89,15 +79,13 @@ def create_key_figures_router(db, require_roles):
                 online_b += 1
             if ch == "direct":
                 website_b += 1
-            rate = rates_saved.get(ch, DEFAULT_RATES.get(ch, 0.0))
-            commission += rev * rate
+            commission += rev * rates_saved.get(ch, DEFAULT_RATES.get(ch, 0.0))
 
         rooms = await db.rooms.count_documents(pq)
         capacity = rooms * days
         unsold_nights = max(capacity - sold_nights, 0)
         total_b = len(bookings)
 
-        # folio breakdown for these bookings
         fq = {"booking_id": {"$in": booking_ids}} if booking_ids else {"booking_id": "__none__"}
         pipeline = [
             {"$match": {**fq, "type": {"$in": ["charge", "adjustment"]}}},
@@ -116,8 +104,7 @@ def create_key_figures_router(db, require_roles):
 
         total_revenue = round(revenue + non_room + noshow_fees + taxes, 2)
         return {
-            "property_id": property_id, "start": start, "end": end,
-            "basis": basis, "days": days, "rooms": rooms,
+            "days": days, "rooms": rooms,
             "tiles": {
                 "nights_sold": sold_nights,
                 "nights_unsold": unsold_nights,
@@ -138,12 +125,43 @@ def create_key_figures_router(db, require_roles):
                 "no_show_fees": noshow_fees,
                 "taxes_collected": taxes,
                 "total_revenue": total_revenue,
-                "costs": {
-                    "commissions": round(commission, 2),
-                    "advanced_deposits": adv_deposits,
-                },
+                "costs": {"commissions": round(commission, 2),
+                          "advanced_deposits": adv_deposits},
             },
             "booking_count": total_b, "cancelled_count": cancelled,
         }
+
+    @router.get("/key-figures/{property_id}")
+    async def key_figures(property_id: str, start: str, end: str, basis: str = "staying",
+                          compare: str = "none",
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        try:
+            d_start, d_end = _d(start), _d(end)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start/end YYYY-MM-DD olmalı")
+        if d_end < d_start:
+            raise HTTPException(status_code=400, detail="end >= start olmalı")
+        pq: Dict = {} if property_id == "all" else {"property_id": property_id}
+
+        current = await _compute(pq, d_start, d_end, basis)
+        out = {"property_id": property_id, "start": start, "end": end,
+               "basis": basis, "compare": compare, **current}
+
+        if compare in ("previous", "last_year"):
+            if compare == "previous":
+                span = (d_end - d_start).days + 1
+                c_start, c_end = d_start - timedelta(days=span), d_start - timedelta(days=1)
+            else:
+                c_start = date(d_start.year - 1, d_start.month, min(d_start.day, 28))
+                c_end = date(d_end.year - 1, d_end.month, min(d_end.day, 28))
+            prev = await _compute(pq, c_start, c_end, basis)
+            deltas = {}
+            for k, v in current["tiles"].items():
+                pv = prev["tiles"].get(k, 0)
+                deltas[k] = {"prev": pv,
+                             "pct": round((v - pv) / pv * 100, 1) if pv else None}
+            out["comparison"] = {"start": c_start.isoformat(), "end": c_end.isoformat(),
+                                 "tiles": prev["tiles"], "deltas": deltas}
+        return out
 
     return router

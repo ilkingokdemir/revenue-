@@ -18,14 +18,24 @@ const QUICK = [
   { key: "next_12m", label: "Gelecek 12 ay", range: () => { const n = new Date(); const e = new Date(n); e.setFullYear(n.getFullYear() + 1); return [iso(n), iso(e)]; } },
 ];
 
-function Tile({ icon: Icon, value, label, testId }) {
+function Tile({ icon: Icon, value, label, testId, delta, invert }) {
+  let deltaEl = null;
+  if (delta && delta.pct !== null && delta.pct !== undefined) {
+    const up = delta.pct >= 0;
+    const good = invert ? !up : up;
+    deltaEl = (
+      <span className={`text-[10px] font-semibold ${good ? "text-emerald-600" : "text-rose-600"}`}>
+        {up ? "▲" : "▼"} %{Math.abs(delta.pct)}
+      </span>
+    );
+  }
   return (
     <div className="flex items-center gap-3 bg-white border border-stone-200 rounded-xl p-3.5" data-testid={testId}>
       <div className="h-11 w-11 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0">
         <Icon size={20} weight="fill" className="text-amber-700" />
       </div>
       <div className="min-w-0">
-        <div className="text-lg font-bold text-stone-900 truncate">{value}</div>
+        <div className="text-lg font-bold text-stone-900 truncate flex items-center gap-2">{value} {deltaEl}</div>
         <div className="text-[11px] text-stone-500">{label}</div>
       </div>
     </div>
@@ -44,21 +54,23 @@ function BRow({ label, value, bold, muted }) {
 export default function KeyFiguresPanel({ propertyId }) {
   const [[start, end], setRange] = useState(QUICK[0].range());
   const [basis, setBasis] = useState("staying");
+  const [compare, setCompare] = useState("none");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await axios.get(`${API}/api/key-figures/${propertyId}?start=${start}&end=${end}&basis=${basis}`);
+      const r = await axios.get(`${API}/api/key-figures/${propertyId}?start=${start}&end=${end}&basis=${basis}&compare=${compare}`);
       setData(r.data);
     } catch { toast.error("Anahtar göstergeler yüklenemedi"); }
     finally { setLoading(false); }
-  }, [propertyId, start, end, basis]);
+  }, [propertyId, start, end, basis, compare]);
   useEffect(() => { load(); }, [load]);
 
   const t = data?.tiles;
   const b = data?.breakdown;
+  const dl = data?.comparison?.deltas || {};
 
   return (
     <div className="space-y-5" data-testid="key-figures-panel">
@@ -83,6 +95,12 @@ export default function KeyFiguresPanel({ propertyId }) {
         <input type="date" value={end} onChange={(e) => setRange([start, e.target.value])}
           data-testid="kf-end-date"
           className="text-xs border border-stone-200 rounded-lg px-2.5 py-2 bg-white" />
+        <select value={compare} onChange={(e) => setCompare(e.target.value)} data-testid="kf-compare-select"
+          className="text-xs border border-stone-200 rounded-lg px-2.5 py-2 bg-white font-medium">
+          <option value="none">Karşılaştırma yok</option>
+          <option value="previous">Önceki döneme göre</option>
+          <option value="last_year">Geçen yıl aynı döneme göre</option>
+        </select>
         <div className="flex items-center gap-1.5 ml-auto">
           {QUICK.map((q) => (
             <button key={q.key} onClick={() => setRange(q.range())} data-testid={`kf-quick-${q.key}`}
@@ -103,19 +121,26 @@ export default function KeyFiguresPanel({ propertyId }) {
         <div className="p-8 text-stone-400 text-sm">Veri yok</div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-          <div className="xl:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Tile icon={Bed} value={`${t.nights_sold.toLocaleString()} gece`} label="Satılan" testId="kf-nights-sold" />
-            <Tile icon={House} value={`%${t.avg_occupancy_pct}`} label="Ortalama doluluk" testId="kf-occupancy" />
-            <Tile icon={Bed} value={`${t.nights_unsold.toLocaleString()} gece`} label="Satılmayan" testId="kf-nights-unsold" />
-            <Tile icon={MoonStars} value={fmt(t.avg_price_per_night)} label="Gecelik ortalama fiyat (ADR)" testId="kf-adr" />
-            <Tile icon={ArrowRight} value={`${t.avg_booking_window_days} gün`} label="Ortalama rezervasyon penceresi" testId="kf-window" />
-            <Tile icon={CalendarBlank} value={`${t.avg_stay_nights} gece`} label="Ortalama konaklama" testId="kf-stay" />
-            <Tile icon={Monitor} value={`%${t.total_online_pct}`} label="Toplam online" testId="kf-online" />
-            <Tile icon={CursorClick} value={`%${t.my_website_pct}`} label="Kendi web sitem / direkt" testId="kf-website" />
-            <Tile icon={UsersThree} value={t.guest_count.toLocaleString()} label="Misafir sayısı" testId="kf-guests" />
-            <Tile icon={ChartLineUp} value={fmt0(t.total_revenue)} label="Toplam gelir" testId="kf-revenue" />
-            <Tile icon={Percent} value={`%${t.cancellation_pct}`} label="İptal / no-show oranı" testId="kf-cancel" />
-            <Tile icon={Tag} value={fmt0(t.commission_costs)} label="Komisyon maliyeti" testId="kf-commission" />
+          <div className="xl:col-span-2 space-y-3">
+            {data.comparison && (
+              <p className="text-[11px] text-stone-500" data-testid="kf-compare-info">
+                Karşılaştırma dönemi: <span className="font-medium text-stone-700">{data.comparison.start} — {data.comparison.end}</span> (▲▼ değişim yüzdeleri bu döneme göredir)
+              </p>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Tile icon={Bed} value={`${t.nights_sold.toLocaleString()} gece`} label="Satılan" testId="kf-nights-sold" delta={dl.nights_sold} />
+            <Tile icon={House} value={`%${t.avg_occupancy_pct}`} label="Ortalama doluluk" testId="kf-occupancy" delta={dl.avg_occupancy_pct} />
+            <Tile icon={Bed} value={`${t.nights_unsold.toLocaleString()} gece`} label="Satılmayan" testId="kf-nights-unsold" delta={dl.nights_unsold} invert />
+            <Tile icon={MoonStars} value={fmt(t.avg_price_per_night)} label="Gecelik ortalama fiyat (ADR)" testId="kf-adr" delta={dl.avg_price_per_night} />
+            <Tile icon={ArrowRight} value={`${t.avg_booking_window_days} gün`} label="Ortalama rezervasyon penceresi" testId="kf-window" delta={dl.avg_booking_window_days} />
+            <Tile icon={CalendarBlank} value={`${t.avg_stay_nights} gece`} label="Ortalama konaklama" testId="kf-stay" delta={dl.avg_stay_nights} />
+            <Tile icon={Monitor} value={`%${t.total_online_pct}`} label="Toplam online" testId="kf-online" delta={dl.total_online_pct} />
+            <Tile icon={CursorClick} value={`%${t.my_website_pct}`} label="Kendi web sitem / direkt" testId="kf-website" delta={dl.my_website_pct} />
+            <Tile icon={UsersThree} value={t.guest_count.toLocaleString()} label="Misafir sayısı" testId="kf-guests" delta={dl.guest_count} />
+            <Tile icon={ChartLineUp} value={fmt0(t.total_revenue)} label="Toplam gelir" testId="kf-revenue" delta={dl.total_revenue} />
+            <Tile icon={Percent} value={`%${t.cancellation_pct}`} label="İptal / no-show oranı" testId="kf-cancel" delta={dl.cancellation_pct} invert />
+            <Tile icon={Tag} value={fmt0(t.commission_costs)} label="Komisyon maliyeti" testId="kf-commission" delta={dl.commission_costs} invert />
+            </div>
           </div>
 
           <div className="bg-white border border-stone-200 rounded-xl overflow-hidden h-fit" data-testid="kf-breakdown">

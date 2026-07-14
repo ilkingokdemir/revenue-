@@ -579,3 +579,13 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - NOT: Uluslararası misafir % metriği veri modelinde uyruk alanı olmadığı için yerine
   "İptal/no-show oranı" kutusu kondu. Kart ücretleri takip edilmiyor (0 varsayım, gösterilmiyor).
 - ERTELENEN: Otomasyon sekmeleri konsolidasyon refactoring'i (kullanıcı eviivo paritesine yönlendirdi).
+
+## Son Durum (Iter 423, 2026-07-14) — Anahtar Göstergeler Dönem Karşılaştırması TAMAMLANDI
+- key_figures.py yeniden yapılandırıldı: _compute(pq, start, end, basis) tekrar kullanılabilir;
+  compare=previous (aynı uzunlukta önceki dönem) | last_year (geçen yıl aynı tarih, gün 28'e
+  kırpılır) parametresi → comparison.{start, end, tiles, deltas{prev, pct}}.
+- KeyFiguresPanel: karşılaştırma seçici (yok/önceki dönem/geçen yıl), her kutuda ▲▼ renk
+  kodlu değişim yüzdesi (invert mantığı: satılmayan gece/iptal/komisyon artışı kırmızı),
+  karşılaştırma dönemi bilgi satırı.
+- E2E DOĞRULANDI: previous (-45.7% gece, -17.3% gelir), last_year, compare=none regresyonu;
+  UI screenshot — tüm deltalar doğru renk/yönde render.

@@ -589,3 +589,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   karşılaştırma dönemi bilgi satırı.
 - E2E DOĞRULANDI: previous (-45.7% gece, -17.3% gelir), last_year, compare=none regresyonu;
   UI screenshot — tüm deltalar doğru renk/yönde render.
+
+## Son Durum (Iter 424, 2026-07-14) — Haftalık Yönetim Raporu (14. motor) + CSV Export TAMAMLANDI
+- YENİ backend: routes/marketing/weekly_report.py — son 7 gün vs önceki 7 gün anahtar
+  göstergeleri (key_figures compute_internal yeniden kullanılır), renk kodlu ▲▼ HTML e-posta
+  (10 gösterge + gelir dökümü + net), admin/manager alıcıları, ISO hafta bazlı dedupe
+  (weekly_report_log, force ile override). Endpoints: GET /reports/weekly-management/preview/{pid},
+  POST /reports/weekly-management/send.
+- Motor: JOB_HANDLERS["weekly_report"] + registry (Pazartesi 07:00, default_dow desteği
+  registry seed'e eklendi) → 14. motor.
+- key_figures.py: router.compute_internal expose + GET /key-figures/{pid}/export (CSV, BOM'lu,
+  noktalı virgül ayraçlı — Excel uyumlu). KeyFiguresPanel'e "CSV" indirme butonu (blob download).
+- E2E DOĞRULANDI: preview deltaları, send (1 alıcı, 2026-W29), dedupe skip, scheduler trigger,
+  14 motor + dow=0, CSV çıktı, UI screenshot OK.

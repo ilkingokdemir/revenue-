@@ -74,6 +74,11 @@ JOB_REGISTRY = {
         "description": "Her ayın başında tüm otomasyon motorlarının performans karnesini e-posta ile gönderir.",
         "default_cron": (7, 30), "default_enabled": True, "params": [],
     },
+    "weekly_report": {
+        "label": "Haftalık Yönetim Raporu", "category": "reporting",
+        "description": "Her pazartesi son 7 günün anahtar göstergelerini önceki hafta karşılaştırmasıyla e-postalar.",
+        "default_cron": (7, 0), "default_dow": 0, "default_enabled": True, "params": [],
+    },
     "rebook_sweep": {
         "label": "Rebook Kupon Motoru", "category": "marketing",
         "description": "Çıkış yapan misafirlere yeniden rezervasyon kuponu planlar ve gönderir.",
@@ -142,7 +147,7 @@ def create_automation_settings_router(db, require_roles):
                     "enabled": meta["default_enabled"],
                     "cron_hour": meta["default_cron"][0],
                     "cron_minute": meta["default_cron"][1],
-                    "cron_dow": None, "notes": "",
+                    "cron_dow": meta.get("default_dow"), "notes": "",
                     "updated_at": now, "updated_by": "auto-seed",
                 }
                 await db.scheduler_config.update_one(

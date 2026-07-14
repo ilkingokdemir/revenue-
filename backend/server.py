@@ -1196,7 +1196,20 @@ async def _job_ota_sync_watchdog(property_id: str) -> dict:
 JOB_HANDLERS["ota_sync_watchdog"] = _job_ota_sync_watchdog
 
 from routes.revenue_ext.key_figures import create_key_figures_router
-api_router.include_router(create_key_figures_router(db, require_roles))
+key_figures_router = create_key_figures_router(db, require_roles)
+api_router.include_router(key_figures_router)
+
+from routes.marketing.weekly_report import create_weekly_report_router
+weekly_report_router = create_weekly_report_router(db, require_roles, key_figures_router.compute_internal)
+api_router.include_router(weekly_report_router)
+
+async def _job_weekly_report(property_id: str) -> dict:
+    try:
+        return await weekly_report_router.run_weekly_report_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["weekly_report"] = _job_weekly_report
 
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))

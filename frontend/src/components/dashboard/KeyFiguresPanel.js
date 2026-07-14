@@ -3,7 +3,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   ChartPieSlice, Bed, House, ArrowRight, CalendarBlank, MoonStars, Monitor,
-  CursorClick, UsersThree, ChartLineUp, Percent, Tag, ArrowsClockwise,
+  CursorClick, UsersThree, ChartLineUp, Percent, Tag, ArrowsClockwise, DownloadSimple,
 } from "@phosphor-icons/react";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -108,6 +108,18 @@ export default function KeyFiguresPanel({ propertyId }) {
               {q.label}
             </button>
           ))}
+          <button onClick={async () => {
+            try {
+              const r = await axios.get(`${API}/api/key-figures/${propertyId}/export?start=${start}&end=${end}&basis=${basis}`, { responseType: "blob" });
+              const url = URL.createObjectURL(r.data);
+              const a = document.createElement("a");
+              a.href = url; a.download = `anahtar-gostergeler_${start}_${end}.csv`; a.click();
+              URL.revokeObjectURL(url);
+            } catch { toast.error("Dışa aktarma başarısız"); }
+          }} data-testid="kf-export-csv"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-stone-600 border border-stone-200 rounded-lg px-2.5 py-1.5 bg-white hover:border-stone-400 transition-colors">
+            <DownloadSimple size={13} /> CSV
+          </button>
           <button onClick={load} data-testid="kf-refresh"
             className="text-stone-500 hover:text-stone-800 border border-stone-200 rounded-lg p-1.5 bg-white">
             <ArrowsClockwise size={14} />

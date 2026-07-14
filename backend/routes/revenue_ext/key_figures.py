@@ -131,6 +131,40 @@ def create_key_figures_router(db, require_roles):
             "booking_count": total_b, "cancelled_count": cancelled,
         }
 
+    router.compute_internal = _compute
+
+    @router.get("/key-figures/{property_id}/export")
+    async def export_csv(property_id: str, start: str, end: str, basis: str = "staying",
+                         current_user: dict = Depends(require_roles("admin", "manager"))):
+        from fastapi.responses import PlainTextResponse
+        try:
+            d_start, d_end = _d(start), _d(end)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="start/end YYYY-MM-DD olmalı")
+        pq: Dict = {} if property_id == "all" else {"property_id": property_id}
+        r = await _compute(pq, d_start, d_end, basis)
+        lines = ["Gosterge;Deger"]
+        labels = {
+            "nights_sold": "Satilan gece", "nights_unsold": "Satilmayan gece",
+            "avg_occupancy_pct": "Ortalama doluluk %", "avg_price_per_night": "ADR (GBP)",
+            "avg_booking_window_days": "Rezervasyon penceresi (gun)",
+            "avg_stay_nights": "Ortalama konaklama (gece)", "total_online_pct": "Toplam online %",
+            "my_website_pct": "Direkt %", "guest_count": "Misafir sayisi",
+            "total_revenue": "Toplam gelir (GBP)", "cancellation_pct": "Iptal/no-show %",
+            "commission_costs": "Komisyon maliyeti (GBP)"}
+        for k, v in r["tiles"].items():
+            lines.append(f"{labels.get(k, k)};{v}")
+        b = r["breakdown"]
+        lines += [f"Oda geliri (GBP);{b['room_revenue']}",
+                  f"Oda disi gelir (GBP);{b['non_room_revenue']}",
+                  f"No-show ucretleri (GBP);{b['no_show_fees']}",
+                  f"Vergiler (GBP);{b['taxes_collected']}",
+                  f"Komisyonlar (GBP);{b['costs']['commissions']}",
+                  f"Tahsil edilen depozitolar (GBP);{b['costs']['advanced_deposits']}"]
+        csv_text = "\ufeff" + "\n".join(lines)
+        return PlainTextResponse(csv_text, media_type="text/csv", headers={
+            "Content-Disposition": f"attachment; filename=anahtar-gostergeler_{start}_{end}.csv"})
+
     @router.get("/key-figures/{property_id}")
     async def key_figures(property_id: str, start: str, end: str, basis: str = "staying",
                           compare: str = "none",

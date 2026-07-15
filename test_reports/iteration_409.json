@@ -1,0 +1,22 @@
+{
+  "summary": "Iteration 409 – Full regression of autonomous marketing/revenue engine stack. Backend: 30/30 pytest cases PASS covering (1) 14-motor automation settings + toggle/params roundtrip + 400/404 validation, (2) simulator for 5 supported jobs + threshold-affects-targets invariant + 404 for unsupported (daily_pulse), (3) guest segments refresh/summary(7)/list/strategy(GET+per-segment PUT+400)/performance, (4) channel-health all(8 channels+summary+alerts)/heal/webhook-config roundtrip+test, (5) key-figures all range/compare=previous/basis=booked/end<start 400/CSV export, (6) weekly-management preview(>=10 rows) + send dedupe + force, (7) scheduler triggers for segment_refresh/ota_sync_watchdog/cancel_save/email_nudge. Frontend: all data-testids present and interactive — key-figures-panel with 23 kf-* elements, quick range button, compare select producing kf-compare-info, CSV button, breakdown; guest-segments-panel with 7 segment cards, strategy-vip-cancel_save toggle, segment-guest-list on card click, segment-performance table; channel-health-panel with 8 channel cards including booking_com, channel-alerts, heal button, webhook config; automation-hub-btn present as SINGLE entry (old automation-settings-btn/analytics-btn/roi-btn/rules-btn all confirmed absent), all 4 tabs (settings/roi/analytics/rules) render, motor-card-cancel_save + toggle + expand -> motor-settings-cancel_save form + motor-simulate-cancel_save button -> motor-sim-result-cancel_save box all work.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration409_regression.py",
+    "/app/test_reports/pytest/iter409.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Actual segments PUT endpoint is /guests/segments/strategy/{segment} (per-segment) not /guests/segments/strategy — request statement was slightly off but implementation is fine and matches frontend usage.",
+    "weekly_report send response uses {ok:true} on first call, and skipped mechanic works; consider explicit 'skipped:already_sent_this_week' key in payload for stronger client contract (currently detected via 'skipped' or 'status' field)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration409_regression.py"],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "100% (all requested testids present, all interactions verified)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — works",
+  "seed_data_creation": "None. All PUT changes (cancel_save enabled/risk_threshold, vip strategy toggle, webhook_url) are restored to original values inside each test. No lingering test data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints validated: GET/PUT /api/automation/settings[/{job}], POST /api/automation/simulate/{job}, POST /api/guests/segments/refresh, GET /api/guests/segments/{summary,list,strategy,performance}, PUT /api/guests/segments/strategy/{segment}, GET /api/channel-health/all, POST /api/channel-health/heal, GET/PUT /api/channel-health/webhook-config[/get], POST /api/channel-health/webhook-test, GET /api/key-figures/all[/export], GET /api/reports/weekly-management/preview/all, POST /api/reports/weekly-management/send (+force), POST /api/scheduler/trigger/all/{job}. All tests restore any state they mutate. Set REACT_APP_BACKEND_URL env var before running pytest.",
+  "rca of the issue": "No unresolved issues."
+}

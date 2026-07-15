@@ -615,3 +615,15 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   (key={activeView} ile remount). Kullanılmayan importlar temizlendi.
 - E2E DOĞRULANDI: eski menü girişleri kalktı (0 adet), hub 4 sekme de içerik render ediyor
   (Ayarlar 14 motor, ROI, Analitik 37 kural, Kurallar paneli), konsol hatasız.
+
+## Son Durum (Iter 426, 2026-07-14) — KAPSAMLI REGRESYON TESTİ ✅ (%100 BAŞARI)
+- Testing agent tam tur regresyon: BACKEND 30/30 PASS — 14 motorlu Otomasyon Ayarları
+  (toggle/param/validasyon), Etki Simülatörü (5 job + eşik değişimi etkisi + 404), Segmentler
+  (refresh/summary/list/strategy/performance), Kanal Sağlık (8 kanal/heal/webhook roundtrip),
+  Anahtar Göstergeler (compare/booked/400/CSV), Haftalık Rapor (preview/dedupe/force),
+  Scheduler trigger'ları. FRONTEND %100 — Otomasyon Merkezi tek giriş + eski 4 girişin
+  kaldırıldığı teyitli, 4 sekme, motor kartı akışı, segment paneli, kanal sağlık paneli,
+  anahtar göstergeler (23 kf-* elemanı, karşılaştırma, CSV).
+- Rapor: /app/test_reports/iteration_409.json + kalıcı pytest suite:
+  /app/backend/tests/test_iteration409_regression.py (state-restoring, tekrar çalıştırılabilir).
+- Sıfır kritik/minör issue. Test verisi kalıntısı yok.

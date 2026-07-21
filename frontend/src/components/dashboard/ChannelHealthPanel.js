@@ -3,8 +3,9 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   HeartStraight, ArrowsClockwise, Wrench, WarningCircle, CheckCircle,
-  CloudSlash, Clock, ArrowCounterClockwise, BellRinging, PaperPlaneTilt,
+  CloudSlash, Clock, ArrowCounterClockwise, BellRinging, PaperPlaneTilt, ClockCounterClockwise,
 } from "@phosphor-icons/react";
+import ChannelPushHistory from "./ChannelPushHistory";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -22,6 +23,7 @@ const fmtTime = (iso) => {
 };
 
 export default function ChannelHealthPanel({ propertyId }) {
+  const [tab, setTab] = useState("health");
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -115,6 +117,21 @@ export default function ChannelHealthPanel({ propertyId }) {
         </div>
       </div>
 
+      <div className="flex items-center gap-1.5 border-b border-stone-200">
+        <button onClick={() => setTab("health")} data-testid="channel-tab-health"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2.5 border-b-2 -mb-px transition-colors ${tab === "health" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
+          <HeartStraight size={14} weight={tab === "health" ? "fill" : "regular"} /> Sağlık & Uyarılar
+        </button>
+        <button onClick={() => setTab("history")} data-testid="channel-tab-history"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2.5 border-b-2 -mb-px transition-colors ${tab === "history" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
+          <ClockCounterClockwise size={14} weight={tab === "history" ? "fill" : "regular"} /> Push Geçmişi
+        </button>
+      </div>
+
+      {tab === "history" ? (
+        <ChannelPushHistory propertyId={propertyId} />
+      ) : (
+      <>
       {data.alerts.length > 0 && (
         <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-2" data-testid="channel-alerts">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-700">
@@ -236,6 +253,8 @@ export default function ChannelHealthPanel({ propertyId }) {
           </table>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

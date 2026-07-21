@@ -627,3 +627,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Rapor: /app/test_reports/iteration_409.json + kalıcı pytest suite:
   /app/backend/tests/test_iteration409_regression.py (state-restoring, tekrar çalıştırılabilir).
 - Sıfır kritik/minör issue. Test verisi kalıntısı yok.
+
+## Son Durum (Iter 427, 2026-07-21) — Kanal Push Geçmişi (P1) TAMAMLANDI
+- YENİ backend: routes/distribution/push_history.py — GET /push-history/{pid}?channel&days&limit
+  (zaman çizelgesi: kanal/tür/hedef tarih/değer/gecikme sn/durum + kanal bazlı istatistik:
+  başarı/hata/ort-maks gecikme) ve GET /push-history/{pid}/freshness?days=14 (kanal × tarih
+  tazelik matrisi: son push zamanı + yaş saati, sync_queue payload.date aggregate).
+- ChannelHealthPanel'e sekme yapısı: "Sağlık & Uyarılar" + "Push Geçmişi" (yeni
+  ChannelPushHistory.js bileşeni — renk kodlu tazelik matrisi ✓≤24s/sarı≤72s/kırmızı eski/
+  gri hiç, istatistik kartları, kanal filtreli zaman çizelgesi).
+- Veri gerçek akışla üretildi: /api/sync-queue/{pid}/enqueue ile 15 fiyat push'u (3 kanal ×
+  5 tarih) → run-tick 15/15 başarılı işledi (kalıcı gerçek kayıtlar, fake seed değil).
+- E2E DOĞRULANDI: timeline 15 kayıt, stats (5/5 başarı, ort 1.8sn), freshness matrisi
+  booking_com 5 dolu hücre; UI screenshot — matris/istatistik/çizelge render OK.

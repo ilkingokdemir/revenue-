@@ -640,3 +640,17 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   5 tarih) → run-tick 15/15 başarılı işledi (kalıcı gerçek kayıtlar, fake seed değil).
 - E2E DOĞRULANDI: timeline 15 kayıt, stats (5/5 başarı, ort 1.8sn), freshness matrisi
   booking_com 5 dolu hücre; UI screenshot — matris/istatistik/çizelge render OK.
+
+## Son Durum (Iter 428, 2026-07-24) — Tek Tık "Şimdi Push'la" TAMAMLANDI
+- push_history.py: POST /push-history/{pid}/push-now {channel, date} — fiyat çözümleme
+  zinciri: son başarılı push → property_monthly_prices aylık ADR → son 90 gün booking ADR →
+  £100 varsayılan (rate_source alanında raporlanır). Task enqueue + process_due_tasks ile
+  anında işlenir; sonuç {ok, status, rate, rate_source, error} döner. Eksik alan 400.
+  pid=all ise channel_connections'tan property çözülür.
+- ChannelPushHistory: tazelik matrisinde eski (>24s) ve hiç push'lanmamış (↑) hücreler
+  tıklanabilir buton oldu (push-cell-{ch}-{date} testid) → başarıda yeşil toast, mock OTA
+  geçici hatasında (%10) mavi bilgi toast'ı "kuyruğa alındı, otomatik yeniden denenecek"
+  (backoff retry sistemi devrede).
+- E2E DOĞRULANDI: expedia push-now anında succeeded + freshness hücresi doldu; agoda mock
+  503 → pending + backoff (doğru davranış); 400 validasyonu; UI'da hücre tıklama → toast →
+  timeline pending kaydı → expedia ✓ hücresi görüldü.

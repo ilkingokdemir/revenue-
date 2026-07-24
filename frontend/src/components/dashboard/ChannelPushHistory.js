@@ -44,6 +44,16 @@ export default function ChannelPushHistory({ propertyId }) {
   }, [propertyId, channel]);
   useEffect(() => { load(); }, [load]);
 
+  const pushNow = async (ch, d) => {
+    try {
+      const r = await axios.post(`${API}/api/push-history/${propertyId}/push-now`, { channel: ch, date: d });
+      if (r.data.ok) toast.success(`${CH_TR[ch] || ch} · ${d} → £${r.data.rate} push'landı (kaynak: ${r.data.rate_source})`);
+      else if (r.data.status === "pending") toast.info(`${CH_TR[ch] || ch} · ${d} kuyruğa alındı — OTA geçici hata verdi, otomatik yeniden denenecek`);
+      else toast.error(`Push başarısız: ${r.data.error || r.data.status}`);
+      await load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Push başarısız"); }
+  };
+
   if (loading) return <div className="p-8 text-stone-400 text-sm" data-testid="push-history-loading">Yükleniyor…</div>;
 
   return (
@@ -53,7 +63,7 @@ export default function ChannelPushHistory({ propertyId }) {
           <GridFour size={15} className="text-stone-400" />
           <div>
             <h3 className="text-sm font-semibold text-stone-900">Tazelik matrisi — kanal × tarih (14 gün)</h3>
-            <p className="text-[10px] text-stone-400">Her hücre o tarihin ilgili kanala en son ne zaman push'landığını gösterir. <span className="text-emerald-600">●≤24s</span> <span className="text-amber-600">●≤72s</span> <span className="text-rose-600">●eski</span> <span className="text-stone-400">●hiç</span></p>
+            <p className="text-[10px] text-stone-400">Her hücre o tarihin ilgili kanala en son ne zaman push'landığını gösterir. <span className="text-emerald-600">●≤24s</span> <span className="text-amber-600">●≤72s</span> <span className="text-rose-600">●eski</span> <span className="text-stone-400">●hiç</span> — eski/boş hücreye tıklayınca o tarih anında push'lanır.</p>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -70,14 +80,20 @@ export default function ChannelPushHistory({ propertyId }) {
               {fresh?.matrix.map((row) => (
                 <tr key={row.channel}>
                   <td className="px-3 py-1 font-medium text-stone-700 whitespace-nowrap sticky left-0 bg-white">{CH_TR[row.channel] || row.channel}</td>
-                  {row.cells.map((c) => (
-                    <td key={c.date} className="p-0.5">
-                      <div title={c.last_pushed_at ? `Son push: ${fmtT(c.last_pushed_at)} (${c.age_hours}s önce)` : "Hiç push'lanmadı"}
-                        className={`h-5 w-9 rounded flex items-center justify-center font-medium ${cellCls(c.age_hours)}`}>
-                        {c.age_hours === null ? "—" : c.age_hours <= 24 ? "✓" : `${Math.round(c.age_hours)}s`}
-                      </div>
-                    </td>
-                  ))}
+                  {row.cells.map((c) => {
+                    const stale = c.age_hours === null || c.age_hours > 24;
+                    return (
+                      <td key={c.date} className="p-0.5">
+                        <button onClick={stale ? () => pushNow(row.channel, c.date) : undefined}
+                          disabled={!stale}
+                          data-testid={`push-cell-${row.channel}-${c.date}`}
+                          title={c.last_pushed_at ? `Son push: ${fmtT(c.last_pushed_at)} (${c.age_hours}s önce)${stale ? " — tıkla: şimdi push'la" : ""}` : "Hiç push'lanmadı — tıkla: şimdi push'la"}
+                          className={`h-5 w-9 rounded flex items-center justify-center font-medium ${cellCls(c.age_hours)} ${stale ? "cursor-pointer hover:ring-2 hover:ring-stone-400" : "cursor-default"}`}>
+                          {c.age_hours === null ? "↑" : c.age_hours <= 24 ? "✓" : `${Math.round(c.age_hours)}s`}
+                        </button>
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

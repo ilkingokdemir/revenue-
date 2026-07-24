@@ -94,6 +94,15 @@ JOB_REGISTRY = {
         "description": "AI fiyat önerilerini gece otomatik uygular (hassas — varsayılan kapalı).",
         "default_cron": (2, 0), "default_enabled": False, "params": [],
     },
+    "comp_radar": {
+        "label": "Rakip Fiyat Radarı", "category": "revenue",
+        "description": "Rakip fiyatlarını her gece tarar; pazar altı/üstü fiyat fırsatlarını işaretler.",
+        "default_cron": (4, 30), "default_enabled": True,
+        "params": [
+            {"key": "days_ahead", "label": "Tarama ufku", "type": "number", "min": 7, "max": 30, "default": 14, "suffix": "gün"},
+            {"key": "threshold_pct", "label": "Fark eşiği", "type": "number", "min": 5, "max": 30, "default": 10, "suffix": "%"},
+        ],
+    },
     "ota_sync_watchdog": {
         "label": "OTA Senkron Watchdog", "category": "distribution",
         "description": "Başarısız OTA güncellemelerini yeniden dener, geciken kanallar için uyarı açar ve eski/boş tarih hücrelerini otomatik push'lar (Auto-Freshness).",

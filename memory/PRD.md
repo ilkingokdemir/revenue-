@@ -667,3 +667,20 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   (IndentationError) → sed ile 203+ temizlenip blok doğru yere kondu; AST + e2e ile onarım doğrulandı.
 - E2E DOĞRULANDI: ardışık çalışmalar 30→30→30→19→0 (doygunlukta 0 = idempotens kanıtı);
   tazelik matrisi 97/112 taze hücreye ulaştı; kalan 15 backoff retry kuyruğunda (beklenen).
+
+## Son Durum (Iter 430, 2026-07-24) — Rakip Fiyat Radarı (15. motor) TAMAMLANDI
+- YENİ backend: routes/revenue_ext/comp_radar.py — compset rakiplerini deterministik MOCK
+  scanner ile tarar (md5 seed → çalışmalar arası tutarlı; gerçek scraper kimlik bilgisi
+  gelince swap edilir), comp_rate_snapshots'a saklar. Kendi fiyat (resolve_rate) vs rakip
+  medyanı; threshold_pct dışında kalan tarihler için comp_radar_findings: underpriced
+  (artış fırsatı + hedef fiyat) / overpriced (doluluk riski).
+- Endpoints: GET /comp-radar/{pid} (findings + own-vs-median 14 gün serisi + özet),
+  POST /comp-radar/scan. Motor: JOB_HANDLERS["comp_radar"] + registry (04:30, revenue,
+  params: days_ahead 14, threshold_pct 10) → 15. motor.
+- YENİ frontend: CompRadarPanel.js (recharts LineChart own vs medyan, 3 özet kart, bulgular
+  tablosu Türkçe önerilerle, "Şimdi tara"). Menü: Revenue & rates > Tools > "Rakip fiyat
+  radarı" (comp-radar-btn).
+- FIX'ler: phosphor'da Radar ikonu yok → Crosshair; App.js render bloğu kaybolmuştu → yeniden eklendi.
+- E2E DOĞRULANDI: scan 112 fiyat noktası + 4 bulgu (%10.7-12.2 pazar altı), scheduler trigger,
+  15 motor listesi, UI (grafik + kartlar + 4 bulgu satırı) OK.
+- NOT: Rakip fiyatları MOCK scanner (gerçek OTA scrape API'si yok).

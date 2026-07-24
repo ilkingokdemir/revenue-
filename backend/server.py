@@ -1214,6 +1214,18 @@ async def _job_weekly_report(property_id: str) -> dict:
 
 JOB_HANDLERS["weekly_report"] = _job_weekly_report
 
+from routes.revenue_ext.comp_radar import create_comp_radar_router
+comp_radar_router = create_comp_radar_router(db, require_roles)
+api_router.include_router(comp_radar_router)
+
+async def _job_comp_radar(property_id: str) -> dict:
+    try:
+        return await comp_radar_router.run_comp_radar_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["comp_radar"] = _job_comp_radar
+
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))
 

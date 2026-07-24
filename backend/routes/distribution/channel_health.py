@@ -91,7 +91,10 @@ def create_channel_health_router(db, require_roles):
         return rows
 
     async def _watchdog_core(property_id: str = "") -> dict:
-        cfg = await get_params(db, "ota_sync_watchdog", {"stale_hours": 24, "max_requeue": 10})
+        cfg = await get_params(db, "ota_sync_watchdog",
+                               {"stale_hours": 24, "max_requeue": 10,
+                                "freshness_hours": 72, "freshness_days": 14,
+                                "max_auto_push": 30})
         stale_hours = int(cfg["stale_hours"])
         max_requeue = int(cfg["max_requeue"])
         pq: Dict = {} if not property_id or property_id == "all" else {"property_id": property_id}
@@ -143,9 +146,55 @@ def create_channel_health_router(db, require_roles):
 
         open_alerts = await db.ota_sync_alerts.count_documents({"status": "open"})
         critical = sum(1 for r in rows if r["status"] == "critical")
+
+        # 3. auto-freshness: push stale/never-pushed channel x date cells
+        freshness_pushed = 0
+        max_auto_push = int(cfg["max_auto_push"])
+        if max_auto_push > 0:
+            from routes.distribution.push_history import resolve_rate
+            from routes.integrations_pkg.sync_queue import process_due_tasks
+            import uuid as _uuid
+            from datetime import date as _date
+            fresh_h = int(cfg["freshness_hours"])
+            horizon = int(cfg["freshness_days"])
+            dates = [(_date.today() + timedelta(days=i)).isoformat() for i in range(horizon)]
+            fresh_cutoff = (datetime.now(timezone.utc) - timedelta(hours=fresh_h)).isoformat()
+            conns = await db.channel_connections.find(
+                {**pq, "channel_id": {"$ne": "direct"}},
+                {"_id": 0, "channel_id": 1, "property_id": 1}).to_list(50)
+            seen = set()
+            for c in conns:
+                ch, cpid = c["channel_id"], c.get("property_id") or "aldgate-flats"
+                for d in dates:
+                    if freshness_pushed >= max_auto_push:
+                        break
+                    key = (ch, d)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    recent_ok = await db.sync_queue.find_one(
+                        {"channel_id": ch, "kind": "rate", "payload.date": d,
+                         "$or": [{"status": "succeeded", "completed_at": {"$gte": fresh_cutoff}},
+                                 {"status": {"$in": ["pending", "processing"]}}]},
+                        {"_id": 0, "id": 1})
+                    if recent_ok:
+                        continue
+                    rate, source = await resolve_rate(db, cpid, d)
+                    await db.sync_queue.insert_one({
+                        "id": str(_uuid.uuid4()), "property_id": cpid, "channel_id": ch,
+                        "kind": "rate", "payload": {"date": d, "rate": rate},
+                        "status": "pending", "attempts": 0, "max_attempts": 6,
+                        "next_retry_at": now, "error": None, "result": None,
+                        "created_at": now, "created_by": "auto-freshness"})
+                    freshness_pushed += 1
+            if freshness_pushed:
+                for _ in range((freshness_pushed // 20) + 1):
+                    await process_due_tasks(db, max_tasks=20)
+
         return {"ok": True, "channels_checked": len(rows), "requeued": requeued,
                 "critical_channels": critical, "alerts_opened": alerts_opened,
-                "alerts_resolved": alerts_resolved, "open_alerts": open_alerts}
+                "alerts_resolved": alerts_resolved, "open_alerts": open_alerts,
+                "freshness_pushed": freshness_pushed}
 
     @router.get("/channel-health/{property_id}")
     async def channel_health(property_id: str,

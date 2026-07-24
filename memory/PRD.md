@@ -654,3 +654,16 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: expedia push-now anında succeeded + freshness hücresi doldu; agoda mock
   503 → pending + backoff (doğru davranış); 400 validasyonu; UI'da hücre tıklama → toast →
   timeline pending kaydı → expedia ✓ hücresi görüldü.
+
+## Son Durum (Iter 429, 2026-07-24) — Auto-Freshness (Watchdog Otomatik Push) TAMAMLANDI
+- push_history.py: resolve_rate(db, pid, date) modül fonksiyonuna çıkarıldı (push-now da kullanır).
+- channel_health.py watchdog 3. adım: kanal × tarih (freshness_days ufku) tarar; freshness_hours
+  eşiğinden eski veya hiç push'lanmamış hücreler için resolve_rate ile fiyat çözüp sync_queue'ya
+  otomatik push ekler (çalışma başına max_auto_push sınırı, pending/processing olanlar atlanır
+  — idempotent), sonra process_due_tasks ile işler. Sonuçta freshness_pushed raporlanır.
+- Registry ota_sync_watchdog yeni paramlar: freshness_hours (72), freshness_days (14),
+  max_auto_push (30, 0=kapalı) — Otomasyon Ayarları'ndan yönetilir.
+- DERS: search_replace sırasında channel_health.py'de dosya sonuna artık blok yapışması oldu
+  (IndentationError) → sed ile 203+ temizlenip blok doğru yere kondu; AST + e2e ile onarım doğrulandı.
+- E2E DOĞRULANDI: ardışık çalışmalar 30→30→30→19→0 (doygunlukta 0 = idempotens kanıtı);
+  tazelik matrisi 97/112 taze hücreye ulaştı; kalan 15 backoff retry kuyruğunda (beklenen).

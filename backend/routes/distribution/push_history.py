@@ -18,6 +18,30 @@ def _age_hours(iso: str) -> float:
         return None
 
 
+async def resolve_rate(db, pid: str, target_date: str):
+    """Rate resolution chain: last push -> monthly ADR -> 90d booking ADR -> default."""
+    last = await db.sync_queue.find_one(
+        {"property_id": pid, "kind": "rate", "status": "succeeded",
+         "payload.date": target_date, "payload.rate": {"$gt": 0}},
+        {"_id": 0, "payload": 1}, sort=[("completed_at", -1)])
+    if last:
+        return float(last["payload"]["rate"]), "son_push"
+    monthly = await db.property_monthly_prices.find_one(
+        {"property_id": pid, "month_key": target_date[:7]}, {"_id": 0, "adr": 1})
+    if monthly and monthly.get("adr"):
+        return float(monthly["adr"]), "aylik_adr"
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+    recent = await db.bookings.find(
+        {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
+         "created_at": {"$gte": cutoff}, "total_price": {"$gt": 0}},
+        {"_id": 0, "total_price": 1, "nights": 1}).to_list(200)
+    if recent:
+        total = sum(float(b["total_price"]) for b in recent)
+        nts = sum(max(int(b.get("nights") or 1), 1) for b in recent)
+        return round(total / nts, 2), "son_90g_adr"
+    return 100.0, "varsayilan"
+
+
 def create_push_history_router(db, require_roles):
     router = APIRouter()
 
@@ -114,30 +138,7 @@ def create_push_history_router(db, require_roles):
                 {"channel_id": channel}, {"_id": 0, "property_id": 1})
             pid = (conn or {}).get("property_id") or "aldgate-flats"
 
-        rate, source = None, None
-        last = await db.sync_queue.find_one(
-            {"property_id": pid, "kind": "rate", "status": "succeeded",
-             "payload.date": target_date, "payload.rate": {"$gt": 0}},
-            {"_id": 0, "payload": 1}, sort=[("completed_at", -1)])
-        if last:
-            rate, source = float(last["payload"]["rate"]), "son_push"
-        if rate is None:
-            monthly = await db.property_monthly_prices.find_one(
-                {"property_id": pid, "month_key": target_date[:7]}, {"_id": 0, "adr": 1})
-            if monthly and monthly.get("adr"):
-                rate, source = float(monthly["adr"]), "aylik_adr"
-        if rate is None:
-            cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
-            recent = await db.bookings.find(
-                {"property_id": pid, "status": {"$nin": ["cancelled", "no_show"]},
-                 "created_at": {"$gte": cutoff}, "total_price": {"$gt": 0}},
-                {"_id": 0, "total_price": 1, "nights": 1}).to_list(200)
-            if recent:
-                total = sum(float(b["total_price"]) for b in recent)
-                nts = sum(max(int(b.get("nights") or 1), 1) for b in recent)
-                rate, source = round(total / nts, 2), "son_90g_adr"
-        if rate is None:
-            rate, source = 100.0, "varsayilan"
+        rate, source = await resolve_rate(db, pid, target_date)
 
         now = datetime.now(timezone.utc).isoformat()
         task = {"id": str(uuid.uuid4()), "property_id": pid, "channel_id": channel,

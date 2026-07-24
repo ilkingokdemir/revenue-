@@ -96,11 +96,14 @@ JOB_REGISTRY = {
     },
     "ota_sync_watchdog": {
         "label": "OTA Senkron Watchdog", "category": "distribution",
-        "description": "Kalıcı başarısız OTA güncellemelerini otomatik yeniden dener, geciken kanallar için uyarı açar.",
+        "description": "Başarısız OTA güncellemelerini yeniden dener, geciken kanallar için uyarı açar ve eski/boş tarih hücrelerini otomatik push'lar (Auto-Freshness).",
         "default_cron": (6, 30), "default_enabled": True,
         "params": [
             {"key": "stale_hours", "label": "Gecikme eşiği", "type": "number", "min": 4, "max": 96, "default": 24, "suffix": "saat"},
             {"key": "max_requeue", "label": "Çalışma başına maks. yeniden kuyruk", "type": "number", "min": 1, "max": 50, "default": 10, "suffix": "adet"},
+            {"key": "freshness_hours", "label": "Tazelik eşiği (Auto-Freshness)", "type": "number", "min": 24, "max": 168, "default": 72, "suffix": "saat"},
+            {"key": "freshness_days", "label": "Tazelik ufku", "type": "number", "min": 7, "max": 30, "default": 14, "suffix": "gün"},
+            {"key": "max_auto_push", "label": "Çalışma başına maks. otomatik push (0=kapalı)", "type": "number", "min": 0, "max": 100, "default": 30, "suffix": "adet"},
         ],
     },
 }

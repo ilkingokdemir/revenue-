@@ -1921,3 +1921,32 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
   Check-in notu + ekip in-app bildirimi aynen devam ediyor.
 - UI: "Misafir bilgilendirme" kolonu "E-posta kapalı · Check-in notu ✓" gösterir.
 - E2E: yeni taşımada e-posta denemesi yok, not eklendi. Test verisi temizlendi.
+
+## Iter 439-442 (2026-07-25) — MEWS PARITY PAKETI (4 özellik) TAMAMLANDI (iteration_431.json: 15/15 PASS)
+Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yapıldı:
+### a) Public Saatlik Rezervasyon Motoru (Mews Spaces/Hourly Booking Engine)
+- spaces.py: booking mantığı _book_space() olarak paylaşıldı; YENİ public endpoint'ler:
+  GET /api/public/spaces/{pid} (busy pencereleri, misafir verisi sızdırmaz), POST /api/public/spaces/book.
+- FIX: meeting_room artık exclusive (capacity=koltuk sayısı, eşzamanlılık değil) → çakışan saat 409.
+- YENİ sayfa: /book-space (SpacesPublicPage.js) — kart listesi, tarih+saat+süre seçimi, fiyat, onay ekranı.
+- SpacesPanel'e "Public rezervasyon sayfası" link butonu (spaces-public-link-btn).
+### b) OTA Sanal Kart (VCC) Otomasyonu
+- YENİ finance_ext/vcc_automation.py: OTA rezervasyonlarını tarar (idempotent), vcc_cards oluşturur,
+  aktivasyon gününde otomatik tahsil (mock %90), başarısız/expired uyarıları.
+- Endpoints: GET /api/vcc/{pid}, POST /vcc/scan, /vcc/run, /vcc/{id}/charge (409 çift tahsilat koruması).
+- Cron: JOB "vcc_auto_charge" 06:00. YENİ VccPanel (menü: Finance > VCC otomatik tahsilat, id vcc-automation).
+### c) Fatura Hatırlatma Otomasyonu
+- YENİ finance_ext/invoice_reminders.py: vadesi geçen city-ledger faturalarına kademeli (L1 1-7g,
+  L2 8-21g, L3 22g+) ödeme linkli e-posta (mock), seviye başına bir kez (idempotent), L3'te yönetici bildirimi.
+- Endpoints: GET /api/invoice-reminders, POST /run, POST /{invoice_id}/send. Cron 07:00.
+- CityLedgerPanel'e "Hatırlatmalar" sekmesi (ledger-tab-reminders, RemindersTab).
+### d) Kiosk Kimlik/Selfie + Kiosk'a Gönder
+- guest_journey.py: POST /kiosk-id-capture/{booking_id} (public, id/selfie base64 max ~600KB, kiosk_id_scans),
+  GET /kiosk-id-scans (auth), POST /kiosk-dispatch (auth), GET /kiosk-queue/{pid} (public, 15dk pencere),
+  POST /kiosk-queue/{id}/claim (public).
+- CheckInKioskPage: yeni "verify" ekranı (kamera + kimlik/selfie çekimi + atla), welcome'da dispatch
+  banner'ı (8sn poll, "Resepsiyon sizi yönlendirdi"). ArrivalsCockpit'e "Kiosk'a gönder" (kiosk-send-*).
+### Test & Fix
+- testing_agent iteration_431: backend 15/15 + tüm frontend akışları PASS.
+- Testing agent CATEGORY_META'ya eksik "finance" etiketini ekledi (automation/settings 400 veriyordu) — doğrulandı.
+- Test verileri (QA/UI Test space bookings) temizlendi.

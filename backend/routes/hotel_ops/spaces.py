@@ -167,9 +167,7 @@ def create_spaces_router(db, require_roles):
         }, {"_id": 0}).sort("start", 1).to_list(500)
         return {"space": space, "from": f, "to": t, "bookings": bookings, "capacity": space.get("capacity", 1)}
 
-    @router.post("/space-bookings")
-    async def book(data: Dict,
-                    current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "fnb"))):
+    async def _book_space(data: Dict, created_by: str, source: str = "admin"):
         space_id = data.get("space_id", "")
         start    = (data.get("start") or "").strip()
         end      = (data.get("end") or "").strip()
@@ -181,12 +179,14 @@ def create_spaces_router(db, require_roles):
         if not space:
             raise HTTPException(404, "Space not found")
 
-        # Concurrency check (overlap + capacity)
+        # Concurrency check (overlap + capacity). Meeting rooms are exclusive:
+        # capacity = seat count, not parallel bookings.
+        limit = 1 if space.get("kind") == "meeting_room" else space.get("capacity", 1)
         overlap = await db.space_bookings.count_documents({
             "space_id": space_id, "status": {"$ne": "cancelled"},
             "start": {"$lt": end}, "end": {"$gt": start},
         })
-        if overlap >= space.get("capacity", 1):
+        if overlap >= limit:
             raise HTTPException(409, "Space at capacity for this window")
 
         # Pricing
@@ -201,7 +201,7 @@ def create_spaces_router(db, require_roles):
             days = max(1, (ed.date() - sd.date()).days)
             units = days
         price = round(units * float(space.get("rate_per_unit") or 0), 2)
-        if "price_override" in data and data["price_override"] is not None:
+        if source == "admin" and "price_override" in data and data["price_override"] is not None:
             price = round(float(data["price_override"]), 2)
 
         record = {
@@ -212,15 +212,17 @@ def create_spaces_router(db, require_roles):
             "kind": space["kind"],
             "guest_name": guest,
             "guest_email": data.get("guest_email", ""),
+            "guest_phone": data.get("guest_phone", ""),
             "booking_id": data.get("booking_id", ""),
             "room_number": data.get("room_number", ""),
             "start": start, "end": end, "units": units,
             "price": price, "currency": space.get("currency", "GBP"),
-            "charge_to": data.get("charge_to", "room"),
+            "charge_to": data.get("charge_to", "room") if source == "admin" else "direct",
             "notes": data.get("notes", ""),
             "status": "confirmed",
+            "source": source,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "created_by": current_user.get("name", "Staff"),
+            "created_by": created_by,
         }
         await db.space_bookings.insert_one(dict(record))
         record.pop("_id", None)
@@ -235,9 +237,53 @@ def create_spaces_router(db, require_roles):
                 "description": f"{space['name']} · {start[:16]} → {end[:16]}",
                 "amount": price,
                 "currency": record["currency"],
-                "posted_by": current_user.get("name", "Staff"),
+                "posted_by": created_by,
                 "created_at": record["created_at"],
             })
+        return record
+
+    @router.post("/space-bookings")
+    async def book(data: Dict,
+                    current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "fnb"))):
+        record = await _book_space(data, created_by=current_user.get("name", "Staff"), source="admin")
+        return {"ok": True, "booking": record}
+
+    # ==================== PUBLIC HOURLY BOOKING ENGINE (no auth) ====================
+
+    @router.get("/public/spaces/{property_id}")
+    async def public_spaces(property_id: str, day: str = ""):
+        if not property_id or property_id == "all":
+            prop = await db.properties.find_one({}, {"_id": 0, "id": 1, "name": 1})
+        else:
+            prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "id": 1, "name": 1})
+        pid = (prop or {}).get("id", property_id)
+        day = day or datetime.now(timezone.utc).date().isoformat()
+        spaces = await db.spaces.find(
+            {"property_id": pid, "active": {"$ne": False}},
+            {"_id": 0}).sort("name", 1).to_list(100)
+        day_start, day_end = f"{day}T00:00:00", f"{day}T23:59:59"
+        for s in spaces:
+            busy = await db.space_bookings.find({
+                "space_id": s["id"], "status": {"$ne": "cancelled"},
+                "start": {"$lt": day_end}, "end": {"$gt": day_start},
+            }, {"_id": 0, "start": 1, "end": 1}).sort("start", 1).to_list(100)
+            s["busy"] = busy  # only time windows, no guest data
+        return {"property_id": pid, "property_name": (prop or {}).get("name", ""),
+                "date": day, "spaces": spaces}
+
+    @router.post("/public/spaces/book")
+    async def public_book(data: Dict):
+        payload = {k: data.get(k) for k in
+                   ("space_id", "start", "end", "guest_name", "guest_email", "guest_phone", "notes")}
+        record = await _book_space(payload, created_by="Public Booking Engine", source="public")
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "type": "info",
+            "title": "Yeni Alan Rezervasyonu (Online)",
+            "message": f"{record['guest_name']} — {record['space_name']} ({record['start'][:16]} → {record['end'][11:16]}, {record['currency']} {record['price']})",
+            "category": "spaces", "target_user": "", "target_role": "",
+            "link_to": "spaces", "priority": "normal",
+            "read": False, "created_by": "Spaces Engine",
+            "created_at": datetime.now(timezone.utc).isoformat()})
         return {"ok": True, "booking": record}
 
     @router.get("/space-bookings/{property_id}")

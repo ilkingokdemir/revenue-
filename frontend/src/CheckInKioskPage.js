@@ -7,13 +7,19 @@ const BASE_URL = process.env.REACT_APP_BACKEND_URL;
 const IDLE_TIMEOUT = 60000; // 60s reset
 
 export default function CheckInKioskPage({ propertyId }) {
-  const [screen, setScreen] = useState("welcome"); // welcome, search, results, register, done
+  const [screen, setScreen] = useState("welcome"); // welcome, search, results, verify, register, done
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [regToken, setRegToken] = useState(null);
   const [hotelName, setHotelName] = useState("Hotel");
   const [completion, setCompletion] = useState(null);    // { guest_name, room_name, qr_url, ... }
+  const [pendingBooking, setPendingBooking] = useState(null); // booking being verified
+  const [dispatched, setDispatched] = useState(null);   // reception-dispatched reservation
+  const [captures, setCaptures] = useState({ id: false, selfie: false });
+  const [camError, setCamError] = useState("");
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
   const idleTimer = useRef(null);
   const pollTimer = useRef(null);
 
@@ -65,6 +71,71 @@ export default function CheckInKioskPage({ propertyId }) {
     return () => { window.removeEventListener("touchstart", reset); window.removeEventListener("click", reset); clearTimeout(idleTimer.current); };
   }, [screen]);
 
+  // Poll the reception dispatch queue while on welcome screen
+  useEffect(() => {
+    if (screen !== "welcome") { setDispatched(null); return; }
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const { data } = await axios.get(`${API}/guest-journey/kiosk-queue/${propertyId}`);
+        if (!cancelled && data.length > 0) setDispatched(data[0]);
+      } catch { /* silent */ }
+    };
+    poll();
+    const t = setInterval(poll, 8000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [screen, propertyId]);
+
+  const acceptDispatch = async (e) => {
+    e.stopPropagation();
+    try { await axios.post(`${API}/guest-journey/kiosk-queue/${dispatched.id}/claim`); } catch { }
+    const bid = dispatched.booking_id;
+    setDispatched(null);
+    startRegistration({ booking_id: bid });
+  };
+
+  // Camera helpers for ID/selfie verification step
+  const startCamera = async () => {
+    setCamError("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+    } catch {
+      setCamError("Kameraya erişilemedi — bu adımı atlayabilirsiniz.");
+    }
+  };
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  };
+  useEffect(() => {
+    if (screen === "verify") startCamera();
+    else stopCamera();
+    return stopCamera;
+  }, [screen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const capture = async (kind) => {
+    const video = videoRef.current;
+    if (!video || !streamRef.current) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = Math.round(640 * (video.videoHeight / (video.videoWidth || 640))) || 480;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    const b64 = canvas.toDataURL("image/jpeg", 0.6);
+    try {
+      await axios.post(`${API}/guest-journey/kiosk-id-capture/${pendingBooking.booking_id}`, {
+        kind, image_base64: b64,
+      });
+      setCaptures((c) => ({ ...c, [kind]: true }));
+    } catch { setCamError("Görsel kaydedilemedi, tekrar deneyin."); }
+  };
+
+  const proceedToRegister = () => {
+    stopCamera();
+    setScreen("register");
+  };
+
   const search = async () => {
     if (!query.trim()) return;
     setSearching(true);
@@ -77,15 +148,17 @@ export default function CheckInKioskPage({ propertyId }) {
   };
 
   const startRegistration = async (booking) => {
+    setPendingBooking(booking);
+    setCaptures({ id: false, selfie: false });
     if (booking.registration_token) {
       setRegToken(booking.registration_token);
-      setScreen("register");
+      setScreen("verify");
       return;
     }
     try {
       const { data } = await axios.post(`${API}/guest-journey/kiosk-register/${propertyId}`, { booking_id: booking.booking_id });
       setRegToken(data.token);
-      setScreen("register");
+      setScreen("verify");
     } catch { }
   };
 
@@ -104,6 +177,15 @@ export default function CheckInKioskPage({ propertyId }) {
               <p className="text-lg font-medium">Tap anywhere to begin</p>
             </div>
           </motion.div>
+          {dispatched && (
+            <motion.button initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+              onClick={acceptDispatch} data-testid="kiosk-dispatch-banner"
+              className="mt-8 block mx-auto bg-emerald-500/20 backdrop-blur border-2 border-emerald-400 rounded-2xl px-8 py-4 text-left hover:bg-emerald-500/30 transition">
+              <p className="text-emerald-300 text-xs font-bold uppercase tracking-wider">Resepsiyon sizi yönlendirdi</p>
+              <p className="text-xl font-bold mt-0.5">👋 Hoş geldiniz, {dispatched.guest_name}</p>
+              <p className="text-white/60 text-sm mt-0.5">Check-in'e başlamak için dokunun</p>
+            </motion.button>
+          )}
           <p className="text-white/30 text-xs mt-12">Powered by MyHotelBox &amp; ReveniQ</p>
         </motion.div>
       </div>
@@ -180,6 +262,45 @@ export default function CheckInKioskPage({ propertyId }) {
 
           <button onClick={() => { setScreen("search"); setResults([]); }} className="mt-6 text-stone-400 text-sm mx-auto block hover:text-stone-600 transition" data-testid="kiosk-back-search">
             Search again
+          </button>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // Identity verification (ID + selfie) before registration
+  if (screen === "verify") {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-stone-50 to-slate-100 flex items-center justify-center p-8" data-testid="kiosk-verify">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="max-w-lg w-full">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-stone-800 mb-1">Kimlik Doğrulama</h1>
+            <p className="text-stone-500 text-sm">Güvenliğiniz için kimliğinizin fotoğrafını ve bir selfie'nizi çekin</p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg p-5">
+            <div className="rounded-xl overflow-hidden bg-stone-900 aspect-video mb-4 relative">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" data-testid="kiosk-camera" />
+              {camError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-stone-900/80 text-white text-sm p-4 text-center" data-testid="kiosk-cam-error">{camError}</div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={() => capture("id")} disabled={!!camError} data-testid="kiosk-capture-id"
+                className={`py-3.5 rounded-xl text-sm font-semibold border-2 transition ${captures.id ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "border-stone-200 text-stone-700 hover:border-[#1e3a5f] disabled:opacity-40"}`}>
+                {captures.id ? "✓ Kimlik alındı" : "📇 Kimlik fotoğrafı çek"}
+              </button>
+              <button onClick={() => capture("selfie")} disabled={!!camError} data-testid="kiosk-capture-selfie"
+                className={`py-3.5 rounded-xl text-sm font-semibold border-2 transition ${captures.selfie ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "border-stone-200 text-stone-700 hover:border-[#1e3a5f] disabled:opacity-40"}`}>
+                {captures.selfie ? "✓ Selfie alındı" : "🤳 Selfie çek"}
+              </button>
+            </div>
+            <button onClick={proceedToRegister} data-testid="kiosk-verify-continue"
+              className={`w-full mt-4 py-4 text-lg font-semibold rounded-xl transition ${captures.id && captures.selfie ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-[#1e3a5f] text-white hover:bg-[#15304f]"}`}>
+              {captures.id && captures.selfie ? "Devam et →" : camError ? "Bu adımı atla →" : "Atla ve devam et →"}
+            </button>
+          </div>
+          <button onClick={() => { stopCamera(); setScreen("results"); }} className="mt-6 text-stone-400 text-sm mx-auto block hover:text-stone-600 transition" data-testid="kiosk-verify-back">
+            Geri dön
           </button>
         </motion.div>
       </div>

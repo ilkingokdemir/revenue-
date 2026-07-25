@@ -384,6 +384,79 @@ def create_guest_journey_router(db, require_roles):
         await db.guest_registrations.insert_one(reg)
         return {"token": token, "status": "pending"}
 
+    # ==================== KIOSK ID/SELFIE CAPTURE + DISPATCH (Mews parity) ====================
+
+    @router.post("/guest-journey/kiosk-id-capture/{booking_id}")
+    async def kiosk_id_capture(booking_id: str, data: dict):
+        """Public (kiosk): store an ID card or selfie snapshot for check-in verification."""
+        kind = (data or {}).get("kind", "id")
+        if kind not in ("id", "selfie"):
+            raise HTTPException(400, "kind 'id' veya 'selfie' olmalı")
+        img = (data or {}).get("image_base64", "")
+        if not img or len(img) < 100:
+            raise HTTPException(400, "image_base64 zorunlu")
+        if len(img) > 800_000:
+            raise HTTPException(413, "Görsel çok büyük (max ~600KB)")
+        booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0, "id": 1, "guest_name": 1})
+        if not booking:
+            raise HTTPException(404, "Rezervasyon bulunamadı")
+        scan_id = str(uuid.uuid4())
+        await db.kiosk_id_scans.insert_one({
+            "id": scan_id, "booking_id": booking_id, "kind": kind,
+            "guest_name": booking.get("guest_name"),
+            "image_base64": img,
+            "captured_at": datetime.now(timezone.utc).isoformat()})
+        field = "id_scan_ref" if kind == "id" else "selfie_scan_ref"
+        await db.bookings.update_one({"id": booking_id}, {"$set": {
+            field: scan_id, "kiosk_identity_verified": True,
+            "updated_at": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True, "scan_id": scan_id, "kind": kind}
+
+    @router.get("/guest-journey/kiosk-id-scans/{booking_id}")
+    async def kiosk_id_scans(booking_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        scans = await db.kiosk_id_scans.find({"booking_id": booking_id}, {"_id": 0}) \
+            .sort("captured_at", -1).to_list(10)
+        return scans
+
+    @router.post("/guest-journey/kiosk-dispatch")
+    async def kiosk_dispatch(data: dict,
+                             current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Staff: send a reservation to the kiosk so the guest is greeted by name."""
+        booking = await db.bookings.find_one({"id": (data or {}).get("booking_id", "")}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Rezervasyon bulunamadı")
+        entry = {"id": str(uuid.uuid4()),
+                 "property_id": booking.get("property_id"),
+                 "booking_id": booking["id"],
+                 "guest_name": booking.get("guest_name"),
+                 "status": "waiting",
+                 "dispatched_by": current_user.get("name", ""),
+                 "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.kiosk_queue.insert_one(entry)
+        entry.pop("_id", None)
+        return {"ok": True, "queue": entry}
+
+    @router.get("/guest-journey/kiosk-queue/{property_id}")
+    async def kiosk_queue(property_id: str):
+        """Public (kiosk polls): waiting dispatched reservations (last 15 min)."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+        q = {"status": "waiting", "created_at": {"$gte": cutoff}}
+        if property_id != "all":
+            q["property_id"] = property_id
+        rows = await db.kiosk_queue.find(
+            q, {"_id": 0, "id": 1, "booking_id": 1, "guest_name": 1, "created_at": 1}) \
+            .sort("created_at", -1).to_list(5)
+        return rows
+
+    @router.post("/guest-journey/kiosk-queue/{queue_id}/claim")
+    async def kiosk_queue_claim(queue_id: str):
+        await db.kiosk_queue.update_one(
+            {"id": queue_id, "status": "waiting"},
+            {"$set": {"status": "claimed",
+                      "claimed_at": datetime.now(timezone.utc).isoformat()}})
+        return {"ok": True}
+
     @router.get("/guest-journey/kiosk-complete/{token}")
     async def kiosk_check_complete(token: str):
         """Public: Polled by kiosk wrapper to detect when the inner registration

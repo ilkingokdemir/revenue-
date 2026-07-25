@@ -1210,6 +1210,30 @@ async def _job_overbooking_auto_move(property_id: str) -> dict:
 
 JOB_HANDLERS["overbooking_auto_move"] = _job_overbooking_auto_move
 
+from routes.finance_ext.vcc_automation import create_vcc_router
+vcc_router = create_vcc_router(db, require_roles)
+api_router.include_router(vcc_router)
+
+async def _job_vcc_auto_charge(property_id: str) -> dict:
+    try:
+        return await vcc_router.run_vcc_job_internal(db)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["vcc_auto_charge"] = _job_vcc_auto_charge
+
+from routes.finance_ext.invoice_reminders import create_invoice_reminders_router
+invoice_reminders_router = create_invoice_reminders_router(db, require_roles)
+api_router.include_router(invoice_reminders_router)
+
+async def _job_invoice_reminders(property_id: str) -> dict:
+    try:
+        return await invoice_reminders_router.run_invoice_reminders_internal(db)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["invoice_reminders"] = _job_invoice_reminders
+
 from routes.revenue_ext.key_figures import create_key_figures_router
 key_figures_router = create_key_figures_router(db, require_roles)
 api_router.include_router(key_figures_router)

@@ -129,7 +129,8 @@ export const CityLedgerPanel = () => {
       <div className="flex gap-2 border-b border-stone-200">
         {[{ id: "companies", label: "Companies", icon: Building2 },
           { id: "invoices", label: "Invoices", icon: Receipt },
-          { id: "aging", label: "Aging Report", icon: TrendingDown }].map(t => (
+          { id: "aging", label: "Aging Report", icon: TrendingDown },
+          { id: "reminders", label: "Hatırlatmalar", icon: Mail }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} data-testid={`ledger-tab-${t.id}`}
             className={`flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border-b-2 -mb-px
               ${tab === t.id ? "border-amber-500 text-stone-900" : "border-transparent text-stone-400 hover:text-stone-700"}`}>
@@ -216,6 +217,8 @@ export const CityLedgerPanel = () => {
           </div>
         </div>
       )}
+
+      {tab === "reminders" && <RemindersTab />}
 
       {tab === "aging" && aging && (
         <div className="space-y-4">
@@ -491,6 +494,117 @@ const EmailInvoiceModal = ({ invoice, onClose, onSend }) => {
         </button>
       </div>
     </Modal>
+  );
+};
+
+const RemindersTab = () => {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState("");
+  const load = async () => {
+    try { const r = await axios.get(`${API}/invoice-reminders`); setData(r.data); }
+    catch { toast.error("Hatırlatma verisi yüklenemedi"); }
+  };
+  useEffect(() => { load(); }, []);
+  const runAll = async () => {
+    setBusy("run");
+    try {
+      const r = await axios.post(`${API}/invoice-reminders/run`);
+      toast.success(`${r.data.reminders_sent} hatırlatma gönderildi (${r.data.skipped_already_sent} zaten gönderilmişti)`);
+      await load();
+    } catch { toast.error("Çalıştırılamadı"); }
+    finally { setBusy(""); }
+  };
+  const sendOne = async (id) => {
+    setBusy(id);
+    try {
+      const r = await axios.post(`${API}/invoice-reminders/${id}/send`);
+      toast.success(`Hatırlatma gönderildi (L${r.data.level}, ${r.data.email_status})`);
+      await load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Gönderilemedi"); }
+    finally { setBusy(""); }
+  };
+  if (!data) return <div className="p-6 text-sm text-stone-400" data-testid="reminders-loading">Yükleniyor…</div>;
+  const s = data.summary;
+  const LV = { 1: "bg-amber-100 text-amber-700", 2: "bg-orange-100 text-orange-700", 3: "bg-rose-100 text-rose-700" };
+  return (
+    <div className="space-y-4" data-testid="reminders-tab">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex gap-3">
+          <div className="bg-white border border-stone-200 rounded-xl px-4 py-3" data-testid="reminders-kpi-overdue">
+            <div className="text-xl font-bold text-rose-600">{cur(s.overdue_balance)}</div>
+            <div className="text-[11px] text-stone-500">Vadesi geçmiş bakiye ({s.overdue_count} fatura)</div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-xl px-4 py-3" data-testid="reminders-kpi-sent">
+            <div className="text-xl font-bold text-stone-900">{s.reminders_sent_total}</div>
+            <div className="text-[11px] text-stone-500">Toplam gönderilen hatırlatma</div>
+          </div>
+        </div>
+        <button onClick={runAll} disabled={!!busy} data-testid="reminders-run-btn"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold disabled:opacity-50">
+          <Mail className="w-4 h-4" /> Hatırlatmaları şimdi çalıştır
+        </button>
+      </div>
+      <p className="text-xs text-stone-500">Bot her gün 07:00'da otomatik çalışır. Kademeler: <b>L1</b> 1-7 gün, <b>L2</b> 8-21 gün, <b>L3</b> 22+ gün (yönetici uyarısı). Her seviye bir kez gönderilir.</p>
+
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-stone-100 text-sm font-semibold text-stone-800">Vadesi geçmiş faturalar</div>
+        {data.overdue_invoices.length === 0 ? (
+          <div className="p-6 text-sm text-emerald-600" data-testid="reminders-none">🎉 Vadesi geçmiş fatura yok.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead><tr className="text-[11px] uppercase text-stone-400 border-b border-stone-100">
+              <th className="text-left px-4 py-2">Fatura</th><th className="text-left px-2 py-2">Firma</th>
+              <th className="text-right px-2 py-2">Bakiye</th><th className="text-left px-2 py-2">Vade</th>
+              <th className="text-left px-2 py-2">Gecikme</th><th className="text-right px-4 py-2">Aksiyon</th>
+            </tr></thead>
+            <tbody>
+              {data.overdue_invoices.map(o => (
+                <tr key={o.id} className="border-b border-stone-50 last:border-0" data-testid={`overdue-${o.id}`}>
+                  <td className="px-4 py-2 text-xs font-medium text-stone-800">{o.invoice_number}</td>
+                  <td className="px-2 py-2 text-xs text-stone-600">{o.company_name} {!o.company_email && <span className="text-rose-400">(e-posta yok)</span>}</td>
+                  <td className="px-2 py-2 text-right text-xs font-bold">{cur(o.balance)}</td>
+                  <td className="px-2 py-2 text-xs text-stone-500">{o.due_date}</td>
+                  <td className="px-2 py-2"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LV[o.level]}`}>L{o.level} · {o.days_overdue} gün</span></td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => sendOne(o.id)} disabled={!!busy} data-testid={`remind-send-${o.id}`}
+                      className="text-[11px] font-semibold text-white bg-stone-900 hover:bg-stone-700 rounded-lg px-2.5 py-1.5 disabled:opacity-50">
+                      Hatırlatma gönder
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="reminders-log">
+        <div className="px-4 py-2.5 border-b border-stone-100 text-sm font-semibold text-stone-800">Gönderim geçmişi</div>
+        {data.reminder_log.length === 0 ? (
+          <div className="p-6 text-sm text-stone-400">Henüz hatırlatma gönderilmedi.</div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead><tr className="text-[11px] uppercase text-stone-400 border-b border-stone-100">
+              <th className="text-left px-4 py-2">Zaman</th><th className="text-left px-2 py-2">Fatura</th>
+              <th className="text-left px-2 py-2">Firma</th><th className="text-left px-2 py-2">Seviye</th>
+              <th className="text-right px-2 py-2">Bakiye</th><th className="text-left px-4 py-2">E-posta</th>
+            </tr></thead>
+            <tbody>
+              {data.reminder_log.map(l => (
+                <tr key={l.id} className="border-b border-stone-50 last:border-0">
+                  <td className="px-4 py-2 text-xs text-stone-500">{new Date(l.created_at).toLocaleString("tr-TR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                  <td className="px-2 py-2 text-xs font-medium">{l.invoice_number}</td>
+                  <td className="px-2 py-2 text-xs text-stone-600">{l.company_name}</td>
+                  <td className="px-2 py-2"><span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${LV[l.level]}`}>L{l.level}</span>{l.manual && <span className="text-[10px] text-stone-400 ml-1">manuel</span>}</td>
+                  <td className="px-2 py-2 text-right text-xs">{cur(l.balance)}</td>
+                  <td className="px-4 py-2 text-xs">{l.email_status === "mock" ? <span className="text-amber-600">mock</span> : l.email_status === "sent" ? <span className="text-emerald-600">gönderildi ✓</span> : <span className="text-stone-400">{l.email_status}</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
   );
 };
 

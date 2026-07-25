@@ -73,7 +73,7 @@ import {
   NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel,
   RoomQRPanel, TaxPresetsPanel, WalkInPanel, NoShowPanel, GuestPrefsPanel,
   CleaningChecklistsPanel, AttributionPanel, MewsUniversityPanel, ScheduledReportsPanel, CustomDashboardBuilder, GroupRoomingImportPanel, OpsQuickActionsPanel,
-  TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, MarketplacePanel, MultiPropertyRollupPanel,
+  TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, VccPanel, MarketplacePanel, MultiPropertyRollupPanel,
   CurrencyPanel, AgentsB2BPanel, SecurityOwnerPanel, PreAuthPanel, ChargebackPanel,
   WebPushPanel, PmsCrsSyncPanel, PmsProPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
   ABTestPanel, PreArrivalDripPanel, MenuEngineeringPanel, SRVoucherPanel, FolioSplitPanel,
@@ -104,6 +104,7 @@ import { buildMenuSections } from "./navigation/menuSections";
 import { SIDEBAR_PERM_MAP } from "./navigation/permMap";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
+import SpacesPublicPage from "./SpacesPublicPage";
 import GuestSurveyPage from "./GuestSurveyPage";
 import UpsellOfferPage from "./UpsellOfferPage";
 import GuestRegistrationPage from "./GuestRegistrationPage";
@@ -2160,6 +2161,10 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <CityLedgerPanel user={user} />
         )}
 
+        {activeView === "vcc-automation" && (
+          <VccPanel propertyId={activePropertyId || "all"} />
+        )}
+
         {/* Tax Configuration */}
         {activeView === "tax-config" && (
           <TaxConfigPanel propertyId={activePropertyId} user={user} />
@@ -2455,6 +2460,9 @@ function App() {
   }
   if (window.location.pathname === "/book") {
     return <BookingEngine />;
+  }
+  if (window.location.pathname === "/book-space" || window.location.pathname.startsWith("/book-space/")) {
+    return <SpacesPublicPage />;
   }
   if (window.location.pathname === "/review") {
     return <ReviewCollectionPage />;

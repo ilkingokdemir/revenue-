@@ -71,6 +71,16 @@ export default function SpacesPanel({ propertyId, hotelName = "" }) {
           <p className="text-sm text-stone-400 mt-1">{hotelName ? `${hotelName} · ` : ""}Parking, EV chargers, meeting rooms, bikes, lockers — all bookable.</p>
         </div>
         <div className="flex gap-2">
+          <button data-testid="spaces-public-link-btn"
+            onClick={() => {
+              const url = `${window.location.origin}/book-space/${propertyId === "all" ? "" : propertyId}`;
+              navigator.clipboard?.writeText(url);
+              toast.success("Public rezervasyon linki kopyalandı: " + url);
+              window.open(url, "_blank");
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-200 text-sm">
+            <Calendar className="w-4 h-4" /> Public rezervasyon sayfası
+          </button>
           <button data-testid="spaces-refresh-btn" onClick={load} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-sm text-stone-100 border border-stone-700">
             <RefreshCw className="w-4 h-4" /> Refresh
           </button>

@@ -103,6 +103,16 @@ JOB_REGISTRY = {
             {"key": "threshold_pct", "label": "Fark eşiği", "type": "number", "min": 5, "max": 30, "default": 10, "suffix": "%"},
         ],
     },
+    "vcc_auto_charge": {
+        "label": "VCC Otomatik Tahsilat", "category": "finance",
+        "description": "OTA rezervasyonlarındaki sanal kartları (Booking.com/Expedia VCC) tespit eder ve aktivasyon gününde otomatik tahsil eder. Başarısız/vadesi geçen kartlar için uyarı üretir.",
+        "default_cron": (6, 0), "default_enabled": True, "params": [],
+    },
+    "invoice_reminders": {
+        "label": "Fatura Hatırlatma Botu", "category": "finance",
+        "description": "Vadesi geçen city-ledger faturalarına kademeli (7/21/22+ gün) ödeme linkli hatırlatma e-postası gönderir. 22+ günde yöneticiye kritik uyarı düşer.",
+        "default_cron": (7, 0), "default_enabled": True, "params": [],
+    },
     "overbooking_auto_move": {
         "label": "Overbooking Otomatik Kaydırma", "category": "distribution",
         "description": "OTA'dan gelen rezervasyon dolu odaya düşerse misafiri ANINDA aynı tip boş odaya taşır ve resepsiyonu bilgilendirir (farklı oda tipine asla taşımaz). Gece süpürmesi açık kalan çakışmaları da dener.",
@@ -129,6 +139,7 @@ CATEGORY_META = {
     "risk": "Risk & Güvence",
     "reporting": "Raporlama",
     "distribution": "Dağıtım & OTA",
+    "finance": "Finans & Tahsilat",
 }
 
 

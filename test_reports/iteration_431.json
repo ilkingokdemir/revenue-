@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 431 — Mews-parity 4 features (Public Spaces engine, VCC automation, Invoice reminders, Kiosk ID capture/dispatch). Backend: 15/15 pytest passed. Frontend: verified /book-space full flow (booking confirmed £100 for 2h Executive Toplantı Odası), VCC panel via ⌘K palette (4 KPIs, 17 rows, 13 charge buttons), City Ledger Reminders tab (all KPIs+run+log+3 send buttons), Kiosk welcome page renders. Found & fixed one critical bug: /api/automation/settings returned 400 because CATEGORY_META was missing 'finance' label used by new vcc_auto_charge & invoice_reminders jobs — the entire automation-settings endpoint was broken.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/invoice-reminders", "issue": "Response returns level as integer (1/2/3) but review spec/docs say 'L1/L2/L3'. UI formats it correctly, so it is only a doc/spec inconsistency."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration431_mews_parity_4.py",
+    "/app/test_reports/pytest/iter431.xml"
+  ],
+  "action_items": [
+    "None blocking. Confirm 'Finans & Tahsilat' label wording for CATEGORY_META['finance'] is acceptable (testing agent applied minimal Turkish label to unblock /api/automation/settings).",
+    "Optional: standardise invoice-reminder 'level' field to string 'L1/L2/L3' if the public API spec is authoritative (backend currently returns int)."
+  ],
+  "critical_code_review_comments": [
+    "BUG FIXED: routes/platform_ext/automation_settings.py — CATEGORY_META dict did not contain a 'finance' key even though JOB_REGISTRY.vcc_auto_charge and .invoice_reminders declared category='finance'. Line 193 `CATEGORY_META[meta['category']]` raised KeyError which the global handler surfaced as 400 'Eksik alan: finance', breaking the entire GET /api/automation/settings response (all automation UI panels). Added 'finance': 'Finans & Tahsilat'.",
+    "Global KeyError → 400 exception handler in server.py masks the actual location of missing-key bugs. Consider logging the traceback so future occurrences are diagnosable.",
+    "spaces.py public_book endpoint has no rate-limit / captcha — anonymous callers can spam bookings; consider IP throttle since prefix 'QA' is only convention.",
+    "_book_space uses status != cancelled comparison with string range on ISO datetimes; correct here but relies on ISO alphabetic ordering — safe as long as all timestamps are ISO 8601 with same tz."
+  ],
+  "updated_files": [
+    "/app/backend/routes/platform_ext/automation_settings.py (added finance category label)",
+    "/app/backend/tests/test_iteration431_mews_parity_4.py (new pytest suite)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% smoke-tested surfaces"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created QA_ prefixed public space bookings (Executive Toplantı Odası 2027-01-01 14:00-16:00, plus 2 meeting/hourly slots in randomised future dates). All isolated behind guest_name prefix 'QA_' as instructed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend hot-reload watches /app/backend/tests/ — dropping a large test file can hang server for ~1-2 min while it re-imports; if API becomes unresponsive after test edits, `sudo supervisorctl restart backend`. The /api/automation/settings endpoint failed hard before this iteration's fix due to missing CATEGORY_META['finance']; any future job registered with a new category MUST also add a CATEGORY_META entry.",
+  "rca of the issue": "Root cause: developer added two new jobs with category='finance' in JOB_REGISTRY but forgot to extend CATEGORY_META. GET /automation/settings iterates JOB_REGISTRY and looks up CATEGORY_META[category] → KeyError. Global KeyError handler converts to HTTP 400 'Eksik alan: finance'. Reproduction: `curl -H \"Authorization: Bearer <admin_token>\" /api/automation/settings` returns 400. Mitigation applied: added 'finance': 'Finans & Tahsilat' to CATEGORY_META."
+}

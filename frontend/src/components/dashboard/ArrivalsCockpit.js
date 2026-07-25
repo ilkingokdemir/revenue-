@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Search, RefreshCw, X, QrCode, Key, CheckCircle2, Circle, Send,
   UserCheck, CreditCard, ShieldCheck, Sparkles, Calendar, Clock,
-  Copy, Mail, MessageSquare, BedDouble, AlertTriangle, Ban,
+  Copy, Mail, MessageSquare, BedDouble, AlertTriangle, Ban, Monitor,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -55,6 +55,15 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
     const t = setTimeout(load, q ? 250 : 0);
     return () => clearTimeout(t);
   }, [load]);
+
+  const sendToKiosk = async (a) => {
+    setBusy(a.booking_id);
+    try {
+      await axios.post(`${API}/guest-journey/kiosk-dispatch`, { booking_id: a.booking_id });
+      toast.success(`${a.guest_name} kiosk'a gönderildi — misafir kioskta adıyla karşılanacak`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Kiosk'a gönderilemedi"); }
+    finally { setBusy(""); }
+  };
 
   const sendRegistration = async (bookingId) => {
     setBusy(bookingId);
@@ -256,6 +265,11 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => sendToKiosk(a)} disabled={busy === a.booking_id}
+                        className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-600 border border-transparent hover:border-indigo-200"
+                        title="Kiosk'a gönder" data-testid={`kiosk-send-${a.booking_id}`}>
+                        <Monitor className="w-4 h-4" />
+                      </button>
                       {!a.progress.link_sent ? (
                         <Button size="sm" variant="outline" disabled={!canAct || busy === a.booking_id} onClick={() => sendRegistration(a.booking_id)} data-testid={`send-${a.booking_id}`}>
                           <Send className="w-3 h-3 mr-1" />Send Link

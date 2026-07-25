@@ -301,6 +301,7 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Payments" },
         { id: "payments", icon: Lightning, name: t("nav.payments"), testId: "payments-btn" },
         { id: "preauth", icon: CreditCard, name: "Pre-auth holds", testId: "preauth-btn" },
+        { id: "vcc-automation", icon: CreditCard, name: "VCC otomatik tahsilat", testId: "vcc-automation-btn" },
         { id: "chargeback", icon: Scales, name: "Chargebacks", testId: "chargeback-btn" },
         { id: "card-vault", icon: CreditCard, name: "Card vault", testId: "card-vault-btn" },
 

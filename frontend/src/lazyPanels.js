@@ -94,6 +94,7 @@ export const TimeSlotsPanel = L(() => import("./components/dashboard/TimeSlotsPa
 export const StaffOpsPanel = L(() => import("./components/dashboard/StaffOpsPanel"));
 export const RevenueProtectionPanel = L(() => import("./components/dashboard/RevenueProtectionPanel"));
 export const SpacesPanel = L(() => import("./components/dashboard/SpacesPanel"));
+export const VccPanel = L(() => import("./components/dashboard/VccPanel"));
 export const MarketplacePanel = L(() => import("./components/dashboard/MarketplacePanel"));
 export const MultiPropertyRollupPanel = L(() => import("./components/dashboard/MultiPropertyRollupPanel"));
 export const CurrencyPanel = L(() => import("./components/dashboard/CurrencyPanel"));

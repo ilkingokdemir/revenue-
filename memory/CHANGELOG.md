@@ -1914,3 +1914,10 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
 - E2E: dolu Superior 02'ye guest_email'li inbound → Superior 01'e taşındı, email=mock, notes alanı doğrulandı,
   UI kolonu göründü. Test verileri temizlendi.
 - NOT: RESEND_API_KEY placeholder olduğu için e-posta MOCK modda; gerçek anahtar gelince otomatik canlıya döner.
+
+## Iter 438 (2026-07-25) — Otomatik Taşımada Misafir E-postası KAPATILDI (kullanıcı isteği)
+- KULLANICI: "otomatik mail gitmesin oda değişikliğinde müşteriye."
+- auto_relocate_booking artık misafire e-posta GÖNDERMEZ (guest_email_status="disabled").
+  Check-in notu + ekip in-app bildirimi aynen devam ediyor.
+- UI: "Misafir bilgilendirme" kolonu "E-posta kapalı · Check-in notu ✓" gösterir.
+- E2E: yeni taşımada e-posta denemesi yok, not eklendi. Test verisi temizlendi.

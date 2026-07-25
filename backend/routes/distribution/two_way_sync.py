@@ -222,7 +222,7 @@ async def auto_relocate_booking(db, booking: Dict) -> Optional[Dict]:
         "auto_relocated": True, "auto_relocated_at": _now(),
         "auto_relocated_from": old_room,
         "updated_at": _now()}})
-    email_status = await _send_relocation_email(db, booking, old_room, target["name"])
+    email_status = "disabled"
     reloc = {"id": str(uuid.uuid4()), "property_id": pid,
              "booking_id": booking["id"], "guest_name": booking.get("guest_name"),
              "channel": booking.get("channel") or booking.get("source"),

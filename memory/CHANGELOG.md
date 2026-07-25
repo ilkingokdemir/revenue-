@@ -1858,3 +1858,19 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
   divider öğeleri filtrelendi → "same key" konsol uyarıları 0; ChannelHealthPanel/PushHistory key'leri kompozit.
 - TEST: testing_agent iteration_430.json — backend 8/8 PASS, frontend akışlar PASS; bulgular giderildi.
 - NOT: OTA push MOCK (%90 başarı); tek bağlı kanal booking_com → booking_com kaynaklı inbound'da ripple hedefi 0 (doğru).
+
+## Iter 434 (2026-07-25) — Takvimde Overbooking Uyarısı + Drag-Drop Çözüm Entegrasyonu TAMAMLANDI
+- KULLANICI İSTEĞİ: "overbooking olduğunda manuel drag-drop, notification ve takvim gününde
+  Cloudbeds/eviivo/Mews tarzı warning olsun."
+- Mevcut envanter: BookingTimeline'da drag-drop reassign + overbooking banner ZATEN vardı → mükerrer yapılmadı.
+- YENİ (BookingTimeline.js):
+  - Gün bazlı overbooking haritası: tarih başlığı hücreleri kırmızı zemin + yanıp sönen üçgen +
+    "N çakışma" rozeti (overbooked-day-{date} testid), tooltip ile detay.
+  - Banner'a etkilenen tarih chipleri eklendi (overbooked-dates-chips).
+  - Yükleme anında bir kez toast.error bildirimi ("Overbooking uyarısı: N oda çakışması...").
+  - Drag-drop başarı toast'ına "N overbooking çakışması çözüldü ✓" eklendi.
+- Backend (booking_timeline.py reassign): oda değişince room_number da güncellenir + o rezervasyonu
+  içeren açık sync_conflicts kayıtları otomatik resolved yapılır (resolution_note: taşındığı oda),
+  yanıtta conflicts_resolved döner → İki Yönlü Sync sekmesindeki açık çakışma sayacı düşer.
+- E2E: kontrollü çakışma senaryosu ile doğrulandı — banner+toast+4 gün işareti göründü; bar sürüklenince
+  "2 çakışma"→"1 çakışma" ve banner 3→2; curl reassign conflicts_resolved:1. Test verileri temizlendi.

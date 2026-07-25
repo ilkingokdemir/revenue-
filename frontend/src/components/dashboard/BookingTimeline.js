@@ -246,6 +246,20 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [collisionCluster, setCollisionCluster] = useState(null); // { room, cluster } for "+N more" pill modal
   const [quickPay, setQuickPay] = useState(null); // { booking } when the flashing balance chip is clicked
   const scrollRef = useRef(null);
+  const obNotifiedRef = useRef(false);
+
+  useEffect(() => {
+    if (!data || obNotifiedRef.current) return;
+    let cnt = 0;
+    data.groups.forEach(g => g.rooms.forEach(r => {
+      const act = r.bookings.filter(b => !["cancelled", "checked_out", "no_show"].includes(b.status));
+      cnt += act.filter((b1, i) => act.slice(i + 1).some(b2 => b1.check_in < b2.check_out && b2.check_in < b1.check_out)).length;
+    }));
+    if (cnt > 0) {
+      obNotifiedRef.current = true;
+      toast.error(`Overbooking uyarısı: ${cnt} oda çakışması var — takvimde kırmızı işaretli günlere bakın ve rezervasyonu sürükleyip başka odaya taşıyın.`, { duration: 8000 });
+    }
+  }, [data]);
 
   const pid = activePropertyId || "all";
 
@@ -530,7 +544,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
       if (res.error) {
         toast.error(res.error === "Room conflict" ? `Conflict with ${res.conflict_guest} (${res.conflict_dates})` : res.error);
       } else {
-        toast.success(`${dragBooking.guest_name} moved to ${res.new_room_name}`);
+        toast.success(`${dragBooking.guest_name} moved to ${res.new_room_name}${res.conflicts_resolved > 0 ? ` — ${res.conflicts_resolved} overbooking çakışması çözüldü ✓` : ""}`);
         load();
       }
     } catch { toast.error("Failed to reassign room"); }
@@ -623,6 +637,17 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
       return a + overlap;
     }, 0);
   }, 0);
+
+  // Per-day overbooking map: date -> number of rooms with >1 active booking that night
+  const overbookedDates = {};
+  date_columns.forEach(col => {
+    let cnt = 0;
+    groups.forEach(g => g.rooms.forEach(r => {
+      const active = r.bookings.filter(b => !["cancelled", "checked_out", "no_show"].includes(b.status) && b.check_in <= col.date && b.check_out > col.date);
+      if (active.length > 1) cnt += 1;
+    }));
+    if (cnt > 0) overbookedDates[col.date] = cnt;
+  });
 
   return (
     <div className="h-full flex flex-col" data-testid="booking-timeline">
@@ -737,6 +762,11 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
           <AlertTriangle className="w-4 h-4 text-rose-600 animate-pulse" />
           <span className="text-xs font-bold text-rose-800">OVERBOOKING ALERT</span>
           <span className="text-[11px] text-rose-700">{overbookingCount} same-room conflict{overbookingCount === 1 ? "" : "s"} detected — resolve by dragging bookings to other rooms.</span>
+          {Object.keys(overbookedDates).length > 0 && (
+            <span className="text-[10px] font-semibold text-rose-800 bg-rose-200/70 rounded-full px-2 py-0.5 ml-1" data-testid="overbooked-dates-chips">
+              {Object.keys(overbookedDates).sort().slice(0, 6).map(d => d.slice(5)).join(" · ")}{Object.keys(overbookedDates).length > 6 ? " …" : ""}
+            </span>
+          )}
         </div>
       )}
 
@@ -881,13 +911,25 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
             </div>
             {date_columns.map((col, i) => {
               const occ = daily_occupancy[i];
+              const obCnt = overbookedDates[col.date];
               return (
-                <div key={col.date} className={`flex-shrink-0 border-r border-stone-300 text-center ${col.is_today ? "bg-blue-50" : col.is_weekend ? "bg-stone-50" : "bg-white"}`} style={{ width: COL_W }}>
+                <div key={col.date}
+                  title={obCnt ? `⚠ Overbooking! ${obCnt} odada çakışan rezervasyon var (${col.date})` : undefined}
+                  data-testid={obCnt ? `overbooked-day-${col.date}` : undefined}
+                  className={`flex-shrink-0 border-r text-center relative ${obCnt ? "bg-rose-100 border-rose-300 border-b-2 border-b-rose-500" : `border-stone-300 ${col.is_today ? "bg-blue-50" : col.is_weekend ? "bg-stone-50" : "bg-white"}`}`}
+                  style={{ width: COL_W }}>
                   <div className="h-12 flex flex-col items-center justify-center">
-                    <span className="text-[9px] text-stone-400 uppercase">{col.dow}</span>
-                    <span className={`text-sm ${col.is_today ? "text-red-600 font-black" : "font-bold text-stone-700"}`}>{col.day}/{col.month}</span>
-                    <span className={`text-[9px] ${getOccColor(occ?.occupancy_pct || 0)}`}>{occ?.occupancy_pct || 0}%</span>
+                    <span className={`text-[9px] uppercase ${obCnt ? "text-rose-500 font-bold" : "text-stone-400"}`}>{col.dow}</span>
+                    <span className={`text-sm ${obCnt ? "text-rose-700 font-black" : col.is_today ? "text-red-600 font-black" : "font-bold text-stone-700"}`}>{col.day}/{col.month}</span>
+                    {obCnt ? (
+                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-rose-600">
+                        <AlertTriangle className="w-2.5 h-2.5 animate-pulse" />{obCnt} çakışma
+                      </span>
+                    ) : (
+                      <span className={`text-[9px] ${getOccColor(occ?.occupancy_pct || 0)}`}>{occ?.occupancy_pct || 0}%</span>
+                    )}
                   </div>
+                  {obCnt > 0 && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" />}
                 </div>
               );
             })}

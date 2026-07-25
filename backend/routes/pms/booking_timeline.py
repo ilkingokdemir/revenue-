@@ -520,10 +520,20 @@ def create_booking_timeline_router(db, require_roles):
 
         await db.bookings.update_one({"id": booking_id}, {"$set": {
             "room_id": new_room_id,
+            "room_number": new_room.get("name", ""),
             "room_type_id": new_room_type_id,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "updated_by": current_user.get("name", ""),
         }})
+
+        # Auto-resolve any open overbooking conflicts involving this booking
+        res = await db.sync_conflicts.update_many(
+            {"status": "open",
+             "$or": [{"booking_a.id": booking_id}, {"booking_b.id": booking_id}]},
+            {"$set": {"status": "resolved",
+                      "resolved_at": datetime.now(timezone.utc).isoformat(),
+                      "resolved_by": f"drag-drop:{current_user.get('name', '')}",
+                      "resolution_note": f"Rezervasyon {new_room.get('name', '')} odasına taşındı"}})
 
         return {
             "booking_id": booking_id,
@@ -531,6 +541,7 @@ def create_booking_timeline_router(db, require_roles):
             "new_room_id": new_room_id,
             "new_room_name": new_room.get("name", ""),
             "status": "reassigned",
+            "conflicts_resolved": res.modified_count,
         }
 
     @router.post("/bookings/timeline/{property_id}/bulk-action")

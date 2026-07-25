@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   Search, RefreshCw, X, QrCode, Key, CheckCircle2, Circle, Send,
   UserCheck, CreditCard, ShieldCheck, Sparkles, Calendar, Clock,
-  Copy, Mail, MessageSquare, BedDouble, AlertTriangle, Ban, Monitor,
+  Copy, Mail, MessageSquare, BedDouble, AlertTriangle, Ban, Monitor, Lightbulb,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -36,6 +36,7 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
   const [qrFor, setQrFor] = useState(null);
   const [keyFor, setKeyFor] = useState(null);
   const [busy, setBusy] = useState(null); // booking id being mutated
+  const [tips, setTips] = useState(null); // { guest, loading, items, model }
 
   const pid = propertyId || "all";
   const canAct = user?.role === "admin" || user?.role === "manager" || user?.role === "receptionist";
@@ -63,6 +64,23 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
       toast.success(`${a.guest_name} kiosk'a gönderildi — misafir kioskta adıyla karşılanacak`);
     } catch (e) { toast.error(e.response?.data?.detail || "Kiosk'a gönderilemedi"); }
     finally { setBusy(""); }
+  };
+
+  const loadSmartTips = async (a) => {
+    setTips({ guest: a.guest_name, loading: true, items: [] });
+    try {
+      const names = (a.guest_name || "").split(" ");
+      const r = await axios.post(`${API}/mews-ai/smart-tips`, {
+        profile: {
+          first_name: names[0] || "", last_name: names.slice(1).join(" "),
+          notes: `Kanal: ${a.source || "-"} · ${a.nights || 1} gece · Oda: ${a.room_number || "atanmadı"} · Check-in: ${a.check_in || ""} · ETA: ${a.eta || "-"}`,
+        },
+      });
+      setTips({ guest: a.guest_name, loading: false, items: r.data.tips || [], model: r.data.model });
+    } catch {
+      toast.error("Smart Tips alınamadı");
+      setTips(null);
+    }
   };
 
   const sendRegistration = async (bookingId) => {
@@ -265,6 +283,11 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => loadSmartTips(a)} disabled={busy === a.booking_id}
+                        className="p-1.5 hover:bg-amber-50 rounded-lg text-amber-500 border border-transparent hover:border-amber-200"
+                        title="AI Smart Tips" data-testid={`smart-tips-${a.booking_id}`}>
+                        <Lightbulb className="w-4 h-4" />
+                      </button>
                       <button onClick={() => sendToKiosk(a)} disabled={busy === a.booking_id}
                         className="p-1.5 hover:bg-indigo-50 rounded-lg text-indigo-600 border border-transparent hover:border-indigo-200"
                         title="Kiosk'a gönder" data-testid={`kiosk-send-${a.booking_id}`}>
@@ -361,6 +384,37 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
                 <Ban className="w-3 h-3 mr-1" />Revoke
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+      {tips && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setTips(null)} data-testid="smart-tips-modal">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Lightbulb className="w-4 h-4 text-amber-500" />
+                <h3 className="text-sm font-bold text-stone-900">Smart Tips — {tips.guest}</h3>
+              </div>
+              <button onClick={() => setTips(null)} className="p-1 hover:bg-stone-100 rounded-lg" data-testid="smart-tips-close"><X className="w-4 h-4" /></button>
+            </div>
+            {tips.loading ? (
+              <div className="py-8 text-center text-sm text-stone-400" data-testid="smart-tips-loading">AI önerileri hazırlanıyor…</div>
+            ) : (
+              <div className="space-y-2.5">
+                {tips.items.map((t, i) => (
+                  <div key={i} className="flex gap-3 bg-amber-50/60 border border-amber-100 rounded-xl p-3" data-testid={`smart-tip-${i}`}>
+                    <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center text-sm shrink-0">
+                      {{ star: "⭐", gift: "🎁", leaf: "🌿", alert: "⚠️", moon: "🌙", briefcase: "💼", heart: "💛", coffee: "☕", wine: "🍷", utensils: "🍽️" }[t.icon] || "💡"}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-stone-800">{t.title}</div>
+                      <div className="text-[11px] text-stone-600 mt-0.5">{t.action}</div>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[10px] text-stone-400 text-right">{tips.model === "fallback" ? "kural tabanlı" : `AI · ${tips.model}`}</p>
+              </div>
+            )}
           </div>
         </div>
       )}

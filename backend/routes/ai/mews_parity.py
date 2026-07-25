@@ -128,7 +128,7 @@ def create_mews_parity_router(db, require_roles):
 
     @router.post("/smart-tips")
     async def smart_tips(payload: dict,
-                          current_user: dict = Depends(require_roles("admin", "manager"))):
+                          current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
         """Return personalized service tips for a guest.
         Body: {guest_id: str} OR {profile: {...inline...}}
         """

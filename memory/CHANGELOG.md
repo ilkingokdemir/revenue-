@@ -1950,3 +1950,18 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - testing_agent iteration_431: backend 15/15 + tüm frontend akışları PASS.
 - Testing agent CATEGORY_META'ya eksik "finance" etiketini ekledi (automation/settings 400 veriyordu) — doğrulandı.
 - Test verileri (QA/UI Test space bookings) temizlendi.
+
+## Iter 443 (2026-07-25) — Mews Kalanları: Smart Tips Arrivals'a Gömüldü + Spaces Stripe Ön Ödeme TAMAMLANDI
+### AI Smart Tips @ Arrivals Cockpit
+- ArrivalsCockpit: her varış satırına ampul butonu (smart-tips-{booking_id}) → modal (smart-tips-modal)
+  gpt-4o-mini ile misafire özel 5 Türkçe servis önerisi (inline profile: kanal/gece/oda/ETA).
+- mews_parity.py smart-tips endpoint'ine "receptionist" rolü eklendi.
+### Public Spaces Stripe Ön Ödeme
+- spaces.py: POST /api/public/spaces/pay/{sb_id} → emergentintegrations StripeCheckout session
+  (payment_transactions type=space_booking, success/cancel /book-space'e döner);
+  GET /api/public/spaces/pay-status/{sb_id}?session_id= → Stripe durum kontrolü, paid'de booking+tx işaretlenir.
+- SpacesPublicPage: onay ekranında "💳 Kartla şimdi öde" (public-pay-now-btn) → Stripe'a yönlendirme;
+  dönüşte ?payment=success&sb=&session_id= poll (5 deneme) → "✓ Ödeme alındı" (public-paid-badge).
+- E2E: rezervasyon → pay init (gerçek checkout.stripe.com test session) → UI yönlendirme doğrulandı.
+- FIX: ArrivalsCockpit'te eksik Lightbulb import'u (ekran hatası veriyordu) düzeltildi.
+- Test verileri (QA*) temizlendi. NOT: Stripe TEST anahtarı ile çalışıyor.

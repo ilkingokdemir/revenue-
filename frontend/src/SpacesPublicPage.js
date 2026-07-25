@@ -30,6 +30,40 @@ export default function SpacesPublicPage() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null); // confirmed booking
   const [error, setError] = useState("");
+  const [payState, setPayState] = useState(""); // "", "redirecting", "paid", "checking"
+
+  // Handle Stripe return (?payment=success&sb=...&session_id=...)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success" && params.get("sb")) {
+      setPayState("checking");
+      const check = async (attempt = 0) => {
+        try {
+          const r = await axios.get(`${API}/api/public/spaces/pay-status/${params.get("sb")}?session_id=${params.get("session_id") || ""}`);
+          if (r.data.status === "paid") {
+            setDone(r.data.booking); setSelected(null); setPayState("paid");
+            window.history.replaceState({}, "", window.location.pathname);
+            return;
+          }
+        } catch { /* ignore */ }
+        if (attempt < 5) setTimeout(() => check(attempt + 1), 2000);
+        else setPayState("");
+      };
+      check();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const payNow = async () => {
+    if (!done) return;
+    setPayState("redirecting");
+    try {
+      const r = await axios.post(`${API}/api/public/spaces/pay/${done.id}`);
+      window.location.href = r.data.url;
+    } catch (e) {
+      setPayState("");
+      setError(e.response?.data?.detail || "Ödeme başlatılamadı");
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -110,10 +144,23 @@ export default function SpacesPublicPage() {
             <p className="text-sm text-stone-600 mt-2">
               <b>{done.space_name}</b> · {done.start.slice(0, 10)} {done.start.slice(11, 16)}–{done.end.slice(11, 16)}
             </p>
-            <p className="text-2xl font-black text-stone-900 mt-2">{currency}{done.price}</p>
-            <p className="text-xs text-stone-400 mt-1">Referans: {done.id.slice(0, 8).toUpperCase()} · Ödeme girişte alınır.</p>
-            <button onClick={() => { setDone(null); setSelected(null); }} data-testid="public-book-another"
-              className="mt-5 px-5 py-2.5 text-sm font-semibold text-white bg-stone-900 rounded-xl hover:bg-stone-700">
+            <p className="text-2xl font-black text-stone-900 mt-2">{currency || "£"}{done.price}</p>
+            {payState === "paid" || done.payment_status === "paid" ? (
+              <p className="text-sm font-bold text-emerald-600 mt-2" data-testid="public-paid-badge">✓ Ödeme alındı — her şey hazır!</p>
+            ) : payState === "checking" ? (
+              <p className="text-xs text-stone-400 mt-1" data-testid="public-pay-checking">Ödeme doğrulanıyor…</p>
+            ) : (
+              <>
+                <p className="text-xs text-stone-400 mt-1">Referans: {done.id.slice(0, 8).toUpperCase()} · Ödemeyi şimdi yapabilir veya girişte ödeyebilirsiniz.</p>
+                <button onClick={payNow} disabled={payState === "redirecting"} data-testid="public-pay-now-btn"
+                  className="mt-4 w-full px-5 py-3 text-sm font-bold text-white bg-indigo-600 rounded-xl hover:bg-indigo-700 disabled:opacity-50">
+                  {payState === "redirecting" ? "Yönlendiriliyor…" : "💳 Kartla şimdi öde"}
+                </button>
+                {error && <p className="text-xs text-rose-500 mt-2">{error}</p>}
+              </>
+            )}
+            <button onClick={() => { setDone(null); setSelected(null); setPayState(""); }} data-testid="public-book-another"
+              className="mt-4 px-5 py-2.5 text-sm font-semibold text-stone-700 border border-stone-300 rounded-xl hover:bg-stone-50">
               Yeni rezervasyon yap
             </button>
           </div>

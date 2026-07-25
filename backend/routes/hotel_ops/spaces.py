@@ -14,10 +14,13 @@ Endpoints:
   GET  /api/space-bookings/{property_id}                   — list bookings
   POST /api/space-bookings/{id}/cancel
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from datetime import datetime, timezone, timedelta, date
 from typing import Dict, List, Optional, Any
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 SPACE_KINDS = ["parking", "ev_charger", "meeting_room", "bicycle", "locker", "cabana", "kayak", "other"]
@@ -418,5 +421,75 @@ def create_spaces_router(db, require_roles):
             "suggestions": suggestions,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
+
+    @router.post("/public/spaces/pay/{sb_id}")
+    async def public_space_pay(sb_id: str, request: Request):
+        """Public: prepay a space booking via Stripe Checkout."""
+        import os
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+        sb = await db.space_bookings.find_one({"id": sb_id}, {"_id": 0})
+        if not sb:
+            raise HTTPException(404, "Rezervasyon bulunamadı")
+        if sb.get("payment_status") == "paid":
+            raise HTTPException(409, "Zaten ödendi")
+        if sb.get("status") == "cancelled":
+            raise HTTPException(410, "Rezervasyon iptal edilmiş")
+        amount = float(sb.get("price") or 0)
+        if amount <= 0:
+            raise HTTPException(400, "Ödenecek tutar yok")
+
+        stripe_api_key = os.environ.get("STRIPE_API_KEY", "")
+        host_url = str(request.base_url).rstrip("/")
+        base_url = os.environ.get("BASE_URL", os.environ.get("REACT_APP_BACKEND_URL", host_url))
+        stripe_checkout = StripeCheckout(api_key=stripe_api_key,
+                                         webhook_url=f"{host_url}/api/webhook/stripe")
+        checkout_req = CheckoutSessionRequest(
+            amount=amount,
+            currency=(sb.get("currency") or "GBP").lower(),
+            success_url=f"{base_url}/book-space?payment=success&sb={sb_id}&session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base_url}/book-space?payment=cancelled",
+            metadata={"type": "space_booking", "space_booking_id": sb_id,
+                      "space_name": sb.get("space_name", ""),
+                      "guest_name": sb.get("guest_name", ""),
+                      "property_id": sb.get("property_id", "")})
+        session = await stripe_checkout.create_checkout_session(checkout_req)
+        await db.payment_transactions.insert_one({
+            "id": str(uuid.uuid4()), "session_id": session.session_id,
+            "type": "space_booking", "reference_id": sb_id,
+            "property_id": sb.get("property_id", ""),
+            "amount": amount, "currency": sb.get("currency", "GBP"),
+            "guest_name": sb.get("guest_name", ""),
+            "payment_method": "stripe", "payment_status": "initiated",
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        await db.space_bookings.update_one({"id": sb_id}, {"$set": {"payment_status": "initiated"}})
+        return {"url": session.url, "session_id": session.session_id}
+
+    @router.get("/public/spaces/pay-status/{sb_id}")
+    async def public_space_pay_status(sb_id: str, session_id: str = "", request: Request = None):
+        import os
+        from emergentintegrations.payments.stripe.checkout import StripeCheckout
+        sb = await db.space_bookings.find_one({"id": sb_id}, {"_id": 0})
+        if not sb:
+            raise HTTPException(404, "Rezervasyon bulunamadı")
+        if sb.get("payment_status") == "paid":
+            return {"status": "paid", "booking": sb}
+        if session_id:
+            try:
+                host_url = str(request.base_url).rstrip("/") if request else ""
+                sc = StripeCheckout(api_key=os.environ.get("STRIPE_API_KEY", ""),
+                                    webhook_url=f"{host_url}/api/webhook/stripe")
+                st = await sc.get_checkout_status(session_id)
+                if st.payment_status == "paid":
+                    now = datetime.now(timezone.utc).isoformat()
+                    await db.space_bookings.update_one({"id": sb_id}, {"$set": {
+                        "payment_status": "paid", "paid_at": now}})
+                    await db.payment_transactions.update_one(
+                        {"session_id": session_id},
+                        {"$set": {"payment_status": "paid", "paid_at": now}})
+                    sb["payment_status"] = "paid"
+                    return {"status": "paid", "booking": sb}
+            except Exception as e:
+                logger.warning(f"space pay status check failed: {e}")
+        return {"status": sb.get("payment_status", "unpaid"), "booking": sb}
 
     return router

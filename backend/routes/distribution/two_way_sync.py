@@ -10,7 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timezone, timedelta, date
 from typing import Dict, Optional
 import uuid
+import os
 import logging
+
+try:
+    import resend
+except Exception:
+    resend = None
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +148,40 @@ async def _is_room_free(db, room_id: str, check_in: str, check_out: str, exclude
     return clash is None
 
 
+async def _send_relocation_email(db, booking: Dict, old_room: str, new_room: str) -> str:
+    to_email = (booking.get("guest_email") or "").strip()
+    if not to_email:
+        return "no_email"
+    prop = await db.properties.find_one({"id": booking.get("property_id")}, {"_id": 0, "name": 1})
+    hotel = (prop or {}).get("name") or "Otelimiz"
+    subject = f"{hotel} — Oda bilginiz güncellendi"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#292524;">
+      <h2 style="color:#0f766e;">Sayın {booking.get('guest_name', 'Misafirimiz')},</h2>
+      <p>{booking.get('check_in')} – {booking.get('check_out')} tarihli rezervasyonunuzla ilgili küçük bir güncelleme yapıldı:</p>
+      <div style="background:#f5f5f4;border-radius:12px;padding:16px 20px;margin:16px 0;">
+        <p style="margin:0;font-size:15px;">Odanız <b>aynı oda tipinde</b> başka bir odayla değiştirildi:</p>
+        <p style="margin:8px 0 0;font-size:18px;"><span style="color:#b91c1c;text-decoration:line-through;">{old_room}</span>
+        &nbsp;→&nbsp; <b style="color:#047857;">{new_room}</b></p>
+      </div>
+      <p>Konforunuzda hiçbir değişiklik olmayacak — oda tipiniz, fiyatınız ve tüm ayrıcalıklarınız aynen geçerli. Girişte resepsiyon ekibimiz sizi yeni odanıza yönlendirecektir.</p>
+      <p style="font-size:12px;color:#78716c;">Sorunuz olursa bu e-postayı yanıtlamanız yeterli. İyi konaklamalar dileriz!<br/>{hotel}</p>
+    </div>"""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not resend or not api_key or api_key.startswith("re_1234"):
+        logger.info(f"[MOCK EMAIL] Relocation notice to {to_email}: {old_room} -> {new_room}")
+        return "mock"
+    try:
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from": os.environ.get("RESEND_FROM", "MyHotelBox <onboarding@resend.dev>"),
+            "to": [to_email], "subject": subject, "html": html})
+        return "sent"
+    except Exception as e:
+        logger.warning(f"Relocation email failed: {e}")
+        return "failed"
+
+
 async def auto_relocate_booking(db, booking: Dict) -> Optional[Dict]:
     """Move a conflicting booking to a free room of the SAME room type only.
     Returns relocation info or None if no same-type room is available."""
@@ -173,17 +213,24 @@ async def auto_relocate_booking(db, booking: Dict) -> Optional[Dict]:
     if not target:
         return None
     old_room = booking.get("room_number") or booking.get("room_id")
+    note_line = f"[Otomatik Taşıma {_now()[:10]}] Overbooking önlendi: {old_room} → {target['name']} (aynı oda tipi). Check-in'de misafiri yeni odasına yönlendirin."
+    existing_notes = (booking.get("notes") or "").strip()
+    new_notes = (existing_notes + "\n" if existing_notes else "") + note_line
     await db.bookings.update_one({"id": booking["id"]}, {"$set": {
         "room_id": target["id"], "room_number": target["name"],
+        "notes": new_notes,
         "auto_relocated": True, "auto_relocated_at": _now(),
         "auto_relocated_from": old_room,
         "updated_at": _now()}})
+    email_status = await _send_relocation_email(db, booking, old_room, target["name"])
     reloc = {"id": str(uuid.uuid4()), "property_id": pid,
              "booking_id": booking["id"], "guest_name": booking.get("guest_name"),
              "channel": booking.get("channel") or booking.get("source"),
              "check_in": ci, "check_out": co,
              "from_room": old_room, "to_room": target["name"],
              "to_room_id": target["id"], "room_type_id": rt,
+             "guest_email_status": email_status,
+             "checkin_note_added": True,
              "created_at": _now()}
     await db.auto_relocations.insert_one(reloc)
     reloc.pop("_id", None)

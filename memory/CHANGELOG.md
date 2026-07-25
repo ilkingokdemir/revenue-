@@ -1902,3 +1902,15 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
 - E2E: dolu Superior 02'ye inbound rezervasyon → otomatik Superior 01'e taşındı (aynı tip twin);
   dolu Deluxe senaryosunda tüm aynı-tip odalar doluyken TAŞIMADI, çakışma açık kaldı + sweep no_same_type_room
   raporladı. UI KPI + tablo doğrulandı. Test verileri temizlendi.
+
+## Iter 437 (2026-07-25) — Otomatik Taşımada Misafir E-postası + Check-in Notu TAMAMLANDI
+- two_way_sync.py auto_relocate_booking():
+  - Rezervasyonun `notes` alanına "[Otomatik Taşıma] eski → yeni oda ... Check-in'de misafiri yeni odasına
+    yönlendirin" notu eklenir (takvimde StickyNote ikonu + detay panelinde görünür).
+  - Misafire Türkçe HTML bilgilendirme e-postası (Resend; anahtar placeholder ise MOCK loglanır):
+    eski oda üstü çizili → yeni oda, "aynı oda tipi, fiyat ve ayrıcalıklar aynen" mesajı.
+  - auto_relocations kaydına guest_email_status (sent/mock/no_email/failed) + checkin_note_added eklendi.
+- TwoWaySyncTab tablosuna "Misafir bilgilendirme" kolonu (e-posta durumu + Check-in notu ✓).
+- E2E: dolu Superior 02'ye guest_email'li inbound → Superior 01'e taşındı, email=mock, notes alanı doğrulandı,
+  UI kolonu göründü. Test verileri temizlendi.
+- NOT: RESEND_API_KEY placeholder olduğu için e-posta MOCK modda; gerçek anahtar gelince otomatik canlıya döner.

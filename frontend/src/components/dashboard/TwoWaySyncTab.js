@@ -134,6 +134,7 @@ export default function TwoWaySyncTab({ propertyId }) {
                 <th className="text-left px-2 py-2 font-medium">Kanal</th>
                 <th className="text-left px-2 py-2 font-medium">Tarih</th>
                 <th className="text-left px-4 py-2 font-medium">Taşıma</th>
+                <th className="text-left px-2 py-2 font-medium">Misafir bilgilendirme</th>
               </tr>
             </thead>
             <tbody>
@@ -147,6 +148,14 @@ export default function TwoWaySyncTab({ propertyId }) {
                     <span className="text-rose-600 line-through">{r.from_room}</span>
                     <span className="text-stone-400 mx-1.5">→</span>
                     <span className="font-bold text-emerald-700">{r.to_room}</span>
+                  </td>
+                  <td className="px-2 py-2 text-xs" data-testid={`email-status-${r.id}`}>
+                    {r.guest_email_status === "sent" ? <span className="text-emerald-600 font-medium">E-posta gönderildi ✓</span>
+                      : r.guest_email_status === "mock" ? <span className="text-amber-600">E-posta (mock)</span>
+                      : r.guest_email_status === "no_email" ? <span className="text-stone-400">E-posta yok</span>
+                      : r.guest_email_status === "failed" ? <span className="text-rose-500">E-posta başarısız</span>
+                      : <span className="text-stone-400">—</span>}
+                    {r.checkin_note_added && <span className="text-indigo-600 ml-1.5">· Check-in notu ✓</span>}
                   </td>
                 </tr>
               ))}

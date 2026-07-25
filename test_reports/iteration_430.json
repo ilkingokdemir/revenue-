@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 430/431 – Full backend + frontend regression of (1) 1-Click Price Push in Comp Radar and (2) Two-Way OTA Sync (ripple + conflict/resolve + inbound webhook e2e). Backend pytest: 8/8 PASS covering GET /comp-radar/all suggested_rate float, POST /comp-radar/apply happy path (ok, new_rate, channels_total>=1, deduped results, 409 on re-apply, push-history reflects new_rate), GET /two-way-sync/all summary shape (ripple_24h/ripple_total/conflicts_open/conflicts_total/channels), POST /two-way-sync/simulate ripple with booking_com in channels + ripple_total increments, force_conflict simulate + POST resolve/{id} success + 404 on re-resolve and non-existent, POST /ota-inbound/airbnb/reservation ripple.tasks_total>=1 + conflict_detected boolean, POST /ota-inbound/airbnb/cancellation cancelled:true + cancellation ripple event appears in /two-way-sync/all, plus regression on /channel-health/all, /push-history/all, /compset/all. Frontend Playwright: command palette navigation OK; Compset radar tab shows 'Önerilen' column + apply-push-btn rows; clicking apply opens apply-push-modal with confirm-old-rate + confirm-new-rate; confirm-push-btn triggers success and row switches to applied-badge. Channel-health twoway tab shows all KPI cards (kpi-ripple-24h/kpi-conflicts-open/kpi-channels) + ripple-timeline; simulate-inbound-btn fires (backend confirmed event created); simulate-conflict-btn creates a resolve-conflict-<id> button; clicking resolve makes the specific resolver disappear. channel-tab-health, channel-tab-history, compset-tab-list all still render.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "TwoWaySyncTab.ripple-timeline", "issue": "After clicking simulate-inbound-btn, the visible ripple-timeline child count did not increment in-place during the same session (observed 2->2 while backend correctly appended a new ripple_event). Likely missing refetch/refresh of GET /two-way-sync/all after simulate call OR the timeline renders a fixed slice (limit) that hides the newest without re-sort. Backend behavior is correct; only UI freshness needs a look.", "selector": "[data-testid=\"ripple-timeline\"]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global (visible on channel-health & push-history tabs)", "issues": ["Massive volume of React 'Encountered two children with the same key' console warnings emitted continuously — indicates a .map() somewhere using a non-unique key (likely PushHistoryTimeline or similar list rendering duplicate rows for the same key). Not visually broken but pollutes console and risks item duplication/omission."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration430_price_push_twoway.py",
+    "/app/test_reports/pytest/iter430.xml"
+  ],
+  "action_items": [
+    "TwoWaySyncTab: after simulate-inbound-btn (and simulate-conflict-btn) success, re-fetch /api/two-way-sync/all so ripple-timeline reflects the new event immediately (or optimistically prepend the returned event).",
+    "Locate the list rendering that produces duplicate React keys (search for .map( pattern in push-history / channel-health / comp-radar timelines) and switch key to a stable unique id (event.id or index composite)."
+  ],
+  "critical_code_review_comments": [
+    "comp_radar.apply_price dedupes channel_connections by channel_id via dict comprehension — good; but the collection could store duplicate rows for the same channel_id, consider a unique index on (channel_id) to prevent write-time duplication.",
+    "two_way_sync.detect_overbooking pair_key uses sorted booking ids — good idempotency, but the 'existing' lookup only checks status:open; a resolved conflict won't be re-created for the same pair on re-detection — acceptable but document behavior.",
+    "ota_inbound.receive_cancellation only fires ripple when modified_count>0; if webhook is retried after cancellation this correctly no-ops.",
+    "React duplicate-key warnings — code quality issue affecting any list under channel-health/push-history (see frontend_issues.design_issues)."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration430_price_push_twoway.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "95% (all requested data-testids present + interactions working; ripple-timeline UI refresh after simulate is the only anomaly)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — works",
+  "seed_data_creation": "Test creates ephemeral bookings via /ota-inbound/airbnb/reservation with channel_reference prefix 'QA-RIP-<hex>' and cancels them in same test. Simulate creates 'Simülasyon Misafiri' bookings (marked simulated:true) — same behavior as main agent's earlier self-tests. No cleanup performed (matches existing convention in this repo).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoints validated for iter 430/431: GET/POST /api/comp-radar/{scan,apply}, GET /api/two-way-sync/{property_id}, POST /api/two-way-sync/simulate, POST /api/two-way-sync/conflicts/{id}/resolve, POST /api/ota-inbound/{channel}/{reservation,cancellation}. Login is cookie-based via /api/auth/login with admin@hotelbox.com / HotelAdmin2026!. OTA push is mocked at ~90% success — occasional 'pending/rescheduled' tasks are expected. Only booking_com is currently connected so ripple.channels defaults to ['booking_com'] when source is 'expedia'. The frontend uses a sidebar command-palette trigger (text 'Ara veya komut çalıştır...') that must be *clicked* first to open the dialog before typing.",
+  "rca of the issue": "Not applicable — no unresolved critical issues. The ripple-timeline stale UI is a minor missing refetch after simulate mutations."
+}

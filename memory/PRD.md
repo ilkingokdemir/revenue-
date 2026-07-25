@@ -684,3 +684,14 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - E2E DOĞRULANDI: scan 112 fiyat noktası + 4 bulgu (%10.7-12.2 pazar altı), scheduler trigger,
   15 motor listesi, UI (grafik + kartlar + 4 bulgu satırı) OK.
 - NOT: Rakip fiyatları MOCK scanner (gerçek OTA scrape API'si yok).
+
+## Son Durum (Iter 431, 2026-07-25) — Radar/Compset Mükerrerlik Giderme TAMAMLANDI
+- KULLANICI GERİ BİLDİRİMİ: "Bu özellik zaten vardı, Revenue içinde — tekrar yapmışsın."
+  Haklı: CompsetPanel (rakip CRUD + fiyat snapshot) zaten mevcuttu; yeni CompRadarPanel
+  ayrı menü girişiyle mükerrerlik yaratıyordu.
+- ÇÖZÜM (konsolidasyon): "Rakip fiyat radarı" menü girişi KALDIRILDI. CompsetPanel'e sekme
+  yapısı eklendi: "Rakip Listesi" (mevcut CRUD, dokunulmadı) + "Fiyat Radarı" (CompRadarPanel
+  lazy gömülü). comp-radar view id'si geriye dönük CompsetPanel(initialTab=radar)'a yönlenir.
+  Backend comp_radar motoru (15.) ve endpoint'ler aynen duruyor — sadece UI birleşti.
+- DERS: Yeni panel eklemeden önce mevcut menü/panel envanterinde işlevsel çakışma taraması yap.
+- E2E DOĞRULANDI: mükerrer giriş 0, Compset > Fiyat Radarı sekmesi grafik + 4 bulgu ile çalışıyor.

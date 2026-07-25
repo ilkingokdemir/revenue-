@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Crosshair, ArrowsClockwise, TrendUp, TrendDown } from "@phosphor-icons/react";
+import { Crosshair, ArrowsClockwise, TrendUp, TrendDown, PaperPlaneTilt, CheckCircle, X } from "@phosphor-icons/react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -11,6 +11,8 @@ export default function CompRadarPanel({ propertyId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [scanning, setScanning] = useState(false);
+  const [confirm, setConfirm] = useState(null);
+  const [pushing, setPushing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -29,6 +31,21 @@ export default function CompRadarPanel({ propertyId }) {
       await load();
     } catch { toast.error("Tarama başarısız"); }
     finally { setScanning(false); }
+  };
+
+  const applyPush = async () => {
+    if (!confirm) return;
+    setPushing(true);
+    try {
+      const r = await axios.post(`${API}/api/comp-radar/apply`, {
+        property_id: confirm.property_id, date: confirm.date,
+      });
+      toast.success(`£${r.data.new_rate} fiyatı ${r.data.channels_succeeded}/${r.data.channels_total} kanala push'landı`);
+      setConfirm(null);
+      await load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Push başarısız");
+    } finally { setPushing(false); }
   };
 
   if (loading) return <div className="p-8 text-stone-400 text-sm" data-testid="comp-radar-loading">Yükleniyor…</div>;
@@ -100,7 +117,9 @@ export default function CompRadarPanel({ propertyId }) {
                 <th className="text-right px-2 py-2 font-medium">Bizim</th>
                 <th className="text-right px-2 py-2 font-medium">Rakip medyan</th>
                 <th className="text-right px-2 py-2 font-medium">Fark</th>
+                <th className="text-right px-2 py-2 font-medium">Önerilen</th>
                 <th className="text-left px-4 py-2 font-medium">Öneri</th>
+                <th className="text-right px-4 py-2 font-medium">Aksiyon</th>
               </tr>
             </thead>
             <tbody>
@@ -110,13 +129,61 @@ export default function CompRadarPanel({ propertyId }) {
                   <td className="px-2 py-2 text-right text-xs font-medium">{fmt0(f.own_rate)}</td>
                   <td className="px-2 py-2 text-right text-xs text-stone-600">{fmt0(f.comp_median)} <span className="text-stone-400">({f.comp_count} rakip)</span></td>
                   <td className={`px-2 py-2 text-right text-xs font-bold ${f.type === "underpriced" ? "text-emerald-600" : "text-rose-600"}`}>%{f.gap_pct}</td>
+                  <td className="px-2 py-2 text-right text-xs font-bold text-indigo-600">{fmt0(f.suggested_rate)}</td>
                   <td className="px-4 py-2 text-xs text-stone-600">{f.message.split(": ").slice(1).join(": ")}</td>
+                  <td className="px-4 py-2 text-right">
+                    {f.applied ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 rounded-full px-2.5 py-1" data-testid={`applied-badge-${f.date}`}>
+                        <CheckCircle size={12} weight="fill" /> Push'landı £{Number(f.applied_rate).toFixed(0)}
+                      </span>
+                    ) : (
+                      <button onClick={() => setConfirm(f)} data-testid={`apply-push-btn-${f.date}`}
+                        className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-2.5 py-1.5 transition-colors">
+                        <PaperPlaneTilt size={12} weight="fill" /> Uygula & Push
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {confirm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !pushing && setConfirm(null)}>
+          <div className="bg-white rounded-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()} data-testid="apply-push-modal">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-stone-900">Fiyatı Uygula & OTA'lara Push'la</h3>
+              <button onClick={() => setConfirm(null)} disabled={pushing}><X size={16} /></button>
+            </div>
+            <div className="text-xs text-stone-500 mb-3">{confirm.date} — {confirm.type === "underpriced" ? "fiyat artış fırsatı" : "doluluk riski, fiyat indirimi"}</div>
+            <div className="flex items-center justify-center gap-4 bg-stone-50 rounded-xl p-4 mb-4">
+              <div className="text-center">
+                <div className="text-[10px] uppercase tracking-wide text-stone-400 mb-1">Mevcut</div>
+                <div className="text-xl font-bold text-stone-500 line-through" data-testid="confirm-old-rate">{fmt0(confirm.own_rate)}</div>
+              </div>
+              <div className="text-stone-300 text-xl">→</div>
+              <div className="text-center">
+                <div className="text-[10px] uppercase tracking-wide text-indigo-400 mb-1">Yeni</div>
+                <div className={`text-xl font-bold ${confirm.type === "underpriced" ? "text-emerald-600" : "text-rose-600"}`} data-testid="confirm-new-rate">{fmt0(confirm.suggested_rate)}</div>
+              </div>
+            </div>
+            <p className="text-[11px] text-stone-500 mb-4">
+              Yeni fiyat sync kuyruğuna eklenir ve bağlı tüm OTA kanallarına anında push'lanır. Sonuç, Kanal Push Geçmişi'nde görünür.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirm(null)} disabled={pushing}
+                className="flex-1 py-2 text-sm text-stone-600 border border-stone-300 rounded-lg" data-testid="confirm-cancel-btn">Vazgeç</button>
+              <button onClick={applyPush} disabled={pushing} data-testid="confirm-push-btn"
+                className="flex-1 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
+                <PaperPlaneTilt size={14} weight="fill" className={pushing ? "animate-pulse" : ""} />
+                {pushing ? "Push'lanıyor…" : "Onayla & Push'la"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1198,6 +1198,9 @@ JOB_HANDLERS["ota_sync_watchdog"] = _job_ota_sync_watchdog
 from routes.distribution.push_history import create_push_history_router
 api_router.include_router(create_push_history_router(db, require_roles))
 
+from routes.distribution.two_way_sync import create_two_way_sync_router
+api_router.include_router(create_two_way_sync_router(db, require_roles))
+
 from routes.revenue_ext.key_figures import create_key_figures_router
 key_figures_router = create_key_figures_router(db, require_roles)
 api_router.include_router(key_figures_router)

@@ -427,6 +427,14 @@ def create_ota_inbound_router(db, require_roles):
                 "upgrade": assignment_info.get("assigned_upgrade", False),
             })
 
+        # Two-way sync: overbooking guard + ripple availability to other OTAs
+        try:
+            from routes.distribution.two_way_sync import run_two_way_side_effects
+            two_way = await run_two_way_side_effects(db, doc, channel, "reservation")
+        except Exception as e:
+            logger.warning(f"two-way side effects failed: {e}")
+            two_way = {}
+
         return {
             "ok":              True,
             "action":          "updated" if existing else "created",
@@ -436,6 +444,8 @@ def create_ota_inbound_router(db, require_roles):
             "room_number":     room_number,
             "room_id":         room_id,
             "upgrade":         assignment_info.get("assigned_upgrade", False),
+            "ripple":          (two_way.get("ripple") or {}),
+            "conflict_detected": bool(two_way.get("conflict")),
         }
 
     @router.post("/{channel}/cancellation")
@@ -457,6 +467,14 @@ def create_ota_inbound_router(db, require_roles):
             "received_at":      _now(),
             "payload":          body.model_dump(),
         })
+        if r.modified_count > 0:
+            try:
+                from routes.distribution.two_way_sync import run_two_way_side_effects
+                bk = await db.bookings.find_one({"channel_key": booking_key}, {"_id": 0})
+                if bk:
+                    await run_two_way_side_effects(db, bk, channel, "cancellation")
+            except Exception as e:
+                logger.warning(f"two-way cancel ripple failed: {e}")
         return {"ok": True, "cancelled": r.modified_count > 0}
 
     @router.get("/log")

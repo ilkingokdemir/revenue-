@@ -84,7 +84,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, CompRadarPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -999,7 +999,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <KeyFiguresPanel propertyId={activePropertyId || "all"} />
         )}
         {activeView === "comp-radar" && (
-          <CompRadarPanel propertyId={activePropertyId || "all"} />
+          <CompsetPanel propertyId={activePropertyId || "default"} initialTab="radar" />
         )}
         {activeView === "meetings-sales" && (
           <MeetingsSalesPanel propertyId={activePropertyId || "all"} />

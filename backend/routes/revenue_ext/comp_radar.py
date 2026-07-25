@@ -81,6 +81,11 @@ def create_comp_radar_router(db, require_roles):
         pq: Dict = {} if property_id == "all" else {"property_id": property_id}
         findings = await db.comp_radar_findings.find(
             pq, {"_id": 0}).sort("date", 1).to_list(200)
+        cfg = await get_params(db, "comp_radar", {"days_ahead": 14, "threshold_pct": 10})
+        thr = float(cfg["threshold_pct"]) / 100
+        for f in findings:
+            m = float(f["comp_median"])
+            f["suggested_rate"] = round(m * (1 - thr) if f["type"] == "underpriced" else m * (1 + thr), 2)
         # chart series: own vs median per date
         dates = [(date.today() + timedelta(days=i)).isoformat() for i in range(int(days))]
         pid = property_id
@@ -108,6 +113,84 @@ def create_comp_radar_router(db, require_roles):
     async def scan_now(data: Dict = None,
                        current_user: dict = Depends(require_roles("admin", "manager"))):
         return await _radar_core((data or {}).get("property_id", ""))
+
+    @router.post("/comp-radar/apply")
+    async def apply_price(data: Dict,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        """1-Click Price Push: apply the radar-suggested rate for a date and
+        push it to every connected OTA via the sync queue."""
+        from fastapi import HTTPException
+        from routes.integrations_pkg.sync_queue import process_due_tasks
+        import uuid
+
+        pid = (data or {}).get("property_id") or ""
+        target_date = (data or {}).get("date") or ""
+        if not target_date:
+            raise HTTPException(400, "date zorunlu")
+        fq = {"date": target_date}
+        if pid and pid != "all":
+            fq["property_id"] = pid
+        finding = await db.comp_radar_findings.find_one(fq, {"_id": 0})
+        if not finding:
+            raise HTTPException(404, "Bulgu bulunamadı")
+        if finding.get("applied"):
+            raise HTTPException(409, "Bu bulgu için fiyat zaten uygulandı")
+
+        cfg = await get_params(db, "comp_radar", {"days_ahead": 14, "threshold_pct": 10})
+        threshold = float(cfg["threshold_pct"]) / 100
+        median = float(finding["comp_median"])
+        if finding["type"] == "underpriced":
+            new_rate = round(median * (1 - threshold), 2)
+        else:
+            new_rate = round(median * (1 + threshold), 2)
+        override = (data or {}).get("rate")
+        if override:
+            new_rate = round(float(override), 2)
+
+        conns = await db.channel_connections.find(
+            {"channel_id": {"$ne": "direct"}, "connected": True},
+            {"_id": 0, "channel_id": 1, "name": 1}).to_list(50)
+        conns = list({c["channel_id"]: c for c in conns}.values())
+        if not conns:
+            raise HTTPException(400, "Bağlı OTA kanalı yok")
+
+        fpid = finding["property_id"]
+        now = datetime.now(timezone.utc).isoformat()
+        task_ids = []
+        for c in conns:
+            task = {"id": str(uuid.uuid4()), "property_id": fpid,
+                    "channel_id": c["channel_id"], "kind": "rate",
+                    "payload": {"date": target_date, "rate": new_rate,
+                                "source": "comp_radar_apply"},
+                    "status": "pending", "attempts": 0, "max_attempts": 6,
+                    "next_retry_at": now, "error": None, "result": None,
+                    "created_at": now,
+                    "created_by": f"radar-apply:{current_user.get('name', '')}"}
+            await db.sync_queue.insert_one(task)
+            task_ids.append(task["id"])
+
+        await process_due_tasks(db, max_tasks=len(task_ids) + 5)
+
+        results = []
+        succeeded = 0
+        for tid in task_ids:
+            t = await db.sync_queue.find_one(
+                {"id": tid}, {"_id": 0, "channel_id": 1, "status": 1, "error": 1})
+            if t.get("status") == "succeeded":
+                succeeded += 1
+            results.append(t)
+
+        await db.comp_radar_findings.update_one(
+            {"property_id": fpid, "date": target_date},
+            {"$set": {"applied": True, "applied_rate": new_rate,
+                      "applied_at": now,
+                      "applied_by": current_user.get("name", ""),
+                      "push_results": results}})
+
+        return {"ok": succeeded > 0, "date": target_date,
+                "old_rate": finding["own_rate"], "new_rate": new_rate,
+                "channels_total": len(task_ids), "channels_succeeded": succeeded,
+                "results": results}
 
     router.run_comp_radar_internal = _radar_core
     return router

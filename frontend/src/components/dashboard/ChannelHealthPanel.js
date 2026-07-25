@@ -6,6 +6,7 @@ import {
   CloudSlash, Clock, ArrowCounterClockwise, BellRinging, PaperPlaneTilt, ClockCounterClockwise,
 } from "@phosphor-icons/react";
 import ChannelPushHistory from "./ChannelPushHistory";
+import TwoWaySyncTab from "./TwoWaySyncTab";
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
@@ -126,9 +127,15 @@ export default function ChannelHealthPanel({ propertyId }) {
           className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2.5 border-b-2 -mb-px transition-colors ${tab === "history" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
           <ClockCounterClockwise size={14} weight={tab === "history" ? "fill" : "regular"} /> Push Geçmişi
         </button>
+        <button onClick={() => setTab("twoway")} data-testid="channel-tab-twoway"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2.5 border-b-2 -mb-px transition-colors ${tab === "twoway" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
+          <ArrowsClockwise size={14} weight={tab === "twoway" ? "fill" : "regular"} /> İki Yönlü Sync
+        </button>
       </div>
 
-      {tab === "history" ? (
+      {tab === "twoway" ? (
+        <TwoWaySyncTab propertyId={propertyId} />
+      ) : tab === "history" ? (
         <ChannelPushHistory propertyId={propertyId} />
       ) : (
       <>

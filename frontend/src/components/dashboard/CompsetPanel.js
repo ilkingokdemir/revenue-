@@ -1,11 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense, lazy } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Crosshair, Plus, X, Sparkle, Trash } from "@phosphor-icons/react";
+import { Crosshair, Plus, X, Sparkle, Trash, ChartLineUp, ListBullets } from "@phosphor-icons/react";
+
+const CompRadarPanel = lazy(() => import("./CompRadarPanel"));
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/compset`;
 
-export default function CompsetPanel({ propertyId = "default" }) {
+export default function CompsetPanel({ propertyId = "default", initialTab = "list" }) {
+  const [tab, setTab] = useState(initialTab);
   const [items, setItems] = useState([]);
   const [snapshot, setSnapshot] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -67,9 +70,10 @@ export default function CompsetPanel({ propertyId = "default" }) {
           </div>
           <h1 className="text-2xl font-semibold text-stone-900">Compset Yönetimi</h1>
           <p className="text-sm text-stone-500 mt-1 max-w-2xl">
-            Yakın rakipleri keşfedin, manuel ekleyin ve son fiyat anlık görüntülerini izleyin.
+            Yakın rakipleri keşfedin, fiyatlarını izleyin ve radar bulgularıyla fiyat fırsatlarını yakalayın.
           </p>
         </div>
+        {tab === "list" && (
         <div className="flex gap-2">
           <button onClick={discover} className="px-3 py-1.5 text-xs text-stone-700 bg-white border border-stone-300 rounded-lg inline-flex items-center gap-1.5" data-testid="compset-discover">
             <Sparkle size={13} /> Otomatik Keşif
@@ -78,8 +82,26 @@ export default function CompsetPanel({ propertyId = "default" }) {
             <Plus size={13} /> Manuel Ekle
           </button>
         </div>
+        )}
       </div>
 
+      <div className="flex items-center gap-1.5 border-b border-stone-200 mb-4">
+        <button onClick={() => setTab("list")} data-testid="compset-tab-list"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2.5 border-b-2 -mb-px transition-colors ${tab === "list" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
+          <ListBullets size={14} /> Rakip Listesi
+        </button>
+        <button onClick={() => setTab("radar")} data-testid="compset-tab-radar"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2.5 border-b-2 -mb-px transition-colors ${tab === "radar" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
+          <ChartLineUp size={14} /> Fiyat Radarı
+        </button>
+      </div>
+
+      {tab === "radar" ? (
+        <Suspense fallback={<div className="p-8 text-stone-400 text-sm">Yükleniyor…</div>}>
+          <CompRadarPanel propertyId={propertyId === "default" ? "all" : propertyId} />
+        </Suspense>
+      ) : (
+      <>
       {loading && <div className="text-center py-12 text-stone-400 text-sm">Yükleniyor…</div>}
 
       {!loading && items.length === 0 && (
@@ -126,6 +148,8 @@ export default function CompsetPanel({ propertyId = "default" }) {
             </tbody>
           </table>
         </div>
+      )}
+      </>
       )}
 
       {showAdd && (

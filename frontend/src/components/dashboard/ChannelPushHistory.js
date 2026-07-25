@@ -78,7 +78,7 @@ export default function ChannelPushHistory({ propertyId }) {
             </thead>
             <tbody>
               {fresh?.matrix.map((row) => (
-                <tr key={row.channel}>
+                <tr key={`fresh-${row.channel}`}>
                   <td className="px-3 py-1 font-medium text-stone-700 whitespace-nowrap sticky left-0 bg-white">{CH_TR[row.channel] || row.channel}</td>
                   {row.cells.map((c) => {
                     const stale = c.age_hours === null || c.age_hours > 24;

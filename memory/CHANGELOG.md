@@ -1835,3 +1835,26 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
   — native date input yerine şık seçici; testId'ler korundu (be-checkin/be-checkout
   gizli input olarak duruyor, eski test akışları kırılmadı). E2E doğrulandı:
   seçim → otomatik kapanış → 14 gece → oda sonuçları.
+
+## Iter 432 (2026-07-25) — Tek Tıkla Fiyat Push (1-Click Price Push) TAMAMLANDI
+- Backend (comp_radar.py): GET findings'e `suggested_rate` eklendi; YENİ POST /api/comp-radar/apply
+  {property_id, date} → önerilen fiyatı hesaplar, bağlı tüm OTA'lara (channel_id bazında tekilleştirilmiş)
+  sync_queue "rate" görevi enqueue + anında process, bulgu applied=true + push_results. İkinci apply → 409.
+- Frontend (CompRadarPanel.js): "Önerilen" kolonu + "Uygula & Push" butonu (apply-push-btn-{date}),
+  onay modalı (eski→yeni fiyat, confirm-push-btn), "Push'landı £X" rozeti (applied-badge-{date}).
+- E2E: apply 2/2 kanal, push-history'de yeni rate, 409 guard, UI modal+rozet OK.
+
+## Iter 433 (2026-07-25) — Gelişmiş İki Yönlü OTA Sync (Ripple + Overbooking Guard) TAMAMLANDI
+- YENİ backend: routes/distribution/two_way_sync.py
+  - ripple_availability(): inbound rezervasyon/iptal → müsaitlik değişikliği kaynak kanal HARİÇ
+    tüm bağlı kanallara gece-gece "avail" görevi olarak push (delta -1/+1, max 30 gece), ripple_events log.
+  - detect_overbooking(): aynı property+oda+çakışan tarih → sync_conflicts (pair_key idempotent) + bildirim.
+  - Endpoints: GET /api/two-way-sync/{pid}, POST /conflicts/{id}/resolve, POST /simulate
+    (varsayılan kaynak expedia → booking_com'a ripple; force_conflict=true guard'ı tetikler).
+- HOOK: ota_inbound.py reservation & cancellation → run_two_way_side_effects; yanıta ripple + conflict_detected.
+- Frontend: TwoWaySyncTab.js — ChannelHealthPanel 3. sekme "İki Yönlü Sync" (channel-tab-twoway):
+  KPI kartları, ripple zaman çizelgesi, çakışma kartları + çözüm, 2 simülasyon butonu.
+- FIX'ler: ota_inbound.py sonundaki bozuk satırlar (IndentationError) temizlendi; CommandPalette'e sızan
+  divider öğeleri filtrelendi → "same key" konsol uyarıları 0; ChannelHealthPanel/PushHistory key'leri kompozit.
+- TEST: testing_agent iteration_430.json — backend 8/8 PASS, frontend akışlar PASS; bulgular giderildi.
+- NOT: OTA push MOCK (%90 başarı); tek bağlı kanal booking_com → booking_com kaynaklı inbound'da ripple hedefi 0 (doğru).

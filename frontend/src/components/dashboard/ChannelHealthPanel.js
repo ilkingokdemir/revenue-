@@ -157,7 +157,7 @@ export default function ChannelHealthPanel({ propertyId }) {
         {data.channels.map((c) => {
           const m = STATUS_META[c.status];
           return (
-            <div key={c.channel} data-testid={`channel-card-${c.channel}`}
+            <div key={`${c.channel}-${c.property_id || ""}`} data-testid={`channel-card-${c.channel}`}
               className="bg-white border border-stone-200 rounded-xl p-4">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-sm text-stone-900">{c.label}</span>

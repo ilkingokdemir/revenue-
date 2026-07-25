@@ -529,6 +529,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     const out = [];
     for (const section of gatedNavigation) {
       for (const it of section.items) {
+        if (it.divider || !it.id) continue; // skip label-only dividers
         if (it.launchUrl) continue; // external launches skipped
         const translatedName = tNav(it);
         const translatedSection = tSectionLabel(section);

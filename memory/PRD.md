@@ -695,3 +695,5 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
   Backend comp_radar motoru (15.) ve endpoint'ler aynen duruyor — sadece UI birleşti.
 - DERS: Yeni panel eklemeden önce mevcut menü/panel envanterinde işlevsel çakışma taraması yap.
 - E2E DOĞRULANDI: mükerrer giriş 0, Compset > Fiyat Radarı sekmesi grafik + 4 bulgu ile çalışıyor.
+
+## NOT: Iter 432+ kayıtları /app/memory/CHANGELOG.md dosyasına taşındı (700 satır limiti).

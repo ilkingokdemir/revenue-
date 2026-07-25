@@ -1965,3 +1965,19 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E: rezervasyon → pay init (gerçek checkout.stripe.com test session) → UI yönlendirme doğrulandı.
 - FIX: ArrivalsCockpit'te eksik Lightbulb import'u (ekran hatası veriyordu) düzeltildi.
 - Test verileri (QA*) temizlendi. NOT: Stripe TEST anahtarı ile çalışıyor.
+
+## Iter 444 (2026-07-25) — Spaces Geliri Raporlarda + Ödeme-Fatura Otomatik Eşleştirme v2 TAMAMLANDI
+### Spaces geliri yönetim raporlarında
+- key_figures.py: space_bookings'ten dönem içi Spaces geliri hesaplanır → tiles.spaces_revenue +
+  breakdown.spaces_revenue + total_revenue'ye dahil. weekly_report TILE_TR'ye "Alan geliri (Spaces)" eklendi
+  (haftalık rapor + CSV otomatik içerir). KeyFiguresPanel dökümünde yeni satır. E2E: £250 doğrulandı.
+### Banka Eşleştirme Motoru v2 (Mews payment-to-bill parity)
+- bank_reconciliation.py auto-match yeniden yazıldı: ±3 gün tarih penceresi, isim/referans token puanlama,
+  Stripe komisyon toleransı (%4), city-ledger fatura eşleşmesi (bakiye eşit VEYA fatura no metinde →
+  %90-99 güven) → YÜKSEK güvende fatura OTOMATİK kapanır (paid_amount+status, paid_via=bank_auto_match).
+- Düşük güven (50-74) → suggested_match olarak kaydedilir; YENİ endpoint'ler:
+  POST /accounting/bank-reconciliation/suggestion/{tx_id}/confirm | /reject (confirm da faturayı kapatır).
+- AccountingPanel: öneri rozeti + "✓ Onayla"/"✕" butonları (bank-suggestion-*), auto-match toast'ı
+  artık öneri ve kapanan fatura sayısını gösterir.
+- E2E: fatura no'lu havale → %99 eşleşme + CL-2026-00001 otomatik kapandı (2500/2500); orta güvenli
+  gelir kaydı → öneri üretildi → confirm ile eşleşti. Test verileri temizlendi.

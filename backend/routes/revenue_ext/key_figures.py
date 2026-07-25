@@ -102,7 +102,13 @@ def create_key_figures_router(db, require_roles):
             {"_id": 0, "amount": 1}).to_list(5000)
         adv_deposits = round(sum(float(d.get("amount") or 0) for d in deposits), 2)
 
-        total_revenue = round(revenue + non_room + noshow_fees + taxes, 2)
+        sb_rows = await db.space_bookings.find(
+            {**pq, "status": {"$ne": "cancelled"},
+             "start": {"$gte": d_start.isoformat(), "$lte": d_end.isoformat() + "T99"}},
+            {"_id": 0, "price": 1}).to_list(5000)
+        spaces_rev = round(sum(float(r.get("price") or 0) for r in sb_rows), 2)
+
+        total_revenue = round(revenue + non_room + noshow_fees + taxes + spaces_rev, 2)
         return {
             "days": days, "rooms": rooms,
             "tiles": {
@@ -116,12 +122,14 @@ def create_key_figures_router(db, require_roles):
                 "my_website_pct": round(website_b / total_b * 100, 1) if total_b else 0,
                 "guest_count": guests,
                 "total_revenue": total_revenue,
+                "spaces_revenue": spaces_rev,
                 "cancellation_pct": round(cancelled / (total_b + cancelled) * 100, 1) if (total_b + cancelled) else 0,
                 "commission_costs": round(commission, 2),
             },
             "breakdown": {
                 "room_revenue": round(revenue, 2),
                 "non_room_revenue": non_room,
+                "spaces_revenue": spaces_rev,
                 "no_show_fees": noshow_fees,
                 "taxes_collected": taxes,
                 "total_revenue": total_revenue,

@@ -22,6 +22,7 @@ TILE_TR = [
     ("avg_stay_nights", "Ortalama konaklama (gece)", ""),
     ("total_online_pct", "Toplam online", "%"),
     ("guest_count", "Misafir sayısı", ""),
+    ("spaces_revenue", "Alan geliri (Spaces)", "£"),
     ("total_revenue", "Toplam gelir", "£"),
     ("cancellation_pct", "İptal / no-show oranı", "%"),
     ("commission_costs", "Komisyon maliyeti", "£"),

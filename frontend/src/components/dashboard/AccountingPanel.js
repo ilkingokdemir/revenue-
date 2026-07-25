@@ -642,7 +642,7 @@ function BankReconciliationTab({ propertyId, month }) {
     setMatching(true);
     try {
       const { data } = await axios.post(`${API}/accounting/bank-reconciliation/auto-match/${propertyId}`);
-      toast.success(`Matched ${data.matched} transactions (${data.remaining_unmatched} remaining)`);
+      toast.success(`Eşleşen: ${data.matched} · Öneri: ${data.suggested || 0} · Kapanan fatura: ${data.invoices_closed || 0} (${data.remaining_unmatched} eşleşmemiş)`);
       fetch();
     } catch (e) { toast.error("Auto-match failed"); }
     finally { setMatching(false); }
@@ -673,6 +673,19 @@ function BankReconciliationTab({ propertyId, month }) {
 
   const unmatch = async (txId) => {
     await axios.post(`${API}/accounting/bank-reconciliation/unmatch/${txId}`);
+    fetch();
+  };
+
+  const confirmSuggestion = async (txId) => {
+    try {
+      await axios.post(`${API}/accounting/bank-reconciliation/suggestion/${txId}/confirm`);
+      toast.success("Eşleştirme onaylandı ✓");
+      fetch();
+    } catch { toast.error("Onaylanamadı"); }
+  };
+
+  const rejectSuggestion = async (txId) => {
+    await axios.post(`${API}/accounting/bank-reconciliation/suggestion/${txId}/reject`);
     fetch();
   };
 
@@ -768,6 +781,17 @@ function BankReconciliationTab({ propertyId, month }) {
                 {tx.matched && (
                   <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium">
                     {tx.match_confidence}% · {tx.matched_type}
+                  </span>
+                )}
+                {!tx.matched && tx.suggested_match && (
+                  <span className="flex items-center gap-1" data-testid={`bank-suggestion-${tx.id}`}>
+                    <span className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full font-medium">
+                      Öneri: {tx.suggested_match.label} · %{tx.suggested_match.confidence}
+                    </span>
+                    <button onClick={() => confirmSuggestion(tx.id)} data-testid={`bank-suggestion-confirm-${tx.id}`}
+                      className="text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded px-1.5 py-0.5">✓ Onayla</button>
+                    <button onClick={() => rejectSuggestion(tx.id)} data-testid={`bank-suggestion-reject-${tx.id}`}
+                      className="text-[10px] font-bold text-stone-500 bg-stone-100 hover:bg-stone-200 rounded px-1.5 py-0.5">✕</button>
                   </span>
                 )}
                 <span className={`text-sm font-bold ${tx.amount >= 0 ? "text-emerald-600" : "text-red-500"}`}>

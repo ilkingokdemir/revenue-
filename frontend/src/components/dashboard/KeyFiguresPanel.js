@@ -162,6 +162,7 @@ export default function KeyFiguresPanel({ propertyId }) {
             </div>
             <BRow label="Oda geliri" value={fmt(b.room_revenue)} />
             <BRow label="Oda dışı gelir (ekstralar)" value={fmt(b.non_room_revenue)} />
+            <BRow label="Alan geliri (Spaces)" value={fmt(b.spaces_revenue)} />
             <BRow label="No-show ücretleri" value={fmt(b.no_show_fees)} />
             <BRow label="Şehir & turizm vergileri" value={fmt(b.taxes_collected)} />
             <BRow label="Toplam gelir" value={fmt(b.total_revenue)} bold />

@@ -74,7 +74,7 @@ export default function TwoWaySyncTab({ propertyId }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-5 gap-3">
         <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="kpi-ripple-24h">
           <div className="text-2xl font-bold text-stone-900">{s.ripple_24h}</div>
           <div className="text-[11px] text-stone-500 mt-1">Ripple olayı (24 saat)</div>
@@ -86,6 +86,10 @@ export default function TwoWaySyncTab({ propertyId }) {
         <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="kpi-conflicts-open">
           <div className={`text-2xl font-bold ${s.conflicts_open > 0 ? "text-rose-600" : "text-emerald-600"}`}>{s.conflicts_open}</div>
           <div className="text-[11px] text-stone-500 mt-1">Açık çakışma (overbooking)</div>
+        </div>
+        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="kpi-auto-moves">
+          <div className="text-2xl font-bold text-indigo-600">{s.auto_moves_total || 0}</div>
+          <div className="text-[11px] text-stone-500 mt-1">Otomatik taşıma (aynı tip oda) {s.auto_move_enabled === false && <span className="text-rose-500 font-semibold">· KAPALI</span>}</div>
         </div>
         <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="kpi-channels">
           <div className="text-2xl font-bold text-stone-900">{s.channels.length}</div>
@@ -113,6 +117,41 @@ export default function TwoWaySyncTab({ propertyId }) {
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {(data.auto_relocations || []).length > 0 && (
+        <div className="bg-white border border-indigo-200 rounded-xl overflow-hidden" data-testid="auto-relocations-list">
+          <div className="px-4 py-3 border-b border-indigo-100 bg-indigo-50/50 flex items-center gap-1.5">
+            <CheckCircle size={14} weight="fill" className="text-indigo-600" />
+            <h3 className="text-sm font-semibold text-stone-900">Otomatik taşımalar — aynı oda tipi kuralı ({data.auto_relocations.length})</h3>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[11px] uppercase tracking-wide text-stone-400 border-b border-stone-100">
+                <th className="text-left px-4 py-2 font-medium">Zaman</th>
+                <th className="text-left px-2 py-2 font-medium">Misafir</th>
+                <th className="text-left px-2 py-2 font-medium">Kanal</th>
+                <th className="text-left px-2 py-2 font-medium">Tarih</th>
+                <th className="text-left px-4 py-2 font-medium">Taşıma</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.auto_relocations.map((r) => (
+                <tr key={r.id} className="border-b border-stone-50 last:border-0" data-testid={`auto-move-${r.id}`}>
+                  <td className="px-4 py-2 text-xs text-stone-500">{fmtTime(r.created_at)}</td>
+                  <td className="px-2 py-2 text-xs font-medium text-stone-800">{r.guest_name}</td>
+                  <td className="px-2 py-2 text-xs text-stone-600">{r.channel || "—"}</td>
+                  <td className="px-2 py-2 text-xs text-stone-600">{r.check_in} → {r.check_out}</td>
+                  <td className="px-4 py-2 text-xs">
+                    <span className="text-rose-600 line-through">{r.from_room}</span>
+                    <span className="text-stone-400 mx-1.5">→</span>
+                    <span className="font-bold text-emerald-700">{r.to_room}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

@@ -1885,3 +1885,20 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
   tek tıkla taşındı, toast + boş durum + sync_conflicts otomatik resolve zinciri çalıştı. Test verisi temizlendi.
 - NOT (test edilirken öğrenildi): sayfa açılışındaki 8sn'lik overbooking toast'ı banner'ın sağını kapatıyor;
   Playwright'ta butona tıklamadan önce toast'ın kapanması beklenmeli.
+
+## Iter 436 (2026-07-25) — Overbooking Otomatik Kaydırma Motoru (SADECE AYNI ODA TİPİ) TAMAMLANDI
+- KULLANICI KURALI: otomatik taşıma YALNIZCA aynı oda tipine yapılır; farklı tipe asla (kodda sabit).
+- two_way_sync.py: auto_relocate_booking() — çakışan inbound rezervasyonu aynı room_type_id'deki boş
+  odaya taşır (rooms + bookings overlap kontrolü), auto_relocations log + tüm rollere in-app bildirim
+  ("Overbooking Önlendi — Otomatik Taşıma"). Boş aynı-tip oda yoksa çakışma AÇIK kalır (doğru davranış).
+- Event-driven: run_two_way_side_effects, çakışma tespitinde toggle açıksa anında taşır ve sync_conflict'i
+  "auto-move" olarak resolve eder. Cron: sweep_open_conflicts() gece 05:30 açık çakışmaları yeniden dener
+  (JOB_HANDLERS["overbooking_auto_move"] + JOB_REGISTRY kaydı → Automation Hub'da aç/kapat edilebilir).
+- Endpoint: POST /api/two-way-sync/sweep (manuel süpürme). GET status'a auto_moves_24h/total,
+  auto_move_enabled ve auto_relocations listesi eklendi.
+- FIX: detect_overbooking artık room_number VE room_id ile eşleşir (eski rezervasyonlarda room_number
+  alanı yoktu → çakışma kaçıyordu).
+- TwoWaySyncTab: 5. KPI "Otomatik taşıma (aynı tip oda)" + "Otomatik taşımalar" tablosu (eski→yeni oda).
+- E2E: dolu Superior 02'ye inbound rezervasyon → otomatik Superior 01'e taşındı (aynı tip twin);
+  dolu Deluxe senaryosunda tüm aynı-tip odalar doluyken TAŞIMADI, çakışma açık kaldı + sweep no_same_type_room
+  raporladı. UI KPI + tablo doğrulandı. Test verileri temizlendi.

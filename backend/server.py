@@ -1199,7 +1199,16 @@ from routes.distribution.push_history import create_push_history_router
 api_router.include_router(create_push_history_router(db, require_roles))
 
 from routes.distribution.two_way_sync import create_two_way_sync_router
-api_router.include_router(create_two_way_sync_router(db, require_roles))
+two_way_sync_router = create_two_way_sync_router(db, require_roles)
+api_router.include_router(two_way_sync_router)
+
+async def _job_overbooking_auto_move(property_id: str) -> dict:
+    try:
+        return await two_way_sync_router.run_auto_move_sweep_internal(db)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["overbooking_auto_move"] = _job_overbooking_auto_move
 
 from routes.revenue_ext.key_figures import create_key_figures_router
 key_figures_router = create_key_figures_router(db, require_roles)

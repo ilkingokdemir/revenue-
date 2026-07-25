@@ -103,6 +103,11 @@ JOB_REGISTRY = {
             {"key": "threshold_pct", "label": "Fark eşiği", "type": "number", "min": 5, "max": 30, "default": 10, "suffix": "%"},
         ],
     },
+    "overbooking_auto_move": {
+        "label": "Overbooking Otomatik Kaydırma", "category": "distribution",
+        "description": "OTA'dan gelen rezervasyon dolu odaya düşerse misafiri ANINDA aynı tip boş odaya taşır ve resepsiyonu bilgilendirir (farklı oda tipine asla taşımaz). Gece süpürmesi açık kalan çakışmaları da dener.",
+        "default_cron": (5, 30), "default_enabled": True, "params": [],
+    },
     "ota_sync_watchdog": {
         "label": "OTA Senkron Watchdog", "category": "distribution",
         "description": "Başarısız OTA güncellemelerini yeniden dener, geciken kanallar için uyarı açar ve eski/boş tarih hücrelerini otomatik push'lar (Auto-Freshness).",

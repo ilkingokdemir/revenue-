@@ -81,12 +81,22 @@ async def ripple_availability(db, booking: Dict, source_channel: str, event_type
 async def detect_overbooking(db, booking: Dict) -> Optional[Dict]:
     """Overlapping active booking on same property + room → conflict record."""
     room = booking.get("room_number")
+    rid = booking.get("room_id")
     ci, co = booking.get("check_in"), booking.get("check_out")
-    if not room or not ci or not co:
+    if (not room and not rid) or not ci or not co:
         return None
+    pid = booking.get("property_id")
+    if not rid and room:
+        rm = await db.rooms.find_one({"property_id": pid, "name": room}, {"_id": 0, "id": 1})
+        rid = (rm or {}).get("id")
+    or_terms = []
+    if room:
+        or_terms.append({"room_number": room})
+    if rid:
+        or_terms.append({"room_id": rid})
     other = await db.bookings.find_one({
-        "property_id": booking.get("property_id"),
-        "room_number": room,
+        "property_id": pid,
+        "$or": or_terms,
         "id": {"$ne": booking.get("id")},
         "status": {"$nin": ["cancelled", "no_show"]},
         "check_in": {"$lt": co}, "check_out": {"$gt": ci},
@@ -94,6 +104,7 @@ async def detect_overbooking(db, booking: Dict) -> Optional[Dict]:
         "check_in": 1, "check_out": 1})
     if not other:
         return None
+    room = room or rid
     pair = sorted([booking.get("id", ""), other["id"]])
     existing = await db.sync_conflicts.find_one(
         {"pair_key": ":".join(pair), "status": "open"}, {"_id": 0, "id": 1})
@@ -123,20 +134,129 @@ async def detect_overbooking(db, booking: Dict) -> Optional[Dict]:
     return conflict
 
 
+async def _is_room_free(db, room_id: str, check_in: str, check_out: str, exclude_id: str) -> bool:
+    clash = await db.bookings.find_one({
+        "room_id": room_id, "id": {"$ne": exclude_id},
+        "status": {"$nin": ["cancelled", "checked_out", "no_show"]},
+        "check_in": {"$lt": check_out}, "check_out": {"$gt": check_in}})
+    return clash is None
+
+
+async def auto_relocate_booking(db, booking: Dict) -> Optional[Dict]:
+    """Move a conflicting booking to a free room of the SAME room type only.
+    Returns relocation info or None if no same-type room is available."""
+    pid = booking.get("property_id")
+    ci, co = booking.get("check_in"), booking.get("check_out")
+    if not pid or not ci or not co:
+        return None
+    # Resolve the booking's room type
+    rt = booking.get("room_type_id")
+    if not rt:
+        cur = None
+        if booking.get("room_id"):
+            cur = await db.rooms.find_one({"id": booking["room_id"]}, {"_id": 0, "room_type_id": 1})
+        if not cur and booking.get("room_number"):
+            cur = await db.rooms.find_one({"property_id": pid, "name": booking["room_number"]},
+                                          {"_id": 0, "room_type_id": 1})
+        rt = (cur or {}).get("room_type_id")
+    if not rt:
+        return None
+    candidates = await db.rooms.find(
+        {"property_id": pid, "room_type_id": rt,
+         "id": {"$ne": booking.get("room_id", "")}},
+        {"_id": 0, "id": 1, "name": 1}).to_list(50)
+    target = None
+    for r in candidates:
+        if await _is_room_free(db, r["id"], ci, co, booking.get("id", "")):
+            target = r
+            break
+    if not target:
+        return None
+    old_room = booking.get("room_number") or booking.get("room_id")
+    await db.bookings.update_one({"id": booking["id"]}, {"$set": {
+        "room_id": target["id"], "room_number": target["name"],
+        "auto_relocated": True, "auto_relocated_at": _now(),
+        "auto_relocated_from": old_room,
+        "updated_at": _now()}})
+    reloc = {"id": str(uuid.uuid4()), "property_id": pid,
+             "booking_id": booking["id"], "guest_name": booking.get("guest_name"),
+             "channel": booking.get("channel") or booking.get("source"),
+             "check_in": ci, "check_out": co,
+             "from_room": old_room, "to_room": target["name"],
+             "to_room_id": target["id"], "room_type_id": rt,
+             "created_at": _now()}
+    await db.auto_relocations.insert_one(reloc)
+    reloc.pop("_id", None)
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()), "type": "info",
+        "title": "Overbooking Önlendi — Otomatik Taşıma",
+        "message": f"{booking.get('guest_name')} ({ci} → {co}) çakışma nedeniyle {old_room} yerine aynı tip odaya taşındı: {target['name']}.",
+        "category": "ota_sync", "target_user": "", "target_role": "",
+        "link_to": "calendar", "priority": "high",
+        "read": False, "created_by": "Auto-Move Guard", "created_at": _now()})
+    return reloc
+
+
+async def _auto_move_enabled(db) -> bool:
+    cfg = await db.scheduler_config.find_one(
+        {"job": "overbooking_auto_move"}, {"_id": 0, "enabled": 1})
+    return bool(cfg.get("enabled", True)) if cfg else True
+
+
 async def run_two_way_side_effects(db, booking: Dict, source_channel: str, event_type: str) -> Dict:
     """Called after every inbound OTA reservation/cancellation."""
     conflict = None
+    auto_move = None
     if event_type == "reservation":
         try:
             conflict = await detect_overbooking(db, booking)
         except Exception as e:
             logger.warning(f"overbooking detect failed: {e}")
+        if conflict and await _auto_move_enabled(db):
+            try:
+                auto_move = await auto_relocate_booking(db, booking)
+                if auto_move:
+                    await db.sync_conflicts.update_one(
+                        {"id": conflict["id"]},
+                        {"$set": {"status": "resolved", "resolved_at": _now(),
+                                  "resolved_by": "auto-move",
+                                  "resolution_note": f"Otomatik taşındı (aynı oda tipi): {auto_move['from_room']} → {auto_move['to_room']}"}})
+                    conflict["status"] = "resolved"
+                    conflict["auto_moved"] = True
+            except Exception as e:
+                logger.warning(f"auto relocate failed: {e}")
     try:
         ripple = await ripple_availability(db, booking, source_channel, event_type)
     except Exception as e:
         logger.warning(f"ripple failed: {e}")
         ripple = {"error": str(e)}
-    return {"ripple": ripple, "conflict": conflict}
+    return {"ripple": ripple, "conflict": conflict, "auto_move": auto_move}
+
+
+async def sweep_open_conflicts(db) -> Dict:
+    """Nightly sweep: try to auto-relocate (same room type only) every open conflict."""
+    if not await _auto_move_enabled(db):
+        return {"ok": True, "skipped": "disabled", "moved": 0}
+    open_conflicts = await db.sync_conflicts.find({"status": "open"}, {"_id": 0}).to_list(100)
+    moved = failed = 0
+    for c in open_conflicts:
+        bk = await db.bookings.find_one({"id": c["booking_a"]["id"]}, {"_id": 0})
+        if not bk or bk.get("status") in ("cancelled", "no_show", "checked_out"):
+            bk = await db.bookings.find_one({"id": c["booking_b"]["id"]}, {"_id": 0})
+        if not bk:
+            continue
+        reloc = await auto_relocate_booking(db, bk)
+        if reloc:
+            await db.sync_conflicts.update_one(
+                {"id": c["id"]},
+                {"$set": {"status": "resolved", "resolved_at": _now(),
+                          "resolved_by": "auto-move-sweep",
+                          "resolution_note": f"Otomatik taşındı (aynı oda tipi): {reloc['from_room']} → {reloc['to_room']}"}})
+            moved += 1
+        else:
+            failed += 1
+    return {"ok": True, "open_conflicts": len(open_conflicts), "moved": moved,
+            "no_same_type_room": failed}
 
 
 def create_two_way_sync_router(db, require_roles):
@@ -153,15 +273,21 @@ def create_two_way_sync_router(db, require_roles):
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
         ripple_24h = await db.ripple_events.count_documents(
             {**pq, "created_at": {"$gte": cutoff}})
+        relocations = await db.auto_relocations.find(pq, {"_id": 0}) \
+            .sort("created_at", -1).to_list(int(limit))
         return {"property_id": property_id,
                 "summary": {
                     "ripple_24h": ripple_24h,
                     "ripple_total": await db.ripple_events.count_documents(pq),
                     "conflicts_open": await db.sync_conflicts.count_documents({**pq, "status": "open"}),
                     "conflicts_total": await db.sync_conflicts.count_documents(pq),
+                    "auto_moves_24h": await db.auto_relocations.count_documents({**pq, "created_at": {"$gte": cutoff}}),
+                    "auto_moves_total": await db.auto_relocations.count_documents(pq),
+                    "auto_move_enabled": await _auto_move_enabled(db),
                     "channels": await _connected_channels(db),
                 },
-                "ripple_events": events, "conflicts": conflicts}
+                "ripple_events": events, "conflicts": conflicts,
+                "auto_relocations": relocations}
 
     @router.post("/two-way-sync/conflicts/{conflict_id}/resolve")
     async def resolve_conflict(conflict_id: str, data: Dict = None,
@@ -217,4 +343,10 @@ def create_two_way_sync_router(db, require_roles):
         return {"ok": True, "booking_id": booking["id"], "simulated": True,
                 "room_number": room_number, "check_in": ci, "check_out": co, **result}
 
+    @router.post("/two-way-sync/sweep")
+    async def sweep_now(current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Manual trigger of the same-type auto-relocation sweep."""
+        return await sweep_open_conflicts(db)
+
+    router.run_auto_move_sweep_internal = sweep_open_conflicts
     return router

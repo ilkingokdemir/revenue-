@@ -244,6 +244,7 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
   const [detailTab, setDetailTab] = useState("info");
   const [upsells, setUpsells] = useState(null);
   const [collisionCluster, setCollisionCluster] = useState(null); // { room, cluster } for "+N more" pill modal
+  const [showResolver, setShowResolver] = useState(false); // overbooking auto-suggest resolver modal
   const [quickPay, setQuickPay] = useState(null); // { booking } when the flashing balance chip is clicked
   const scrollRef = useRef(null);
   const obNotifiedRef = useRef(false);
@@ -551,6 +552,19 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     setDragBooking(null);
   };
 
+  // One-click suggested move (overbooking resolver)
+  const applySuggestedMove = async (booking, roomId, roomName) => {
+    try {
+      const { data: res } = await axios.put(`${API}/bookings/timeline/${pid}/reassign/${booking.id}`, { room_id: roomId });
+      if (res.error) {
+        toast.error(res.error === "Room conflict" ? `Çakışma: ${res.conflict_guest} (${res.conflict_dates})` : res.error);
+      } else {
+        toast.success(`${booking.guest_name} → ${roomName} taşındı${res.conflicts_resolved > 0 ? " — overbooking çözüldü ✓" : " ✓"}`);
+        load();
+      }
+    } catch { toast.error("Taşıma başarısız"); }
+  };
+
   // Bulk actions
   const toggleSelect = (bookingId) => {
     setSelectedIds(prev => {
@@ -648,6 +662,24 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
     }));
     if (cnt > 0) overbookedDates[col.date] = cnt;
   });
+
+  // Conflict pairs + auto-suggested free room (same type preferred)
+  const conflictPairs = [];
+  {
+    const allRoomsFlat = groups.flatMap(g => g.rooms.map(r => ({ ...r, room_type_id: g.room_type_id, room_type_name: g.room_type_name })));
+    const isActive = (b) => !["cancelled", "checked_out", "no_show"].includes(b.status);
+    groups.forEach(g => g.rooms.forEach(r => {
+      const active = r.bookings.filter(isActive);
+      active.forEach((b1, i) => active.slice(i + 1).forEach(b2 => {
+        if (b1.check_in < b2.check_out && b2.check_in < b1.check_out) {
+          const mover = b2;
+          const isFree = (rm) => rm.id !== r.id && !rm.bookings.some(b => isActive(b) && b.check_in < mover.check_out && mover.check_in < b.check_out);
+          const suggestion = allRoomsFlat.find(rm => rm.room_type_id === g.room_type_id && isFree(rm)) || allRoomsFlat.find(isFree) || null;
+          conflictPairs.push({ roomName: r.name, stay: b1, mover, suggestion });
+        }
+      }));
+    }));
+  }
 
   return (
     <div className="h-full flex flex-col" data-testid="booking-timeline">
@@ -767,6 +799,10 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
               {Object.keys(overbookedDates).sort().slice(0, 6).map(d => d.slice(5)).join(" · ")}{Object.keys(overbookedDates).length > 6 ? " …" : ""}
             </span>
           )}
+          <button onClick={() => setShowResolver(true)} data-testid="overbooking-resolver-btn"
+            className="ml-auto flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow transition-all">
+            <Wrench className="w-3 h-3" /> Çözüm önerileri
+          </button>
         </div>
       )}
 
@@ -1662,6 +1698,57 @@ export const BookingTimeline = ({ properties, activePropertyId }) => {
       })()}
 
       {/* Collision Cluster Modal — "+N more" hidden bookings */}
+      {showResolver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowResolver(false)} data-testid="overbooking-resolver-modal">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-rose-600 to-red-500 rounded-t-2xl">
+              <div>
+                <h3 className="text-sm font-black text-white flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Overbooking Çözüm Önerileri</h3>
+                <p className="text-[11px] text-rose-100 mt-0.5">Sistem her çakışma için uygun boş oda buldu — tek tıkla taşıyın.</p>
+              </div>
+              <button onClick={() => setShowResolver(false)} className="p-1 hover:bg-white/20 rounded-lg" data-testid="resolver-close"><X className="w-4 h-4 text-white" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {conflictPairs.length === 0 ? (
+                <div className="text-center py-10" data-testid="resolver-empty">
+                  <div className="text-3xl mb-2">🎉</div>
+                  <p className="text-sm font-bold text-emerald-700">Tüm çakışmalar çözüldü!</p>
+                  <p className="text-[11px] text-stone-500 mt-1">Takvimde açık overbooking kalmadı.</p>
+                </div>
+              ) : conflictPairs.map((cp, i) => (
+                <div key={`${cp.mover.id}-${i}`} className="border border-rose-200 bg-rose-50/50 rounded-xl p-3" data-testid={`resolver-row-${cp.mover.id}`}>
+                  <div className="flex items-center gap-2 text-[11px] font-bold text-rose-700 mb-2">
+                    <Bed className="w-3.5 h-3.5" /> {cp.roomName} — çakışan tarihler
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-2.5">
+                    <div className="bg-white border border-stone-200 rounded-lg px-2.5 py-1.5">
+                      <div className="text-xs font-semibold text-stone-800 truncate">{cp.stay.guest_name}</div>
+                      <div className="text-[10px] text-stone-500">{cp.stay.check_in} → {cp.stay.check_out} · kalıyor</div>
+                    </div>
+                    <div className="bg-white border border-rose-300 rounded-lg px-2.5 py-1.5">
+                      <div className="text-xs font-semibold text-stone-800 truncate">{cp.mover.guest_name}</div>
+                      <div className="text-[10px] text-rose-600">{cp.mover.check_in} → {cp.mover.check_out} · taşınacak</div>
+                    </div>
+                  </div>
+                  {cp.suggestion ? (
+                    <button onClick={() => applySuggestedMove(cp.mover, cp.suggestion.id, cp.suggestion.name)}
+                      data-testid={`suggest-move-${cp.mover.id}`}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow transition-all">
+                      <ChevronRight className="w-3.5 h-3.5" /> {cp.mover.guest_name} → {cp.suggestion.name}'e taşı
+                      <span className="text-[9px] font-semibold text-emerald-100 bg-emerald-700/50 rounded-full px-1.5 py-0.5 ml-1">{cp.suggestion.room_type_name}</span>
+                    </button>
+                  ) : (
+                    <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2" data-testid={`no-suggestion-${cp.mover.id}`}>
+                      Bu tarihler için uygun boş oda yok — tarih değişikliği veya iptal gerekir.
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {collisionCluster && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setCollisionCluster(null)} data-testid="collision-modal">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>

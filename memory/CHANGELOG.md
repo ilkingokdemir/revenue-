@@ -1874,3 +1874,14 @@ Kullanıcı talebi: tüm modüller/butonlar işlevsel olsun, ölü kod canlansı
   yanıtta conflicts_resolved döner → İki Yönlü Sync sekmesindeki açık çakışma sayacı düşer.
 - E2E: kontrollü çakışma senaryosu ile doğrulandı — banner+toast+4 gün işareti göründü; bar sürüklenince
   "2 çakışma"→"1 çakışma" ve banner 3→2; curl reassign conflicts_resolved:1. Test verileri temizlendi.
+
+## Iter 435 (2026-07-25) — Overbooking "Önerilen Taşıma" Tek Tık Çözücü TAMAMLANDI
+- BookingTimeline: overbooking banner'ına "Çözüm önerileri" butonu (overbooking-resolver-btn) eklendi.
+- Çözücü modalı (overbooking-resolver-modal): her çakışma için oda + kalan/taşınacak misafir kartları,
+  sistem aynı oda tipinde (yoksa herhangi) boş oda bulur → yeşil "{misafir} → {oda}'ya taşı" butonu
+  (suggest-move-{id}) mevcut reassign endpoint'ini çağırır; uygun oda yoksa amber uyarı.
+  Tüm çakışmalar çözülünce "Tüm çakışmalar çözüldü! 🎉" boş durumu.
+- E2E: kontrollü çakışma ile doğrulandı — modal açıldı, öneri "Zara Ahmed → Deluxe 03 [Deluxe Suite]"
+  tek tıkla taşındı, toast + boş durum + sync_conflicts otomatik resolve zinciri çalıştı. Test verisi temizlendi.
+- NOT (test edilirken öğrenildi): sayfa açılışındaki 8sn'lik overbooking toast'ı banner'ın sağını kapatıyor;
+  Playwright'ta butona tıklamadan önce toast'ın kapanması beklenmeli.

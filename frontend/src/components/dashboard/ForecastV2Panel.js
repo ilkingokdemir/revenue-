@@ -110,7 +110,6 @@ function HorizonTab({ propertyId }) {
   if (loading) return <div className="text-sm text-stone-400">Yükleniyor…</div>;
   if (!data) return null;
 
-  const maxRev = Math.max(...data.forecast.map((f) => f.revenue), 1);
   const totalRev = data.forecast.reduce((s, f) => s + f.revenue, 0);
   const totalBk = data.forecast.reduce((s, f) => s + f.bookings, 0);
 
@@ -153,11 +152,14 @@ function HorizonTab({ propertyId }) {
 
       <div className="bg-white border border-stone-200 rounded-lg p-4">
         <div className="text-xs text-stone-500 mb-3 flex items-center gap-1.5">
-          <Info size={12} /> Çubuk yüksekliği tahmini gelir, renk YoY değişim, ucu güven skoru.
+          <Info size={12} /> Çubuk yüksekliği tahmini gelir, soluk bölge belirsizlik bandı (iyimser↔kötümser), renk YoY değişim.
         </div>
         <div className="flex items-end gap-1.5 h-56 overflow-x-auto" data-testid="fcv2-horizon-chart">
           {data.forecast.map((f) => {
-            const h = Math.max(4, (f.revenue / maxRev) * 200);
+            const maxBand = Math.max(...data.forecast.map((x) => x.revenue_high || x.revenue), 1);
+            const h = Math.max(4, (f.revenue / maxBand) * 200);
+            const hHigh = Math.max(h, ((f.revenue_high || f.revenue) / maxBand) * 200);
+            const hLow = Math.min(h, Math.max(2, ((f.revenue_low || f.revenue) / maxBand) * 200));
             const yoy = f.vs_last_year;
             const barColor =
               yoy === null ? "bg-stone-300" :
@@ -165,14 +167,19 @@ function HorizonTab({ propertyId }) {
               yoy < -5 ? "bg-rose-400" : "bg-sky-400";
             return (
               <div key={f.period} className="flex flex-col items-center flex-shrink-0 group relative" style={{ width: 30 }}>
-                <div className="absolute -top-14 bg-stone-900 text-white text-[10px] rounded-md px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-10">
+                <div className="absolute -top-16 bg-stone-900 text-white text-[10px] rounded-md px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-all pointer-events-none whitespace-nowrap z-10">
                   <div className="font-semibold">{f.label}</div>
                   <div>£{f.revenue.toLocaleString()}</div>
+                  {f.revenue_low != null && <div className="text-stone-400">Aralık: £{f.revenue_low.toLocaleString()} – £{f.revenue_high.toLocaleString()}</div>}
                   <div>{f.bookings} rez · ADR £{f.adr}</div>
                   <div>Güven %{f.confidence}</div>
                   {yoy !== null && <div className={yoy >= 0 ? "text-emerald-300" : "text-rose-300"}>{yoy >= 0 ? "+" : ""}{yoy}% YoY</div>}
                 </div>
-                <div className={`${barColor} rounded-t w-full transition-all group-hover:opacity-80`} style={{ height: h }} />
+                <div className="relative w-full flex items-end justify-center" style={{ height: hHigh }} data-testid={`fcv2-band-${f.period}`}>
+                  <div className={`absolute bottom-0 w-full ${barColor} opacity-20 rounded-t`} style={{ height: hHigh }} />
+                  <div className={`${barColor} rounded-t w-full transition-all group-hover:opacity-80 relative`} style={{ height: h }} />
+                  <div className="absolute w-full border-t border-white/70" style={{ bottom: hLow }} />
+                </div>
                 <div className="text-[9px] text-stone-500 mt-1 -rotate-45 origin-top-left whitespace-nowrap">{f.label}</div>
               </div>
             );
@@ -187,6 +194,7 @@ function HorizonTab({ propertyId }) {
               <th className="text-left px-3 py-2">Dönem</th>
               <th className="text-right px-3 py-2">Rezervasyon</th>
               <th className="text-right px-3 py-2">Gelir</th>
+              <th className="text-right px-3 py-2">Aralık (±)</th>
               <th className="text-right px-3 py-2">ADR</th>
               <th className="text-right px-3 py-2">LOS</th>
               <th className="text-right px-3 py-2">YoY</th>
@@ -199,6 +207,9 @@ function HorizonTab({ propertyId }) {
                 <td className="px-3 py-2 font-medium text-stone-800">{f.label}</td>
                 <td className="px-3 py-2 text-right">{f.bookings}</td>
                 <td className="px-3 py-2 text-right">£{f.revenue.toLocaleString()}</td>
+                <td className="px-3 py-2 text-right text-stone-400" data-testid={`fcv2-range-${f.period}`}>
+                  {f.revenue_low != null ? `£${f.revenue_low.toLocaleString()} – £${f.revenue_high.toLocaleString()}` : "—"}
+                </td>
                 <td className="px-3 py-2 text-right">£{f.adr}</td>
                 <td className="px-3 py-2 text-right">{f.los}</td>
                 <td className={`px-3 py-2 text-right ${f.vs_last_year > 0 ? "text-emerald-600" : f.vs_last_year < 0 ? "text-rose-600" : "text-stone-500"}`}>

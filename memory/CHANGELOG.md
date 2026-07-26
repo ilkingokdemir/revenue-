@@ -2182,3 +2182,15 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   aynı dosyada ardışık edit kullan.
 - E2E: 8 oda × 3 gece £70 senaryosu → breakeven £62, önerilen £124 (LRV), %0→%40,
   uplift £1296; UI kartı ekran görüntüsüyle doğrulandı.
+
+## Iter 454 (2026-07-26) — Forecast Belirsizlik Bandı TAMAMLANDI (FLYR paritesi %100)
+- forecast_v2.compute_horizon: son 12 ay rezervasyon volatilitesinden CV hesaplanır
+  (%8-%40 sınırlı), ufukla ayda +%5 genişler (max %50). Her aya bookings_low/high,
+  revenue_low/high, band_pct; yanıt köküne uncertainty_cv_pct eklendi.
+- ForecastV2Panel (24 Ay Ufku): çubuklarda soluk belirsizlik bandı katmanı
+  (fcv2-band-*), tooltip'te "Aralık: £X – £Y", tabloya "Aralık (±)" kolonu (fcv2-range-*).
+- NOT: Hot reload bir kez takıldı (WatchFiles reload sonrası startup asılı kaldı) —
+  supervisorctl restart backend ile çözüldü.
+- E2E: API'da band değerleri (%40→%46 genişleme) + UI grafik/tablo doğrulandı.
+- FLYR fark listesi TAMAMEN kapandı: Planning sürümleme (449), intraday re-price (450),
+  MLOS/CTA advisor (451), üçlü görünüm (452), blended-rate (453), belirsizlik bandı (454).

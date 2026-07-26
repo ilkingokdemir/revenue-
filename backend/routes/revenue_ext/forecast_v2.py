@@ -121,6 +121,16 @@ async def compute_horizon(db, property_id: str, months: int = 24):
     yoy = r6 / p6 if p6 else 1.0
     yoy = max(0.7, min(1.5, yoy))
 
+    # Uncertainty band: last-12 volatility (CV), horizon ile genişler
+    bks_12 = [x["bookings"] for x in last_12 if x["bookings"] > 0]
+    if len(bks_12) >= 3:
+        mean_bk = sum(bks_12) / len(bks_12)
+        var_bk = sum((b - mean_bk) ** 2 for b in bks_12) / len(bks_12)
+        cv = (var_bk ** 0.5) / mean_bk if mean_bk else 0.2
+    else:
+        cv = 0.2
+    cv = max(0.08, min(cv, 0.40))
+
     # ---- Forecast loop ----
     forecast = []
     for i in range(months):
@@ -139,11 +149,18 @@ async def compute_horizon(db, property_id: str, months: int = 24):
             base = avg_bk * season * yoy
         # Confidence decays over time
         confidence = max(40, 95 - i * 2)
+        band = min(cv * (1 + i * 0.05), 0.5)
+        rev = round(base * avg_adr * avg_los, 2)
         forecast.append({
             "period": f"{fy:04d}-{fm:02d}",
             "label": f"{calendar.month_abbr[fm]} {fy}",
             "bookings": int(round(base)),
-            "revenue": round(base * avg_adr * avg_los, 2),
+            "bookings_low": int(round(base * (1 - band))),
+            "bookings_high": int(round(base * (1 + band))),
+            "revenue": rev,
+            "revenue_low": round(rev * (1 - band), 2),
+            "revenue_high": round(rev * (1 + band), 2),
+            "band_pct": round(band * 100, 1),
             "adr": round(avg_adr, 2),
             "los": round(avg_los, 2),
             "confidence": confidence,
@@ -156,6 +173,7 @@ async def compute_horizon(db, property_id: str, months: int = 24):
         "avg_adr": round(avg_adr, 2),
         "avg_los": round(avg_los, 2),
         "yoy_growth_pct": round((yoy - 1) * 100, 1),
+        "uncertainty_cv_pct": round(cv * 100, 1),
         "historical": historical,
         "forecast": forecast,
     }

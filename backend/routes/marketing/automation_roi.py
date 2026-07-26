@@ -341,6 +341,39 @@ def create_automation_roi_router(db, require_roles, runners=None):
                            "view_rate": rate(up_viewed, up_sent),
                            "accept_rate": rate(up_accepted, up_sent)}}
 
+    @router.get("/automation/roi/{property_id}/time-saved")
+    async def time_saved(property_id: str, days: int = 30,
+                         current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Kazanılan saat + FTE karşılığı (RobosizeME Automation Center paritesi)."""
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        pq = {} if property_id == "all" else {"property_id": property_id}
+
+        async def _cnt(coll, q):
+            try:
+                return await coll.count_documents(q)
+            except Exception:
+                return 0
+
+        items = [
+            ("Kupon e-postaları", 5, await _cnt(db.direct_conversion_offers, {**pq, "created_at": {"$gte": since}})),
+            ("Upsell teklifleri", 4, await _cnt(db.upsell_offers, {"source": "autopilot", "created_at": {"$gte": since}})),
+            ("İptal kurtarma teklifleri", 5, await _cnt(db.save_offers, {"source": "autopilot", "created_at": {"$gte": since}})),
+            ("AI yorum yanıtları", 8, await _cnt(db.reviews, {"response_method": {"$regex": "ai_autopilot"}, "responded_at": {"$gte": since}})),
+            ("No-show tahsilatları", 10, await _cnt(db.bookings, {**pq, "no_show_charged": True, "no_show_charged_at": {"$gte": since}})),
+            ("AR ödeme eşleştirmeleri", 6, await _cnt(db.ar_match_log, {"applications.0": {"$exists": True}, "created_at": {"$gte": since}})),
+            ("Waitlist teklifleri", 5, await _cnt(db.waitlist_entries, {"offered_at": {"$gte": since}})),
+            ("Depozito talepleri", 6, await _cnt(db.deposit_requests, {"created_at": {"$gte": since}})),
+            ("HK otomatik görev dağıtımı", 2, await _cnt(db.housekeeping_tasks, {"auto_generated": True, "created_at": {"$gte": since}})),
+            ("Inbox AI otonom cevaplar", 4, await _cnt(db.inbox_agent_log, {"action": "auto_replied", "created_at": {"$gte": since}})),
+        ]
+        rows = [{"label": l, "minutes_each": m, "count": c, "minutes": m * c}
+                for l, m, c in items if c > 0]
+        total_min = sum(r["minutes"] for r in rows)
+        hours = round(total_min / 60, 1)
+        work_hours_in_period = 160 * (days / 30.0)
+        return {"days": days, "rows": rows, "total_actions": sum(r["count"] for r in rows),
+                "hours_saved": hours, "fte_equivalent": round(hours / work_hours_in_period, 2)}
+
     @router.get("/automation/health/{property_id}")
     async def automation_health(property_id: str,
                                 current_user: dict = Depends(require_roles("admin", "manager"))):

@@ -148,6 +148,16 @@ JOB_REGISTRY = {
             {"key": "offer_ttl_hours", "label": "Teklif geçerlilik süresi", "type": "number", "min": 12, "max": 168, "default": 48, "suffix": "saat"},
         ],
     },
+    "hk_dispatch": {
+        "label": "HK Otomatik Görev Dağıtımı", "category": "guest",
+        "description": "Check-out olan odaları en az yüklü kat görevlisine atar; bugün varış olan odalara öncelik verir.",
+        "default_cron": (6, 45), "default_enabled": True, "params": [],
+    },
+    "res_quality": {
+        "label": "Rezervasyon Kalite Kontrolü", "category": "guest",
+        "description": "Yaklaşan varışları hatalara karşı tarar (eksik iletişim, sıfır fiyat, çift kayıt) ve iletişim bilgilerini otomatik tamamlar.",
+        "default_cron": (5, 30), "default_enabled": True, "params": [],
+    },
 }
 
 CATEGORY_META = {

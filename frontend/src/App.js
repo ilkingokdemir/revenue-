@@ -84,7 +84,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -995,6 +995,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         )}
         {activeView === "waitlist" && (
           <WaitlistPanel propertyId={activePropertyId || "all"} />
+        )}
+        {activeView === "hk-dispatch" && (
+          <HkDispatchPanel propertyId={activePropertyId || "all"} />
+        )}
+        {activeView === "res-quality" && (
+          <ResQualityPanel propertyId={activePropertyId || "all"} />
         )}
         {activeView === "guest-segments" && <GuestSegmentsPanel />}
         {activeView === "channel-health" && (

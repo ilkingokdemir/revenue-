@@ -66,7 +66,7 @@ def _heuristic_parse(text: str) -> Dict:
         conditions.append({"field": "nights", "op": "gte", "value": int(m.group(1))})
     for tag in ("honeymoon", "vip", "balayı", "aile", "business"):
         if tag in low:
-            conditions.append({"field": "tags", "op": "contains", "value": "balayı" and tag})
+            conditions.append({"field": "tags", "op": "contains", "value": tag})
             break
     return {
         "name": (text[:60] + "…") if len(text) > 60 else text,

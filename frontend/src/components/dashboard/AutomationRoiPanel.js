@@ -52,6 +52,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const [savingRun, setSavingRun] = useState(false);
   const [report, setReport] = useState(null);
   const [sendingReport, setSendingReport] = useState(false);
+  const [timeSaved, setTimeSaved] = useState(null);
 
   const sendReport = async () => {
     setSendingReport(true);
@@ -98,7 +99,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, o, t, f, n, p, h, cs, rc] = await Promise.all([
+      const [r, o, t, f, n, p, h, cs, rc, ts] = await Promise.all([
         axios.get(`${API}/api/automation/roi/${propertyId}?days=${days}`),
         axios.get(`${API}/api/automation/opportunities/${propertyId}`),
         axios.get(`${API}/api/automation/roi/${propertyId}/trend?weeks=8`),
@@ -108,6 +109,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
         axios.get(`${API}/api/automation/health/${propertyId}`),
         axios.get(`${API}/api/ai-predictions/cancel-save/stats/${propertyId}?days=30`),
         axios.get(`${API}/api/automation/report-card/preview/${propertyId}?days=30`),
+        axios.get(`${API}/api/automation/roi/${propertyId}/time-saved?days=${days}`),
       ]);
       setData(r.data);
       setOpps(o.data);
@@ -118,6 +120,7 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
       setHealth(h.data);
       setCancelSave(cs.data);
       setReport(rc.data);
+      setTimeSaved(ts.data);
     } catch { toast.error("ROI verisi yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId, days]);
@@ -214,6 +217,31 @@ export default function AutomationRoiPanel({ propertyId, onNavigate }) {
           );
         })}
       </div>
+
+      {timeSaved && timeSaved.total_actions > 0 && (
+        <div className="bg-gradient-to-br from-cyan-50 to-sky-50 border border-cyan-200 rounded-xl p-5" data-testid="roi-time-saved">
+          <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+            <h3 className="text-sm font-semibold text-stone-900">⏱️ Kazanılan Zaman ({timeSaved.days} gün)</h3>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <div className="text-2xl font-black text-cyan-700">{timeSaved.hours_saved} saat</div>
+                <div className="text-[10px] text-stone-500">{timeSaved.total_actions} otomatik aksiyon</div>
+              </div>
+              <div className="text-right border-l border-cyan-200 pl-4">
+                <div className="text-2xl font-black text-sky-700">{timeSaved.fte_equivalent} FTE</div>
+                <div className="text-[10px] text-stone-500">tam zamanlı personel karşılığı</div>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {timeSaved.rows.map(r => (
+              <span key={r.label} className="text-[11px] px-2 py-1 bg-white border border-cyan-100 rounded-lg text-stone-600">
+                {r.label}: <strong>{r.count}</strong> × {r.minutes_each}dk
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {trend?.buckets?.length > 0 && (
         <div className="bg-white border border-stone-200 rounded-xl p-5" data-testid="roi-trend-chart">

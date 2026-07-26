@@ -1307,6 +1307,30 @@ async def _job_waitlist_match(property_id: str) -> dict:
 
 JOB_HANDLERS["waitlist_match"] = _job_waitlist_match
 
+from routes.hotel_ops.hk_dispatch import create_hk_dispatch_router
+hk_dispatch_router = create_hk_dispatch_router(db, require_roles)
+api_router.include_router(hk_dispatch_router)
+
+async def _job_hk_dispatch(property_id: str) -> dict:
+    try:
+        return await hk_dispatch_router.run_dispatch_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["hk_dispatch"] = _job_hk_dispatch
+
+from routes.pms.res_quality import create_res_quality_router
+res_quality_router = create_res_quality_router(db, require_roles)
+api_router.include_router(res_quality_router)
+
+async def _job_res_quality(property_id: str) -> dict:
+    try:
+        return await res_quality_router.run_autofix_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["res_quality"] = _job_res_quality
+
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))
 

@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 433 - HK Auto-Dispatch + Reservation Quality Check + Automation ROI FTE/Time-Saved. Backend pytest: 13/13 PASSED covering (1) HK dispatch: seeded 3 checkouts (901/902/903) + 1 arrival on room 902 → run_dispatch returned tasks_created=3 urgent=1, tasks distributed across multiple different housekeepers, urgent task correctly on room 902; rerun → skipped_duplicates=3 tasks_created=0 (idempotent). GET /hk-dispatch/{pid}/board returned {columns, unassigned, counts, urgent_rooms, total} with room 902 in urgent_rooms. (2) Res Quality: seeded booking with missing email/phone + matching guest_profile → GET /res-quality/{pid}?days=14 returned proper shape with our seed booking flagged missing_email + missing_phone; days param clamped correctly (200→60, 0→1); POST /autofix returned fixed_email≥1, fixed_phone≥1 and booking doc was updated with guest_email, guest_phone, quality_fixed_at. (3) Time-Saved: GET /automation/roi/all/time-saved?days=30 returned {days=30, rows, total_actions, hours_saved, fte_equivalent} — numerically consistent (hours_saved == round(sum(minutes)/60,1); fte == round(hours/160,2)). Real values: 56.5 saat / 676 aksiyon / 0.35 FTE. (4) Automation settings: /api/automation/settings returned jobs array with 23 motors including hk_dispatch + res_quality; scheduler trigger for both motors returned 200. (5) Regression 432: /ar-agent/overview, /waitlist/all, /automation/v2/nl-parse (short text 400), /inbox/agent/config all healthy. Frontend Playwright: (a) Operations→'HK görev dağıtım panosu' opened hk-dispatch-panel with all 4 stat tiles (hkd-stat-total/pending/progress/urgent), 4 housekeeper columns (hkd-col-*), 'Görevleri Dağıt' button (hk-dispatch-run-btn) triggered toast; (b) Reservations→'Rezervasyon kalite kontrolü' opened res-quality-panel with all 4 stats (98 scanned / 92 clean / 6 issues / 93.9 score), days selector, by_code chips (Oda atanmamış: 5, E-posta eksik: 1, Telefon eksik: 1), issues table with 6 rows, autofix triggered toast; (c) Revenue & rates → Tools → automation-hub-btn → ROI tab → roi-time-saved card displays '56.5 saat / 676 otomatik aksiyon / 0.35 FTE' with 6 action chips (Kupon 664×5dk, İptal kurtarma 6×5dk, No-show 2×10dk, Depozito 2×6dk, HK otomatik görev dağıtımı 1×2dk, Inbox AI otonom cevaplar 1×4dk). All UI-DB integration verified.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration433_hk_res_time.py",
+    "/app/test_reports/pytest/iter433.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "hk_dispatch.run_dispatch_internal: departure query includes status 'checked_in' — this dispatches HK cleaning tasks for guests who never actually checked out but merely had check_out==today; if a guest overstays (day-use extension after 15:00) or receptionist forgot to hit checkout, HK will be dispatched prematurely. Consider limiting to status='checked_out' or gating on time-of-day.",
+    "hk_dispatch.board: 'minutes' calculation `sum(... for t in mine if t not in done)` compares dicts by identity — this works because 'done' list contains the same object refs as 'mine', but is fragile. Use a set of task ids for clarity.",
+    "res_quality.scan_internal: duplicate detection groups by guest_email OR guest_name — if two different guests happen to share a first-name-only guest_name and same check_in/property, false positive 'duplicate' will be reported. Recommend requiring email match only.",
+    "res_quality.autofix_internal: silently ignores properties that have no matching guest_profile (correct behavior) but never records to res_quality_log which issues were left unfixed — the log entry only holds counters. Add {unfixed_email_ids, unfixed_phone_ids} for auditability.",
+    "automation_roi time-saved endpoint (~line 345): action counts appear to be derived from actual DB rows — verify hk_dispatch counter increments per dispatched task rather than per run, otherwise long-term FTE will under-report as usage grows.",
+    "hk_dispatch does not persist a per-run summary anywhere — historical dispatch analytics (how many tasks/day, urgent%, distribution fairness) are lost. Consider inserting a run summary into a hk_dispatch_log collection for reporting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration433_hk_res_time.py (new)"
+  ],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "100% (HK + RQ + ROI Time-Saved panels all verified with data-testids and live data)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — works (token field 'token')",
+  "seed_data_creation": "Ephemeral test bookings hkd-qa-out-901/902/903 + hkd-qa-in-902 (4 bookings) and rq-qa-booking-1 + guest_profile rq-qa-profile@test.local created inside pytest module fixture and CLEANED UP on teardown (delete_many by id regex ^hkd-qa and ^rq-qa, housekeeping_tasks by booking_id regex ^hkd-qa and also room_number in [901,902,903] auto_dispatch=true today, guest_profiles by email). Verified no leftovers.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 433 features all validated. Automation settings shape: {'categories': {...}, 'jobs': [ {job: str, category, ...} ]} — use response['jobs'] not response['motors']. HK dispatch dedupe key: (property_id, room_number, due_date, auto_dispatch=true). Time-saved endpoint at GET /api/automation/roi/all/time-saved?days=30 (admin-only). Real production data currently: 676 total_actions, 56.5 hours, 0.35 FTE.",
+  "rca of the issue": "N/A — no bugs found."
+}

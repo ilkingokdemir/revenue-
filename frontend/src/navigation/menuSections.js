@@ -131,6 +131,7 @@ export function buildMenuSections(t, user) {
       color: "text-stone-500",
       items: [
         { id: "arrivals", icon: Bed, name: "Arrivals cockpit", testId: "arrivals-btn" },
+        { id: "res-quality", icon: ShieldCheck, name: "Rezervasyon kalite kontrolü", testId: "res-quality-btn" },
         { id: "unified-inbox", icon: Tray, name: "Unified inbox", testId: "unified-inbox-btn" },
         { id: "walkin", icon: UserPlus, name: "Walk-in", testId: "walkin-btn" },
         { id: "no-show", icon: Bell, name: "No-show charges", testId: "no-show-btn" },
@@ -204,6 +205,7 @@ export function buildMenuSections(t, user) {
       items: [
         { divider: true, label: "Housekeeping" },
         { id: "housekeeping", icon: Broom, name: t("nav.housekeeping"), testId: "housekeeping-btn" },
+        { id: "hk-dispatch", icon: Lightning, name: "HK görev dağıtım panosu", testId: "hk-dispatch-btn" },
 
         { divider: true, label: "Maintenance & Ops" },
         { id: "ops-quick", icon: Lightning, name: "Quick ops", testId: "ops-quick-btn" },

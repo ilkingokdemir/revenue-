@@ -78,6 +78,89 @@ def _segment_of(source: str) -> str:
     return "Diğer"
 
 
+async def compute_horizon(db, property_id: str, months: int = 24):
+    today = date.today()
+    start_12mo_back = date(today.year - 1, today.month, 1)
+
+    # ---- Build historical monthly stats (last 24 months) ----
+    historical = {}  # "YYYY-MM" -> {bookings, revenue, adr, los}
+    for i in range(24, 0, -1):
+        ref_y = today.year
+        ref_m = today.month - i
+        while ref_m <= 0:
+            ref_m += 12
+            ref_y -= 1
+        fm, lm = _month_range(ref_y, ref_m)
+        bks = await db.bookings.find({
+            "property_id": property_id,
+            "check_in": {"$gte": fm.isoformat(), "$lte": lm.isoformat()},
+            "status": {"$ne": "cancelled"},
+        }, {"_id": 0, "total_price": 1, "nights": 1}).to_list(5000)
+        n = len(bks)
+        rev = sum((b.get("total_price") or 0) for b in bks)
+        nights = sum((b.get("nights") or 1) for b in bks)
+        historical[f"{ref_y:04d}-{ref_m:02d}"] = {
+            "bookings": n,
+            "revenue": round(rev, 2),
+            "adr": round(rev / nights, 2) if nights else 0,
+            "avg_los": round(nights / n, 2) if n else 0,
+        }
+
+    # ---- Model parameters ----
+    last_12 = [v for k, v in historical.items() if k >= f"{start_12mo_back.year:04d}-{start_12mo_back.month:02d}"]
+    avg_bk = sum(x["bookings"] for x in last_12) / max(len(last_12), 1)
+    avg_adr = sum(x["adr"] for x in last_12 if x["adr"] > 0) / max(sum(1 for x in last_12 if x["adr"] > 0), 1) or 120
+    avg_los = sum(x["avg_los"] for x in last_12 if x["avg_los"] > 0) / max(sum(1 for x in last_12 if x["avg_los"] > 0), 1) or 2.0
+
+    # YoY growth from last 6 vs prior 6
+    keys_sorted = sorted(historical.keys())
+    recent_6 = keys_sorted[-6:] if len(keys_sorted) >= 6 else keys_sorted
+    prior_6 = keys_sorted[-12:-6] if len(keys_sorted) >= 12 else []
+    r6 = sum(historical[k]["bookings"] for k in recent_6) or 1
+    p6 = sum(historical[k]["bookings"] for k in prior_6) or r6
+    yoy = r6 / p6 if p6 else 1.0
+    yoy = max(0.7, min(1.5, yoy))
+
+    # ---- Forecast loop ----
+    forecast = []
+    for i in range(months):
+        fy = today.year
+        fm = today.month + i
+        while fm > 12:
+            fm -= 12
+            fy += 1
+        key_ly = f"{fy - 1:04d}-{fm:02d}"
+        ly_bk = historical.get(key_ly, {}).get("bookings", 0)
+        season = SEASON_WEIGHTS.get(fm, 1.0)
+        # Prefer LY actual if available (seasonality learned), else synthetic
+        if ly_bk > 0:
+            base = ly_bk * yoy
+        else:
+            base = avg_bk * season * yoy
+        # Confidence decays over time
+        confidence = max(40, 95 - i * 2)
+        forecast.append({
+            "period": f"{fy:04d}-{fm:02d}",
+            "label": f"{calendar.month_abbr[fm]} {fy}",
+            "bookings": int(round(base)),
+            "revenue": round(base * avg_adr * avg_los, 2),
+            "adr": round(avg_adr, 2),
+            "los": round(avg_los, 2),
+            "confidence": confidence,
+            "vs_last_year": round((base - ly_bk) / ly_bk * 100, 1) if ly_bk else None,
+        })
+
+    return {
+        "property_id": property_id,
+        "months": months,
+        "avg_adr": round(avg_adr, 2),
+        "avg_los": round(avg_los, 2),
+        "yoy_growth_pct": round((yoy - 1) * 100, 1),
+        "historical": historical,
+        "forecast": forecast,
+    }
+
+
 def create_forecast_v2_router(db, require_roles):
     router = APIRouter()
 
@@ -168,86 +251,7 @@ def create_forecast_v2_router(db, require_roles):
                       current_user: dict = Depends(require_roles("admin", "manager"))):
         if months < 3 or months > 36:
             raise HTTPException(400, "months must be 3..36")
-        today = date.today()
-        start_12mo_back = date(today.year - 1, today.month, 1)
-
-        # ---- Build historical monthly stats (last 24 months) ----
-        historical = {}  # "YYYY-MM" -> {bookings, revenue, adr, los}
-        for i in range(24, 0, -1):
-            ref_y = today.year
-            ref_m = today.month - i
-            while ref_m <= 0:
-                ref_m += 12
-                ref_y -= 1
-            fm, lm = _month_range(ref_y, ref_m)
-            bks = await db.bookings.find({
-                "property_id": property_id,
-                "check_in": {"$gte": fm.isoformat(), "$lte": lm.isoformat()},
-                "status": {"$ne": "cancelled"},
-            }, {"_id": 0, "total_price": 1, "nights": 1}).to_list(5000)
-            n = len(bks)
-            rev = sum((b.get("total_price") or 0) for b in bks)
-            nights = sum((b.get("nights") or 1) for b in bks)
-            historical[f"{ref_y:04d}-{ref_m:02d}"] = {
-                "bookings": n,
-                "revenue": round(rev, 2),
-                "adr": round(rev / nights, 2) if nights else 0,
-                "avg_los": round(nights / n, 2) if n else 0,
-            }
-
-        # ---- Model parameters ----
-        last_12 = [v for k, v in historical.items() if k >= f"{start_12mo_back.year:04d}-{start_12mo_back.month:02d}"]
-        avg_bk = sum(x["bookings"] for x in last_12) / max(len(last_12), 1)
-        avg_adr = sum(x["adr"] for x in last_12 if x["adr"] > 0) / max(sum(1 for x in last_12 if x["adr"] > 0), 1) or 120
-        avg_los = sum(x["avg_los"] for x in last_12 if x["avg_los"] > 0) / max(sum(1 for x in last_12 if x["avg_los"] > 0), 1) or 2.0
-
-        # YoY growth from last 6 vs prior 6
-        keys_sorted = sorted(historical.keys())
-        recent_6 = keys_sorted[-6:] if len(keys_sorted) >= 6 else keys_sorted
-        prior_6 = keys_sorted[-12:-6] if len(keys_sorted) >= 12 else []
-        r6 = sum(historical[k]["bookings"] for k in recent_6) or 1
-        p6 = sum(historical[k]["bookings"] for k in prior_6) or r6
-        yoy = r6 / p6 if p6 else 1.0
-        yoy = max(0.7, min(1.5, yoy))
-
-        # ---- Forecast loop ----
-        forecast = []
-        for i in range(months):
-            fy = today.year
-            fm = today.month + i
-            while fm > 12:
-                fm -= 12
-                fy += 1
-            key_ly = f"{fy - 1:04d}-{fm:02d}"
-            ly_bk = historical.get(key_ly, {}).get("bookings", 0)
-            season = SEASON_WEIGHTS.get(fm, 1.0)
-            # Prefer LY actual if available (seasonality learned), else synthetic
-            if ly_bk > 0:
-                base = ly_bk * yoy
-            else:
-                base = avg_bk * season * yoy
-            # Confidence decays over time
-            confidence = max(40, 95 - i * 2)
-            forecast.append({
-                "period": f"{fy:04d}-{fm:02d}",
-                "label": f"{calendar.month_abbr[fm]} {fy}",
-                "bookings": int(round(base)),
-                "revenue": round(base * avg_adr * avg_los, 2),
-                "adr": round(avg_adr, 2),
-                "los": round(avg_los, 2),
-                "confidence": confidence,
-                "vs_last_year": round((base - ly_bk) / ly_bk * 100, 1) if ly_bk else None,
-            })
-
-        return {
-            "property_id": property_id,
-            "months": months,
-            "avg_adr": round(avg_adr, 2),
-            "avg_los": round(avg_los, 2),
-            "yoy_growth_pct": round((yoy - 1) * 100, 1),
-            "historical": historical,
-            "forecast": forecast,
-        }
+        return await compute_horizon(db, property_id, months)
 
     # ========== DAILY DEMAND CALENDAR ==========
     # iter 372: extended horizon to 730 days (2 years) with hybrid modeling —

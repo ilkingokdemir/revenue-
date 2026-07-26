@@ -610,6 +610,9 @@ ops_v2_router = create_ops_v2_router(db, require_roles)
 api_router.include_router(ops_v2_router)
 forecast_v2_router = create_forecast_v2_router(db, require_roles)
 api_router.include_router(forecast_v2_router)
+
+from routes.revenue_ext.forecast_plans import create_forecast_plans_router
+api_router.include_router(create_forecast_plans_router(db, require_roles))
 anomaly_router = create_anomaly_router(db, require_roles, LlmChat, UserMessage)
 api_router.include_router(anomaly_router)
 tipping_router = create_tipping_router(db, require_roles, stripe_api_key)

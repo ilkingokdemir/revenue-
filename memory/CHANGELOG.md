@@ -2110,3 +2110,20 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   (allot-operator-report, allot-op-row-{op}).
 - E2E: 2 operatör + 3 pickup + release-run → rapor değerleri (420/285 EUR, kayıplar, trend)
   curl + UI ekran görüntüsüyle doğrulandı. QA verileri temizlendi.
+
+## Iter 449 (2026-07-26) — FLYR Analizi + Forecast Planlama Çalışma Alanı TAMAMLANDI
+- flyrhospitality.com incelendi (ana sayfa + Optimize + Planning) → /app/memory/FLYR_GAP_REPORT.md
+  (bizde olan/olmayan karşılaştırma tablosu + öncelikli eksik listesi).
+- forecast_v2.py REFACTOR: horizon hesabı module-level compute_horizon(db,pid,months) olarak
+  ayrıldı (endpoint davranışı değişmedi, regresyon doğrulandı).
+- YENİ revenue_ext/forecast_plans.py (/api/forecast-plans) — FLYR Planning paritesi:
+  POST /{pid}/versions (AI snapshot), GET listesi+özet, GET /versions/{vid},
+  PUT /versions/{vid}/rows (sadece taslak; adjustment log + not), POST /lock (yayınla/kilitle),
+  POST /comment, POST /approve (kişi başı idempotent), DELETE (taslak), GET /{pid}/compare?a=&b=
+  (dönem bazlı delta + toplam Δ). Collection: forecast_versions.
+- YENİ ForecastPlansPanel (menü: Revenue>Forecast & Pace> "Forecast planlama (sürüm & onay)",
+  id forecast-plans): sürüm listesi (durum/gelir/düzeltme/yorum/onay), 2'li karşılaştırma
+  (fp-compare-*), detay görünümü: satır düzeltme formu (AI baz farkı vurgulu), yorum akışı,
+  değişiklik+onay geçmişi, Kilitle&Yayınla + Onayla butonları.
+- E2E: snapshot→düzeltme→yorum→onay→kilit→kilitliyken düzenleme 400→karşılaştırma (Δ -2496.66)
+  + forecast-v2 regresyonu + UI detay ekranı doğrulandı. QA verileri temizlendi.

@@ -89,6 +89,7 @@ import {
   HourglassMedium,
   Bank,
   LockKey,
+  GitBranch,
 } from "@phosphor-icons/react";
 
 export function buildMenuSections(t, user) {
@@ -247,6 +248,7 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Forecast & Pace" },
         { id: "forecast", icon: ChartLine, name: t("nav.forecast"), testId: "forecast-btn" },
         { id: "forecast-v2", icon: TrendUp, name: "24-month forecast", testId: "forecast-v2-btn" },
+        { id: "forecast-plans", icon: GitBranch, name: "Forecast planlama (sürüm & onay)", testId: "forecast-plans-btn" },
         { id: "pace-reports", icon: ChartLine, name: "Pace reports", testId: "pace-reports-btn" },
 
         { divider: true, label: "AI & Insights" },

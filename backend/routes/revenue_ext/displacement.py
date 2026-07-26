@@ -39,7 +39,11 @@ def create_displacement_router(db, require_roles):
         else:
             pid = property_id
 
-        total_rooms = await db.rooms.count_documents({"property_id": pid})
+        total_rooms = 0
+        for rt in await db.room_types.find({"property_id": pid}, {"_id": 0, "total_rooms": 1}).to_list(50):
+            total_rooms += int(rt.get("total_rooms", 0))
+        if total_rooms == 0:
+            total_rooms = await db.rooms.count_documents({"property_id": pid})
         if total_rooms == 0:
             rt_count = await db.room_types.count_documents({"property_id": pid})
             total_rooms = rt_count * 3
@@ -133,6 +137,56 @@ def create_displacement_router(db, require_roles):
         if group_rate < avg_individual_rate * 0.7:
             risks.append({"type": "deep_discount", "text": f"Group rate is {round((1-group_rate/avg_individual_rate)*100)}% below avg individual rate", "impact": "negative"})
 
+        # ── Blended-rate optimization (FLYR Groups parity) ──
+        room_nights = rooms_requested * nights
+        breakeven_rate = round(individual_total_revenue / room_nights, 2) if room_nights else 0.0
+        recommended_rate = round(breakeven_rate * 1.08, 2)
+        lrv_floor = 0.0
+        try:
+            from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
+            today = datetime.now(timezone.utc).date()
+            horizon = min(max((co.date() - today).days + 1, 1), 90)
+            lrv_map = await compute_lrv_floor(db, pid, horizon)
+            floors = [float(lrv_map.get((ci + timedelta(days=i)).strftime("%Y-%m-%d")) or 0) for i in range(nights)]
+            lrv_floor = round(max(floors or [0.0]), 2)
+        except Exception as ex:
+            logger.warning("LRV floor lookup failed: %s", ex)
+        if avg_individual_rate:
+            recommended_rate = min(recommended_rate, round(avg_individual_rate, 2))
+        if lrv_floor:
+            recommended_rate = max(recommended_rate, lrv_floor)
+        recommended_rate = round(recommended_rate, 2)
+
+        # Forecast impact: occupancy before/after accepting the group
+        occ_counts = []
+        for i in range(nights):
+            ds = (ci + timedelta(days=i)).strftime("%Y-%m-%d")
+            booked = await db.bookings.count_documents({
+                "property_id": pid, "status": {"$in": ["confirmed", "checked_in"]},
+                "check_in": {"$lte": ds}, "check_out": {"$gt": ds}})
+            occ_counts.append(booked)
+        avg_booked = sum(occ_counts) / max(len(occ_counts), 1)
+        occ_before_pct = round(avg_booked / total_rooms * 100, 1) if total_rooms else 0.0
+        occ_after_pct = round(min((avg_booked + rooms_requested) / total_rooms * 100, 100), 1) if total_rooms else 0.0
+
+        # Blended ADR after accepting group (kalan odalar bireysel satılır varsayımı)
+        remaining = max(total_rooms - int(avg_booked) - rooms_requested, 0)
+        expected_ind_sold = remaining * (fill_probability / 100)
+        blended_denom = rooms_requested + expected_ind_sold
+        blended_adr = round((group_rate * rooms_requested + avg_individual_rate * expected_ind_sold) / blended_denom, 2) if blended_denom else group_rate
+
+        blended = {
+            "breakeven_rate": breakeven_rate,
+            "recommended_rate": recommended_rate,
+            "lrv_floor": lrv_floor,
+            "requested_rate": group_rate,
+            "rate_verdict": "above" if group_rate >= recommended_rate else ("near" if group_rate >= breakeven_rate else "below"),
+            "uplift_if_recommended": round(max(recommended_rate - group_rate, 0) * room_nights, 2),
+            "blended_adr_after": blended_adr,
+            "occ_before_pct": occ_before_pct,
+            "occ_after_pct": occ_after_pct,
+        }
+
         return {
             "recommendation": recommendation,
             "confidence": confidence,
@@ -153,6 +207,7 @@ def create_displacement_router(db, require_roles):
                 "total_revenue": individual_total_revenue,
             },
             "displacement_cost": displacement_cost,
+            "blended": blended,
             "avg_demand": round(avg_demand),
             "total_rooms": total_rooms,
             "daily_analysis": daily_analysis,

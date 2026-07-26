@@ -132,6 +132,38 @@ export const DisplacementAnalysis = ({ propertyId }) => {
               <p className="text-xs text-stone-500">{result.displacement_cost > 0 ? "Lost revenue if you accept the group" : "Extra revenue from accepting the group"}</p>
             </div>
 
+            {/* Blended-Rate Önerisi (FLYR Groups parity) */}
+            {result.blended && (
+              <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 mt-3" data-testid="blended-rate-card">
+                <p className="text-[9px] text-indigo-300 uppercase font-bold mb-2">💡 Blended-Rate Önerisi</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <p className="text-[9px] text-white/30 uppercase">Önerilen min. grup fiyatı</p>
+                    <p className="text-xl font-black text-indigo-300" data-testid="blended-recommended-rate">{cur(result.blended.recommended_rate)}<span className="text-xs font-normal text-stone-500">/gece</span></p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-white/30 uppercase">Başabaş (breakeven)</p>
+                    <p className="text-lg font-bold text-white">{cur(result.blended.breakeven_rate)}</p>
+                    {result.blended.lrv_floor > 0 && <p className="text-[9px] text-stone-500">LRV taban: {cur(result.blended.lrv_floor)}</p>}
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-white/30 uppercase">Doluluk etkisi</p>
+                    <p className="text-lg font-bold text-white">%{result.blended.occ_before_pct} → <span className="text-emerald-400">%{result.blended.occ_after_pct}</span></p>
+                    <p className="text-[9px] text-stone-500">Blended ADR: {cur(result.blended.blended_adr_after)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-white/30 uppercase">Talep edilen fiyat</p>
+                    <p className={`text-lg font-bold ${result.blended.rate_verdict === "above" ? "text-emerald-400" : result.blended.rate_verdict === "near" ? "text-amber-400" : "text-red-400"}`} data-testid="blended-verdict">
+                      {cur(result.blended.requested_rate)} {result.blended.rate_verdict === "above" ? "✓ uygun" : result.blended.rate_verdict === "near" ? "≈ sınırda" : "✕ düşük"}
+                    </p>
+                    {result.blended.uplift_if_recommended > 0 && (
+                      <p className="text-[9px] text-amber-300">Önerilen fiyatla +{cur(result.blended.uplift_if_recommended)} kazanç</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Decision Buttons */}
             <div className="flex gap-3 mt-4">
               <button onClick={() => saveDecision("accepted")} data-testid="decision-accept"

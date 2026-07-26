@@ -2165,3 +2165,20 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - BudgetActualPanel: 3. sekme "Bütçe · Forecast · Gerçekleşen" (budget-tab-triple) — 4 KPI
   (kaynak rozeti dahil, triple-forecast-source), renkli sapma tablosu (triple-row-*).
 - E2E: canlı AI fallback → kilitli sürüm önceliği doğrulandı; UI ekranı onaylandı. QA temizlendi.
+
+## Iter 453 (2026-07-26) — Grup Blended-Rate Optimizasyonu TAMAMLANDI (FLYR Groups paritesi)
+- displacement.py analyze genişletildi: yanıta "blended" bloğu eklendi —
+  breakeven_rate (bireysel gelir / oda-gece), recommended_rate (breakeven×1.08,
+  bireysel ADR üstü kırpılır, LRV tabanı EN SON uygulanır — taban her zaman kazanır),
+  rate_verdict (above/near/below), uplift_if_recommended, blended_adr_after
+  (grup + kalan bireysel satış karması), occ_before/after_pct (gece bazlı OTB).
+- FIX: total_rooms artık room_types.total_rooms toplamından (fallback: rooms count) —
+  doluluk etkisi gerçekçi oldu.
+- DisplacementAnalysis.js: sonuç kartına "💡 Blended-Rate Önerisi" bölümü
+  (blended-rate-card, blended-recommended-rate, blended-verdict) — önerilen min grup
+  fiyatı, breakeven+LRV taban, doluluk %önce→%sonra + blended ADR, talep edilen fiyat
+  kararı (✓ uygun / ≈ sınırda / ✕ düşük) + önerilen fiyatla ek kazanç.
+- NOT: Aynı dosyaya paralel search_replace çakışması yaşandı (bir edit kayboldu) —
+  aynı dosyada ardışık edit kullan.
+- E2E: 8 oda × 3 gece £70 senaryosu → breakeven £62, önerilen £124 (LRV), %0→%40,
+  uplift £1296; UI kartı ekran görüntüsüyle doğrulandı.

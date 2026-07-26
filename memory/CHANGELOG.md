@@ -4,6 +4,13 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 437 — Team Chat Canlı Çeviri / Flexkeeping paritesi ✅ self-test PASS)
+- flexkeeping.com incelendi: Housekeeping/Maintenance/Collab/Automation/QA/Lost&Found modüllerinin TAMAMI zaten mevcuttu (lost_found.py + lost_found_match dahil — yeniden yapılmadı). Tek gerçek eksik: "dil bariyeri çözümü".
+- **Team Chat Canlı Çeviri** (`integrations_pkg/team_chat.py`): POST /team-chat/channels/{id}/translate {lang: tr|en|de|ru|ar|es} — son 30 mesajı gpt-4o-mini ile toplu çevirir, mesaj dokümanında `translations.{lang}` cache (2. çağrı 0.14s). Zaten hedef dilde olan mesaj aynen döner (UI'da gizlenir).
+- TeamChatPanel: başlıkta 🌐 dil seçici (localStorage kalıcı), orijinal mesajın altında mor italik çeviri satırı (chat-translation-{id}).
+- Bugfix: team_chat'te `Dict` import eksikliği backend'i düşürdü — düzeltildi. Eski test kanalları (test-channel-17787xx + ceviri-test) DB'den temizlendi.
+- E2E: TR→EN ve EN→TR çeviri, cache hızı, UI screenshot doğrulandı.
+
 ### 2026-07-26 (iter 436 — Misafir Olay Kayıtları & Dönen Misafir Takibi ✅ self-test PASS)
 - Kullanıcı isteği: Mews'teki "misafire özel bilgi kaydı (sessiz oda, astım, sevdiği yemek) + vardiya devri + tekrar rezervasyonda takip".
 - Mevcut altyapı tespit edildi: guest_preferences (yastık/kat/alerji/diyet + apply-to-booking) ve profil tercih chip'leri ZATEN vardı; eksik olan olay kayıtları + otomatik takip inşa edildi.

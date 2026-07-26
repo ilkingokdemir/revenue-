@@ -13,6 +13,8 @@ export default function TeamChatPanel({ user }) {
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [lang, setLang] = useState(() => localStorage.getItem("chat_lang") || "");
+  const [translations, setTranslations] = useState({});
   const streamRef = useRef(null);
 
   const loadChannels = useCallback(async () => {
@@ -46,6 +48,23 @@ export default function TeamChatPanel({ user }) {
 
   useEffect(() => { loadChannels(); }, [loadChannels]);
   useEffect(() => { loadMessages(); }, [loadMessages]);
+
+  // Canlı çeviri (Flexkeeping dil bariyeri paritesi)
+  useEffect(() => {
+    if (!lang || !activeId || messages.length === 0) return;
+    const missing = messages.some(m => !translations[m.id]);
+    if (!missing) return;
+    axios.post(`${API}/channels/${activeId}/translate`, { lang }, { withCredentials: true })
+      .then(r => setTranslations(t => ({ ...t, ...(r.data.translations || {}) })))
+      .catch(() => {});
+  }, [lang, activeId, messages]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const changeLang = (v) => {
+    setLang(v);
+    setTranslations({});
+    if (v) localStorage.setItem("chat_lang", v); else localStorage.removeItem("chat_lang");
+    if (v) toast.success(`Canlı çeviri açık: mesajlar ${{ tr: "Türkçe", en: "English", de: "Deutsch", ru: "Русский", ar: "العربية", es: "Español" }[v]} gösterilecek`);
+  };
 
   // Auto-poll
   useEffect(() => {
@@ -128,9 +147,21 @@ export default function TeamChatPanel({ user }) {
                 <Hash size={14} className="text-stone-400" />
                 <h2 className="text-sm font-semibold text-stone-900">{activeChannel.name}</h2>
                 <span className="text-[10px] text-stone-400">{activeChannel.kind}</span>
-                <span className="ml-auto flex items-center gap-1 text-[10px] text-stone-400">
-                  <Circle size={6} weight="fill" className="text-emerald-500" />
-                  Canlı (4sn poll)
+                <span className="ml-auto flex items-center gap-2">
+                  <select value={lang} onChange={e => changeLang(e.target.value)} data-testid="chat-translate-select"
+                    className="text-[10px] px-1.5 py-1 border border-stone-200 rounded-lg bg-white text-stone-600">
+                    <option value="">🌐 Çeviri kapalı</option>
+                    <option value="tr">🌐 Türkçe</option>
+                    <option value="en">🌐 English</option>
+                    <option value="de">🌐 Deutsch</option>
+                    <option value="ru">🌐 Русский</option>
+                    <option value="ar">🌐 العربية</option>
+                    <option value="es">🌐 Español</option>
+                  </select>
+                  <span className="flex items-center gap-1 text-[10px] text-stone-400">
+                    <Circle size={6} weight="fill" className="text-emerald-500" />
+                    Canlı (4sn poll)
+                  </span>
                 </span>
               </div>
               {activeChannel.description && (
@@ -170,6 +201,11 @@ export default function TeamChatPanel({ user }) {
                       <div className="text-sm text-stone-800 whitespace-pre-wrap break-words mt-0.5">
                         {m.body}
                       </div>
+                      {lang && translations[m.id] && translations[m.id] !== m.body && (
+                        <div className="text-xs text-violet-600 italic whitespace-pre-wrap break-words mt-0.5" data-testid={`chat-translation-${m.id}`}>
+                          🌐 {translations[m.id]}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

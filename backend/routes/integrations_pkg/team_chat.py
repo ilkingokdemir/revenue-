@@ -15,7 +15,8 @@ Endpoints:
 """
 from datetime import datetime, timezone
 import uuid
-from typing import Optional, List
+import os
+from typing import Optional, List, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -261,5 +262,55 @@ def create_team_chat_router(db, require_roles):
         await db.chat_channels.insert_one(doc)
         doc.pop("_id", None)
         return doc
+
+    SUPPORTED_LANGS = {"tr": "Türkçe", "en": "English", "de": "Deutsch",
+                       "ru": "Русский", "ar": "العربية", "es": "Español"}
+
+    @router.post("/channels/{channel_id}/translate")
+    async def translate_channel(
+        channel_id: str, data: Dict,
+        current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeping", "maintenance")),
+    ):
+        """Kanalın son mesajlarını hedef dile çevirir (Flexkeeping dil bariyeri paritesi).
+        Çeviriler mesaj dokümanında cache'lenir — her mesaj/dil için 1 LLM çağrısı."""
+        lang = data.get("lang", "tr")
+        if lang not in SUPPORTED_LANGS:
+            raise HTTPException(400, f"Desteklenen diller: {list(SUPPORTED_LANGS)}")
+        channel = await db.chat_channels.find_one({"id": channel_id}, {"_id": 0})
+        if not channel or not _can_user_see(channel, current_user):
+            raise HTTPException(403, "No access to this channel")
+        msgs = await db.chat_messages.find(
+            {"channel_id": channel_id}, {"_id": 0, "id": 1, "body": 1, "translations": 1}
+        ).sort("created_at", -1).to_list(30)
+        result = {m["id"]: (m.get("translations") or {}).get(lang) for m in msgs}
+        pending = [m for m in msgs if not result[m["id"]] and (m.get("body") or "").strip()]
+        if pending:
+            api_key = os.environ.get("EMERGENT_LLM_KEY")
+            if not api_key:
+                raise HTTPException(503, "Çeviri servisi kullanılamıyor")
+            try:
+                from emergentintegrations.llm.chat import LlmChat, UserMessage
+                import json as _json
+                import re as _re
+                payload = [{"id": m["id"], "text": m["body"][:500]} for m in pending[:30]]
+                chat = LlmChat(
+                    api_key=api_key, session_id=f"chat-tr-{uuid.uuid4().hex[:8]}",
+                    system_message=(
+                        f"Otel personeli sohbet mesajlarını {SUPPORTED_LANGS[lang]} diline çevir. "
+                        "Mesaj zaten o dildeyse aynen döndür. Kısaltmaları ve otel jargonunu koru. "
+                        'SADECE strict JSON array döndür: [{"id":"...","text":"çeviri"}]'
+                    ),
+                ).with_model("openai", "gpt-4o-mini")
+                resp = await chat.send_message(UserMessage(text=_json.dumps(payload, ensure_ascii=False)))
+                mjson = _re.search(r"\[.*\]", (resp or ""), _re.DOTALL)
+                for item in (_json.loads(mjson.group(0)) if mjson else []):
+                    mid, text = item.get("id"), (item.get("text") or "").strip()
+                    if mid and text and mid in result:
+                        result[mid] = text
+                        await db.chat_messages.update_one(
+                            {"id": mid}, {"$set": {f"translations.{lang}": text}})
+            except Exception as e:
+                logger.warning("Chat translate failed: %s", e)
+        return {"lang": lang, "translations": {k: v for k, v in result.items() if v}}
 
     return router

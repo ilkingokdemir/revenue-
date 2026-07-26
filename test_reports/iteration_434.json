@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 434 regression run for VCC Gelir Kurtarma, Guest Incidents/Returning Guest, Chain Benchmark, Weekly Report automation_wins, ROI VCC row + time-saved, Team Chat translate, HK My Tasks smoke, plus smoke checks for iter 432/433 endpoints. Backend: 24/24 pass. Frontend: all key data-testids verified present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "GuestProfilesPanel", "issues": ["React console warning: 'Each child in a list should have a unique key prop' — non-blocking but should be fixed."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration434_regression.py",
+    "/app/test_reports/pytest/iter434.xml"
+  ],
+  "action_items": [
+    "Optional: fix missing 'key' prop warning in GuestProfilesPanel guest list render.",
+    "Optional: verify GuestIncidentsCard end-to-end (open GUESTS accordion → Guest profiles → click a guest) — automated agent could not open nested accordion in one session; visual/manual check recommended, functional API path already verified in backend tests."
+  ],
+  "critical_code_review_comments": [
+    "VCC Recovery: scan_recovery_internal fetches all vcc_cards with to_list(2000) — for large chains may need pagination. Not blocking.",
+    "guest_incidents/watch-run marks bookings idempotently via guest_watch_flagged — good; cleanup on booking cancel not handled but acceptable.",
+    "team_chat translate handles missing EMERGENT_LLM_KEY with 503 and caches translations per lang on the message doc — good pattern.",
+    "Chain benchmark active_only default is true; if only one active property, normalization returns 50 flat scores (min==max) — acceptable."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration434_regression.py (new)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "verified: vcc-recovery-section, vcc-recoverable-total, vcc-recovered-total, roi-time-saved, chain-benchmark-panel, 11 benchmark-action-* buttons, chat-translate-select, arrivals-btn (returning-guest-strip correctly absent — no returning guests today)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (verified). testhk@hotelbox.com / Test2026! (verified via API).",
+  "seed_data_creation": "During test run only: vrqa2- prefix (4 bookings + 4 vcc_cards + 1 ota_dispute), regqa prefix (1 booking + 1 guest_incident + auto-created shift_handover + notifications), 1 general channel 'regqa-ceviri' with 2 messages. ALL cleaned up via module-scoped fixtures using pymongo direct connection to $MONGO_URL.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter 434 regression PASSED for all backend features (VCC recovery incl. all 4 types & dispute flow, guest_incidents + returning watch idempotent, chain benchmark, weekly report automation_wins, ROI vcc_recovery row + time-saved, team chat translate incl. LLM+cache+400, HK my-tasks, plus 7-endpoint smoke). Frontend main data-testids all present. Test file at /app/backend/tests/test_iteration434_regression.py uses pymongo direct MONGO_URL for seed/cleanup (no debug endpoints exist). Only minor React 'key prop' warning in GuestProfilesPanel."
+}

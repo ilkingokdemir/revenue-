@@ -157,6 +157,7 @@ export const ArReconPanel = L(() => import("./components/dashboard/ArReconPanel"
 export const WaitlistPanel = L(() => import("./components/dashboard/WaitlistPanel"));
 export const HkDispatchPanel = L(() => import("./components/dashboard/HkDispatchPanel"));
 export const ResQualityPanel = L(() => import("./components/dashboard/ResQualityPanel"));
+export const ChainBenchmarkPanel = L(() => import("./components/dashboard/ChainBenchmarkPanel"));
 export const AutomationSettingsPanel = L(() => import("./components/dashboard/AutomationSettingsPanel"));
 export const GuestSegmentsPanel = L(() => import("./components/dashboard/GuestSegmentsPanel"));
 export const ChannelHealthPanel = L(() => import("./components/dashboard/ChannelHealthPanel"));

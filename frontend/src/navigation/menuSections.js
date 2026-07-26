@@ -390,6 +390,7 @@ export function buildMenuSections(t, user) {
         { id: "synclog", icon: ArrowsClockwise, name: t("nav.synclog"), testId: "sync-log-btn" },
         { id: "b2b-agents", icon: Briefcase, name: "B2B portal (agents)", testId: "b2b-agents-btn" },
         { id: "multi-rollup", icon: Buildings, name: "Multi-property roll-up", testId: "multi-rollup-btn" },
+        { id: "chain-benchmark", icon: Trophy, name: "Zincir benchmark", testId: "chain-benchmark-btn" },
         { id: "brand-portal", icon: Buildings, name: "Brand portal (HQ)", testId: "brand-portal-btn" },
         { id: "security-owner", icon: Lock, name: "Owner portal", testId: "security-owner-btn" },
         { id: "setup-wizard", icon: Gear, name: t("nav.setup_wizard"), testId: "setup-wizard-btn" },

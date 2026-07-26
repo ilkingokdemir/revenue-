@@ -4,6 +4,14 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 435 — Zincir Benchmark Panosu ✅ self-test PASS)
+- **Zincir Benchmark** (`platform_ext/chain_benchmark.py` + `ChainBenchmarkPanel.js`, System > "Zincir benchmark"):
+  - GET /chain/benchmark?days=&active_only= — tesis başına doluluk/ADR/RevPAR (key_figures reuse), misafir puanı (reviews), rezervasyon kalite skoru (res_quality reuse), otomasyon aktivitesi (HK+VCC+waitlist+kupon sayısı).
+  - Kompozit "Tesis Skoru" 0-100: doluluk %30 + RevPAR %30 + puan %20 + kalite %10 + otomasyon %10 (zincir içi min-max normalize) + sıralama + metrik bazında En iyi/En zayıf rozetleri + zincir ortalamaları.
+  - active_only=true default: aktivitesiz tesisler gizlenir. UI: madalyalı leaderboard, skor barı, 7/30/90 gün seçici.
+- **DB temizliği**: eski test ajanlarından kalan 39 çöp "Test ..." tesisi (rezervasyonsuz) properties+room_types'tan silindi — tüm tesis seçicileri temizlendi.
+- Test: 5 aktif tesis doğru sıralandı (Franziskaner 91.7 → London Suite 0.6), rozetler doğru, UI screenshot OK.
+
 ### 2026-07-26 (iter 434c — Haftalık Rapora "Otomasyonun Kazandırdıkları" ✅ self-test PASS)
 - `weekly_report.py`: `_automation_wins(pq, start, end)` — hafta penceresinde 8 motor çıktısı (VCC tahsilat £, kurtarılan OTA geliri £, AR eşleştirme £, waitlist teklif+dönüşüm, inbox AI cevap, HK görev, kalite düzeltme, no-show) + toplam aksiyon + işlenen tutar + tahmini kazanılan saat.
 - Pazartesi e-postasına yeşil "🤖 Bu Hafta Otomasyonun Kazandırdıkları" tablosu eklendi; preview endpoint'i `automation_wins` alanını döndürüyor.

@@ -84,7 +84,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -1645,6 +1645,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             <MultiPropertyRollupPanel hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""} />
           </div>
         )}
+        {activeView === "chain-benchmark" && <ChainBenchmarkPanel />}
 
         {activeView === "currency" && (
           <div className="p-6">

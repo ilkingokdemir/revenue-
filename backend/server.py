@@ -1254,6 +1254,9 @@ async def _job_owner_summary(property_id: str) -> dict:
 JOB_HANDLERS["owner_summary_monthly"] = _job_owner_summary
 api_router.include_router(weekly_report_router)
 
+from routes.platform_ext.chain_benchmark import create_chain_benchmark_router
+api_router.include_router(create_chain_benchmark_router(db, require_roles, key_figures_router.compute_internal))
+
 async def _job_weekly_report(property_id: str) -> dict:
     try:
         return await weekly_report_router.run_weekly_report_internal(property_id or "all")

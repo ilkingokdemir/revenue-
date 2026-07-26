@@ -4,6 +4,33 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 433 — HK Auto-Dispatch + Rezervasyon Kalite Kontrolü + FTE Metriği ✅ 13/13 PASS)
+- Kullanıcı: "(a) HK otomatik görev yönlendirme uygula + robosize.me/products incele".
+- **Loyalty (b) YAPILMADI — zaten mevcut** (loyalty_tiers/loyalty_tier/loyalty_v2/loyalty_auto + GuestProfilesPanel tier kartı). Mükerrerlik önlendi.
+- **HK Auto-Dispatch** (`hotel_ops/hk_dispatch.py` + `HkDispatchPanel.js`, motor 22 "hk_dispatch" 06:45):
+  - Bugün check-out olan odalar → en az yüklü housekeeper'a atama (workload balancing).
+  - Bugün varışı olan odalar priority=urgent + öne alınır (oda no eşleşmesi; atanmamış varışlarda oda tipi).
+  - Dedupe: auto_dispatch+property+room+date. Canlı pano: GET /hk-dispatch/{pid}/board (30sn refresh, görevli kolonları, urgent şeridi). Menü: Operations > Housekeeping > "HK görev dağıtım panosu".
+  - E2E: 3 checkout + 1 varış(902) → 3 görev, SADECE 902 urgent, 3 farklı görevliye dağıtıldı, rerun dedupe 3.
+- **Rezervasyon Kalite Kontrolü** (RoboSize "Reservation Quality Check" paritesi; `pms/res_quality.py` + `ResQualityPanel.js`, motor 23 "res_quality" 05:30):
+  - GET /res-quality/{pid}?days= → eksik e-posta/telefon, oda atanmamış (<48s varış), sıfır fiyat, tarih hatası, çift kayıt; quality_score.
+  - POST /autofix → guest_profiles'tan iletişim backfill (quality_fixed_at işareti). Menü: Reservations > "Rezervasyon kalite kontrolü".
+  - Gerçek veri: 98 varış tarandı, skor %93.9.
+- **FTE/Kazanılan Saat** (RoboSize Automation Center paritesi): GET /automation/roi/{pid}/time-saved — 10 otomasyon türünün aksiyon sayısı × dakika → saat + FTE (56.5 saat / 0.35 FTE gerçek veri). AutomationRoiPanel'e "Kazanılan Zaman" kartı (roi-time-saved).
+- Fix'ler: housekeeper id fallback (email/name), no_room sadece <48s varışta, arriving_types sadece odasız varışlar.
+- Test: iteration_433.json — backend 13/13, frontend %100, sıfır sorun.
+- BEKLEYEN: (c) WhatsApp misafir mesajlaşma — Twilio API anahtarı kullanıcıdan bekleniyor.
+
+### 2026-07-26 (iter 432 — Mews 2026 Paritesi: 4 Yeni Agent ✅ 27/27 PASS)
+- Kullanıcı: "Mews incele, eksikleri tespit et, sırayla hepsini yap". Gap analizi yapıldı (Mews Unfold 2026).
+- **1. NL Automation Builder** (`platform_ext/nl_automation.py`): POST /automation/v2/nl-parse — Türkçe cümle → LLM (gpt-4o-mini) ile TRIGGER/ACTION katalogu sınırlı kural + heuristic fallback. UI: AutomationRulesPanel üstünde NlRuleBuilder (nl-rule-builder) — önizleme chip'leri + Kaydet&Aktifleştir/Taslak.
+- **2. Inbox AI Agent** (`integrations_pkg/inbox_agent.py`): unified inbox webhook'una gelen mesajı chatbot_intents FAQ + LLM ile otonom cevaplar (sent_by "AI Agent", agent:true); güven < eşik veya hassas konu → needs_human + bildirim. Config: GET/PUT /inbox/agent/config (enabled, threshold 40-95, property_id), stats endpoint. UI: UnifiedInboxPanel AgentBar (inbox-agent-bar) + ai-agent-badge.
+- **3. AR Mutabakat Agent'ı** (`finance_ext/ar_recon_agent.py`, motor 20 "ar_recon" 07:30): gelen ödemeleri city_ledger_invoices ile eşleştirir — referansta fatura no (tek/toplu), tam tutar, alt-küme toplamı (≤6 fatura), kısmi ödeme, fazla ödeme→ar_credits alacak. Manuel apply endpoint'i. UI: ArReconPanel (Finance > "AR mutabakat agent'ı").
+- **4. Waitlist** (`pms/waitlist.py`, motor 21 "waitlist_match" 08:15): public join → müsaitlik açılınca 48s geçerli teklif e-postası (deep-link ?waitlist=token) → widget convert. Booking widget "No rooms available" → WaitlistJoinCard formu. UI: WaitlistPanel (Guests > "Bekleme listesi").
+- Test: iteration_432.json — backend 27/27, frontend %95, kritik yok. Kalıcı suite: tests/test_iteration432_mews_parity_agents.py.
+- NOT (prod backlog): inbox webhook HMAC/rate-limit, ar payments DELETE endpoint'i yok (QA temizliği DB'den yapıldı).
+
+
 ### 2026-07-08 (iter 374 — OTA Commission Dashboard + Net Revenue Analytics ✅)
 
 **OTA Commission Dashboard (Potansiyel iyileştirme + P2)** — NEW `/app/backend/routes/integrations_pkg/ota_commission.py`

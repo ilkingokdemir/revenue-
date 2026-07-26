@@ -36,6 +36,14 @@
 | Budget vs Actual | `/api/budget/*` | iter 277 DONE |
 | Compset Auto-Discovery (mock pool) | `/api/compset/*` | iter 277 DONE |
 | Partner Webhooks & API Keys | `/api/partner/*` | iter 277 DONE |
+| NL Automation Builder (Mews Automations) | `platform_ext/nl_automation.py` + NlRuleBuilder | iter 432 DONE |
+| Inbox AI Agent (Mews Guest Messaging) | `integrations_pkg/inbox_agent.py` + AgentBar | iter 432 DONE |
+| AR Mutabakat Agent'ı (Mews AR) | `finance_ext/ar_recon_agent.py` + ArReconPanel | iter 432 DONE |
+| Waitlist + otomatik teklif | `pms/waitlist.py` + WaitlistPanel + widget formu | iter 432 DONE |
+| HK Auto-Dispatch (iş yükü dengeleme + öncelik) | `hotel_ops/hk_dispatch.py` + HkDispatchPanel | iter 433 DONE |
+| Rezervasyon Kalite Kontrolü (RoboSize paritesi) | `pms/res_quality.py` + ResQualityPanel | iter 433 DONE |
+| FTE/Kazanılan Saat metriği | automation_roi.py /time-saved + roi-time-saved kartı | iter 433 DONE |
+| Loyalty Tiers + benefits + auto-upgrade + CRM kartı | loyalty_tiers/loyalty_tier/loyalty_v2/loyalty_auto | ÖNCEDEN MEVCUT — tekrar önerme |
 
 ## P0 — Kullanıcı API anahtarı gerektirir (BLOKE — anahtar gelince yap)
 - Gerçek OTA rate push: rate_sync_queue → Booking.com/Expedia (OTA credentials gerekli)

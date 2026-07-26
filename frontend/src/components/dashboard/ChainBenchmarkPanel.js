@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Trophy, Medal, TrendUp, TrendDown } from "@phosphor-icons/react";
+import { Trophy, Medal, TrendUp, TrendDown, Lightning } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/chain`;
 
@@ -12,7 +12,7 @@ const RANK_STYLE = {
 };
 const METRIC_SHORT = { occupancy: "Doluluk", revpar: "RevPAR", review: "Puan", quality: "Kalite", automation: "Otomasyon" };
 
-export default function ChainBenchmarkPanel() {
+export default function ChainBenchmarkPanel({ onNavigate }) {
   const [data, setData] = useState(null);
   const [days, setDays] = useState(30);
 
@@ -109,6 +109,17 @@ export default function ChainBenchmarkPanel() {
                       </span>
                     ))}
                   </div>
+                  {(r.actions || []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {r.actions.map(a => (
+                        <button key={a.metric} title={a.text} onClick={() => onNavigate && onNavigate(a.view)}
+                          data-testid={`benchmark-action-${r.property_id}-${a.metric}`}
+                          className="inline-flex items-center gap-1 text-[9px] px-2 py-1 bg-stone-900 text-white rounded-full font-semibold hover:bg-stone-700 transition-colors">
+                          <Lightning size={9} weight="fill" className="text-amber-400" /> {a.label} →
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

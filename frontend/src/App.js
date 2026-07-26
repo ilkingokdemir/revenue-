@@ -1645,7 +1645,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             <MultiPropertyRollupPanel hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""} />
           </div>
         )}
-        {activeView === "chain-benchmark" && <ChainBenchmarkPanel />}
+        {activeView === "chain-benchmark" && <ChainBenchmarkPanel onNavigate={navigate} />}
 
         {activeView === "currency" && (
           <div className="p-6">

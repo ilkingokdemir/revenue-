@@ -118,6 +118,33 @@ def create_chain_benchmark_router(db, require_roles, compute_kf):
         for i, r in enumerate(rows):
             r["rank"] = i + 1
 
+        # Aksiyon önerileri (zayıf metrik → çözüm paneli kısayolu)
+        chain_occ = sum(r["occupancy"] for r in rows) / len(rows)
+        for r in rows:
+            actions = []
+            worst = set(r["badges"]["worst"])
+            if "quality" in worst or r["quality"] < 90:
+                actions.append({"metric": "quality", "view": "res-quality",
+                                "label": "Kalite kontrolünü çalıştır",
+                                "text": "Rezervasyon kalite skoru düşük — eksik iletişim/fiyat hatalarını tarayıp otomatik düzeltin."})
+            if "review" in worst or (r["review_count"] > 0 and r["review"] < 4):
+                actions.append({"metric": "review", "view": "reviews",
+                                "label": "Yorumları yanıtla",
+                                "text": "Misafir puanı zincir gerisinde — bekleyen yorumları yanıtlayın, Review Autopilot'u değerlendirin."})
+            if "occupancy" in worst or r["occupancy"] < chain_occ * 0.7:
+                actions.append({"metric": "occupancy", "view": "open-pricing",
+                                "label": "Fiyatlamayı gözden geçir",
+                                "text": "Doluluk zincir ortalamasının altında — Open Pricing matrisini ve kampanyaları gözden geçirin."})
+            if "revpar" in worst:
+                actions.append({"metric": "revpar", "view": "compset",
+                                "label": "Rakip radarına bak",
+                                "text": "RevPAR zincirin en düşüğü — compset fiyatlarını kıyaslayıp fiyat push değerlendirin."})
+            if "automation" in worst or r["automation"] == 0:
+                actions.append({"metric": "automation", "view": "automation-hub",
+                                "label": "Motorları etkinleştir",
+                                "text": "Bu tesiste otomasyon aktivitesi yok — Otomasyon Merkezi'nden motorları açın."})
+            r["actions"] = actions[:3]
+
         n = len(rows)
         chain = {
             "occupancy": round(sum(r["occupancy"] for r in rows) / n, 1),

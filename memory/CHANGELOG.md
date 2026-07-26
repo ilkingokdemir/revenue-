@@ -4,6 +4,11 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 435b — Benchmark Akıllı Aksiyon Önerileri ✅ self-test PASS)
+- `chain_benchmark.py`: her tesis için `actions[]` — zayıf metrik → çözüm paneli eşlemesi (quality<90→res-quality, review<4→reviews, occupancy<zincir×0.7→open-pricing, revpar worst→compset, automation 0→automation-hub), maks 3 öneri.
+- ChainBenchmarkPanel: rozetlerin altında siyah "⚡ {öneri} →" butonları; `onNavigate` prop (App.js `navigate`) ile tek tıkla ilgili panele gidiş. Hover'da açıklama tooltip'i.
+- Test: 5 tesiste 11 aksiyon butonu; kalite aksiyonu tıklaması res-quality paneline başarıyla yönlendirdi (screenshot doğrulandı).
+
 ### 2026-07-26 (iter 435 — Zincir Benchmark Panosu ✅ self-test PASS)
 - **Zincir Benchmark** (`platform_ext/chain_benchmark.py` + `ChainBenchmarkPanel.js`, System > "Zincir benchmark"):
   - GET /chain/benchmark?days=&active_only= — tesis başına doluluk/ADR/RevPAR (key_figures reuse), misafir puanı (reviews), rezervasyon kalite skoru (res_quality reuse), otomasyon aktivitesi (HK+VCC+waitlist+kupon sayısı).

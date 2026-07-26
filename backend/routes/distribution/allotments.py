@@ -53,6 +53,35 @@ async def _contract_stats(db, c: Dict) -> Dict:
             "remaining": max(total - picked - released, 0), "pickup_pct": pct}
 
 
+async def _push_releases_to_ota(db, released_entries) -> int:
+    """Release edilen odaları bağlı OTA kanallarına müsaitlik push'u olarak kuyruklar."""
+    from routes.distribution.two_way_sync import _connected_channels
+    from routes.integrations_pkg.sync_queue import process_due_tasks
+    channels = await _connected_channels(db)
+    if not channels or not released_entries:
+        return 0
+    now = _iso()
+    task_ids = []
+    for e in released_entries:
+        for ch in channels:
+            task = {"id": str(uuid.uuid4()), "property_id": e["property_id"],
+                    "channel_id": ch, "kind": "avail",
+                    "payload": {"date": e["date"], "delta": e["rooms"],
+                                "source": "allotment_release",
+                                "contract_id": e["contract_id"],
+                                "operator": e["operator_name"]},
+                    "status": "pending", "attempts": 0, "max_attempts": 6,
+                    "next_retry_at": now, "error": None, "result": None,
+                    "created_at": now, "created_by": "allotment_release"}
+            await db.sync_queue.insert_one(task)
+            task_ids.append(task["id"])
+    try:
+        await process_due_tasks(db, max_tasks=len(task_ids) + 5)
+    except Exception as ex:
+        logger.warning("Allotment OTA push processing failed: %s", ex)
+    return len(task_ids)
+
+
 async def run_allotment_release_internal(db, property_id: str = "") -> Dict:
     """Release penceresine giren satılmamış kontenjanları serbest bırakır."""
     today = _parse(_today())
@@ -62,6 +91,7 @@ async def run_allotment_release_internal(db, property_id: str = "") -> Dict:
     contracts = await db.allotment_contracts.find(q, {"_id": 0}).to_list(200)
     total_released, touched = 0, 0
     by_prop: Dict[str, int] = {}
+    released_entries = []
     for c in contracts:
         try:
             start, end = _parse(c["start_date"]), _parse(c["end_date"])
@@ -92,21 +122,26 @@ async def run_allotment_release_internal(db, property_id: str = "") -> Dict:
                 "id": str(uuid.uuid4()), "contract_id": c["id"],
                 "property_id": c["property_id"], "operator_name": c["operator_name"],
                 "date": ds, "rooms_released": free, "run_at": _iso()})
+            released_entries.append({"property_id": c["property_id"], "date": ds,
+                                     "rooms": free, "contract_id": c["id"],
+                                     "operator_name": c["operator_name"]})
             contract_released += free
         if contract_released:
             touched += 1
             total_released += contract_released
             by_prop[c["property_id"]] = by_prop.get(c["property_id"], 0) + contract_released
+    ota_tasks = await _push_releases_to_ota(db, released_entries)
     for pid, rooms in by_prop.items():
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()), "property_id": pid,
             "category": "allotment_release", "priority": "normal",
             "target_user": "", "target_role": "manager",
             "title": f"🏷️ Kontenjan release: {rooms} oda serbest bırakıldı",
-            "message": "Release penceresine giren satılmamış operatör kontenjanları genel satışa açıldı.",
+            "message": "Release penceresine giren satılmamış operatör kontenjanları genel satışa açıldı."
+                       + (f" {ota_tasks} OTA müsaitlik push'u kuyruğa alındı." if ota_tasks else ""),
             "read": False, "created_at": _iso()})
     return {"contracts_scanned": len(contracts), "contracts_released": touched,
-            "rooms_released": total_released}
+            "rooms_released": total_released, "ota_push_tasks": ota_tasks}
 
 
 def create_allotments_router(db, require_roles):

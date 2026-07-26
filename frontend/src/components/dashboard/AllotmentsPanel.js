@@ -23,7 +23,7 @@ export default function AllotmentsPanel({ propertyId = "all" }) {
     setRunning(true);
     try {
       const r = await axios.post(`${API}/${propertyId}/release-run`);
-      toast.success(`${r.data.rooms_released} oda serbest bırakıldı · ${r.data.contracts_scanned} kontrat tarandı`);
+      toast.success(`${r.data.rooms_released} oda serbest bırakıldı · ${r.data.ota_push_tasks || 0} OTA push kuyruklandı`);
       load();
     } catch (e) { toast.error(e.response?.data?.detail || "Release çalıştırılamadı"); }
     setRunning(false);

@@ -2094,3 +2094,10 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   hücreden pickup ekleme + stop-sale toggle), yeni kontrat formu, "Release Çalıştır".
 - E2E: kontrat → pickup(3) → aşım 400 → stop-sale → release-run (35 oda) → takvim/özet
   doğrulandı; UI ekran görüntüsüyle onaylandı. QA verileri temizlendi.
+
+## Iter 447 (2026-07-26) — Kontenjan Release → OTA Müsaitlik Push Entegrasyonu TAMAMLANDI
+- allotments.py run_allotment_release_internal: release edilen her (tarih, oda) için bağlı
+  OTA kanallarına (direct hariç) kind=avail sync_queue task'ı kuyruklar (delta=+oda,
+  source=allotment_release) ve process_due_tasks ile anında işler; dönüşe ota_push_tasks eklendi.
+- Yönetici bildirimi ve panel toast'ı artık kuyruklanan OTA push sayısını gösterir.
+- E2E: 2 günlük release (6 oda) → 2 booking_com avail task succeeded doğrulandı. QA temizlendi.

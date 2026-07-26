@@ -84,7 +84,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel, DigitalAuthPanel, AllotmentsPanel, ForecastPlansPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel, DigitalAuthPanel, AllotmentsPanel, ForecastPlansPanel, IntradayRepricePanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -2177,6 +2177,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "digital-auth" && <DigitalAuthPanel propertyId={activePropertyId || "all"} />}
         {activeView === "allotments" && <AllotmentsPanel propertyId={activePropertyId || "all"} />}
         {activeView === "forecast-plans" && <ForecastPlansPanel propertyId={activePropertyId || "all"} />}
+        {activeView === "intraday-reprice" && <IntradayRepricePanel propertyId={activePropertyId || "all"} />}
 
         {activeView === "vcc-automation" && (
           <VccPanel propertyId={activePropertyId || "all"} />

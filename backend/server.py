@@ -613,6 +613,16 @@ api_router.include_router(forecast_v2_router)
 
 from routes.revenue_ext.forecast_plans import create_forecast_plans_router
 api_router.include_router(create_forecast_plans_router(db, require_roles))
+
+from routes.revenue_ext.intraday_reprice import create_intraday_reprice_router, intraday_reprice_loop
+_idr_auto_fn = getattr(ai_pricing_router, "run_auto_apply_internal", None)
+intraday_reprice_router = create_intraday_reprice_router(db, require_roles, _idr_auto_fn)
+api_router.include_router(intraday_reprice_router)
+
+@app.on_event("startup")
+async def _start_intraday_reprice():
+    import asyncio as _asyncio
+    _asyncio.create_task(intraday_reprice_loop(db, _idr_auto_fn))
 anomaly_router = create_anomaly_router(db, require_roles, LlmChat, UserMessage)
 api_router.include_router(anomaly_router)
 tipping_router = create_tipping_router(db, require_roles, stripe_api_key)

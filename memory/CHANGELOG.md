@@ -2127,3 +2127,16 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   değişiklik+onay geçmişi, Kilitle&Yayınla + Onayla butonları.
 - E2E: snapshot→düzeltme→yorum→onay→kilit→kilitliyken düzenleme 400→karşılaştırma (Δ -2496.66)
   + forecast-v2 regresyonu + UI detay ekranı doğrulandı. QA verileri temizlendi.
+
+## Iter 450 (2026-07-26) — Gün-İçi Yeniden Fiyatlama (Intraday Re-price) TAMAMLANDI
+- FLYR "hourly optimization" paritesi. YENİ revenue_ext/intraday_reprice.py (/api/intraday-reprice):
+  son N saatte (varsayılan 3) aynı konaklama tarihine ≥spike_rooms (3) rezervasyon → sıçrama;
+  ai_pricing run_auto_apply_internal tetiklenir (auto_apply açıksa uygular, kapalıysa öneri +
+  yönetici bildirimi). Tarih başına cooldown (6s) ile tekrar engellenir.
+- Arka plan döngüsü: intraday_reprice_loop her 30 dk (server startup'ta create_task).
+- Endpoints: GET /{pid} (config+olaylar+özet), PUT /{pid}/config (enabled/window/spike/cooldown,
+  sınır korumalı), POST /{pid}/scan (manuel).
+- YENİ IntradayRepricePanel (menü: AI & Insights > "Gün-içi re-price (pickup spike)",
+  id intraday-reprice): amber hero + 3 KPI, eşik ayar formu (idr-cfg-*), olay tablosu (idr-event-*).
+- E2E: 3 QA booking ile sıçrama → 4 olay + bildirim; cooldown 2. taramada 0 aksiyon; config
+  güncelleme; UI ekran görüntüsü doğrulandı. QA verileri temizlendi, config resetlendi.

@@ -73,5 +73,5 @@ Her iterasyonda: yapılan işi CHANGELOG.md'ye ekle, bu dosyada ilgili maddeyi
 
 ## FLYR Hospitality fark analizi (iter 449, detay: FLYR_GAP_REPORT.md)
 | Forecast Planlama (sürüm+kilit+onay+yorum+karşılaştırma) | revenue_ext/forecast_plans.py + ForecastPlansPanel | iter 449 DONE |
-Kalan FLYR boşlukları (P1 adayı): gün-içi/saatlik re-price tetikleyici, AI MLOS/CTA kısıtlama
+Kalan FLYR boşlukları (P1 adayı): ~~gün-içi re-price~~ (iter 450 DONE), AI MLOS/CTA kısıtlama
 önerileri, forecast belirsizlik bandı, grup blended-rate optimizasyonu, bütçe-forecast-actual üçlü görünüm.

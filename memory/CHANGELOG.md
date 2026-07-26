@@ -2261,3 +2261,19 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Test artıkları temizlendi (TEST_* allotment/forecast_version/promo + 75 TEST booking).
 - Kalıcı test dosyası: /app/backend/tests/test_iteration459_regression.py (3.5 sn'de tüm yeni
   modülleri koşar; REACT_APP_BACKEND_URL export gerektirir).
+
+## Iter 461 (2026-07-26) — Kayıp Talep Takibi (Denials & Regrets) TAMAMLANDI
+- Duetto/IDeaS paritesi. YENİ revenue_ext/lost_demand.py (/api/lost-demand):
+  POST /{pid}/log (reason enum + est_lost_revenue = oda×gece×fiyat), GET liste+özet
+  (sebep dağılımı, kayıp oda-gece, kayıp gelir, top sebep), DELETE, GET /{pid}/insights —
+  konaklama tarihi bazında kısıtsız talep (OTB + kayıp) ve akıllı öneri (kapasite aşımı →
+  fiyat yükselt; fiyat kaynaklı → indirim yapma; müsaitlik → waitlist/oda tipi).
+- OTOMATİK YAKALAMA: booking_widget check-availability müsait oda bulamazsa
+  source=widget_auto denial kaydı düşer (try/except korumalı).
+- YENİ LostDemandPanel (menü: AI & Insights > 'Kayıp talep (denials & regrets)',
+  id lost-demand): slate/rose hero + 4 KPI, hızlı kayıt formu (ld-form-*), sebep dağılım
+  barları, Kayıtlar/İçgörüler sekmeleri (ld-tab-*), oto rozeti.
+- BUG (kendi hatam): App.js'e aynı batch'te 2 paralel search_replace → dosya sonunda bozuk
+  JSX bloğu + kayıp satır. Düzeltildi. KURAL: AYNI DOSYAYA ASLA PARALEL EDIT YAPMA (3. kez!).
+- E2E: 2 log (900£ kayıp, 31 og), geçersiz reason 400, insights önerileri (28/20 kapasite
+  aşımı → fiyat yükselt) + UI ekranı doğrulandı. QA verileri temizlendi.

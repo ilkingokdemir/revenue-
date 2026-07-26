@@ -1363,6 +1363,9 @@ from routes.marketing.gap_filler import create_gap_filler_router
 gap_filler_router = create_gap_filler_router(db, require_roles)
 api_router.include_router(gap_filler_router)
 
+from routes.revenue_ext.lost_demand import create_lost_demand_router
+api_router.include_router(create_lost_demand_router(db, require_roles))
+
 async def _job_gap_filler(property_id: str) -> dict:
     try:
         return await gap_filler_router.run_internal(property_id or "")

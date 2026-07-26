@@ -168,6 +168,15 @@ def create_booking_widget_router(db, require_roles):
                     "description": room.get("description", ""),
                     "amenities": room.get("amenities", []),
                 })
+        if not available and rooms:
+            try:
+                from routes.revenue_ext.lost_demand import log_lost_demand
+                await log_lost_demand(db, property_id, {
+                    "check_in": check_in, "check_out": check_out, "rooms": 1,
+                    "channel": "widget", "reason": "no_availability",
+                    "note": "Widget araması — müsait oda bulunamadı"}, source="widget_auto")
+            except Exception as ex:
+                logger.warning("Lost demand auto-log failed: %s", ex)
         return {"available_rooms": available, "check_in": check_in, "check_out": check_out}
 
     # ==================== PUBLIC: CREATE BOOKING ====================

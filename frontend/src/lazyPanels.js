@@ -164,6 +164,7 @@ export const ForecastPlansPanel = L(() => import("./components/dashboard/Forecas
 export const IntradayRepricePanel = L(() => import("./components/dashboard/IntradayRepricePanel"));
 export const RestrictionAdvisorPanel = L(() => import("./components/dashboard/RestrictionAdvisorPanel"));
 export const GapFillerPanel = L(() => import("./components/dashboard/GapFillerPanel"));
+export const LostDemandPanel = L(() => import("./components/dashboard/LostDemandPanel"));
 export const AutomationSettingsPanel = L(() => import("./components/dashboard/AutomationSettingsPanel"));
 export const GuestSegmentsPanel = L(() => import("./components/dashboard/GuestSegmentsPanel"));
 export const ChannelHealthPanel = L(() => import("./components/dashboard/ChannelHealthPanel"));

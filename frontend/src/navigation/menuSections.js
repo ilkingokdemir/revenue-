@@ -90,6 +90,7 @@ import {
   Bank,
   LockKey,
   GitBranch,
+  UserMinus,
 } from "@phosphor-icons/react";
 
 export function buildMenuSections(t, user) {
@@ -256,6 +257,7 @@ export function buildMenuSections(t, user) {
         { id: "ai-pricing-v2", icon: Lightning, name: "AI pricing", testId: "ai-pricing-v2-btn" },
         { id: "intraday-reprice", icon: Lightning, name: "Gün-içi re-price (pickup spike)", testId: "intraday-reprice-btn" },
         { id: "restriction-advisor", icon: LockKey, name: "AI kısıtlama önerileri (MLOS/CTA)", testId: "restriction-advisor-btn" },
+        { id: "lost-demand", icon: UserMinus, name: "Kayıp talep (denials & regrets)", testId: "lost-demand-btn" },
         { id: "pricing-explain", icon: Brain, name: "AI pricing explainer", testId: "pricing-explain-btn" },
         { id: "anomaly", icon: Lightning, name: "Anomaly radar", testId: "anomaly-btn" },
         { id: "ai-predictions", icon: Sparkle, name: "AI predictions", testId: "ai-predictions-btn" },

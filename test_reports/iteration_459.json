@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration 459 tam regresyon: 13 maddeden 12'si backend + smoke UI olarak doğrulandı. 30 backend testinden 28 PASSED, 2 SKIPPED (koşullu — restriction accept: aktif öneri yoksa skip, gap coupon validate: gap kodu bulunamadıysa skip). Frontend dashboard ve Morning Brief paneli sorunsuz render oluyor, 'AI Gece Vardıyası' (brief-ai-night-shift) bloğu 4 metrik ile görünüyor. React page-crash yok. 1 küçük hydration warning tespit edildi.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "MorningBriefPanel.js (satır ~220)",
+        "issue": "React hydration warning: <span> cannot be a child of <option>. `<select>` içindeki <option> etiketlerinin altında <span> render ediliyor — invalid HTML, hydration hatası veriyor. İşlevsel etkisi düşük ama konsol kirletiyor ve gelecek React sürümlerinde kırılabilir.",
+        "selector": "select in MorningBriefPanel (period selector 7/14/30 gün)",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration459_regression.py",
+    "/app/test_reports/pytest/iter459.xml"
+  ],
+  "action_items": [
+    "MorningBriefPanel.js satır 220 civarında <option> içindeki <span>'ı kaldır (etiketi direkt string olarak yaz). Örn: <option value={7}>Son 7 gün</option> — <span> sarmalayıcı olmadan.",
+    "Bilgi: Kullanıcının belirttiği 'System > Allotments' menüsü sidebar'da varsayılan çökük durumda; kullanıcı bunu görebilmesi için 'SİSTEM' bölümünü aç/kapat butonu ile açması gerekiyor — testte data-testid'ler bu yüzden sadece açık bölümlerde görünür oldu. Bu bir hata değil, tasarım seçimi."
+  ],
+  "critical_code_review_comments": [
+    "Backend endpoint contract sağlıklı: allotments overshoot 400 döndürüyor, forecast plan lock sonrası row edit 400 döndürüyor, invalid promo ok:false + reason döndürüyor. İş kuralları doğru.",
+    "Forecast v2 horizon response şeması: forecast[] listesi içinde revenue_low/revenue_high/band_pct/bookings_low/bookings_high var, uncertainty_cv_pct top-level'de. Frontend Aralık kolonu bu iki farklı yerden okuyorsa emin ol.",
+    "Blended-rate response'ta breakeven_rate, recommended_rate, occ_before_pct, occ_after_pct alanları 'blended' bloğunda mevcut — kontrat sağlam.",
+    "MorningBrief `ai_night_shift` bloğu API'de mevcut (test PASS) — UI'da da render ediliyor (görsel onay).",
+    "Rate-structure PromoCodeIn modeli `kind` (percent/flat) + `amount` alanlarını kullanıyor; belge/örneklerde `discount_type`/`discount_value` olarak referans edilirse kafa karışıklığı olabilir — dokümantasyon tutarlı olsun."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration459_regression.py"
+  ],
+  "success_rate": {
+    "backend": "100% (28/28 çalışan test; 2 conditional skip)",
+    "frontend": "Smoke OK — dashboard + morning brief render, no crash"
+  },
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (verified working)",
+  "seed_data_creation": "Test verileri: 1 allotment (TEST_Op_*), 1 forecast plan version (TEST_v1_*), 1 promo code (TESTP*****). Bunlar db.allotments, db.forecast_versions, db.promo_codes koleksiyonlarında kaldı — main agent temizleyebilir veya bırakabilir.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 459 backend regression test dosyası /app/backend/tests/test_iteration459_regression.py — çalıştırmak için REACT_APP_BACKEND_URL env var'ı export etmeyi unutmayın. Test 3.5 saniyede biter, tüm yeni modülleri (allotments, forecast-plans, intraday-reprice, restriction-advisor, budget/triple, displacement/blended, forecast-v2/horizon, rate-structure/promo-codes, direct-conversion/validate, booking-widget/book, gap-filler, morning-brief) kapsar. Frontend UI sidebar bölümleri (SİSTEM, REVENUE & RATES vb.) collapsed durumda; testid'lerini bulmak için önce section header'ı click ile açmak gerek. Kullanıcı ek fonksiyonel test isterse Playwright ile section expand → panel click akışı gerekli.",
+  "rca_of_the_issue": "İlk turdaki 5 test hatası tamamen test-side idi (backend endpoint response şemalarıyla test beklentileri uyuşmadı): (1) allotment id nested 'contract.id' altında, (2) forecast version id 'version.id' altında, (3) forecast-v2/horizon rows 'forecast' anahtarında ve uncertainty_cv_pct top-level'de, (4) promo model 'kind'/'amount' alanları kullanıyor, 'discount_type'/'discount_value' değil, (5) booking-widget/book guest_name'i top-level bekliyor. Test dosyası düzeltildikten sonra 28/28 PASS. Backend'de gerçek bir bug tespit edilmedi. Sadece MorningBriefPanel.js'te küçük bir React hydration warning var (option > span invalid nesting)."
+}

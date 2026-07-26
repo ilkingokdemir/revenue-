@@ -62,6 +62,66 @@ def create_budget_router(db, require_roles):
         totals["revenue_variance"] = round(totals["revenue_actual"] - totals["revenue_budget"], 2)
         return {"property_id": property_id, "year": year, "rows": rows, "totals": totals}
 
+    @router.get("/{property_id}/triple")
+    async def triple_view(property_id: str, year: str = "",
+                          _: dict = Depends(require_roles("admin", "manager"))):
+        """Bütçe vs Forecast vs Gerçekleşen üçlü görünüm (FLYR Planning paritesi)."""
+        if not year:
+            year = datetime.now(timezone.utc).strftime("%Y")
+        budgets = await db.budget_monthly.find(
+            {"property_id": property_id, "year": year}, {"_id": 0}).to_list(20)
+        budget_map = {b["month"]: float(b.get("revenue_budget", 0)) for b in budgets}
+
+        forecast_map, forecast_source = {}, None
+        locked = await db.forecast_versions.find_one(
+            {"property_id": property_id, "status": "locked",
+             "rows.period": {"$regex": f"^{year}-"}},
+            {"_id": 0, "name": 1, "rows": 1}, sort=[("locked_at", -1)])
+        if locked:
+            forecast_source = f"Kilitli sürüm: {locked['name']}"
+            for r in locked["rows"]:
+                if r["period"].startswith(year):
+                    forecast_map[r["period"][5:7]] = float(r.get("revenue", 0))
+        else:
+            try:
+                from routes.revenue_ext.forecast_v2 import compute_horizon
+                h = await compute_horizon(db, property_id, 12)
+                forecast_source = "Canlı AI forecast"
+                for f in h.get("forecast", []):
+                    if f["period"].startswith(year):
+                        forecast_map[f["period"][5:7]] = float(f.get("revenue", 0))
+            except Exception:
+                forecast_source = "Forecast yok"
+
+        current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+        rows = []
+        for m in range(1, 13):
+            mk = f"{m:02d}"
+            prefix = f"{year}-{mk}"
+            actual = None
+            if prefix <= current_month:
+                agg = await db.bookings.aggregate([
+                    {"$match": {"property_id": property_id,
+                                "check_in": {"$regex": f"^{prefix}"},
+                                "status": {"$in": ["confirmed", "checked_in", "checked_out", "completed"]}}},
+                    {"$group": {"_id": None, "revenue": {"$sum": "$total_price"}}},
+                ]).to_list(1)
+                actual = round(float(agg[0]["revenue"]) if agg else 0.0, 2)
+            budget = budget_map.get(mk, 0.0)
+            forecast = forecast_map.get(mk)
+            rows.append({
+                "month": mk, "budget": budget, "forecast": forecast, "actual": actual,
+                "actual_vs_budget_pct": round((actual - budget) / budget * 100, 1) if actual is not None and budget else None,
+                "forecast_vs_budget_pct": round((forecast - budget) / budget * 100, 1) if forecast is not None and budget else None,
+            })
+        totals = {
+            "budget": round(sum(r["budget"] for r in rows), 2),
+            "forecast": round(sum(r["forecast"] or 0 for r in rows), 2),
+            "actual": round(sum(r["actual"] or 0 for r in rows), 2),
+        }
+        return {"property_id": property_id, "year": year,
+                "forecast_source": forecast_source, "rows": rows, "totals": totals}
+
     @router.get("/{property_id}/yoy")
     async def year_over_year(property_id: str,
                              _: dict = Depends(require_roles("admin", "manager"))):

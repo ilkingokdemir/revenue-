@@ -2155,3 +2155,13 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   → JOB kaydı allotment_release sonrasına taşındı.
 - E2E: %95 ve %85 doluluk seed → 3 öneri (MLOS3+CTA, MLOS2); accept → restriction+sync succeeded;
   reject; yeniden taramada ikisi de tekrar önerilmedi; UI doğrulandı. QA verileri temizlendi.
+
+## Iter 452 (2026-07-26) — Bütçe · Forecast · Gerçekleşen Üçlü Görünüm + RM Denetimi TAMAMLANDI
+- Revenue management modül denetimi FLYR'a karşı yapıldı (37 revenue_ext modülü haritalandı;
+  FLYR_GAP_REPORT.md güncel). Kalan boşluklar: forecast belirsizlik bandı, grup blended-rate.
+- budget_actual.py: YENİ GET /api/budget/{pid}/triple?year= — aylık Bütçe / Forecast /
+  Gerçekleşen + sapma yüzdeleri. Forecast önceliği: en son KİLİTLİ forecast_versions sürümü
+  ("tek doğru"), yoksa canlı compute_horizon AI forecast. Geçmiş aylar actual, gelecek "gelecek".
+- BudgetActualPanel: 3. sekme "Bütçe · Forecast · Gerçekleşen" (budget-tab-triple) — 4 KPI
+  (kaynak rozeti dahil, triple-forecast-source), renkli sapma tablosu (triple-row-*).
+- E2E: canlı AI fallback → kilitli sürüm önceliği doğrulandı; UI ekranı onaylandı. QA temizlendi.

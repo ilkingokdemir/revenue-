@@ -11,18 +11,21 @@ export default function BudgetActualPanel({ propertyId = "default" }) {
   const [year, setYear] = useState(new Date().getFullYear().toString());
   const [budget, setBudget] = useState({ rows: [] });
   const [variance, setVariance] = useState(null);
+  const [triple, setTriple] = useState(null);
   const [tab, setTab] = useState("budget");
   const [loading, setLoading] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [b, v] = await Promise.all([
+      const [b, v, t] = await Promise.all([
         axios.get(`${API}/${propertyId}/${year}`, { withCredentials: true }),
         axios.get(`${API}/${propertyId}/variance?year=${year}`, { withCredentials: true }),
+        axios.get(`${API}/${propertyId}/triple?year=${year}`, { withCredentials: true }),
       ]);
       setBudget(b.data || { rows: [] });
       setVariance(v.data);
+      setTriple(t.data);
     } catch (e) { toast.error("Yüklenemedi"); }
     finally { setLoading(false); }
   }, [propertyId, year]);
@@ -73,6 +76,10 @@ export default function BudgetActualPanel({ propertyId = "default" }) {
         <button onClick={() => setTab("variance")} data-testid="budget-tab-variance"
                 className={`px-4 py-2 text-xs font-medium border-b-2 ${tab === "variance" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500"}`}>
           Sapma Analizi
+        </button>
+        <button onClick={() => setTab("triple")} data-testid="budget-tab-triple"
+                className={`px-4 py-2 text-xs font-medium border-b-2 ${tab === "triple" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500"}`}>
+          Bütçe · Forecast · Gerçekleşen
         </button>
         {tab === "budget" && (
           <button onClick={save} className="ml-auto px-3 py-1.5 text-xs text-white bg-stone-900 rounded-lg inline-flex items-center gap-1.5 mb-1" data-testid="budget-save">
@@ -154,6 +161,51 @@ export default function BudgetActualPanel({ propertyId = "default" }) {
               </tbody>
             </table>
           </div>
+        </>
+      )}
+
+      {!loading && tab === "triple" && triple && (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <Metric label="Bütçe (yıl)" value={`£${triple.totals.budget.toLocaleString("tr-TR")}`} />
+            <Metric label="Forecast (yıl)" value={`£${triple.totals.forecast.toLocaleString("tr-TR")}`} />
+            <Metric label="Gerçekleşen (bugüne dek)" value={`£${triple.totals.actual.toLocaleString("tr-TR")}`} positive={triple.totals.actual >= triple.totals.budget * (new Date().getMonth() + 1) / 12} />
+            <div className="bg-white border border-stone-200 rounded-xl p-3">
+              <div className="text-[10px] uppercase tracking-wider text-stone-500">Forecast kaynağı</div>
+              <div className="text-xs font-semibold mt-1 text-indigo-600" data-testid="triple-forecast-source">{triple.forecast_source}</div>
+            </div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto" data-testid="triple-table">
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-[11px] uppercase tracking-wider text-stone-500">
+                <tr>
+                  <th className="px-3 py-2 text-left">Ay</th>
+                  <th className="px-3 py-2 text-right">Bütçe</th>
+                  <th className="px-3 py-2 text-right">Forecast</th>
+                  <th className="px-3 py-2 text-right">Fcst vs Bütçe</th>
+                  <th className="px-3 py-2 text-right">Gerçekleşen</th>
+                  <th className="px-3 py-2 text-right">Gerç. vs Bütçe</th>
+                </tr>
+              </thead>
+              <tbody>
+                {triple.rows.map((r, i) => (
+                  <tr key={r.month} className="border-t border-stone-100" data-testid={`triple-row-${r.month}`}>
+                    <td className="px-3 py-1.5 font-medium">{MONTHS[i]}</td>
+                    <td className="px-3 py-1.5 text-right">£{r.budget.toFixed(0)}</td>
+                    <td className="px-3 py-1.5 text-right text-indigo-700 font-medium">{r.forecast != null ? `£${r.forecast.toFixed(0)}` : "—"}</td>
+                    <td className={`px-3 py-1.5 text-right text-xs font-medium ${r.forecast_vs_budget_pct == null ? "text-stone-300" : r.forecast_vs_budget_pct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {r.forecast_vs_budget_pct != null ? `${r.forecast_vs_budget_pct >= 0 ? "+" : ""}${r.forecast_vs_budget_pct.toFixed(1)}%` : "—"}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-semibold">{r.actual != null ? `£${r.actual.toFixed(0)}` : <span className="text-stone-300">gelecek</span>}</td>
+                    <td className={`px-3 py-1.5 text-right text-xs font-medium ${r.actual_vs_budget_pct == null ? "text-stone-300" : r.actual_vs_budget_pct >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {r.actual_vs_budget_pct != null ? `${r.actual_vs_budget_pct >= 0 ? "+" : ""}${r.actual_vs_budget_pct.toFixed(1)}%` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-stone-400 mt-2">Forecast, kilitli bir Forecast Planlama sürümü varsa ondan gelir ("tek doğru"); yoksa canlı AI forecast kullanılır. Geçmiş aylar gerçekleşen, gelecek aylar forecast ile okunur.</p>
         </>
       )}
     </div>

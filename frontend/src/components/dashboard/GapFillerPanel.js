@@ -70,10 +70,11 @@ export default function GapFillerPanel({ propertyId = "all" }) {
             {scanning ? "Taranıyor…" : "Boşlukları Tara"}
           </button>
         </div>
-        <div className="grid grid-cols-3 gap-3 mt-5">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
           <Stat label="Taslak kampanya" value={s.draft} testid="gf-stat-draft" />
           <Stat label="Aktif kampanya" value={s.activated} testid="gf-stat-active" />
           <Stat label="Kod kullanımı" value={s.redemptions} testid="gf-stat-redemptions" />
+          <Stat label="Atıflanan gelir" value={`£${(s.attributed_revenue || 0).toLocaleString("tr-TR")}`} testid="gf-stat-attributed" />
         </div>
       </div>
 
@@ -132,6 +133,12 @@ function CampaignCard({ cp, onAct }) {
           {cp.status === "activated" ? "Aktif" : cp.status === "dismissed" ? "Reddedildi" : "Taslak"}
         </span>
         {cp.promo_used > 0 && <span className="text-[11px] text-emerald-600 font-semibold">{cp.promo_used} kullanım</span>}
+        {cp.attributed_bookings > 0 && (
+          <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-full font-semibold" data-testid={`gf-roi-${cp.id}`}>
+            💰 {cp.attributed_bookings} rez · £{cp.attributed_revenue.toLocaleString("tr-TR")}
+            {cp.discount_given > 0 && <span className="text-emerald-500 font-normal">(−£{cp.discount_given.toLocaleString("tr-TR")} indirim)</span>}
+          </span>
+        )}
         <div className="flex-1" />
         <button onClick={() => setOpen(v => !v)} className="text-xs text-stone-500 hover:text-stone-800 font-semibold" data-testid={`gf-toggle-${cp.id}`}>
           {open ? "Gizle" : "Taslağı Gör"}

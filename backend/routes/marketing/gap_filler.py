@@ -154,11 +154,23 @@ def create_gap_filler_router(db, require_roles):
         for r in rows:
             promo = await db.promo_codes.find_one({"id": r.get("promo_id", "")}, {"_id": 0, "used": 1})
             r["promo_used"] = int(promo.get("used", 0)) if promo else 0
+            agg = await db.bookings.aggregate([
+                {"$match": {"coupon_code": r["promo_code"],
+                            "status": {"$nin": ["cancelled"]}}},
+                {"$group": {"_id": None, "bookings": {"$sum": 1},
+                            "revenue": {"$sum": "$total"},
+                            "discount": {"$sum": "$coupon_discount_amount"}}},
+            ]).to_list(1)
+            a = agg[0] if agg else {}
+            r["attributed_bookings"] = int(a.get("bookings", 0) or 0)
+            r["attributed_revenue"] = round(float(a.get("revenue", 0) or 0), 2)
+            r["discount_given"] = round(float(a.get("discount", 0) or 0), 2)
         cfg = await _get_cfg(db, property_id if property_id != "all" else "all")
         return {"campaigns": rows, "config": cfg,
                 "summary": {"draft": sum(1 for r in rows if r["status"] == "draft"),
                             "activated": sum(1 for r in rows if r["status"] == "activated"),
-                            "redemptions": sum(r["promo_used"] for r in rows)}}
+                            "redemptions": sum(r["promo_used"] for r in rows),
+                            "attributed_revenue": round(sum(r["attributed_revenue"] for r in rows), 2)}}
 
     @router.put("/{property_id}/config")
     async def put_config(property_id: str, data: Dict,

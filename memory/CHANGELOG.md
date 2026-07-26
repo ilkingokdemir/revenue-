@@ -2228,3 +2228,12 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - SİNERJİ: Üretilen kod misafir booking widget'ında (iter 455 promo akışı) anında geçerli —
   E2E doğrulandı: tarama → 1 kampanya (%2.6 doluluk penceresi) → kod validate ok (−%15) →
   activate → campaigns'e düştü → 2. tarama 0 üretti. UI ekranı onaylandı. QA temizlendi.
+
+## Iter 457 (2026-07-26) — Gap Filler Gelir Atıflaması (ROI) TAMAMLANDI
+- gap_filler.py list_campaigns: kampanya başına bookings agregasyonu (coupon_code eşleşmesi,
+  cancelled hariç) → attributed_bookings, attributed_revenue (total), discount_given
+  (coupon_discount_amount). Summary'e attributed_revenue eklendi.
+- GapFillerPanel: 4. KPI "Atıflanan gelir" (gf-stat-attributed) + kampanya kartında ROI rozeti
+  "💰 X rez · £Y (−£Z indirim)" (gf-roi-*).
+- E2E: kampanya kodu ile 2 widget rezervasyonu (£170+£102) → ROI: 2 rez, £272 gelir,
+  £48 indirim; UI rozet + KPI doğrulandı. QA verileri temizlendi.

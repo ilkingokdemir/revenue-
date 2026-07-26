@@ -4,6 +4,11 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 434b — Kurtarılan VCC Geliri → ROI & Sahip Raporu ✅ self-test PASS)
+- Automation ROI (/automation/roi/{pid}) rows'a "VCC Gelir Kurtarma" satırı eklendi (recovered disputes, gerçek gelir — estimated:false, total_attributed'a dahil). Frontend değişikliği gerekmedi (rows dinamik render).
+- Sahip Özeti (_month_summary) "vcc_recovered" alanı + PDF'e "KURTARILAN OTA GELIRI" kutusu + sahip e-postasına satır eklendi.
+- Test: recovered dispute seed → ROI row 1/£180 + total_attributed'a yansıdı, owner-summary vcc_recovered=180, PDF 200 (3.5KB). Seed temizlendi.
+
 ### 2026-07-26 (iter 434 — VCC Gelir Kurtarma / RoboSize Insights paritesi ✅ self-test PASS)
 - Kullanıcı: robosize.me/insights incelendi — 5 temadan 4'ü zaten mevcuttu; tek eksik VCC mutabakatı onaylandı ve inşa edildi.
 - **VCC Gelir Kurtarma** (`finance_ext/vcc_recovery.py`, motor 24 "vcc_recovery" 07:00 finance):

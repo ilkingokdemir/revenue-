@@ -48,6 +48,9 @@ def create_owner_summary_router(db, require_roles, compute_kf):
                                       {"_id": 0, "amount": 1}).to_list(2000)
         inv_paid = await db.city_ledger_invoices.find(
             {"status": "paid", "paid_at": rng}, {"_id": 0, "amount": 1}).to_list(500)
+        rec_disputes = await db.ota_disputes.find(
+            {**pq, "status": "recovered", "resolved_at": rng},
+            {"_id": 0, "recovered_amount": 1}).to_list(500)
         tiles = kf.get("tiles", {})
         return {"month": month,
                 "occupancy_pct": tiles.get("avg_occupancy_pct", 0),
@@ -61,6 +64,7 @@ def create_owner_summary_router(db, require_roles, compute_kf):
                 "commission_costs": tiles.get("commission_costs", 0),
                 "online_share_pct": tiles.get("total_online_pct", 0),
                 "vcc_collected": round(sum(v["amount"] for v in vcc), 2),
+                "vcc_recovered": round(sum(float(r.get("recovered_amount") or 0) for r in rec_disputes), 2),
                 "invoices_collected": round(sum(i.get("amount", 0) for i in inv_paid), 2)}
 
     async def _full(pid: str, month: str) -> Dict:
@@ -120,6 +124,7 @@ def create_owner_summary_router(db, require_roles, compute_kf):
                 ("Ortalama gecelik fiyat (ADR)", f"£{c['adr']:,.0f}"),
                 ("Alan geliri (Spaces)", f"£{c['spaces_revenue']:,.0f}"),
                 ("VCC tahsilatı", f"£{c['vcc_collected']:,.0f}"),
+                ("Kurtarılan OTA geliri", f"£{c.get('vcc_recovered', 0):,.0f}"),
                 ("Kurumsal fatura tahsilatı", f"£{c['invoices_collected']:,.0f}"),
                 ("Satılan gece", f"{c['nights_sold']}"),
             ])
@@ -171,6 +176,7 @@ def create_owner_summary_router(db, require_roles, compute_kf):
             ("ODA GELIRI", f"£{c_data['room_revenue']:,.0f}", ""),
             ("ALAN GELIRI (SPACES)", f"£{c_data['spaces_revenue']:,.0f}", delta_str("spaces_revenue")),
             ("VCC TAHSILATI", f"£{c_data['vcc_collected']:,.0f}", ""),
+            ("KURTARILAN OTA GELIRI", f"£{c_data.get('vcc_recovered', 0):,.0f}", ""),
             ("KURUMSAL TAHSILAT", f"£{c_data['invoices_collected']:,.0f}", ""),
             ("SATILAN GECE", f"{c_data['nights_sold']}", delta_str("nights_sold")),
             ("MISAFIR", f"{c_data['guest_count']}", ""),

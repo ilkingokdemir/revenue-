@@ -150,6 +150,13 @@ def create_automation_roi_router(db, require_roles, runners=None):
         ai_count = len(decs)
         ai_uplift = sum(max(float(d.get("new_rate") or 0) - float(d.get("prev_rate") or 0), 0) for d in decs)
 
+        # VCC recovered revenue (disputes resolved as recovered)
+        rec_disputes = await db.ota_disputes.find(
+            {**pq, "status": "recovered", "resolved_at": {"$gte": since}},
+            {"_id": 0, "recovered_amount": 1}).to_list(1000)
+        vcc_rec_count = len(rec_disputes)
+        vcc_rec_rev = sum(float(r.get("recovered_amount") or 0) for r in rec_disputes)
+
         rows = [
             {"key": "rebook", "name": "Rebook Kampanyası",
              "desc": "Check-out sonrası kuponlu tekrar rezervasyon e-postaları",
@@ -166,6 +173,9 @@ def create_automation_roi_router(db, require_roles, runners=None):
             {"key": "upsell", "name": "Upsell Motoru",
              "desc": "Oda yükseltme ve ek hizmet satışları",
              "count": upsell_count, "revenue": round(upsell_rev, 2), "estimated": False},
+            {"key": "vcc_recovery", "name": "VCC Gelir Kurtarma",
+             "desc": "OTA sanal kart itirazlarından geri kazanılan gelir",
+             "count": vcc_rec_count, "revenue": round(vcc_rec_rev, 2), "estimated": False},
             {"key": "ai_pricing", "name": "AI Fiyatlama (tahmini)",
              "desc": "Pozitif fiyat optimizasyonlarının oda-gece başına tahmini katkısı",
              "count": ai_count, "revenue": round(ai_uplift, 2), "estimated": True},

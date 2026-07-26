@@ -217,7 +217,7 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
             <select value={autopilot?.days_window || 14} onChange={e => updateConfig({ days_window: parseInt(e.target.value) })}
               className="w-full bg-stone-800 border border-stone-700 text-stone-100 text-xs rounded-lg px-2 py-1.5"
               data-testid="autopilot-days-window">
-              {[7, 14, 21, 30].map(d => <option key={d} value={d}>{d} days</option>)}
+              {[7, 14, 21, 30].map(d => <option key={d} value={d} label={`${d} days`} />)}
             </select>
           </div>
           <div className="bg-stone-900/50 rounded-xl p-3">

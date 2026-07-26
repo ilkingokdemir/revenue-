@@ -2247,3 +2247,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   bekleyenler (öneri/taslak > 0) violet vurgulu.
 - E2E: API bloğu + UI bölümü ekran görüntüsüyle doğrulandı (3 sıçrama, 1 gap taslağı).
 - NOT: Gap taslağı/promo gerçek ürün davranışı olarak bırakıldı (cron her sabah üretir).
+
+## Iter 459-460 (2026-07-26) — TAM YAZILIM DENETİMİ + BUG FIX (testing_agent doğrulamalı)
+- Iter 459: testing_agent tam regresyon — iter 449-458'in 10 yeni modülü + kritik eski akışlar.
+  Sonuç: 28/28 backend PASS (allotments, forecast-plans, intraday, restriction-advisor,
+  budget/triple, blended-rate, forecast band, promo widget, gap-filler, morning-brief, smoke).
+  Kritik bug YOK. Tek LOW bug: MorningBriefPanel <option> içinde <span> hydration uyarısı.
+- Kök neden: dev enstrümantasyon plugin'i JSX'te karışık children'ı ({d} days) span'a sarıyor →
+  invalid <option><span>. FIX: satır 220 option artık label attribute kullanıyor
+  (<option value={d} label=\"...\"/>). Konsol temiz.
+- Iter 460: testing_agent fix doğrulaması — %100 PASS, hydration uyarısı 0, select 4 seçenek
+  gösterip değer değiştiriyor, AI Gece Vardiyası bölümü sağlam.
+- Test artıkları temizlendi (TEST_* allotment/forecast_version/promo + 75 TEST booking).
+- Kalıcı test dosyası: /app/backend/tests/test_iteration459_regression.py (3.5 sn'de tüm yeni
+  modülleri koşar; REACT_APP_BACKEND_URL export gerektirir).

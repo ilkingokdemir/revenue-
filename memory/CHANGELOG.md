@@ -4,6 +4,14 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 434 — VCC Gelir Kurtarma / RoboSize Insights paritesi ✅ self-test PASS)
+- Kullanıcı: robosize.me/insights incelendi — 5 temadan 4'ü zaten mevcuttu; tek eksik VCC mutabakatı onaylandı ve inşa edildi.
+- **VCC Gelir Kurtarma** (`finance_ext/vcc_recovery.py`, motor 24 "vcc_recovery" 07:00 finance):
+  - 4 tutarsızlık tipi: missed_charge (aktivasyonu geçmiş çekilmemiş), expired (süresi dolmuş), underfunded (rezervasyon tutarı arttı kart eski — fark), cancel_fee (iptal edilmiş, 1 gece iptal ücreti çekilmemiş).
+  - GET /vcc-recovery/{pid}/scan (total_recoverable + by_type + items[action]), POST /dispute/{vcc_id} (duplicate→400), POST /dispute/{id}/resolve (recovered|written_off), GET /{pid}/disputes. Açık/kurtarılmış itirazlar rescan'de hariç tutulur. Günlük motor kurtarılabilir gelir varsa manager'a bildirim atar.
+  - UI: VccPanel içine VccRecoverySection — yeşil "Gelir Kurtarma" bandı (kurtarılabilir + bugüne dek kurtarılan), tip rozetleri, aksiyon tablosu (Şimdi çek → mevcut /vcc/{id}/charge; OTA'ya itiraz aç), itiraz listesi (Kurtarıldı ✓ / Vazgeç).
+  - E2E: 4 senaryo seed → 790 tespit (400+180+150+60), dispute→resolve→recovered_to_date 180, rescan hariç tutma, motor tetikleme, UI screenshot. Test verisi temizlendi. Toplam motor: 24.
+
 ### 2026-07-26 (iter 433b — HK Urgent Anlık Bildirim + Webhook HMAC ✅ self-test PASS)
 - **HK urgent bildirim zinciri**: hk_dispatch urgent görev oluşturunca atanan görevliye db.notifications kaydı (target_user=email). `my_tasks.py` artık `hk_tasks` + summary.hk_open/hk_urgent döndürüyor. MyTasksPanel'e "Bugünkü Temizlik Görevlerim" bölümü (my-hk-tasks-section): urgent kartlar kırmızı + pulse, Başla/Tamamlandı hızlı aksiyonları (PUT /housekeeping/tasks artık housekeeper rolüne açık), 30sn poll + yeni urgent görevde WebAudio ding + toast.
 - **Inbox webhook HMAC**: INBOX_WEBHOOK_SECRET env set ise X-Inbox-Signature (HMAC-SHA256 raw body) zorunlu; unset ise eski davranış (opt-in, backward compatible).

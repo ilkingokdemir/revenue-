@@ -158,6 +158,11 @@ JOB_REGISTRY = {
         "description": "Yaklaşan varışları hatalara karşı tarar (eksik iletişim, sıfır fiyat, çift kayıt) ve iletişim bilgilerini otomatik tamamlar.",
         "default_cron": (5, 30), "default_enabled": True, "params": [],
     },
+    "vcc_recovery": {
+        "label": "VCC Gelir Kurtarma", "category": "finance",
+        "description": "OTA sanal kart tutarsızlıklarını tarar (unutulmuş çekim, süresi dolmuş kart, eksik yükleme, iptal ücreti) ve kurtarılabilir geliri raporlar.",
+        "default_cron": (7, 0), "default_enabled": True, "params": [],
+    },
 }
 
 CATEGORY_META = {

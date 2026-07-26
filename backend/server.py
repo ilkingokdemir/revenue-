@@ -1331,6 +1331,18 @@ async def _job_res_quality(property_id: str) -> dict:
 
 JOB_HANDLERS["res_quality"] = _job_res_quality
 
+from routes.finance_ext.vcc_recovery import create_vcc_recovery_router
+vcc_recovery_router = create_vcc_recovery_router(db, require_roles)
+api_router.include_router(vcc_recovery_router)
+
+async def _job_vcc_recovery(property_id: str) -> dict:
+    try:
+        return await vcc_recovery_router.run_internal()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["vcc_recovery"] = _job_vcc_recovery
+
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))
 

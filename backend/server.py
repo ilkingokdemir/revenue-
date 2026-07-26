@@ -1322,6 +1322,18 @@ async def _job_hk_dispatch(property_id: str) -> dict:
 
 JOB_HANDLERS["hk_dispatch"] = _job_hk_dispatch
 
+from routes.distribution.allotments import create_allotments_router
+allotments_router = create_allotments_router(db, require_roles)
+api_router.include_router(allotments_router)
+
+async def _job_allotment_release(property_id: str) -> dict:
+    try:
+        return await allotments_router.run_release_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["allotment_release"] = _job_allotment_release
+
 from routes.pms.res_quality import create_res_quality_router
 res_quality_router = create_res_quality_router(db, require_roles)
 api_router.include_router(res_quality_router)
@@ -1357,6 +1369,9 @@ async def _job_returning_guest_watch(property_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 JOB_HANDLERS["returning_guest_watch"] = _job_returning_guest_watch
+
+from routes.finance_ext.digital_auth import create_digital_auth_router
+api_router.include_router(create_digital_auth_router(db, require_roles))
 
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))

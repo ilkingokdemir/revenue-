@@ -46,6 +46,11 @@ Marketplace zaten yapılmışken tekrar önerildi — bir daha ASLA.
 - Kupon deep-link: `/book/{property}?coupon=DIRECT-XXX` otomatik uygular; promo
   e-postasına "Şimdi Rezervasyon Yap" CTA butonu eklendi (PUBLIC_BASE_URL env).
 
+## Son Durum (Iter 446, 2026-07-26) — Tur Operatörü Kontenjan (Allotment) Yönetimi
+- `distribution/allotments.py` (/api/allotments): operatör kontratları, pickup, stop-sale,
+  takvim grid, otomatik release (cron 05:45). AllotmentsPanel (System > Tur operatörü kontenjanları).
+- E2E curl + UI ekran görüntüsü ile doğrulandı. Detay: CHANGELOG.md iter 446.
+
 ## Son Durum (Iter 380, 2026-07-08) — Nihai API Denetimi & Tahminsel Housekeeping
 - 500 Hata Denetimi TAMAMLANDI: 2187 endpoint mutasyon taramasıyla test edildi.
   - `server.py`'ye global `bson.errors.InvalidId` + `BSONError` handler eklendi (400 döner).

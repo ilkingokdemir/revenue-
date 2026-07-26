@@ -158,6 +158,8 @@ export const WaitlistPanel = L(() => import("./components/dashboard/WaitlistPane
 export const HkDispatchPanel = L(() => import("./components/dashboard/HkDispatchPanel"));
 export const ResQualityPanel = L(() => import("./components/dashboard/ResQualityPanel"));
 export const ChainBenchmarkPanel = L(() => import("./components/dashboard/ChainBenchmarkPanel"));
+export const DigitalAuthPanel = L(() => import("./components/dashboard/DigitalAuthPanel"));
+export const AllotmentsPanel = L(() => import("./components/dashboard/AllotmentsPanel"));
 export const AutomationSettingsPanel = L(() => import("./components/dashboard/AutomationSettingsPanel"));
 export const GuestSegmentsPanel = L(() => import("./components/dashboard/GuestSegmentsPanel"));
 export const ChannelHealthPanel = L(() => import("./components/dashboard/ChannelHealthPanel"));

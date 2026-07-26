@@ -163,6 +163,11 @@ JOB_REGISTRY = {
         "description": "OTA sanal kart tutarsızlıklarını tarar (unutulmuş çekim, süresi dolmuş kart, eksik yükleme, iptal ücreti) ve kurtarılabilir geliri raporlar.",
         "default_cron": (7, 0), "default_enabled": True, "params": [],
     },
+    "allotment_release": {
+        "label": "Kontenjan Otomatik Release", "category": "distribution",
+        "description": "Release penceresine giren satılmamış tur operatörü kontenjanlarını otomatik serbest bırakır ve yöneticiye bildirir.",
+        "default_cron": (5, 45), "default_enabled": True, "params": [],
+    },
     "returning_guest_watch": {
         "label": "Dönen Misafir Takibi", "category": "guest",
         "description": "48 saat içinde varışı olan, kayıtlı tercihi (sessiz oda, sağlık, yemek) veya geçmiş olayı bulunan misafirleri resepsiyona bildirir.",

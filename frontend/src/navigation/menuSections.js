@@ -88,6 +88,7 @@ import {
   Wrench,
   HourglassMedium,
   Bank,
+  LockKey,
 } from "@phosphor-icons/react";
 
 export function buildMenuSections(t, user) {
@@ -319,6 +320,7 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "Ledger & Folios" },
         { id: "city-ledger", icon: Wallet, name: "City ledger (AR)", testId: "city-ledger-btn" },
         { id: "ar-recon", icon: Bank, name: "AR mutabakat agent'ı", testId: "ar-recon-btn" },
+        { id: "digital-auth", icon: LockKey, name: "Dijital yetkilendirme", testId: "digital-auth-btn" },
         { id: "commission-recon", icon: Receipt, name: "Commission reconciliation", testId: "commission-recon-btn" },
         { id: "folio-live", icon: Receipt, name: "In-stay folio", testId: "folio-live-btn" },
         { id: "folio-split", icon: Receipt, name: "Folio split-billing", testId: "folio-split-btn" },
@@ -378,6 +380,7 @@ export function buildMenuSections(t, user) {
         { id: "ota-commission", icon: Lightning, name: "OTA Komisyon & Net Gelir", testId: "ota-commission-btn" },
         { id: "direct-conversion", icon: Sparkle, name: "Direct Booking Conversion", testId: "direct-conversion-btn" },
         { id: "siteminder", icon: PlugsConnected, name: "SiteMinder adapter", testId: "siteminder-btn" },
+        { id: "allotments", icon: Buildings, name: "Tur operatörü kontenjanları", testId: "allotments-btn" },
         { id: "channel-map-matrix", icon: Buildings, name: "Channel mappings", testId: "channel-map-matrix-btn" },
         { id: "channel-restrictions", icon: Lock, name: "Restrictions", testId: "channel-restrictions-btn" },
         { id: "channel-inbound", icon: Link, name: "Inbound reservations", testId: "channel-inbound-btn" },

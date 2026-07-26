@@ -84,7 +84,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel, DigitalAuthPanel, AllotmentsPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -104,6 +104,7 @@ import { buildMenuSections } from "./navigation/menuSections";
 import { SIDEBAR_PERM_MAP } from "./navigation/permMap";
 import GuestMaintenancePage from "./GuestMaintenancePage";
 import BookingWidgetPage from "./BookingWidgetPage";
+import AuthorizeFormPage from "./AuthorizeFormPage";
 import SpacesPublicPage from "./SpacesPublicPage";
 import GuestSurveyPage from "./GuestSurveyPage";
 import UpsellOfferPage from "./UpsellOfferPage";
@@ -2173,6 +2174,9 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {activeView === "ar-recon" && <ArReconPanel />}
 
+        {activeView === "digital-auth" && <DigitalAuthPanel propertyId={activePropertyId || "all"} />}
+        {activeView === "allotments" && <AllotmentsPanel propertyId={activePropertyId || "all"} />}
+
         {activeView === "vcc-automation" && (
           <VccPanel propertyId={activePropertyId || "all"} />
         )}
@@ -2543,6 +2547,10 @@ function App() {
   if (window.location.pathname.startsWith("/room-help/")) {
     const parts = window.location.pathname.split("/room-help/")[1].split("/");
     return <GuestMaintenancePage propertyId={parts[0]} roomId={parts[1] || "unknown"} />;
+  }
+  if (window.location.pathname.startsWith("/authorize/")) {
+    const token = window.location.pathname.split("/authorize/")[1];
+    return <AuthorizeFormPage token={token} />;
   }
   if (window.location.pathname.startsWith("/offer/")) {
     const token = window.location.pathname.split("/offer/")[1];

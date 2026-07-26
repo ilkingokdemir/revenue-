@@ -2080,3 +2080,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   backend çökmüştü) → weekly_report sonrasına taşındı.
 - E2E: summary (£37.5k gelir, Δ deltalar), PDF 200/3410B, mock e-posta gönderimi UI'dan doğrulandı.
 - NOT: Owner portal'daki birim-sahibi ekstreleriyle çakışmaz; bu tesis düzeyi yönetici özetidir.
+
+## Iter 446 (2026-07-26) — Tur Operatörü Kontenjan (Allotment) Yönetimi TAMAMLANDI
+- YENİ backend: distribution/allotments.py (/api/allotments) — allotment_contracts /
+  allotment_pickups / allotment_releases koleksiyonları.
+- Endpoints: GET /{pid} (kontratlar+pickup% özet), POST /{pid} (kontrat), PUT/DELETE,
+  POST /{cid}/pickup (kontenjan aşımı 400 ile korunur), POST /{cid}/stop-sale (toggle),
+  GET /{cid}/calendar?days= (günlük kalan/picked/released/stop-sale grid),
+  POST /release-run (release penceresindeki satılmamış kontenjanı serbest bırakır, idempotent,
+  yönetici bildirimi). Cron: JOB "allotment_release" 05:45 (automation_settings distribution).
+- YENİ AllotmentsPanel (menü: System > Tur operatörü kontenjanları, id allotments):
+  teal hero + 4 KPI, kontrat kartları (pickup bar), inline 21 günlük takvim (P/R/stop-sale,
+  hücreden pickup ekleme + stop-sale toggle), yeni kontrat formu, "Release Çalıştır".
+- E2E: kontrat → pickup(3) → aşım 400 → stop-sale → release-run (35 oda) → takvim/özet
+  doğrulandı; UI ekran görüntüsüyle onaylandı. QA verileri temizlendi.

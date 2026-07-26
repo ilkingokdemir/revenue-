@@ -44,6 +44,7 @@
 | Rezervasyon Kalite Kontrolü (RoboSize paritesi) | `pms/res_quality.py` + ResQualityPanel | iter 433 DONE |
 | FTE/Kazanılan Saat metriği | automation_roi.py /time-saved + roi-time-saved kartı | iter 433 DONE |
 | Loyalty Tiers + benefits + auto-upgrade + CRM kartı | loyalty_tiers/loyalty_tier/loyalty_v2/loyalty_auto | ÖNCEDEN MEVCUT — tekrar önerme |
+| Tur Operatörü Kontenjan (Allotment) Yönetimi | `distribution/allotments.py` + AllotmentsPanel + cron allotment_release | iter 446 DONE |
 
 ## P0 — Kullanıcı API anahtarı gerektirir (BLOKE — anahtar gelince yap)
 - Gerçek OTA rate push: rate_sync_queue → Booking.com/Expedia (OTA credentials gerekli)

@@ -4,6 +4,11 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 434c — Haftalık Rapora "Otomasyonun Kazandırdıkları" ✅ self-test PASS)
+- `weekly_report.py`: `_automation_wins(pq, start, end)` — hafta penceresinde 8 motor çıktısı (VCC tahsilat £, kurtarılan OTA geliri £, AR eşleştirme £, waitlist teklif+dönüşüm, inbox AI cevap, HK görev, kalite düzeltme, no-show) + toplam aksiyon + işlenen tutar + tahmini kazanılan saat.
+- Pazartesi e-postasına yeşil "🤖 Bu Hafta Otomasyonun Kazandırdıkları" tablosu eklendi; preview endpoint'i `automation_wins` alanını döndürüyor.
+- Test: preview 4 aksiyon/£1802.5 gerçek veri, force send OK (mock e-posta).
+
 ### 2026-07-26 (iter 434b — Kurtarılan VCC Geliri → ROI & Sahip Raporu ✅ self-test PASS)
 - Automation ROI (/automation/roi/{pid}) rows'a "VCC Gelir Kurtarma" satırı eklendi (recovered disputes, gerçek gelir — estimated:false, total_attributed'a dahil). Frontend değişikliği gerekmedi (rows dinamik render).
 - Sahip Özeti (_month_summary) "vcc_recovered" alanı + PDF'e "KURTARILAN OTA GELIRI" kutusu + sahip e-postasına satır eklendi.

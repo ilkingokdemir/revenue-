@@ -135,6 +135,19 @@ JOB_REGISTRY = {
             {"key": "max_auto_push", "label": "Çalışma başına maks. otomatik push (0=kapalı)", "type": "number", "min": 0, "max": 100, "default": 30, "suffix": "adet"},
         ],
     },
+    "ar_recon": {
+        "label": "AR Mutabakat Agent'ı", "category": "finance",
+        "description": "Gelen banka ödemelerini açık faturalarla akıllı eşleştirir (kısmi/fazla/toplu ödeme dahil).",
+        "default_cron": (7, 30), "default_enabled": True, "params": [],
+    },
+    "waitlist_match": {
+        "label": "Bekleme Listesi Eşleştirici", "category": "guest",
+        "description": "Müsaitlik açılınca bekleme listesindeki misafirlere otomatik rezervasyon teklifi e-postası gönderir.",
+        "default_cron": (8, 15), "default_enabled": True,
+        "params": [
+            {"key": "offer_ttl_hours", "label": "Teklif geçerlilik süresi", "type": "number", "min": 12, "max": 168, "default": 48, "suffix": "saat"},
+        ],
+    },
 }
 
 CATEGORY_META = {

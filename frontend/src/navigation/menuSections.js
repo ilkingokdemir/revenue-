@@ -86,6 +86,8 @@ import {
   Warning,
   WhatsappLogo,
   Wrench,
+  HourglassMedium,
+  Bank,
 } from "@phosphor-icons/react";
 
 export function buildMenuSections(t, user) {
@@ -166,6 +168,7 @@ export function buildMenuSections(t, user) {
         { id: "guest-profiles", icon: AddressBook, name: t("nav.guest_profiles"), testId: "guest-profiles-btn" },
         { id: "crm-360", icon: Users, name: "Guest CRM 360", testId: "crm-360-btn" },
         { id: "guest-risk", icon: ShieldWarning, name: "Misafir risk radarı", testId: "guest-risk-btn" },
+        { id: "waitlist", icon: HourglassMedium, name: "Bekleme listesi", testId: "waitlist-btn" },
         { id: "guest-segments", icon: UsersThree, name: "Segment motoru", testId: "guest-segments-btn" },
         { id: "guest-journey", icon: SignIn, name: t("nav.guest_journey"), testId: "guest-journey-btn" },
         { id: "guest-rfm", icon: Target, name: "RFM segmentation", testId: "guest-rfm-btn" },
@@ -313,6 +316,7 @@ export function buildMenuSections(t, user) {
 
         { divider: true, label: "Ledger & Folios" },
         { id: "city-ledger", icon: Wallet, name: "City ledger (AR)", testId: "city-ledger-btn" },
+        { id: "ar-recon", icon: Bank, name: "AR mutabakat agent'ı", testId: "ar-recon-btn" },
         { id: "commission-recon", icon: Receipt, name: "Commission reconciliation", testId: "commission-recon-btn" },
         { id: "folio-live", icon: Receipt, name: "In-stay folio", testId: "folio-live-btn" },
         { id: "folio-split", icon: Receipt, name: "Folio split-billing", testId: "folio-split-btn" },

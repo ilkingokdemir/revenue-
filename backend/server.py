@@ -1274,6 +1274,39 @@ async def _job_comp_radar(property_id: str) -> dict:
 
 JOB_HANDLERS["comp_radar"] = _job_comp_radar
 
+# ── Mews 2026 paritesi: NL Automation + Inbox AI Agent + AR Recon + Waitlist ──
+from routes.platform_ext.nl_automation import create_nl_automation_router
+api_router.include_router(create_nl_automation_router(db, require_roles))
+
+from routes.integrations_pkg.inbox_agent import create_inbox_agent_router
+api_router.include_router(create_inbox_agent_router(db, require_roles))
+
+from routes.finance_ext.ar_recon_agent import create_ar_recon_router
+ar_recon_router = create_ar_recon_router(db, require_roles)
+api_router.include_router(ar_recon_router)
+
+async def _job_ar_recon(property_id: str) -> dict:
+    try:
+        return await ar_recon_router.run_match_internal()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["ar_recon"] = _job_ar_recon
+
+from routes.pms.waitlist import create_waitlist_router
+waitlist_router = create_waitlist_router(db, require_roles)
+api_router.include_router(waitlist_router)
+
+async def _job_waitlist_match(property_id: str) -> dict:
+    try:
+        from routes.platform_ext.automation_settings import get_params
+        params = await get_params(db, "waitlist_match", {"offer_ttl_hours": 48})
+        return await waitlist_router.run_match_internal(ttl_hours=int(params.get("offer_ttl_hours", 48)))
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["waitlist_match"] = _job_waitlist_match
+
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))
 

@@ -54,6 +54,51 @@ function SocialProofBadge({ propertyId }) {
   );
 }
 
+function WaitlistJoinCard({ propertyId, checkIn, checkOut, guests }) {
+  const [form, setForm] = useState({ guest_name: "", email: "" });
+  const [state, setState] = useState("idle"); // idle | saving | done
+
+  const join = async () => {
+    if (!form.guest_name.trim() || !form.email.includes("@")) return;
+    setState("saving");
+    try {
+      await axios.post(`${API}/waitlist/${propertyId}/join`, {
+        guest_name: form.guest_name.trim(), email: form.email.trim(),
+        check_in: checkIn, check_out: checkOut, guests,
+      });
+      setState("done");
+    } catch { setState("idle"); }
+  };
+
+  if (state === "done") {
+    return (
+      <div className="max-w-md mx-auto bg-emerald-50 border border-emerald-200 rounded-xl p-5 text-left" data-testid="be-waitlist-done">
+        <p className="text-sm font-semibold text-emerald-800">✓ You're on the waitlist!</p>
+        <p className="text-xs text-emerald-700 mt-1">If a room opens up for {checkIn} → {checkOut}, we'll email you a priority booking link right away.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="max-w-md mx-auto bg-amber-50 border border-amber-200 rounded-xl p-5 text-left" data-testid="be-waitlist-card">
+      <p className="text-sm font-semibold text-stone-800 mb-1">Join the waitlist</p>
+      <p className="text-xs text-stone-500 mb-3">If a cancellation opens up your dates, you'll get an email with a priority booking link.</p>
+      <div className="space-y-2">
+        <input value={form.guest_name} onChange={e => setForm(f => ({ ...f, guest_name: e.target.value }))}
+          placeholder="Your name" data-testid="be-waitlist-name"
+          className="w-full px-3 py-2 text-sm border border-stone-300 rounded-lg" />
+        <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+          placeholder="Email address" type="email" data-testid="be-waitlist-email"
+          className="w-full px-3 py-2 text-sm border border-stone-300 rounded-lg" />
+        <button onClick={join} disabled={state === "saving" || !form.guest_name.trim() || !form.email.includes("@")}
+          data-testid="be-waitlist-join-btn"
+          className="w-full px-3 py-2 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg disabled:opacity-50">
+          {state === "saving" ? "Joining…" : "Notify me when available"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function BookingWidgetPage({ propertyId }) {
   const [hotel, setHotel] = useState({ hotel_name: "Hotel", rooms: [], currency: "GBP", logo_url: "", reviews: [], avg_rating: 0, review_count: 0, theme: {} });
   const [step, setStep] = useState("home");
@@ -207,6 +252,10 @@ export default function BookingWidgetPage({ propertyId }) {
           const { data } = await axios.get(`${API}/booking-widget/payment-status/${ref}`);
           if (data.status === "confirmed") {
             axios.post(`${API}/booking-widget/abandoned/convert`, { session_id: localStorage.getItem("be_session_id") || "" }).catch(() => {});
+            {
+              const wlt = new URLSearchParams(window.location.search).get("waitlist");
+              if (wlt) axios.post(`${API}/waitlist/convert/${wlt}`, { booking_id: data.id || "" }).catch(() => {});
+            }
             const abv = localStorage.getItem("be_ab_social_proof_variant");
             if (abv) axios.post(`${API}/ab/track`, { key: "social_proof_badge", session_id: localStorage.getItem("be_session_id") || "", variant: abv, event: "booking_completed", value: Number(data.total_price || 0) }).catch(() => {});
             setConfirmation({
@@ -280,6 +329,10 @@ export default function BookingWidgetPage({ propertyId }) {
       // Pay-at-property or fallback path → show confirmation in-place
       abTrack("booking_completed", Number(data?.booking?.total_price || finalRate || 0));
       axios.post(`${API}/booking-widget/abandoned/convert`, { session_id: abSessionId }).catch(() => {});
+      {
+        const wlt = new URLSearchParams(window.location.search).get("waitlist");
+        if (wlt) axios.post(`${API}/waitlist/convert/${wlt}`, { booking_id: data?.booking?.id || "" }).catch(() => {});
+      }
       setConfirmation(data);
       setStep("confirmed");
     } catch { /* silent */ }
@@ -672,7 +725,8 @@ export default function BookingWidgetPage({ propertyId }) {
           <div className="bg-white rounded-2xl p-12 text-center border border-stone-200">
             <svg className="w-16 h-16 text-stone-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
             <h3 className="text-lg font-semibold text-stone-800 mb-2">No rooms available</h3>
-            <p className="text-sm text-stone-500">Try different dates or contact us directly.</p>
+            <p className="text-sm text-stone-500 mb-6">Try different dates or contact us directly.</p>
+            <WaitlistJoinCard propertyId={propertyId} checkIn={checkIn} checkOut={checkOut} guests={guests} />
           </div>
         ) : available.map((r, i) => (
           <motion.div key={r.room_type_id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}

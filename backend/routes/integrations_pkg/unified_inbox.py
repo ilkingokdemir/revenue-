@@ -246,7 +246,17 @@ def create_unified_inbox_router(db):
             "read": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
+        if data.get("property_id"):
+            doc["property_id"] = data["property_id"]
         await db.unified_messages.insert_one(dict(doc))
-        return {"ok": True, "id": doc["id"]}
+        doc.pop("_id", None)
+
+        agent_result = None
+        try:
+            from routes.integrations_pkg.inbox_agent import agent_handle_inbound
+            agent_result = await agent_handle_inbound(db, doc)
+        except Exception as e:
+            logger.warning("Inbox agent processing failed: %s", e)
+        return {"ok": True, "id": doc["id"], "agent": agent_result}
 
     return router

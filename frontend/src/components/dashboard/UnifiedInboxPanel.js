@@ -129,6 +129,9 @@ export const UnifiedInboxPanel = () => {
         </div>
       </div>
 
+      {/* AI Agent control bar */}
+      <AgentBar />
+
       {/* Split pane — thread list (left) + conversation (right) */}
       <div className="grid grid-cols-[340px_1fr] gap-4 h-[calc(100vh-280px)] min-h-[500px]">
         {/* Threads list */}
@@ -215,6 +218,8 @@ export const UnifiedInboxPanel = () => {
                       <div className={`flex items-center gap-1 text-[10px] mb-1 ${out ? "text-emerald-100" : cm.fg}`}>
                         <cm.icon className="w-3 h-3" />
                         <span className="font-semibold">{cm.label}</span>
+                        {m.agent && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-violet-500/80 text-white font-bold" data-testid="ai-agent-badge">🤖 AI Agent</span>}
+                        {m.needs_human && <span className="ml-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-white font-bold" data-testid="needs-human-badge">İnsana devredildi</span>}
                         <span className={`ml-1 ${out ? "text-emerald-200" : "text-stone-400"}`}>· {formatTime(m.created_at)}</span>
                       </div>
                       <p className="whitespace-pre-wrap leading-relaxed">{m.body}</p>
@@ -270,6 +275,61 @@ export const UnifiedInboxPanel = () => {
 
       {/* Mock Inbound — quick way to seed threads without real channel providers */}
       {testOpen && <MockInboundModal onClose={() => setTestOpen(false)} onSend={sendTestInbound} />}
+    </div>
+  );
+};
+
+const AgentBar = () => {
+  const [cfg, setCfg] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = async () => {
+    try {
+      const [c, s] = await Promise.all([
+        axios.get(`${API}/inbox/agent/config`),
+        axios.get(`${API}/inbox/agent/stats?days=7`),
+      ]);
+      setCfg(c.data);
+      setStats(s.data);
+    } catch { /* silent */ }
+  };
+  useEffect(() => { load(); }, []);
+
+  const update = async (patch) => {
+    setSaving(true);
+    try {
+      const { data } = await axios.put(`${API}/inbox/agent/config`, patch);
+      setCfg(data);
+      toast.success(patch.enabled !== undefined ? (patch.enabled ? "AI Agent açıldı — basit sorular otonom cevaplanacak" : "AI Agent kapatıldı") : "Eşik güncellendi");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Güncellenemedi"); }
+    setSaving(false);
+  };
+
+  if (!cfg) return null;
+  return (
+    <div className="bg-white border border-violet-200 rounded-xl p-3 flex items-center gap-4 flex-wrap" data-testid="inbox-agent-bar">
+      <button onClick={() => update({ enabled: !cfg.enabled })} disabled={saving} data-testid="agent-toggle-btn"
+        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition
+          ${cfg.enabled ? "bg-violet-600 text-white" : "bg-stone-100 text-stone-500 hover:bg-stone-200"}`}>
+        <Sparkles className="w-3.5 h-3.5" />
+        AI Agent: {cfg.enabled ? "AÇIK" : "KAPALI"}
+      </button>
+      <div className="flex items-center gap-1.5 text-xs text-stone-600">
+        <span>Güven eşiği:</span>
+        <input type="number" min={40} max={95} defaultValue={cfg.threshold} data-testid="agent-threshold-input"
+          onBlur={e => { const v = parseInt(e.target.value); if (v >= 40 && v <= 95 && v !== cfg.threshold) update({ threshold: v }); }}
+          className="w-16 px-2 py-1 border border-stone-200 rounded text-center" />
+        <span className="text-stone-400">%</span>
+      </div>
+      {stats && (
+        <div className="ml-auto flex items-center gap-4 text-xs" data-testid="agent-stats">
+          <span className="text-violet-700 font-semibold">🤖 {stats.auto_replied} otonom cevap</span>
+          <span className="text-rose-600 font-semibold">{stats.escalated} insana devir</span>
+          <span className="text-stone-400">otomasyon %{stats.automation_rate} (7g)</span>
+        </div>
+      )}
+      <p className="w-full text-[11px] text-stone-400 -mt-1">Basit misafir soruları (WiFi, kahvaltı, check-in saati) chatbot FAQ bilgi tabanından otonom cevaplanır; hassas konular veya düşük güven skorunda konuşma insana devredilir.</p>
     </div>
   );
 };

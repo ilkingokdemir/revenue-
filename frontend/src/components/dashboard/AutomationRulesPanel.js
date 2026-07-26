@@ -100,6 +100,9 @@ export default function AutomationRulesPanel({ propertyId = "all", user }) {
         </div>
       </div>
 
+      {/* NL Builder — Mews Automations paritesi */}
+      <NlRuleBuilder onCreated={reload} />
+
       {loading ? (
         <div className="py-12 text-center text-stone-400">Yükleniyor…</div>
       ) : rules.length === 0 ? (
@@ -166,6 +169,89 @@ export default function AutomationRulesPanel({ propertyId = "all", user }) {
       )}
       {runsForRule && (
         <RunsModal {...runsForRule} onClose={() => setRunsForRule(null)} />
+      )}
+    </div>
+  );
+}
+
+function NlRuleBuilder({ onCreated }) {
+  const [text, setText] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  async function parse() {
+    if (text.trim().length < 8) { toast.error("En az 8 karakterlik bir cümle yazın"); return; }
+    setParsing(true);
+    setPreview(null);
+    try {
+      const r = await axios.post(`${API}/nl-parse`, { text: text.trim() }, { withCredentials: true });
+      setPreview(r.data);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Çevrilemedi"); }
+    finally { setParsing(false); }
+  }
+
+  async function save(enabled) {
+    if (!preview?.rule) return;
+    setSaving(true);
+    try {
+      await axios.post(`${API}/rules`, { ...preview.rule, enabled }, { withCredentials: true });
+      toast.success(enabled ? "Kural oluşturuldu ve aktif" : "Kural taslak olarak kaydedildi");
+      setPreview(null);
+      setText("");
+      onCreated();
+    } catch (e) { toast.error("Kaydedilemedi: " + (e?.response?.data?.detail || e.message)); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <div className="mb-5 bg-gradient-to-br from-stone-900 via-indigo-950 to-violet-950 rounded-2xl p-5 text-white" data-testid="nl-rule-builder">
+      <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-violet-300 mb-2">
+        <Lightning size={12} weight="fill" /> Doğal Dilde Kural Yaz (AI)
+      </div>
+      <p className="text-xs text-stone-300 mb-3">
+        Cümleyle anlat, çalışan kurala çevrilsin — örn: <em>"Balayı etiketli misafir check-in olduğunda odaya şampanya gönder ve resepsiyona bildirim at"</em>
+      </p>
+      <div className="flex gap-2">
+        <input value={text} onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") parse(); }}
+          placeholder="Otomasyon kuralını cümleyle yaz…"
+          className="flex-1 px-3 py-2.5 text-sm rounded-lg bg-white/10 border border-white/20 placeholder-stone-400 text-white focus:outline-none focus:border-violet-400"
+          data-testid="nl-input" />
+        <button onClick={parse} disabled={parsing} data-testid="nl-parse-btn"
+          className="px-4 py-2 text-sm font-bold bg-violet-500 hover:bg-violet-400 rounded-lg disabled:opacity-60 shrink-0">
+          {parsing ? "Çevriliyor…" : "✨ Kurala Çevir"}
+        </button>
+      </div>
+      {preview && (
+        <div className="mt-4 bg-white/10 rounded-xl p-4" data-testid="nl-preview">
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <span className="text-sm font-semibold">{preview.rule.name}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${preview.source === "llm" ? "bg-violet-400/30 text-violet-200" : "bg-amber-400/30 text-amber-200"}`}>
+              {preview.source === "llm" ? `AI · güven %${preview.confidence}` : "sezgisel çeviri"}
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 items-center text-[11px]">
+            <span className="px-2 py-1 bg-yellow-400/20 text-yellow-200 rounded font-mono">⚡ {preview.trigger_label}</span>
+            {(preview.rule.conditions || []).map((c, i) => (
+              <span key={i} className="px-2 py-1 bg-white/10 rounded font-mono">🔍 {c.field} {c.op} {JSON.stringify(c.value)}</span>
+            ))}
+            {(preview.action_labels || []).map((a, i) => (
+              <span key={i} className="px-2 py-1 bg-emerald-400/20 text-emerald-200 rounded">🎯 {a}</span>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button onClick={() => save(true)} disabled={saving} data-testid="nl-save-active-btn"
+              className="px-3 py-1.5 text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-stone-900 rounded-lg disabled:opacity-60">
+              Kaydet & Aktifleştir
+            </button>
+            <button onClick={() => save(false)} disabled={saving} data-testid="nl-save-draft-btn"
+              className="px-3 py-1.5 text-xs font-medium bg-white/10 hover:bg-white/20 rounded-lg disabled:opacity-60">
+              Taslak olarak kaydet
+            </button>
+            <button onClick={() => setPreview(null)} className="px-3 py-1.5 text-xs text-stone-400 hover:text-white">Vazgeç</button>
+          </div>
+        </div>
       )}
     </div>
   );

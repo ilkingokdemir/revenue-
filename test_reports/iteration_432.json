@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 432 - Mews Parity 4 agents (NL Automation Builder, Inbox AI Agent, AR Reconciliation Agent, Waitlist auto-offer). Backend pytest: 27/27 PASSED covering all specified flows: (1) NL parse validation + LLM-driven Turkish honeymoon parse + save via /automation/v2/rules; (2) Inbox agent config get/put/threshold-validation (40-95) + WhatsApp webhook auto_replied for wifi FAQ + escalated for refund/cancel sensitive + stats; (3) AR agent reference match, subset_batch match closing two invoices (150.0 + 220.5 + 80.0), partial invoice, overpayment producing exactly 45 credit in ar_credits, overview shape, negative amount 400; (4) Waitlist join validation (email/dates), duplicate 'already:true', staff list summary+conversion_rate, match-run creates offered entry with offer_link containing 'waitlist=' token + email_status='mock', public /offer/{token} resolves, /convert/{token} idempotent; (5) automation/settings returns 21 motors including 'ar_recon' and 'waitlist_match', /scheduler/trigger/all/{motor} works without error. Frontend Playwright: verified panels & data-testids present — waitlist-panel (+ 5 filters + waitlist-match-btn), ar-recon-panel (+4 ar-stat cards + 3 ar-input + ar-add-payment-btn + ar-match-run-btn), automation-hub-btn → Kurallar tab → nl-rule-builder + nl-input + nl-parse-btn → nl-preview → nl-save-draft-btn → rule appended to list; test rule cleaned up. Only surface not fully clicked through in playwright was unified-inbox-panel (accordion header not expanded before click) — backend AI Agent flows for inbox are fully verified. Data cleanup done for all QA Recon Co companies + invoices + waitlist entries + NL automation rule created during test.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/ar-agent/payments", "issue": "No public DELETE endpoint for ar_incoming_payments records — testing leaves 4 QA-created payment rows visible in the AR panel table (matched, cannot be removed via API). Cosmetic only; match_log & credits also lack cleanup endpoints."},
+      {"endpoint": "/api/inbox/webhook/{channel}", "issue": "Public webhook (no signature verification stub, expected — flagged in code comment) but body accepts arbitrary property_id from caller — an attacker could enqueue synthetic messages against any property; acceptable for MVP, worth an auth guard in prod."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration432_mews_parity_agents.py",
+    "/app/test_reports/pytest/iter432.xml"
+  ],
+  "action_items": [
+    "(Optional) Provide DELETE endpoints or admin cleanup route for ar_incoming_payments / ar_match_log / ar_credits so future QA test data can be scrubbed. Currently the AR panel shows lingering 'QA Recon Co' payment rows after tests.",
+    "(Optional) Consider adding a soft signature/HMAC on POST /api/inbox/webhook/{channel} for real Twilio/Meta ingress before production."
+  ],
+  "critical_code_review_comments": [
+    "nl_automation.py line 69 heuristic condition: `\"value\": \"balayı\" and tag` is a truthy-short-circuit bug — the `'balayı' and tag` expression always evaluates to `tag`, but the code appears to intend `'balayı' if tag=='balayı' else tag`; harmless (value is still set to `tag`) but the expression looks accidental. Consider simplifying to `\"value\": tag`.",
+    "waitlist.py _availability uses room_type name matching between rooms.name and bookings.room_type which is a fragile string join — booking creation is elsewhere and if room_type field diverges the count could be off. A join on room_type_id would be safer.",
+    "ar_recon_agent._subset_match caps to combinations of up to 6 across at most 12 open invoices — O(C(12,6)) is fine but the pruning by balance size may miss valid subsets that include small invoices. Acceptable heuristic; document behavior.",
+    "inbox_agent.agent_handle_inbound resolves property_id from cfg fallback which may be 'all'; _load_faq handles that but the LLM system prompt includes all-property FAQ — not a bug, just be aware for multi-property tenants.",
+    "unified_inbox.inbound_webhook is public and does not throttle — production risk (spam). Add IP-based rate limit or channel-secret verification.",
+    "city_ledger.delete_invoice must not remove paid invoices without audit trail — currently deletes any invoice (verified in test: it 404s only on missing id). Consider soft-delete with reason."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration432_mews_parity_agents.py (new pytest suite)"
+  ],
+  "success_rate": {"backend": "100% (27/27)", "frontend": "95% (all 4 target panels+testids verified; unified-inbox-panel not clicked via playwright but agent bar exists in code and backend flow fully validated)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — works",
+  "seed_data_creation": "Ephemeral test data — all cleaned up: 1 NL automation rule (deleted via UI delete button), waitlist entries with email prefix qa432_ (deleted via DELETE /waitlist/{pid}/{id}), QA Recon Co company + invoices (deleted via /city-ledger). ar_incoming_payments (4 rows) + ar_match_log entries + 1 ar_credit (£45) could NOT be cleaned as no DELETE endpoint exists — see minor issue.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Inbox agent config currently: enabled=true, threshold=65, property_id='aldgate-flats' (set by this iteration's test and left as-is per instruction). Automation motor keys in /api/automation/settings use field 'job' (not 'key'). AR agent test data leftovers: 4 ar_incoming_payments + 1 ar_credit of £45 — visible in AR panel but harmless. Waitlist match may not create an offer if the seeded room_types have no availability for the chosen future dates; test uses check-in offset +600d for aldgate-flats and worked. Login response includes 'token' field; cookie also set.",
+  "rca of the issue": "N/A — no critical bugs."
+}

@@ -139,6 +139,27 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
         </div>
       </div>
 
+      {/* AI Night Shift */}
+      {data?.ai_night_shift && (
+        <div className="bg-stone-900/60 border border-violet-500/30 rounded-2xl p-4" data-testid="brief-ai-night-shift">
+          <h3 className="text-sm font-bold text-stone-100 mb-3 flex items-center gap-2">
+            <span className="text-violet-300">🤖</span>AI Gece Vardiyası · son 24 saat
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <NightStat label="Pickup sıçraması" value={data.ai_night_shift.intraday_spikes_24h}
+              sub={`${data.ai_night_shift.intraday_prices_applied_24h} fiyat oto-uygulandı`} testid="ns-intraday" />
+            <NightStat label="Kısıtlama önerisi" value={data.ai_night_shift.restriction_recs_pending}
+              sub={`${data.ai_night_shift.restriction_recs_new_24h} yeni · onay bekliyor`} testid="ns-restrictions"
+              highlight={data.ai_night_shift.restriction_recs_pending > 0} />
+            <NightStat label="Gap kampanya taslağı" value={data.ai_night_shift.gap_campaign_drafts}
+              sub={`${data.ai_night_shift.gap_campaigns_new_24h} yeni üretildi`} testid="ns-gap"
+              highlight={data.ai_night_shift.gap_campaign_drafts > 0} />
+            <NightStat label="Kontenjan release" value={data.ai_night_shift.allotment_rooms_released_24h}
+              sub="oda genel satışa açıldı" testid="ns-allotment" />
+          </div>
+        </div>
+      )}
+
       {/* Alerts */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="brief-alerts">
         <AlertCard icon={ClipboardList} label="Open logbook items"   count={alerts.open_logbook}        accent="emerald" />
@@ -240,6 +261,16 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function NightStat({ label, value, sub, testid, highlight }) {
+  return (
+    <div className={`rounded-xl p-3 border ${highlight ? "bg-violet-500/10 border-violet-500/40" : "bg-stone-800/40 border-stone-800"}`} data-testid={testid}>
+      <div className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">{label}</div>
+      <div className={`text-2xl font-black tabular-nums ${highlight ? "text-violet-300" : "text-stone-200"}`}>{value ?? 0}</div>
+      <div className="text-[10px] text-stone-500 mt-0.5">{sub}</div>
     </div>
   );
 }

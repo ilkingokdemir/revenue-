@@ -2237,3 +2237,13 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   "💰 X rez · £Y (−£Z indirim)" (gf-roi-*).
 - E2E: kampanya kodu ile 2 widget rezervasyonu (£170+£102) → ROI: 2 rez, £272 gelir,
   £48 indirim; UI rozet + KPI doğrulandı. QA verileri temizlendi.
+
+## Iter 458 (2026-07-26) — Morning Brief "AI Gece Vardiyası" TAMAMLANDI
+- competitor_parity.py morning_brief yanıtına ai_night_shift bloğu eklendi (son 24 saat):
+  intraday_spikes_24h + oto-uygulanan fiyat sayısı, restriction_recs_pending/new,
+  gap_campaign_drafts/new, allotment_rooms_released_24h.
+- MorningBriefPanel: STLY altına "🤖 AI Gece Vardiyası · son 24 saat" bölümü
+  (brief-ai-night-shift, ns-intraday/ns-restrictions/ns-gap/ns-allotment) — aksiyon
+  bekleyenler (öneri/taslak > 0) violet vurgulu.
+- E2E: API bloğu + UI bölümü ekran görüntüsüyle doğrulandı (3 sıçrama, 1 gap taslağı).
+- NOT: Gap taslağı/promo gerçek ürün davranışı olarak bırakıldı (cron her sabah üretir).

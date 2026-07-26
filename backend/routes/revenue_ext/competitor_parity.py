@@ -210,6 +210,34 @@ def create_competitor_parity_router(db, require_roles):
         # Unread inbox messages
         unread_inbox = await db.unified_messages.count_documents({"direction": "inbound", "read": False})
 
+        # AI Night Shift — son 24 saatte AI motorlarının yaptıkları
+        since24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        idr_events = await db.intraday_reprice_events.find(
+            {"property_id": property_id, "created_at": {"$gte": since24}},
+            {"_id": 0, "applied_count": 1}).to_list(200)
+        ra_pending = await db.restriction_recommendations.count_documents(
+            {"property_id": property_id, "status": "pending"})
+        ra_new = await db.restriction_recommendations.count_documents(
+            {"property_id": property_id, "created_at": {"$gte": since24}})
+        gap_drafts = await db.gap_campaigns.count_documents(
+            {"property_id": property_id, "status": "draft"})
+        gap_new = await db.gap_campaigns.count_documents(
+            {"property_id": property_id, "created_at": {"$gte": since24}})
+        allot_released = 0
+        async for r in db.allotment_releases.aggregate([
+                {"$match": {"property_id": property_id, "run_at": {"$gte": since24}}},
+                {"$group": {"_id": None, "rooms": {"$sum": "$rooms_released"}}}]):
+            allot_released = int(r.get("rooms", 0))
+        ai_night_shift = {
+            "intraday_spikes_24h": len(idr_events),
+            "intraday_prices_applied_24h": sum(int(e.get("applied_count", 0)) for e in idr_events),
+            "restriction_recs_pending": ra_pending,
+            "restriction_recs_new_24h": ra_new,
+            "gap_campaign_drafts": gap_drafts,
+            "gap_campaigns_new_24h": gap_new,
+            "allotment_rooms_released_24h": allot_released,
+        }
+
         return {
             "property_id": property_id,
             "as_of": datetime.now(timezone.utc).isoformat(),
@@ -225,6 +253,7 @@ def create_competitor_parity_router(db, require_roles):
             },
             "new_reviews": new_reviews,
             "autopilot": autopilot or None,
+            "ai_night_shift": ai_night_shift,
         }
 
     # ============================================================

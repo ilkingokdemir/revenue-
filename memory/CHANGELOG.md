@@ -2101,3 +2101,12 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   source=allotment_release) ve process_due_tasks ile anında işler; dönüşe ota_push_tasks eklendi.
 - Yönetici bildirimi ve panel toast'ı artık kuyruklanan OTA push sayısını gösterir.
 - E2E: 2 günlük release (6 oda) → 2 booking_com avail task succeeded doğrulandı. QA temizlendi.
+
+## Iter 448 (2026-07-26) — Operatör Performans Raporu TAMAMLANDI
+- allotments.py: GET /api/allotments/{pid}/report/operators — operatör bazında kontrat sayısı,
+  oda-gece, pickup %, gelir (picked×rate), release kaybı (released×rate) ve aylık pickup trendi.
+- AllotmentsPanel: "Kontratlar | Operatör performansı" sekmeleri (allot-tab-*). Rapor tablosu:
+  gelir barı, pickup rozeti (yeşil/amber/kırmızı), release kaybı, aylık mini bar trend
+  (allot-operator-report, allot-op-row-{op}).
+- E2E: 2 operatör + 3 pickup + release-run → rapor değerleri (420/285 EUR, kayıplar, trend)
+  curl + UI ekran görüntüsüyle doğrulandı. QA verileri temizlendi.

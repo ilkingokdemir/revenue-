@@ -10,6 +10,7 @@ export default function AllotmentsPanel({ propertyId = "all" }) {
   const [showForm, setShowForm] = useState(false);
   const [openCal, setOpenCal] = useState(null);
   const [running, setRunning] = useState(false);
+  const [tab, setTab] = useState("contracts");
 
   const load = useCallback(async () => {
     try {
@@ -73,6 +74,18 @@ export default function AllotmentsPanel({ propertyId = "all" }) {
 
       {showForm && <ContractForm propertyId={propertyId} onDone={() => { setShowForm(false); load(); }} />}
 
+      <div className="flex gap-1.5">
+        {[["contracts", "Kontratlar"], ["performance", "Operatör performansı"]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} data-testid={`allot-tab-${id}`}
+            className={`px-3 py-1 text-xs rounded-full border ${tab === id ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200 hover:bg-stone-50"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "performance" ? (
+        <OperatorReport propertyId={propertyId} />
+      ) : (
       <div className="space-y-3">
         {(data.contracts || []).map(c => (
           <ContractCard key={c.id} c={c} onDelete={() => remove(c)} onReload={load}
@@ -84,6 +97,80 @@ export default function AllotmentsPanel({ propertyId = "all" }) {
           </div>
         )}
       </div>
+      )}
+    </div>
+  );
+}
+
+function OperatorReport({ propertyId }) {
+  const [rep, setRep] = useState(null);
+  useEffect(() => {
+    axios.get(`${API}/${propertyId}/report/operators`)
+      .then(r => setRep(r.data))
+      .catch(() => toast.error("Performans raporu yüklenemedi"));
+  }, [propertyId]);
+
+  if (!rep) return <div className="p-8 text-center text-stone-400 text-sm">Rapor yükleniyor…</div>;
+  if (!rep.operators.length) {
+    return <div className="bg-white border border-stone-200 rounded-xl px-4 py-12 text-center text-stone-400 text-sm">
+      Rapor için henüz veri yok — önce kontrat ve pickup kaydı oluşturun.
+    </div>;
+  }
+  const maxRev = Math.max(...rep.operators.map(o => o.revenue), 1);
+  return (
+    <div className="bg-white border border-stone-200 rounded-xl overflow-x-auto" data-testid="allot-operator-report">
+      <table className="w-full text-sm min-w-[760px]">
+        <thead><tr className="text-[11px] uppercase text-stone-400 border-b border-stone-100">
+          <th className="text-left px-4 py-2">Operatör</th>
+          <th className="text-center px-2 py-2">Kontrat</th>
+          <th className="text-center px-2 py-2">Oda-gece</th>
+          <th className="text-center px-2 py-2">Pickup</th>
+          <th className="text-left px-2 py-2 w-[180px]">Gelir</th>
+          <th className="text-center px-2 py-2">Release kaybı</th>
+          <th className="text-left px-2 py-2">Aylık trend</th>
+        </tr></thead>
+        <tbody>
+          {rep.operators.map(o => {
+            const trendMax = Math.max(...rep.months.map(m => o.monthly[m] || 0), 1);
+            return (
+              <tr key={o.operator_name} className="border-b border-stone-50" data-testid={`allot-op-row-${o.operator_name}`}>
+                <td className="px-4 py-2.5 font-semibold text-stone-800">{o.operator_name}</td>
+                <td className="px-2 py-2.5 text-center">{o.contracts}</td>
+                <td className="px-2 py-2.5 text-center">{o.total_room_nights}</td>
+                <td className="px-2 py-2.5 text-center">
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${o.pickup_pct >= 70 ? "bg-emerald-50 text-emerald-700" : o.pickup_pct >= 40 ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-600"}`}>
+                    %{o.pickup_pct}
+                  </span>
+                  <div className="text-[10px] text-stone-400 mt-0.5">{o.picked} oda</div>
+                </td>
+                <td className="px-2 py-2.5">
+                  <div className="font-bold text-stone-800">{o.revenue.toLocaleString("tr-TR")} {o.currency}</div>
+                  <div className="h-1.5 bg-stone-100 rounded-full mt-1 overflow-hidden">
+                    <div className="h-full bg-teal-500 rounded-full" style={{ width: `${(o.revenue / maxRev) * 100}%` }} />
+                  </div>
+                </td>
+                <td className="px-2 py-2.5 text-center">
+                  <div className="text-rose-600 font-semibold">{o.released} oda</div>
+                  {o.lost_revenue > 0 && <div className="text-[10px] text-stone-400">−{o.lost_revenue.toLocaleString("tr-TR")} {o.currency}</div>}
+                </td>
+                <td className="px-2 py-2.5">
+                  <div className="flex items-end gap-0.5 h-8">
+                    {rep.months.map(m => {
+                      const v = o.monthly[m] || 0;
+                      return <div key={m} title={`${m}: ${v} oda`}
+                        className={`w-3 rounded-sm ${v ? "bg-teal-400" : "bg-stone-100"}`}
+                        style={{ height: `${Math.max((v / trendMax) * 100, 8)}%` }} />;
+                    })}
+                  </div>
+                  {rep.months.length > 0 && (
+                    <div className="text-[9px] text-stone-300 font-mono mt-0.5">{rep.months[0]} → {rep.months[rep.months.length - 1]}</div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

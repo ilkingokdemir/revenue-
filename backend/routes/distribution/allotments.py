@@ -311,6 +311,42 @@ def create_allotments_router(db, require_roles):
             d += timedelta(days=1)
         return {"contract": c, "days": rows}
 
+    @router.get("/{property_id}/report/operators")
+    async def operator_report(property_id: str,
+                              current_user: dict = Depends(require_roles(*STAFF))):
+        q = {} if property_id == "all" else {"property_id": property_id}
+        contracts = await db.allotment_contracts.find(q, {"_id": 0}).to_list(200)
+        ops: Dict[str, Dict] = {}
+        months = set()
+        for c in contracts:
+            st = await _contract_stats(db, c)
+            o = ops.setdefault(c["operator_name"], {
+                "operator_name": c["operator_name"], "contracts": 0,
+                "total_room_nights": 0, "picked": 0, "released": 0,
+                "revenue": 0.0, "lost_revenue": 0.0,
+                "currency": c.get("currency", "EUR"), "monthly": {}})
+            o["contracts"] += 1
+            o["total_room_nights"] += st["total_room_nights"]
+            o["picked"] += st["picked"]
+            o["released"] += st["released"]
+            rate = float(c.get("rate", 0) or 0)
+            o["revenue"] += st["picked"] * rate
+            o["lost_revenue"] += st["released"] * rate
+            async for r in db.allotment_pickups.aggregate([
+                    {"$match": {"contract_id": c["id"]}},
+                    {"$group": {"_id": {"$substr": ["$date", 0, 7]}, "rooms": {"$sum": "$rooms"}}}]):
+                m = r["_id"]
+                months.add(m)
+                o["monthly"][m] = o["monthly"].get(m, 0) + int(r["rooms"])
+        out = []
+        for o in ops.values():
+            o["pickup_pct"] = round(o["picked"] / o["total_room_nights"] * 100, 1) if o["total_room_nights"] else 0.0
+            o["revenue"] = round(o["revenue"], 2)
+            o["lost_revenue"] = round(o["lost_revenue"], 2)
+            out.append(o)
+        out.sort(key=lambda x: -x["revenue"])
+        return {"operators": out, "months": sorted(months)}
+
     @router.post("/{property_id}/release-run")
     async def release_run(property_id: str,
                           current_user: dict = Depends(require_roles("admin", "manager"))):

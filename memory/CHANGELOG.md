@@ -4,6 +4,16 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 436 — Misafir Olay Kayıtları & Dönen Misafir Takibi ✅ self-test PASS)
+- Kullanıcı isteği: Mews'teki "misafire özel bilgi kaydı (sessiz oda, astım, sevdiği yemek) + vardiya devri + tekrar rezervasyonda takip".
+- Mevcut altyapı tespit edildi: guest_preferences (yastık/kat/alerji/diyet + apply-to-booking) ve profil tercih chip'leri ZATEN vardı; eksik olan olay kayıtları + otomatik takip inşa edildi.
+- **`guests/guest_incidents.py`** (motor 25 "returning_guest_watch" 06:30):
+  - POST /guest-incidents {guest_email, text, severity, handover} — handover=true ise shift_handover defterine (note_type:guest, role_target:receptionist) otomatik düşer → My Tasks devir notlarında görünür.
+  - GET /by-guest/{email} (tercih+olay bağlamı), PUT /{id}/resolve, DELETE, GET /returning/{pid} (48s varışlar içinde tercihi/olayı olanlar), POST /watch-run/{pid}.
+  - Watch motoru: dönen misafir varışında resepsiyona bildirim (🔁 Dönen misafir + tercih/olay özeti), booking.guest_watch_flagged ile idempotent.
+- UI: GuestProfilesPanel'e "Olay Kayıtları & Vardiya Notları" kartı (severity + devir checkbox + çöz butonu); ArrivalsCockpit üstüne amber "🔁 Dönen Misafirler" şeridi (tercih chip'leri + açık olay uyarısı + VIP tacı).
+- E2E: olay→handover kaydı, watch-run→1 flag+bildirim, rerun idempotent (0), returning listesi, UI screenshot. Test verisi temizlendi. Toplam motor: 25.
+
 ### 2026-07-26 (iter 435b — Benchmark Akıllı Aksiyon Önerileri ✅ self-test PASS)
 - `chain_benchmark.py`: her tesis için `actions[]` — zayıf metrik → çözüm paneli eşlemesi (quality<90→res-quality, review<4→reviews, occupancy<zincir×0.7→open-pricing, revpar worst→compset, automation 0→automation-hub), maks 3 öneri.
 - ChainBenchmarkPanel: rozetlerin altında siyah "⚡ {öneri} →" butonları; `onNavigate` prop (App.js `navigate`) ile tek tıkla ilgili panele gidiş. Hover'da açıklama tooltip'i.

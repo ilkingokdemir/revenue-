@@ -39,6 +39,87 @@ const PREF_OPTIONS = [
   { id: "newspaper", label: "Daily Newspaper", icon: "📰" },
 ];
 
+const SEV_CLS = { high: "bg-rose-50 text-rose-700 border-rose-200", medium: "bg-amber-50 text-amber-700 border-amber-200", low: "bg-stone-50 text-stone-600 border-stone-200" };
+
+function GuestIncidentsCard({ guestEmail, guestName }) {
+  const [ctx, setCtx] = useState(null);
+  const [form, setForm] = useState({ text: "", severity: "medium", handover: true });
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!guestEmail) return;
+    try {
+      const r = await axios.get(`${API}/guest-incidents/by-guest/${encodeURIComponent(guestEmail)}`);
+      setCtx(r.data);
+    } catch { /* silent */ }
+  }, [guestEmail]);
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    if (form.text.trim().length < 3) { toast.error("Not en az 3 karakter olmalı"); return; }
+    setAdding(true);
+    try {
+      await axios.post(`${API}/guest-incidents`, { guest_email: guestEmail, guest_name: guestName, ...form, text: form.text.trim() });
+      toast.success(form.handover ? "Olay kaydedildi + vardiya devir defterine düştü" : "Olay kaydedildi");
+      setForm({ text: "", severity: "medium", handover: true });
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Kaydedilemedi"); }
+    setAdding(false);
+  };
+
+  const resolve = async (id) => {
+    try { await axios.put(`${API}/guest-incidents/${id}/resolve`); toast.success("Olay çözüldü ✓"); load(); }
+    catch { toast.error("Güncellenemedi"); }
+  };
+
+  if (!ctx) return null;
+  return (
+    <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm" data-testid="guest-incidents-card">
+      <h4 className="text-xs font-bold text-stone-800 flex items-center gap-1.5 mb-3">
+        <Note size={13} className="text-orange-500" weight="fill" /> Olay Kayıtları & Vardiya Notları
+        {ctx.open_incidents > 0 && <Badge className="text-[9px] bg-rose-100 text-rose-700">{ctx.open_incidents} açık</Badge>}
+      </h4>
+      <div className="space-y-1.5 mb-3">
+        {(ctx.incidents || []).slice(0, 6).map(i => (
+          <div key={i.id} className={`rounded-lg border px-3 py-2 ${SEV_CLS[i.severity]}`} data-testid={`incident-${i.id}`}>
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="font-bold uppercase text-[9px]">{i.severity}</span>
+              {i.handover && <span className="text-[9px] px-1.5 py-0.5 bg-white/70 rounded-full font-semibold">📋 devir</span>}
+              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${i.status === "open" ? "bg-rose-600 text-white" : "bg-emerald-100 text-emerald-700"}`}>
+                {i.status === "open" ? "açık" : "çözüldü"}
+              </span>
+              <span className="ml-auto text-[9px] opacity-60">{(i.created_at || "").slice(0, 10)}</span>
+              {i.status === "open" && (
+                <button onClick={() => resolve(i.id)} className="text-[9px] font-bold underline" data-testid={`resolve-incident-${i.id}`}>Çöz ✓</button>
+              )}
+            </div>
+            <p className="text-[11px] mt-1">{i.text}</p>
+          </div>
+        ))}
+        {(ctx.incidents || []).length === 0 && <p className="text-[10px] text-stone-300">Kayıtlı olay yok.</p>}
+      </div>
+      <div className="border-t border-stone-100 pt-3 space-y-2">
+        <Textarea value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} rows={2}
+          placeholder="Olay / bilgi notu — örn: Klima gürültüsünden şikayet etti, oda değişimi istedi…" data-testid="incident-input" className="text-xs" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={form.severity} onChange={e => setForm(f => ({ ...f, severity: e.target.value }))}
+            className="text-[10px] px-2 py-1.5 border border-stone-200 rounded-lg" data-testid="incident-severity">
+            <option value="low">Düşük</option><option value="medium">Orta</option><option value="high">Yüksek</option>
+          </select>
+          <label className="flex items-center gap-1.5 text-[10px] text-stone-600">
+            <input type="checkbox" checked={form.handover} onChange={e => setForm(f => ({ ...f, handover: e.target.checked }))} data-testid="incident-handover" />
+            Sonraki vardiyaya devret
+          </label>
+          <button onClick={add} disabled={adding} data-testid="save-incident-btn"
+            className="ml-auto text-[10px] px-3 py-1.5 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 disabled:opacity-50">
+            {adding ? "Kaydediliyor…" : "Olay Kaydet"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function GuestProfilesPanel({ properties, activePropertyId }) {
   const [profiles, setProfiles] = useState([]);
   const [stats, setStats] = useState({});
@@ -282,6 +363,9 @@ export function GuestProfilesPanel({ properties, activePropertyId }) {
 
               {/* AI Smart Tips (Mews-parity iter 356) */}
               <SmartTipsCard guestId={g.id} />
+
+              {/* Olay kayıtları & vardiya devri (Mews guest notes parity) */}
+              <GuestIncidentsCard guestEmail={g.email} guestName={g.name} />
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">

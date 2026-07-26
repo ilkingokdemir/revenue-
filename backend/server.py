@@ -1346,6 +1346,18 @@ async def _job_vcc_recovery(property_id: str) -> dict:
 
 JOB_HANDLERS["vcc_recovery"] = _job_vcc_recovery
 
+from routes.guests.guest_incidents import create_guest_incidents_router
+guest_incidents_router = create_guest_incidents_router(db, require_roles)
+api_router.include_router(guest_incidents_router)
+
+async def _job_returning_guest_watch(property_id: str) -> dict:
+    try:
+        return await guest_incidents_router.run_watch_internal(property_id or "all")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["returning_guest_watch"] = _job_returning_guest_watch
+
 from routes.platform_ext.automation_simulator import create_automation_simulator_router
 api_router.include_router(create_automation_simulator_router(db, require_roles, guest_risk_router.risk_for_internal))
 

@@ -28,6 +28,44 @@ const STEPS = [
   { key: "key_issued",  short: "Key",   icon: Key,          label: "Key Issued" },
 ];
 
+const ReturningGuestStrip = ({ pid }) => {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    axios.get(`${API}/guest-incidents/returning/${pid}`).then(r => setData(r.data)).catch(() => {});
+  }, [pid]);
+  if (!data || data.count === 0) return null;
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4" data-testid="returning-guest-strip">
+      <div className="flex items-center gap-2 mb-2">
+        <Sparkles className="w-4 h-4 text-amber-600" />
+        <span className="text-xs font-black text-amber-800 uppercase tracking-wider">🔁 Dönen misafirler — 48 saat içinde varış ({data.count})</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+        {data.guests.slice(0, 6).map(g => (
+          <div key={g.id} className="bg-white border border-amber-100 rounded-xl px-3 py-2.5" data-testid={`returning-guest-${g.id}`}>
+            <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800">
+              {g.vip && <span title="VIP">👑</span>}
+              {g.guest_name}
+              <span className="ml-auto text-[10px] font-mono text-stone-400">{g.check_in}{g.room_number ? ` · Oda ${g.room_number}` : ""}</span>
+            </div>
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {(g.prefs || []).slice(0, 4).map((p, i) => (
+                <span key={i} className="text-[9px] px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">{p}</span>
+              ))}
+              {g.open_incidents > 0 && (
+                <span className="text-[9px] px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded-full font-bold">⚠ {g.open_incidents} açık olay</span>
+              )}
+            </div>
+            {(g.incidents || []).slice(0, 1).map(i => (
+              <p key={i.id} className="text-[10px] text-rose-600 mt-1 line-clamp-2">⚠ {i.text}</p>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const ArrivalsCockpit = ({ propertyId, user }) => {
   const [data, setData] = useState({ counters: { total: 0, registered: 0, id_verified: 0, paid: 0, key_issued: 0 }, arrivals: [] });
   const [timeWindow, setTimeWindow] = useState("7d");
@@ -175,6 +213,7 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
 
   return (
     <div className="space-y-5" data-testid="arrivals-cockpit">
+      <ReturningGuestStrip pid={pid} />
       {/* Hero */}
       <div className="bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full -translate-y-24 translate-x-24 blur-3xl" />

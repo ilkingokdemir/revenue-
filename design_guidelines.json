@@ -1,117 +1,129 @@
 {
-  "theme": "Light",
-  "archetype": "Archetype 1 (Organic & Earthy)",
-  "color_palette": {
-    "background": "bg-[#F9F8F6]",
-    "surface": "bg-white",
-    "primary": "bg-[#2C4C3B]",
-    "primary_foreground": "text-white",
-    "secondary": "bg-[#F0EBE1]",
-    "secondary_foreground": "text-[#2C4C3B]",
-    "accent": "bg-[#D4A373]",
-    "accent_foreground": "text-white",
-    "destructive": "bg-[#9B4837]",
-    "destructive_foreground": "text-white",
-    "muted": "bg-[#EAE5DC]",
-    "muted_foreground": "text-[#78716C]",
-    "border": "border-[#E5E0D8]"
-  },
+  "project_context": "B2B Hotel Platform & RMS (ReveniQ, MyHotelBox) - 90+ panels",
+  "theme_strategy": "Light mode for content areas (Dashboards, Tables, Forms) for high data legibility, and Dark mode for structural elements (Sidebar, Hero Cards) to create an 'Enterprise Command Center' feel.",
   "typography": {
-    "heading_font": "Outfit",
-    "body_font": "Manrope",
-    "h1": "text-4xl sm:text-5xl font-black tracking-tighter text-[#1C1917]",
-    "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-[#1C1917]",
-    "h3": "text-xl sm:text-2xl font-bold tracking-tight text-[#1C1917]",
-    "h4": "text-lg sm:text-xl font-semibold tracking-tight text-[#1C1917]",
-    "body": "text-base font-medium text-[#44403C]",
-    "small": "text-sm font-medium text-[#78716C]",
-    "overline": "text-xs font-bold uppercase tracking-[0.2em] text-[#78716C]"
+    "headings": {
+      "family": "Manrope",
+      "import_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap",
+      "description": "Used for all panel titles, KPI values, and hero sections. Geometric but humanistic, breaking away from standard 'AI-slop' generic fonts.",
+      "tracking": "tracking-tight",
+      "css_var": "--font-heading"
+    },
+    "body": {
+      "family": "IBM Plex Sans",
+      "import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap",
+      "description": "Used for tables, data grids, inputs, and standard text. Excellent for tabular figures, imparting a 'Swiss-engineered' professional feel.",
+      "css_var": "--font-body"
+    }
   },
-  "spacing_and_layout": {
-    "philosophy": "Generous Spacing Philosophy with Control Room Grid for dense areas.",
-    "pos_terminal": "flex h-screen overflow-hidden. Left Nav (w-20), Main Content (flex-1 flex flex-col p-6), Right Cart (w-[400px] border-l border-[#E5E0D8] bg-white p-6 flex flex-col).",
-    "menu_grid": "grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6",
-    "kitchen_display": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 items-start",
-    "reports_grid": "grid grid-cols-1 lg:grid-cols-3 gap-6",
-    "table_plan": "relative w-full h-full bg-[#F0EBE1] rounded-3xl p-8 border border-[#E5E0D8]",
-    "card_padding": "p-6",
-    "section_gap": "gap-8"
+  "colors": {
+    "archetype": "Swiss & High-Contrast (Enterprise Authority)",
+    "primary": {
+      "DEFAULT": "#1D4ED8",
+      "foreground": "#FFFFFF",
+      "hover": "#1E40AF",
+      "description": "Sapphire Blue - A deep, trustworthy primary action color."
+    },
+    "sidebar": {
+      "background": "#0A0F1C",
+      "foreground": "#F8FAFC",
+      "border": "#1E293B",
+      "active_bg": "rgba(255,255,255,0.05)",
+      "active_text": "#FFFFFF"
+    },
+    "surface": {
+      "app_background": "#F4F6F8",
+      "card_background": "#FFFFFF",
+      "card_border": "#E2E8F0"
+    },
+    "hero_card": {
+      "gradient_start": "#1C1917",
+      "gradient_end": "#292524",
+      "tint": "rgba(29, 78, 216, 0.10)",
+      "text": "#FAFAF9",
+      "description": "Replaces generic flat gradients with a deep stone base overlaid with a subtle 10% primary tint for depth."
+    },
+    "semantic": {
+      "success": "#059669",
+      "warning": "#D97706",
+      "danger": "#DC2626",
+      "info": "#0284C7"
+    }
   },
-  "surface_strategies": {
-    "header": "Solid background bg-white with a hard bottom border border-[#E5E0D8].",
-    "menu_card": "Flat background bg-white, 1px subtle border border-[#E5E0D8], rounded-2xl p-2. Image rounded-xl. Hover: -translate-y-1 shadow-lg border-[#D4A373] transition-all duration-200.",
-    "cart_sidebar": "bg-white border-l border-[#E5E0D8] shadow-[0_0_40px_rgba(0,0,0,0.02)]",
-    "kitchen_ticket": "bg-white border border-[#E5E0D8] rounded-2xl p-6 shadow-sm. Header of ticket uses accent color for new orders.",
-    "table_object": "Rounded geometries (circles for round tables, rounded-2xl for square). bg-white border-2 border-[#E5E0D8]. Active table: border-[#2C4C3B] bg-[#2C4C3B]/5."
+  "grids": {
+    "dashboard_density": "High Density Grid Strategy (grid-cols-1 md:grid-cols-3 lg:grid-cols-4) with gap-6.",
+    "kpi_cards": "col-span-1, minimal padding (p-5), keeping numbers aligned to the left.",
+    "data_tables": "col-span-full or col-span-3, allowing horizontal expansion.",
+    "spacing_scale": "Strict use of Tailwind spacing. Internal card padding must be p-6 to avoid text collision."
+  },
+  "layouts": {
+    "sidebar": "Fixed left sidebar (w-64). Dark theme (#0A0F1C) background with 1px right border.",
+    "header": "Sticky top header, solid white background (bg-white) with a subtle bottom border (border-b border-slate-200) - NEVER transparent.",
+    "content_area": "bg-[#F4F6F8]. Generous padding (p-6 md:p-8) to give data breathing room.",
+    "hero_card_pattern": "Gradient dark stone card spanning the top row (col-span-full), rounded-lg, overlapping slightly with the content beneath to create z-axis depth."
+  },
+  "visual_enhancers": {
+    "border_radius": {
+      "global": "0.5rem",
+      "css_var": "--radius: 0.5rem;",
+      "description": "8px (rounded-lg) for cards and buttons. Avoids the 'AI' overly pill-shaped or brutally sharp corners. Feels structurally sound."
+    },
+    "shadows": {
+      "card": "0 2px 8px -2px rgba(10, 15, 28, 0.04)",
+      "hover": "0 10px 24px -4px rgba(10, 15, 28, 0.08)",
+      "description": "Very soft, blue-tinted ambient shadows. Never use harsh black drop shadows."
+    },
+    "borders": {
+      "card": "1px solid #E2E8F0 (border-slate-200)",
+      "sidebar": "1px solid #1E293B (border-slate-800)"
+    }
   },
   "components": {
-    "buttons": {
-      "primary": "bg-[#2C4C3B] text-white hover:bg-[#1A3025] hover:text-white rounded-xl px-6 py-4 font-bold transition-all duration-200",
-      "secondary": "bg-[#F0EBE1] text-[#2C4C3B] hover:bg-[#E5E0D8] hover:text-[#1A3025] rounded-xl px-4 py-2 font-bold",
-      "accent": "bg-[#D4A373] text-white hover:bg-[#C28E5B] hover:text-white rounded-xl px-4 py-2 font-bold",
-      "destructive": "bg-[#9B4837] text-white hover:bg-[#7D382A] hover:text-white rounded-xl px-4 py-2 font-bold"
-    },
-    "inputs": "Shadcn UI Input, rounded-xl border-[#E5E0D8] bg-[#F9F8F6] focus:ring-2 focus:ring-[#2C4C3B]/20 focus:border-[#2C4C3B] transition-all",
-    "dialog": "Shadcn Dialog for Split Bill and Payment. Use rounded-3xl, p-8. No generic modal feel, make it feel like a tactile receipt.",
-    "tabs": "Shadcn Tabs for POS Categories. Use pill-style tabs: data-[state=active]:bg-[#2C4C3B] data-[state=active]:text-white rounded-full px-6 py-2 bg-transparent text-[#78716C] border border-[#E5E0D8]",
-    "charts": "Recharts. Bar Chart for Top Items (using #2C4C3B and #D4A373). Heatmap for sales (custom grid of colored blocks)."
+    "buttons": "Moderate border radius (rounded-md). Crisp hover states with background darkening and subtle transform (-translate-y-[1px]).",
+    "tables": "Shadcn-based. Left-aligned text, right-aligned numbers. Header row has bg-slate-50 and border-b. Remove vertical borders for cleaner 'Stripe-like' look.",
+    "kpi_cards": "Flat background (bg-white), 1px subtle border, soft shadow. Top-left oriented values for F-pattern scanning.",
+    "forms": "Use Shadcn components. Inputs must have clear focus rings (ring-2 ring-blue-600/20 border-blue-600). Do not use generic native inputs.",
+    "dialogs": "Solid white background, dark overlay (bg-slate-900/40 backdrop-blur-sm)."
   },
-  "icons_and_assets": {
-    "icon_library": "@phosphor-icons/react",
-    "installation": "yarn add @phosphor-icons/react lucide-react recharts clsx tailwind-merge framer-motion",
-    "icon_style": "Duotone weight for primary navigation, Regular for dense UI actions."
-  },
-  "media": {
-    "image_urls": [
-      {
-        "category": "menu_item_gourmet",
-        "url": "https://images.unsplash.com/photo-1737140789642-9788a3388494?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHw0fHxnb3VybWV0JTIwZm9vZCUyMHJlc3RhdXJhbnQlMjBkaXNofGVufDB8fHx8MTc3NTk5Nzc3NHww&ixlib=rb-4.1.0&q=85",
-        "description": "Gourmet Dish 1 - Steak/Meat"
-      },
-      {
-        "category": "menu_item_scallops",
-        "url": "https://images.unsplash.com/photo-1758580815331-44e9214c3e6a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwyfHxnb3VybWV0JTIwZm9vZCUyMHJlc3RhdXJhbnQlMjBkaXNofGVufDB8fHx8MTc3NTk5Nzc3NHww&ixlib=rb-4.1.0&q=85",
-        "description": "Gourmet Dish 2 - Scallops"
-      },
-      {
-        "category": "menu_item_cheese",
-        "url": "https://images.unsplash.com/photo-1698369233650-f34e12878909?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwzfHxnb3VybWV0JTIwZm9vZCUyMHJlc3RhdXJhbnQlMjBkaXNofGVufDB8fHx8MTc3NTk5Nzc3NHww&ixlib=rb-4.1.0&q=85",
-        "description": "Appetizer - Cheese and Crackers"
-      },
-      {
-        "category": "menu_item_cocktail",
-        "url": "https://images.unsplash.com/photo-1698054239930-1a96f42f87da?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxjcmFmdCUyMGNvY2t0YWlsJTIwZHJpbmslMjBiYXJ8ZW58MHx8fHwxNzc1OTk3Nzc0fDA&ixlib=rb-4.1.0&q=85",
-        "description": "Craft Cocktail with Lime"
-      },
-      {
-        "category": "menu_item_coffee",
-        "url": "https://images.unsplash.com/photo-1582076174004-d66a1311d411?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwzfHxjb2ZmZWUlMjBsYXR0ZSUyMGFydCUyMGNhZmV8ZW58MHx8fHwxNzc1OTk3Nzc0fDA&ixlib=rb-4.1.0&q=85",
-        "description": "Coffee Latte Art"
-      }
-    ]
-  },
-  "animations_and_motion": {
-    "hover_states": "All buttons and cards must have transform scaling (scale-95 for click, scale-105 for hover).",
-    "page_transitions": "Framer motion for switching between POS, Kitchen, Tables, and Reports. Use opacity and subtle y-axis sliding.",
-    "cart_items": "Animate layout shifts when items are added/removed from cart using framer-motion <motion.li layout />."
+  "motion": {
+    "micro_interactions": "All interactive elements need hover states. Use transition-colors duration-200.",
+    "entrance": "Staggered fade-up for dashboard widgets (opacity-0 translate-y-2 -> opacity-100 translate-y-0) using CSS animations.",
+    "accessibility": "Respect prefers-reduced-motion."
   },
   "accessibility": {
-    "focus_rings": "focus-visible:ring-2 focus-visible:ring-[#2C4C3B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F9F8F6]",
-    "contrast": "Text must meet 4.5:1 ratio. Primary button text (#FFFFFF) on #2C4C3B meets standard.",
-    "testing_attributes": "All interactive elements MUST have data-testid attributes (e.g., data-testid='pos-menu-item', data-testid='cart-pay-button')."
+    "contrast": "Ensure all text meets WCAG AA (4.5:1). Dark hero cards must use text-white/90. Avoid pure white on light grey.",
+    "testing": "All interactive and key informational elements MUST include a data-testid attribute.",
+    "focus": "Clear focus rings on all inputs and buttons."
+  },
+  "media": {
+    "icons": "Phosphor Icons (@phosphor-icons/react). Professional, consistent stroke weights.",
+    "image_usage": "Images are used primarily in the public booking engine or login screens. Never use placeholders."
+  },
+  "image_urls": {
+    "hotel_lobby_1": {
+      "url": "https://images.unsplash.com/photo-1677129667171-92abd8740fa3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwzfHxsdXh1cnklMjBob3RlbCUyMGxvYmJ5JTIwYXJjaGl0ZWN0dXJlfGVufDB8fHx8MTc4NTEwOTk0NHww&ixlib=rb-4.1.0&q=85",
+      "category": "Public Booking / Login Hero",
+      "description": "High-end luxury hotel lobby with a chandelier hanging from the ceiling"
+    },
+    "hotel_reception": {
+      "url": "https://images.unsplash.com/photo-1759038085950-1234ca8f5fed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBob3RlbCUyMHJlY2VwdGlvbmlzdCUyMGRlc2t8ZW58MHx8fHwxNzg1MTA5OTQ0fDA&ixlib=rb-4.1.0&q=85",
+      "category": "Staff Dashboard Empty State / Onboarding",
+      "description": "Professional hotel reception desk with modern wooden furniture"
+    },
+    "hotel_room": {
+      "url": "https://images.pexels.com/photos/6434592/pexels-photo-6434592.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "category": "Booking Widget / Room Listing",
+      "description": "Contemporary hotel room interior with pillows and cover on bed"
+    }
   },
   "instructions_to_main_agent": [
-    "Create a responsive multi-view dashboard: 1. POS Terminal (Menu & Cart) 2. Table Floor Plan 3. Kitchen Display 4. Reports.",
-    "Use a Left Sidebar (w-20 or w-24) for main navigation between these views. It should just have icons and active state indicators.",
-    "The POS Terminal view: Split into Left/Center (Menu Grid) and Right (Order Cart Sidebar). The cart MUST include Modifiers, Order Notes, Discount/Promo inputs, Void/Refund buttons, and a massive 'PAY' CTA.",
-    "The Table Floor Plan: Create a visual map of tables using absolute positioning or CSS Grid, where tables change color if occupied (#2C4C3B/10 background, #2C4C3B border).",
-    "Kitchen Display: A horizontal timeline or bento grid of active order tickets. Tickets must show items, modifiers, and time elapsed.",
-    "Reports View: Incorporate Recharts to show a Sales Heatmap and a Top Items Bar Chart.",
-    "Payment Dialog: Implement a Shadcn Dialog for the payment step that includes a Split Bill functionality and Receipt Preview.",
-    "Use Outfit for headings and Manrope for body text. Enforce the Organic & Earthy palette strictly. Do not use generic Inter or generic blue/gray.",
-    "Cards should use the 1px subtle border rule, no heavy shadows until hovered.",
-    "Use @phosphor-icons/react for premium duotone/regular icons.",
-    "All interactive elements MUST include data-testid attributes.",
-    "Install Google Fonts 'Outfit' and 'Manrope' in index.css using @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');"
-  ]
+    "UPDATE index.css: Redefine the Shadcn root CSS variables based on the color and visual enhancers defined above (e.g., set --radius: 0.5rem, modify --primary to 226 71% 47% equivalent to #1D4ED8).",
+    "UPDATE tailwind.config.js: Add the font families 'Manrope' (for headings) and 'IBM Plex Sans' (for body) to the theme extension.",
+    "DO NOT rewrite the 90+ panels individually. Apply global styles that naturally inherit down to existing Shadcn and layout components.",
+    "ENSURE the dark sidebar is defined as a specific layout wrap class, e.g., 'bg-[#0A0F1C] text-slate-50', without altering the global light theme of the content area.",
+    "APPLY the hero card gradient globally to the designated hero component, using: bg-gradient-to-br from-stone-900 to-stone-800 with an absolute inset div of bg-blue-600/10.",
+    "REPLACE any 'Inter' or 'Roboto' imports in index.css or index.html with Manrope and IBM Plex Sans.",
+    "ADD data-testid attributes to core navigation items and main action buttons in the layout wrappers."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": "Focus on high data legibility, structured alignment, and subtle interactions. Avoid generic centered layouts, simplistic pure-black shadows, and uniform AI-slop styling. The application must look meticulously hand-crafted by an enterprise team. Use nested radii correctly (inner element radius < outer element radius). Create depth through layered design elements with z-index hierarchy, but keep data tables flat and scannable. Never use transparent backgrounds on headers. Toast notifications must use Sonner."
 }

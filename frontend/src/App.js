@@ -73,7 +73,7 @@ import {
   NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel,
   RoomQRPanel, TaxPresetsPanel, WalkInPanel, NoShowPanel, GuestPrefsPanel,
   CleaningChecklistsPanel, AttributionPanel, MewsUniversityPanel, ScheduledReportsPanel, CustomDashboardBuilder, GroupRoomingImportPanel, OpsQuickActionsPanel,
-  TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, VccPanel, MarketplacePanel, MultiPropertyRollupPanel,
+  TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, VccPanel, OwnerSummaryPanel, MarketplacePanel, MultiPropertyRollupPanel,
   CurrencyPanel, AgentsB2BPanel, SecurityOwnerPanel, PreAuthPanel, ChargebackPanel,
   WebPushPanel, PmsCrsSyncPanel, PmsProPanel, PublicApiPortalPanel, MidStaySurveyPanel, FolioLivePanel,
   ABTestPanel, PreArrivalDripPanel, MenuEngineeringPanel, SRVoucherPanel, FolioSplitPanel,
@@ -2163,6 +2163,10 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {activeView === "vcc-automation" && (
           <VccPanel propertyId={activePropertyId || "all"} />
+        )}
+
+        {activeView === "owner-summary" && (
+          <OwnerSummaryPanel propertyId={activePropertyId || "all"} />
         )}
 
         {/* Tax Configuration */}

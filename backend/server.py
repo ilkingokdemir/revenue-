@@ -1240,6 +1240,18 @@ api_router.include_router(key_figures_router)
 
 from routes.marketing.weekly_report import create_weekly_report_router
 weekly_report_router = create_weekly_report_router(db, require_roles, key_figures_router.compute_internal)
+
+from routes.revenue_ext.owner_summary import create_owner_summary_router
+owner_summary_router = create_owner_summary_router(db, require_roles, key_figures_router.compute_internal)
+api_router.include_router(owner_summary_router)
+
+async def _job_owner_summary(property_id: str) -> dict:
+    try:
+        return await owner_summary_router.run_monthly_internal()
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["owner_summary_monthly"] = _job_owner_summary
 api_router.include_router(weekly_report_router)
 
 async def _job_weekly_report(property_id: str) -> dict:

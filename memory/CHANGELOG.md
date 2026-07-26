@@ -1981,3 +1981,16 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   artık öneri ve kapanan fatura sayısını gösterir.
 - E2E: fatura no'lu havale → %99 eşleşme + CL-2026-00001 otomatik kapandı (2500/2500); orta güvenli
   gelir kaydı → öneri üretildi → confirm ile eşleşti. Test verileri temizlendi.
+
+## Iter 445 (2026-07-26) — Aylık Sahip/Yatırımcı Özeti (Owner Executive Summary) TAMAMLANDI
+- YENİ backend: revenue_ext/owner_summary.py — key_figures.compute_internal'ı yeniden kullanır:
+  GET /api/owner-summary/{pid}?month=YYYY-MM (12 KPI + önceki ay deltaları: gelir/doluluk/ADR/Spaces/
+  VCC tahsilatı/kurumsal tahsilat/gece/misafir/iptal/online pay/komisyon),
+  GET /{pid}/pdf (reportlab tek sayfa şık A4), POST /send (sahibe e-posta, mock fallback, owner_summary_log).
+- Cron: JOB "owner_summary_monthly" 08:00, sadece ayın 1'inde çalışır → önceki ay özeti + yönetici bildirimi.
+- YENİ OwnerSummaryPanel (menü: Finance > Aylık sahip özeti, id owner-summary): ay seçici, hero KPI grid
+  (deltalarla), "PDF indir", "Sahibe e-postala" kutusu.
+- FIX: server.py'de owner_summary bloğu key_figures_router tanımından ÖNCE eklenmişti (NameError,
+  backend çökmüştü) → weekly_report sonrasına taşındı.
+- E2E: summary (£37.5k gelir, Δ deltalar), PDF 200/3410B, mock e-posta gönderimi UI'dan doğrulandı.
+- NOT: Owner portal'daki birim-sahibi ekstreleriyle çakışmaz; bu tesis düzeyi yönetici özetidir.

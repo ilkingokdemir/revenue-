@@ -113,6 +113,11 @@ JOB_REGISTRY = {
         "description": "Vadesi geçen city-ledger faturalarına kademeli (7/21/22+ gün) ödeme linkli hatırlatma e-postası gönderir. 22+ günde yöneticiye kritik uyarı düşer.",
         "default_cron": (7, 0), "default_enabled": True, "params": [],
     },
+    "owner_summary_monthly": {
+        "label": "Aylık Sahip Özeti", "category": "finance",
+        "description": "Her ayın 1'inde bir önceki ayın sahip/yatırımcı özetini hazırlar ve yöneticiye bildirir (PDF panelden indirilebilir, sahibe e-postalanabilir).",
+        "default_cron": (8, 0), "default_enabled": True, "params": [],
+    },
     "overbooking_auto_move": {
         "label": "Overbooking Otomatik Kaydırma", "category": "distribution",
         "description": "OTA'dan gelen rezervasyon dolu odaya düşerse misafiri ANINDA aynı tip boş odaya taşır ve resepsiyonu bilgilendirir (farklı oda tipine asla taşımaz). Gece süpürmesi açık kalan çakışmaları da dener.",

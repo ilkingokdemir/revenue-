@@ -623,6 +623,10 @@ api_router.include_router(intraday_reprice_router)
 async def _start_intraday_reprice():
     import asyncio as _asyncio
     _asyncio.create_task(intraday_reprice_loop(db, _idr_auto_fn))
+
+from routes.revenue_ext.restriction_advisor import create_restriction_advisor_router
+restriction_advisor_router = create_restriction_advisor_router(db, require_roles)
+api_router.include_router(restriction_advisor_router)
 anomaly_router = create_anomaly_router(db, require_roles, LlmChat, UserMessage)
 api_router.include_router(anomaly_router)
 tipping_router = create_tipping_router(db, require_roles, stripe_api_key)
@@ -1346,6 +1350,14 @@ async def _job_allotment_release(property_id: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 JOB_HANDLERS["allotment_release"] = _job_allotment_release
+
+async def _job_restriction_advisor(property_id: str) -> dict:
+    try:
+        return await restriction_advisor_router.run_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["restriction_advisor"] = _job_restriction_advisor
 
 from routes.pms.res_quality import create_res_quality_router
 res_quality_router = create_res_quality_router(db, require_roles)

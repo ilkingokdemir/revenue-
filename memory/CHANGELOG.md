@@ -2140,3 +2140,18 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   id intraday-reprice): amber hero + 3 KPI, eşik ayar formu (idr-cfg-*), olay tablosu (idr-event-*).
 - E2E: 3 QA booking ile sıçrama → 4 olay + bildirim; cooldown 2. taramada 0 aksiyon; config
   güncelleme; UI ekran görüntüsü doğrulandı. QA verileri temizlendi, config resetlendi.
+
+## Iter 451 (2026-07-26) — AI Kısıtlama Danışmanı (MLOS/CTA) TAMAMLANDI
+- FLYR "AI-driven restriction recommendations" paritesi. YENİ revenue_ext/restriction_advisor.py
+  (/api/restriction-advisor): 60 gün ufukta doluluk hesaplar → %80+ MLOS2, %92+ MLOS3, %95+ CTA
+  önerisi (Türkçe gerekçeli). Mevcut kısıtlaması yeterli tarihler ve son 7 günde reddedilenler atlanır.
+- Accept akışı: channel_restrictions upsert (tüm bağlı kanallar, room_type=all) + kind=restriction
+  sync_queue task + process_due_tasks (anında OTA push). Reject: 7 gün tekrar önerilmez.
+- Cron: JOB "restriction_advisor" 05:15 (revenue kategorisi) + yönetici bildirimi.
+- YENİ RestrictionAdvisorPanel (menü: AI & Insights > "AI kısıtlama önerileri (MLOS/CTA)",
+  id restriction-advisor): violet hero + 3 KPI, durum filtreleri, öneri tablosu (ra-rec-*),
+  ✓ uygula / ✕ reddet butonları.
+- FIX: server.py'de JOB_HANDLERS tanımından önce kayıt yapılmıştı (NameError, backend çökmüştü)
+  → JOB kaydı allotment_release sonrasına taşındı.
+- E2E: %95 ve %85 doluluk seed → 3 öneri (MLOS3+CTA, MLOS2); accept → restriction+sync succeeded;
+  reject; yeniden taramada ikisi de tekrar önerilmedi; UI doğrulandı. QA verileri temizlendi.

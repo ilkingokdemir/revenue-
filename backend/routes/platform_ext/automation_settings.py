@@ -168,6 +168,11 @@ JOB_REGISTRY = {
         "description": "Release penceresine giren satılmamış tur operatörü kontenjanlarını otomatik serbest bırakır ve yöneticiye bildirir.",
         "default_cron": (5, 45), "default_enabled": True, "params": [],
     },
+    "restriction_advisor": {
+        "label": "AI Kısıtlama Danışmanı", "category": "revenue",
+        "description": "Yüksek talepli geceler için MLOS (min konaklama) ve CTA (varışa kapalı) önerileri üretir; onayla tek tıkla tüm kanallara uygulanır.",
+        "default_cron": (5, 15), "default_enabled": True, "params": [],
+    },
     "returning_guest_watch": {
         "label": "Dönen Misafir Takibi", "category": "guest",
         "description": "48 saat içinde varışı olan, kayıtlı tercihi (sessiz oda, sağlık, yemek) veya geçmiş olayı bulunan misafirleri resepsiyona bildirir.",

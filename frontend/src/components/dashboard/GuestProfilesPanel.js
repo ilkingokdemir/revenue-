@@ -376,9 +376,9 @@ export function GuestProfilesPanel({ properties, activePropertyId }) {
                   <div className="flex flex-wrap gap-1.5">
                     {(() => {
                       const prefs = Array.isArray(g.preferences) ? g.preferences : [];
-                      return prefs.length > 0 ? prefs.map(p => {
+                      return prefs.length > 0 ? prefs.map((p, pi) => {
                         const opt = PREF_OPTIONS.find(o => o.id === p) || { label: p, icon: "✓" };
-                        return <Badge key={p} className="text-[9px] bg-pink-50 text-pink-700 border border-pink-200">{opt.icon} {opt.label}</Badge>;
+                        return <Badge key={`${p}-${pi}`} className="text-[9px] bg-pink-50 text-pink-700 border border-pink-200">{opt.icon} {opt.label}</Badge>;
                       }) : <span className="text-[10px] text-stone-300">No preferences set</span>;
                     })()}
                   </div>
@@ -388,8 +388,8 @@ export function GuestProfilesPanel({ properties, activePropertyId }) {
                 <div className="bg-white rounded-2xl border border-stone-200 p-4 shadow-sm">
                   <h4 className="text-xs font-bold text-stone-800 flex items-center gap-1.5 mb-3"><Tag size={13} className="text-blue-500" weight="fill" /> Tags</h4>
                   <div className="flex flex-wrap gap-1.5">
-                    {(g.tags || []).map(t => (
-                      <Badge key={t} className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                    {(g.tags || []).map((t, ti) => (
+                      <Badge key={`${t}-${ti}`} className="text-[9px] bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
                         {t} <button onClick={() => removeTag(t)} className="hover:text-red-500"><X size={8} /></button>
                       </Badge>
                     ))}

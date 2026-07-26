@@ -4,6 +4,11 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 437b — Kapsamlı Regresyon Turu ✅ 24/24 PASS)
+- testing_agent regresyon: VCC kurtarma (4 tip + dispute akışı), misafir olayları + dönen misafir (idempotent watch), zincir benchmark + aksiyonlar, haftalık rapor automation_wins, ROI vcc_recovery satırı + time-saved, team chat çeviri (LLM + cache), my-tasks HK, 25 motor + 7 endpoint smoke — hepsi geçti. Rapor: iteration_434.json.
+- Minor fix: GuestProfilesPanel'de mükerrer değerli key uyarısı (prefs/tags map'lerine index-composite key eklendi).
+- GuestIncidentsCard UI e2e ayrıca doğrulandı (Chen Lee profili: olay kaydet → devir defteri toast → kartta açık olay + Çöz).
+
 ### 2026-07-26 (iter 437 — Team Chat Canlı Çeviri / Flexkeeping paritesi ✅ self-test PASS)
 - flexkeeping.com incelendi: Housekeeping/Maintenance/Collab/Automation/QA/Lost&Found modüllerinin TAMAMI zaten mevcuttu (lost_found.py + lost_found_match dahil — yeniden yapılmadı). Tek gerçek eksik: "dil bariyeri çözümü".
 - **Team Chat Canlı Çeviri** (`integrations_pkg/team_chat.py`): POST /team-chat/channels/{id}/translate {lang: tr|en|de|ru|ar|es} — son 30 mesajı gpt-4o-mini ile toplu çevirir, mesaj dokümanında `translations.{lang}` cache (2. çağrı 0.14s). Zaten hedef dilde olan mesaj aynen döner (UI'da gizlenir).

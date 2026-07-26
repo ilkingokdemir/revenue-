@@ -173,6 +173,11 @@ JOB_REGISTRY = {
         "description": "Yüksek talepli geceler için MLOS (min konaklama) ve CTA (varışa kapalı) önerileri üretir; onayla tek tıkla tüm kanallara uygulanır.",
         "default_cron": (5, 15), "default_enabled": True, "params": [],
     },
+    "gap_filler": {
+        "label": "AI Boşluk Doldurma Kampanyaları", "category": "marketing",
+        "description": "Düşük doluluklu tarih pencereleri için otomatik promo kodu + e-posta/WhatsApp kampanya taslağı üretir.",
+        "default_cron": (6, 10), "default_enabled": True, "params": [],
+    },
     "returning_guest_watch": {
         "label": "Dönen Misafir Takibi", "category": "guest",
         "description": "48 saat içinde varışı olan, kayıtlı tercihi (sessiz oda, sağlık, yemek) veya geçmiş olayı bulunan misafirleri resepsiyona bildirir.",

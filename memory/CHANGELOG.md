@@ -2213,3 +2213,18 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   render edilip sayfayı çökertiyordu → string tip kontrolü.
 - E2E: percent (200→150), flat (200→180 UI'da), min_nights reddi, bilinmeyen kod, used sayacı
   +1 doğrulandı. QA verileri temizlendi.
+
+## Iter 456 (2026-07-26) — AI Boşluk Doldurma Kampanyaları (Gap Filler) TAMAMLANDI
+- YENİ marketing/gap_filler.py (/api/gap-filler): 45 gün ufukta doluluk < eşik (%40) olan
+  ardışık tarih pencerelerini bulur (min 2 gün, ilk 3 gün atlanır) → otomatik GAP-XXXXX promo
+  kodu (promo_codes'a %15 percent, valid_to=pencere sonu, max_uses 20, source=gap_filler) +
+  Türkçe e-posta ({guest_name} merge alanlı) ve WhatsApp/SMS kampanya taslağı üretir.
+- Akış: draft → Aktive Et (mevcut Campaigns modülüne e-posta taslağı düşer, source=gap_filler)
+  veya Reddet (promo kapanır). Idempotent: örtüşen pencere için tekrar üretmez.
+- Cron: JOB "gap_filler" 06:10 (marketing) + yönetici bildirimi. Config: eşik/indirim/ufuk/pencere.
+- YENİ GapFillerPanel (menü: Guests > "AI boşluk doldurma kampanyaları", id gap-filler):
+  rose/orange hero + 3 KPI, eşik formu (gf-cfg-*), kampanya kartları (kod kopyala, e-posta +
+  WA önizleme, gf-activate/gf-dismiss).
+- SİNERJİ: Üretilen kod misafir booking widget'ında (iter 455 promo akışı) anında geçerli —
+  E2E doğrulandı: tarama → 1 kampanya (%2.6 doluluk penceresi) → kod validate ok (−%15) →
+  activate → campaigns'e düştü → 2. tarama 0 üretti. UI ekranı onaylandı. QA temizlendi.

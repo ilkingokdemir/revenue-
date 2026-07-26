@@ -1359,6 +1359,18 @@ async def _job_restriction_advisor(property_id: str) -> dict:
 
 JOB_HANDLERS["restriction_advisor"] = _job_restriction_advisor
 
+from routes.marketing.gap_filler import create_gap_filler_router
+gap_filler_router = create_gap_filler_router(db, require_roles)
+api_router.include_router(gap_filler_router)
+
+async def _job_gap_filler(property_id: str) -> dict:
+    try:
+        return await gap_filler_router.run_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["gap_filler"] = _job_gap_filler
+
 from routes.pms.res_quality import create_res_quality_router
 res_quality_router = create_res_quality_router(db, require_roles)
 api_router.include_router(res_quality_router)

@@ -2194,3 +2194,22 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E: API'da band değerleri (%40→%46 genişleme) + UI grafik/tablo doğrulandı.
 - FLYR fark listesi TAMAMEN kapandı: Planning sürümleme (449), intraday re-price (450),
   MLOS/CTA advisor (451), üçlü görünüm (452), blended-rate (453), belirsizlik bandı (454).
+
+## Iter 455 (2026-07-26) — Rakip Taraması (PMS+RM) & Promo Kod Widget Entegrasyonu TAMAMLANDI
+- Rakip taraması: Mews, Cloudbeds, eviivo (PMS) + RoomPriceGenie, Atomize (RM) web araştırması.
+  Sonuç: Spaces zaten var (hotel_ops/spaces.py — DİKKAT: pms/spaces.py diye duplike yazma!),
+  PIE/RMS/kiosk/messaging/AR karşılıkları mevcut. Gerçek boşluk: promo_codes (rate_structure)
+  BACKOFFICE'te tanımlanıyor ama misafir booking widget'ında UYGULANMIYORDU (eviivo Promo
+  Manager boşluğu).
+- direct_conversion.py: validate_coupon(code, booking_value, nights) artık direct kupon
+  bulunamazsa promo_codes'a düşer — active/valid_from/valid_to/max_uses/min_nights kontrolü,
+  percent & flat desteği (flat için dinamik discount_pct + discount_label '−£20').
+  redeem_coupon_for_booking promo yolunda used sayacını artırır. RedeemRequest'e nights eklendi.
+- booking_widget.py: redeem çağrısına nights geçirildi.
+- BookingWidgetPage.js: validate'e booking_value+nights gönderir; placeholder 'Promo / coupon
+  code'; applied satırı discount_label gösterir.
+- 2 BUG FIX (önceden var olan): (1) applyCoupon onClick'te click event'i codeOverride sanıyordu
+  → event.trim crash; typeof string kontrolü eklendi. (2) 422 detail dizisi React child olarak
+  render edilip sayfayı çökertiyordu → string tip kontrolü.
+- E2E: percent (200→150), flat (200→180 UI'da), min_nights reddi, bilinmeyen kod, used sayacı
+  +1 doğrulandı. QA verileri temizlendi.

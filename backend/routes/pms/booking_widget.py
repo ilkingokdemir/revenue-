@@ -209,7 +209,7 @@ def create_booking_widget_router(db, require_roles):
             from routes.integrations_pkg.direct_conversion import redeem_coupon_for_booking
             coupon_info = await redeem_coupon_for_booking(
                 db, coupon_code, total, guest_email=data["guest_email"],
-                booking_ref=booking_ref)
+                booking_ref=booking_ref, nights=nights)
             if not coupon_info.get("ok"):
                 raise HTTPException(400, coupon_info.get("reason", "Kupon geçersiz"))
             total = round(total - coupon_info["discount_amount"], 2)

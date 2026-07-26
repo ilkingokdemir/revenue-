@@ -161,16 +161,22 @@ export default function BookingWidgetPage({ propertyId }) {
   }, [form.guest_email, form.guest_name, step]);
 
   const applyCoupon = async (codeOverride) => {
-    const code = (codeOverride || coupon.code).trim();
+    const code = (typeof codeOverride === "string" ? codeOverride : coupon.code).trim();
     if (!code) return;
     setCoupon(p => ({ ...p, code, checking: true, error: null }));
     try {
-      const { data } = await axios.post(`${API}/direct-conversion/validate`, { coupon_code: code });
+      const ni = Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000);
+      const { data } = await axios.post(`${API}/direct-conversion/validate`, {
+        coupon_code: code,
+        booking_value: Number(selected?.total_rate) || 0,
+        nights: Number.isFinite(ni) && ni > 0 ? ni : 1,
+      });
       if (data.ok) setCoupon(p => ({ ...p, applied: data, checking: false, error: null }));
       else setCoupon(p => ({ ...p, applied: null, checking: false, error: data.reason || "Invalid coupon" }));
     } catch (e) {
+      const det = e.response?.data?.detail;
       setCoupon(p => ({ ...p, applied: null, checking: false,
-        error: e.response?.data?.detail || "Coupon could not be validated" }));
+        error: typeof det === "string" ? det : "Coupon could not be validated" }));
     }
   };
 
@@ -864,7 +870,7 @@ export default function BookingWidgetPage({ propertyId }) {
                     <div className="flex justify-between items-center text-xs text-emerald-700 font-bold" data-testid="coupon-applied-line">
                       <span>🎟 {coupon.applied.coupon_code}</span>
                       <span className="flex items-center gap-2">
-                        −{coupon.applied.discount_pct}%
+                        {coupon.applied.discount_label || `−${coupon.applied.discount_pct}%`}
                         <button onClick={() => setCoupon({ code: "", applied: null, checking: false, error: null })}
                           className="text-stone-400 hover:text-red-500 font-normal" data-testid="coupon-remove-btn">✕</button>
                       </span>
@@ -874,7 +880,7 @@ export default function BookingWidgetPage({ propertyId }) {
                       <div className="flex gap-1.5">
                         <input value={coupon.code}
                           onChange={e => setCoupon(p => ({ ...p, code: e.target.value.toUpperCase(), error: null }))}
-                          placeholder="Coupon code (DIRECT-...)"
+                          placeholder="Promo / coupon code"
                           className="flex-1 min-w-0 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs uppercase focus:outline-none focus:ring-1 focus:ring-emerald-500"
                           data-testid="coupon-input" />
                         <button onClick={applyCoupon} disabled={coupon.checking || !coupon.code.trim()}

@@ -199,30 +199,74 @@ async def process_checkout_conversion(db, booking: dict) -> Optional[dict]:
         return None
 
 
-async def validate_coupon(db, code: str) -> dict:
-    """Kupon doğrulama (redeem etmeden) — booking widget kullanır."""
+async def validate_coupon(db, code: str, booking_value: float = 0, nights: int = 1) -> dict:
+    """Kupon/promo kodu doğrulama (redeem etmeden) — booking widget kullanır.
+    Önce direct-conversion kuponlarına, yoksa rate-structure promo_codes'a bakar."""
     code = (code or "").strip().upper()
     offer = await db.direct_conversion_offers.find_one({"coupon_code": code}, {"_id": 0})
-    if not offer:
-        return {"ok": False, "reason": "Kupon bulunamadı"}
-    if offer.get("status") == "redeemed":
-        return {"ok": False, "reason": "Kupon daha önce kullanılmış"}
-    if offer.get("valid_until", "9") < _now():
-        return {"ok": False, "reason": "Kupon süresi dolmuş"}
-    return {"ok": True, "coupon_code": code,
-            "discount_pct": offer["discount_pct"],
-            "channel": offer.get("channel"),
-            "valid_until": offer.get("valid_until")}
+    if offer:
+        if offer.get("status") == "redeemed":
+            return {"ok": False, "reason": "Kupon daha önce kullanılmış"}
+        if offer.get("valid_until", "9") < _now():
+            return {"ok": False, "reason": "Kupon süresi dolmuş"}
+        return {"ok": True, "coupon_code": code, "source": "direct",
+                "discount_pct": offer["discount_pct"],
+                "discount_label": f"−%{offer['discount_pct']}",
+                "channel": offer.get("channel"),
+                "valid_until": offer.get("valid_until")}
+
+    promo = await db.promo_codes.find_one({"code": code}, {"_id": 0})
+    if not promo:
+        return {"ok": False, "reason": "Kod bulunamadı"}
+    if not promo.get("active", True):
+        return {"ok": False, "reason": "Kod aktif değil"}
+    today = _now()[:10]
+    if promo.get("valid_from") and today < promo["valid_from"]:
+        return {"ok": False, "reason": f"Kod {promo['valid_from']} tarihinde başlıyor"}
+    if promo.get("valid_to") and today > promo["valid_to"]:
+        return {"ok": False, "reason": "Kod süresi dolmuş"}
+    max_uses = int(promo.get("max_uses", 0) or 0)
+    if max_uses and int(promo.get("used", 0)) >= max_uses:
+        return {"ok": False, "reason": "Kod kullanım limiti doldu"}
+    min_nights = int(promo.get("min_nights", 1) or 1)
+    if nights and nights < min_nights:
+        return {"ok": False, "reason": f"Bu kod minimum {min_nights} gece konaklamada geçerli"}
+    kind = promo.get("kind", "percent")
+    amount = float(promo.get("amount", 0) or 0)
+    if kind == "flat":
+        if booking_value and booking_value > 0:
+            pct = round(min(amount, booking_value) / booking_value * 100, 2)
+        else:
+            pct = 0
+        label = f"−£{amount:g}"
+    else:
+        pct = amount
+        label = f"−%{amount:g}"
+    return {"ok": True, "coupon_code": code, "source": "promo",
+            "promo_id": promo["id"], "kind": kind, "amount": amount,
+            "discount_pct": pct, "discount_label": label, "min_nights": min_nights}
 
 
 async def redeem_coupon_for_booking(db, code: str, booking_value: float,
                                     guest_email: Optional[str] = None,
-                                    booking_ref: Optional[str] = None) -> dict:
-    """Kuponu kullan + komisyon tasarrufunu hesapla. Widget booking çağırır."""
-    v = await validate_coupon(db, code)
+                                    booking_ref: Optional[str] = None,
+                                    nights: int = 1) -> dict:
+    """Kuponu/promo kodunu kullan. Widget booking çağırır."""
+    v = await validate_coupon(db, code, booking_value, nights)
     if not v["ok"]:
         return v
     code = v["coupon_code"]
+    if v.get("source") == "promo":
+        if v["kind"] == "flat":
+            discount_amount = round(min(v["amount"], float(booking_value or 0)), 2)
+        else:
+            discount_amount = round(float(booking_value or 0) * v["amount"] / 100, 2)
+        r = await db.promo_codes.update_one({"id": v["promo_id"]}, {"$inc": {"used": 1}})
+        if not r.matched_count:
+            return {"ok": False, "reason": "Kod bulunamadı"}
+        return {"ok": True, "coupon_code": code, "source": "promo",
+                "discount_pct": v["discount_pct"], "discount_amount": discount_amount,
+                "commission_saved": 0.0}
     rate = _COMMISSION_RATES.get(v.get("channel") or "", 0.15)
     saved = round(float(booking_value or 0) * rate, 2)
     discount_amount = round(float(booking_value or 0) * v["discount_pct"] / 100, 2)
@@ -250,6 +294,7 @@ class SettingsUpdate(BaseModel):
 class RedeemRequest(BaseModel):
     coupon_code: str
     booking_value: float = 0
+    nights: int = 1
     guest_email: Optional[str] = None
 
 
@@ -367,7 +412,7 @@ def create_direct_conversion_router(db, require_roles):
         if len(attempts) >= 10:
             raise HTTPException(429, "Çok fazla hatalı deneme — 15 dk sonra tekrar deneyin")
         _redeem_fails[ip] = attempts
-        result = await validate_coupon(db, body.coupon_code)
+        result = await validate_coupon(db, body.coupon_code, body.booking_value, body.nights)
         if not result["ok"]:
             _redeem_fails[ip].append(now_ts)
         return result

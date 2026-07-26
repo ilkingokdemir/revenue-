@@ -62,6 +62,14 @@ def create_my_tasks_router(db, require_roles):
                 {"status": "scheduled", "scheduled_date": {"$lte": tomorrow}}, {"_id": 0}
             ).to_list(10)
 
+        # 6.5 Today's housekeeping tasks assigned to me (urgent first)
+        uid = current_user.get("id", "")
+        hk_tasks = await db.housekeeping_tasks.find(
+            {"due_date": today, "status": {"$in": ["pending", "in_progress"]},
+             "assigned_to": {"$in": [v for v in (uid, user_email, user_name) if v]}},
+            {"_id": 0}).to_list(50)
+        hk_tasks.sort(key=lambda t: (t.get("priority") != "urgent", t.get("created_at", "")))
+
         # 7. Notifications count
         notif_q = {"read": False, "$or": [{"target_user": user_email}, {"target_user": ""}, {"target_role": user_role}]}
         unread_notifs = await db.notifications.count_documents(notif_q)
@@ -75,6 +83,7 @@ def create_my_tasks_router(db, require_roles):
             "routines": routines,
             "maintenance": maint,
             "compliance": compliance,
+            "hk_tasks": hk_tasks,
             "unread_notifications": unread_notifs,
             "summary": {
                 "shifts_today": len(shifts),
@@ -83,6 +92,8 @@ def create_my_tasks_router(db, require_roles):
                 "active_routines": len(routines),
                 "open_maintenance": len(maint),
                 "upcoming_compliance": len(compliance),
+                "hk_open": len(hk_tasks),
+                "hk_urgent": sum(1 for t in hk_tasks if t.get("priority") == "urgent"),
             }
         }
 

@@ -18,11 +18,14 @@ Endpoints (/api/inbox/*):
 - POST /mark-read/{guest_key}            → mark all inbound messages as read
 - POST /webhook/{channel}                → public inbound webhook (stub — real integrations wire here)
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from datetime import datetime, timezone
 from typing import Optional, List, Dict
 import os
 import uuid
+import hmac
+import hashlib
+import json
 import logging
 
 from auth import require_perm
@@ -218,10 +221,22 @@ def create_unified_inbox_router(db):
         return {"marked": r.modified_count}
 
     @router.post("/webhook/{channel}")
-    async def inbound_webhook(channel: str, data: Dict):
+    async def inbound_webhook(channel: str, request: Request):
         """PUBLIC endpoint — downstream channel providers (Twilio, Meta WhatsApp Cloud,
-        Booking.com, Airbnb) POST inbound messages here. This is the common-shape stub;
-        per-channel signature verification is the caller's responsibility to add."""
+        Booking.com, Airbnb) POST inbound messages here.
+        Security: if INBOX_WEBHOOK_SECRET env is set, requests must carry
+        X-Inbox-Signature: HMAC-SHA256(secret, raw_body) hex digest."""
+        raw = await request.body()
+        secret = os.environ.get("INBOX_WEBHOOK_SECRET", "")
+        if secret:
+            sig = request.headers.get("x-inbox-signature", "")
+            expected = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(sig, expected):
+                raise HTTPException(401, "Invalid webhook signature")
+        try:
+            data = json.loads(raw or b"{}")
+        except Exception:
+            raise HTTPException(400, "Invalid JSON body")
         if channel not in ("whatsapp", "sms", "email", "booking_com", "airbnb", "direct"):
             raise HTTPException(400, "Invalid channel")
         guest_key = (data.get("guest_key") or data.get("from") or "").strip()

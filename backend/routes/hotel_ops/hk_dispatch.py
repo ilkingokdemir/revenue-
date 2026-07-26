@@ -89,6 +89,15 @@ async def run_dispatch_internal(db, property_id: str = "") -> Dict:
         created.append(task)
         if is_urgent:
             urgent += 1
+            if assignee and assignee.get("email"):
+                await db.notifications.insert_one({
+                    "id": str(uuid.uuid4()), "property_id": d["property_id"],
+                    "category": "hk_dispatch", "priority": "high",
+                    "target_user": assignee["email"], "target_role": "",
+                    "title": f"⚡ Öncelikli temizlik — Oda {d['room_number']}",
+                    "message": f"Bu odaya bugün varış var; öncelikli temizlenmeli. ({d.get('guest_name','')} check-out)",
+                    "read": False, "created_at": now,
+                })
     return {"date": today, "departures_scanned": len(departures), "tasks_created": len(created),
             "urgent": urgent, "skipped_duplicates": skipped,
             "housekeepers": len(housekeepers)}

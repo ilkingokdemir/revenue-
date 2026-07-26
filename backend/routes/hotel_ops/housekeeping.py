@@ -255,7 +255,7 @@ def create_housekeeping_router(db, require_roles):
 
     @router.put("/housekeeping/tasks/{task_id}")
     async def update_task(task_id: str, updates: Dict,
-                          current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+                          current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "housekeeper"))):
         updates.pop("_id", None)
         updates.pop("id", None)
         if updates.get("status") == "completed":

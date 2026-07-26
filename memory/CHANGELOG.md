@@ -4,6 +4,12 @@
 High-end full-stack hotel platform (React + FastAPI + MongoDB) — multi-tenant Mews-style hub with 140+ modules. Implement all "keyless" features before requesting external API keys. Turkish language UI.
 
 
+### 2026-07-26 (iter 433b — HK Urgent Anlık Bildirim + Webhook HMAC ✅ self-test PASS)
+- **HK urgent bildirim zinciri**: hk_dispatch urgent görev oluşturunca atanan görevliye db.notifications kaydı (target_user=email). `my_tasks.py` artık `hk_tasks` + summary.hk_open/hk_urgent döndürüyor. MyTasksPanel'e "Bugünkü Temizlik Görevlerim" bölümü (my-hk-tasks-section): urgent kartlar kırmızı + pulse, Başla/Tamamlandı hızlı aksiyonları (PUT /housekeeping/tasks artık housekeeper rolüne açık), 30sn poll + yeni urgent görevde WebAudio ding + toast.
+- **Inbox webhook HMAC**: INBOX_WEBHOOK_SECRET env set ise X-Inbox-Signature (HMAC-SHA256 raw body) zorunlu; unset ise eski davranış (opt-in, backward compatible).
+- E2E doğrulandı: en az yüklü testhk@hotelbox.com'a urgent atama → my-tasks hk_urgent=1 → bildirim düştü → housekeeper PUT in_progress/completed OK → UI screenshot (Oda 951 urgent kartı). Test verisi temizlendi.
+- BEKLEYEN: (c) WhatsApp misafir mesajlaşma — Twilio anahtarı kullanıcıdan bekleniyor.
+
 ### 2026-07-26 (iter 433 — HK Auto-Dispatch + Rezervasyon Kalite Kontrolü + FTE Metriği ✅ 13/13 PASS)
 - Kullanıcı: "(a) HK otomatik görev yönlendirme uygula + robosize.me/products incele".
 - **Loyalty (b) YAPILMADI — zaten mevcut** (loyalty_tiers/loyalty_tier/loyalty_v2/loyalty_auto + GuestProfilesPanel tier kartı). Mükerrerlik önlendi.

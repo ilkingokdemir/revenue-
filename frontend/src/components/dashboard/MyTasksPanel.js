@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -8,11 +8,46 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export const MyTasksPanel = ({ user }) => {
   const [data, setData] = useState(null);
+  const prevUrgentIds = useRef(null);
+
+  const playDing = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [880, 1174.7].forEach((f, i) => {
+        const o = ctx.createOscillator(); const g = ctx.createGain();
+        o.frequency.value = f; o.type = "sine";
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.15, ctx.currentTime + i * 0.18);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.4);
+        o.start(ctx.currentTime + i * 0.18); o.stop(ctx.currentTime + i * 0.18 + 0.45);
+      });
+    } catch { /* audio unavailable */ }
+  };
 
   const load = useCallback(async () => {
-    try { const { data: d } = await axios.get(`${API}/my-tasks`); setData(d); } catch { /* silent */ }
+    try {
+      const { data: d } = await axios.get(`${API}/my-tasks`);
+      setData(d);
+      const urgentIds = (d.hk_tasks || []).filter(t => t.priority === "urgent").map(t => t.id);
+      if (prevUrgentIds.current !== null) {
+        const fresh = urgentIds.filter(id => !prevUrgentIds.current.includes(id));
+        if (fresh.length > 0) {
+          playDing();
+          toast.warning(`⚡ ${fresh.length} yeni öncelikli oda temizliği atandı!`, { duration: 8000 });
+        }
+      }
+      prevUrgentIds.current = urgentIds;
+    } catch { /* silent */ }
   }, []);
-  useEffect(() => { load(); const iv = setInterval(load, 60000); return () => clearInterval(iv); }, [load]);
+  useEffect(() => { load(); const iv = setInterval(load, 30000); return () => clearInterval(iv); }, [load]);
+
+  const updateHkStatus = async (taskId, status) => {
+    try {
+      await axios.put(`${API}/housekeeping/tasks/${taskId}`, { status });
+      toast.success(status === "in_progress" ? "Göreve başlandı" : "Görev tamamlandı ✓");
+      load();
+    } catch { toast.error("Güncellenemedi"); }
+  };
 
   const s = data?.summary || {};
   const greeting = () => {
@@ -51,6 +86,43 @@ export const MyTasksPanel = ({ user }) => {
           </motion.div>
         ))}
       </div>
+
+      {(data?.hk_tasks || []).length > 0 && (
+        <div className="mb-6 bg-white border-2 border-cyan-200 rounded-2xl p-5" data-testid="my-hk-tasks-section">
+          <h3 className="font-bold text-stone-800 mb-3 flex items-center gap-2">
+            <svg className="w-5 h-5 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            Bugünkü Temizlik Görevlerim ({data.summary?.hk_open || 0})
+            {(data.summary?.hk_urgent || 0) > 0 && (
+              <span className="text-[10px] px-2 py-0.5 bg-rose-100 text-rose-700 rounded-full font-bold animate-pulse">
+                ⚡ {data.summary.hk_urgent} öncelikli
+              </span>
+            )}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {data.hk_tasks.map(t => (
+              <div key={t.id} data-testid={`my-hk-task-${t.id}`}
+                className={`rounded-xl border px-3 py-2.5 ${t.priority === "urgent" ? "border-rose-300 bg-rose-50" : "border-stone-200 bg-stone-50"}`}>
+                <div className="flex items-center gap-2 text-sm font-semibold text-stone-800">
+                  {t.priority === "urgent" && <span className="text-rose-600">⚡</span>}
+                  Oda {t.room_number}
+                  <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full ${t.status === "in_progress" ? "bg-sky-100 text-sky-700" : "bg-amber-100 text-amber-700"}`}>
+                    {t.status === "in_progress" ? "devam ediyor" : "bekliyor"}
+                  </span>
+                </div>
+                <div className="text-[11px] text-stone-500 mt-1 line-clamp-2">{typeof t.notes === "string" ? t.notes : ""}</div>
+                <div className="flex gap-1.5 mt-2">
+                  {t.status === "pending" && (
+                    <button onClick={() => updateHkStatus(t.id, "in_progress")} data-testid={`my-hk-start-${t.id}`}
+                      className="flex-1 px-2 py-1 text-[11px] font-semibold bg-sky-600 text-white rounded-lg hover:bg-sky-700">Başla</button>
+                  )}
+                  <button onClick={() => updateHkStatus(t.id, "completed")} data-testid={`my-hk-done-${t.id}`}
+                    className="flex-1 px-2 py-1 text-[11px] font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Tamamlandı ✓</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Today's Shifts */}

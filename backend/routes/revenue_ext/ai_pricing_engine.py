@@ -484,9 +484,9 @@ def create_ai_pricing_router(db, require_roles):
             items = [s for s in payload["suggestions"] if s["auto_apply_eligible"] and s["status"] == "pending"]
 
         from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
-        from routes.revenue_ext.min_rate_floors import effective_min_rate_map
+        from routes.revenue_ext.min_rate_floors import effective_bounds_map, clamp_to_bounds
         lrv_map = await compute_lrv_floor(db, property_id, int(cfg.get("days_horizon", 30)))
-        min_map = await effective_min_rate_map(
+        min_map = await effective_bounds_map(
             db, property_id, [it.get("date", "") for it in items])
         applied, lrv_clamped, min_clamped = 0, 0, 0
         for it in items:
@@ -495,11 +495,11 @@ def create_ai_pricing_router(db, require_roles):
                 it["suggested_rate"] = floor
                 it["rationale"] = (it.get("rationale") or "") + f" · LRV guardrail: fiyat £{floor} tabanına yükseltildi"
                 lrv_clamped += 1
-            mr = min_map.get(it.get("date", ""), {})
-            if mr.get("floor") and float(it["suggested_rate"]) < mr["floor"]:
-                it["suggested_rate"] = mr["floor"]
-                label = "yakın tarih min." if mr.get("mode") == "near_term" else "standart min."
-                it["rationale"] = (it.get("rationale") or "") + f" · Minimum fiyat koruması ({label}): £{mr['floor']} tabanına yükseltildi"
+            bounds = min_map.get(it.get("date", ""), {})
+            res = clamp_to_bounds(float(it["suggested_rate"]), bounds)
+            if res["clamped"]:
+                it["suggested_rate"] = res["rate"]
+                it["rationale"] = (it.get("rationale") or "") + f" · Fiyat koruması ({res['reason']}): £{res['rate']} sınırına ayarlandı"
                 min_clamped += 1
             await _apply_one(property_id, it, source="ai-pricing-manual", rationale=it.get("rationale"))
             applied += 1

@@ -360,7 +360,7 @@ def _parse_llm_json(text: str) -> Dict:
 
 
 async def _apply_price_action(db, pid: str, action: Dict, source: str, user: str) -> Dict:
-    from routes.revenue_ext.min_rate_floors import get_effective_min_rate
+    from routes.revenue_ext.min_rate_floors import effective_bounds_map, clamp_to_bounds
     target = float(action.get("target_rate") or 0)
     if target <= 0:
         raise HTTPException(400, "target_rate gerekli")
@@ -369,24 +369,25 @@ async def _apply_price_action(db, pid: str, action: Dict, source: str, user: str
         d_end = ddate.fromisoformat(action.get("date_end") or action["date_start"])
     except Exception:
         raise HTTPException(400, "Geçersiz tarih aralığı")
+    all_dates = []
+    dd = d
+    while dd <= d_end and len(all_dates) < 120:
+        all_dates.append(dd.isoformat())
+        dd += timedelta(days=1)
+    bounds_map = await effective_bounds_map(db, pid, all_dates)
     now = _iso()
-    days = 0
     floor_clamped = 0
-    while d <= d_end and days < 120:
-        rate = target
-        mr = await get_effective_min_rate(db, pid, d.isoformat())
-        if mr.get("floor") and rate < mr["floor"]:
-            rate = mr["floor"]
+    for ds in all_dates:
+        res = clamp_to_bounds(target, bounds_map.get(ds, {}))
+        if res["clamped"]:
             floor_clamped += 1
         await db.rate_overrides.update_one(
-            {"property_id": pid, "date": d.isoformat()},
-            {"$set": {"property_id": pid, "date": d.isoformat(), "custom_rate": round(rate, 2),
+            {"property_id": pid, "date": ds},
+            {"$set": {"property_id": pid, "date": ds, "custom_rate": round(res["rate"], 2),
                       "source": source, "set_by": user, "set_at": now,
                       "context": {"strategist_action": action.get("id"), "title": action.get("title", "")}}},
             upsert=True)
-        d += timedelta(days=1)
-        days += 1
-    return {"dates_updated": days, "rate": round(target, 2), "min_rate_clamped": floor_clamped}
+    return {"dates_updated": len(all_dates), "rate": round(target, 2), "min_rate_clamped": floor_clamped}
 
 
 def create_revenue_strategist_router(db, require_roles):

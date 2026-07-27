@@ -2377,3 +2377,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - DOĞRULANDI: kural CRUD + validasyon + preview (7 gün geçişi) curl ile; kırpma testi £50 hedef
   → yakın £75 / uzak £110'a yükseltildi (9 tarih clamped, temizlendi); UI ekran görüntüsü OK.
   Örnek kural bırakıldı: Standard Double £120/£80/7 gün.
+
+## Iter 470 (2026-07-27) — Çift Maksimum Fiyat Tavanı (Dual Max + Event Ceiling) TAMAMLANDI
+- Potansiyel iyileştirme (kullanıcı onayı "devam et"): min sistemine simetrik çift tavan.
+- min_rate_floors.py genişletildi: standard_max_rate + event_max_rate + event_score_threshold
+  (vars. 40). Etkinlik günleri market_events'ten otomatik (skor >= eşik, end_date aralığı dahil).
+  Yeni API: effective_bounds_map / get_effective_bounds / clamp_to_bounds (iki yönlü kırpma,
+  gerekçeli). Eski get_effective_min_rate/effective_min_rate_map geriye dönük uyumlu.
+- Validasyonlar: etkinlik maks >= standart maks, maks >= min, eşik 1-100.
+- ai_pricing_engine accept + strategist _apply_price_action → clamp_to_bounds (taban+tavan).
+- Panel: Standart maks / Etkinlik maks / skor eşiği alanları; önizlemede tavan (↑£300) ve
+  etkinlik günü mor ⚡ vurgusu (08-08 Street Parade ↑£450 doğrulandı).
+- TEST: £999 → etkinlik günü £450'ye, normal gün £300'e; £50 → £120'ye kırpıldı (python E2E).
+  Curl: kural CRUD + validasyon + preview. UI ekran görüntüsü OK. Örnek kural: Standard Double
+  120/80/7g + 300/450/eşik 20.

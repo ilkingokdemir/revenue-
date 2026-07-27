@@ -9,6 +9,9 @@ function RuleRow({ rt, rule, pid, onSaved, onDeleted }) {
   const [std, setStd] = useState(rule?.standard_min_rate ?? "");
   const [near, setNear] = useState(rule?.near_term_min_rate ?? "");
   const [window_, setWindow] = useState(rule?.near_term_window_days ?? 7);
+  const [stdMax, setStdMax] = useState(rule?.standard_max_rate ?? "");
+  const [evMax, setEvMax] = useState(rule?.event_max_rate ?? "");
+  const [threshold, setThreshold] = useState(rule?.event_score_threshold ?? 40);
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -20,9 +23,12 @@ function RuleRow({ rt, rule, pid, onSaved, onDeleted }) {
         standard_min_rate: std ? parseFloat(std) : null,
         near_term_min_rate: near ? parseFloat(near) : null,
         near_term_window_days: parseInt(window_) || 7,
+        standard_max_rate: stdMax ? parseFloat(stdMax) : null,
+        event_max_rate: evMax ? parseFloat(evMax) : null,
+        event_score_threshold: parseInt(threshold) || 40,
         enabled,
       });
-      toast.success(`${rt.name}: minimum fiyat kuralı kaydedildi`);
+      toast.success(`${rt.name}: fiyat koruma kuralı kaydedildi`);
       onSaved();
       loadPreview();
     } catch (e) {
@@ -34,7 +40,7 @@ function RuleRow({ rt, rule, pid, onSaved, onDeleted }) {
     try {
       await axios.delete(`${API}/${pid}/${rt.id}`);
       toast.success("Kural silindi");
-      setStd(""); setNear(""); setWindow(7); setPreview(null);
+      setStd(""); setNear(""); setWindow(7); setStdMax(""); setEvMax(""); setPreview(null);
       onDeleted();
     } catch (e) { toast.error(e?.response?.data?.detail || "Silinemedi"); }
   };
@@ -73,6 +79,23 @@ function RuleRow({ rt, rule, pid, onSaved, onDeleted }) {
             className="w-16 rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40"
             data-testid={`minrate-window-${rt.id}`} />
         </div>
+        <div className="w-px self-stretch bg-stone-200 hidden lg:block" />
+        <div>
+          <label className="block text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">Standart maks (£)</label>
+          <input type="number" min="1" value={stdMax} onChange={(e) => setStdMax(e.target.value)}
+            placeholder="örn. 300" className={inputCls} data-testid={`minrate-stdmax-${rt.id}`} />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">Etkinlik maks (£)</label>
+          <input type="number" min="1" value={evMax} onChange={(e) => setEvMax(e.target.value)}
+            placeholder="örn. 450" className={inputCls} data-testid={`minrate-evmax-${rt.id}`} />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">Etk. skor eşiği</label>
+          <input type="number" min="1" max="100" value={threshold} onChange={(e) => setThreshold(e.target.value)}
+            className="w-16 rounded-lg border border-stone-200 px-2.5 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40"
+            data-testid={`minrate-threshold-${rt.id}`} />
+        </div>
         <label className="flex items-center gap-2 text-xs text-stone-600 font-bold cursor-pointer mt-4">
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)}
             className="accent-[#1D4ED8] w-4 h-4" data-testid={`minrate-enabled-${rt.id}`} />
@@ -99,13 +122,17 @@ function RuleRow({ rt, rule, pid, onSaved, onDeleted }) {
           </div>
           <div className="flex gap-1 overflow-x-auto pb-1" data-testid={`minrate-preview-${rt.id}`}>
             {preview.map((d) => (
-              <div key={d.date} title={d.date}
+              <div key={d.date} title={d.date + (d.is_event_day ? " · Etkinlik günü" : "")}
                 className={`shrink-0 w-[68px] rounded-lg border px-1.5 py-1.5 text-center ${
-                  d.mode === "near_term" ? "bg-amber-50 border-amber-300"
+                  d.is_event_day ? "bg-violet-50 border-violet-400 ring-1 ring-violet-300"
+                  : d.mode === "near_term" ? "bg-amber-50 border-amber-300"
                   : d.mode === "standard" ? "bg-blue-50 border-blue-200" : "bg-stone-50 border-stone-200"}`}>
-                <div className="text-[9px] text-stone-400 font-bold">{d.date.slice(5)}</div>
+                <div className="text-[9px] text-stone-400 font-bold">{d.date.slice(5)}{d.is_event_day ? " ⚡" : ""}</div>
                 <div className={`text-xs font-black tabular-nums ${d.mode === "near_term" ? "text-amber-700" : d.mode === "standard" ? "text-[#1D4ED8]" : "text-stone-300"}`}>
                   {d.floor ? `£${d.floor}` : "—"}
+                </div>
+                <div className={`text-[9px] font-bold tabular-nums ${d.ceiling_mode === "event" ? "text-violet-600" : "text-stone-400"}`}>
+                  {d.ceiling ? `↑£${d.ceiling}` : ""}
                 </div>
                 <div className="text-[8px] font-bold uppercase text-stone-400">
                   {d.mode === "near_term" ? "yakın" : d.mode === "standard" ? "standart" : ""}
@@ -143,16 +170,16 @@ export default function MinRateFloorsPanel({ propertyId = "default" }) {
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-emerald-300 mb-1">
             <ShieldCheck size={15} weight="duotone" /> Revenue Management · Fiyat Koruması
           </div>
-          <h2 className="text-2xl font-bold">Çift Minimum Fiyat Sistemi</h2>
+          <h2 className="text-2xl font-bold">Fiyat Koruma Sistemi — Çift Min & Çift Maks</h2>
           <p className="text-sm text-stone-400 mt-1 max-w-2xl">
-            Her oda tipi için iki taban fiyat belirleyin: <b className="text-blue-300">standart minimum</b> normal dönemde geçerlidir;
-            girişe belirlediğiniz gün sayısı kala (vars. 7) otomatik devre dışı kalır ve
-            <b className="text-amber-300"> yakın tarih minimumu</b> devreye girer.
-            AI pricing ve Strateji Robotu bu tabanların altına fiyat yazamaz.
+            <b className="text-blue-300">Standart minimum</b> normal dönemde geçerlidir; girişe belirlediğiniz gün sayısı kala
+            <b className="text-amber-300"> yakın tarih minimumu</b> devreye girer. <b className="text-stone-200">Standart maksimum</b> tavan
+            fiyatı sınırlar; talep skoru eşiği aşan <b className="text-violet-300">etkinlik günlerinde ⚡ etkinlik maksimumu</b> devreye girer.
+            AI pricing ve Strateji Robotu bu sınırların dışına fiyat yazamaz.
           </p>
           <div className="flex items-center gap-2 mt-3 text-xs text-stone-400">
             <Clock size={13} className="text-amber-300" />
-            Örnek: Double oda standart min £120 → son 7 gün kala min £80 aktif olur.
+            Örnek: Double std min £120 → son 7 gün £80 · std maks £300 → etkinlik günü £450.
           </div>
         </div>
       </div>

@@ -255,6 +255,7 @@ export function buildMenuSections(t, user) {
         { id: "pace-reports", icon: ChartLine, name: "Pace reports", testId: "pace-reports-btn" },
 
         { divider: true, label: "AI & Insights" },
+        { id: "revenue-strategist", icon: Robot, name: "AI Strateji Robotu", testId: "revenue-strategist-btn" },
         { id: "ai-pricing-v2", icon: Lightning, name: "AI pricing", testId: "ai-pricing-v2-btn" },
         { id: "intraday-reprice", icon: Lightning, name: "Gün-içi re-price (pickup spike)", testId: "intraday-reprice-btn" },
         { id: "restriction-advisor", icon: LockKey, name: "AI kısıtlama önerileri (MLOS/CTA)", testId: "restriction-advisor-btn" },

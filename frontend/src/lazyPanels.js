@@ -166,6 +166,7 @@ export const RestrictionAdvisorPanel = L(() => import("./components/dashboard/Re
 export const GapFillerPanel = L(() => import("./components/dashboard/GapFillerPanel"));
 export const LostDemandPanel = L(() => import("./components/dashboard/LostDemandPanel"));
 export const DemoLeadsPanel = L(() => import("./components/dashboard/DemoLeadsPanel"));
+export const RevenueStrategistPanel = L(() => import("./components/dashboard/RevenueStrategistPanel"));
 export const AutomationSettingsPanel = L(() => import("./components/dashboard/AutomationSettingsPanel"));
 export const GuestSegmentsPanel = L(() => import("./components/dashboard/GuestSegmentsPanel"));
 export const ChannelHealthPanel = L(() => import("./components/dashboard/ChannelHealthPanel"));

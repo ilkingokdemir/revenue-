@@ -1369,6 +1369,18 @@ api_router.include_router(create_lost_demand_router(db, require_roles))
 from routes.marketing.demo_requests import create_demo_requests_router
 api_router.include_router(create_demo_requests_router(db, require_roles))
 
+from routes.revenue_ext.revenue_strategist import create_revenue_strategist_router
+revenue_strategist_router = create_revenue_strategist_router(db, require_roles)
+api_router.include_router(revenue_strategist_router)
+
+async def _job_revenue_strategist(property_id: str) -> dict:
+    try:
+        return await revenue_strategist_router.run_internal(property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["revenue_strategist"] = _job_revenue_strategist
+
 async def _job_gap_filler(property_id: str) -> dict:
     try:
         return await gap_filler_router.run_internal(property_id or "")

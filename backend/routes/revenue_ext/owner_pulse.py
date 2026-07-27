@@ -635,6 +635,71 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
         cfg = await db.owner_pulse_config.find_one({"property_id": pid}, {"_id": 0}) or {}
         return bool(cfg.get("digest_enabled", False))
 
+    # ── Kurtarma Autopilot ──
+    async def _autopilot_cfg(pid: str) -> Dict:
+        cfg = await db.owner_pulse_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        ap = cfg.get("autopilot") or {}
+        return {"mode": ap.get("mode", "off"), "occ_threshold": float(ap.get("occ_threshold", 35))}
+
+    async def _notify(pid: str, title: str, message: str, priority: str = "high"):
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "type": "warning", "title": title, "message": message,
+            "category": "recovery_autopilot", "target_user": "", "target_role": "admin",
+            "link_to": pid, "priority": priority, "read": False,
+            "created_by": "Recovery Autopilot",
+            "created_at": datetime.now(timezone.utc).isoformat()})
+
+    async def _autopilot_sweep() -> dict:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        results = []
+        async for cfg in db.owner_pulse_config.find(
+                {"autopilot.mode": {"$in": ["approval", "auto"]}}, {"_id": 0}):
+            pid = cfg["property_id"]
+            ap = await _autopilot_cfg(pid)
+            try:
+                plan = await build_recovery_plan(db, pid)
+            except Exception:
+                continue
+            if plan["avg_occ_30d"] >= ap["occ_threshold"]:
+                results.append({"property_id": pid, "avg_occ": plan["avg_occ_30d"], "action": "healthy"})
+                continue
+            if ap["mode"] == "auto":
+                r = await apply_recovery_action(db, pid, "promo", "autopilot")
+                await _notify(pid, f"Autopilot devreye girdi — {plan['property_name']}",
+                              f"30g ort. doluluk %{plan['avg_occ_30d']} (eşik %{ap['occ_threshold']}). {r['detail']}")
+                await db.recovery_autopilot_log.insert_one({
+                    "id": str(uuid.uuid4()), "property_id": pid, "mode": "auto",
+                    "avg_occ": plan["avg_occ_30d"], "detail": r["detail"], "created_at": now_iso})
+                results.append({"property_id": pid, "avg_occ": plan["avg_occ_30d"], "action": "auto_applied"})
+            else:  # approval
+                mitigated = await db.discount_layers.find_one(
+                    {"property_id": pid, "source": "recovery_plan", "active": True}, {"_id": 0, "id": 1})
+                if mitigated:
+                    results.append({"property_id": pid, "avg_occ": plan["avg_occ_30d"], "action": "already_mitigated"})
+                    continue
+                pending = await db.recovery_approvals.find_one(
+                    {"property_id": pid, "status": "pending"}, {"_id": 0, "id": 1})
+                if not pending:
+                    await db.recovery_approvals.insert_one({
+                        "id": str(uuid.uuid4()), "property_id": pid,
+                        "property_name": plan["property_name"], "action_type": "promo",
+                        "avg_occ": plan["avg_occ_30d"], "threshold": ap["occ_threshold"],
+                        "weak_days": plan["weak_days"], "status": "pending", "created_at": now_iso})
+                    await _notify(pid, f"Onay bekliyor — {plan['property_name']}",
+                                  f"30g ort. doluluk %{plan['avg_occ_30d']} eşiğin altında. Kurtarma promosyonu onayınızı bekliyor.")
+                results.append({"property_id": pid, "avg_occ": plan["avg_occ_30d"], "action": "approval_queued"})
+        return {"ok": True, "checked": len(results), "results": results}
+
+    async def _autopilot_loop(interval_seconds: int = 21600):
+        while True:
+            try:
+                r = await _autopilot_sweep()
+                if r["checked"]:
+                    logger.info(f"Recovery autopilot: {r['results']}")
+            except Exception as e:
+                logger.warning(f"Recovery autopilot loop error: {e}")
+            await asyncio.sleep(interval_seconds)
+
     # ── Haftalık Pulse Özeti (digest) ──
     def _sym(cur: str) -> str:
         return {"GBP": "£", "EUR": "€", "TRY": "₺", "USD": "$"}.get(cur, (cur or "") + " ")
@@ -817,6 +882,62 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
         return await apply_recovery_action(db, pid, (data or {}).get("action_type", ""),
                                            current_user.get("email", "admin"))
 
+    # ── Autopilot yönetimi (admin) ──
+    @router.get("/autopilot/status")
+    async def autopilot_status(current_user: dict = Depends(require_roles("admin", "manager"))):
+        configs = {}
+        async for cfg in db.owner_pulse_config.find({}, {"_id": 0, "property_id": 1, "autopilot": 1}):
+            ap = cfg.get("autopilot") or {}
+            configs[cfg["property_id"]] = {"mode": ap.get("mode", "off"),
+                                           "occ_threshold": float(ap.get("occ_threshold", 35))}
+        approvals = await db.recovery_approvals.find(
+            {"status": "pending"}, {"_id": 0}).sort("created_at", -1).to_list(50)
+        log = await db.recovery_autopilot_log.find(
+            {}, {"_id": 0}).sort("created_at", -1).to_list(10)
+        return {"configs": configs, "pending_approvals": approvals, "recent_log": log}
+
+    @router.put("/autopilot/{pid}")
+    async def autopilot_set(pid: str, data: Dict,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        mode = (data or {}).get("mode", "off")
+        if mode not in ("off", "approval", "auto"):
+            raise HTTPException(400, "mode: off | approval | auto")
+        thr = float((data or {}).get("occ_threshold", 35))
+        await db.owner_pulse_config.update_one(
+            {"property_id": pid},
+            {"$set": {"property_id": pid,
+                      "autopilot": {"mode": mode, "occ_threshold": thr},
+                      "updated_at": datetime.now(timezone.utc).isoformat(),
+                      "updated_by": current_user.get("email", "")}},
+            upsert=True)
+        return {"ok": True, "mode": mode, "occ_threshold": thr}
+
+    @router.post("/autopilot/run-now")
+    async def autopilot_run_now(current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await _autopilot_sweep()
+
+    @router.post("/autopilot/approvals/{aid}/decide")
+    async def autopilot_decide(aid: str, data: Dict,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        decision = (data or {}).get("decision", "")
+        if decision not in ("approve", "reject"):
+            raise HTTPException(400, "decision: approve | reject")
+        appr = await db.recovery_approvals.find_one({"id": aid, "status": "pending"}, {"_id": 0})
+        if not appr:
+            raise HTTPException(404, "Bekleyen onay bulunamadı")
+        detail = "Reddedildi"
+        if decision == "approve":
+            r = await apply_recovery_action(db, appr["property_id"], appr["action_type"],
+                                            current_user.get("email", "admin"))
+            detail = r["detail"]
+        await db.recovery_approvals.update_one(
+            {"id": aid},
+            {"$set": {"status": "approved" if decision == "approve" else "rejected",
+                      "decided_by": current_user.get("email", ""),
+                      "decided_at": datetime.now(timezone.utc).isoformat(),
+                      "result_detail": detail}})
+        return {"ok": True, "decision": decision, "detail": detail}
+
     @router.post("/portal/recovery/{pid}/apply")
     async def portal_recovery_apply(pid: str, data: Dict, owner: dict = Depends(get_current_owner)):
         await _check(_pid(owner), "portfolio")
@@ -882,4 +1003,5 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
         return {"html": await _build_digest_html(owner), "owner_email": owner.get("email")}
 
     router.digest_loop = _digest_loop
+    router.autopilot_loop = _autopilot_loop
     return router

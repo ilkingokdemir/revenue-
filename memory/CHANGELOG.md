@@ -2458,3 +2458,9 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Endpoint'ler: POST /api/owner-pulse/portfolio/recovery/{pid}/apply (admin), /api/owner-pulse/portal/recovery/{pid}/apply (owner, yetki kontrollü).
 - UI: modal aksiyonlarında "Uygula" butonu → ✓ UYGULANDI rozeti + sonuç satırı (pf-apply-*/pf-applied-*).
 - E2E doğrulama: price 30 override yazdı → owner-rates board'da source=recovery-plan + yeni satış fiyatı görüldü; promo katmanı aktif katman listesine düştü; idempotency OK. Test yan etkileri temizlendi. pytest 15/15 PASS.
+
+## iter 473 (2026-07-27) — Kurtarma Autopilot
+- owner_pulse.py: _autopilot_sweep + _autopilot_loop (6 saatte bir): autopilot.mode ∈ {off, approval, auto}, occ_threshold (vars. %35). Eşik altı → auto: promo otomatik uygulanır + admin bildirimi (notifications, category=recovery_autopilot) + recovery_autopilot_log; approval: recovery_approvals'a bekleyen kayıt (mükerrer/promosyon-zaten-aktif korumalı) + bildirim.
+- Endpoint'ler: GET /api/owner-pulse/autopilot/status, PUT /autopilot/{pid}, POST /autopilot/run-now, POST /autopilot/approvals/{aid}/decide (approve→apply_recovery_action, reject).
+- OwnerPulseAdminPanel: Autopilot bölümü — Kapalı/Onaylı/Tam Otomatik mod butonları, eşik girişi, Şimdi Tara, bekleyen onaylar (Onayla/Reddet), son otomatik müdahale günlüğü.
+- E2E: onaylı mod → run-now → pending + bildirim → approve → indirim katmanı açıldı → already_mitigated koruması. Test promo katmanı temizlendi; default tesiste approval modu + 1 bekleyen onay demo için bırakıldı. pytest 15/15 PASS.

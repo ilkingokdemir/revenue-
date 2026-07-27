@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Gauge, Eye, EyeSlash, FloppyDisk, ArrowSquareOut, EnvelopeSimple, PaperPlaneTilt } from "@phosphor-icons/react";
+import { Gauge, Eye, EyeSlash, FloppyDisk, ArrowSquareOut, EnvelopeSimple, PaperPlaneTilt, Robot } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -23,6 +23,17 @@ export default function OwnerPulseAdminPanel({ propertyId }) {
   const [digestOn, setDigestOn] = useState(false);
   const [digestLog, setDigestLog] = useState([]);
   const [sending, setSending] = useState(false);
+  const [ap, setAp] = useState({ mode: "off", occ_threshold: 35 });
+  const [apStatus, setApStatus] = useState({ pending_approvals: [], recent_log: [] });
+  const [apBusy, setApBusy] = useState(false);
+
+  const loadAutopilot = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/owner-pulse/autopilot/status`);
+      setApStatus(data);
+      if (data.configs[pid]) setAp(data.configs[pid]);
+    } catch { /* noop */ }
+  }, [pid]);
 
   const load = useCallback(async () => {
     try {
@@ -38,7 +49,35 @@ export default function OwnerPulseAdminPanel({ propertyId }) {
     } catch { toast.error("Yüklenemedi"); }
   }, [pid]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); loadAutopilot(); }, [load, loadAutopilot]);
+
+  const saveAutopilot = async (next) => {
+    setApBusy(true);
+    try {
+      await axios.put(`${API}/owner-pulse/autopilot/${pid}`, next);
+      setAp(next);
+      toast.success(`Autopilot: ${next.mode === "off" ? "kapalı" : next.mode === "approval" ? "onaylı mod" : "tam otomatik"}`);
+    } catch { toast.error("Kaydedilemedi"); }
+    setApBusy(false);
+  };
+
+  const runAutopilot = async () => {
+    setApBusy(true);
+    try {
+      const { data } = await axios.post(`${API}/owner-pulse/autopilot/run-now`);
+      toast.success(`Tarama bitti: ${data.checked} tesis kontrol edildi`);
+      loadAutopilot();
+    } catch { toast.error("Tarama başarısız"); }
+    setApBusy(false);
+  };
+
+  const decide = async (aid, decision) => {
+    try {
+      const { data } = await axios.post(`${API}/owner-pulse/autopilot/approvals/${aid}/decide`, { decision });
+      toast.success(data.detail);
+      loadAutopilot();
+    } catch { toast.error("İşlem başarısız"); }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -125,6 +164,57 @@ export default function OwnerPulseAdminPanel({ propertyId }) {
               ))}
             </tbody>
           </table>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-stone-800 bg-stone-900/60 p-4 space-y-3" data-testid="opa-autopilot-section">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div className="text-sm font-semibold text-stone-200 flex items-center gap-2"><Robot size={16} className="text-rose-400" /> Kurtarma Autopilot</div>
+            <div className="text-[11px] text-stone-500 mt-0.5">30g ort. doluluk eşiğin altına düşerse sistem kurtarma promosyonunu kendisi açar (otomatik) veya onayınıza sunar (onaylı). 6 saatte bir tarar.</div>
+          </div>
+          <button onClick={runAutopilot} disabled={apBusy} data-testid="opa-ap-run-now"
+            className="text-xs px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-200 font-semibold disabled:opacity-50">Şimdi Tara</button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {[["off", "Kapalı"], ["approval", "Onaylı Mod"], ["auto", "Tam Otomatik"]].map(([m, label]) => (
+            <button key={m} onClick={() => saveAutopilot({ ...ap, mode: m })} disabled={apBusy} data-testid={`opa-ap-mode-${m}`}
+              className={`text-xs px-3 py-1.5 rounded-lg border font-semibold ${ap.mode === m ? "bg-rose-500/20 border-rose-500/40 text-rose-200" : "bg-stone-800 border-stone-700 text-stone-400"}`}>
+              {label}
+            </button>
+          ))}
+          <label className="flex items-center gap-1.5 text-xs text-stone-400 ml-2">Doluluk eşiği %
+            <input type="number" value={ap.occ_threshold} data-testid="opa-ap-threshold"
+              onChange={(e) => setAp({ ...ap, occ_threshold: parseFloat(e.target.value) || 35 })}
+              onBlur={() => saveAutopilot(ap)}
+              className="w-16 px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-200" />
+          </label>
+        </div>
+        {apStatus.pending_approvals.length > 0 && (
+          <div className="space-y-2" data-testid="opa-ap-approvals">
+            <div className="text-[10px] uppercase text-amber-400 font-bold">Onay Bekleyenler ({apStatus.pending_approvals.length})</div>
+            {apStatus.pending_approvals.map((a) => (
+              <div key={a.id} className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+                <div className="text-xs text-stone-200">
+                  <b>{a.property_name}</b> — ort. doluluk %{a.avg_occ} (eşik %{a.threshold}), {a.weak_days} zayıf gün → %15 son-dakika promosyonu
+                </div>
+                <div className="flex gap-1.5">
+                  <button onClick={() => decide(a.id, "approve")} data-testid={`opa-ap-approve-${a.id}`} className="text-[10px] font-bold px-2 py-1 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">Onayla</button>
+                  <button onClick={() => decide(a.id, "reject")} data-testid={`opa-ap-reject-${a.id}`} className="text-[10px] font-bold px-2 py-1 rounded bg-stone-800 border border-stone-700 text-stone-400">Reddet</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {apStatus.recent_log.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase text-stone-500 font-bold mb-1">Son Otomatik Müdahaleler</div>
+            {apStatus.recent_log.slice(0, 5).map((l) => (
+              <div key={l.id} className="text-[11px] text-stone-400 border-t border-stone-800/60 py-1">
+                {(l.created_at || "").slice(0, 16).replace("T", " ")} · <span className="text-stone-300">{l.property_id}</span> · occ %{l.avg_occ} → {l.detail}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 

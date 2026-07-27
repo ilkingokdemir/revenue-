@@ -569,6 +569,7 @@ api_router.include_router(owner_pulse_router)
 async def _start_owner_pulse_digest():
     import asyncio as _asyncio
     _asyncio.create_task(owner_pulse_router.digest_loop())
+    _asyncio.create_task(owner_pulse_router.autopilot_loop())
 price_alerts_router = create_price_alerts_router(db, require_roles)
 api_router.include_router(price_alerts_router)
 booking_timeline_router = create_booking_timeline_router(db, require_roles)

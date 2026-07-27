@@ -183,15 +183,28 @@ def create_demand_radar_router(db, require_roles):
             insights.append({"icon": "event", "title": f"{event_count} major events in the next {days} days", "desc": ", ".join(event_names) + ". These drive significant accommodation demand.", "type": "event"})
 
         # ===== 7-DAY PICKUP CHANGE =====
+        # Gerçek veri: aynı tarihe ait güncel tarama vs ≥7 gün önceki tarama farkı.
+        cutoff_old = (now - timedelta(days=7)).isoformat()
+        old_supply_map = {}
+        for s in supply_docs:  # scanned_at desc sıralı → cutoff öncesi ilk kayıt en güncel eski tarama
+            if (s.get("scanned_at") or "") <= cutoff_old and s["date"] not in old_supply_map:
+                old_supply_map[s["date"]] = s
         pickup_change = []
         for d in daily[:days]:
-            # Simulate 7-day change (in real system, compare current scan vs 7-day-old scan)
-            demand_chg = random.randint(-15, 20) if d["demand"] is not None else 0
+            cur = supply_map.get(d["date"])
+            old = old_supply_map.get(d["date"])
+            if cur and old:
+                demand_chg = round((cur.get("unavailable_pct") or 0) - (old.get("unavailable_pct") or 0))
+                source = "scan"
+            else:
+                demand_chg = random.randint(-15, 20) if d["demand"] is not None else 0
+                source = "sim"
             price_chg = round(random.uniform(-8, 12), 1)
             pickup_change.append({
                 "date": d["date"], "dow": d["dow"],
                 "demand_change": demand_chg,
                 "price_change": price_chg,
+                "source": source,
                 "direction": "up" if demand_chg > 0 else "down" if demand_chg < 0 else "flat",
             })
 

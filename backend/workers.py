@@ -36,6 +36,51 @@ async def scheduled_checkout_loop(db, interval_seconds: int = 300):
         await asyncio.sleep(interval_seconds)
 
 
+async def otb_snapshot_loop(db, interval_seconds: int = 21600):
+    """Günlük OTB snapshot arşivi — gerçek pickup/pace hesapları için (idempotent, günde 1)."""
+    from datetime import timedelta
+    while True:
+        try:
+            today = datetime.now(timezone.utc).date()
+            scan_date = today.isoformat()
+            exists = await db.otb_daily_snapshots.find_one({"scan_date": scan_date}, {"_id": 1})
+            if not exists:
+                props = await db.properties.find({}, {"_id": 0, "id": 1}).to_list(200)
+                total_docs = 0
+                for p in props:
+                    pid = p.get("id")
+                    if not pid:
+                        continue
+                    day_counts = {}
+                    async for b in db.bookings.find(
+                            {"property_id": pid, "status": {"$ne": "cancelled"},
+                             "check_out": {"$gt": scan_date}},
+                            {"_id": 0, "check_in": 1, "check_out": 1}):
+                        try:
+                            ci = datetime.strptime(b["check_in"][:10], "%Y-%m-%d").date()
+                            co = datetime.strptime(b["check_out"][:10], "%Y-%m-%d").date()
+                        except (ValueError, TypeError, KeyError):
+                            continue
+                        d = max(ci, today)
+                        end = min(co, today + timedelta(days=90))
+                        while d < end:
+                            day_counts[d.isoformat()] = day_counts.get(d.isoformat(), 0) + 1
+                            d += timedelta(days=1)
+                    if day_counts:
+                        docs = [{"property_id": pid, "scan_date": scan_date, "date": k,
+                                 "rooms_booked": v, "created_at": datetime.now(timezone.utc).isoformat()}
+                                for k, v in day_counts.items()]
+                        await db.otb_daily_snapshots.insert_many(docs)
+                        total_docs += len(docs)
+                # 180 günden eski snapshot'ları temizle
+                purge_before = (today - timedelta(days=180)).isoformat()
+                await db.otb_daily_snapshots.delete_many({"scan_date": {"$lt": purge_before}})
+                logger.info(f"OTB snapshot: {scan_date} için {total_docs} satır arşivlendi")
+        except Exception as e:
+            logger.warning(f"OTB snapshot tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def reports_loop(db, interval_seconds: int = 300):
     while True:
         try:

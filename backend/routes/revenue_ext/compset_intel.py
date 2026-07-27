@@ -161,7 +161,10 @@ def create_compset_intel_router(db, require_roles):
             "market_rooms": (sum(t["count"] for t in tier_distribution) + 30) * 18,
         }
 
+        prop_cur = await db.properties.find_one({"id": property_id}, {"_id": 0, "currency": 1}) or {}
+
         return {
+            "currency": prop_cur.get("currency") or "GBP",
             "kpis": {
                 "my_occupancy": my_avg_occ,
                 "comp_occupancy": comp_avg_occ,

@@ -4,22 +4,56 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend } f
 
 export default function OwnerCompsetIntel({ ax }) {
   const [d, setD] = useState(null);
+  const [pf, setPf] = useState(null);
   const [err, setErr] = useState("");
   useEffect(() => {
     ax().get("/owner-pulse/portal/compset").then(r => setD(r.data)).catch(e => setErr(e?.response?.data?.detail || "Yüklenemedi"));
+    ax().get("/owner-pulse/portal/portfolio").then(r => setPf(r.data)).catch(() => {});
   }, [ax]);
   if (err) return <div className="text-center py-12 text-rose-500 text-sm" data-testid="op-compset-error">{err}</div>;
   if (!d) return <div className="text-center py-12 text-stone-400 text-sm">Yükleniyor…</div>;
   const k = d.kpis;
+  const dc = d.currency || "GBP";
+  const cs = dc === "GBP" ? "£" : dc === "EUR" ? "€" : dc === "TRY" ? "₺" : dc === "USD" ? "$" : dc + " ";
   const mc = d.market_context || {};
   const maxTier = Math.max(...(d.tier_distribution || []).map(t => t.count), 1);
 
   return (
     <div className="space-y-5" data-testid="owner-compset-intel">
+      {pf && pf.count > 1 && (
+        <div className="bg-white border border-stone-200 rounded-xl overflow-hidden" data-testid="op-portfolio-summary">
+          <div className="px-4 py-2.5 border-b border-stone-200 flex items-center justify-between">
+            <div className="text-sm font-semibold text-stone-800">Portföy Rekabet Özeti</div>
+            <span className="text-[10px] text-stone-400">{pf.count} tesis</span>
+          </div>
+          <table className="w-full text-xs">
+            <thead className="text-[9px] uppercase text-stone-400 bg-stone-50">
+              <tr><th className="text-left px-4 py-2">Tesis</th><th className="text-right px-2">Occ</th><th className="text-right px-2 text-stone-300">Seg.</th><th className="text-right px-2">ADR</th><th className="text-right px-2 text-stone-300">Seg.</th><th className="text-right px-2">RevPAR</th><th className="text-right px-2 text-stone-300">Seg.</th><th className="text-right px-4">Sıra</th></tr>
+            </thead>
+            <tbody>
+              {pf.items.map((p) => {
+                const pcs = p.currency === "GBP" ? "£" : p.currency === "EUR" ? "€" : p.currency === "USD" ? "$" : p.currency + " ";
+                return (
+                  <tr key={p.property_id} className="border-t border-stone-100" data-testid={`op-pf-row-${p.property_id}`}>
+                    <td className="px-4 py-1.5 font-medium text-stone-700">{p.name}</td>
+                    <td className={`text-right px-2 font-semibold ${p.occ >= p.comp_occ ? "text-emerald-600" : "text-stone-700"}`}>{p.occ}%</td>
+                    <td className="text-right px-2 text-stone-400">{p.comp_occ}%</td>
+                    <td className={`text-right px-2 font-semibold ${p.adr >= p.comp_adr ? "text-emerald-600" : "text-stone-700"}`}>{pcs}{Math.round(p.adr)}</td>
+                    <td className="text-right px-2 text-stone-400">{pcs}{Math.round(p.comp_adr)}</td>
+                    <td className={`text-right px-2 font-semibold ${p.revpar >= p.comp_revpar ? "text-emerald-600" : "text-stone-700"}`}>{pcs}{Math.round(p.revpar)}</td>
+                    <td className="text-right px-2 text-stone-400">{pcs}{Math.round(p.comp_revpar)}</td>
+                    <td className="text-right px-4"><span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">#{p.occ_rank}/{p.segment_size}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
         <KpiCard label="Doluluk" mine={`${k.my_occupancy}%`} seg={`${k.comp_occupancy}%`} rank={k.occ_rank} size={k.segment_size} testId="op-kpi-occ" />
-        <KpiCard label="ADR" mine={`£${k.my_adr}`} seg={`£${k.comp_adr}`} rank={k.adr_rank} size={k.segment_size} testId="op-kpi-adr" />
-        <KpiCard label="RevPAR" mine={`£${k.my_revpar}`} seg={`£${k.comp_revpar}`} rank={k.revpar_rank} size={k.segment_size} testId="op-kpi-revpar" />
+        <KpiCard label="ADR" mine={`${cs}${k.my_adr}`} seg={`${cs}${k.comp_adr}`} rank={k.adr_rank} size={k.segment_size} testId="op-kpi-adr" />
+        <KpiCard label="RevPAR" mine={`${cs}${k.my_revpar}`} seg={`${cs}${k.comp_revpar}`} rank={k.revpar_rank} size={k.segment_size} testId="op-kpi-revpar" />
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4" data-testid="op-sentinel">
           <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">Sentinel İçgörüsü</div>
           <div className="text-sm text-stone-800 mt-2">{d.sentinel_insight}</div>
@@ -56,8 +90,8 @@ export default function OwnerCompsetIntel({ ax }) {
                       <td className="px-4 py-1.5 text-stone-600">{r.date.slice(5)} <span className="text-stone-400">{r.dow}</span></td>
                       <td className={`text-right px-2 font-semibold ${r.my_occ >= r.comp_occ ? "text-emerald-600" : "text-stone-700"}`}>{r.my_occ}%</td>
                       <td className="text-right px-2 text-stone-500">{r.comp_occ}%</td>
-                      <td className={`text-right px-2 font-semibold ${r.my_adr >= r.comp_adr ? "text-emerald-600" : "text-stone-700"}`}>£{Math.round(r.my_adr)}</td>
-                      <td className="text-right px-4 text-stone-500">£{Math.round(r.comp_adr)}</td>
+                      <td className={`text-right px-2 font-semibold ${r.my_adr >= r.comp_adr ? "text-emerald-600" : "text-stone-700"}`}>{cs}{Math.round(r.my_adr)}</td>
+                      <td className="text-right px-4 text-stone-500">{cs}{Math.round(r.comp_adr)}</td>
                     </tr>
                   ))}
                 </tbody>

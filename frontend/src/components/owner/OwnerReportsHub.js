@@ -1,6 +1,6 @@
 /** Owner Reports Hub — kategorili rapor kataloğu + dinamik tablo görüntüleyici */
 import { useState } from "react";
-import { ChartBar, CalendarBlank, Receipt, Broadcast, ArrowLeft, DownloadSimple } from "@phosphor-icons/react";
+import { ChartBar, CalendarBlank, Receipt, Broadcast, ArrowLeft, DownloadSimple, CurrencyCircleDollar, Bank } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 const CATALOG = [
@@ -11,6 +11,10 @@ const CATALOG = [
   { cat: "REZERVASYON", items: [
     { key: "bookings", title: "Rezervasyon Raporu", desc: "Son 30 günün misafir detaylı rezervasyon dökümü", Icon: Receipt },
     { key: "source", title: "Kaynak / Kanal Raporu", desc: "Kanal bazlı hacim, gece ve gelir payı", Icon: Broadcast },
+  ]},
+  { cat: "FİNANSAL", items: [
+    { key: "financial", title: "Finansal İşlemler", desc: "Gelir akışları, ödeme yöntemleri, işlem analizi", Icon: CurrencyCircleDollar },
+    { key: "takings", title: "Aylık Tahsilat", desc: "Cash vs Accrual mutabakatı — ay sonu kapanışı", Icon: Bank },
   ]},
 ];
 

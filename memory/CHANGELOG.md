@@ -2420,3 +2420,11 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Admin: OwnerPulseAdminPanel ("owner-pulse-admin", Revenue & Rates menüsü) — 5 modül aç/kapa + önizleme.
 - Test: testing_agent iter_466 backend 15/15 PASS; HIGH bulgu (config useEffect kaybolmuştu) düzeltildi, gating UI'da doğrulandı (Rekabet sekmesi gizlendi). Regresyon: backend/tests/test_iteration466_owner_pulse.py.
 - DERS: Phosphor'da EyeOff yok → EyeSlash. search_replace sonrası kritik edit'lerin dosyada kaldığını grep ile doğrula (bir edit kayboldu).
+
+## iter 467 (2026-07-27) — Owner Pulse Faz 2
+- Rapor Merkezi + FİNANSAL kategori: "Finansal İşlemler" (ödemeler + rezervasyon gelirleri, son 30g) ve "Aylık Tahsilat — Cash vs Accrual" (12 ay mutabakat) raporları (owner_pulse.py build_owner_report).
+- "Portföy Rekabet Özeti": GET /api/owner-pulse/portal/portfolio — sahibin property_ids listesindeki tüm tesisler için occ/ADR/RevPAR vs segment + sıralama; Rekabet sekmesinin üstünde çok tesisli tablo (OwnerCompsetIntel op-portfolio-summary). Test sahibi 3 tesise bağlandı.
+- Gerçek 7-gün pickup: demand_radar.py pickup_change artık market_supply tarama GEÇMİŞİNDEN hesaplanıyor (güncel vs ≥7 gün önceki tarama farkı, source=scan); veri yoksa simülasyona düşer. Doğrulandı: 90/90 satır gerçek taramadan.
+- OTB günlük snapshot worker'ı: workers.py otb_snapshot_loop (6 saatte bir kontrol, günde 1 idempotent arşiv, 180 gün saklama) — otb_daily_snapshots koleksiyonu; ilk çalıştırmada 91 satır arşivlendi.
+- compset_intel.py response'una currency eklendi; OwnerCompsetIntel KPI/drill-down artık tesis para birimini gösteriyor (CHF fix).
+- Test: pytest iter466 regresyonu 15/15 PASS; portfolio/financial/takings/pickup curl doğrulandı; UI screenshot'larla doğrulandı.

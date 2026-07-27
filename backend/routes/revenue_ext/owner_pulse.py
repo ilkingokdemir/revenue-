@@ -224,6 +224,41 @@ async def build_owner_report(db, pid: str, key: str) -> Dict:
                 "columns": [{"key": "channel", "label": "Kanal"}, {"key": "bookings", "label": "Rezervasyon"},
                             {"key": "nights", "label": "Gece"}, {"key": "revenue", "label": "Gelir"},
                             {"key": "share", "label": "Pay"}], "rows": rows}
+    if key == "financial":
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        rows = []
+        pays = await db.payments.find(
+            {"property_id": pid, "created_at": {"$gte": cutoff}}, {"_id": 0}).to_list(500)
+        for p in pays:
+            rows.append({"date": (p.get("created_at") or "")[:10], "type": "Ödeme",
+                         "method": p.get("method") or "—", "ref": p.get("booking_id") or "—",
+                         "amount": round(float(p.get("amount") or 0), 2)})
+        for b in bookings:
+            if (b.get("created_at") or "") >= cutoff:
+                rows.append({"date": (b.get("created_at") or "")[:10], "type": "Rezervasyon Geliri",
+                             "method": (b.get("channel") or b.get("source") or "direct").split(":")[0],
+                             "ref": b.get("guest_name") or "—",
+                             "amount": round(float(b.get("total_price") or 0), 2)})
+        rows.sort(key=lambda r: r["date"], reverse=True)
+        return {"title": "Finansal İşlemler (son 30 gün)",
+                "columns": [{"key": "date", "label": "Tarih"}, {"key": "type", "label": "Tür"},
+                            {"key": "method", "label": "Yöntem/Kanal"}, {"key": "ref", "label": "Referans"},
+                            {"key": "amount", "label": "Tutar"}], "rows": rows[:200]}
+    if key == "takings":
+        cy = today.year
+        rows = []
+        for m in range(1, 13):
+            accrual = _month_stats(bookings, rooms, cy, m)["revenue"]
+            cash = round(sum(float(b.get("total_price") or 0) for b in bookings
+                             if (b.get("created_at") or "")[:7] == f"{cy}-{m:02d}"), 2)
+            diff = round(cash - accrual, 2)
+            rows.append({"month": f"{MONTH_TR[m-1]} {cy}", "cash": cash, "accrual": accrual,
+                         "diff": f"{'+' if diff >= 0 else ''}{diff}"})
+        return {"title": f"Aylık Tahsilat — Cash vs Accrual ({cy})",
+                "columns": [{"key": "month", "label": "Ay"},
+                            {"key": "cash", "label": "Cash (tahsilat, oluşturma bazlı)"},
+                            {"key": "accrual", "label": "Accrual (hakediş, konaklama bazlı)"},
+                            {"key": "diff", "label": "Fark"}], "rows": rows}
     raise HTTPException(404, "Bilinmeyen rapor")
 
 
@@ -284,6 +319,27 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
     async def portal_compset(owner: dict = Depends(get_current_owner)):
         await _check(_pid(owner), "compset")
         return await compset_router.build(property_id=_pid(owner), days=30, current_user=owner)
+
+    @router.get("/portal/portfolio")
+    async def portal_portfolio(owner: dict = Depends(get_current_owner)):
+        """Portföy Rekabet Özeti — sahibin tüm tesisleri için occ/ADR/RevPAR vs segment."""
+        await _check(_pid(owner), "compset")
+        pids = owner.get("property_ids") or [_pid(owner)]
+        items = []
+        for pid in pids[:10]:
+            prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "currency": 1}) or {}
+            try:
+                cs = await compset_router.build(property_id=pid, days=30, current_user=owner)
+            except Exception:
+                continue
+            k = cs.get("kpis", {})
+            items.append({"property_id": pid, "name": prop.get("name") or pid,
+                          "currency": prop.get("currency") or "GBP",
+                          "occ": k.get("my_occupancy"), "comp_occ": k.get("comp_occupancy"),
+                          "adr": k.get("my_adr"), "comp_adr": k.get("comp_adr"),
+                          "revpar": k.get("my_revpar"), "comp_revpar": k.get("comp_revpar"),
+                          "occ_rank": k.get("occ_rank"), "segment_size": k.get("segment_size")})
+        return {"count": len(items), "items": items}
 
     @router.get("/portal/reports/{key}")
     async def portal_report(key: str, owner: dict = Depends(get_current_owner)):

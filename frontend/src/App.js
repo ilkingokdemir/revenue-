@@ -39,6 +39,7 @@ import ActionFeedPanel from "./components/dashboard/ActionFeedPanel";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { LoginPage } from "./components/dashboard/LoginPage";
+import LandingPage from "./LandingPage";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
 import { ContractSigningPage } from "./components/public/ContractSigningPage";
@@ -84,7 +85,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel, DigitalAuthPanel, AllotmentsPanel, ForecastPlansPanel, IntradayRepricePanel, RestrictionAdvisorPanel, GapFillerPanel, LostDemandPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel, DigitalAuthPanel, AllotmentsPanel, ForecastPlansPanel, IntradayRepricePanel, RestrictionAdvisorPanel, GapFillerPanel, LostDemandPanel, DemoLeadsPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -2181,6 +2182,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "restriction-advisor" && <RestrictionAdvisorPanel propertyId={activePropertyId || "all"} />}
         {activeView === "gap-filler" && <GapFillerPanel propertyId={activePropertyId || "all"} />}
         {activeView === "lost-demand" && <LostDemandPanel propertyId={activePropertyId || "all"} />}
+        {activeView === "demo-leads" && <DemoLeadsPanel />}
 
         {activeView === "vcc-automation" && (
           <VccPanel propertyId={activePropertyId || "all"} />
@@ -2442,6 +2444,9 @@ function MainApp() {
   }
 
   if (!user) {
+    if (window.location.pathname !== "/login") {
+      return <LandingPage />;
+    }
     return (
       <>
         <LoginPage onLogin={handleLogin} />

@@ -189,6 +189,7 @@ export function buildMenuSections(t, user) {
         { id: "sr-voucher", icon: Tag, name: "Recovery vouchers", testId: "sr-voucher-btn" },
         { id: "campaigns", icon: Megaphone, name: t("nav.campaigns"), testId: "campaigns-btn" },
         { id: "gap-filler", icon: MagicWand, name: "AI boşluk doldurma kampanyaları", testId: "gap-filler-btn" },
+        { id: "demo-leads", icon: Funnel, name: "Demo talepleri (web sitesi)", testId: "demo-leads-btn" },
         { id: "messaging", icon: Envelope, name: t("nav.messaging"), testId: "messaging-btn" },
         { id: "msg-templates", icon: Globe, name: "Message templates", testId: "msg-templates-btn" },
         { id: "pre-arrival", icon: Envelope, name: "Pre-arrival drip", testId: "pre-arrival-btn" },

@@ -1,0 +1,29 @@
+{
+  "summary": "Frontend E2E testing of new marketing landing page + demo-lead admin panel (iteration 463). All requested flows PASS. Landing page renders correctly for unauth visitors at '/', with sticky nav, hero, trust marquee, 5-feature bento, dark Revenue AI section, 3 testimonials, 3-tier pricing, demo form, FAQ accordion, and footer — all data-testids present and interactive. Sign In routes to /login; admin login succeeds; sidebar 'Guests' section (nav-section-Guests) expands to reveal demo-leads-btn; DemoLeadsPanel renders with KPI cards and lead rows; Contact / Close / Delete row actions all update backend state (verified via GET /api/demo-requests). Demo form invalid-email is blocked by HTML5 validation (no success state shown). Regression checks pass: authenticated '/' shows dashboard (not landing) and public /book/default booking widget still loads. All test demo requests created during this run were cleaned up (0 remaining).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Landing demo form – invalid email", "issues": ["Invalid email is blocked purely by native HTML5 validity (input type=email), so no in-app 'error toast' is shown as described in the spec. The success state correctly does NOT appear, so behaviour is safe, but the promised error toast is not surfaced. Consider adding a soft validation message under the field for consistency with the rest of the app’s toast pattern."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Optional/low priority) Add explicit inline validation / toast for invalid email in DemoForm — currently HTML5 validity silently blocks submit and no visible error appears if the user has a JS-heavy environment or overrides novalidate. Success state correctly hidden, so this is cosmetic."
+  ],
+  "critical_code_review_comments": [
+    "Landing page + DemoLeadsPanel are well-scoped with correct data-testids on every interactive element — good testability.",
+    "menuSections registers 'demo-leads' under Guests section; nav toggle uses data-testid=nav-section-Guests — consistent with rest of nav.",
+    "Public POST /api/public/demo-requests returned 200 and persisted; admin GET /api/demo-requests returns items+summary shape correctly (summary counts match items). No _id leakage observed.",
+    "Auth-gated routing at App.js:2444 correctly separates unauth '/' → LandingPage from '/login' → LoginPage and does not regress the authenticated dashboard at '/'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (verified via in-page API calls during E2E)", "frontend": "100% on requested flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (worked)",
+  "seed_data_creation": "Created 3 demo requests during the run (Test User, Test E2E 463, E2E 463 Retest) — ALL DELETED at end of test; DB clean. Remaining leads: 0.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sidebar 'Guests' section starts COLLAPSED after fresh login — you must click [data-testid=nav-section-Guests] before [data-testid=demo-leads-btn] becomes visible. Landing page routing lives at App.js line ~2444 in the `if (!user)` branch (LandingPage for non-/login, LoginPage for /login). DemoLeadsPanel uses status keys 'new'/'contacted'/'closed' and endpoints POST /api/public/demo-requests (public), GET/PATCH/DELETE /api/demo-requests (admin).",
+  "rca of the issue": "N/A — no bugs found. Only cosmetic note: invalid-email UX relies on HTML5 validation instead of an app toast."
+}

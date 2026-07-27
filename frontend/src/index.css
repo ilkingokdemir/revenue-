@@ -185,3 +185,12 @@ code {
         display: none;
     }
 }
+
+@keyframes landing-marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.landing-marquee {
+  width: max-content;
+  animation: landing-marquee-scroll 40s linear infinite;
+}

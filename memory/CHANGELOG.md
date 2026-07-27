@@ -2475,3 +2475,7 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - ReveniqLanding.js'e #pulse bölümü: PREMIUM MODULE rozeti, 6 özellik kartı (Portfolio Board, Demand Radar, Recovery Autopilot, Impact Cards, Compset Intel, Weekly Digest), mini ısı haritası mock'u + Autopilot onay uyarısı görseli, "+€1 per room/month" fiyat notu.
 - CTA "Request a Market Pulse demo" → demoProduct state'i "pulse" yapıp form'a kaydırır; DemoForm product={demoProduct} — lead'ler product=pulse ile demo_requests'e düşer (curl doğrulandı).
 - Nav'a "Market Pulse" linki eklendi. Screenshot ile doğrulandı.
+
+## iter 476 (2026-07-27) — ROI Hesaplayıcı (ReveniQ Landing)
+- #pulse bölümüne RoiCalculator: 3 kaydırıcı (oda 5-300, doluluk %20-100, ADR €30-500) → canlı hesap: mevcut aylık gelir, +%9 RevPAR varsayımıyla Pulse ek geliri, Pulse maliyeti (oda×€1), ROI çarpanı. "Claim this uplift — book a demo" CTA'sı product=pulse ile demo formuna kaydırır.
+- Test: screenshot + kaydırıcı etkileşimi doğrulandı (40 oda +€6,361/ay → 120 oda +€19,084/ay, 159× ROI).

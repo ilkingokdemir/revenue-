@@ -317,6 +317,8 @@ export default function ReveniqLanding() {
               <p className="mt-2 text-center text-[11px] text-stone-500">Add-on to any plan · +€1 per room / month</p>
             </motion.div>
           </div>
+
+          <RoiCalculator onDemo={() => { setDemoProduct("pulse"); scrollTo("#demo"); }} />
         </div>
       </section>
 
@@ -475,5 +477,69 @@ export default function ReveniqLanding() {
         </div>
       </footer>
     </div>
+  );
+}
+
+function RoiCalculator({ onDemo }) {
+  const [rooms, setRooms] = useState(40);
+  const [occ, setOcc] = useState(62);
+  const [adr, setAdr] = useState(95);
+  const monthlyRev = rooms * 30 * (occ / 100) * adr;
+  const uplift = monthlyRev * 0.09;
+  const cost = rooms * 1;
+  const roi = cost > 0 ? Math.round(uplift / cost) : 0;
+  const fmtE = (n) => "€" + Math.round(n).toLocaleString("en-GB");
+
+  return (
+    <motion.div {...fadeUp} className="mt-14 rounded-2xl border border-teal-400/25 bg-white/[0.03] p-6 lg:p-8" data-testid="rq-roi-calc">
+      <div className="grid lg:grid-cols-12 gap-8 items-center">
+        <div className="lg:col-span-6">
+          <h3 className="text-xl font-bold">What is Pulse worth to <span className="text-teal-300">your</span> hotel?</h3>
+          <p className="mt-1.5 text-[13px] text-stone-400">Drag the sliders — based on a conservative +9% RevPAR uplift observed with dynamic pricing &amp; recovery automation.</p>
+          <div className="mt-6 space-y-5">
+            {[
+              ["Rooms", rooms, setRooms, 5, 300, ""],
+              ["Avg. occupancy", occ, setOcc, 20, 100, "%"],
+              ["Avg. daily rate (ADR)", adr, setAdr, 30, 500, "€"],
+            ].map(([label, val, set, min, max, unit]) => (
+              <div key={label}>
+                <div className="flex justify-between text-xs mb-1.5">
+                  <span className="text-stone-400">{label}</span>
+                  <span className="font-bold text-white">{unit === "€" ? `€${val}` : `${val}${unit}`}</span>
+                </div>
+                <input type="range" min={min} max={max} value={val} onChange={(e) => set(parseInt(e.target.value, 10))}
+                  data-testid={`rq-roi-${label.split(" ")[0].toLowerCase().replace(".", "")}`}
+                  className="w-full accent-teal-400 cursor-pointer" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="lg:col-span-6">
+          <div className="rounded-xl border border-white/10 bg-[#0D1424] p-5 space-y-3">
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-stone-400">Current room revenue / month</span>
+              <span className="font-semibold text-stone-200">{fmtE(monthlyRev)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-white/5 pt-3">
+              <span className="text-[13px] text-stone-400">Estimated extra revenue with Pulse</span>
+              <span className="text-2xl font-bold text-teal-300" data-testid="rq-roi-uplift">+{fmtE(uplift)}<span className="text-xs text-stone-500 font-normal"> /mo</span></span>
+            </div>
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-stone-400">Pulse cost ({rooms} rooms × €1)</span>
+              <span className="font-semibold text-stone-200">{fmtE(cost)} /mo</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-white/5 pt-3">
+              <span className="text-[13px] text-stone-400">Return on investment</span>
+              <span className="text-lg font-bold text-emerald-300" data-testid="rq-roi-multiple">{roi}× ROI</span>
+            </div>
+          </div>
+          <button onClick={onDemo} data-testid="rq-roi-demo-btn"
+            className="mt-4 w-full py-3 rounded-lg border border-teal-400/50 text-teal-300 hover:bg-teal-400/10 font-bold text-sm transition-colors">
+            Claim this uplift — book a demo
+          </button>
+          <p className="mt-2 text-center text-[10px] text-stone-600">Estimate only. Actual uplift depends on market, seasonality and current pricing maturity.</p>
+        </div>
+      </div>
+    </motion.div>
   );
 }

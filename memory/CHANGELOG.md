@@ -2331,3 +2331,20 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   Menü: Revenue & rates > AI & Insights > "AI Strateji Robotu" (revenue-strategist-btn).
 - TEST: iteration_465 — backend 10/10 pytest, frontend %100. Curl E2E: 30g TR analiz 6 öneri,
   apply → rate_override €179 yazıldı, dismiss, config validasyonları OK.
+
+## Iter 467 (2026-07-27) — Strateji Robotu: Event Robot + Pazar Doluluk Entegrasyonu TAMAMLANDI
+- Kullanıcı: robot etkinlik robotu verilerini, rakip fiyatları, doluluk/talebi ve fiyata etki
+  eden TÜM pozitif/negatif etkenleri göz önünde bulundursun.
+- _gather_intel genişletildi: market_events (talep skoru/etki/katılım/ziyaretçi kökeni/gerekçe,
+  tarih-bazlı skor haritası), market_supply agregasyonu (tarih bazlı pazar doluluk %),
+  pickup_7d (talep hızı). daily satırlarına market_occ_pct + event_score eklendi.
+- Prompt: etkinlik robotu bölümü + pazar doluluk + pickup + "tüm etkenleri değerlendir,
+  pozitif/negatif ayır" görevi. JSON şemasına positive_factors/negative_factors eklendi.
+- Rapor: events_considered (yüksek etkili ilk 10) saklanıyor. KPI'lara avg_market_occ_pct +
+  high_impact_events eklendi.
+- Panel: 7'li KPI şeridi, yeşil/kırmızı Pozitif-Negatif Etken kartları
+  (strategist-positive/negative-factors), amber etkinlik rozetleri (strategist-events).
+- DOĞRULANDI: 90 gün analiz → pazar doluluk %60.9, 34 etkili etkinlik (Zürich Openair skor 78,
+  NFL London 74), 4+4 pozitif/negatif etken, 7 öneri. UI ekran görüntüsüyle onaylandı.
+- NOT: Uzun analizlerde (60-90 sn) curl bağlantısı düşebilir ama rapor DB'ye yazılır; panel
+  "reports" listesinden en yeni raporu gösterir.

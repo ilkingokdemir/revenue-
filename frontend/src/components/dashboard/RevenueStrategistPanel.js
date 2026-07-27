@@ -156,11 +156,13 @@ export default function RevenueStrategistPanel({ propertyId = "default" }) {
       ) : (
         <>
           {/* KPI strip */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3" data-testid="strategist-kpis">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3" data-testid="strategist-kpis">
             {[
               ["İleri dönem doluluk", `%${k.fwd_occ_pct ?? 0}`, "text-[#1D4ED8]"],
+              ["Pazar doluluğu", k.avg_market_occ_pct != null ? `%${k.avg_market_occ_pct}` : "—", "text-violet-600"],
               ["Ort. pazar farkı", k.avg_market_gap_pct != null ? `%${k.avg_market_gap_pct}` : "—", "text-[#F97316]"],
               ["Pazar altı gün", k.underpriced_dates ?? 0, "text-rose-600"],
+              ["Etkili etkinlik", k.high_impact_events ?? 0, "text-amber-600"],
               ["Potansiyel ek gelir", `€${(k.potential_extra_revenue ?? 0).toLocaleString()}`, "text-emerald-600"],
               ["Maks. rakip fiyat", `€${k.max_observed_comp_rate ?? 0}`, "text-cyan-600"],
             ].map(([l, v, c]) => (
@@ -196,6 +198,51 @@ export default function RevenueStrategistPanel({ propertyId = "default" }) {
             <Section title="Geçmiş Performans (STLY karşılaştırma)" text={report.past_performance} icon={ClockCounterClockwise} color="text-amber-600" />
             <Section title="Yapılanların Değerlendirmesi" text={report.what_was_done} icon={CheckCircle} color="text-emerald-600" />
           </div>
+
+          {(report.positive_factors?.length > 0 || report.negative_factors?.length > 0) && (
+            <div className="grid md:grid-cols-2 gap-4">
+              <div className="bg-white border-2 border-emerald-200 rounded-2xl p-5" data-testid="strategist-positive-factors">
+                <h3 className="text-sm font-bold text-emerald-700 flex items-center gap-2 mb-3">
+                  <TrendUp size={16} weight="duotone" /> Geliri Pozitif Etkileyecek Etkenler
+                </h3>
+                <ul className="space-y-2">
+                  {(report.positive_factors || []).map((f, i) => (
+                    <li key={i} className="text-sm text-stone-700 flex gap-2 bg-emerald-50/70 rounded-lg px-3 py-2">
+                      <span className="text-emerald-500 font-black">+</span>{f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="bg-white border-2 border-rose-200 rounded-2xl p-5" data-testid="strategist-negative-factors">
+                <h3 className="text-sm font-bold text-rose-700 flex items-center gap-2 mb-3">
+                  <TrendDown size={16} weight="duotone" /> Geliri Negatif Etkileyecek Etkenler
+                </h3>
+                <ul className="space-y-2">
+                  {(report.negative_factors || []).map((f, i) => (
+                    <li key={i} className="text-sm text-stone-700 flex gap-2 bg-rose-50/70 rounded-lg px-3 py-2">
+                      <span className="text-rose-500 font-black">−</span>{f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {report.events_considered?.length > 0 && (
+            <div className="bg-white border border-stone-200 rounded-2xl p-5" data-testid="strategist-events">
+              <h3 className="text-sm font-bold text-amber-600 flex items-center gap-2 mb-3">
+                <Lightning size={16} weight="duotone" /> Dikkate Alınan Etkinlikler (Event Robotu)
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {report.events_considered.map((e, i) => (
+                  <span key={i} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800">
+                    {e.name} · {e.date}
+                    <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px]">skor {e.score}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {(report.risks?.length > 0 || report.opportunities?.length > 0) && (
             <div className="grid md:grid-cols-2 gap-4">

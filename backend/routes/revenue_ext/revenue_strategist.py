@@ -117,10 +117,51 @@ async def _gather_intel(db, pid: str, horizon: int) -> Dict:
         "adr": round(s_rev / s_sold, 2) if s_sold else 0, "room_nights": s_sold,
     }
 
-    # Future events
-    events = await db.events.find(
-        {"property_id": pid, "date": {"$gte": today.isoformat(), "$lt": end.isoformat()}},
-        {"_id": 0, "name": 1, "date": 1, "title": 1}).to_list(30)
+    # Future events — Event Robot (market_events: talep skoru, etki, katılım)
+    events = await db.market_events.find(
+        {"property_id": {"$in": [pid, "all"]},
+         "date": {"$gte": today.isoformat(), "$lt": end.isoformat()}},
+        {"_id": 0, "name": 1, "date": 1, "end_date": 1, "category": 1, "impact": 1,
+         "hotel_demand_score": 1, "estimated_attendance": 1, "visitor_origin": 1,
+         "reasoning": 1}).sort("hotel_demand_score", -1).to_list(200)
+    event_score_by_date: Dict[str, int] = {}
+    for e in events:
+        try:
+            es = ddate.fromisoformat(e["date"][:10])
+            ee = ddate.fromisoformat((e.get("end_date") or e["date"])[:10])
+        except Exception:
+            continue
+        d = es
+        while d <= ee:
+            k = d.isoformat()
+            event_score_by_date[k] = max(event_score_by_date.get(k, 0),
+                                         int(e.get("hotel_demand_score", 0) or 0))
+            d += timedelta(days=1)
+
+    # Market occupancy — Market Robot supply scans (pazar doluluk baskısı)
+    market_occ: Dict[str, float] = {}
+    try:
+        pipeline = [
+            {"$match": {"property_id": {"$in": [pid, "all"]},
+                        "date": {"$gte": today.isoformat(), "$lt": end.isoformat()}}},
+            {"$sort": {"scanned_at": -1}},
+            {"$group": {"_id": "$date", "unavailable_pct": {"$first": "$unavailable_pct"}}},
+        ]
+        async for row in db.market_supply.aggregate(pipeline):
+            market_occ[row["_id"]] = float(row.get("unavailable_pct", 0) or 0)
+    except Exception as e:
+        logger.warning(f"market_supply aggregate failed: {e}")
+
+    # Pickup — son 7 günde alınan rezervasyonlar (talep hızı)
+    pk_since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    pickup_7d = await db.bookings.count_documents({
+        "property_id": pid, "created_at": {"$gte": pk_since},
+        "status": {"$in": ["confirmed", "checked_in"]}})
+
+    # daily satırlarına pazar doluluğu ve etkinlik skoru ekle
+    for x in daily:
+        x["market_occ_pct"] = market_occ.get(x["date"])
+        x["event_score"] = event_score_by_date.get(x["date"], 0)
 
     # Actions taken (last 14 days)
     since = (datetime.now(timezone.utc) - timedelta(days=14)).isoformat()
@@ -136,18 +177,24 @@ async def _gather_intel(db, pid: str, horizon: int) -> Dict:
     underpriced = [x for x in daily if (x["gap_pct"] or 0) >= 8]
     potential = round(sum(((x["comp_median"] or 0) - x["own_rate"]) * max(total_rooms - x["rooms_sold"], 0) * 0.3
                           for x in underpriced), 2)
+    mo_vals = list(market_occ.values())
+    high_events = [e for e in events if int(e.get("hotel_demand_score", 0) or 0) >= 40
+                   or (e.get("impact") in ("major", "high", "significant"))]
 
     return {
         "total_rooms": total_rooms, "base_rate": base_rate, "horizon": horizon,
         "daily": daily, "past_perf": past_perf, "stly_perf": stly_perf,
-        "events": events,
+        "events": events[:25], "high_impact_events": high_events[:10],
+        "pickup_7d": pickup_7d,
         "actions_taken": {"rate_overrides_14d": ov_recent, "intraday_events_14d": intraday,
                           "restriction_recs_14d": restr, "recent_campaigns": campaigns,
                           "lost_demand_records": len(lost), "lost_demand_revenue": lost_rev},
         "kpis": {
             "fwd_occ_pct": round(fwd_sold / (total_rooms * horizon) * 100, 1),
             "avg_market_gap_pct": round(sum(gaps) / len(gaps), 1) if gaps else None,
+            "avg_market_occ_pct": round(sum(mo_vals) / len(mo_vals), 1) if mo_vals else None,
             "underpriced_dates": len(underpriced),
+            "high_impact_events": len(high_events),
             "potential_extra_revenue": potential,
             "max_observed_comp_rate": max((x["comp_median"] or 0) for x in daily) if daily else 0,
         },
@@ -156,9 +203,15 @@ async def _gather_intel(db, pid: str, horizon: int) -> Dict:
 
 def _bucketize(daily, horizon):
     """Compact daily rows for LLM: daily for <=30d, weekly buckets beyond."""
+    def _mkt(x):
+        return f", pazar doluluk %{x['market_occ_pct']}" if x.get("market_occ_pct") is not None else ""
+
+    def _ev(x):
+        return f", ETKİNLİK (talep skoru {x['event_score']})" if x.get("event_score") else ""
+
     if horizon <= 35:
         return [f"{x['date']}: doluluk %{x['occ_pct']}, fiyat €{x['own_rate']}, rakip medyan "
-                f"{'€' + str(x['comp_median']) if x['comp_median'] else 'veri yok'}"
+                f"{'€' + str(x['comp_median']) if x['comp_median'] else 'veri yok'}{_mkt(x)}{_ev(x)}"
                 for x in daily]
     lines = []
     for i in range(0, len(daily), 7):
@@ -167,26 +220,45 @@ def _bucketize(daily, horizon):
         own = round(sum(w["own_rate"] for w in wk) / len(wk), 2)
         comps = [w["comp_median"] for w in wk if w["comp_median"]]
         cm = round(sum(comps) / len(comps), 2) if comps else None
+        mos = [w["market_occ_pct"] for w in wk if w.get("market_occ_pct") is not None]
+        mo = f", pazar doluluk %{round(sum(mos) / len(mos), 1)}" if mos else ""
+        evs = max((w.get("event_score") or 0) for w in wk)
+        ev = f", ETKİNLİK haftası (maks skor {evs})" if evs else ""
         lines.append(f"{wk[0]['date']} – {wk[-1]['date']}: ort. doluluk %{occ}, ort. fiyat €{own}, "
-                     f"rakip medyan {'€' + str(cm) if cm else 'veri yok'}")
+                     f"rakip medyan {'€' + str(cm) if cm else 'veri yok'}{mo}{ev}")
     return lines
 
 
 def _build_prompt(intel: Dict, language: str) -> str:
-    ev = "\n".join(f"- {e.get('name') or e.get('title', 'Etkinlik')} ({e.get('date')})" for e in intel["events"]) or "- Kayıtlı etkinlik yok"
+    ev_lines = []
+    for e in intel["events"][:20]:
+        score = e.get("hotel_demand_score", 0)
+        att = e.get("estimated_attendance")
+        ev_lines.append(
+            f"- {e.get('name', 'Etkinlik')} ({e.get('date')}"
+            f"{' → ' + e['end_date'] if e.get('end_date') and e['end_date'] != e.get('date') else ''}) · "
+            f"kategori: {e.get('category', '?')} · otel talep skoru: {score}/100 · etki: {e.get('impact', '?')}"
+            f"{' · katılım ~' + str(att) if att else ''}"
+            f"{' · ziyaretçi: ' + e['visitor_origin'] if e.get('visitor_origin') else ''}"
+            f"{' · not: ' + e['reasoning'][:100] if e.get('reasoning') else ''}")
+    ev = "\n".join(ev_lines) or "- Kayıtlı etkinlik yok"
     at = intel["actions_taken"]
     camp = ", ".join(c.get("name", "") for c in at["recent_campaigns"]) or "yok"
     rows = "\n".join(_bucketize(intel["daily"], intel["horizon"]))
+    k = intel["kpis"]
+    mo = f"%{k['avg_market_occ_pct']}" if k.get("avg_market_occ_pct") is not None else "veri yok"
     lang_line = "Raporu TÜRKÇE yaz." if language == "tr" else "Write the report in ENGLISH."
     return f"""OTEL VERİLERİ (kapasite: {intel['total_rooms']} oda, baz fiyat €{intel['base_rate']}):
 
-GELECEK {intel['horizon']} GÜN (tarih bazlı doluluk / kendi fiyat / rakip medyan):
+GELECEK {intel['horizon']} GÜN (tarih bazlı: kendi doluluk / kendi fiyat / rakip medyan / pazar doluluk / etkinlik):
 {rows}
 
 GEÇMİŞ 30 GÜN PERFORMANS: doluluk %{intel['past_perf']['occ_pct']}, ADR €{intel['past_perf']['adr']}, gelir €{intel['past_perf']['revenue']}
 GEÇEN YIL AYNI DÖNEM (STLY): doluluk %{intel['stly_perf']['occ_pct']}, ADR €{intel['stly_perf']['adr']}
+TALEP HIZI: son 7 günde {intel['pickup_7d']} yeni rezervasyon (pickup)
+PAZAR DOLULUĞU (Market Robot taraması, şehir geneli ort.): {mo}
 
-YAKLAŞAN ETKİNLİKLER:
+ETKİNLİK ROBOTU VERİLERİ (yaklaşan etkinlikler — talep skorlarıyla):
 {ev}
 
 SON 14 GÜNDE YAPILAN RM AKSİYONLARI:
@@ -194,19 +266,23 @@ SON 14 GÜNDE YAPILAN RM AKSİYONLARI:
 - Kampanyalar: {camp}
 - Kayıp talep: {at['lost_demand_records']} kayıt, tahmini €{at['lost_demand_revenue']} kaçan gelir
 
-ÖZET KPI: ileri dönem doluluk %{intel['kpis']['fwd_occ_pct']}, ort. pazar farkı %{intel['kpis']['avg_market_gap_pct']}, pazar altı gün sayısı {intel['kpis']['underpriced_dates']}, potansiyel ek gelir €{intel['kpis']['potential_extra_revenue']}, gözlenen maksimum rakip fiyat €{intel['kpis']['max_observed_comp_rate']}
+ÖZET KPI: ileri dönem doluluk %{k['fwd_occ_pct']}, ort. pazar farkı %{k['avg_market_gap_pct']}, pazar altı gün sayısı {k['underpriced_dates']}, yüksek etkili etkinlik sayısı {k['high_impact_events']}, potansiyel ek gelir €{k['potential_extra_revenue']}, gözlenen maksimum rakip fiyat €{k['max_observed_comp_rate']}
+
+GÖREV: Fiyata etki edecek TÜM etkenleri birlikte değerlendir — etkinlikler (talep skorlarına göre), pazar doluluğu (arz baskısı), rakip fiyat konumu, kendi doluluk/pace, pickup hızı, geçmiş/STLY trendi, kayıp talep. Geliri POZİTİF ve NEGATİF etkileyecek unsurları açıkça ayır ve stratejiyi bu etkenlere dayandır. Etkinlik günlerinde talep skoru yüksekse fiyat yukarı esnekliğini, pazar doluluğu düşükken agresif fiyatın riskini mutlaka değerlendir.
 
 {lang_line}
 SADECE geçerli JSON döndür (markdown yok, kod bloğu yok):
 {{
- "situation_report": "mevcut durumun kapsamlı yorumu (doluluk, fiyat konumu, pace)",
- "market_analysis": "piyasa ve rakip analizi + maksimum satılabilir fiyat değerlendirmesi",
+ "situation_report": "mevcut durumun kapsamlı yorumu (doluluk, fiyat konumu, pace, pazar)",
+ "market_analysis": "piyasa, pazar doluluğu ve rakip analizi + maksimum satılabilir fiyat değerlendirmesi",
  "past_performance": "geçmiş + STLY karşılaştırma yorumu",
  "what_was_done": "yapılan RM aksiyonlarının değerlendirmesi",
+ "positive_factors": ["geliri POZİTİF etkileyecek etken 1 (ör. etkinlik, pazar doluluğu, talep)", "..."],
+ "negative_factors": ["geliri NEGATİF etkileyecek etken 1 (ör. zayıf pace, arz fazlası, düşük sezon)", "..."],
  "risks": ["risk 1", "risk 2"],
  "opportunities": ["fırsat 1", "fırsat 2"],
  "recommendations": [
-   {{"title": "kısa başlık", "detail": "somut, sayısal gerekçeli öneri",
+   {{"title": "kısa başlık", "detail": "somut, sayısal gerekçeli öneri (hangi etkene dayandığını belirt)",
      "action_type": "price_increase|price_decrease|restriction|campaign|monitor",
      "date_start": "YYYY-MM-DD", "date_end": "YYYY-MM-DD",
      "target_rate": 150.0, "priority": "high|medium|low", "expected_impact": "beklenen etki"}}
@@ -295,8 +371,13 @@ def create_revenue_strategist_router(db, require_roles):
             "market_analysis": parsed.get("market_analysis", ""),
             "past_performance": parsed.get("past_performance", ""),
             "what_was_done": parsed.get("what_was_done", ""),
+            "positive_factors": parsed.get("positive_factors", []),
+            "negative_factors": parsed.get("negative_factors", []),
             "risks": parsed.get("risks", []), "opportunities": parsed.get("opportunities", []),
             "recommendations": recs, "kpis": intel["kpis"],
+            "events_considered": [{"name": e.get("name"), "date": e.get("date"),
+                                   "score": e.get("hotel_demand_score", 0),
+                                   "impact": e.get("impact")} for e in intel["high_impact_events"]],
             "auto_applied_count": auto_applied, "created_at": _iso(),
         }
         await db.strategist_reports.insert_one(dict(report))

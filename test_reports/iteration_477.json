@@ -1,0 +1,34 @@
+{
+  "summary": "SEAL regression for Market Pulse premium package (iterations 466-476). Backend: 40/40 pytest tests pass — existing test_iteration466_owner_pulse.py (15) + new test_iteration476_market_pulse_seal.py (25) covering portfolio-overview (10 props), recovery, autopilot (status/run-now/impact), digest send-now+log, module gating, cross-token authz, extended report catalog (financial/takings/events/positioning) and public demo request. Frontend: all 4 critical UI flows verified end-to-end — owner /owner portal (7 tabs, portfolio-board with 3 props, ADR metric switch works, rank badges, 8 report cards in 4 categories, Etkinlik Etkisi opens with action-column table + CSV button), admin portfolio-board-btn (10 hotels heatmap, pf-recovery-default → pf-recovery-modal → pf-apply-restriction → ✓ UYGULANDI badge), admin owner-pulse-admin-btn (6 module toggles, digest Şimdi Gönder produces mock log entries, autopilot Onaylı Mod with 1 pending approval + Şimdi Tara, opa-impact-section with 4 measured cards including +2.2pp KISMEN verdict), ReveniQ /reveniq (#pulse section with 6 feature cards + heatmap mock, rq-roi-calc sliders live-update rq-roi-uplift +€6,361→+€31,806, rq-pulse-demo-btn scrolls to demo form, submitting form → POST /api/public/demo-requests returns 200 + success toast). Cleanup verified: 6 modules restored to true and digest_enabled=true post-test; pending autopilot approval left untouched (safe per instructions).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration466_owner_pulse.py",
+    "/app/backend/tests/test_iteration476_market_pulse_seal.py",
+    "/app/test_reports/pytest/iter476_final.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Owner-pulse routes correctly split owner (portal/*) vs admin ({pid}/* and portfolio/*) namespaces with cross-token 401 — good separation.",
+    "Public /api/public/demo-requests requires field 'hotel_name' (not 'hotel'); ReveniQ front-end already uses correct field. Confirmed working.",
+    "portfolio/overview returns proper structure with 'properties' (10) + 'heatmap.rows' (10) + cells having occ/pace/adr/avail — matches spec exactly.",
+    "Recovery apply for action_type='crm' is idempotent-safe (task-only) as documented; 'price'/'promo' were NOT tested to respect the cleanup contract."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration476_market_pulse_seal.py (new)"
+  ],
+  "success_rate": {"backend": "100% (40/40)", "frontend": "100% (all critical flows verified)"},
+  "test_credentials": "Admin: admin@hotelbox.com / HotelAdmin2026! (token field 'token'). Owner: pulse_owner@test.com / PIN 862347 (access_token). All working.",
+  "seed_data_creation": "1 public demo request lead created via ReveniQ form (name='TEST Seal Regression', email='TEST_seal_fe@example.com', product=pulse) + 1 backend demo lead (name='TEST_seal_regression'). Both prefixed TEST_ for easy cleanup. Applied 1 'restriction' recovery task to 'default' property — safe per instructions (task-only, no live pricing change).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Market Pulse premium is production-ready. Regression test file `test_iteration476_market_pulse_seal.py` covers all endpoints added in iter 466-476 and is safe to re-run repeatedly (autouse fixture restores modules+digest at teardown). If retesting FE, the owner tab 'Fiyatlar & İndirimler' uses an ampersand in the label so use partial-text or exact='Fiyatlar & İndirimler' — not just 'Fiyatlar'. ROI slider on ReveniQ requires React native input setter (Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set + dispatch 'input') to fire change; plain el.value= does not update React state.",
+  "rca of the issue": "No issues found. All 40 backend endpoints pass with correct shapes (pace_source, currency, pickup_change.source, heatmap cells, autopilot fields, digest, impact verdict). All frontend flows work: portal tabs, portfolio board + metric switching + search, competitor KPIs with rank badges, 8 reports with CSV export, admin portfolio board with 10 hotels + recovery apply, admin Pulse panel with 6 toggles + digest + autopilot + impact cards, and ReveniQ landing with #pulse section + working ROI calculator + demo submit."
+}

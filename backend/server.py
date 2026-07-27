@@ -1379,6 +1379,9 @@ api_router.include_router(create_min_rate_floors_router(db, require_roles))
 from routes.revenue_ext.discount_stack import create_discount_stack_router
 api_router.include_router(create_discount_stack_router(db, require_roles))
 
+from routes.revenue_ext.owner_rates import create_owner_rates_router
+api_router.include_router(create_owner_rates_router(db, require_roles))
+
 async def _job_revenue_strategist(property_id: str) -> dict:
     try:
         return await revenue_strategist_router.run_internal(property_id or "")

@@ -5,10 +5,11 @@
  * separate from the main staff app. Uses `owner_access_token` localStorage
  * (segregated from staff `access_token`).
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import { toast, Toaster } from "sonner";
-import { Buildings, SignIn, SignOut, FilePdf, ChartLineUp, House } from "@phosphor-icons/react";
+import { Buildings, SignIn, SignOut, FilePdf, ChartLineUp, House, Tag } from "@phosphor-icons/react";
+import OwnerRatesBoard from "../shared/OwnerRatesBoard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const STORAGE_KEY = "owner_access_token";
@@ -20,11 +21,20 @@ export default function OwnerSelfServiceApp() {
   const [me, setMe] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [year, setYear] = useState(new Date().getFullYear().toString());
+  const [tab, setTab] = useState("summary");
 
   const ax = useCallback(() => axios.create({
     baseURL: API,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   }), [token]);
+
+  const ratesApi = useMemo(() => ({
+    getBoard: async (days) => (await ax().get(`/owner-rates/portal/board?days=${days}`)).data,
+    setRate: async (p) => (await ax().post("/owner-rates/portal/manual-rate", p)).data,
+    addLayer: async (p) => (await ax().post("/owner-rates/portal/layers", p)).data,
+    toggleLayer: async (id, active) => (await ax().put(`/owner-rates/portal/layers/${id}`, { active })).data,
+    deleteLayer: async (id) => (await ax().delete(`/owner-rates/portal/layers/${id}`)).data,
+  }), [ax]);
 
   useEffect(() => {
     if (!token) return;
@@ -80,6 +90,26 @@ export default function OwnerSelfServiceApp() {
       </header>
 
       <main className="max-w-6xl mx-auto px-5 py-6">
+        <div className="flex items-center gap-2 mb-5" data-testid="owner-tabs">
+          {[["summary", "Performans Özeti", ChartLineUp], ["rates", "Fiyatlar & İndirimler", Tag]].map(([id, label, Icon]) => (
+            <button key={id} onClick={() => setTab(id)} data-testid={`owner-tab-${id}`}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${tab === id ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"}`}>
+              <Icon size={14} /> {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === "rates" && (
+          <div data-testid="owner-rates-tab">
+            <div className="mb-4">
+              <h2 className="text-2xl font-semibold text-stone-900">Fiyatlar & İndirimler</h2>
+              <p className="text-sm text-stone-500 mt-0.5">Fiyata tıklayıp değiştirin — brüt (PMS) veya müşteri fiyatı. İndirimleri ekleyip çıkarabilirsiniz; değişiklikler otel yönetimine anında yansır.</p>
+            </div>
+            <OwnerRatesBoard api={ratesApi} title="Fiyatlarım" />
+          </div>
+        )}
+
+        {tab === "summary" && (<>
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-2xl font-semibold text-stone-900">{year} Performans Özeti</h2>
@@ -153,6 +183,7 @@ export default function OwnerSelfServiceApp() {
             </div>
           </>
         )}
+        </>)}
       </main>
     </div>
   );

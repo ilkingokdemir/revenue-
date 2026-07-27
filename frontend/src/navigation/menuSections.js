@@ -259,6 +259,7 @@ export function buildMenuSections(t, user) {
         { id: "ai-pricing-v2", icon: Lightning, name: "AI pricing", testId: "ai-pricing-v2-btn" },
         { id: "min-rates", icon: ShieldCheck, name: "Minimum fiyat koruması", testId: "min-rates-btn" },
         { id: "discount-stack", icon: Tag, name: "İndirim katmanları & net fiyat", testId: "discount-stack-btn" },
+        { id: "owner-rates", icon: ArrowsClockwise, name: "Sahip fiyat panosu (iki yönlü)", testId: "owner-rates-btn" },
         { id: "intraday-reprice", icon: Lightning, name: "Gün-içi re-price (pickup spike)", testId: "intraday-reprice-btn" },
         { id: "restriction-advisor", icon: LockKey, name: "AI kısıtlama önerileri (MLOS/CTA)", testId: "restriction-advisor-btn" },
         { id: "lost-demand", icon: UserMinus, name: "Kayıp talep (denials & regrets)", testId: "lost-demand-btn" },

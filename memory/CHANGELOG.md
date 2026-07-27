@@ -2479,3 +2479,8 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 ## iter 476 (2026-07-27) — ROI Hesaplayıcı (ReveniQ Landing)
 - #pulse bölümüne RoiCalculator: 3 kaydırıcı (oda 5-300, doluluk %20-100, ADR €30-500) → canlı hesap: mevcut aylık gelir, +%9 RevPAR varsayımıyla Pulse ek geliri, Pulse maliyeti (oda×€1), ROI çarpanı. "Claim this uplift — book a demo" CTA'sı product=pulse ile demo formuna kaydırır.
 - Test: screenshot + kaydırıcı etkileşimi doğrulandı (40 oda +€6,361/ay → 120 oda +€19,084/ay, 159× ROI).
+
+## iter 477 (2026-07-27) — SEAL Regresyonu: Market Pulse Yayına Hazır
+- testing_agent tam tur: backend 40/40 PASS (mevcut 15 + yeni test_iteration476_market_pulse_seal.py 25 test — tekrar çalıştırılabilir, teardown'da modülleri geri yükler), frontend tüm kritik akışlar PASS (owner 7 sekme, portföy panosu + metrik/arama, 8 rapor + CSV, admin 10 otel ısı haritası + kurtarma uygula, Pulse admin paneli, ReveniQ #pulse + ROI hesaplayıcı + demo formu).
+- Sıfır kritik/minör bulgu. Yetki ayrımı (portal vs admin) ve modül geri yükleme doğrulandı. TEST_ önekli 2 demo lead + 1 restriction görevi oluşturuldu (zararsız).
+- NOT: ROI slider testlerinde React native input setter gerekir (rapor context notunda).

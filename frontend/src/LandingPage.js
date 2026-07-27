@@ -21,18 +21,20 @@ const TRUST_NAMES = [
   "Grand Anatolia Resort", "The Olive & Fig Hotel", "Blue Slate Residences",
 ];
 
+const DOT_COLORS = ["bg-[#1D4ED8]", "bg-[#F97316]", "bg-[#10B981]", "bg-[#F59E0B]", "bg-[#06B6D4]", "bg-[#F43F5E]"];
+
 const TESTIMONIALS = [
   {
     quote: "We replaced four separate tools with one platform. Our front desk closes night audit in minutes and check-in queues simply disappeared once guests started arriving pre-registered.",
-    name: "Selin Aydın", role: "General Manager", hotel: "Aurora Palace İstanbul · 142 rooms",
+    name: "Selin Aydın", role: "General Manager", hotel: "Aurora Palace İstanbul · 142 rooms", accent: "bg-[#1D4ED8]",
   },
   {
     quote: "Housekeeping gets tasks the moment a guest checks out, maintenance issues are logged from the room's QR code, and I can see the whole house on one screen.",
-    name: "Marco Bianchi", role: "Operations Manager", hotel: "Harborline Suites · 86 rooms",
+    name: "Marco Bianchi", role: "Operations Manager", hotel: "Harborline Suites · 86 rooms", accent: "bg-[#F97316]",
   },
   {
     quote: "Guests check in from their phone, order room service by QR, and I finally see clean P&L numbers per outlet. It feels like hiring three extra people.",
-    name: "Deniz Kaya", role: "Owner", hotel: "Villa Lumen Kaş · 24 rooms",
+    name: "Deniz Kaya", role: "Owner", hotel: "Villa Lumen Kaş · 24 rooms", accent: "bg-[#10B981]",
   },
 ];
 
@@ -46,35 +48,35 @@ const FAQS = [
 
 function FrontDeskMockup() {
   const rows = [
-    ["101 · Deluxe", "S. Carter", "Arriving 14:00", "bg-blue-500/15 text-blue-300"],
-    ["204 · Suite", "J. Meyer", "In-house · 2n", "bg-emerald-500/15 text-emerald-300"],
-    ["118 · Twin", "A. Rossi", "Checkout 11:00", "bg-amber-500/15 text-amber-300"],
-    ["302 · Deluxe", "L. Novak", "Cleaning", "bg-stone-500/20 text-stone-300"],
+    ["101 · Deluxe", "S. Carter", "Arriving 14:00", "bg-blue-500/20 text-blue-300"],
+    ["204 · Suite", "J. Meyer", "In-house · 2n", "bg-emerald-500/20 text-emerald-300"],
+    ["118 · Twin", "A. Rossi", "Checkout 11:00", "bg-amber-500/20 text-amber-300"],
+    ["302 · Deluxe", "L. Novak", "Cleaning", "bg-cyan-500/20 text-cyan-300"],
   ];
   return (
     <div className="relative" data-testid="hero-dashboard-mockup">
-      <div className="absolute -inset-6 bg-[#849B89]/15 rounded-[32px] -rotate-2" aria-hidden="true" />
-      <div className="relative bg-[#0A0F1C] rounded-2xl border border-white/10 shadow-[0_24px_80px_rgba(10,15,28,0.35)] overflow-hidden">
+      <div className="absolute -inset-6 bg-gradient-to-br from-[#1D4ED8]/25 via-[#06B6D4]/20 to-[#10B981]/25 rounded-[32px] -rotate-2 blur-sm" aria-hidden="true" />
+      <div className="relative bg-[#0A0F1C] rounded-2xl border border-white/10 shadow-[0_24px_80px_rgba(29,78,216,0.35)] overflow-hidden">
         <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/10">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#E07A5F]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#E5C05F]" />
-          <span className="w-2.5 h-2.5 rounded-full bg-[#849B89]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F57]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#FEBC2E]" />
+          <span className="w-2.5 h-2.5 rounded-full bg-[#28C840]" />
           <span className="ml-3 text-[10px] text-stone-400 font-mono">myhotelbox · front desk</span>
         </div>
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-3 gap-3">
-            {[["Arrivals", "18", "6 pre-registered"], ["In-house", "112", "87% occupancy"], ["Departures", "14", "3 late checkout"]].map(([l, v, d]) => (
-              <div key={l} className="bg-white/[0.04] border border-white/10 rounded-xl p-3">
+            {[["Arrivals", "18", "6 pre-registered", "text-cyan-300"], ["In-house", "112", "87% occupancy", "text-emerald-300"], ["Departures", "14", "3 late checkout", "text-amber-300"]].map(([l, v, d, c]) => (
+              <div key={l} className="bg-white/[0.05] border border-white/10 rounded-xl p-3">
                 <div className="text-[9px] uppercase tracking-widest text-stone-400 font-bold">{l}</div>
-                <div className="text-xl font-extrabold text-white tabular-nums mt-0.5">{v}</div>
-                <div className="text-[10px] text-emerald-400 font-bold">{d}</div>
+                <div className={`text-xl font-extrabold tabular-nums mt-0.5 ${c}`}>{v}</div>
+                <div className="text-[10px] text-stone-400 font-bold">{d}</div>
               </div>
             ))}
           </div>
-          <div className="bg-white/[0.04] border border-white/10 rounded-xl p-4 space-y-2.5">
+          <div className="bg-white/[0.05] border border-white/10 rounded-xl p-4 space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">Today's board</span>
-              <span className="text-[10px] text-blue-300 font-bold flex items-center gap-1"><Sparkles size={10} /> auto-assigned</span>
+              <span className="text-[10px] text-cyan-300 font-bold flex items-center gap-1"><Sparkles size={10} /> auto-assigned</span>
             </div>
             {rows.map(([room, guest, status, badge]) => (
               <div key={room} className="flex items-center justify-between bg-white/[0.03] rounded-lg px-3 py-2">
@@ -86,7 +88,7 @@ function FrontDeskMockup() {
               </div>
             ))}
           </div>
-          <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-3 py-2.5">
+          <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-500/15 to-cyan-500/10 border border-emerald-500/30 rounded-xl px-3 py-2.5">
             <ClipboardCheck size={13} className="text-emerald-400 shrink-0" />
             <span className="text-[11px] text-emerald-200">Housekeeping: 12 rooms cleaned, 4 in progress — night audit ready</span>
           </div>
@@ -102,40 +104,43 @@ const FEATURES = [
     title: "Front desk, reservations & housekeeping in one calm screen",
     desc: "Drag-and-drop room calendar, group bookings, digital check-in kiosk, housekeeping auto-dispatch and a night audit that runs itself. Your team stops juggling tabs.",
     img: "https://images.unsplash.com/photo-1759038085950-1234ca8f5fed?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
-    testid: "feature-pms",
+    testid: "feature-pms", bar: "from-[#1D4ED8] to-[#06B6D4]", chip: "bg-blue-50 text-[#1D4ED8]",
   },
   {
     span: "md:col-span-5", icon: Globe2, label: "Distribution",
     title: "Direct bookings & OTA sync",
     desc: "Commission-free booking engine with promo codes, plus a real-time channel manager that keeps availability, rates and restrictions aligned across every OTA — with parity alerts when a channel undercuts you.",
-    testid: "feature-booking",
+    testid: "feature-booking", bar: "from-[#06B6D4] to-[#10B981]", chip: "bg-cyan-50 text-[#0891B2]",
   },
   {
     span: "md:col-span-4", icon: MessageSquareText, label: "Guest Experience",
     title: "One inbox for every guest",
     desc: "WhatsApp, email and SMS unified with AI-drafted replies, pre-arrival journeys, upsell offers and post-stay review autopilot.",
     img: "https://images.unsplash.com/photo-1713865470192-efd903813197?crop=entropy&cs=srgb&fm=jpg&q=85&w=800",
-    testid: "feature-guest",
+    testid: "feature-guest", bar: "from-[#F97316] to-[#F59E0B]", chip: "bg-orange-50 text-[#EA580C]",
   },
   {
     span: "md:col-span-4", icon: BedDouble, label: "Housekeeping & Maintenance",
     title: "The house runs itself",
     desc: "Mobile housekeeping app, auto-dispatch on checkout, lost & found, minibar posting and QR maintenance reporting straight from the room.",
     img: "https://images.unsplash.com/photo-1549638441-b787d2e11f14?crop=entropy&cs=srgb&fm=jpg&q=85&w=800",
-    testid: "feature-housekeeping",
+    testid: "feature-housekeeping", bar: "from-[#10B981] to-[#84CC16]", chip: "bg-emerald-50 text-[#059669]",
   },
   {
     span: "md:col-span-4", icon: BarChart3, label: "Finance & Reports",
     title: "Numbers your accountant will love",
     desc: "P&L per outlet, OTA commission reconciliation, city ledger, invoicing and scheduled reports delivered to your inbox.",
-    testid: "feature-finance",
+    testid: "feature-finance", bar: "from-[#F43F5E] to-[#F97316]", chip: "bg-rose-50 text-[#E11D48]",
   },
 ];
 
 const CHIPS = [
-  [BedDouble, "Housekeeping mobile app"], [CreditCard, "Payments & terminals"],
-  [Building2, "Multi-property & chains"], [ShieldCheck, "Role-based access"],
-  [Zap, "POS · F&B · spa & events"], [Sparkles, "AI guest messaging"],
+  [BedDouble, "Housekeeping mobile app", "bg-emerald-50 border-emerald-200 text-emerald-700"],
+  [CreditCard, "Payments & terminals", "bg-blue-50 border-blue-200 text-blue-700"],
+  [Building2, "Multi-property & chains", "bg-amber-50 border-amber-200 text-amber-700"],
+  [ShieldCheck, "Role-based access", "bg-cyan-50 border-cyan-200 text-cyan-700"],
+  [Zap, "POS · F&B · spa & events", "bg-orange-50 border-orange-200 text-orange-700"],
+  [Sparkles, "AI guest messaging", "bg-rose-50 border-rose-200 text-rose-700"],
 ];
 
 export default function LandingPage() {
@@ -148,7 +153,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#FDFCFB]/80 border-b border-black/5">
         <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2.5" data-testid="landing-logo">
-            <div className="w-8 h-8 rounded-lg bg-[#0A0F1C] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#1D4ED8] to-[#06B6D4] flex items-center justify-center">
               <Building2 size={16} className="text-white" />
             </div>
             <span className="font-extrabold tracking-tight text-lg">MyHotelBox</span>
@@ -159,15 +164,15 @@ export default function LandingPage() {
                 className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">{l.label}</button>
             ))}
             <a href="/reveniq" data-testid="nav-link-reveniq"
-              className="text-sm font-bold text-[#1D4ED8] hover:text-[#1E40AF] transition-colors flex items-center gap-1">
+              className="text-sm font-bold text-[#1D4ED8] hover:text-[#06B6D4] transition-colors flex items-center gap-1">
               ReveniQ <ArrowUpRight size={13} />
             </a>
           </nav>
           <div className="hidden md:flex items-center gap-3">
             <button onClick={goLogin} data-testid="landing-signin-btn"
-              className="px-4 py-2 rounded-lg text-sm font-bold text-stone-700 border border-stone-300 hover:border-stone-500 transition-colors">Sign In</button>
+              className="px-4 py-2 rounded-lg text-sm font-bold text-stone-700 border border-stone-300 hover:border-[#1D4ED8] hover:text-[#1D4ED8] transition-colors">Sign In</button>
             <button onClick={() => scrollTo("#demo")} data-testid="landing-nav-demo-btn"
-              className="px-4 py-2 rounded-lg text-sm font-bold bg-[#1D4ED8] hover:bg-[#1E40AF] text-white transition-colors">Request Demo</button>
+              className="px-4 py-2 rounded-lg text-sm font-bold bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:from-[#1E40AF] hover:to-[#0891B2] text-white transition-colors shadow-[0_4px_16px_rgba(29,78,216,0.3)]">Request Demo</button>
           </div>
           <button className="md:hidden p-2" onClick={() => setMobileNav(!mobileNav)} data-testid="landing-mobile-menu-btn">
             {mobileNav ? <X size={20} /> : <Menu size={20} />}
@@ -188,47 +193,55 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-7xl mx-auto px-5 sm:px-8 pt-16 pb-20 lg:pt-24 lg:pb-28 grid lg:grid-cols-12 gap-12 items-center">
-        <motion.div className="lg:col-span-6" initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#849B89]/15 border border-[#849B89]/30 text-[#3E5245] text-xs font-bold mb-6" data-testid="hero-badge">
-            <Sparkles size={12} /> The hotel property management system
-          </div>
-          <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tighter leading-[1.05]">
-            The calm way<br />
-            <span className="text-[#1D4ED8]">to run your hotel.</span>
-          </h1>
-          <p className="mt-6 text-lg text-stone-600 leading-relaxed max-w-xl">
-            MyHotelBox brings front desk, housekeeping, bookings, guest messaging and payments into one quiet, reliable screen — so your team spends their day with guests, not with software.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <button onClick={() => scrollTo("#demo")} data-testid="hero-request-demo-btn"
-              className="px-7 py-3.5 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white font-bold transition-colors flex items-center gap-2">
-              Request a demo <ArrowRight size={16} />
-            </button>
-            <button onClick={() => scrollTo("#product")} data-testid="hero-explore-btn"
-              className="px-7 py-3.5 rounded-lg border border-stone-300 hover:border-stone-500 text-stone-800 font-bold transition-colors">
-              Explore the platform
-            </button>
-          </div>
-          <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3">
-            {[["2 wks", "typical go-live"], ["-40%", "front desk admin time"], ["24/7", "guest self-service"]].map(([v, l]) => (
-              <div key={l} data-testid={`hero-stat-${l.replace(/[.\s%]/g, "-")}`}>
-                <div className="text-2xl font-extrabold tabular-nums text-stone-900">{v}</div>
-                <div className="text-xs text-stone-500 font-medium">{l}</div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-        <motion.div className="lg:col-span-6" initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
-          <FrontDeskMockup />
-        </motion.div>
+      <section className="relative overflow-hidden">
+        <div className="absolute top-[-120px] left-[-80px] w-[420px] h-[420px] rounded-full bg-[#1D4ED8]/15 blur-3xl" aria-hidden="true" />
+        <div className="absolute top-[60px] right-[-120px] w-[480px] h-[480px] rounded-full bg-[#06B6D4]/15 blur-3xl" aria-hidden="true" />
+        <div className="absolute bottom-[-140px] left-[30%] w-[380px] h-[380px] rounded-full bg-[#F97316]/10 blur-3xl" aria-hidden="true" />
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-8 pt-16 pb-20 lg:pt-24 lg:pb-28 grid lg:grid-cols-12 gap-12 items-center">
+          <motion.div className="lg:col-span-6" initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-blue-50 to-cyan-50 border border-[#1D4ED8]/25 text-[#1D4ED8] text-xs font-bold mb-6" data-testid="hero-badge">
+              <Sparkles size={12} className="text-[#06B6D4]" /> The hotel property management system
+            </div>
+            <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tighter leading-[1.05]">
+              The calm way<br />
+              <span className="bg-gradient-to-r from-[#1D4ED8] via-[#06B6D4] to-[#10B981] bg-clip-text text-transparent">to run your hotel.</span>
+            </h1>
+            <p className="mt-6 text-lg text-stone-600 leading-relaxed max-w-xl">
+              MyHotelBox brings front desk, housekeeping, bookings, guest messaging and payments into one quiet, reliable screen — so your team spends their day with guests, not with software.
+            </p>
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <button onClick={() => scrollTo("#demo")} data-testid="hero-request-demo-btn"
+                className="px-7 py-3.5 rounded-lg bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:from-[#1E40AF] hover:to-[#0891B2] text-white font-bold transition-colors flex items-center gap-2 shadow-[0_8px_24px_rgba(29,78,216,0.35)]">
+                Request a demo <ArrowRight size={16} />
+              </button>
+              <button onClick={() => scrollTo("#product")} data-testid="hero-explore-btn"
+                className="px-7 py-3.5 rounded-lg border-2 border-stone-300 hover:border-[#F97316] hover:text-[#EA580C] text-stone-800 font-bold transition-colors">
+                Explore the platform
+              </button>
+            </div>
+            <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3">
+              {[["2 wks", "typical go-live", "text-[#1D4ED8]"], ["-40%", "front desk admin time", "text-[#F97316]"], ["24/7", "guest self-service", "text-[#10B981]"]].map(([v, l, c]) => (
+                <div key={l} data-testid={`hero-stat-${l.replace(/[.\s%]/g, "-")}`}>
+                  <div className={`text-2xl font-extrabold tabular-nums ${c}`}>{v}</div>
+                  <div className="text-xs text-stone-500 font-medium">{l}</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+          <motion.div className="lg:col-span-6" initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
+            <FrontDeskMockup />
+          </motion.div>
+        </div>
       </section>
 
       {/* Trust marquee */}
-      <section className="border-y border-black/5 bg-[#F5F4F0] py-6 overflow-hidden" data-testid="trust-bar">
-        <div className="landing-marquee flex items-center gap-12 whitespace-nowrap">
+      <section className="border-y border-black/5 bg-gradient-to-r from-blue-50/60 via-[#F5F4F0] to-emerald-50/60 py-6 overflow-hidden" data-testid="trust-bar">
+        <div className="landing-marquee flex items-center gap-10 whitespace-nowrap">
           {[...TRUST_NAMES, ...TRUST_NAMES].map((n, i) => (
-            <span key={i} className="text-sm font-bold tracking-wide text-stone-400 uppercase">{n}</span>
+            <span key={i} className="flex items-center gap-10">
+              <span className="text-sm font-bold tracking-wide text-stone-500 uppercase">{n}</span>
+              <span className={`w-1.5 h-1.5 rounded-full ${DOT_COLORS[i % DOT_COLORS.length]}`} />
+            </span>
           ))}
         </div>
       </section>
@@ -237,16 +250,17 @@ export default function LandingPage() {
       <section id="product" className="max-w-7xl mx-auto px-5 sm:px-8 py-24">
         <motion.div {...fadeUp} className="max-w-2xl mb-14">
           <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#1D4ED8] mb-3">The platform</div>
-          <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Everything a modern hotel needs. Nothing it doesn't.</h2>
+          <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Everything a modern hotel needs. <span className="bg-gradient-to-r from-[#F97316] to-[#F43F5E] bg-clip-text text-transparent">Nothing it doesn't.</span></h2>
           <p className="mt-4 text-stone-600 leading-relaxed">One login for operations, distribution, guest experience and finance — built to replace the patchwork of tools your team fights with today.</p>
         </motion.div>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6" id="guests">
           {FEATURES.map((f, i) => (
             <motion.div key={f.testid} {...fadeUp} transition={{ ...fadeUp.transition, delay: i * 0.06 }}
-              className={`${f.span} rounded-2xl border overflow-hidden group hover:-translate-y-1 transition-transform duration-300 bg-white border-black/5 shadow-[0_8px_32px_rgba(29,78,216,0.05)]`}
+              className={`${f.span} rounded-2xl border overflow-hidden group hover:-translate-y-1 transition-transform duration-300 bg-white border-black/5 shadow-[0_8px_32px_rgba(29,78,216,0.06)]`}
               data-testid={f.testid}>
+              <div className={`h-1.5 bg-gradient-to-r ${f.bar}`} />
               <div className="p-7">
-                <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] mb-4 text-[#1D4ED8]">
+                <div className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] mb-4 px-2.5 py-1.5 rounded-lg ${f.chip}`}>
                   <f.icon size={14} /> {f.label}
                 </div>
                 <h3 className="text-xl lg:text-2xl font-semibold tracking-tight text-stone-900">{f.title}</h3>
@@ -261,34 +275,36 @@ export default function LandingPage() {
           ))}
         </div>
         <motion.div {...fadeUp} className="mt-8 flex flex-wrap gap-3">
-          {CHIPS.map(([Icon, label]) => (
-            <span key={label} className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#F5F4F0] border border-black/5 text-sm font-medium text-stone-700">
-              <Icon size={14} className="text-[#1D4ED8]" /> {label}
+          {CHIPS.map(([Icon, label, cls]) => (
+            <span key={label} className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-bold ${cls}`}>
+              <Icon size={14} /> {label}
             </span>
           ))}
         </motion.div>
       </section>
 
       {/* ReveniQ cross-sell */}
-      <section className="bg-[#0A0F1C] text-white py-20" data-testid="reveniq-crosssell">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 grid lg:grid-cols-12 gap-10 items-center">
+      <section className="relative bg-[#0A0F1C] text-white py-20 overflow-hidden" data-testid="reveniq-crosssell">
+        <div className="absolute top-[-100px] right-[10%] w-[400px] h-[400px] rounded-full bg-[#1D4ED8]/25 blur-3xl" aria-hidden="true" />
+        <div className="absolute bottom-[-140px] left-[5%] w-[360px] h-[360px] rounded-full bg-[#06B6D4]/15 blur-3xl" aria-hidden="true" />
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-8 grid lg:grid-cols-12 gap-10 items-center">
           <motion.div {...fadeUp} className="lg:col-span-7">
-            <div className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300 mb-3 flex items-center gap-2">
+            <div className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300 mb-3 flex items-center gap-2">
               <TrendingUp size={14} /> Works hand-in-hand with ReveniQ
             </div>
-            <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Need your prices to run themselves too?</h2>
+            <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Need your prices to <span className="bg-gradient-to-r from-blue-400 to-cyan-300 bg-clip-text text-transparent">run themselves</span> too?</h2>
             <p className="mt-4 text-stone-300 leading-relaxed max-w-2xl">
               ReveniQ is our dedicated AI revenue management platform — demand forecasting, dynamic pricing, competitor rate radar and gap-filler campaigns. It shares the same data as MyHotelBox, so it switches on in a day, not a quarter.
             </p>
             <a href="/reveniq" data-testid="crosssell-reveniq-btn"
-              className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-sm font-bold transition-colors">
+              className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:from-[#1E40AF] hover:to-[#0891B2] text-white text-sm font-bold transition-colors shadow-[0_8px_24px_rgba(6,182,212,0.3)]">
               Discover ReveniQ <ArrowUpRight size={15} />
             </a>
           </motion.div>
           <motion.div {...fadeUp} className="lg:col-span-5 grid grid-cols-2 gap-4">
-            {[["+12.4%", "avg. RevPAR lift"], ["94%", "forecast accuracy"], ["38k", "price decisions / week"], ["24/7", "competitor radar"]].map(([v, l]) => (
-              <div key={l} className="bg-white/[0.05] border border-white/10 rounded-xl p-5">
-                <div className="text-2xl font-extrabold tabular-nums">{v}</div>
+            {[["+12.4%", "avg. RevPAR lift", "text-emerald-300"], ["94%", "forecast accuracy", "text-cyan-300"], ["38k", "price decisions / week", "text-blue-300"], ["24/7", "competitor radar", "text-amber-300"]].map(([v, l, c]) => (
+              <div key={l} className="bg-white/[0.06] border border-white/10 rounded-xl p-5">
+                <div className={`text-2xl font-extrabold tabular-nums ${c}`}>{v}</div>
                 <div className="text-[10px] text-stone-400 mt-1 uppercase tracking-widest font-bold leading-tight">{l}</div>
               </div>
             ))}
@@ -299,19 +315,24 @@ export default function LandingPage() {
       {/* Testimonials */}
       <section className="max-w-7xl mx-auto px-5 sm:px-8 py-24">
         <motion.div {...fadeUp} className="max-w-2xl mb-14">
-          <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#1D4ED8] mb-3">From hoteliers</div>
+          <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#F97316] mb-3">From hoteliers</div>
           <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Trusted at the front desk and in the back office</h2>
         </motion.div>
         <div className="grid md:grid-cols-3 gap-6">
           {TESTIMONIALS.map((t, i) => (
             <motion.div key={t.name} {...fadeUp} transition={{ ...fadeUp.transition, delay: i * 0.08 }}
-              className={`bg-white rounded-2xl border border-black/5 p-7 shadow-[0_8px_32px_rgba(29,78,216,0.05)] ${i === 1 ? "md:mt-10" : ""}`}
+              className={`bg-white rounded-2xl border border-black/5 p-7 shadow-[0_8px_32px_rgba(29,78,216,0.06)] ${i === 1 ? "md:mt-10" : ""}`}
               data-testid={`testimonial-${i}`}>
-              <div className="text-4xl font-black text-[#1D4ED8]/20 leading-none">"</div>
+              <div className="text-4xl font-black text-[#1D4ED8]/25 leading-none">"</div>
               <p className="text-sm text-stone-700 leading-relaxed mt-2">{t.quote}</p>
-              <div className="mt-6 pt-5 border-t border-stone-100">
-                <div className="font-bold text-sm text-stone-900">{t.name}</div>
-                <div className="text-xs text-stone-500">{t.role} · {t.hotel}</div>
+              <div className="mt-6 pt-5 border-t border-stone-100 flex items-center gap-3">
+                <div className={`w-9 h-9 rounded-full ${t.accent} flex items-center justify-center text-white text-xs font-black`}>
+                  {t.name.split(" ").map((w) => w[0]).join("")}
+                </div>
+                <div>
+                  <div className="font-bold text-sm text-stone-900">{t.name}</div>
+                  <div className="text-xs text-stone-500">{t.role} · {t.hotel}</div>
+                </div>
               </div>
             </motion.div>
           ))}
@@ -319,55 +340,55 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="bg-[#F5F4F0] border-y border-black/5 py-24">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8">
+      <section id="pricing" className="relative bg-gradient-to-b from-[#F5F4F0] via-blue-50/40 to-[#F5F4F0] border-y border-black/5 py-24 overflow-hidden">
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-8">
           <motion.div {...fadeUp} className="max-w-2xl mb-14">
             <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#1D4ED8] mb-3">Pricing</div>
-            <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Simple per-room pricing. No surprises.</h2>
+            <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Simple per-room pricing. <span className="bg-gradient-to-r from-[#10B981] to-[#06B6D4] bg-clip-text text-transparent">No surprises.</span></h2>
             <p className="mt-4 text-stone-600">Pay per room, per month. Every plan includes onboarding, data migration and unlimited users. Add <a href="/reveniq" className="text-[#1D4ED8] font-bold hover:underline">ReveniQ revenue AI</a> to any plan.</p>
           </motion.div>
           <div className="grid md:grid-cols-3 gap-6 items-start">
             {[
               {
-                name: "Starter", price: "€4", note: "per room / month",
+                name: "Starter", price: "€4", note: "per room / month", accent: "text-[#10B981]",
                 desc: "Core operations for independent hotels.",
                 items: ["PMS: calendar, front desk & housekeeping", "Direct booking engine", "Payments & invoicing", "Guest messaging inbox", "Standard reports"],
                 cta: "Start with Starter", highlight: false,
               },
               {
-                name: "Professional", price: "€7", note: "per room / month",
+                name: "Professional", price: "€7", note: "per room / month", accent: "text-white",
                 desc: "Full operations, distribution and guest experience.",
                 items: ["Everything in Starter", "Channel manager & parity alerts", "Digital check-in, kiosk & room keys", "Upsells, surveys & review autopilot", "POS, F&B and events", "P&L, budgets & scheduled reports"],
                 cta: "Choose Professional", highlight: true,
               },
               {
-                name: "Enterprise", price: "Custom", note: "chains & groups",
+                name: "Enterprise", price: "Custom", note: "chains & groups", accent: "text-[#F97316]",
                 desc: "Multi-property, custom SLAs and integrations.",
                 items: ["Everything in Professional", "Multi-property & chain benchmarking", "Owner & agency portals", "Custom integrations & API access", "Dedicated success manager"],
                 cta: "Contact Sales", highlight: false,
               },
             ].map((p, i) => (
               <motion.div key={p.name} {...fadeUp} transition={{ ...fadeUp.transition, delay: i * 0.08 }}
-                className={`rounded-2xl p-7 border transition-transform duration-300 hover:-translate-y-1 ${p.highlight ? "bg-[#0A0F1C] text-white border-white/10 shadow-[0_24px_60px_rgba(10,15,28,0.3)] md:-mt-4" : "bg-white border-black/5"}`}
+                className={`rounded-2xl p-7 border transition-transform duration-300 hover:-translate-y-1 ${p.highlight ? "bg-[#0A0F1C] text-white border-transparent ring-2 ring-[#06B6D4]/60 shadow-[0_24px_60px_rgba(29,78,216,0.35)] md:-mt-4" : "bg-white border-black/5"}`}
                 data-testid={`pricing-${p.name.toLowerCase()}`}>
                 {p.highlight && (
-                  <div className="inline-block px-3 py-1 rounded-full bg-[#1D4ED8] text-white text-[10px] font-bold uppercase tracking-widest mb-4">Most popular</div>
+                  <div className="inline-block px-3 py-1 rounded-full bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] text-white text-[10px] font-bold uppercase tracking-widest mb-4">Most popular</div>
                 )}
                 <h3 className={`text-lg font-bold ${p.highlight ? "text-white" : "text-stone-900"}`}>{p.name}</h3>
                 <div className="mt-3 flex items-baseline gap-2">
-                  <span className={`text-4xl font-extrabold tabular-nums ${p.highlight ? "text-white" : "text-stone-900"}`}>{p.price}</span>
+                  <span className={`text-4xl font-extrabold tabular-nums ${p.highlight ? "bg-gradient-to-r from-blue-300 to-cyan-300 bg-clip-text text-transparent" : p.accent}`}>{p.price}</span>
                   <span className={`text-xs font-medium ${p.highlight ? "text-stone-400" : "text-stone-500"}`}>{p.note}</span>
                 </div>
                 <p className={`mt-2 text-sm ${p.highlight ? "text-stone-300" : "text-stone-600"}`}>{p.desc}</p>
                 <ul className="mt-6 space-y-2.5">
                   {p.items.map((it) => (
                     <li key={it} className={`flex items-start gap-2.5 text-sm ${p.highlight ? "text-stone-200" : "text-stone-700"}`}>
-                      <CheckCircle2 size={15} className={`mt-0.5 shrink-0 ${p.highlight ? "text-emerald-400" : "text-[#1D4ED8]"}`} /> {it}
+                      <CheckCircle2 size={15} className={`mt-0.5 shrink-0 ${p.highlight ? "text-emerald-400" : "text-[#10B981]"}`} /> {it}
                     </li>
                   ))}
                 </ul>
                 <button onClick={() => scrollTo("#demo")} data-testid={`pricing-cta-${p.name.toLowerCase()}`}
-                  className={`mt-7 w-full py-3 rounded-lg text-sm font-bold transition-colors ${p.highlight ? "bg-[#1D4ED8] hover:bg-[#1E40AF] text-white" : "border border-stone-300 hover:border-stone-500 text-stone-800"}`}>
+                  className={`mt-7 w-full py-3 rounded-lg text-sm font-bold transition-colors ${p.highlight ? "bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:from-[#1E40AF] hover:to-[#0891B2] text-white" : "border-2 border-stone-300 hover:border-[#1D4ED8] hover:text-[#1D4ED8] text-stone-800"}`}>
                   {p.cta}
                 </button>
               </motion.div>
@@ -377,41 +398,46 @@ export default function LandingPage() {
       </section>
 
       {/* Demo form */}
-      <section id="demo" className="max-w-7xl mx-auto px-5 sm:px-8 py-24 grid lg:grid-cols-12 gap-12">
-        <motion.div {...fadeUp} className="lg:col-span-5">
-          <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#1D4ED8] mb-3">Get started</div>
-          <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">See your hotel inside MyHotelBox</h2>
-          <p className="mt-4 text-stone-600 leading-relaxed">Tell us about your property and we'll prepare a walkthrough with your room types, your outlets and your OTA mix — not a generic slideshow.</p>
-          <ul className="mt-8 space-y-3">
-            {["30-minute personalised demo", "Migration & onboarding plan included", "Pricing quote for your exact room count"].map((t) => (
-              <li key={t} className="flex items-center gap-3 text-sm text-stone-700">
-                <CheckCircle2 size={16} className="text-emerald-500 shrink-0" /> {t}
-              </li>
-            ))}
-          </ul>
-        </motion.div>
-        <motion.div {...fadeUp} className="lg:col-span-7">
-          <DemoForm product="pms" />
-        </motion.div>
+      <section id="demo" className="relative overflow-hidden">
+        <div className="absolute top-[20%] left-[-100px] w-[360px] h-[360px] rounded-full bg-[#10B981]/10 blur-3xl" aria-hidden="true" />
+        <div className="absolute bottom-[-80px] right-[-80px] w-[400px] h-[400px] rounded-full bg-[#1D4ED8]/10 blur-3xl" aria-hidden="true" />
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-8 py-24 grid lg:grid-cols-12 gap-12">
+          <motion.div {...fadeUp} className="lg:col-span-5">
+            <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#10B981] mb-3">Get started</div>
+            <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">See your hotel inside MyHotelBox</h2>
+            <p className="mt-4 text-stone-600 leading-relaxed">Tell us about your property and we'll prepare a walkthrough with your room types, your outlets and your OTA mix — not a generic slideshow.</p>
+            <ul className="mt-8 space-y-3">
+              {["30-minute personalised demo", "Migration & onboarding plan included", "Pricing quote for your exact room count"].map((t) => (
+                <li key={t} className="flex items-center gap-3 text-sm text-stone-700">
+                  <CheckCircle2 size={16} className="text-[#10B981] shrink-0" /> {t}
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+          <motion.div {...fadeUp} className="lg:col-span-7">
+            <DemoForm product="pms" />
+          </motion.div>
+        </div>
       </section>
 
       {/* FAQ */}
       <section id="faq" className="max-w-4xl mx-auto px-5 sm:px-8 pb-24">
         <motion.div {...fadeUp}>
-          <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#1D4ED8] mb-3">FAQ</div>
+          <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#F97316] mb-3">FAQ</div>
           <h2 className="text-3xl font-bold tracking-tight mb-6">Questions hoteliers ask us</h2>
           {FAQS.map((f, i) => <FaqItem key={f.q} q={f.q} a={f.a} idx={i} />)}
         </motion.div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-[#0A0F1C] text-white">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 py-20">
+      <footer className="relative bg-[#0A0F1C] text-white overflow-hidden">
+        <div className="absolute top-[-120px] left-[20%] w-[420px] h-[420px] rounded-full bg-[#1D4ED8]/20 blur-3xl" aria-hidden="true" />
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-8 py-20">
           <div className="grid lg:grid-cols-12 gap-12">
             <div className="lg:col-span-7">
-              <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tighter leading-tight">Ready to run<br />a calmer hotel?</h2>
+              <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tighter leading-tight">Ready to run<br /><span className="bg-gradient-to-r from-blue-400 via-cyan-300 to-emerald-300 bg-clip-text text-transparent">a calmer hotel?</span></h2>
               <button onClick={() => scrollTo("#demo")} data-testid="footer-demo-btn"
-                className="mt-8 px-7 py-3.5 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white font-bold transition-colors inline-flex items-center gap-2">
+                className="mt-8 px-7 py-3.5 rounded-lg bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:from-[#1E40AF] hover:to-[#0891B2] text-white font-bold transition-colors inline-flex items-center gap-2 shadow-[0_8px_24px_rgba(6,182,212,0.3)]">
                 Request a demo <ArrowRight size={16} />
               </button>
             </div>
@@ -422,7 +448,7 @@ export default function LandingPage() {
                   <li><button onClick={() => scrollTo("#product")} className="hover:text-white transition-colors">Property Management</button></li>
                   <li><button onClick={() => scrollTo("#pricing")} className="hover:text-white transition-colors">Pricing</button></li>
                   <li><button onClick={() => scrollTo("#faq")} className="hover:text-white transition-colors">FAQ</button></li>
-                  <li><a href="/reveniq" className="hover:text-white transition-colors font-bold text-blue-300" data-testid="footer-reveniq-link">ReveniQ — Revenue AI ↗</a></li>
+                  <li><a href="/reveniq" className="hover:text-white transition-colors font-bold text-cyan-300" data-testid="footer-reveniq-link">ReveniQ — Revenue AI ↗</a></li>
                 </ul>
               </div>
               <div>
@@ -436,7 +462,7 @@ export default function LandingPage() {
           </div>
           <div className="mt-16 pt-8 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs text-[#9CA3AF]">
             <span>© {new Date().getFullYear()} MyHotelBox. All rights reserved.</span>
-            <span className="flex items-center gap-2"><ShieldCheck size={13} /> PCI-DSS compliant payments · GDPR ready</span>
+            <span className="flex items-center gap-2"><ShieldCheck size={13} className="text-emerald-400" /> PCI-DSS compliant payments · GDPR ready</span>
           </div>
         </div>
       </footer>

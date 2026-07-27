@@ -2302,3 +2302,13 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Admin: DemoLeadsPanel (Guests > 'Demo talepleri (web sitesi)', demo-leads-btn) — KPI kartları,
   durum filtreleri, MyHotelBox/ReveniQ ürün rozetleri, iletişim/kapat/sil aksiyonları.
 - TEST: iteration_463 (tek site, %100) + iteration_464 (çift site, %100, 0 sorun). DB temiz.
+
+## Iter 465 (2026-07-27) — Pazarlama Siteleri Canlı Renk Revizyonu TAMAMLANDI
+- Kullanıcı: "canlı renkler kullan, çok basit duruyor". LandingPage.js + ReveniqLanding.js yeniden yazıldı.
+- Palet: safir mavi + camgöbeği + zümrüt + amber + mercan + gül (mor/violet YOK).
+- Eklenenler: gradient başlıklar (bg-clip-text), hero arka plan renk blob'ları (blur-3xl),
+  gradient CTA butonları + renkli gölgeler, özellik kartlarında renkli üst şeritler + renkli
+  etiket çipleri, 8 motor kartında 8 farklı renkli ikon, renkli KPI/istatistik sayıları,
+  gradient SVG forecast çizgisi, renkli testimonial avatarları, marquee renkli noktalar.
+- Tüm data-testid'ler AYNEN korundu (test regresyonu yok). Görsel doğrulama: 4 ekran görüntüsü
+  (iki hero + MHB pricing + RQ engines) — hepsi doğru render.

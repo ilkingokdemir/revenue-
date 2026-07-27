@@ -58,14 +58,14 @@
 - ~~sw.js offline stratejisini genişlet (route cache + offline fallback sayfası)~~ YAPILDI (iter 387: API cache + offline.html + OfflineBanner)
 - ~~Offline aksiyon kuyruğu (HK görev/oda durumu yazmaları)~~ YAPILDI (iter 388: offlineQueue.js + banner sayacı)
 - ~~App.js refactor (5200 satır → görünüm bazlı alt dosyalar; davranış değişmeden)~~ FAZ 1+2 YAPILDI (iter 386+390: navigasyon config + perm map + 8 büyük panel bileşeni ayrıldı, 5230→2531 satır). Kalan opsiyonel faz: Dashboard render bloklarının ayrıştırılması
-- server.py tick worker'larını ayrı worker modülüne taşı
+- ~~server.py tick worker'larını ayrı worker modülüne taşı~~ YAPILDI (iter 466: backend/workers.py — scheduled_checkout_loop + reports_loop)
 - ~~React linter uyarıları~~ YAPILDI (iter 379, sıfır uyarı)
 - ~~Legacy modal görünümlerini (analytics/templates/integrations/alerts/reports/branding/approvals) inline panele çevir~~ YAPILDI (iter 389, test ajanı 7/7 PASS)
 
 ## P2
 - PCI-DSS / SOC 2 hazırlık dokümantasyonu
 - Native Mobile App (React Native) — kullanıcı talimatıyla backlog'da
-- Kupon dönüşüm A/B ölçümü (farklı indirim oranlarını test et)
+- ~~Kupon dönüşüm A/B ölçümü (farklı indirim oranlarını test et)~~ YAPILDI (iter 466: rebook.py sweep-ab + discount-ab; RebookPanel A/B bölümü, Wilson LB + marj skoru ile kazanan)
 
 ## Süreç Kuralı
 Her iterasyonda: yapılan işi CHANGELOG.md'ye ekle, bu dosyada ilgili maddeyi

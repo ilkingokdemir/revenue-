@@ -36,6 +36,16 @@ def _gen_coupon() -> str:
     return "REBOOK-" + "".join(secrets.choice(alphabet) for _ in range(6))
 
 
+def _wilson_lower(p: float, n: int) -> float:
+    if n == 0:
+        return 0.0
+    z = 1.96
+    denom = 1 + z * z / n
+    centre = p + z * z / (2 * n)
+    margin = z * ((p * (1 - p) + z * z / (4 * n)) / n) ** 0.5
+    return max(0.0, (centre - margin) / denom)
+
+
 def _build_email_html(d: dict, book_url: str) -> str:
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;color:#292524;">
@@ -77,17 +87,25 @@ def create_rebook_router(db, require_roles):
     router = APIRouter()
 
     async def _sweep_core(property_id: str = "", days_after: int = 30,
-                          discount_pct: float = 10.0) -> dict:
+                          discount_pct: float = 10.0,
+                          discount_pcts: Optional[list] = None) -> dict:
         target = (_today() - timedelta(days=days_after)).isoformat()
         q: Dict = {"check_out": {"$regex": f"^{target}"}, "status": "checked_out"}
         if property_id and property_id != "all":
             q["property_id"] = property_id
         bookings = await db.bookings.find(q, {"_id": 0}).to_list(5000)
         base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+        variants = [float(p) for p in (discount_pcts or []) if p is not None]
         queued, sent = 0, 0
         for b in bookings:
             if await db.rebook_dispatches.find_one({"booking_id": b["id"]}, {"_id": 0, "id": 1}):
                 continue
+            if variants:
+                idx = queued % len(variants)
+                discount_pct = variants[idx]
+                ab_variant = chr(ord("A") + idx)
+            else:
+                ab_variant = ""
             token = secrets.token_urlsafe(20)
             coupon = _gen_coupon()
             valid_until = (datetime.now(timezone.utc) + timedelta(days=90)).isoformat()
@@ -111,6 +129,7 @@ def create_rebook_router(db, require_roles):
                 "last_check_out": b.get("check_out", ""),
                 "loyalty_discount_pct": float(discount_pct),
                 "coupon_code": coupon, "coupon_valid_until": valid_until,
+                "ab_variant": ab_variant,
                 "channel": "email", "scheduled_for": _now(),
                 "status": "pending", "clicked": False, "clicked_at": "",
             }
@@ -138,6 +157,56 @@ def create_rebook_router(db, require_roles):
             property_id=body.get("property_id", ""),
             days_after=int(body.get("days_after_checkout") or 30),
             discount_pct=float(body.get("loyalty_discount_pct") or 10.0))
+
+    @router.post("/rebook/sweep-ab")
+    async def sweep_ab(data: Optional[Dict] = None,
+                       current_user: dict = Depends(require_roles("admin", "manager"))):
+        body = data or {}
+        pcts = [float(body.get("pct_a") or 10.0), float(body.get("pct_b") or 15.0)]
+        return await _sweep_core(
+            property_id=body.get("property_id", ""),
+            days_after=int(body.get("days_after_checkout") or 30),
+            discount_pcts=pcts)
+
+    @router.get("/rebook/{property_id}/discount-ab")
+    async def discount_ab(property_id: str, days: int = 90,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        q: Dict = {"scheduled_for": {"$gte": since}}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        rows = await db.rebook_dispatches.find(q, {"_id": 0}).to_list(5000)
+        groups: Dict[float, dict] = {}
+        for r in rows:
+            pct = float(r.get("loyalty_discount_pct") or 0)
+            g = groups.setdefault(pct, {"discount_pct": pct, "sent": 0, "clicked": 0,
+                                        "codes": [], "variant": r.get("ab_variant") or ""})
+            g["sent"] += 1
+            if r.get("clicked"):
+                g["clicked"] += 1
+            if r.get("coupon_code"):
+                g["codes"].append(r["coupon_code"])
+        for g in groups.values():
+            redeemed = 0
+            if g["codes"]:
+                redeemed = await db.direct_conversion_offers.count_documents(
+                    {"coupon_code": {"$in": g["codes"]}, "status": "redeemed"})
+            g["redeemed"] = redeemed
+            g["click_rate"] = round(g["clicked"] * 100 / max(g["sent"], 1), 1)
+            g["conversion_rate"] = round(redeemed * 100 / max(g["sent"], 1), 1)
+            g["wilson_lb"] = round(_wilson_lower(redeemed / max(g["sent"], 1), g["sent"]) * 100, 2)
+            # net revenue impact proxy: conversion weighted by margin left after discount
+            g["margin_score"] = round(g["conversion_rate"] * (1 - g["discount_pct"] / 100), 2)
+            g.pop("codes", None)
+        items = sorted(groups.values(), key=lambda x: x["discount_pct"])
+        winner = None
+        eligible = [g for g in items if g["sent"] >= 5]
+        if len(eligible) >= 2:
+            best = max(eligible, key=lambda x: (x["wilson_lb"], x["margin_score"]))
+            if best["redeemed"] > 0:
+                winner = best["discount_pct"]
+        return {"items": items, "winner_pct": winner,
+                "min_sample": 5, "window_days": days}
 
     @router.get("/rebook/{property_id}/dispatches")
     async def list_disp(property_id: str, days: int = 60,

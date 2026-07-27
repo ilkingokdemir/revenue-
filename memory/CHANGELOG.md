@@ -2407,3 +2407,8 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - DOĞRULANDI: 3×%10 kademeli → £79 hedef → brüt £108.37 (97.53→87.78→79.0), 3 tarihe yazıldı,
   koruma kırpması 0. UI ekran görüntüsü: katmanlar + hesap + OTA önizleme tam çalışıyor.
 - Örnek veriler bırakıldı: Phone/Last minute/Genius %10 katmanları.
+
+## iter 466 (2026-07-27)
+- Owner↔Admin 2 yönlü fiyat panosu DOĞRULANDI (GET /api/owner-rates/{pid}/board curl PASS) — özellik kapatıldı.
+- P1: server.py inline tick worker'ları /app/backend/workers.py modülüne taşındı (scheduled_checkout_loop, reports_loop). Davranış değişmedi, backend temiz başladı.
+- P2: Kupon İndirim A/B Ölçümü — rebook.py'ye POST /api/rebook/sweep-ab (50/50 varyant dağıtımı, ab_variant alanı) + GET /api/rebook/{pid}/discount-ab (indirim oranına göre gönderim/tıklama/kupon kullanımı/dönüşüm + Wilson alt sınırı + marj skoru ile kazanan; min 5 örnek). RebookPanel'e A/B bölümü (varyant girişleri, sweep butonu, karşılaştırma tablosu, kazanan rozeti). Curl + screenshot ile doğrulandı: %15 varyantı %50 dönüşümle kazanan seçildi.

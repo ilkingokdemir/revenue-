@@ -1,129 +1,120 @@
 {
-  "project_context": "B2B Hotel Platform & RMS (ReveniQ, MyHotelBox) - 90+ panels",
-  "theme_strategy": "Light mode for content areas (Dashboards, Tables, Forms) for high data legibility, and Dark mode for structural elements (Sidebar, Hero Cards) to create an 'Enterprise Command Center' feel.",
+  "theme": "Light mode by default with high-contrast Dark Navy sections (e.g., Hero or Revenue Management feature section) for visual rhythm and authority. No generic center alignments.",
   "typography": {
-    "headings": {
-      "family": "Manrope",
-      "import_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&display=swap",
-      "description": "Used for all panel titles, KPI values, and hero sections. Geometric but humanistic, breaking away from standard 'AI-slop' generic fonts.",
-      "tracking": "tracking-tight",
-      "css_var": "--font-heading"
+    "fonts": {
+      "headings": "Manrope",
+      "body": "IBM Plex Sans",
+      "mono": "IBM Plex Mono"
     },
-    "body": {
-      "family": "IBM Plex Sans",
-      "import_url": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap",
-      "description": "Used for tables, data grids, inputs, and standard text. Excellent for tabular figures, imparting a 'Swiss-engineered' professional feel.",
-      "css_var": "--font-body"
+    "rules": {
+      "h1": "text-5xl lg:text-6xl tracking-tighter leading-tight font-extrabold text-left",
+      "h2": "text-3xl lg:text-4xl tracking-tight leading-snug font-bold text-left",
+      "h3": "text-xl lg:text-2xl font-semibold tracking-tight text-left",
+      "body": "text-base lg:text-lg leading-relaxed text-left",
+      "labels": "text-xs font-bold uppercase tracking-[0.2em]"
     }
   },
   "colors": {
-    "archetype": "Swiss & High-Contrast (Enterprise Authority)",
-    "primary": {
-      "DEFAULT": "#1D4ED8",
-      "foreground": "#FFFFFF",
-      "hover": "#1E40AF",
-      "description": "Sapphire Blue - A deep, trustworthy primary action color."
+    "primary": "#1D4ED8",
+    "primary_hover": "#1E40AF",
+    "background_light": "#FDFCFB",
+    "surface_light": "#F5F4F0",
+    "background_dark": "#0A0F1C",
+    "surface_dark": "#111827",
+    "text_main_light": "#1C1917",
+    "text_muted_light": "#57534E",
+    "text_main_dark": "#F9FAFB",
+    "text_muted_dark": "#9CA3AF",
+    "accents": {
+      "sage": "#849B89",
+      "terracotta": "#E07A5F",
+      "sand": "#E5E0D8"
     },
-    "sidebar": {
-      "background": "#0A0F1C",
-      "foreground": "#F8FAFC",
-      "border": "#1E293B",
-      "active_bg": "rgba(255,255,255,0.05)",
-      "active_text": "#FFFFFF"
-    },
-    "surface": {
-      "app_background": "#F4F6F8",
-      "card_background": "#FFFFFF",
-      "card_border": "#E2E8F0"
-    },
-    "hero_card": {
-      "gradient_start": "#1C1917",
-      "gradient_end": "#292524",
-      "tint": "rgba(29, 78, 216, 0.10)",
-      "text": "#FAFAF9",
-      "description": "Replaces generic flat gradients with a deep stone base overlaid with a subtle 10% primary tint for depth."
-    },
-    "semantic": {
-      "success": "#059669",
-      "warning": "#D97706",
-      "danger": "#DC2626",
-      "info": "#0284C7"
-    }
-  },
-  "grids": {
-    "dashboard_density": "High Density Grid Strategy (grid-cols-1 md:grid-cols-3 lg:grid-cols-4) with gap-6.",
-    "kpi_cards": "col-span-1, minimal padding (p-5), keeping numbers aligned to the left.",
-    "data_tables": "col-span-full or col-span-3, allowing horizontal expansion.",
-    "spacing_scale": "Strict use of Tailwind spacing. Internal card padding must be p-6 to avoid text collision."
-  },
-  "layouts": {
-    "sidebar": "Fixed left sidebar (w-64). Dark theme (#0A0F1C) background with 1px right border.",
-    "header": "Sticky top header, solid white background (bg-white) with a subtle bottom border (border-b border-slate-200) - NEVER transparent.",
-    "content_area": "bg-[#F4F6F8]. Generous padding (p-6 md:p-8) to give data breathing room.",
-    "hero_card_pattern": "Gradient dark stone card spanning the top row (col-span-full), rounded-lg, overlapping slightly with the content beneath to create z-axis depth."
+    "rules": "No violet/purple gradients. Avoid pure black/white. Use text shadow over images to pass APCA contrast. Buttons and highlights use primary blue. Dark backgrounds for data/analytics sections to convey power."
   },
   "visual_enhancers": {
-    "border_radius": {
-      "global": "0.5rem",
-      "css_var": "--radius: 0.5rem;",
-      "description": "8px (rounded-lg) for cards and buttons. Avoids the 'AI' overly pill-shaped or brutally sharp corners. Feels structurally sound."
-    },
-    "shadows": {
-      "card": "0 2px 8px -2px rgba(10, 15, 28, 0.04)",
-      "hover": "0 10px 24px -4px rgba(10, 15, 28, 0.08)",
-      "description": "Very soft, blue-tinted ambient shadows. Never use harsh black drop shadows."
-    },
-    "borders": {
-      "card": "1px solid #E2E8F0 (border-slate-200)",
-      "sidebar": "1px solid #1E293B (border-slate-800)"
-    }
+    "surfaces": "Mix of Flat Solid backgrounds for trustworthiness and Glassmorphism (backdrop-blur-xl bg-white/70) for sticky header only.",
+    "borders": "Subtle 1px borders on feature cards (border-black/5 in light mode, border-white/10 in dark mode).",
+    "shadows": "Diffuse, ambient shadows for interactive elements. Flat design for foundational elements. shadow-[0_8px_32px_rgba(29,78,216,0.08)]",
+    "radius": "Subtle roundness, max 8px (rounded-lg) for buttons and cards. Organic feel, not heavily bubbled."
   },
-  "components": {
-    "buttons": "Moderate border radius (rounded-md). Crisp hover states with background darkening and subtle transform (-translate-y-[1px]).",
-    "tables": "Shadcn-based. Left-aligned text, right-aligned numbers. Header row has bg-slate-50 and border-b. Remove vertical borders for cleaner 'Stripe-like' look.",
-    "kpi_cards": "Flat background (bg-white), 1px subtle border, soft shadow. Top-left oriented values for F-pattern scanning.",
-    "forms": "Use Shadcn components. Inputs must have clear focus rings (ring-2 ring-blue-600/20 border-blue-600). Do not use generic native inputs.",
-    "dialogs": "Solid white background, dark overlay (bg-slate-900/40 backdrop-blur-sm)."
+  "layouts": {
+    "spacing": "Generous. Use p-12, p-16, py-24, py-32 for sections to give breathing room.",
+    "grid_strategy": "The 'Tetris' Bento Grid (Mode A) for the Features section. Asymmetrical layouts: e.g., col-span-8 for primary feature (PMS), col-span-4 for secondary (Guest Exp). Never center everything.",
+    "alignment": "Strictly left-aligned text for readability. Optical alignment for icons."
   },
   "motion": {
-    "micro_interactions": "All interactive elements need hover states. Use transition-colors duration-200.",
-    "entrance": "Staggered fade-up for dashboard widgets (opacity-0 translate-y-2 -> opacity-100 translate-y-0) using CSS animations.",
-    "accessibility": "Respect prefers-reduced-motion."
+    "hover": "Slight lift (-translate-y-1) for pricing/feature cards. Primary buttons: bg darkens (hover:bg-[#1E40AF]), text remains white.",
+    "scroll": "Smooth reveal using framer-motion (y: 20 to 0, opacity: 0 to 1) staggered for lists and grid items.",
+    "micro": "Interactive elements must feel tactile. Provide immediate visual feedback."
   },
-  "accessibility": {
-    "contrast": "Ensure all text meets WCAG AA (4.5:1). Dark hero cards must use text-white/90. Avoid pure white on light grey.",
-    "testing": "All interactive and key informational elements MUST include a data-testid attribute.",
-    "focus": "Clear focus rings on all inputs and buttons."
+  "components": {
+    "navigation": "Sticky top, backdrop-blur-xl bg-background_light/80, z-50. Logo left, Links center, 'Sign In' (ghost/outline) and 'Request Demo' (solid primary) right.",
+    "hero": "Asymmetrical split. Left: High-impact H1 + subtext + CTA + Trust indicators (logos). Right: High-quality product dashboard mockup overlaid on a subtle organic shape or image.",
+    "trust_bar": "Grayscale/low-opacity logos of partner hotels/brands running in a slow, continuous horizontal marquee (react-fast-marquee).",
+    "features_bento": "Grid cols-1 md:grid-cols-12 gap-8. Mix of tall (row-span-2) and wide cards. Each card contains a label, title, short desc, and a relevant image or UI mockup snippet.",
+    "testimonials": "Masonry or staggered layout. Include real-sounding hotelier names, titles, hotel names, and distinct un-centered typography (e.g., large serif quotes if applicable, otherwise keep Manrope).",
+    "pricing": "3-column grid. Starter, Professional (highlighted), Enterprise. Distinct CTAs. Professional has 'Most Popular' badge. Enterprise CTA says 'Contact Sales'.",
+    "demo_form": "Shadcn form components. Fields: Name, Email, Hotel Name, Room Count (select), Message. Solid background card, distinct from page background.",
+    "faq": "Shadcn Accordion. Left-aligned, bordered bottom.",
+    "footer": "Dark Navy background (#0A0F1C). Massive 'Ready to upgrade?' heading. Multi-column links. Footer text in #9CA3AF."
   },
   "media": {
-    "icons": "Phosphor Icons (@phosphor-icons/react). Professional, consistent stroke weights.",
-    "image_usage": "Images are used primarily in the public booking engine or login screens. Never use placeholders."
+    "icons": "lucide-react for UI actions. @phosphor-icons/react (Duotone) for feature representations.",
+    "images": [
+      {
+        "category": "Hero Dashboard Mockup",
+        "url": "https://images.unsplash.com/photo-1686061594225-3e92c0cd51b0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NDh8MHwxfHNlYXJjaHwzfHxhYnN0cmFjdCUyMG1vZGVybiUyMHNvZnR3YXJlJTIwZGFzaGJvYXJkJTIwZ3JhcGh8ZW58MHx8fHwxNzg1MTMzOTE4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Clean modern dashboard interface to represent the MyHotelBox / ReveniQ software."
+      },
+      {
+        "category": "Feature - PMS / Front Desk",
+        "url": "https://images.unsplash.com/photo-1759038085950-1234ca8f5fed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwxfHxob3RlbCUyMGZyb250JTIwZGVzayUyMHN0YWZmfGVufDB8fHx8MTc4NTEzMzkxOHww&ixlib=rb-4.1.0&q=85",
+        "description": "Modern hotel reception desk with staff, illustrating PMS capabilities."
+      },
+      {
+        "category": "Feature - Guest Experience",
+        "url": "https://images.unsplash.com/photo-1713865470192-efd903813197?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwyfHxoYXBweSUyMGhvdGVsJTIwZ3Vlc3QlMjBsb29raW5nJTIwYXQlMjBwaG9uZXxlbnwwfHx8fDE3ODUxMzM5MTh8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Guest relaxing in a hotel room looking at their phone, representing mobile check-in and messaging."
+      },
+      {
+        "category": "Feature - Housekeeping",
+        "url": "https://images.unsplash.com/photo-1549638441-b787d2e11f14?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwyfHxob3RlbCUyMHJvb20lMjBjbGVhbmluZyUyMG1haWR8ZW58MHx8fHwxNzg1MTMzOTE4fDA&ixlib=rb-4.1.0&q=85",
+        "description": "Crisp clean hotel bed representing housekeeping management."
+      },
+      {
+        "category": "General Background / Trust",
+        "url": "https://images.unsplash.com/photo-1692153142524-60285a93c249?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODl8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBob3RlbCUyMGxvYmJ5JTIwbW9kZXJufGVufDB8fHx8MTc4NTEzMzkxOHww&ixlib=rb-4.1.0&q=85",
+        "description": "Luxury hotel lobby to set a premium, trustworthy tone for enterprise software."
+      }
+    ]
   },
-  "image_urls": {
-    "hotel_lobby_1": {
-      "url": "https://images.unsplash.com/photo-1677129667171-92abd8740fa3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwzfHxsdXh1cnklMjBob3RlbCUyMGxvYmJ5JTIwYXJjaGl0ZWN0dXJlfGVufDB8fHx8MTc4NTEwOTk0NHww&ixlib=rb-4.1.0&q=85",
-      "category": "Public Booking / Login Hero",
-      "description": "High-end luxury hotel lobby with a chandelier hanging from the ceiling"
-    },
-    "hotel_reception": {
-      "url": "https://images.unsplash.com/photo-1759038085950-1234ca8f5fed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1Mjh8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBob3RlbCUyMHJlY2VwdGlvbmlzdCUyMGRlc2t8ZW58MHx8fHwxNzg1MTA5OTQ0fDA&ixlib=rb-4.1.0&q=85",
-      "category": "Staff Dashboard Empty State / Onboarding",
-      "description": "Professional hotel reception desk with modern wooden furniture"
-    },
-    "hotel_room": {
-      "url": "https://images.pexels.com/photos/6434592/pexels-photo-6434592.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "category": "Booking Widget / Room Listing",
-      "description": "Contemporary hotel room interior with pillows and cover on bed"
-    }
+  "accessibility": {
+    "contrast": "Strict APCA/WCAG AA adherence. #1D4ED8 (Primary) on white is accessible. Avoid light grey text.",
+    "interactive": "All links and buttons must have clear :focus-visible states (ring-2 ring-primary ring-offset-2).",
+    "testing": "All interactive elements MUST include a data-testid attribute (e.g., data-testid='hero-request-demo-btn')."
   },
   "instructions_to_main_agent": [
-    "UPDATE index.css: Redefine the Shadcn root CSS variables based on the color and visual enhancers defined above (e.g., set --radius: 0.5rem, modify --primary to 226 71% 47% equivalent to #1D4ED8).",
-    "UPDATE tailwind.config.js: Add the font families 'Manrope' (for headings) and 'IBM Plex Sans' (for body) to the theme extension.",
-    "DO NOT rewrite the 90+ panels individually. Apply global styles that naturally inherit down to existing Shadcn and layout components.",
-    "ENSURE the dark sidebar is defined as a specific layout wrap class, e.g., 'bg-[#0A0F1C] text-slate-50', without altering the global light theme of the content area.",
-    "APPLY the hero card gradient globally to the designated hero component, using: bg-gradient-to-br from-stone-900 to-stone-800 with an absolute inset div of bg-blue-600/10.",
-    "REPLACE any 'Inter' or 'Roboto' imports in index.css or index.html with Manrope and IBM Plex Sans.",
-    "ADD data-testid attributes to core navigation items and main action buttons in the layout wrappers."
+    "Build the landing page at the root route ('/') using React, Tailwind CSS, and Framer Motion.",
+    "Do NOT use a generic centered layout. Use asymmetrical grid columns.",
+    "Implement the 'Tetris' grid layout for the features section with varied card sizes and images/icons.",
+    "The 'Sign In' button in the nav must link to the dashboard login page. The 'Request Demo' button should scroll to the form.",
+    "Implement a working Demo Request form using Shadcn UI forms. Ensure fields match requirements (Name, Email, Hotel Name, Room Count, Message).",
+    "Use Framer Motion for scroll-triggered entrance animations.",
+    "Avoid violet, purple, or generic AI gradients. Stick to the Sapphire Blue, Dark Navy, and Earthy Sand palette."
   ],
-  "UNIVERSAL GUIDELINES FOR MAIN AGENT": "Focus on high data legibility, structured alignment, and subtle interactions. Avoid generic centered layouts, simplistic pure-black shadows, and uniform AI-slop styling. The application must look meticulously hand-crafted by an enterprise team. Use nested radii correctly (inner element radius < outer element radius). Create depth through layered design elements with z-index hierarchy, but keep data tables flat and scannable. Never use transparent backgrounds on headers. Toast notifications must use Sonner."
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Avoid generic, 'on distribution' outputs. Make creative, distinctive frontends.",
+    "Do NOT use dark colors as gradients.",
+    "Do NOT apply universal transitions (e.g., transition: all). Add specific transitions for interactive elements.",
+    "Do NOT center align the app container in CSS.",
+    "Use modern pill-shaped or sharp buttons with interaction animations.",
+    "Never use AI assistant emojis for icons.",
+    "Include micro-animations for interactions.",
+    "Use generous spacing (2-3x normal).",
+    "Add subtle grain textures or noise overlays if possible to break digital flatness.",
+    "Use provided image URLs. Do NOT use placeholder image services.",
+    "Use sonner for toasts.",
+    "Use Lucide React and Phosphor Icons for standard imagery."
+  ]
 }

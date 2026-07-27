@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Gauge, Eye, EyeSlash, FloppyDisk, ArrowSquareOut } from "@phosphor-icons/react";
+import { Gauge, Eye, EyeSlash, FloppyDisk, ArrowSquareOut, EnvelopeSimple, PaperPlaneTilt } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -15,30 +15,48 @@ const MODULES = [
 ];
 
 export default function OwnerPulseAdminPanel({ propertyId }) {
+  const pid = !propertyId || propertyId === "all" ? "default" : propertyId;
   const [modules, setModules] = useState(null);
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [digestOn, setDigestOn] = useState(false);
+  const [digestLog, setDigestLog] = useState([]);
+  const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [{ data: cfg }, { data: dash }] = await Promise.all([
-        axios.get(`${API}/owner-pulse/${propertyId}/config`),
-        axios.get(`${API}/owner-pulse/${propertyId}/dashboard`),
+      const [{ data: cfg }, { data: dash }, { data: log }] = await Promise.all([
+        axios.get(`${API}/owner-pulse/${pid}/config`),
+        axios.get(`${API}/owner-pulse/${pid}/dashboard`),
+        axios.get(`${API}/owner-pulse/${pid}/digest/log`),
       ]);
       setModules(cfg.modules);
+      setDigestOn(!!cfg.digest_enabled);
       setPreview(dash);
+      setDigestLog(log.items || []);
     } catch { toast.error("Yüklenemedi"); }
-  }, [propertyId]);
+  }, [pid]);
 
   useEffect(() => { load(); }, [load]);
 
   const save = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API}/owner-pulse/${propertyId}/config`, { modules });
+      await axios.put(`${API}/owner-pulse/${pid}/config`, { modules, digest_enabled: digestOn });
       toast.success("Sahip portalı modülleri güncellendi");
     } catch { toast.error("Kaydedilemedi"); }
     setSaving(false);
+  };
+
+  const sendNow = async () => {
+    setSending(true);
+    try {
+      const { data } = await axios.post(`${API}/owner-pulse/${pid}/digest/send-now`);
+      toast.success(`Pulse özeti gönderildi: ${data.sent}/${data.owners} sahip`);
+      const { data: log } = await axios.get(`${API}/owner-pulse/${pid}/digest/log`);
+      setDigestLog(log.items || []);
+    } catch (e) { toast.error(e?.response?.data?.detail || "Gönderilemedi"); }
+    setSending(false);
   };
 
   if (!modules) return <div className="text-center py-12 text-stone-400 text-sm">Yükleniyor…</div>;
@@ -75,6 +93,39 @@ export default function OwnerPulseAdminPanel({ propertyId }) {
         className="px-4 py-2 rounded-lg bg-teal-500/20 border border-teal-500/40 text-teal-200 text-sm font-semibold inline-flex items-center gap-2 hover:bg-teal-500/30 disabled:opacity-50">
         <FloppyDisk size={15} /> {saving ? "Kaydediliyor…" : "Değişiklikleri Kaydet"}
       </button>
+
+      <div className="rounded-xl border border-stone-800 bg-stone-900/60 p-4 space-y-3" data-testid="opa-digest-section">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <div className="text-sm font-semibold text-stone-200 flex items-center gap-2"><EnvelopeSimple size={16} className="text-amber-400" /> Haftalık Pulse Özeti E-postası</div>
+            <div className="text-[11px] text-stone-500 mt-0.5">Her Pazartesi sahiplere otomatik gönderilir: aylık kartlar + haftanın 3 içgörüsü + portföy tablosu. (Resend anahtarı yoksa mock loglanır)</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setDigestOn(!digestOn)} data-testid="opa-digest-toggle"
+              className={`text-xs px-3 py-1.5 rounded-lg border font-semibold ${digestOn ? "bg-amber-500/15 border-amber-500/40 text-amber-300" : "bg-stone-800 border-stone-700 text-stone-400"}`}>
+              {digestOn ? "OTOMATİK AÇIK" : "OTOMATİK KAPALI"}
+            </button>
+            <button onClick={sendNow} disabled={sending} data-testid="opa-digest-send-now"
+              className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-200 font-semibold inline-flex items-center gap-1 disabled:opacity-50">
+              <PaperPlaneTilt size={13} /> {sending ? "Gönderiliyor…" : "Şimdi Gönder"}
+            </button>
+          </div>
+        </div>
+        {digestLog.length > 0 && (
+          <table className="w-full text-xs" data-testid="opa-digest-log">
+            <thead className="text-[9px] uppercase text-stone-500"><tr><th className="text-left py-1">Gönderim</th><th className="text-left">Sahip</th><th className="text-right">Durum</th></tr></thead>
+            <tbody>
+              {digestLog.slice(0, 8).map((l) => (
+                <tr key={l.id} className="border-t border-stone-800/60">
+                  <td className="py-1.5 text-stone-400">{(l.sent_at || "").slice(0, 16).replace("T", " ")}</td>
+                  <td className="text-stone-300">{l.owner_email}</td>
+                  <td className={`text-right font-semibold ${l.status === "failed" ? "text-rose-400" : "text-emerald-400"}`}>{l.status === "mock" ? "gönderildi (mock)" : l.status === "sent" ? "gönderildi" : "hata"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       {preview && (
         <div className="rounded-xl border border-stone-800 bg-stone-900/60 p-4" data-testid="opa-preview">

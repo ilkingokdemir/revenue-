@@ -13,7 +13,33 @@ import logging
 
 from routes.platform_ext.owner_self_service import _jwt_secret, JWT_ALGORITHM
 
+try:
+    import resend
+except Exception:
+    resend = None
+
+import os
+import asyncio
+import uuid
+
 logger = logging.getLogger(__name__)
+
+
+async def _send_email(to_email: str, subject: str, html: str) -> str:
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not resend or not api_key or api_key.startswith("re_1234"):
+        logger.info(f"[MOCK EMAIL] Pulse digest to {to_email}: {subject}")
+        return "mock"
+    try:
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from": os.environ.get("RESEND_FROM", "MyHotelBox <onboarding@resend.dev>"),
+            "to": [to_email], "subject": subject, "html": html,
+        })
+        return "sent"
+    except Exception as e:
+        logger.warning(f"Pulse digest email failed: {e}")
+        return "failed"
 
 MODULE_KEYS = ["dashboard", "demand_radar", "compset", "reports", "rates"]
 MONTH_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
@@ -290,6 +316,112 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
         mods = cfg.get("modules") or {}
         return {k: bool(mods.get(k, True)) for k in MODULE_KEYS}
 
+    async def _digest_enabled(pid: str) -> bool:
+        cfg = await db.owner_pulse_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        return bool(cfg.get("digest_enabled", False))
+
+    # ── Haftalık Pulse Özeti (digest) ──
+    def _sym(cur: str) -> str:
+        return {"GBP": "£", "EUR": "€", "TRY": "₺", "USD": "$"}.get(cur, (cur or "") + " ")
+
+    async def _build_digest_html(owner: dict) -> str:
+        pid = _pid(owner)
+        dash = await build_owner_dashboard(db, pid)
+        c = _sym(dash["currency"])
+        try:
+            radar = await demand_radar_router.build(property_id=pid, days=90, current_user=owner)
+            insights = (radar.get("insights") or [])[:3]
+        except Exception:
+            insights = []
+        cards_html = ""
+        for m in dash["month_cards"]:
+            yoy = ""
+            if m.get("yoy_pct") is not None:
+                col = "#059669" if m["yoy_pct"] >= 0 else "#e11d48"
+                yoy = f'<span style="color:{col};font-size:11px;font-weight:bold;">YoY {"+" if m["yoy_pct"]>=0 else ""}{m["yoy_pct"]}%</span>'
+            cards_html += f"""
+            <td style="width:33%;padding:6px;">
+              <div style="border:1px solid #e7e5e4;border-radius:10px;padding:12px;">
+                <div style="font-size:10px;color:#78716c;text-transform:uppercase;">{m['label']} · {m['tag']} {yoy}</div>
+                <div style="font-size:22px;font-weight:bold;color:#1c1917;margin-top:4px;">{c}{m['revenue']:,.0f}</div>
+                <div style="font-size:11px;color:#78716c;">Doluluk {m['occ']}% · ADR {c}{m['adr']:.0f}</div>
+              </div>
+            </td>"""
+        ins_html = "".join(
+            f'<li style="margin-bottom:6px;"><b>{i.get("title","")}</b><br/><span style="color:#78716c;font-size:12px;">{i.get("desc","")}</span></li>'
+            for i in insights) or '<li style="color:#78716c;">Bu hafta öne çıkan içgörü yok.</li>'
+        pf_html = ""
+        pids = owner.get("property_ids") or []
+        if len(pids) > 1:
+            rows = ""
+            for p in pids[:10]:
+                prop = await db.properties.find_one({"id": p}, {"_id": 0, "name": 1, "currency": 1}) or {}
+                try:
+                    cs_data = await compset_router.build(property_id=p, days=30, current_user=owner)
+                    k = cs_data.get("kpis", {})
+                except Exception:
+                    continue
+                ps = _sym(prop.get("currency") or "GBP")
+                rows += f'<tr><td style="padding:5px 8px;border-top:1px solid #f5f5f4;">{prop.get("name") or p}</td><td style="padding:5px 8px;border-top:1px solid #f5f5f4;text-align:right;">{k.get("my_occupancy")}%</td><td style="padding:5px 8px;border-top:1px solid #f5f5f4;text-align:right;">{ps}{k.get("my_adr")}</td><td style="padding:5px 8px;border-top:1px solid #f5f5f4;text-align:right;">#{k.get("occ_rank")}/{k.get("segment_size")}</td></tr>'
+            if rows:
+                pf_html = f"""
+                <h3 style="font-size:14px;color:#1c1917;margin:22px 0 8px;">Portföy Özeti</h3>
+                <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                  <tr style="color:#a8a29e;font-size:10px;text-transform:uppercase;"><td style="padding:5px 8px;">Tesis</td><td style="padding:5px 8px;text-align:right;">Occ</td><td style="padding:5px 8px;text-align:right;">ADR</td><td style="padding:5px 8px;text-align:right;">Sıra</td></tr>
+                  {rows}
+                </table>"""
+        base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+        return f"""
+        <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#292524;">
+          <h2 style="color:#0f766e;margin-bottom:2px;">Haftalık Pulse Özeti</h2>
+          <div style="font-size:12px;color:#78716c;margin-bottom:14px;">{dash.get('property_name') or pid} · Merhaba {owner.get('name','')}</div>
+          <table style="width:100%;border-collapse:collapse;"><tr>{cards_html}</tr></table>
+          <h3 style="font-size:14px;color:#1c1917;margin:22px 0 8px;">Bu Haftanın İçgörüleri</h3>
+          <ul style="font-size:13px;padding-left:18px;margin:0;">{ins_html}</ul>
+          {pf_html}
+          <p style="text-align:center;margin:26px 0 8px;">
+            <a href="{base}/owner" style="background:#0f766e;color:#fff;text-decoration:none;padding:11px 26px;border-radius:10px;font-weight:bold;display:inline-block;">Portalı Aç</a>
+          </p>
+          <p style="font-size:11px;color:#a8a29e;text-align:center;">Bu özet her Pazartesi otomatik gönderilir. Kapatmak için yönetim ofisiyle iletişime geçin.</p>
+        </div>"""
+
+    async def _digest_sweep(pid: str) -> dict:
+        q = {"$or": [{"property_id": pid}, {"property_ids": pid}]}
+        if pid == "default":
+            q["$or"].append({"property_id": {"$in": [None, ""]}})
+        owners = await db.unit_owners.find(q, {"_id": 0}).to_list(50)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        sent = 0
+        for o in owners:
+            email = (o.get("email") or "").strip()
+            if not email:
+                continue
+            html = await _build_digest_html(o)
+            result = await _send_email(email, "Haftalık Pulse Özeti — otelinizin nabzı", html)
+            await db.owner_digest_log.insert_one({
+                "id": str(uuid.uuid4()), "property_id": pid, "owner_id": o.get("id"),
+                "owner_email": email, "status": result, "sent_at": now_iso})
+            if result in ("sent", "mock"):
+                sent += 1
+        return {"ok": True, "owners": len(owners), "sent": sent}
+
+    async def _digest_loop(interval_seconds: int = 21600):
+        while True:
+            try:
+                now = datetime.now(timezone.utc)
+                if now.weekday() == 0:  # Pazartesi
+                    week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+                    async for cfg in db.owner_pulse_config.find({"digest_enabled": True}, {"_id": 0, "property_id": 1}):
+                        pid = cfg["property_id"]
+                        already = await db.owner_digest_log.find_one(
+                            {"property_id": pid, "sent_at": {"$gte": week_start}}, {"_id": 1})
+                        if not already:
+                            r = await _digest_sweep(pid)
+                            logger.info(f"Pulse digest ({pid}): {r['sent']}/{r['owners']} gönderildi")
+            except Exception as e:
+                logger.warning(f"Pulse digest loop error: {e}")
+            await asyncio.sleep(interval_seconds)
+
     async def _check(pid: str, key: str):
         mods = await _modules(pid)
         if not mods.get(key, True):
@@ -350,23 +482,49 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
     @router.get("/{pid}/config")
     async def admin_get_config(pid: str,
                                current_user: dict = Depends(require_roles("admin", "manager"))):
-        return {"property_id": pid, "modules": await _modules(pid)}
+        return {"property_id": pid, "modules": await _modules(pid),
+                "digest_enabled": await _digest_enabled(pid)}
 
     @router.put("/{pid}/config")
     async def admin_set_config(pid: str, data: Dict,
                                current_user: dict = Depends(require_roles("admin", "manager"))):
         mods = {k: bool((data.get("modules") or {}).get(k, True)) for k in MODULE_KEYS}
+        update = {"property_id": pid, "modules": mods,
+                  "updated_at": datetime.now(timezone.utc).isoformat(),
+                  "updated_by": current_user.get("email", "")}
+        if "digest_enabled" in data:
+            update["digest_enabled"] = bool(data["digest_enabled"])
         await db.owner_pulse_config.update_one(
-            {"property_id": pid},
-            {"$set": {"property_id": pid, "modules": mods,
-                      "updated_at": datetime.now(timezone.utc).isoformat(),
-                      "updated_by": current_user.get("email", "")}},
-            upsert=True)
-        return {"ok": True, "modules": mods}
+            {"property_id": pid}, {"$set": update}, upsert=True)
+        return {"ok": True, "modules": mods, "digest_enabled": update.get("digest_enabled")}
 
     @router.get("/{pid}/dashboard")
     async def admin_preview_dashboard(pid: str,
                                       current_user: dict = Depends(require_roles("admin", "manager"))):
         return await build_owner_dashboard(db, pid)
 
+    @router.post("/{pid}/digest/send-now")
+    async def admin_send_digest(pid: str,
+                                current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await _digest_sweep(pid)
+
+    @router.get("/{pid}/digest/log")
+    async def admin_digest_log(pid: str,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        rows = await db.owner_digest_log.find(
+            {"property_id": pid}, {"_id": 0}).sort("sent_at", -1).to_list(20)
+        return {"items": rows}
+
+    @router.get("/{pid}/digest/preview")
+    async def admin_digest_preview(pid: str,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        q = {"$or": [{"property_id": pid}, {"property_ids": pid}]}
+        if pid == "default":
+            q["$or"].append({"property_id": {"$in": [None, ""]}})
+        owner = await db.unit_owners.find_one(q, {"_id": 0})
+        if not owner:
+            raise HTTPException(404, "Bu tesise bağlı sahip yok")
+        return {"html": await _build_digest_html(owner), "owner_email": owner.get("email")}
+
+    router.digest_loop = _digest_loop
     return router

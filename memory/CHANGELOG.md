@@ -2428,3 +2428,9 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - OTB günlük snapshot worker'ı: workers.py otb_snapshot_loop (6 saatte bir kontrol, günde 1 idempotent arşiv, 180 gün saklama) — otb_daily_snapshots koleksiyonu; ilk çalıştırmada 91 satır arşivlendi.
 - compset_intel.py response'una currency eklendi; OwnerCompsetIntel KPI/drill-down artık tesis para birimini gösteriyor (CHF fix).
 - Test: pytest iter466 regresyonu 15/15 PASS; portfolio/financial/takings/pickup curl doğrulandı; UI screenshot'larla doğrulandı.
+
+## iter 468 (2026-07-27) — Haftalık Pulse Özeti E-postası
+- owner_pulse.py: _build_digest_html (aylık kartlar + YoY, haftanın 3 içgörüsü, çok tesisli portföy tablosu, portal CTA), _digest_sweep (tesise bağlı sahiplere gönderim + owner_digest_log), _digest_loop (Pazartesi otomatik, haftada 1 idempotent, server.py startup'ta create_task).
+- E-posta: Resend (RESEND_API_KEY yoksa MOCK loglanır). Admin endpoint'leri: POST /{pid}/digest/send-now, GET /{pid}/digest/log, GET /{pid}/digest/preview; config'e digest_enabled eklendi.
+- OwnerPulseAdminPanel: digest bölümü (otomatik aç/kapa + Şimdi Gönder + gönderim günlüğü); "all" property seçiminde pid→default normalizasyonu (0/0 gönderim bug'ı düzeltildi).
+- Test: curl 17/17 sahip mock gönderim + log + preview HTML doğrulandı; pytest iter466 regresyon 15/15 PASS; admin UI screenshot ile doğrulandı.

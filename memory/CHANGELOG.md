@@ -2492,3 +2492,12 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 ## iter 479 (2026-07-27) — Digest'e Riskli Tesis + Müdahale Etkisi Bölümleri
 - _build_digest_html: (1) "⚠ Dikkat gerektiren tesisler" — build_portfolio_overview'dan risk=true satırlar (ad + 30g ort. occ, amber kutu, portala yönlendirme notu); (2) "Müdahale Etkileri" — son 3 recovery_actions: ölçülmüşse %baseline→%güncel (+Δpp · verdict, renkli), değilse "izleniyor". Hata durumlarında bölümler sessizce atlanır.
 - Test: digest/preview HTML'de iki bölüm + 1 riskli tesis doğrulandı; send-now 17/17; tam regresyon 40/40 PASS.
+
+## 2026-07-27 — Iter 478: Akıllı Oda (IoT) + F&B↔Sadakat Köprüsü
+- YENİ: `routes/hotel_ops/smart_rooms.py` — IoT oda kontrol simülasyonu (ışık, termostat 16-30, klima modu, perde, DND, TV), 4 sahne (welcome/eco/night/checkout), Eco Sweep (boş odalar → eco, kWh tasarruf logu), enerji özeti + işlem günlüğü. Koleksiyonlar: smart_room_states, smart_room_actions, smart_room_energy_log.
+- YENİ: `SmartRoomsPanel.js` — sidebar "Akıllı Oda (IoT)" (smart-rooms-btn, Inventory & Assets bölümü). KPI kartları + oda grid + sahneler + günlük.
+- YENİ: F&B↔Sadakat: `fnb_tabs.py` — GET /fnb/tabs/{id}/loyalty-discount + close'a apply_loyalty. Booking → guest_profiles(email) → loyalty_guest_tiers → tier benefits regex "(\d+)% F&B" → otomatik indirim (örn. Gold %20, £50→£40 folyoya).
+- FnbTabsPanel CloseForm: amber sadakat banner'ı (fnb-loyalty-discount) + toggle + canlı toplam.
+- TEST: iteration_478.json — backend 15/15, frontend %100. Testing agent düzeltmesi: lazyPanels.js SmartRoomsPanel N()→L() (default export).
+- DERS: `export default` kullanan panellerde lazyPanels'ta L() helper kullan, N() named export içindir.
+- NOT: Sadakat/POS/dijital anahtar modülleri zaten mevcuttu (loyalty_tier.py, pos.py, digital_keys.py) — çakışma taraması yapıldı, sadece eksik parçalar (IoT kontrol + loyalty-POS köprüsü) eklendi.

@@ -27,6 +27,11 @@ const AC_LABEL = { off: "Kapalı", cool: "Soğutma", heat: "Isıtma", auto: "Oto
 
 export default function SmartRoomsPanel({ properties = [], activePropertyId }) {
   const [propertyId, setPropertyId] = useState(activePropertyId || properties[0]?.id || "default");
+
+  useEffect(() => {
+    if (activePropertyId && activePropertyId !== "all") setPropertyId(activePropertyId);
+  }, [activePropertyId]);
+
   const [rooms, setRooms] = useState([]);
   const [energy, setEnergy] = useState(null);
   const [tab, setTab] = useState("rooms");

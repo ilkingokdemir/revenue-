@@ -75,3 +75,9 @@ Her iterasyonda: yapılan işi CHANGELOG.md'ye ekle, bu dosyada ilgili maddeyi
 | Forecast Planlama (sürüm+kilit+onay+yorum+karşılaştırma) | revenue_ext/forecast_plans.py + ForecastPlansPanel | iter 449 DONE |
 Kalan FLYR boşlukları (P1 adayı): ~~gün-içi re-price~~ (iter 450 DONE), ~~AI MLOS/CTA kısıtlama önerileri~~ (iter 451 DONE),
 ~~forecast belirsizlik bandı~~ (iter 454 DONE), ~~grup blended-rate optimizasyonu~~ (iter 453 DONE), ~~bütçe-forecast-actual üçlü görünüm~~ (iter 452 DONE).
+
+## Iter 478 sonrası (2026-07-27)
+- DONE: Akıllı Oda / IoT Kontrol Merkezi (smart_rooms.py + SmartRoomsPanel) — sahneler, Eco Sweep, enerji tasarrufu KPI.
+- DONE: F&B ↔ Sadakat köprüsü — tab kapatırken tier F&B indirimi otomatik uygulanıyor (apply_loyalty).
+- P1 kalan: Native Mobile App (React Native), Eco Sweep'in workers.py'ye gece cron'u olarak bağlanması (şu an manuel buton).
+- P2: IoT gerçek donanım sağlayıcı adaptörleri (şu an simülasyon).

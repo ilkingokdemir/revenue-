@@ -2412,3 +2412,11 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Owner↔Admin 2 yönlü fiyat panosu DOĞRULANDI (GET /api/owner-rates/{pid}/board curl PASS) — özellik kapatıldı.
 - P1: server.py inline tick worker'ları /app/backend/workers.py modülüne taşındı (scheduled_checkout_loop, reports_loop). Davranış değişmedi, backend temiz başladı.
 - P2: Kupon İndirim A/B Ölçümü — rebook.py'ye POST /api/rebook/sweep-ab (50/50 varyant dağıtımı, ab_variant alanı) + GET /api/rebook/{pid}/discount-ab (indirim oranına göre gönderim/tıklama/kupon kullanımı/dönüşüm + Wilson alt sınırı + marj skoru ile kazanan; min 5 örnek). RebookPanel'e A/B bölümü (varyant girişleri, sweep butonu, karşılaştırma tablosu, kazanan rozeti). Curl + screenshot ile doğrulandı: %15 varyantı %50 dönüşümle kazanan seçildi.
+
+## iter 466b (2026-07-27) — Owner Pulse (Market Pulse paritesi)
+- Kullanıcı Market Pulse rakip ekran görüntülerini paylaştı; owner + admin taraflarına uygulandı.
+- Backend: routes/revenue_ext/owner_pulse.py — /api/owner-pulse/portal/{config,dashboard,demand-radar,booking-behavior,compset,reports/{performance|yoy|bookings|source}} (owner JWT) + /api/owner-pulse/{pid}/{config,dashboard} (admin). demand_radar.py & compset_intel.py router.build attribute'ları ile yeniden kullanıldı. Modül gating: owner_pulse_config koleksiyonu, kapalı modül → 403.
+- Owner portal (/owner) yeni sekmeler: Genel Bakış (aylık kartlar+YoY+90g doluluk&pickup+yıllık tablo), Talep Radarı (timeline+pickup+lead time/LOS+fırsat haritası+arz), Rekabet (KPI+sıralama+drill-down+tier+semtler), Raporlar (4 rapor + CSV). Mali Özet para birimi artık tesisten geliyor (CHF fix).
+- Admin: OwnerPulseAdminPanel ("owner-pulse-admin", Revenue & Rates menüsü) — 5 modül aç/kapa + önizleme.
+- Test: testing_agent iter_466 backend 15/15 PASS; HIGH bulgu (config useEffect kaybolmuştu) düzeltildi, gating UI'da doğrulandı (Rekabet sekmesi gizlendi). Regresyon: backend/tests/test_iteration466_owner_pulse.py.
+- DERS: Phosphor'da EyeOff yok → EyeSlash. search_replace sonrası kritik edit'lerin dosyada kaldığını grep ile doğrula (bir edit kayboldu).

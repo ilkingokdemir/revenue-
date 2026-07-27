@@ -170,8 +170,11 @@ def create_owner_auth_router(db, require_roles):
             "nights": sum(m["nights"] for m in months),
             "bookings_count": sum(m["bookings"] for m in months),
         }
+        prop = await db.properties.find_one(
+            {"id": owner.get("property_id") or "default"}, {"_id": 0, "currency": 1}) or {}
         return {
             "owner_id": owner["id"], "year": year,
+            "currency": prop.get("currency") or "GBP",
             "unit_count": len(unit_ids), "months": months, "total": total,
             "management_fee_percent": float(owner.get("management_fee_percent", 25)),
         }

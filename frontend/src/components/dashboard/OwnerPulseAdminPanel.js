@@ -42,7 +42,8 @@ export default function OwnerPulseAdminPanel({ propertyId }) {
   };
 
   if (!modules) return <div className="text-center py-12 text-stone-400 text-sm">Yükleniyor…</div>;
-  const c = preview?.currency === "GBP" ? "£" : "£";
+  const pc = preview?.currency || "GBP";
+  const c = pc === "GBP" ? "£" : pc === "EUR" ? "€" : pc === "TRY" ? "₺" : pc === "USD" ? "$" : pc + " ";
 
   return (
     <div className="space-y-6 rounded-2xl bg-stone-950 border border-stone-800 p-6" data-testid="owner-pulse-admin-panel">

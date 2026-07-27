@@ -63,6 +63,17 @@ export default function OwnerSelfServiceApp() {
 
   useEffect(() => { if (me) loadDashboard(); }, [me, loadDashboard]);
 
+  useEffect(() => {
+    if (!me) return;
+    ax().get("/owner-pulse/portal/config")
+      .then(r => {
+        const mods = r.data.modules || {};
+        setModules(mods);
+        if (mods.dashboard === false) setTab("summary");
+      })
+      .catch(() => setModules({}));
+  }, [me, ax]);
+
   function logout() {
     localStorage.removeItem(STORAGE_KEY);
     setToken(""); setMe(null); setDashboard(null);
@@ -71,6 +82,9 @@ export default function OwnerSelfServiceApp() {
   if (!token || !me) {
     return <OwnerLoginScreen onLogin={(t) => { localStorage.setItem(STORAGE_KEY, t); setToken(t); }} />;
   }
+
+  const dc = dashboard?.currency || "GBP";
+  const cs = dc === "GBP" ? "£" : dc === "EUR" ? "€" : dc === "TRY" ? "₺" : dc === "USD" ? "$" : dc + " ";
 
   return (
     <div className="min-h-screen bg-stone-50" data-testid="owner-self-service-app">
@@ -149,8 +163,8 @@ export default function OwnerSelfServiceApp() {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-              <KPI label="Brüt Gelir" value={`£${dashboard.total.revenue.toLocaleString("tr-TR")}`} icon={ChartLineUp} color="text-stone-900" />
-              <KPI label="Net Dağıtım" value={`£${dashboard.total.net_distribution.toLocaleString("tr-TR")}`} icon={ChartLineUp} color="text-emerald-600" />
+              <KPI label="Brüt Gelir" value={`${cs}${dashboard.total.revenue.toLocaleString("tr-TR")}`} icon={ChartLineUp} color="text-stone-900" />
+              <KPI label="Net Dağıtım" value={`${cs}${dashboard.total.net_distribution.toLocaleString("tr-TR")}`} icon={ChartLineUp} color="text-emerald-600" />
               <KPI label="Toplam Rezervasyon" value={dashboard.total.bookings_count} icon={House} color="text-stone-900" />
               <KPI label="Doluluk (gece)" value={dashboard.total.nights} icon={House} color="text-stone-900" />
             </div>
@@ -172,10 +186,10 @@ export default function OwnerSelfServiceApp() {
                   {dashboard.months.map((m, i) => (
                     <tr key={m.month} className="border-t border-stone-100" data-testid={`owner-month-${m.month}`}>
                       <td className="px-4 py-2 font-medium">{MONTH_LABELS[i]} {year}</td>
-                      <td className="px-4 py-2 text-right">£{m.revenue.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-right text-rose-600">-£{m.mgmt_fee.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-right text-rose-600">-£{m.opex_est.toFixed(2)}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-emerald-600">£{m.net_distribution.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right">{cs}{m.revenue.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-rose-600">-{cs}{m.mgmt_fee.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right text-rose-600">-{cs}{m.opex_est.toFixed(2)}</td>
+                      <td className="px-4 py-2 text-right font-semibold text-emerald-600">{cs}{m.net_distribution.toFixed(2)}</td>
                       <td className="px-4 py-2 text-center">
                         {m.revenue > 0 ? (
                           <a href={`${API}/owner-auth/statement.pdf?month=${m.month}`}

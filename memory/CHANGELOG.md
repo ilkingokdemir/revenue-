@@ -2277,3 +2277,14 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   JSX bloğu + kayıp satır. Düzeltildi. KURAL: AYNI DOSYAYA ASLA PARALEL EDIT YAPMA (3. kez!).
 - E2E: 2 log (900£ kayıp, 31 og), geçersiz reason 400, insights önerileri (28/20 kapasite
   aşımı → fiyat yükselt) + UI ekranı doğrulandı. QA verileri temizlendi.
+
+## Iter 462 (2026-07-26) — Organik UI/UX Redesign TAMAMLANDI + Kontrast Düzeltmeleri
+- Kullanıcı isteği: yazılım "insan eliyle yapılmış" görünsün, AI-slop görünümünden çık.
+- /app/design_guidelines.json oluşturuldu; Manrope + IBM Plex fontları, sapphire primary
+  (#1D4ED8), koyu lacivert sidebar (#0A0F1C), Stone/Earth nötr paleti uygulandı.
+- Testing agent (iteration_462.json): %100 fonksiyonel, 0 konsol hatası; 3 küçük WCAG
+  kontrast sorunu raporlandı → HEPSİ DÜZELTİLDİ (fork sonrası):
+  1. Sidebar bölüm başlıkları stone-500 → stone-400 (App.js:671), divider stone-600 → stone-400
+  2. MorningBriefPanel.js: tüm koyu kart etiketleri stone-500 → stone-400
+  3. DeparturesBoard.js footer metni stone-600 → stone-400
+- Ekran görüntüsüyle doğrulandı: dashboard, sidebar, KPI şeridi düzgün render.

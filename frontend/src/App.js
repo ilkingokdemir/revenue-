@@ -668,7 +668,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                 {section.label && (
                   <button onClick={toggleSection} data-testid={`nav-section-${sectionKey}`}
                     className="w-full flex items-center justify-between px-4 py-2 text-left hover:bg-stone-800/30 transition-colors group">
-                    <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-stone-500 group-hover:text-stone-300">
+                    <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-stone-400 group-hover:text-stone-200">
                       {tSectionLabel(section)}
                     </span>
                     <CaretRight
@@ -684,7 +684,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                     return (
                       <div
                         key={`div-${item.label}`}
-                        className="px-4 pt-3 pb-1 text-[9px] uppercase tracking-[0.18em] text-stone-600 font-semibold select-none"
+                        className="px-4 pt-3 pb-1 text-[9px] uppercase tracking-[0.18em] text-stone-400 font-semibold select-none"
                         data-testid={`sidebar-divider-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                       >
                         {item.label}

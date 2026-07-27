@@ -114,7 +114,7 @@ export default function DeparturesBoard({ propertyId }) {
                 </div>
                 <div className="text-xs text-stone-400 flex items-center gap-2 truncate">
                   <span className="flex items-center gap-1"><BedDouble className="w-3 h-3" />{i.room_number || "—"}</span>
-                  <span className="text-stone-600">·</span>
+                  <span className="text-stone-400">·</span>
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {i.is_overdue
@@ -138,7 +138,7 @@ export default function DeparturesBoard({ propertyId }) {
         </div>
       )}
 
-      <div className="text-[10px] text-stone-600 flex items-center gap-1">
+      <div className="text-[10px] text-stone-400 flex items-center gap-1">
         <Clock className="w-3 h-3" /> Otomatik her 30 sn yenilenir · Cron her 5dk `tick` çalıştırır
       </div>
     </div>

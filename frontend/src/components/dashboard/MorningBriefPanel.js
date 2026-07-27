@@ -116,21 +116,21 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
         <Stat icon={Building2} label="Departures today" value={today.departures}  color="text-amber-300" />
         <Stat icon={Bed}      label="In-house"          value={today.in_house}    color="text-cyan-300" />
         <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-4">
-          <div className="text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-1 flex items-center gap-1">
+          <div className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1 flex items-center gap-1">
             <ClipboardList className="w-3 h-3" />Pickup last 7 days
           </div>
           <div className="text-2xl font-black text-violet-300 tabular-nums">{pickup.count || 0}</div>
-          <div className="text-[10px] text-stone-500 mt-0.5">{cur(pickup.revenue)} revenue</div>
+          <div className="text-[10px] text-stone-400 mt-0.5">{cur(pickup.revenue)} revenue</div>
         </div>
       </div>
 
       {/* STLY snapshot */}
       <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-4 flex items-center justify-between" data-testid="brief-stly">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-1">STLY · next 7 days</div>
+          <div className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">STLY · next 7 days</div>
           <div className="flex items-center gap-3">
             <span className="text-2xl font-black text-cyan-300 tabular-nums">{stly.ty_rooms || 0}</span>
-            <span className="text-stone-500 text-sm">vs LY {stly.ly_rooms || 0}</span>
+            <span className="text-stone-400 text-sm">vs LY {stly.ly_rooms || 0}</span>
           </div>
         </div>
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black ${ahead ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "bg-rose-500/15 text-rose-300 border border-rose-500/30"}`}>
@@ -177,7 +177,7 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
             {data.new_reviews.slice(0, 5).map((r, i) => (
               <div key={i} className="bg-stone-800/40 rounded-lg p-3">
                 <div className="flex items-center justify-between text-[11px] mb-1">
-                  <span className="font-bold text-stone-200">{r.guest_name || "Guest"} · <span className="text-stone-500">{r.platform}</span></span>
+                  <span className="font-bold text-stone-200">{r.guest_name || "Guest"} · <span className="text-stone-400">{r.platform}</span></span>
                   <span className="text-amber-300 font-black">★ {r.rating}</span>
                 </div>
                 <p className="text-xs text-stone-400 line-clamp-2">{r.text}</p>
@@ -213,7 +213,7 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
           <div className="bg-stone-900/50 rounded-xl p-3">
-            <label className="block text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-1">Days window</label>
+            <label className="block text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">Days window</label>
             <select value={autopilot?.days_window || 14} onChange={e => updateConfig({ days_window: parseInt(e.target.value) })}
               className="w-full bg-stone-800 border border-stone-700 text-stone-100 text-xs rounded-lg px-2 py-1.5"
               data-testid="autopilot-days-window">
@@ -221,7 +221,7 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
             </select>
           </div>
           <div className="bg-stone-900/50 rounded-xl p-3">
-            <label className="block text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-1">Schedule</label>
+            <label className="block text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">Schedule</label>
             <select value={autopilot?.schedule || "daily_03"} onChange={e => updateConfig({ schedule: e.target.value })}
               className="w-full bg-stone-800 border border-stone-700 text-stone-100 text-xs rounded-lg px-2 py-1.5"
               data-testid="autopilot-schedule">
@@ -237,7 +237,7 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
                 className="accent-violet-500" data-testid="autopilot-auto-apply" />
               <span>Auto-apply suggestions to rate calendar</span>
             </label>
-            <p className="text-[10px] text-stone-500 mt-1">Off = review only</p>
+            <p className="text-[10px] text-stone-400 mt-1">Off = review only</p>
           </div>
         </div>
 
@@ -245,7 +245,7 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
           <div className="bg-stone-900/50 rounded-xl p-3" data-testid="autopilot-last-run">
             <div className="flex items-center justify-between mb-2">
               <div className="text-[10px] uppercase tracking-widest text-violet-300 font-bold">Last run</div>
-              <div className="text-[10px] text-stone-500">{new Date(autopilot.last_run_at).toLocaleString()}</div>
+              <div className="text-[10px] text-stone-400">{new Date(autopilot.last_run_at).toLocaleString()}</div>
             </div>
             {autopilot.last_summary && <p className="text-xs text-stone-300 mb-2">{autopilot.last_summary}</p>}
             {(autopilot.last_recommendations || []).length > 0 && (
@@ -268,9 +268,9 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
 function NightStat({ label, value, sub, testid, highlight }) {
   return (
     <div className={`rounded-xl p-3 border ${highlight ? "bg-violet-500/10 border-violet-500/40" : "bg-stone-800/40 border-stone-800"}`} data-testid={testid}>
-      <div className="text-[10px] uppercase tracking-widest text-stone-500 font-bold">{label}</div>
+      <div className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">{label}</div>
       <div className={`text-2xl font-black tabular-nums ${highlight ? "text-violet-300" : "text-stone-200"}`}>{value ?? 0}</div>
-      <div className="text-[10px] text-stone-500 mt-0.5">{sub}</div>
+      <div className="text-[10px] text-stone-400 mt-0.5">{sub}</div>
     </div>
   );
 }
@@ -278,7 +278,7 @@ function NightStat({ label, value, sub, testid, highlight }) {
 function Stat({ icon: Icon, label, value, color }) {
   return (
     <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-4">
-      <div className="text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-1 flex items-center gap-1">
+      <div className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1 flex items-center gap-1">
         <Icon className="w-3 h-3" />{label}
       </div>
       <div className={`text-3xl font-black tabular-nums ${color}`}>{value ?? "—"}</div>
@@ -294,7 +294,7 @@ function AlertCard({ icon: Icon, label, count, accent }) {
   };
   const has = (count || 0) > 0;
   return (
-    <div className={`rounded-2xl p-4 border ${has ? colours[accent] : "border-stone-800 bg-stone-900/40 text-stone-500"}`}>
+    <div className={`rounded-2xl p-4 border ${has ? colours[accent] : "border-stone-800 bg-stone-900/40 text-stone-400"}`}>
       <div className="flex items-center justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-widest font-bold mb-1 opacity-80">{label}</div>

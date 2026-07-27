@@ -13,7 +13,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-STATUSES = ("new", "contacted", "closed")
+STATUSES = ("new", "contacted", "demo_scheduled", "won", "lost")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -39,7 +39,7 @@ def create_demo_requests_router(db, require_roles):
             raise HTTPException(429, "Too many pending requests for this email")
         doc = {"id": str(uuid.uuid4()), "name": name, "email": email,
                "hotel_name": hotel_name,
-               "product": payload.get("product") if payload.get("product") in ("pms", "rms") else "pms",
+               "product": payload.get("product") if payload.get("product") in ("pms", "rms", "pulse") else "pms",
                "room_count": (payload.get("room_count") or "")[:40],
                "message": (payload.get("message") or "").strip()[:1000],
                "status": "new", "created_at": _iso(), "updated_at": _iso()}
@@ -51,15 +51,25 @@ def create_demo_requests_router(db, require_roles):
     @router.get("/demo-requests")
     async def list_demo_requests(
         status: str = "",
+        product: str = "",
         current_user: dict = Depends(require_roles("admin", "manager")),
     ):
-        q = {"status": status} if status in STATUSES else {}
+        # legacy: eski "closed" kayıtları "lost" olarak taşı
+        await db.demo_requests.update_many({"status": "closed"}, {"$set": {"status": "lost"}})
+        q: Dict = {}
+        if status in STATUSES:
+            q["status"] = status
+        if product:
+            q["product"] = product
         items = await db.demo_requests.find(q, {"_id": 0}).sort(
             "created_at", -1).to_list(500)
         counts = {s: await db.demo_requests.count_documents({"status": s})
                   for s in STATUSES}
+        total = sum(counts.values())
+        decided = counts["won"] + counts["lost"]
         return {"items": items,
-                "summary": {**counts, "total": sum(counts.values())}}
+                "summary": {**counts, "total": total,
+                            "win_rate": round(counts["won"] * 100 / decided, 1) if decided else None}}
 
     @router.patch("/demo-requests/{req_id}")
     async def update_demo_request(

@@ -38,6 +38,26 @@ export default function OwnerPulseDashboard({ ax }) {
         ))}
       </div>
 
+      <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="op-pace-strip">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-stone-800">Önümüzdeki 14 Gün — Dolum Hızı (Pace)</div>
+            <div className="text-[11px] text-stone-400">Son 7 günde her tarihe eklenen oda geceleri {d.pace_source === "snapshot" ? "· günlük OTB arşivinden" : "· rezervasyon akışından"}</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 gap-1.5 mt-3">
+          {d.occ_series.slice(0, 14).map((s) => (
+            <div key={s.date} className={`rounded-lg border p-1.5 text-center ${s.pace > 0 ? "bg-emerald-50 border-emerald-200" : s.pace < 0 ? "bg-orange-50 border-orange-200" : "bg-stone-50 border-stone-200"}`}>
+              <div className="text-[9px] text-stone-500">{s.date.slice(5)}</div>
+              <div className={`text-sm font-bold ${s.pace > 0 ? "text-emerald-600" : s.pace < 0 ? "text-orange-500" : "text-stone-400"}`}>
+                {s.pace > 0 ? "▲" : s.pace < 0 ? "▼" : "–"}{s.pace !== 0 ? Math.abs(s.pace) : ""}
+              </div>
+              <div className="text-[9px] text-stone-400">{s.occ}%</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl p-4">
           <div className="text-sm font-semibold text-stone-800">90 Günlük Doluluk & Pickup</div>

@@ -140,11 +140,26 @@ async def build_owner_dashboard(db, pid: str) -> Dict:
             if age_h <= 168:
                 pickup_counts["7d"][iso] += 1
             d += timedelta(days=1)
+    # ── Kendi otelin pace'i: OTB snapshot (≥7 gün önce) vs bugünkü durum ──
+    snap_cut = (today - timedelta(days=7)).isoformat()
+    old_scan = await db.otb_daily_snapshots.find_one(
+        {"property_id": pid, "scan_date": {"$lte": snap_cut}},
+        {"_id": 0, "scan_date": 1}, sort=[("scan_date", -1)])
+    old_booked = {}
+    pace_source = "bookings"
+    if old_scan:
+        pace_source = "snapshot"
+        async for s in db.otb_daily_snapshots.find(
+                {"property_id": pid, "scan_date": old_scan["scan_date"]},
+                {"_id": 0, "date": 1, "rooms_booked": 1}):
+            old_booked[s["date"]] = s["rooms_booked"]
     occ_series = []
     for i in range(90):
         iso = (today + timedelta(days=i)).isoformat()
+        pace = (day_occ[iso] - old_booked.get(iso, 0)) if pace_source == "snapshot" else pickup_counts["7d"][iso]
         occ_series.append({"date": iso, "occ": min(100, round(day_occ[iso] * 100 / rooms)),
-                           "pickup_24h": pickup_counts["24h"][iso], "pickup_7d": pickup_counts["7d"][iso]})
+                           "pickup_24h": pickup_counts["24h"][iso], "pickup_7d": pickup_counts["7d"][iso],
+                           "pace": pace})
 
     # ── Son 7 gün rezervasyon akışı ──
     recent = []
@@ -177,11 +192,11 @@ async def build_owner_dashboard(db, pid: str) -> Dict:
                          "delta_pct": round((tot["c_rev"] - tot["p_rev"]) * 100 / tot["p_rev"], 1) if tot["p_rev"] else None}}
 
     return {"currency": prop.get("currency") or "GBP", "property_name": prop.get("name") or "",
-            "rooms": rooms, "month_cards": cards, "occ_series": occ_series,
+            "rooms": rooms, "pace_source": pace_source, "month_cards": cards, "occ_series": occ_series,
             "recent_bookings": recent, "annual": annual}
 
 
-async def build_owner_report(db, pid: str, key: str) -> Dict:
+async def build_owner_report(db, pid: str, key: str, radar_build=None, compset_build=None, owner=None) -> Dict:
     rooms = await _total_rooms(db, pid)
     bookings = await _fetch_bookings(db, pid)
     today = ddate.today()
@@ -285,6 +300,65 @@ async def build_owner_report(db, pid: str, key: str) -> Dict:
                             {"key": "cash", "label": "Cash (tahsilat, oluşturma bazlı)"},
                             {"key": "accrual", "label": "Accrual (hakediş, konaklama bazlı)"},
                             {"key": "diff", "label": "Fark"}], "rows": rows}
+    if key == "events" and radar_build:
+        radar = await radar_build(property_id=pid, days=90, current_user=owner or {})
+        # kendi otelin o tarihteki doluluğu
+        day_occ = defaultdict(int)
+        for b in bookings:
+            ci, co = _parse_d(b.get("check_in")), _parse_d(b.get("check_out"))
+            if not ci or not co:
+                continue
+            d = max(ci, today)
+            while d < min(co, today + timedelta(days=90)):
+                day_occ[d.isoformat()] += 1
+                d += timedelta(days=1)
+        rows = []
+        for r in radar.get("daily", []):
+            if not r.get("event"):
+                continue
+            dem = r.get("demand")
+            my_occ = min(100, round(day_occ[r["date"]] * 100 / rooms))
+            if dem is not None and dem >= 70 and my_occ < 60:
+                action = "Fiyat artışı fırsatı — talep yüksek, dolulukta yer var"
+            elif dem is not None and dem >= 70:
+                action = "Yield koru — kalan odaları yüksek fiyatla sat"
+            elif my_occ < 30:
+                action = "Promosyon düşün — etkinliğe rağmen dolum zayıf"
+            else:
+                action = "İzle"
+            rows.append({"date": r["date"], "event": r["event"],
+                         "demand": f"{dem}%" if dem is not None else "—",
+                         "wap": r.get("wap") or "—", "my_occ": f"{my_occ}%", "action": action})
+        return {"title": "Etkinlik Etkisi (90 gün)",
+                "columns": [{"key": "date", "label": "Tarih"}, {"key": "event", "label": "Etkinlik"},
+                            {"key": "demand", "label": "Pazar Talebi"}, {"key": "wap", "label": "Pazar Fiyatı"},
+                            {"key": "my_occ", "label": "Benim Doluluğum"}, {"key": "action", "label": "Önerilen Aksiyon"}],
+                "rows": rows}
+    if key == "positioning" and compset_build:
+        cs = await compset_build(property_id=pid, days=30, current_user=owner or {})
+        k = cs.get("kpis", {})
+        rows = []
+        for r in cs.get("daily", []):
+            occ_d = round(r["my_occ"] - r["comp_occ"], 1)
+            adr_d = round(r["my_adr"] - r["comp_adr"], 1)
+            if occ_d >= 0 and adr_d >= 0:
+                pos = "Lider — hem dolulukta hem fiyatta önde"
+            elif occ_d >= 0:
+                pos = "Hacim önde, fiyat geride"
+            elif adr_d >= 0:
+                pos = "Fiyat önde, hacim geride"
+            else:
+                pos = "Geride — aksiyon gerekli"
+            rows.append({"date": r["date"], "my_occ": f'{r["my_occ"]}%', "comp_occ": f'{r["comp_occ"]}%',
+                         "occ_delta": f"{'+' if occ_d >= 0 else ''}{occ_d}pp",
+                         "my_adr": round(r["my_adr"]), "comp_adr": round(r["comp_adr"]),
+                         "adr_delta": f"{'+' if adr_d >= 0 else ''}{adr_d}", "position": pos})
+        return {"title": f'Rekabetçi Konumlanma — Occ #{k.get("occ_rank")}, ADR #{k.get("adr_rank")}, RevPAR #{k.get("revpar_rank")} / {k.get("segment_size")} otel',
+                "columns": [{"key": "date", "label": "Tarih"}, {"key": "my_occ", "label": "Benim Occ"},
+                            {"key": "comp_occ", "label": "Segment Occ"}, {"key": "occ_delta", "label": "Δ Occ"},
+                            {"key": "my_adr", "label": "Benim ADR"}, {"key": "comp_adr", "label": "Segment ADR"},
+                            {"key": "adr_delta", "label": "Δ ADR"}, {"key": "position", "label": "Konum"}],
+                "rows": rows}
     raise HTTPException(404, "Bilinmeyen rapor")
 
 
@@ -476,7 +550,9 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
     @router.get("/portal/reports/{key}")
     async def portal_report(key: str, owner: dict = Depends(get_current_owner)):
         await _check(_pid(owner), "reports")
-        return await build_owner_report(db, _pid(owner), key)
+        return await build_owner_report(db, _pid(owner), key,
+                                        radar_build=demand_radar_router.build,
+                                        compset_build=compset_router.build, owner=owner)
 
     # ── Admin endpoints ──
     @router.get("/{pid}/config")

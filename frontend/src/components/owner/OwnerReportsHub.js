@@ -1,6 +1,6 @@
 /** Owner Reports Hub — kategorili rapor kataloğu + dinamik tablo görüntüleyici */
 import { useState } from "react";
-import { ChartBar, CalendarBlank, Receipt, Broadcast, ArrowLeft, DownloadSimple, CurrencyCircleDollar, Bank } from "@phosphor-icons/react";
+import { ChartBar, CalendarBlank, Receipt, Broadcast, ArrowLeft, DownloadSimple, CurrencyCircleDollar, Bank, Confetti, Trophy } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 const CATALOG = [
@@ -15,6 +15,10 @@ const CATALOG = [
   { cat: "FİNANSAL", items: [
     { key: "financial", title: "Finansal İşlemler", desc: "Gelir akışları, ödeme yöntemleri, işlem analizi", Icon: CurrencyCircleDollar },
     { key: "takings", title: "Aylık Tahsilat", desc: "Cash vs Accrual mutabakatı — ay sonu kapanışı", Icon: Bank },
+  ]},
+  { cat: "PAZAR ZEKASI", items: [
+    { key: "events", title: "Etkinlik Etkisi", desc: "Yaklaşan etkinliklerin talebe etkisi + önerilen aksiyonlar", Icon: Confetti },
+    { key: "positioning", title: "Rekabetçi Konumlanma", desc: "Gün gün segment kıyası: Δ doluluk, Δ ADR ve konum", Icon: Trophy },
   ]},
 ];
 

@@ -2434,3 +2434,8 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E-posta: Resend (RESEND_API_KEY yoksa MOCK loglanır). Admin endpoint'leri: POST /{pid}/digest/send-now, GET /{pid}/digest/log, GET /{pid}/digest/preview; config'e digest_enabled eklendi.
 - OwnerPulseAdminPanel: digest bölümü (otomatik aç/kapa + Şimdi Gönder + gönderim günlüğü); "all" property seçiminde pid→default normalizasyonu (0/0 gönderim bug'ı düzeltildi).
 - Test: curl 17/17 sahip mock gönderim + log + preview HTML doğrulandı; pytest iter466 regresyon 15/15 PASS; admin UI screenshot ile doğrulandı.
+
+## iter 469 (2026-07-27) — Pazar Zekası Raporları + Kendi Pace
+- Rapor Merkezi'ne PAZAR ZEKASI kategorisi: "Etkinlik Etkisi" (90 gün: etkinlik + pazar talebi/fiyatı + kendi doluluk + önerilen aksiyon kuralları) ve "Rekabetçi Konumlanma" (30 gün: Δocc/Δadr + konum etiketi, başlıkta sıralamalar). Rakip üründe "coming soon" olan iki rapor bizde canlı.
+- Pulse Dashboard'a "Önümüzdeki 14 Gün — Dolum Hızı (Pace)" şeridi: ▲/▼ hücreler; OTB snapshot ≥7 gün olduğunda snapshot farkından (pace_source=snapshot), yoksa rezervasyon akışından (bookings) hesaplanır. Snapshot yolu sentetik veriyle doğrulanıp temizlendi.
+- build_owner_report'a radar_build/compset_build enjeksiyonu. Test: curl (events 37 satır, positioning 30 satır) + UI screenshot + pytest 15/15 PASS.

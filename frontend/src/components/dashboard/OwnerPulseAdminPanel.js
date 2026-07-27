@@ -26,11 +26,16 @@ export default function OwnerPulseAdminPanel({ propertyId }) {
   const [ap, setAp] = useState({ mode: "off", occ_threshold: 35 });
   const [apStatus, setApStatus] = useState({ pending_approvals: [], recent_log: [] });
   const [apBusy, setApBusy] = useState(false);
+  const [impacts, setImpacts] = useState([]);
 
   const loadAutopilot = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API}/owner-pulse/autopilot/status`);
+      const [{ data }, { data: imp }] = await Promise.all([
+        axios.get(`${API}/owner-pulse/autopilot/status`),
+        axios.get(`${API}/owner-pulse/autopilot/impact`),
+      ]);
       setApStatus(data);
+      setImpacts(imp.items || []);
       if (data.configs[pid]) setAp(data.configs[pid]);
     } catch { /* noop */ }
   }, [pid]);
@@ -217,6 +222,36 @@ export default function OwnerPulseAdminPanel({ propertyId }) {
           </div>
         )}
       </div>
+
+      {impacts.length > 0 && (
+        <div className="rounded-xl border border-stone-800 bg-stone-900/60 p-4" data-testid="opa-impact-section">
+          <div className="text-sm font-semibold text-stone-200">Müdahale Etki Kartları</div>
+          <div className="text-[11px] text-stone-500 mt-0.5 mb-3">Her kurtarma müdahalesinin doluluk etkisi — 7 gün dolunca otomatik ölçülür ve bildirilir</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+            {impacts.slice(0, 9).map((a) => {
+              const measured = a.status === "measured";
+              const d = a.impact_delta;
+              const badge = measured
+                ? (a.verdict === "etkili" ? ["bg-emerald-500/20 text-emerald-300", `▲ +${d}pp · ETKİLİ`]
+                  : a.verdict === "kismen" ? ["bg-amber-500/15 text-amber-300", `+${d}pp · KISMEN`]
+                  : ["bg-rose-500/15 text-rose-300", `${d >= 0 ? "+" : ""}${d}pp · ETKİSİZ`])
+                : ["bg-sky-500/15 text-sky-300", d != null ? `şu an ${d >= 0 ? "+" : ""}${d}pp · İZLENİYOR` : "İZLENİYOR"];
+              return (
+                <div key={a.id} className="rounded-lg border border-stone-800 bg-stone-950/60 p-3" data-testid={`opa-impact-${a.id}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-bold text-stone-200 truncate">{a.property_name || a.property_id}</span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded whitespace-nowrap ${badge[0]}`}>{badge[1]}</span>
+                  </div>
+                  <div className="text-[10px] text-stone-500 mt-1">{a.action_type} · {(a.applied_at || "").slice(0, 10)} · {a.days_elapsed != null ? `${a.days_elapsed} gün` : ""}</div>
+                  <div className="text-[11px] text-stone-400 mt-1">
+                    {a.baseline_avg_occ != null ? (<>Doluluk %{a.baseline_avg_occ} → {a.current_avg_occ != null ? `%${a.current_avg_occ}` : "…"}</>) : "Başlangıç ölçümü yok (eski kayıt)"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {preview && (
         <div className="rounded-xl border border-stone-800 bg-stone-900/60 p-4" data-testid="opa-preview">

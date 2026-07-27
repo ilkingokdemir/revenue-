@@ -432,8 +432,9 @@ async def apply_recovery_action(db, pid: str, action_type: str, applied_by: str)
         raise HTTPException(400, "Bilinmeyen aksiyon tipi")
 
     await db.recovery_actions.insert_one({
-        "id": str(uuid.uuid4()), "property_id": pid, "action_type": action_type,
-        "detail": detail, "applied_by": applied_by, "applied_at": now_iso})
+        "id": str(uuid.uuid4()), "property_id": pid, "property_name": plan["property_name"],
+        "action_type": action_type, "detail": detail, "applied_by": applied_by,
+        "applied_at": now_iso, "baseline_avg_occ": plan["avg_occ_30d"], "measured": False})
     return {"ok": True, "action_type": action_type, "detail": detail}
 
 
@@ -690,12 +691,43 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
                 results.append({"property_id": pid, "avg_occ": plan["avg_occ_30d"], "action": "approval_queued"})
         return {"ok": True, "checked": len(results), "results": results}
 
+    async def _measure_impacts() -> int:
+        """7 günü dolan müdahalelerin doluluk etkisini ölçer ve bildirir."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        pending = await db.recovery_actions.find(
+            {"measured": False, "applied_at": {"$lte": cutoff},
+             "baseline_avg_occ": {"$ne": None}}, {"_id": 0}).to_list(50)
+        plans = {}
+        measured = 0
+        for a in pending:
+            pid = a["property_id"]
+            if pid not in plans:
+                try:
+                    plans[pid] = await build_recovery_plan(db, pid)
+                except Exception:
+                    continue
+            cur = plans[pid]["avg_occ_30d"]
+            delta = round(cur - a["baseline_avg_occ"], 1)
+            verdict = "etkili" if delta >= 5 else ("kismen" if delta >= 2 else "etkisiz")
+            await db.recovery_actions.update_one(
+                {"id": a["id"]},
+                {"$set": {"measured": True, "measured_at": datetime.now(timezone.utc).isoformat(),
+                          "current_avg_occ": cur, "impact_delta": delta, "verdict": verdict}})
+            await _notify(pid, f"Müdahale etkisi ölçüldü — {a.get('property_name') or pid}",
+                          f"{a['action_type']} aksiyonu sonrası doluluk %{a['baseline_avg_occ']} → %{cur} ({'+' if delta >= 0 else ''}{delta}pp) — sonuç: {verdict}",
+                          priority="medium")
+            measured += 1
+        return measured
+
     async def _autopilot_loop(interval_seconds: int = 21600):
         while True:
             try:
                 r = await _autopilot_sweep()
                 if r["checked"]:
                     logger.info(f"Recovery autopilot: {r['results']}")
+                m = await _measure_impacts()
+                if m:
+                    logger.info(f"Recovery impact: {m} müdahale ölçüldü")
             except Exception as e:
                 logger.warning(f"Recovery autopilot loop error: {e}")
             await asyncio.sleep(interval_seconds)
@@ -914,7 +946,39 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
 
     @router.post("/autopilot/run-now")
     async def autopilot_run_now(current_user: dict = Depends(require_roles("admin", "manager"))):
-        return await _autopilot_sweep()
+        sweep = await _autopilot_sweep()
+        sweep["impacts_measured"] = await _measure_impacts()
+        return sweep
+
+    @router.get("/autopilot/impact")
+    async def autopilot_impact(current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Müdahale etki kartları — ölçülmüşler + izlenenler (canlı delta)."""
+        actions = await db.recovery_actions.find(
+            {}, {"_id": 0}).sort("applied_at", -1).to_list(20)
+        plans = {}
+        now = datetime.now(timezone.utc)
+        items = []
+        for a in actions:
+            pid = a["property_id"]
+            applied = _parse_created(a.get("applied_at"))
+            days = round((now - applied).total_seconds() / 86400, 1) if applied else None
+            if a.get("measured"):
+                items.append({**a, "days_elapsed": days, "status": "measured"})
+                continue
+            cur, delta = None, None
+            if a.get("baseline_avg_occ") is not None:
+                if pid not in plans:
+                    try:
+                        plans[pid] = await build_recovery_plan(db, pid)
+                    except Exception:
+                        plans[pid] = None
+                if plans[pid]:
+                    cur = plans[pid]["avg_occ_30d"]
+                    delta = round(cur - a["baseline_avg_occ"], 1)
+            items.append({**a, "days_elapsed": days, "current_avg_occ": cur,
+                          "impact_delta": delta, "status": "tracking"})
+        return {"items": items}
+
 
     @router.post("/autopilot/approvals/{aid}/decide")
     async def autopilot_decide(aid: str, data: Dict,

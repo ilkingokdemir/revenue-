@@ -2464,3 +2464,9 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Endpoint'ler: GET /api/owner-pulse/autopilot/status, PUT /autopilot/{pid}, POST /autopilot/run-now, POST /autopilot/approvals/{aid}/decide (approve→apply_recovery_action, reject).
 - OwnerPulseAdminPanel: Autopilot bölümü — Kapalı/Onaylı/Tam Otomatik mod butonları, eşik girişi, Şimdi Tara, bekleyen onaylar (Onayla/Reddet), son otomatik müdahale günlüğü.
 - E2E: onaylı mod → run-now → pending + bildirim → approve → indirim katmanı açıldı → already_mitigated koruması. Test promo katmanı temizlendi; default tesiste approval modu + 1 bekleyen onay demo için bırakıldı. pytest 15/15 PASS.
+
+## iter 474 (2026-07-27) — Müdahale Etki Kartları
+- apply_recovery_action artık baseline_avg_occ + measured:False kaydeder. _measure_impacts(): 7 günü dolan müdahalelerde güncel 30g occ ölçülür → impact_delta + verdict (etkili ≥+5pp / kismen ≥+2pp / etkisiz) + admin bildirimi; autopilot loop'una ve run-now'a bağlandı.
+- GET /api/owner-pulse/autopilot/impact: ölçülmüş + izlenen (canlı delta) müdahale listesi.
+- OwnerPulseAdminPanel: "Müdahale Etki Kartları" bölümü — tesis, aksiyon, baseline→güncel occ, rozet (▲ETKİLİ/KISMEN/ETKİSİZ/İZLENİYOR).
+- Test: 8 gün önceki demo müdahale ölçüldü (%2→%4.2, +2.2pp, kismen) + bildirim; UI screenshot; eski şemasız kayıtlar temizlendi; pytest 15/15 PASS.

@@ -11,6 +11,7 @@ import { DemoForm, FaqItem, fadeUp, goLogin, scrollTo } from "./landing/shared";
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
   { label: "How it works", href: "#how" },
+  { label: "Market Pulse", href: "#pulse" },
   { label: "Pricing", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
 ];
@@ -119,6 +120,7 @@ const STEPS = [
 
 export default function ReveniqLanding() {
   const [mobileNav, setMobileNav] = useState(false);
+  const [demoProduct, setDemoProduct] = useState("rms");
   return (
     <div className="min-h-screen bg-[#0A0F1C] text-white antialiased" data-testid="reveniq-page">
       <Toaster position="top-right" richColors />
@@ -257,6 +259,67 @@ export default function ReveniqLanding() {
         </motion.div>
       </section>
 
+      {/* Market Pulse premium module */}
+      <section id="pulse" className="relative border-t border-white/10 bg-[#070B14] py-24 overflow-hidden">
+        <div className="absolute top-[-120px] right-[15%] w-[440px] h-[440px] rounded-full bg-[#14B8A6]/12 blur-3xl" aria-hidden="true" />
+        <div className="relative max-w-7xl mx-auto px-5 sm:px-8">
+          <motion.div {...fadeUp} className="max-w-2xl mb-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-teal-400/10 border border-teal-400/40 text-teal-300 text-xs font-bold mb-4" data-testid="rq-pulse-badge">
+              PREMIUM MODULE · NEW
+            </div>
+            <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Market Pulse — <span className="bg-gradient-to-r from-teal-300 to-cyan-300 bg-clip-text text-transparent">your whole portfolio on one screen.</span></h2>
+            <p className="mt-4 text-stone-400 leading-relaxed">A live command board for owners and operators: 30-day occupancy heatmap across every property, demand radar, competitor benchmarking — and a Recovery Autopilot that fixes weak dates before you even notice them.</p>
+          </motion.div>
+
+          <div className="grid lg:grid-cols-12 gap-8 items-start">
+            <div className="lg:col-span-7 grid sm:grid-cols-2 gap-4">
+              {[
+                ["Portfolio Command Board", "Every property, 30 days ahead — occupancy / ADR / availability heatmap, sorted by risk."],
+                ["Demand Radar", "90-day market intelligence: demand, supply, pricing power, events and pace arrows."],
+                ["Recovery Autopilot", "Occupancy drops below your threshold? The system opens a rescue promo — automatically or with your approval."],
+                ["Impact Cards", "Every intervention is measured 7 days later: occupancy before vs after, verdict included."],
+                ["Compset Intel", "Your rank in the market — #4 of 22 on ADR — with daily drill-down against your segment."],
+                ["Weekly Owner Digest", "Owners get a Monday email: monthly cards, top insights and the portfolio table."],
+              ].map(([t, d], i) => (
+                <motion.div key={t} {...fadeUp} transition={{ ...fadeUp.transition, delay: i * 0.05 }}
+                  className="rounded-2xl bg-white/[0.03] border border-white/10 p-5 hover:border-teal-400/50 transition-colors" data-testid={`rq-pulse-feature-${i}`}>
+                  <div className="text-sm font-bold text-white">{t}</div>
+                  <div className="mt-1.5 text-[13px] text-stone-400 leading-relaxed">{d}</div>
+                </motion.div>
+              ))}
+            </div>
+            <motion.div {...fadeUp} className="lg:col-span-5">
+              <div className="rounded-2xl border border-white/10 bg-[#0D1424] p-5" data-testid="rq-pulse-mock">
+                <div className="flex items-center justify-between text-[10px] text-stone-500 uppercase tracking-widest mb-3">
+                  <span>Portfolio · 8 properties</span><span className="text-emerald-400">● Live</span>
+                </div>
+                {["Camden Suites", "Whitechapel Grand", "City Rooms", "Aldgate Flats"].map((name, r) => (
+                  <div key={name} className="flex items-center gap-2 py-1.5 border-t border-white/5">
+                    <span className="w-28 text-[11px] text-stone-300 font-semibold truncate">{r === 3 && <span className="text-amber-400">⚠ </span>}{name}</span>
+                    <div className="flex-1 flex gap-1">
+                      {[82, 74, 66, 91, 58, 43, 71, 88, 35, 62, 79, 84].map((v, i2) => {
+                        const val = Math.max(4, v - r * 14);
+                        const col = val >= 70 ? "rgba(45,212,191,0.55)" : val >= 40 ? "rgba(251,191,36,0.45)" : "rgba(244,63,94,0.4)";
+                        return <div key={i2} className="h-4 flex-1 rounded-sm" style={{ background: col }} />;
+                      })}
+                    </div>
+                  </div>
+                ))}
+                <div className="mt-4 rounded-lg border border-rose-400/30 bg-rose-500/10 px-3 py-2.5 text-[11px] text-rose-200">
+                  <b>Recovery Autopilot:</b> Aldgate Flats avg. occupancy 28% — rescue promo pending your approval.
+                  <span className="ml-2 inline-block px-2 py-0.5 rounded bg-emerald-400/20 text-emerald-300 font-bold text-[10px]">APPROVE</span>
+                </div>
+              </div>
+              <button onClick={() => { setDemoProduct("pulse"); scrollTo("#demo"); }} data-testid="rq-pulse-demo-btn"
+                className="mt-5 w-full py-3.5 rounded-lg bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-400 hover:to-cyan-400 text-[#04211d] font-bold transition-colors inline-flex items-center justify-center gap-2">
+                Request a Market Pulse demo <ArrowRight size={16} />
+              </button>
+              <p className="mt-2 text-center text-[11px] text-stone-500">Add-on to any plan · +€1 per room / month</p>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
       {/* Testimonials */}
       <section className="border-y border-white/10 bg-[#0D1424] py-24">
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
@@ -360,7 +423,7 @@ export default function ReveniqLanding() {
             </ul>
           </motion.div>
           <motion.div {...fadeUp} className="lg:col-span-7">
-            <DemoForm product="rms" dark />
+            <DemoForm product={demoProduct} dark />
           </motion.div>
         </div>
       </section>

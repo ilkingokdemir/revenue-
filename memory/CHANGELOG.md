@@ -2470,3 +2470,8 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - GET /api/owner-pulse/autopilot/impact: ölçülmüş + izlenen (canlı delta) müdahale listesi.
 - OwnerPulseAdminPanel: "Müdahale Etki Kartları" bölümü — tesis, aksiyon, baseline→güncel occ, rozet (▲ETKİLİ/KISMEN/ETKİSİZ/İZLENİYOR).
 - Test: 8 gün önceki demo müdahale ölçüldü (%2→%4.2, +2.2pp, kismen) + bildirim; UI screenshot; eski şemasız kayıtlar temizlendi; pytest 15/15 PASS.
+
+## iter 475 (2026-07-27) — ReveniQ Landing: Market Pulse Premium Modül Bölümü
+- ReveniqLanding.js'e #pulse bölümü: PREMIUM MODULE rozeti, 6 özellik kartı (Portfolio Board, Demand Radar, Recovery Autopilot, Impact Cards, Compset Intel, Weekly Digest), mini ısı haritası mock'u + Autopilot onay uyarısı görseli, "+€1 per room/month" fiyat notu.
+- CTA "Request a Market Pulse demo" → demoProduct state'i "pulse" yapıp form'a kaydırır; DemoForm product={demoProduct} — lead'ler product=pulse ile demo_requests'e düşer (curl doğrulandı).
+- Nav'a "Market Pulse" linki eklendi. Screenshot ile doğrulandı.

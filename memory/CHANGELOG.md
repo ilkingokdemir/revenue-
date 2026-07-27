@@ -2488,3 +2488,7 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 ## iter 478 (2026-07-27) — Deploy Hazırlık Kontrolü: PASS
 - deployment_agent ilk turda tek BLOCKER buldu: .gitignore'da onlarca mükerrer .env/*.env/credentials.json engelleme kalıbı (508 satır → temizlenip 357 satır; .env dosyaları artık repoya girebiliyor, memory/test_credentials.md hariç tutması korundu).
 - İkinci tur: status PASS — sıfır bulgu. Env kullanımı, CORS, supervisor, derleme, DB hepsi temiz. Uygulama yayına hazır.
+
+## iter 479 (2026-07-27) — Digest'e Riskli Tesis + Müdahale Etkisi Bölümleri
+- _build_digest_html: (1) "⚠ Dikkat gerektiren tesisler" — build_portfolio_overview'dan risk=true satırlar (ad + 30g ort. occ, amber kutu, portala yönlendirme notu); (2) "Müdahale Etkileri" — son 3 recovery_actions: ölçülmüşse %baseline→%güncel (+Δpp · verdict, renkli), değilse "izleniyor". Hata durumlarında bölümler sessizce atlanır.
+- Test: digest/preview HTML'de iki bölüm + 1 riskli tesis doğrulandı; send-now 17/17; tam regresyon 40/40 PASS.

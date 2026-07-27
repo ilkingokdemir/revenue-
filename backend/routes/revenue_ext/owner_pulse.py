@@ -782,6 +782,43 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
                   <tr style="color:#a8a29e;font-size:10px;text-transform:uppercase;"><td style="padding:5px 8px;">Tesis</td><td style="padding:5px 8px;text-align:right;">Occ</td><td style="padding:5px 8px;text-align:right;">ADR</td><td style="padding:5px 8px;text-align:right;">Sıra</td></tr>
                   {rows}
                 </table>"""
+
+        # ⚠ Riskli tesisler + müdahale etkileri
+        pids_all = owner.get("property_ids") or [pid]
+        risk_html, impact_html = "", ""
+        try:
+            overview = await build_portfolio_overview(db, pids_all)
+            risky = [r for r in overview["heatmap"]["rows"] if r["risk"]]
+            if risky:
+                rr = "".join(
+                    f'<li style="margin-bottom:4px;"><b>{r["name"]}</b> — 30 gün ort. doluluk <span style="color:#d97706;font-weight:bold;">%{r["avg_occ"]}</span></li>'
+                    for r in risky[:6])
+                risk_html = f"""
+                <div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:10px;padding:12px 14px;margin-top:22px;">
+                  <div style="font-size:13px;font-weight:bold;color:#92400e;">⚠ Dikkat gerektiren tesisler ({len(risky)})</div>
+                  <ul style="font-size:12px;color:#78716c;padding-left:16px;margin:8px 0 4px;">{rr}</ul>
+                  <div style="font-size:11px;color:#a16207;">Kurtarma planları portalınızın Portföy sekmesinde tek tıkla hazır.</div>
+                </div>"""
+        except Exception:
+            pass
+        try:
+            acts = await db.recovery_actions.find(
+                {"property_id": {"$in": pids_all}}, {"_id": 0}).sort("applied_at", -1).to_list(3)
+            if acts:
+                ai = ""
+                for a in acts:
+                    if a.get("measured"):
+                        d = a.get("impact_delta")
+                        col = "#059669" if (d or 0) >= 2 else "#e11d48"
+                        stat = f'<span style="color:{col};font-weight:bold;">%{a.get("baseline_avg_occ")} → %{a.get("current_avg_occ")} ({"+" if (d or 0) >= 0 else ""}{d}pp · {a.get("verdict","")})</span>'
+                    else:
+                        stat = '<span style="color:#0284c7;">izleniyor (7 gün sonra ölçülecek)</span>'
+                    ai += f'<li style="margin-bottom:4px;"><b>{a.get("property_name") or a["property_id"]}</b> · {a["action_type"]} ({(a.get("applied_at") or "")[:10]}) — {stat}</li>'
+                impact_html = f"""
+                <h3 style="font-size:14px;color:#1c1917;margin:22px 0 8px;">Müdahale Etkileri</h3>
+                <ul style="font-size:12px;color:#78716c;padding-left:16px;margin:0;">{ai}</ul>"""
+        except Exception:
+            pass
         base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
         return f"""
         <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#292524;">
@@ -791,6 +828,8 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
           <h3 style="font-size:14px;color:#1c1917;margin:22px 0 8px;">Bu Haftanın İçgörüleri</h3>
           <ul style="font-size:13px;padding-left:18px;margin:0;">{ins_html}</ul>
           {pf_html}
+          {risk_html}
+          {impact_html}
           <p style="text-align:center;margin:26px 0 8px;">
             <a href="{base}/owner" style="background:#0f766e;color:#fff;text-decoration:none;padding:11px 26px;border-radius:10px;font-weight:bold;display:inline-block;">Portalı Aç</a>
           </p>

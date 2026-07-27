@@ -82,6 +82,9 @@ export default function DemoLeadsPanel() {
               <div className="flex-1 min-w-[220px]">
                 <div className="font-bold text-stone-800 text-sm flex items-center gap-2">
                   {it.name}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${it.product === "rms" ? "bg-[#0A0F1C] text-blue-300 border-blue-900" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`} data-testid={`demo-lead-product-${it.id}`}>
+                    {it.product === "rms" ? "ReveniQ" : "MyHotelBox"}
+                  </span>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_STYLE[it.status]}`}>{STATUS_TR[it.status]}</span>
                 </div>
                 <div className="text-xs text-stone-500 flex items-center gap-3 mt-1">

@@ -1,25 +1,16 @@
 import { useState } from "react";
-import axios from "axios";
 import { motion } from "framer-motion";
-import { Toaster, toast } from "sonner";
+import { Toaster } from "sonner";
 import {
-  ArrowRight, ArrowUpRight, CheckCircle2, ChevronDown, Sparkles,
+  ArrowRight, ArrowUpRight, CheckCircle2, Sparkles,
   CalendarCheck, TrendingUp, Globe2, MessageSquareText, BedDouble,
-  BarChart3, CreditCard, Zap, ShieldCheck, Building2, Menu, X,
+  BarChart3, CreditCard, Zap, ShieldCheck, Building2, Menu, X, ClipboardCheck,
 } from "lucide-react";
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
-
-const fadeUp = {
-  initial: { opacity: 0, y: 24 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true, margin: "-60px" },
-  transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
-};
+import { DemoForm, FaqItem, fadeUp, goLogin, scrollTo } from "./landing/shared";
 
 const NAV_LINKS = [
   { label: "Product", href: "#product" },
-  { label: "Revenue AI", href: "#revenue" },
+  { label: "Guest Experience", href: "#guests" },
   { label: "Pricing", href: "#pricing" },
   { label: "FAQ", href: "#faq" },
 ];
@@ -32,15 +23,15 @@ const TRUST_NAMES = [
 
 const TESTIMONIALS = [
   {
-    quote: "We replaced four separate tools with one platform. Our front desk closes night audit in minutes and the AI pricing quietly lifted our RevPAR by double digits in the first season.",
+    quote: "We replaced four separate tools with one platform. Our front desk closes night audit in minutes and check-in queues simply disappeared once guests started arriving pre-registered.",
     name: "Selin Aydın", role: "General Manager", hotel: "Aurora Palace İstanbul · 142 rooms",
   },
   {
-    quote: "The morning brief is the first thing I read every day. Pickup, parity issues, gap dates — it tells me exactly where to look before my coffee is done.",
-    name: "Marco Bianchi", role: "Revenue Manager", hotel: "Harborline Suites · 86 rooms",
+    quote: "Housekeeping gets tasks the moment a guest checks out, maintenance issues are logged from the room's QR code, and I can see the whole house on one screen.",
+    name: "Marco Bianchi", role: "Operations Manager", hotel: "Harborline Suites · 86 rooms",
   },
   {
-    quote: "Guests check in from their phone, housekeeping gets tasks automatically, and I finally see clean P&L numbers per outlet. It feels like hiring three extra people.",
+    quote: "Guests check in from their phone, order room service by QR, and I finally see clean P&L numbers per outlet. It feels like hiring three extra people.",
     name: "Deniz Kaya", role: "Owner", hotel: "Villa Lumen Kaş · 24 rooms",
   },
 ];
@@ -48,30 +39,31 @@ const TESTIMONIALS = [
 const FAQS = [
   { q: "How long does onboarding take?", a: "Most independent hotels go live in under two weeks. We migrate your reservations, rate plans and OTA connections, and your team gets guided training inside the product with the built-in academy." },
   { q: "Does it connect to Booking.com, Expedia and other OTAs?", a: "Yes. The channel manager keeps availability, rates and restrictions in sync in real time across all major OTAs, with parity monitoring that alerts you when a channel undercuts your direct price." },
-  { q: "Is the AI revenue management really automatic?", a: "You choose the level of control. Run it in advisory mode where it suggests prices for approval, or full autopilot with guardrails — floor and ceiling rates, max daily change, and instant rollback." },
-  { q: "Can I use only the PMS without the revenue tools?", a: "Absolutely. Start with the Starter plan for core operations, and switch on ReveniQ revenue intelligence whenever you're ready — your data is already in place." },
+  { q: "Can guests really check in without the front desk?", a: "Yes — guests receive a pre-arrival link to register, upload documents, pay and get a digital room key. The kiosk mode covers walk-ins. Your team only steps in for exceptions." },
+  { q: "What about revenue management?", a: "MyHotelBox pairs natively with ReveniQ, our AI revenue platform. It shares the same data, so forecasting, dynamic pricing and competitor tracking switch on instantly — no extra integration project." },
   { q: "What about my existing payment provider?", a: "Built-in payments support cards, payment links, terminals and OTA virtual cards. If you prefer your current provider, we integrate with it during onboarding." },
 ];
 
-function MiniBar({ h, c }) {
-  return <div className={`w-full rounded-sm ${c}`} style={{ height: `${h}%` }} />;
-}
-
-function DashboardMockup() {
-  const bars = [42, 58, 50, 66, 74, 62, 82, 90, 78, 88, 96, 84];
+function FrontDeskMockup() {
+  const rows = [
+    ["101 · Deluxe", "S. Carter", "Arriving 14:00", "bg-blue-500/15 text-blue-300"],
+    ["204 · Suite", "J. Meyer", "In-house · 2n", "bg-emerald-500/15 text-emerald-300"],
+    ["118 · Twin", "A. Rossi", "Checkout 11:00", "bg-amber-500/15 text-amber-300"],
+    ["302 · Deluxe", "L. Novak", "Cleaning", "bg-stone-500/20 text-stone-300"],
+  ];
   return (
     <div className="relative" data-testid="hero-dashboard-mockup">
-      <div className="absolute -inset-6 bg-[#1D4ED8]/8 rounded-[32px] rotate-2" aria-hidden="true" />
+      <div className="absolute -inset-6 bg-[#849B89]/15 rounded-[32px] -rotate-2" aria-hidden="true" />
       <div className="relative bg-[#0A0F1C] rounded-2xl border border-white/10 shadow-[0_24px_80px_rgba(10,15,28,0.35)] overflow-hidden">
         <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/10">
           <span className="w-2.5 h-2.5 rounded-full bg-[#E07A5F]" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#E5C05F]" />
           <span className="w-2.5 h-2.5 rounded-full bg-[#849B89]" />
-          <span className="ml-3 text-[10px] text-stone-400 font-mono">reveniq · live dashboard</span>
+          <span className="ml-3 text-[10px] text-stone-400 font-mono">myhotelbox · front desk</span>
         </div>
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-3 gap-3">
-            {[["Occupancy", "87%", "+6 pts"], ["ADR", "€184", "+€11"], ["RevPAR", "€160", "+12.4%"]].map(([l, v, d]) => (
+            {[["Arrivals", "18", "6 pre-registered"], ["In-house", "112", "87% occupancy"], ["Departures", "14", "3 late checkout"]].map(([l, v, d]) => (
               <div key={l} className="bg-white/[0.04] border border-white/10 rounded-xl p-3">
                 <div className="text-[9px] uppercase tracking-widest text-stone-400 font-bold">{l}</div>
                 <div className="text-xl font-extrabold text-white tabular-nums mt-0.5">{v}</div>
@@ -79,20 +71,24 @@ function DashboardMockup() {
               </div>
             ))}
           </div>
-          <div className="bg-white/[0.04] border border-white/10 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">Next 12 days · AI price</span>
-              <span className="text-[10px] text-blue-300 font-bold flex items-center gap-1"><Sparkles size={10} /> autopilot on</span>
+          <div className="bg-white/[0.04] border border-white/10 rounded-xl p-4 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-widest text-stone-400 font-bold">Today's board</span>
+              <span className="text-[10px] text-blue-300 font-bold flex items-center gap-1"><Sparkles size={10} /> auto-assigned</span>
             </div>
-            <div className="flex items-end gap-1.5 h-24">
-              {bars.map((h, i) => (
-                <MiniBar key={i} h={h} c={i >= 7 ? "bg-blue-500" : "bg-stone-600"} />
-              ))}
-            </div>
+            {rows.map(([room, guest, status, badge]) => (
+              <div key={room} className="flex items-center justify-between bg-white/[0.03] rounded-lg px-3 py-2">
+                <div>
+                  <div className="text-[11px] font-bold text-white">{room}</div>
+                  <div className="text-[10px] text-stone-400">{guest}</div>
+                </div>
+                <span className={`text-[9px] font-bold px-2 py-1 rounded-full ${badge}`}>{status}</span>
+              </div>
+            ))}
           </div>
           <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-3 py-2.5">
-            <Zap size={13} className="text-emerald-400 shrink-0" />
-            <span className="text-[11px] text-emerald-200">Weekend spike detected — 14 rates repriced, est. +€2,340 revenue</span>
+            <ClipboardCheck size={13} className="text-emerald-400 shrink-0" />
+            <span className="text-[11px] text-emerald-200">Housekeeping: 12 rooms cleaned, 4 in progress — night audit ready</span>
           </div>
         </div>
       </div>
@@ -102,22 +98,16 @@ function DashboardMockup() {
 
 const FEATURES = [
   {
-    span: "md:col-span-7", icon: CalendarCheck, label: "Property Management",
+    span: "md:col-span-7", icon: CalendarCheck, label: "Front Desk & Reservations",
     title: "Front desk, reservations & housekeeping in one calm screen",
     desc: "Drag-and-drop room calendar, group bookings, digital check-in kiosk, housekeeping auto-dispatch and a night audit that runs itself. Your team stops juggling tabs.",
     img: "https://images.unsplash.com/photo-1759038085950-1234ca8f5fed?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
     testid: "feature-pms",
   },
   {
-    span: "md:col-span-5", dark: true, icon: TrendingUp, label: "ReveniQ · Revenue AI",
-    title: "Prices that move before the market does",
-    desc: "15 automation engines: demand forecasting with confidence bands, intraday repricing, competitor rate radar, gap-filler campaigns and restriction advisor — all explainable, all with guardrails.",
-    testid: "feature-revenue",
-  },
-  {
-    span: "md:col-span-4", icon: Globe2, label: "Distribution",
+    span: "md:col-span-5", icon: Globe2, label: "Distribution",
     title: "Direct bookings & OTA sync",
-    desc: "Commission-free booking engine with promo codes, plus real-time channel manager and rate-parity monitoring across every OTA.",
+    desc: "Commission-free booking engine with promo codes, plus a real-time channel manager that keeps availability, rates and restrictions aligned across every OTA — with parity alerts when a channel undercuts you.",
     testid: "feature-booking",
   },
   {
@@ -128,9 +118,16 @@ const FEATURES = [
     testid: "feature-guest",
   },
   {
+    span: "md:col-span-4", icon: BedDouble, label: "Housekeeping & Maintenance",
+    title: "The house runs itself",
+    desc: "Mobile housekeeping app, auto-dispatch on checkout, lost & found, minibar posting and QR maintenance reporting straight from the room.",
+    img: "https://images.unsplash.com/photo-1549638441-b787d2e11f14?crop=entropy&cs=srgb&fm=jpg&q=85&w=800",
+    testid: "feature-housekeeping",
+  },
+  {
     span: "md:col-span-4", icon: BarChart3, label: "Finance & Reports",
     title: "Numbers your accountant will love",
-    desc: "P&L per outlet, budget vs forecast vs actual, OTA commission reconciliation, city ledger and scheduled reports to your inbox.",
+    desc: "P&L per outlet, OTA commission reconciliation, city ledger, invoicing and scheduled reports delivered to your inbox.",
     testid: "feature-finance",
   },
 ];
@@ -138,100 +135,8 @@ const FEATURES = [
 const CHIPS = [
   [BedDouble, "Housekeeping mobile app"], [CreditCard, "Payments & terminals"],
   [Building2, "Multi-property & chains"], [ShieldCheck, "Role-based access"],
-  [Zap, "POS · F&B · spa & events"], [Sparkles, "AI morning brief"],
+  [Zap, "POS · F&B · spa & events"], [Sparkles, "AI guest messaging"],
 ];
-
-function DemoForm() {
-  const [form, setForm] = useState({ name: "", email: "", hotel_name: "", room_count: "", message: "" });
-  const [sending, setSending] = useState(false);
-  const [done, setDone] = useState(false);
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!form.name || !form.email || !form.hotel_name) {
-      toast.error("Please fill in your name, email and hotel name");
-      return;
-    }
-    setSending(true);
-    try {
-      await axios.post(`${API}/public/demo-requests`, form);
-      setDone(true);
-      toast.success("Thanks! Our team will reach out within one business day.");
-    } catch (err) {
-      toast.error(err?.response?.data?.detail || "Something went wrong — please try again");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  if (done) {
-    return (
-      <div className="bg-white rounded-2xl border border-black/5 p-10 text-center shadow-[0_8px_32px_rgba(29,78,216,0.08)]" data-testid="demo-form-success">
-        <CheckCircle2 size={40} className="mx-auto text-emerald-500 mb-4" />
-        <h3 className="text-xl font-bold text-stone-900">Request received</h3>
-        <p className="text-sm text-stone-500 mt-2">We'll email {form.email} to schedule your personalised demo.</p>
-      </div>
-    );
-  }
-
-  const inputCls = "w-full rounded-lg border border-stone-200 bg-[#FDFCFB] px-3.5 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]/40 focus:border-[#1D4ED8] transition-colors";
-  return (
-    <form onSubmit={submit} className="bg-white rounded-2xl border border-black/5 p-6 sm:p-8 shadow-[0_8px_32px_rgba(29,78,216,0.08)] space-y-4" data-testid="demo-request-form">
-      <div className="grid sm:grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs font-bold uppercase tracking-[0.15em] text-stone-500">Full name *</label>
-          <input value={form.name} onChange={set("name")} placeholder="Jane Smith" className={`${inputCls} mt-1.5`} data-testid="demo-form-name" />
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase tracking-[0.15em] text-stone-500">Work email *</label>
-          <input type="email" value={form.email} onChange={set("email")} placeholder="jane@yourhotel.com" className={`${inputCls} mt-1.5`} data-testid="demo-form-email" />
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase tracking-[0.15em] text-stone-500">Hotel name *</label>
-          <input value={form.hotel_name} onChange={set("hotel_name")} placeholder="The Grand Hotel" className={`${inputCls} mt-1.5`} data-testid="demo-form-hotel" />
-        </div>
-        <div>
-          <label className="text-xs font-bold uppercase tracking-[0.15em] text-stone-500">Rooms</label>
-          <select value={form.room_count} onChange={set("room_count")} className={`${inputCls} mt-1.5`} data-testid="demo-form-rooms">
-            <option value="">Select…</option>
-            <option value="1-20">1 – 20</option>
-            <option value="21-50">21 – 50</option>
-            <option value="51-120">51 – 120</option>
-            <option value="121-300">121 – 300</option>
-            <option value="300+">300+</option>
-          </select>
-        </div>
-      </div>
-      <div>
-        <label className="text-xs font-bold uppercase tracking-[0.15em] text-stone-500">Anything specific you'd like to see?</label>
-        <textarea value={form.message} onChange={set("message")} rows={3} placeholder="e.g. AI pricing, channel manager, group bookings…" className={`${inputCls} mt-1.5 resize-none`} data-testid="demo-form-message" />
-      </div>
-      <button type="submit" disabled={sending} data-testid="demo-form-submit"
-        className="w-full sm:w-auto px-8 py-3 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-sm font-bold transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
-        {sending ? "Sending…" : "Request my demo"} <ArrowRight size={15} />
-      </button>
-      <p className="text-[11px] text-stone-400">No credit card required · 30-minute personalised walkthrough · Replies within one business day</p>
-    </form>
-  );
-}
-
-function FaqItem({ q, a, idx }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-stone-200">
-      <button onClick={() => setOpen(!open)} data-testid={`faq-item-${idx}`}
-        className="w-full flex items-center justify-between gap-4 py-5 text-left group">
-        <span className="text-base font-semibold text-stone-900 group-hover:text-[#1D4ED8] transition-colors">{q}</span>
-        <ChevronDown size={18} className={`shrink-0 text-stone-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && <p className="pb-5 text-sm text-stone-600 leading-relaxed max-w-3xl">{a}</p>}
-    </div>
-  );
-}
-
-const goLogin = () => { window.location.href = "/login"; };
-const scrollTo = (id) => document.querySelector(id)?.scrollIntoView({ behavior: "smooth" });
 
 export default function LandingPage() {
   const [mobileNav, setMobileNav] = useState(false);
@@ -246,13 +151,17 @@ export default function LandingPage() {
             <div className="w-8 h-8 rounded-lg bg-[#0A0F1C] flex items-center justify-center">
               <Building2 size={16} className="text-white" />
             </div>
-            <span className="font-extrabold tracking-tight text-lg">MyHotelBox <span className="text-[#1D4ED8]">&amp; ReveniQ</span></span>
+            <span className="font-extrabold tracking-tight text-lg">MyHotelBox</span>
           </a>
           <nav className="hidden md:flex items-center gap-7">
             {NAV_LINKS.map((l) => (
               <button key={l.href} onClick={() => scrollTo(l.href)} data-testid={`nav-link-${l.label.toLowerCase().replace(/\s/g, "-")}`}
                 className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors">{l.label}</button>
             ))}
+            <a href="/reveniq" data-testid="nav-link-reveniq"
+              className="text-sm font-bold text-[#1D4ED8] hover:text-[#1E40AF] transition-colors flex items-center gap-1">
+              ReveniQ <ArrowUpRight size={13} />
+            </a>
           </nav>
           <div className="hidden md:flex items-center gap-3">
             <button onClick={goLogin} data-testid="landing-signin-btn"
@@ -269,6 +178,7 @@ export default function LandingPage() {
             {NAV_LINKS.map((l) => (
               <button key={l.href} onClick={() => { setMobileNav(false); scrollTo(l.href); }} className="block text-sm font-medium text-stone-700">{l.label}</button>
             ))}
+            <a href="/reveniq" className="block text-sm font-bold text-[#1D4ED8]">ReveniQ ↗</a>
             <div className="flex gap-3 pt-2">
               <button onClick={goLogin} className="flex-1 px-4 py-2 rounded-lg text-sm font-bold border border-stone-300">Sign In</button>
               <button onClick={() => { setMobileNav(false); scrollTo("#demo"); }} className="flex-1 px-4 py-2 rounded-lg text-sm font-bold bg-[#1D4ED8] text-white">Request Demo</button>
@@ -280,15 +190,15 @@ export default function LandingPage() {
       {/* Hero */}
       <section className="max-w-7xl mx-auto px-5 sm:px-8 pt-16 pb-20 lg:pt-24 lg:pb-28 grid lg:grid-cols-12 gap-12 items-center">
         <motion.div className="lg:col-span-6" initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1D4ED8]/8 border border-[#1D4ED8]/20 text-[#1D4ED8] text-xs font-bold mb-6" data-testid="hero-badge">
-            <Sparkles size={12} /> PMS + AI Revenue Management, finally together
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#849B89]/15 border border-[#849B89]/30 text-[#3E5245] text-xs font-bold mb-6" data-testid="hero-badge">
+            <Sparkles size={12} /> The hotel property management system
           </div>
           <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tighter leading-[1.05]">
-            Run your hotel.<br />
-            <span className="text-[#1D4ED8]">The revenue runs itself.</span>
+            The calm way<br />
+            <span className="text-[#1D4ED8]">to run your hotel.</span>
           </h1>
           <p className="mt-6 text-lg text-stone-600 leading-relaxed max-w-xl">
-            MyHotelBox handles front desk, housekeeping, bookings and payments. ReveniQ's AI reprices your rooms around the clock — forecasting demand, watching competitors, and filling the gaps you didn't know you had.
+            MyHotelBox brings front desk, housekeeping, bookings, guest messaging and payments into one quiet, reliable screen — so your team spends their day with guests, not with software.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <button onClick={() => scrollTo("#demo")} data-testid="hero-request-demo-btn"
@@ -301,8 +211,8 @@ export default function LandingPage() {
             </button>
           </div>
           <div className="mt-10 flex flex-wrap gap-x-8 gap-y-3">
-            {[["+12.4%", "avg. RevPAR lift"], ["15", "automation engines"], ["2 wks", "typical go-live"]].map(([v, l]) => (
-              <div key={l} data-testid={`hero-stat-${l.replace(/[.\s]/g, "-")}`}>
+            {[["2 wks", "typical go-live"], ["-40%", "front desk admin time"], ["24/7", "guest self-service"]].map(([v, l]) => (
+              <div key={l} data-testid={`hero-stat-${l.replace(/[.\s%]/g, "-")}`}>
                 <div className="text-2xl font-extrabold tabular-nums text-stone-900">{v}</div>
                 <div className="text-xs text-stone-500 font-medium">{l}</div>
               </div>
@@ -310,7 +220,7 @@ export default function LandingPage() {
           </div>
         </motion.div>
         <motion.div className="lg:col-span-6" initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}>
-          <DashboardMockup />
+          <FrontDeskMockup />
         </motion.div>
       </section>
 
@@ -330,27 +240,17 @@ export default function LandingPage() {
           <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Everything a modern hotel needs. Nothing it doesn't.</h2>
           <p className="mt-4 text-stone-600 leading-relaxed">One login for operations, distribution, guest experience and finance — built to replace the patchwork of tools your team fights with today.</p>
         </motion.div>
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6" id="guests">
           {FEATURES.map((f, i) => (
             <motion.div key={f.testid} {...fadeUp} transition={{ ...fadeUp.transition, delay: i * 0.06 }}
-              className={`${f.span} rounded-2xl border overflow-hidden group hover:-translate-y-1 transition-transform duration-300 ${f.dark ? "bg-[#0A0F1C] border-white/10 text-white" : "bg-white border-black/5 shadow-[0_8px_32px_rgba(29,78,216,0.05)]"}`}
+              className={`${f.span} rounded-2xl border overflow-hidden group hover:-translate-y-1 transition-transform duration-300 bg-white border-black/5 shadow-[0_8px_32px_rgba(29,78,216,0.05)]`}
               data-testid={f.testid}>
               <div className="p-7">
-                <div className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] mb-4 ${f.dark ? "text-blue-300" : "text-[#1D4ED8]"}`}>
+                <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] mb-4 text-[#1D4ED8]">
                   <f.icon size={14} /> {f.label}
                 </div>
-                <h3 className={`text-xl lg:text-2xl font-semibold tracking-tight ${f.dark ? "text-white" : "text-stone-900"}`}>{f.title}</h3>
-                <p className={`mt-3 text-sm leading-relaxed ${f.dark ? "text-stone-300" : "text-stone-600"}`}>{f.desc}</p>
-                {f.dark && (
-                  <div className="mt-6 grid grid-cols-2 gap-3">
-                    {[["Forecast accuracy", "94%"], ["Prices/day", "1,400+"], ["Comp radar", "24/7"], ["Guardrails", "Always"]].map(([l, v]) => (
-                      <div key={l} className="bg-white/[0.05] border border-white/10 rounded-lg px-3 py-2.5">
-                        <div className="text-lg font-extrabold text-white">{v}</div>
-                        <div className="text-[10px] text-stone-400 uppercase tracking-widest font-bold">{l}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <h3 className="text-xl lg:text-2xl font-semibold tracking-tight text-stone-900">{f.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-stone-600">{f.desc}</p>
               </div>
               {f.img && (
                 <div className="h-48 overflow-hidden">
@@ -369,43 +269,29 @@ export default function LandingPage() {
         </motion.div>
       </section>
 
-      {/* Revenue dark section */}
-      <section id="revenue" className="bg-[#0A0F1C] text-white py-24">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 grid lg:grid-cols-12 gap-12 items-center">
-          <motion.div {...fadeUp} className="lg:col-span-5">
-            <div className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300 mb-3">ReveniQ · Revenue Intelligence</div>
-            <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Your best revenue manager never sleeps</h2>
-            <p className="mt-4 text-stone-300 leading-relaxed">Every night it forecasts. Every hour it scans pickup and competitor rates. Every morning it hands you a brief with exactly what changed and why — then acts on it, within the limits you set.</p>
-            <ul className="mt-8 space-y-4">
-              {[
-                "Demand forecast with confidence bands & version approvals",
-                "Intraday repricing on pickup spikes — not just nightly runs",
-                "Competitor rate radar with under/over-priced alerts",
-                "AI gap-filler campaigns with promo codes & ROI tracking",
-                "Lost-demand tracking to reveal unconstrained demand",
-              ].map((t) => (
-                <li key={t} className="flex items-start gap-3 text-sm text-stone-200">
-                  <CheckCircle2 size={16} className="text-emerald-400 mt-0.5 shrink-0" /> {t}
-                </li>
-              ))}
-            </ul>
-            <button onClick={() => scrollTo("#demo")} data-testid="revenue-cta-btn"
-              className="mt-9 px-6 py-3 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-sm font-bold transition-colors inline-flex items-center gap-2">
-              See it price your hotel <ArrowUpRight size={15} />
-            </button>
-          </motion.div>
+      {/* ReveniQ cross-sell */}
+      <section className="bg-[#0A0F1C] text-white py-20" data-testid="reveniq-crosssell">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8 grid lg:grid-cols-12 gap-10 items-center">
           <motion.div {...fadeUp} className="lg:col-span-7">
-            <div className="rounded-2xl overflow-hidden border border-white/10">
-              <img src="https://images.unsplash.com/photo-1692153142524-60285a93c249?crop=entropy&cs=srgb&fm=jpg&q=85&w=1400" alt="Luxury hotel lobby" loading="lazy" className="w-full h-[420px] object-cover" />
+            <div className="text-xs font-bold uppercase tracking-[0.2em] text-blue-300 mb-3 flex items-center gap-2">
+              <TrendingUp size={14} /> Works hand-in-hand with ReveniQ
             </div>
-            <div className="grid grid-cols-3 gap-4 -mt-10 px-6 relative">
-              {[["€2.4M", "revenue optimised monthly"], ["38k", "price decisions / week"], ["0", "spreadsheets needed"]].map(([v, l]) => (
-                <div key={l} className="bg-[#111827] border border-white/10 rounded-xl p-4 text-center shadow-xl">
-                  <div className="text-xl lg:text-2xl font-extrabold tabular-nums">{v}</div>
-                  <div className="text-[10px] text-stone-400 mt-1 uppercase tracking-widest font-bold leading-tight">{l}</div>
-                </div>
-              ))}
-            </div>
+            <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Need your prices to run themselves too?</h2>
+            <p className="mt-4 text-stone-300 leading-relaxed max-w-2xl">
+              ReveniQ is our dedicated AI revenue management platform — demand forecasting, dynamic pricing, competitor rate radar and gap-filler campaigns. It shares the same data as MyHotelBox, so it switches on in a day, not a quarter.
+            </p>
+            <a href="/reveniq" data-testid="crosssell-reveniq-btn"
+              className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white text-sm font-bold transition-colors">
+              Discover ReveniQ <ArrowUpRight size={15} />
+            </a>
+          </motion.div>
+          <motion.div {...fadeUp} className="lg:col-span-5 grid grid-cols-2 gap-4">
+            {[["+12.4%", "avg. RevPAR lift"], ["94%", "forecast accuracy"], ["38k", "price decisions / week"], ["24/7", "competitor radar"]].map(([v, l]) => (
+              <div key={l} className="bg-white/[0.05] border border-white/10 rounded-xl p-5">
+                <div className="text-2xl font-extrabold tabular-nums">{v}</div>
+                <div className="text-[10px] text-stone-400 mt-1 uppercase tracking-widest font-bold leading-tight">{l}</div>
+              </div>
+            ))}
           </motion.div>
         </div>
       </section>
@@ -414,7 +300,7 @@ export default function LandingPage() {
       <section className="max-w-7xl mx-auto px-5 sm:px-8 py-24">
         <motion.div {...fadeUp} className="max-w-2xl mb-14">
           <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#1D4ED8] mb-3">From hoteliers</div>
-          <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Trusted at the front desk and in the boardroom</h2>
+          <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Trusted at the front desk and in the back office</h2>
         </motion.div>
         <div className="grid md:grid-cols-3 gap-6">
           {TESTIMONIALS.map((t, i) => (
@@ -438,7 +324,7 @@ export default function LandingPage() {
           <motion.div {...fadeUp} className="max-w-2xl mb-14">
             <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#1D4ED8] mb-3">Pricing</div>
             <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">Simple per-room pricing. No surprises.</h2>
-            <p className="mt-4 text-stone-600">Pay per room, per month. Every plan includes onboarding, data migration and unlimited users.</p>
+            <p className="mt-4 text-stone-600">Pay per room, per month. Every plan includes onboarding, data migration and unlimited users. Add <a href="/reveniq" className="text-[#1D4ED8] font-bold hover:underline">ReveniQ revenue AI</a> to any plan.</p>
           </motion.div>
           <div className="grid md:grid-cols-3 gap-6 items-start">
             {[
@@ -450,8 +336,8 @@ export default function LandingPage() {
               },
               {
                 name: "Professional", price: "€7", note: "per room / month",
-                desc: "Operations + full AI revenue intelligence.",
-                items: ["Everything in Starter", "ReveniQ AI pricing & forecasting", "Channel manager & parity radar", "Competitor rate radar", "Gap-filler campaigns & morning brief", "POS, F&B and events"],
+                desc: "Full operations, distribution and guest experience.",
+                items: ["Everything in Starter", "Channel manager & parity alerts", "Digital check-in, kiosk & room keys", "Upsells, surveys & review autopilot", "POS, F&B and events", "P&L, budgets & scheduled reports"],
                 cta: "Choose Professional", highlight: true,
               },
               {
@@ -494,8 +380,8 @@ export default function LandingPage() {
       <section id="demo" className="max-w-7xl mx-auto px-5 sm:px-8 py-24 grid lg:grid-cols-12 gap-12">
         <motion.div {...fadeUp} className="lg:col-span-5">
           <div className="text-xs font-bold uppercase tracking-[0.2em] text-[#1D4ED8] mb-3">Get started</div>
-          <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">See your hotel inside the platform</h2>
-          <p className="mt-4 text-stone-600 leading-relaxed">Tell us about your property and we'll prepare a walkthrough with your room types, your market and your OTA mix — not a generic slideshow.</p>
+          <h2 className="text-3xl lg:text-4xl font-bold tracking-tight">See your hotel inside MyHotelBox</h2>
+          <p className="mt-4 text-stone-600 leading-relaxed">Tell us about your property and we'll prepare a walkthrough with your room types, your outlets and your OTA mix — not a generic slideshow.</p>
           <ul className="mt-8 space-y-3">
             {["30-minute personalised demo", "Migration & onboarding plan included", "Pricing quote for your exact room count"].map((t) => (
               <li key={t} className="flex items-center gap-3 text-sm text-stone-700">
@@ -505,7 +391,7 @@ export default function LandingPage() {
           </ul>
         </motion.div>
         <motion.div {...fadeUp} className="lg:col-span-7">
-          <DemoForm />
+          <DemoForm product="pms" />
         </motion.div>
       </section>
 
@@ -523,7 +409,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-5 sm:px-8 py-20">
           <div className="grid lg:grid-cols-12 gap-12">
             <div className="lg:col-span-7">
-              <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tighter leading-tight">Ready to run<br />a smarter hotel?</h2>
+              <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tighter leading-tight">Ready to run<br />a calmer hotel?</h2>
               <button onClick={() => scrollTo("#demo")} data-testid="footer-demo-btn"
                 className="mt-8 px-7 py-3.5 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] text-white font-bold transition-colors inline-flex items-center gap-2">
                 Request a demo <ArrowRight size={16} />
@@ -534,9 +420,9 @@ export default function LandingPage() {
                 <div className="text-xs font-bold uppercase tracking-[0.2em] text-stone-400 mb-4">Product</div>
                 <ul className="space-y-2.5 text-[#9CA3AF]">
                   <li><button onClick={() => scrollTo("#product")} className="hover:text-white transition-colors">Property Management</button></li>
-                  <li><button onClick={() => scrollTo("#revenue")} className="hover:text-white transition-colors">Revenue AI</button></li>
                   <li><button onClick={() => scrollTo("#pricing")} className="hover:text-white transition-colors">Pricing</button></li>
                   <li><button onClick={() => scrollTo("#faq")} className="hover:text-white transition-colors">FAQ</button></li>
+                  <li><a href="/reveniq" className="hover:text-white transition-colors font-bold text-blue-300" data-testid="footer-reveniq-link">ReveniQ — Revenue AI ↗</a></li>
                 </ul>
               </div>
               <div>
@@ -549,7 +435,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="mt-16 pt-8 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs text-[#9CA3AF]">
-            <span>© {new Date().getFullYear()} MyHotelBox &amp; ReveniQ. All rights reserved.</span>
+            <span>© {new Date().getFullYear()} MyHotelBox. All rights reserved.</span>
             <span className="flex items-center gap-2"><ShieldCheck size={13} /> PCI-DSS compliant payments · GDPR ready</span>
           </div>
         </div>

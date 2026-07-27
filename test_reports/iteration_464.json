@@ -1,0 +1,24 @@
+{
+  "summary": "Frontend E2E for the split marketing sites (iter 464). ALL requested flows PASS. '/' renders MyHotelBox PMS landing (light theme) with every requested data-testid present (nav-link-reveniq, hero-*, feature-*, reveniq-crosssell, crosssell-reveniq-btn, pricing-*, footer-reveniq-link, landing-signin-btn). '/reveniq' renders ReveniQ RMS site (dark theme) with rq-nav-link-myhotelbox, rq-hero-mockup, rq-feature-0..7, rq-step-0..2, rq-testimonial-0..2, rq-pricing-essentials/pro/enterprise, faq-item-0 (expands), rq-footer-mhb-link, rq-signin-btn. Cross-nav both directions works. Demo forms: PMS submits with product='pms', RMS submits with product='rms' (verified via intercepted POST payloads to /api/public/demo-requests); both show demo-form-success. Invalid email now shows sonner toast 'Please enter a valid work email' and correctly suppresses the success state — the iter 463 cosmetic gap is FIXED. Admin panel: login OK, nav-section-Guests → demo-leads-btn → DemoLeadsPanel shows both leads with correct product badges ('MyHotelBox' green for pms, 'ReveniQ' dark for rms). Regression: authenticated '/' shows dashboard (not landing), public /book/default booking widget loads. Test leads cleaned up (2 deleted, 200 responses).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "shared.js DemoForm: noValidate + JS regex email check + sonner toast is a clean, consistent replacement for the previous HTML5-only validation. Product field is passed via props (pms/rms) and correctly serialized in the POST body.",
+    "LandingPage.js and ReveniqLanding.js correctly namespace their data-testids (nav-* vs rq-*) so cross-page selectors never collide — good for E2E.",
+    "DemoLeadsPanel product badge uses data-testid=demo-lead-product-{id} with distinct color per product — matches spec and renders correctly for both pms/rms records."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (verified via network + admin GET)", "frontend": "100% on all requested flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (worked)",
+  "seed_data_creation": "Created 2 demo requests during the run (Bad Email Test/pms, TEST RMS Lead 464/rms) — both DELETED at end (HTTP 200). DB clean.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "DemoForm inputs use data-testid selectors ONLY (demo-form-name, demo-form-email, demo-form-hotel, demo-form-rooms, demo-form-message, demo-form-submit) — they do NOT have HTML 'name' attributes, so name-based selectors will time out. Invalid email is now blocked via JS regex + sonner toast (not HTML5). Sidebar 'Guests' section still starts collapsed; click nav-section-Guests before demo-leads-btn. Cleanup endpoint DELETE /api/demo-requests/{id} works with credentials:'include'.",
+  "rca of the issue": "N/A — no bugs found. Iter 463's cosmetic invalid-email note is now resolved."
+}

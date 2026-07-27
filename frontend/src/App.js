@@ -40,6 +40,7 @@ import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { LoginPage } from "./components/dashboard/LoginPage";
 import LandingPage from "./LandingPage";
+import ReveniqLanding from "./ReveniqLanding";
 import { PendingLegalDocsGate } from "./components/PendingLegalDocsGate";
 import { StaffOnboardingGate } from "./components/StaffOnboardingGate";
 import { ContractSigningPage } from "./components/public/ContractSigningPage";
@@ -2473,6 +2474,9 @@ function MainApp() {
 }
 
 function App() {
+  if (window.location.pathname === "/reveniq" || window.location.pathname.startsWith("/reveniq/")) {
+    return <ReveniqLanding />;
+  }
   if (window.location.pathname === "/owner" || window.location.pathname.startsWith("/owner/")) {
     return <OwnerSelfServiceApp />;
   }

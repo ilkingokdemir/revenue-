@@ -39,6 +39,7 @@ def create_demo_requests_router(db, require_roles):
             raise HTTPException(429, "Too many pending requests for this email")
         doc = {"id": str(uuid.uuid4()), "name": name, "email": email,
                "hotel_name": hotel_name,
+               "product": payload.get("product") if payload.get("product") in ("pms", "rms") else "pms",
                "room_count": (payload.get("room_count") or "")[:40],
                "message": (payload.get("message") or "").strip()[:1000],
                "status": "new", "created_at": _iso(), "updated_at": _iso()}

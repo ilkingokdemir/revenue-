@@ -18,7 +18,7 @@ ADMIN_PWD = "HotelAdmin2026!"
 OWNER_EMAIL = "pulse_owner@test.com"
 OWNER_PIN = "862347"
 PID = "default"
-MODULE_KEYS = ["dashboard", "demand_radar", "compset", "reports", "rates"]
+MODULE_KEYS = ["dashboard", "demand_radar", "compset", "reports", "rates", "portfolio"]
 
 
 @pytest.fixture(scope="module")

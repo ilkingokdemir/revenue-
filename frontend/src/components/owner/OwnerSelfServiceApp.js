@@ -14,6 +14,7 @@ import OwnerPulseDashboard from "./OwnerPulseDashboard";
 import OwnerDemandRadar from "./OwnerDemandRadar";
 import OwnerCompsetIntel from "./OwnerCompsetIntel";
 import OwnerReportsHub from "./OwnerReportsHub";
+import OwnerPortfolioBoard from "./OwnerPortfolioBoard";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const STORAGE_KEY = "owner_access_token";
@@ -111,6 +112,7 @@ export default function OwnerSelfServiceApp() {
       <main className="max-w-6xl mx-auto px-5 py-6">
         <div className="flex items-center gap-2 mb-5 flex-wrap" data-testid="owner-tabs">
           {[["pulse", "Genel Bakış", Gauge, "dashboard"],
+            ["portfolio", "Portföy", Buildings, "portfolio"],
             ["radar", "Talep Radarı", Broadcast, "demand_radar"],
             ["compset", "Rekabet", Storefront, "compset"],
             ["rates", "Fiyatlar & İndirimler", Tag, "rates"],
@@ -126,6 +128,7 @@ export default function OwnerSelfServiceApp() {
         </div>
 
         {tab === "pulse" && <OwnerPulseDashboard ax={ax} />}
+        {tab === "portfolio" && <OwnerPortfolioBoard ax={ax} />}
         {tab === "radar" && <OwnerDemandRadar ax={ax} />}
         {tab === "compset" && <OwnerCompsetIntel ax={ax} />}
         {tab === "reports" && <OwnerReportsHub ax={ax} />}

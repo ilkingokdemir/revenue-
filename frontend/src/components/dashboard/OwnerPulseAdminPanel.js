@@ -12,6 +12,7 @@ const MODULES = [
   { key: "compset", label: "Rekabet Analizi (Compset)", desc: "Segment kıyası, sıralamalar, günlük drill-down" },
   { key: "reports", label: "Rapor Merkezi", desc: "Performans, YoY, rezervasyon ve kanal raporları + CSV" },
   { key: "rates", label: "Fiyatlar & İndirimler", desc: "İki yönlü fiyat panosu (mevcut modül)" },
+  { key: "portfolio", label: "Portföy Panosu", desc: "Birleşik kartlar + doluluk ısı haritası + tesis YoY tabloları" },
 ];
 
 export default function OwnerPulseAdminPanel({ propertyId }) {

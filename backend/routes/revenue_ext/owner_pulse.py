@@ -41,7 +41,7 @@ async def _send_email(to_email: str, subject: str, html: str) -> str:
         logger.warning(f"Pulse digest email failed: {e}")
         return "failed"
 
-MODULE_KEYS = ["dashboard", "demand_radar", "compset", "reports", "rates"]
+MODULE_KEYS = ["dashboard", "demand_radar", "compset", "reports", "rates", "portfolio"]
 MONTH_TR = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"]
 
 
@@ -194,6 +194,97 @@ async def build_owner_dashboard(db, pid: str) -> Dict:
     return {"currency": prop.get("currency") or "GBP", "property_name": prop.get("name") or "",
             "rooms": rooms, "pace_source": pace_source, "month_cards": cards, "occ_series": occ_series,
             "recent_bookings": recent, "annual": annual}
+
+
+async def build_portfolio_overview(db, pids) -> Dict:
+    """Portföy panosu — birleşik aylık kartlar + doluluk ısı haritası + tesis bazlı YoY tabloları."""
+    today = ddate.today()
+    now = datetime.now(timezone.utc)
+    cy, py = today.year, today.year - 1
+    heat_days = [(today + timedelta(days=i)).isoformat() for i in range(30)]
+    dow_tr = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
+
+    windows = []
+    for offset, label in [(-1, "Geçen Ay"), (0, "Bu Ay"), (1, "Gelecek Ay")]:
+        y, m = today.year, today.month + offset
+        if m < 1:
+            y, m = y - 1, 12
+        elif m > 12:
+            y, m = y + 1, 1
+        tag = "FINAL" if offset == -1 else ("MTD" if offset == 0 else "OTB")
+        windows.append({"label": label, "tag": tag, "y": y, "m": m,
+                        "rev": 0.0, "nights": 0, "cap": 0,
+                        "ly_rev": 0.0, "ly_nights": 0, "ly_cap": 0})
+
+    props_out, heat_rows, currencies = [], [], []
+    for pid in pids:
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "currency": 1}) or {}
+        cur = prop.get("currency") or "GBP"
+        currencies.append(cur)
+        rooms = await _total_rooms(db, pid)
+        bookings = await _fetch_bookings(db, pid)
+
+        # birleşik aylık kartlar
+        for w in windows:
+            s = _month_stats(bookings, rooms, w["y"], w["m"])
+            ls = _month_stats(bookings, rooms, w["y"] - 1, w["m"])
+            mdays = calendar.monthrange(w["y"], w["m"])[1]
+            w["rev"] += s["revenue"]; w["nights"] += s["nights"]; w["cap"] += rooms * mdays
+            w["ly_rev"] += ls["revenue"]; w["ly_nights"] += ls["nights"]; w["ly_cap"] += rooms * mdays
+
+        # ısı haritası (30 gün) + pace
+        day_occ = defaultdict(int)
+        pickup7 = defaultdict(int)
+        h_end = today + timedelta(days=30)
+        for b in bookings:
+            ci, co = _parse_d(b.get("check_in")), _parse_d(b.get("check_out"))
+            if not ci or not co:
+                continue
+            created = _parse_created(b.get("created_at"))
+            fresh = created and (now - created).total_seconds() <= 7 * 86400
+            d = max(ci, today)
+            while d < min(co, h_end):
+                iso = d.isoformat()
+                day_occ[iso] += 1
+                if fresh:
+                    pickup7[iso] += 1
+                d += timedelta(days=1)
+        cells = [{"occ": min(100, round(day_occ[x] * 100 / rooms)), "pace": pickup7[x]} for x in heat_days]
+        avg_occ = round(sum(c["occ"] for c in cells) / len(cells), 1)
+        heat_rows.append({"property_id": pid, "name": prop.get("name") or pid, "rooms": rooms,
+                          "avg_occ": avg_occ, "risk": avg_occ < 35, "cells": cells})
+
+        # tesis bazlı 12 ay YoY
+        months = []
+        for m in range(1, 13):
+            p = _month_stats(bookings, rooms, py, m)
+            c = _month_stats(bookings, rooms, cy, m)
+            var = round((c["revenue"] - p["revenue"]) * 100 / p["revenue"], 1) if p["revenue"] else None
+            months.append({"month": MONTH_TR[m - 1], "mtd": (m == today.month),
+                           "p_occ": p["occ"], "p_adr": p["adr"], "p_rev": p["revenue"],
+                           "c_occ": c["occ"], "c_adr": c["adr"], "c_rev": c["revenue"], "var_pct": var})
+        props_out.append({"property_id": pid, "name": prop.get("name") or pid,
+                          "currency": cur, "rooms": rooms, "months": months})
+
+    heat_rows.sort(key=lambda r: r["avg_occ"])  # risk önce
+    cards = []
+    for w in windows:
+        occ = round(w["nights"] * 100 / w["cap"], 1) if w["cap"] else 0
+        ly_occ = round(w["ly_nights"] * 100 / w["ly_cap"], 1) if w["ly_cap"] else 0
+        adr = round(w["rev"] / w["nights"], 2) if w["nights"] else 0
+        ly_adr = round(w["ly_rev"] / w["ly_nights"], 2) if w["ly_nights"] else 0
+        yoy = round((w["rev"] - w["ly_rev"]) * 100 / w["ly_rev"], 1) if w["ly_rev"] else None
+        cards.append({"label": w["label"], "tag": w["tag"], "month": f"{MONTH_TR[w['m']-1]} {w['y']}",
+                      "revenue": round(w["rev"], 2), "occ": occ, "adr": adr,
+                      "ly_revenue": round(w["ly_rev"], 2), "ly_occ": ly_occ, "ly_adr": ly_adr,
+                      "yoy_pct": yoy})
+    uniq = list(dict.fromkeys(currencies))
+    return {"currency": uniq[0] if len(uniq) == 1 else "MIX",
+            "currency_mixed": len(uniq) > 1, "prev_year": py, "cur_year": cy,
+            "month_cards": cards,
+            "heatmap": {"days": [{"date": x, "dow": dow_tr[ddate.fromisoformat(x).weekday()]} for x in heat_days],
+                        "rows": heat_rows},
+            "properties": props_out}
 
 
 async def build_owner_report(db, pid: str, key: str, radar_build=None, compset_build=None, owner=None) -> Dict:
@@ -546,6 +637,17 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
                           "revpar": k.get("my_revpar"), "comp_revpar": k.get("comp_revpar"),
                           "occ_rank": k.get("occ_rank"), "segment_size": k.get("segment_size")})
         return {"count": len(items), "items": items}
+
+    @router.get("/portal/portfolio-overview")
+    async def portal_portfolio_overview(owner: dict = Depends(get_current_owner)):
+        await _check(_pid(owner), "portfolio")
+        pids = owner.get("property_ids") or [_pid(owner)]
+        return await build_portfolio_overview(db, pids[:12])
+
+    @router.get("/portfolio/overview")
+    async def admin_portfolio_overview(current_user: dict = Depends(require_roles("admin", "manager"))):
+        pids = [p["id"] async for p in db.properties.find({}, {"_id": 0, "id": 1}) if p.get("id")]
+        return await build_portfolio_overview(db, pids[:12])
 
     @router.get("/portal/reports/{key}")
     async def portal_report(key: str, owner: dict = Depends(get_current_owner)):

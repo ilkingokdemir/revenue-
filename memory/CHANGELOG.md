@@ -2439,3 +2439,9 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Rapor Merkezi'ne PAZAR ZEKASI kategorisi: "Etkinlik Etkisi" (90 gün: etkinlik + pazar talebi/fiyatı + kendi doluluk + önerilen aksiyon kuralları) ve "Rekabetçi Konumlanma" (30 gün: Δocc/Δadr + konum etiketi, başlıkta sıralamalar). Rakip üründe "coming soon" olan iki rapor bizde canlı.
 - Pulse Dashboard'a "Önümüzdeki 14 Gün — Dolum Hızı (Pace)" şeridi: ▲/▼ hücreler; OTB snapshot ≥7 gün olduğunda snapshot farkından (pace_source=snapshot), yoksa rezervasyon akışından (bookings) hesaplanır. Snapshot yolu sentetik veriyle doğrulanıp temizlendi.
 - build_owner_report'a radar_build/compset_build enjeksiyonu. Test: curl (events 37 satır, positioning 30 satır) + UI screenshot + pytest 15/15 PASS.
+
+## iter 470 (2026-07-27) — Portföy Panosu (Market Pulse Portfolio paritesi)
+- build_portfolio_overview (owner_pulse.py): birleşik aylık kartlar (Σ karma para birimi desteği, YoY), 30 günlük doluluk ısı haritası (otel × gün, riske göre sıralı, ⚠ düşük doluluk, ▲ 7g pickup), tesis bazlı 12 ay YoY tabloları (2025 vs 2026 occ/adr/rev + VAR%).
+- Endpoint'ler: GET /api/owner-pulse/portfolio/overview (admin — TÜM tesisler, 10 tesis döndü), GET /api/owner-pulse/portal/portfolio-overview (owner — property_ids, gating: yeni "portfolio" modül anahtarı MODULE_KEYS'e eklendi).
+- Frontend: shared/PortfolioBoard.js (Market Pulse koyu tema), owner "Portföy" sekmesi (OwnerPortfolioBoard), admin "Portföy panosu (tüm tesisler)" görünümü (PortfolioBoardPanel, view id portfolio-board), OwnerPulseAdminPanel'e 6. toggle.
+- Test: curl admin(10 tesis)/owner(3 tesis) + her iki UI screenshot; pytest güncellenip 15/15 PASS (test MODULE_KEYS'e portfolio eklendi).

@@ -261,6 +261,7 @@ export function buildMenuSections(t, user) {
         { id: "discount-stack", icon: Tag, name: "İndirim katmanları & net fiyat", testId: "discount-stack-btn" },
         { id: "owner-rates", icon: ArrowsClockwise, name: "Sahip fiyat panosu (iki yönlü)", testId: "owner-rates-btn" },
         { id: "owner-pulse-admin", icon: ArrowsClockwise, name: "Sahip portalı modülleri (Pulse)", testId: "owner-pulse-admin-btn" },
+        { id: "portfolio-board", icon: ArrowsClockwise, name: "Portföy panosu (tüm tesisler)", testId: "portfolio-board-btn" },
         { id: "intraday-reprice", icon: Lightning, name: "Gün-içi re-price (pickup spike)", testId: "intraday-reprice-btn" },
         { id: "restriction-advisor", icon: LockKey, name: "AI kısıtlama önerileri (MLOS/CTA)", testId: "restriction-advisor-btn" },
         { id: "lost-demand", icon: UserMinus, name: "Kayıp talep (denials & regrets)", testId: "lost-demand-btn" },

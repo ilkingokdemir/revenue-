@@ -360,6 +360,7 @@ def _parse_llm_json(text: str) -> Dict:
 
 
 async def _apply_price_action(db, pid: str, action: Dict, source: str, user: str) -> Dict:
+    from routes.revenue_ext.min_rate_floors import get_effective_min_rate
     target = float(action.get("target_rate") or 0)
     if target <= 0:
         raise HTTPException(400, "target_rate gerekli")
@@ -370,16 +371,22 @@ async def _apply_price_action(db, pid: str, action: Dict, source: str, user: str
         raise HTTPException(400, "Geçersiz tarih aralığı")
     now = _iso()
     days = 0
+    floor_clamped = 0
     while d <= d_end and days < 120:
+        rate = target
+        mr = await get_effective_min_rate(db, pid, d.isoformat())
+        if mr.get("floor") and rate < mr["floor"]:
+            rate = mr["floor"]
+            floor_clamped += 1
         await db.rate_overrides.update_one(
             {"property_id": pid, "date": d.isoformat()},
-            {"$set": {"property_id": pid, "date": d.isoformat(), "custom_rate": round(target, 2),
+            {"$set": {"property_id": pid, "date": d.isoformat(), "custom_rate": round(rate, 2),
                       "source": source, "set_by": user, "set_at": now,
                       "context": {"strategist_action": action.get("id"), "title": action.get("title", "")}}},
             upsert=True)
         d += timedelta(days=1)
         days += 1
-    return {"dates_updated": days, "rate": round(target, 2)}
+    return {"dates_updated": days, "rate": round(target, 2), "min_rate_clamped": floor_clamped}
 
 
 def create_revenue_strategist_router(db, require_roles):

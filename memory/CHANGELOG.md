@@ -2361,3 +2361,19 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   önerisi üretti. UI 9 KPI kartı ekran görüntüsüyle onaylandı.
 - Robotun gördüğü talep sinyalleri artık 11: etkinlik, pazar doluluk, rakip fiyat, kendi OTB,
   pickup, iptal/no-show, lead time, STLY, geçmiş perf, RM aksiyonları, kayıp talep.
+
+## Iter 469 (2026-07-27) — Çift Minimum Fiyat Sistemi (Dual Min-Rate Floors) TAMAMLANDI
+- Kullanıcı: iki minimum rate — standart (örn. Double £120) + yakın tarih (son 7 gün £80),
+  gün penceresi değiştirilebilir; pencere içinde standart devre dışı, yakın tarih aktif.
+- YENİ backend: revenue_ext/min_rate_floors.py (/api/min-rates): oda tipi bazlı kurallar
+  ("all" property-geneli destekli), get_effective_min_rate + effective_min_rate_map helper,
+  GET/PUT/DELETE + 14 günlük preview endpoint. Validasyon: yakın min > standart min reddedilir.
+- ENTEGRASYON: ai_pricing_engine accept → LRV'den sonra min-rate clamp (min_rate_clamped alanı);
+  revenue_strategist _apply_price_action → tarih bazlı taban kırpması (yakın pencerede yakın
+  taban, dışında standart taban).
+- YENİ panel: MinRateFloorsPanel.js — oda tipi satırları (std/yakın/pencere/aktif), 14 günlük
+  renkli önizleme şeridi (amber=yakın, mavi=standart, geçiş günü görünür).
+  Menü: Revenue & rates > AI & Insights > "Minimum fiyat koruması" (min-rates-btn).
+- DOĞRULANDI: kural CRUD + validasyon + preview (7 gün geçişi) curl ile; kırpma testi £50 hedef
+  → yakın £75 / uzak £110'a yükseltildi (9 tarih clamped, temizlendi); UI ekran görüntüsü OK.
+  Örnek kural bırakıldı: Standard Double £120/£80/7 gün.

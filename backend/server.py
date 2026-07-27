@@ -1373,6 +1373,9 @@ from routes.revenue_ext.revenue_strategist import create_revenue_strategist_rout
 revenue_strategist_router = create_revenue_strategist_router(db, require_roles)
 api_router.include_router(revenue_strategist_router)
 
+from routes.revenue_ext.min_rate_floors import create_min_rate_floors_router
+api_router.include_router(create_min_rate_floors_router(db, require_roles))
+
 async def _job_revenue_strategist(property_id: str) -> dict:
     try:
         return await revenue_strategist_router.run_internal(property_id or "")

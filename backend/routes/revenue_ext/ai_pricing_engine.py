@@ -484,17 +484,26 @@ def create_ai_pricing_router(db, require_roles):
             items = [s for s in payload["suggestions"] if s["auto_apply_eligible"] and s["status"] == "pending"]
 
         from routes.revenue_ext.hurdle_lrv import compute_lrv_floor
+        from routes.revenue_ext.min_rate_floors import effective_min_rate_map
         lrv_map = await compute_lrv_floor(db, property_id, int(cfg.get("days_horizon", 30)))
-        applied, lrv_clamped = 0, 0
+        min_map = await effective_min_rate_map(
+            db, property_id, [it.get("date", "") for it in items])
+        applied, lrv_clamped, min_clamped = 0, 0, 0
         for it in items:
             floor = lrv_map.get(it.get("date", ""))
             if floor and float(it["suggested_rate"]) < floor:
                 it["suggested_rate"] = floor
                 it["rationale"] = (it.get("rationale") or "") + f" · LRV guardrail: fiyat £{floor} tabanına yükseltildi"
                 lrv_clamped += 1
+            mr = min_map.get(it.get("date", ""), {})
+            if mr.get("floor") and float(it["suggested_rate"]) < mr["floor"]:
+                it["suggested_rate"] = mr["floor"]
+                label = "yakın tarih min." if mr.get("mode") == "near_term" else "standart min."
+                it["rationale"] = (it.get("rationale") or "") + f" · Minimum fiyat koruması ({label}): £{mr['floor']} tabanına yükseltildi"
+                min_clamped += 1
             await _apply_one(property_id, it, source="ai-pricing-manual", rationale=it.get("rationale"))
             applied += 1
-        return {"accepted": applied, "lrv_clamped": lrv_clamped}
+        return {"accepted": applied, "lrv_clamped": lrv_clamped, "min_rate_clamped": min_clamped}
 
     @router.post("/revenue/ai-pricing/{property_id}/reject")
     async def reject_suggestion(property_id: str, data: Dict,

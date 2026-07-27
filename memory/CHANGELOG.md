@@ -2288,3 +2288,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   2. MorningBriefPanel.js: tüm koyu kart etiketleri stone-500 → stone-400
   3. DeparturesBoard.js footer metni stone-600 → stone-400
 - Ekran görüntüsüyle doğrulandı: dashboard, sidebar, KPI şeridi düzgün render.
+
+## Iter 463-464 (2026-07-27) — Pazarlama Siteleri (2 ayrı site) TAMAMLANDI
+- Kullanıcı: potansiyel müşteriler için web sitesi + "iki ayrı site olmalı: MyHotelBox (PMS) ve ReveniQ (RMS)".
+- '/' = MyHotelBox PMS sitesi (açık tema, operasyon odaklı, front-desk mockup, 5 özellik bento,
+  ReveniQ cross-sell koyu bölümü, Starter €4/Professional €7/Enterprise fiyatlandırma).
+- '/reveniq' = ReveniQ RMS sitesi (koyu lacivert tema, SVG forecast mockup, 8 motor kartı,
+  3 adımlı how-it-works, Essentials €3/Pro €5/Enterprise). Çapraz linkler iki yönde.
+- Ortak: /app/frontend/src/landing/shared.js (DemoForm product=pms|rms + noValidate + regex
+  email toast, FaqItem, fadeUp). Login artık '/login' rotasında; unauth '/' → landing.
+- Backend: routes/marketing/demo_requests.py — POST /api/public/demo-requests (public, rate
+  limit 3 bekleyen/email, product alanı), GET/PATCH/DELETE /api/demo-requests (admin/manager).
+- Admin: DemoLeadsPanel (Guests > 'Demo talepleri (web sitesi)', demo-leads-btn) — KPI kartları,
+  durum filtreleri, MyHotelBox/ReveniQ ürün rozetleri, iletişim/kapat/sil aksiyonları.
+- TEST: iteration_463 (tek site, %100) + iteration_464 (çift site, %100, 0 sorun). DB temiz.

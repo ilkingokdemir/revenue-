@@ -1,0 +1,31 @@
+{
+  "summary": "Frontend-only visual/theme regression testing for the new hand-crafted design system (Manrope + IBM Plex, sapphire primary #1D4ED8, dark navy sidebar #0A0F1C). Login → Dashboard → all 6 sidebar sections expand → 4 target panels (Morning brief, Forecast planlama, Kayıp talep, Bütçe vs Gerçekleşen incl. budget-tab-triple) → Public booking /book/default + CHECK AVAILABILITY: all render without layout breakage. Zero console errors / zero page errors across the entire flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Sidebar (all pages)", "issues": ["Sidebar section header labels (Overview / Reservations / Guests / Operations / Revenue & rates / Food & events / Finance / Reports / System) render in rgb(120,113,108) ~ #78716C on rgb(10,15,28) #0A0F1C dark navy. Measured contrast ratio ≈ 3.8:1 which is BELOW WCAG AA 4.5:1 for normal text (they are uppercase/small labels, but still borderline). Suggest lightening to at least #A8A29E (stone-400) or #D6D3D1 to comfortably clear AA. Main nav item labels (Dashboard, My tasks, Calendar…) themselves are also rendered in the same rgb(120,113,108) — legible in screenshot but same borderline contrast issue applies."]},
+      {"screen": "Morning brief (top KPI strip)", "issues": ["The small metric-label captions above the big numbers on the dark hero KPI cards appear extremely faint / almost invisible against the dark card backgrounds. Only the large numeric values (0, 0, 2, 35, 18) are clearly readable. Labels need a brighter foreground or an increased font-weight."]},
+      {"screen": "Dashboard (TodayHub) — 'Planlı Çıkışlar · Bugün' card", "issues": ["Footer helper text under the card ('Otomatik her 30 sn periyodik… Excel her 5dk. Hızlı çalıştırın.') renders in very light gray on white — barely legible. Bump to slate-500/600 for readability."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Raise sidebar text color from #78716C to at least #A8A29E (or #D6D3D1) to pass WCAG AA on the #0A0F1C background.",
+    "Increase contrast of Morning brief KPI card SMALL LABELS (currently near-invisible on dark cards).",
+    "Increase contrast of Dashboard TodayHub 'Planlı Çıkışlar' footer helper text (too faint on white)."
+  ],
+  "critical_code_review_comments": [
+    "Global theme cascade is working — Manrope + IBM Plex loaded, sapphire primary applied to CTA buttons (Sign In, Morning Brief’e git, Reserve, CHECK AVAILABILITY), sidebar bg confirmed rgb(10,15,28). No hydration or React errors — LoginPage, TodayHub, Forecast Planlama, Bütçe vs Gerçekleşen and public /book/default all clean.",
+    "Only remaining concern is text contrast on the new dark navy sidebar — this is the direct side-effect of the theme swap. Fix is a one-token change (nav text color)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100% functional; 3 minor contrast/design regressions"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Sapphire-blue theme regression verified. All key flows work: login (blue Sign In btn), Dashboard KPI strip, sidebar with 6 expandable sections, Morning brief, Forecast planlama (forecast-plans-btn), Kayıp talep (lost-demand-btn), Bütçe vs Gerçekleşen (budget-actual-btn + budget-tab-triple), public /book/default → CHECK AVAILABILITY → 2 rooms result. 0 console errors. Only issues are contrast (see design_issues). Data-testids used: forecast-plans-btn, lost-demand-btn, budget-actual-btn, budget-tab-triple — all present with count=1.",
+  "rca of the issue": "N/A — no functional bug. Sidebar/label contrast regression stems from using stone-500 (#78716C) for muted text on very-dark navy (#0A0F1C) — contrast ratio ≈ 3.8:1 fails WCAG AA (4.5:1) for normal text. Mitigation: switch muted-on-dark token to stone-400/300 (~#A8A29E or #D6D3D1)."
+}

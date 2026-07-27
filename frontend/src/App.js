@@ -556,7 +556,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
 
   return (
-    <div className="min-h-screen bg-stone-50 flex" data-testid="review-dashboard">
+    <div className="min-h-screen bg-[#F4F6F8] flex" data-testid="review-dashboard">
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setSidebarOpen(false)} data-testid="sidebar-overlay" />
@@ -572,7 +572,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       </div>
 
       {/* Left Sidebar */}
-      <aside className={`w-56 bg-[#1C1917] flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`} data-testid="sidebar">
+      <aside className={`w-56 bg-[#0A0F1C] border-r border-slate-800/60 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-200 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`} data-testid="sidebar">
         {/* Logo */}
         <div className="p-4 border-b border-stone-800">
           <div className="flex items-center gap-2.5">

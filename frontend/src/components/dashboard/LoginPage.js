@@ -161,7 +161,7 @@ const LoginPage = ({ onLogin }) => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="flex-1 bg-[#3E5245] text-white py-2.5 rounded-lg hover:bg-[#2A3B30] transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
+                className="flex-1 bg-[#1D4ED8] text-white py-2.5 rounded-lg hover:bg-[#1E40AF] transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 font-medium"
                 data-testid="login-submit-btn"
               >
                 {isLoading ? (

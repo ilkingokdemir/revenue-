@@ -157,13 +157,13 @@ export default function TodayHub({ propertyId, hotelName, onNavigate }) {
       {/* HERO */}
       <div className="mb-6">
         <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-2">
-          <Sparkle size={12} className="text-violet-400" weight="fill" />
+          <Sparkle size={12} className="text-blue-400" weight="fill" />
           <span>Today · {hotelName || "Property"}</span>
         </div>
         <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-stone-900 leading-tight">
           {greet}.
           <span className="text-stone-400"> Bugün için</span>{" "}
-          <span className="text-violet-600">{actions.length}</span>{" "}
+          <span className="text-blue-600">{actions.length}</span>{" "}
           <span className="text-stone-400">odak alanın var.</span>
         </h1>
 
@@ -260,7 +260,7 @@ export default function TodayHub({ propertyId, hotelName, onNavigate }) {
             <h3 className="text-sm font-semibold text-stone-900">Öne çıkan KPI'lar</h3>
             <button
               onClick={() => onNavigate && onNavigate("tier1-dashboard")}
-              className="text-xs text-violet-600 hover:underline"
+              className="text-xs text-blue-600 hover:underline"
             >
               Tümü →
             </button>
@@ -319,12 +319,12 @@ export default function TodayHub({ propertyId, hotelName, onNavigate }) {
         </div>
 
         {/* Last 7d revenue */}
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-violet-500/10 to-transparent border border-violet-500/20">
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-blue-500/10 to-transparent border border-blue-500/20">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-stone-900">Pickup (son 7 gün)</h3>
-            <ArrowsClockwise size={14} className="text-violet-500" />
+            <ArrowsClockwise size={14} className="text-blue-500" />
           </div>
-          <div className="text-3xl font-bold text-violet-900">
+          <div className="text-3xl font-bold text-blue-900">
             {fmtCurrency(brief?.last_7d?.revenue || 0, brief?.currency || "GBP")}
           </div>
           <div className="text-xs text-stone-600 mt-1">
@@ -345,7 +345,7 @@ export default function TodayHub({ propertyId, hotelName, onNavigate }) {
           )}
           <button
             onClick={() => onNavigate && onNavigate("morning-brief")}
-            className="mt-4 w-full text-xs px-3 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700"
+            className="mt-4 w-full text-xs px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
             data-testid="today-morning-brief-link"
           >
             Morning Brief'e git
@@ -372,7 +372,7 @@ function toneCardClass(tone) {
     emerald: "bg-white hover:bg-emerald-50/50 border-stone-200 hover:border-emerald-200",
     sky: "bg-white hover:bg-sky-50/50 border-stone-200 hover:border-sky-200",
     amber: "bg-white hover:bg-amber-50/50 border-stone-200 hover:border-amber-200",
-    violet: "bg-white hover:bg-violet-50/50 border-stone-200 hover:border-violet-200",
+    violet: "bg-white hover:bg-blue-50/50 border-stone-200 hover:border-blue-200",
     rose: "bg-white hover:bg-rose-50/50 border-stone-200 hover:border-rose-200",
   };
   return map[tone] || map.violet;
@@ -383,7 +383,7 @@ function toneIconBg(tone) {
     emerald: "bg-emerald-100 text-emerald-700",
     sky: "bg-sky-100 text-sky-700",
     amber: "bg-amber-100 text-amber-700",
-    violet: "bg-violet-100 text-violet-700",
+    violet: "bg-blue-100 text-blue-700",
     rose: "bg-rose-100 text-rose-700",
   };
   return map[tone] || map.violet;

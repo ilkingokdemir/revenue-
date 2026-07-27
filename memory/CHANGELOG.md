@@ -2348,3 +2348,16 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   NFL London 74), 4+4 pozitif/negatif etken, 7 öneri. UI ekran görüntüsüyle onaylandı.
 - NOT: Uzun analizlerde (60-90 sn) curl bağlantısı düşebilir ama rapor DB'ye yazılır; panel
   "reports" listesinden en yeni raporu gösterir.
+
+## Iter 468 (2026-07-27) — Strateji Robotu: İptal Trendi + Lead Time Sinyalleri TAMAMLANDI
+- Kullanıcı 2 ve 5'i seçti: iptal/no-show trendi + lead time dağılımı.
+- _gather_intel: cancellations (son 30g iptal oranı %, no-show, ileri dönem iptaller),
+  lead_time (son 60g, 6 bucket dağılımı 0-3/4-7/8-14/15-30/31-60/60+, medyan gün).
+- Prompt: iptal/lead-time satırları + görev metnine "lead time kısaysa erken indirim gereksiz,
+  iptal yüksekse overbooking/sıkı politika değerlendir" talimatı.
+- KPI'lar: cancel_rate_30d_pct + median_lead_time_days → panelde 9'lu KPI şeridi.
+- DOĞRULANDI: analiz → iptal %3, medyan lead 0g (son dakika pazarı), rapor bu sinyalleri
+  yorumladı ("erken agresif indirim yapmayı gereksiz kılarken..."), Street Parade etkinlik primi
+  önerisi üretti. UI 9 KPI kartı ekran görüntüsüyle onaylandı.
+- Robotun gördüğü talep sinyalleri artık 11: etkinlik, pazar doluluk, rakip fiyat, kendi OTB,
+  pickup, iptal/no-show, lead time, STLY, geçmiş perf, RM aksiyonları, kayıp talep.

@@ -158,6 +158,55 @@ async def _gather_intel(db, pid: str, horizon: int) -> Dict:
         "property_id": pid, "created_at": {"$gte": pk_since},
         "status": {"$in": ["confirmed", "checked_in"]}})
 
+    # İptal & no-show trendi (son 30 gün oluşturulan rezervasyonlar üzerinden)
+    c_since = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    created_30d = await db.bookings.count_documents({"property_id": pid, "created_at": {"$gte": c_since}})
+    cancelled_30d = await db.bookings.count_documents({
+        "property_id": pid, "created_at": {"$gte": c_since}, "status": "cancelled"})
+    noshow_30d = await db.bookings.count_documents({
+        "property_id": pid, "created_at": {"$gte": c_since}, "status": "no_show"})
+    fwd_cancelled = await db.bookings.count_documents({
+        "property_id": pid, "status": "cancelled",
+        "check_in": {"$gte": today.isoformat(), "$lt": end.isoformat()}})
+    cancellations = {
+        "cancel_rate_30d_pct": round(cancelled_30d / created_30d * 100, 1) if created_30d else 0,
+        "cancelled_30d": cancelled_30d, "noshow_30d": noshow_30d,
+        "created_30d": created_30d, "fwd_period_cancellations": fwd_cancelled,
+    }
+
+    # Lead time dağılımı (son 60 günde oluşturulan rezervasyonlar)
+    lt_since = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    lt_buckets = {"0-3": 0, "4-7": 0, "8-14": 0, "15-30": 0, "31-60": 0, "60+": 0}
+    leads = []
+    async for b in db.bookings.find(
+            {"property_id": pid, "created_at": {"$gte": lt_since},
+             "status": {"$in": ["confirmed", "checked_in", "checked_out"]}},
+            {"_id": 0, "created_at": 1, "check_in": 1}).limit(5000):
+        try:
+            lead = (ddate.fromisoformat(b["check_in"][:10]) -
+                    ddate.fromisoformat(b["created_at"][:10])).days
+        except Exception:
+            continue
+        lead = max(lead, 0)
+        leads.append(lead)
+        if lead <= 3:
+            lt_buckets["0-3"] += 1
+        elif lead <= 7:
+            lt_buckets["4-7"] += 1
+        elif lead <= 14:
+            lt_buckets["8-14"] += 1
+        elif lead <= 30:
+            lt_buckets["15-30"] += 1
+        elif lead <= 60:
+            lt_buckets["31-60"] += 1
+        else:
+            lt_buckets["60+"] += 1
+    leads.sort()
+    lead_time = {
+        "median_days": leads[len(leads) // 2] if leads else None,
+        "buckets": lt_buckets, "sample": len(leads),
+    }
+
     # daily satırlarına pazar doluluğu ve etkinlik skoru ekle
     for x in daily:
         x["market_occ_pct"] = market_occ.get(x["date"])
@@ -185,7 +234,7 @@ async def _gather_intel(db, pid: str, horizon: int) -> Dict:
         "total_rooms": total_rooms, "base_rate": base_rate, "horizon": horizon,
         "daily": daily, "past_perf": past_perf, "stly_perf": stly_perf,
         "events": events[:25], "high_impact_events": high_events[:10],
-        "pickup_7d": pickup_7d,
+        "pickup_7d": pickup_7d, "cancellations": cancellations, "lead_time": lead_time,
         "actions_taken": {"rate_overrides_14d": ov_recent, "intraday_events_14d": intraday,
                           "restriction_recs_14d": restr, "recent_campaigns": campaigns,
                           "lost_demand_records": len(lost), "lost_demand_revenue": lost_rev},
@@ -195,6 +244,8 @@ async def _gather_intel(db, pid: str, horizon: int) -> Dict:
             "avg_market_occ_pct": round(sum(mo_vals) / len(mo_vals), 1) if mo_vals else None,
             "underpriced_dates": len(underpriced),
             "high_impact_events": len(high_events),
+            "cancel_rate_30d_pct": cancellations["cancel_rate_30d_pct"],
+            "median_lead_time_days": lead_time["median_days"],
             "potential_extra_revenue": potential,
             "max_observed_comp_rate": max((x["comp_median"] or 0) for x in daily) if daily else 0,
         },
@@ -256,6 +307,8 @@ GELECEK {intel['horizon']} GÜN (tarih bazlı: kendi doluluk / kendi fiyat / rak
 GEÇMİŞ 30 GÜN PERFORMANS: doluluk %{intel['past_perf']['occ_pct']}, ADR €{intel['past_perf']['adr']}, gelir €{intel['past_perf']['revenue']}
 GEÇEN YIL AYNI DÖNEM (STLY): doluluk %{intel['stly_perf']['occ_pct']}, ADR €{intel['stly_perf']['adr']}
 TALEP HIZI: son 7 günde {intel['pickup_7d']} yeni rezervasyon (pickup)
+İPTAL & NO-SHOW TRENDİ (son 30 gün): iptal oranı %{intel['cancellations']['cancel_rate_30d_pct']} ({intel['cancellations']['cancelled_30d']} iptal, {intel['cancellations']['noshow_30d']} no-show / {intel['cancellations']['created_30d']} rezervasyon) · ileri dönemde {intel['cancellations']['fwd_period_cancellations']} iptal mevcut
+LEAD TIME DAĞILIMI (son 60 gün, {intel['lead_time']['sample']} rezervasyon, medyan {intel['lead_time']['median_days']} gün): {', '.join(f"{k} gün: {v}" for k, v in intel['lead_time']['buckets'].items())}
 PAZAR DOLULUĞU (Market Robot taraması, şehir geneli ort.): {mo}
 
 ETKİNLİK ROBOTU VERİLERİ (yaklaşan etkinlikler — talep skorlarıyla):
@@ -268,7 +321,7 @@ SON 14 GÜNDE YAPILAN RM AKSİYONLARI:
 
 ÖZET KPI: ileri dönem doluluk %{k['fwd_occ_pct']}, ort. pazar farkı %{k['avg_market_gap_pct']}, pazar altı gün sayısı {k['underpriced_dates']}, yüksek etkili etkinlik sayısı {k['high_impact_events']}, potansiyel ek gelir €{k['potential_extra_revenue']}, gözlenen maksimum rakip fiyat €{k['max_observed_comp_rate']}
 
-GÖREV: Fiyata etki edecek TÜM etkenleri birlikte değerlendir — etkinlikler (talep skorlarına göre), pazar doluluğu (arz baskısı), rakip fiyat konumu, kendi doluluk/pace, pickup hızı, geçmiş/STLY trendi, kayıp talep. Geliri POZİTİF ve NEGATİF etkileyecek unsurları açıkça ayır ve stratejiyi bu etkenlere dayandır. Etkinlik günlerinde talep skoru yüksekse fiyat yukarı esnekliğini, pazar doluluğu düşükken agresif fiyatın riskini mutlaka değerlendir.
+GÖREV: Fiyata etki edecek TÜM etkenleri birlikte değerlendir — etkinlikler (talep skorlarına göre), pazar doluluğu (arz baskısı), rakip fiyat konumu, kendi doluluk/pace, pickup hızı, iptal/no-show trendi (net talebi düşürür), lead time dağılımı (talep penceresine göre fiyatlama zamanlaması), geçmiş/STLY trendi, kayıp talep. Geliri POZİTİF ve NEGATİF etkileyecek unsurları açıkça ayır ve stratejiyi bu etkenlere dayandır. Etkinlik günlerinde talep skoru yüksekse fiyat yukarı esnekliğini, pazar doluluğu düşükken agresif fiyatın riskini mutlaka değerlendir. Lead time kısaysa (son dakika pazarı) erken indirimin gereksizliğini, iptal oranı yüksekse overbooking/sıkı iptal politikası ihtiyacını değerlendir.
 
 {lang_line}
 SADECE geçerli JSON döndür (markdown yok, kod bloğu yok):

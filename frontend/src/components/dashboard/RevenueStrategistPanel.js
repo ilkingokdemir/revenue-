@@ -156,13 +156,15 @@ export default function RevenueStrategistPanel({ propertyId = "default" }) {
       ) : (
         <>
           {/* KPI strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3" data-testid="strategist-kpis">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-3" data-testid="strategist-kpis">
             {[
               ["İleri dönem doluluk", `%${k.fwd_occ_pct ?? 0}`, "text-[#1D4ED8]"],
               ["Pazar doluluğu", k.avg_market_occ_pct != null ? `%${k.avg_market_occ_pct}` : "—", "text-violet-600"],
               ["Ort. pazar farkı", k.avg_market_gap_pct != null ? `%${k.avg_market_gap_pct}` : "—", "text-[#F97316]"],
               ["Pazar altı gün", k.underpriced_dates ?? 0, "text-rose-600"],
               ["Etkili etkinlik", k.high_impact_events ?? 0, "text-amber-600"],
+              ["İptal oranı 30g", k.cancel_rate_30d_pct != null ? `%${k.cancel_rate_30d_pct}` : "—", "text-red-500"],
+              ["Medyan lead time", k.median_lead_time_days != null ? `${k.median_lead_time_days}g` : "—", "text-sky-600"],
               ["Potansiyel ek gelir", `€${(k.potential_extra_revenue ?? 0).toLocaleString()}`, "text-emerald-600"],
               ["Maks. rakip fiyat", `€${k.max_observed_comp_rate ?? 0}`, "text-cyan-600"],
             ].map(([l, v, c]) => (

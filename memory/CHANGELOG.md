@@ -2391,3 +2391,19 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - TEST: £999 → etkinlik günü £450'ye, normal gün £300'e; £50 → £120'ye kırpıldı (python E2E).
   Curl: kural CRUD + validasyon + preview. UI ekran görüntüsü OK. Örnek kural: Standard Double
   120/80/7g + 300/450/eşik 20.
+
+## Iter 471 (2026-07-27) — İndirim Katmanları & Net Fiyat Hesaplayıcı TAMAMLANDI
+- Kullanıcı akışı (Market Pulse ekran görüntüsüyle): OTA indirimleri (phone %10, last minute %10,
+  Genius %10) üst üste biner; hedef SON satış fiyatı girilir (£79), sistem geriye hesaplayıp
+  PMS Override brütünü bulur; OTA'da "was £X → £79" görünür.
+- YENİ backend: revenue_ext/discount_stack.py (/api/discount-stack): discount_layers CRUD +
+  aktif/pasif, stack_mode config (multiplicative=OTA standardı | additive), compute_stack
+  (net→brüt ve brüt→net, adım adım breakdown, ota_display), POST apply → tarih aralığına
+  rate_overrides (source=discount-calculator) + fiyat koruma (min/maks) brüte otomatik uygulanır.
+- YENİ panel: DiscountStackPanel.js — katman listesi (ikon/toggle/sil/ekle), yığınlama modu,
+  hesaplayıcı (brüt → toplam % → müşteri fiyatı akış kartı, adım adım indirim, Booking.com
+  önizlemesi üstü çizili was/now), tarih aralığına "PMS Override olarak uygula".
+  Menü: Revenue & rates > AI & Insights > "İndirim katmanları & net fiyat" (discount-stack-btn).
+- DOĞRULANDI: 3×%10 kademeli → £79 hedef → brüt £108.37 (97.53→87.78→79.0), 3 tarihe yazıldı,
+  koruma kırpması 0. UI ekran görüntüsü: katmanlar + hesap + OTA önizleme tam çalışıyor.
+- Örnek veriler bırakıldı: Phone/Last minute/Genius %10 katmanları.

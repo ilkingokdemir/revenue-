@@ -8,8 +8,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import axios from "axios";
 import { toast, Toaster } from "sonner";
-import { Buildings, SignIn, SignOut, FilePdf, ChartLineUp, House, Tag } from "@phosphor-icons/react";
+import { Buildings, SignIn, SignOut, FilePdf, ChartLineUp, House, Tag, Gauge, Broadcast, Storefront } from "@phosphor-icons/react";
 import OwnerRatesBoard from "../shared/OwnerRatesBoard";
+import OwnerPulseDashboard from "./OwnerPulseDashboard";
+import OwnerDemandRadar from "./OwnerDemandRadar";
+import OwnerCompsetIntel from "./OwnerCompsetIntel";
+import OwnerReportsHub from "./OwnerReportsHub";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const STORAGE_KEY = "owner_access_token";
@@ -21,7 +25,8 @@ export default function OwnerSelfServiceApp() {
   const [me, setMe] = useState(null);
   const [dashboard, setDashboard] = useState(null);
   const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [tab, setTab] = useState("summary");
+  const [tab, setTab] = useState("pulse");
+  const [modules, setModules] = useState(null);
 
   const ax = useCallback(() => axios.create({
     baseURL: API,
@@ -90,14 +95,26 @@ export default function OwnerSelfServiceApp() {
       </header>
 
       <main className="max-w-6xl mx-auto px-5 py-6">
-        <div className="flex items-center gap-2 mb-5" data-testid="owner-tabs">
-          {[["summary", "Performans Özeti", ChartLineUp], ["rates", "Fiyatlar & İndirimler", Tag]].map(([id, label, Icon]) => (
+        <div className="flex items-center gap-2 mb-5 flex-wrap" data-testid="owner-tabs">
+          {[["pulse", "Genel Bakış", Gauge, "dashboard"],
+            ["radar", "Talep Radarı", Broadcast, "demand_radar"],
+            ["compset", "Rekabet", Storefront, "compset"],
+            ["rates", "Fiyatlar & İndirimler", Tag, "rates"],
+            ["reports", "Raporlar", FilePdf, "reports"],
+            ["summary", "Mali Özet", House, null]]
+            .filter(([, , , mod]) => !mod || !modules || modules[mod] !== false)
+            .map(([id, label, Icon]) => (
             <button key={id} onClick={() => setTab(id)} data-testid={`owner-tab-${id}`}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${tab === id ? "bg-stone-900 text-white border-stone-900" : "bg-white text-stone-600 border-stone-200 hover:border-stone-400"}`}>
               <Icon size={14} /> {label}
             </button>
           ))}
         </div>
+
+        {tab === "pulse" && <OwnerPulseDashboard ax={ax} />}
+        {tab === "radar" && <OwnerDemandRadar ax={ax} />}
+        {tab === "compset" && <OwnerCompsetIntel ax={ax} />}
+        {tab === "reports" && <OwnerReportsHub ax={ax} />}
 
         {tab === "rates" && (
           <div data-testid="owner-rates-tab">
@@ -112,7 +129,7 @@ export default function OwnerSelfServiceApp() {
         {tab === "summary" && (<>
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-2xl font-semibold text-stone-900">{year} Performans Özeti</h2>
+            <h2 className="text-2xl font-semibold text-stone-900">{year} Mali Özet</h2>
             <p className="text-sm text-stone-500 mt-0.5">
               {me.unit_count || 0} birim · Yönetim ücreti %{me.management_fee_percent}
             </p>

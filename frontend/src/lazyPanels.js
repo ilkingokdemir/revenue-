@@ -170,6 +170,7 @@ export const RevenueStrategistPanel = L(() => import("./components/dashboard/Rev
 export const MinRateFloorsPanel = L(() => import("./components/dashboard/MinRateFloorsPanel"));
 export const DiscountStackPanel = L(() => import("./components/dashboard/DiscountStackPanel"));
 export const OwnerRatesAdminPanel = L(() => import("./components/dashboard/OwnerRatesAdminPanel"));
+export const OwnerPulseAdminPanel = L(() => import("./components/dashboard/OwnerPulseAdminPanel"));
 export const AutomationSettingsPanel = L(() => import("./components/dashboard/AutomationSettingsPanel"));
 export const GuestSegmentsPanel = L(() => import("./components/dashboard/GuestSegmentsPanel"));
 export const ChannelHealthPanel = L(() => import("./components/dashboard/ChannelHealthPanel"));

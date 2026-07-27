@@ -1,0 +1,60 @@
+{
+  "summary": "Iteration 466 — Owner Pulse (analytics + admin visibility) e2e testing. Backend: 15/15 pytest tests PASS covering dashboard shape (month_cards=3, occ_series=90, annual.rows=12), demand-radar daily=90, compset daily=30, all 4 reports (performance/yoy/bookings/source) shape, admin config GET/PUT, module gating (disable compset → 403, re-enable → 200), and auth gating (staff/admin JWT on /portal/* → 401, missing token → 401/403, owner cannot call admin config). Frontend e2e: owner login with pulse_owner@test.com/862347 works; all 6 tabs render (pulse/radar/compset/rates/reports/summary); Pulse tab shows 3 month cards with CHF currency + Bu Ay/Geçen Ay/Gelecek Ay content + 90-day chart + Son Rezervasyonlar + Yıllık Performans 12-month table; Radar tab renders Talep/Pickup/Lead Time/Haftanın Günü/Arz sections; Compset tab renders Pazara Karşı + Günlük Performans; Reports tab shows 4 catalog cards, clicking op-report-performance opens op-report-view with 31 rows + CSV + back button; back returns to catalog; rates & summary tabs still work (regression OK). Admin: /login → sidebar 'Revenue & rates' → 'Sahip portalı modülleri (Pulse)' opens owner-pulse-admin-panel with 5 toggle cards + save button (success toast 'Sahip portalı modülleri güncellendi') + preview showing 3 month cards. Final state: all 5 modules restored to true, compset endpoint returns 200.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "OwnerSelfServiceApp.js",
+        "issue": "Module-gating tab-hide is BROKEN in the owner portal. Component defines `const [modules, setModules] = useState(null)` and gates the tab bar with `filter(([,,,mod]) => !mod || !modules || modules[mod] !== false)`, but setModules is NEVER called anywhere — /api/owner-pulse/portal/config is never fetched. Result: even when admin disables compset (verified: API returns 403 correctly), the 'Rekabet' tab STILL shows to the owner. Only when the owner clicks the tab does the child component get the 403. This violates the review requirement 'owner portal hides the Rekabet tab after reload'.",
+        "selector": "[data-testid='owner-tab-compset']",
+        "priority": "HIGH"
+      },
+      {
+        "component": "OwnerPulseAdminPanel.js preview",
+        "issue": "Preview month cards show £ (GBP) hardcoded even for CHF properties. build_owner_dashboard returns currency from property, but the admin panel does not respect it in the preview KPI strip.",
+        "selector": "[data-testid='opa-preview']",
+        "priority": "LOW"
+      },
+      {
+        "component": "OwnerSelfServiceApp.js Mali Özet",
+        "issue": "Mali Özet tab uses hardcoded £ symbol (lines 152-155, 175-178) instead of the property currency (CHF for default). Pre-existing, not part of new Pulse layer, but inconsistent with Pulse tab which correctly shows CHF.",
+        "selector": "[data-testid='owner-tab-summary']",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Owner Portal module gating",
+        "issue": "Frontend never calls GET /api/owner-pulse/portal/config → module visibility is a no-op on UI side. Fix: add useEffect on mount that calls ax().get('/owner-pulse/portal/config') and setModules(r.data.modules).",
+        "affected_selectors": ["[data-testid='owner-tabs']", "[data-testid='owner-tab-compset']"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration466_owner_pulse.py",
+    "/app/test_reports/pytest/iteration_466.xml"
+  ],
+  "action_items": [
+    "HIGH: In /app/frontend/src/components/owner/OwnerSelfServiceApp.js, add a useEffect that (after `me` is set) fetches `/owner-pulse/portal/config` and calls setModules(r.data.modules). Without this, admin toggles have no effect on owner tab visibility — only the API returns 403.",
+    "LOW: Make OwnerPulseAdminPanel preview month cards honor the property currency (CHF/GBP/etc.) instead of hardcoded £.",
+    "LOW (pre-existing): Mali Özet tab of owner portal shows £ hardcoded; should read currency from property/dashboard payload."
+  ],
+  "critical_code_review_comments": [
+    "owner_pulse.py: clean 316-line module, well-organised; MODULE_KEYS constant and _check helper are idiomatic. build_owner_dashboard is O(bookings × months) — for large properties consider caching _month_stats intermediate.",
+    "owner_pulse.py:153 `prop.get('currency') or 'GBP'` — hardcoded GBP default is fine but note that this default should probably match the tenant's locale.",
+    "OwnerSelfServiceApp.js: `modules` state defined but never populated → dead code / broken feature (see BUG above). This is the core deliverable of the review request.",
+    "OwnerSelfServiceApp.js:152-178: hardcoded £ symbol in Mali Özet — inconsistent with Pulse tab that renders `CHF` correctly from backend `currency` field.",
+    "All new owner endpoints correctly enforce owner_access token type and 5-module gating; auth boundary is solid."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration466_owner_pulse.py"
+  ],
+  "success_rate": {"backend": "100% (15/15 pytest)", "frontend": "83% (5/6 tabs + reports flow + admin panel + save all work; module-gating tab-hide broken)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (worked); pulse_owner@test.com / PIN 862347 (worked). Admin app is at /login, NOT /.",
+  "seed_data_creation": "None. During gating test, temporarily set compset=false then restored all 5 modules=true. Verified final owner GET /portal/config → all true and /portal/compset → 200.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "The critical missing piece is a useEffect in OwnerSelfServiceApp.js that fetches /owner-pulse/portal/config and populates the `modules` state. After main agent fixes it, re-run: (1) admin disables one module via /api/owner-pulse/default/config, (2) reload /owner, (3) confirm the corresponding tab (e.g. owner-tab-compset) is NOT visible. Then restore all modules to true. Backend regression file: /app/backend/tests/test_iteration466_owner_pulse.py — takes ~6s, run with `pytest backend/tests/test_iteration466_owner_pulse.py -v`.",
+  "rca of the issue": "OwnerSelfServiceApp.js declares `const [modules, setModules] = useState(null)` (line 29) and uses it in the tab-bar filter (line 105), but no code path ever calls setModules. Grep confirms: only 2 references to 'modules' in the file — the useState and the filter. Backend GET /owner-pulse/portal/config exists and returns correct data (verified via curl). Fix: after `me` loads, add `useEffect(() => { ax().get('/owner-pulse/portal/config').then(r => setModules(r.data.modules)).catch(() => setModules({})); }, [me, ax]);`. Reproduction: set compset:false via admin PUT → reload /owner as pulse_owner → 'Rekabet' tab remains visible (screenshot captured)."
+}

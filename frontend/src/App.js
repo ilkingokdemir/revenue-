@@ -86,7 +86,7 @@ import {
   BudgetActualPanel, CompsetPanel, PartnerWebhooksPanel,
   MeetingsSalesPanel, FnbPosHubPanel, CarbonReportingV2Panel,
   AgencyPortalAdminPanel, WebConciergeAdminPanel, ReviewAgentPanel,
-  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel, DigitalAuthPanel, AllotmentsPanel, ForecastPlansPanel, IntradayRepricePanel, RestrictionAdvisorPanel, GapFillerPanel, LostDemandPanel, DemoLeadsPanel, RevenueStrategistPanel, MinRateFloorsPanel, DiscountStackPanel, OwnerRatesAdminPanel,
+  OpenPricingPanel, BeachPosPanel, PublicEventsPanel, HurdleLrvPanel, LeakagePanel, GuestRiskPanel, GuestSegmentsPanel, ChannelHealthPanel, KeyFiguresPanel, AutomationHubPanel, ArReconPanel, WaitlistPanel, HkDispatchPanel, ResQualityPanel, ChainBenchmarkPanel, DigitalAuthPanel, AllotmentsPanel, ForecastPlansPanel, IntradayRepricePanel, RestrictionAdvisorPanel, GapFillerPanel, LostDemandPanel, DemoLeadsPanel, RevenueStrategistPanel, MinRateFloorsPanel, DiscountStackPanel, OwnerRatesAdminPanel, OwnerPulseAdminPanel,
   AgentsPanel, VacationRentalPanel,
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
@@ -2188,6 +2188,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {activeView === "min-rates" && <MinRateFloorsPanel propertyId={activePropertyId || "default"} />}
         {activeView === "discount-stack" && <DiscountStackPanel propertyId={activePropertyId || "default"} />}
         {activeView === "owner-rates" && <OwnerRatesAdminPanel propertyId={activePropertyId || "default"} />}
+        {activeView === "owner-pulse-admin" && <OwnerPulseAdminPanel propertyId={activePropertyId || "default"} />}
 
         {activeView === "vcc-automation" && (
           <VccPanel propertyId={activePropertyId || "all"} />

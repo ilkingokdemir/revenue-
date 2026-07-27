@@ -560,6 +560,9 @@ demand_radar_router = create_demand_radar_router(db, require_roles)
 api_router.include_router(demand_radar_router)
 compset_intel_router = create_compset_intel_router(db, require_roles)
 api_router.include_router(compset_intel_router)
+
+from routes.revenue_ext.owner_pulse import create_owner_pulse_router
+api_router.include_router(create_owner_pulse_router(db, require_roles, demand_radar_router, compset_intel_router))
 price_alerts_router = create_price_alerts_router(db, require_roles)
 api_router.include_router(price_alerts_router)
 booking_timeline_router = create_booking_timeline_router(db, require_roles)

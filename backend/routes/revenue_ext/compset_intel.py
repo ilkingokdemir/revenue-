@@ -183,4 +183,5 @@ def create_compset_intel_router(db, require_roles):
             "days": days,
         }
 
+    router.build = get_compset_intelligence
     return router

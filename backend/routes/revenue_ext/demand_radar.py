@@ -418,4 +418,6 @@ def create_demand_radar_router(db, require_roles):
             "dow_patterns": dow_patterns,
         }
 
+    router.build = get_demand_radar
+    router.build_behavior = get_booking_behavior
     return router

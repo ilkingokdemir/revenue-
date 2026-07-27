@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 478 — full regression testing of Smart Rooms IoT and F&B Loyalty Bridge. Backend: 15/15 pytest cases PASS (list/control/scene/eco-sweep/energy/log validation + loyalty-discount eligible & no_booking + close with apply_loyalty=True gives total 40.0 from subtotal 50 (Gold 20%) + regression: demo-requests + close w/o loyalty). Frontend: Smart Rooms panel fully functional after fixing lazy import (see updated_files). All KPIs, 22 room cards for aldgate-flats, light toggle, thermostat/AC mode/curtains/DND/TV controls, scene buttons, Eco Sweep with toast, and İşlem Günlüğü tab (10 log rows visible) working. F&B loyalty banner + toggle + total recalculation (£50→£40) + close toast 'Gold indirimi %20' all confirmed on a booking-linked tab.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration478_smart_rooms_fnb_loyalty.py",
+    "/app/test_reports/pytest/iter478.xml"
+  ],
+  "action_items": [
+    "None — bug found during testing (SmartRoomsPanel lazy import mismatch) was fixed in-place. Main agent should be aware the file /app/frontend/src/lazyPanels.js line 277 was changed from N() to L() because SmartRoomsPanel uses `export default` not a named export."
+  ],
+  "critical_code_review_comments": [
+    "lazyPanels.js line 277 used N() helper (named-export unwrap) for SmartRoomsPanel but the component only has `export default`. This produced a fatal React error 'Element type is invalid. Received a promise that resolves to: undefined' and rendered the ErrorBoundary fallback. Fixed by switching to L() helper. Recommend a lint / smoke test that mounts each lazy panel to catch this class of bug earlier.",
+    "SmartRoomsPanel does not automatically follow the top-level branch selector (`activePropertyId`) until user picks the property in the in-panel select. In this test the default 'Franziskaner by Centra' had 0 rooms so KPIs showed zeros until the aldgate-flats option was chosen. Consider defaulting the in-panel select to `activePropertyId` when available.",
+    "FnbTabsPanel tab list is scoped to `activePropertyId`, so tabs created for aldgate-flats do not appear when the sidebar branch is 'All Branches'. Only after switching branch to Aldgate Flats did the new tab surface. Acceptable but could be surfaced in UI copy."
+  ],
+  "updated_files": [
+    "/app/frontend/src/lazyPanels.js  (line 277: SmartRoomsPanel N()→L())",
+    "/app/backend/tests/test_iteration478_smart_rooms_fnb_loyalty.py (new)"
+  ],
+  "success_rate": {"backend": "100% (15/15)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created ~2 test F&B tabs linked to booking 48ae77e7-95fa-487f-8f01-1fbbbc4366fa (Sarah Johnson, Gold) with £50 UITest Pasta items. One was closed to room folio with loyalty applied (charge landed on guest folio).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "SmartRoomsPanel lazy loader was fixed; verify no regression. Sarah Johnson booking 48ae77e7-95fa-487f-8f01-1fbbbc4366fa continues to have Gold tier in 'default' loyalty config. To test F&B loyalty via UI, switch branch to 'Aldgate Flats' first, otherwise tabs list does not show aldgate rows. Smart Rooms panel similarly requires selecting aldgate-flats from its in-panel property selector.",
+  "rca of the issue": "Frontend blank crash on opening 'Akıllı Oda (IoT)' — cause: /app/frontend/src/lazyPanels.js used `N(importer, 'SmartRoomsPanel')` (unwrap named export) but /app/frontend/src/components/dashboard/SmartRoomsPanel.js exports the component with `export default`. React.lazy resolved to `undefined`, triggering the ErrorBoundary. Reproduction: login as admin → sidebar Operations → Akıllı Oda (IoT) → 'Bir şeyler ters gitti' error card. Mitigation: switched to `L(importer)` which uses the default export. Verified panel renders and all sub-features work."
+}

@@ -163,6 +163,7 @@ export const SIDEBAR_PERM_MAP = {
     "kds-btn":                "finance_dashboard_view",
     "self-checkin-v2-btn":    "operations_reception_view",
     "smart-locks-btn":        "bookings_view",
+    "smart-rooms-btn":        "bookings_view",
     "automation-btn":         "channel_manager_connections_view",
     "templates-btn":          "settings_roles_view",
     "website-templates-btn":  "settings_roles_view",

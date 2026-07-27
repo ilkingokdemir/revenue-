@@ -1609,6 +1609,9 @@ api_router.include_router(create_dashboards_router(db, require_roles))
 from routes.pms.digital_keys import create_digital_keys_router
 api_router.include_router(create_digital_keys_router(db, require_roles))
 
+from routes.hotel_ops.smart_rooms import create_smart_rooms_router
+api_router.include_router(create_smart_rooms_router(db, require_roles))
+
 from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
 api_router.include_router(create_ota_inbound_router(db, require_roles))
 

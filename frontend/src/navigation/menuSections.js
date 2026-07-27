@@ -225,6 +225,7 @@ export function buildMenuSections(t, user) {
         { id: "spaces", icon: SquaresFour, name: "Spaces (parking, meet)", testId: "spaces-btn" },
         { id: "marketplace", icon: Storefront, name: "Marketplace (integrations)", testId: "marketplace-btn" },
         { id: "smart-locks", icon: Key, name: t("nav.smart_locks"), testId: "smart-locks-btn" },
+        { id: "smart-rooms", icon: Lightning, name: "Akıllı Oda (IoT)", testId: "smart-rooms-btn" },
 
         { divider: true, label: "Staff" },
         { id: "team-chat", icon: ChatText, name: "Team chat", testId: "team-chat-btn" },

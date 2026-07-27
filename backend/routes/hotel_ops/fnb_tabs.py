@@ -57,6 +57,35 @@ class CloseReq(BaseModel):
     payment_method: str
     tip_amount: float = 0
     discount_pct: float = 0
+    apply_loyalty: bool = False
+
+
+async def _loyalty_fnb_discount(db, booking_id: str) -> Optional[dict]:
+    """Booking → guest tier → tier benefits içindeki F&B indirim yüzdesi."""
+    import re
+    bk = await db.bookings.find_one({"id": booking_id},
+                                    {"_id": 0, "guest_email": 1, "guest_name": 1})
+    if not bk or not bk.get("guest_email"):
+        return None
+    prof = await db.guest_profiles.find_one({"email": bk["guest_email"]}, {"_id": 0, "id": 1})
+    if not prof:
+        return None
+    gt = await db.loyalty_guest_tiers.find_one({"guest_id": prof["id"]},
+                                               {"_id": 0, "tier_key": 1, "property_id": 1})
+    if not gt:
+        return None
+    cfg = await db.loyalty_tier_configs.find_one({"property_id": gt.get("property_id")},
+                                                 {"_id": 0, "tiers": 1}) or {}
+    tier = next((t for t in cfg.get("tiers", []) if t.get("tier_key") == gt["tier_key"]), None)
+    if not tier:
+        return None
+    pct = 0
+    for b in tier.get("benefits", []):
+        m = re.search(r"(\d+)\s*%\s*F&B", b, re.I)
+        if m:
+            pct = max(pct, int(m.group(1)))
+    return {"tier_key": gt["tier_key"], "tier_name": tier.get("name"),
+            "discount_pct": pct, "guest_name": bk.get("guest_name")}
 
 
 def create_fnb_tabs_router(db, require_roles):
@@ -227,6 +256,19 @@ def create_fnb_tabs_router(db, require_roles):
         })
         return {"transferred": True, "from": tab["outlet"], "to": req.new_outlet, "history_len": len(history)}
 
+    @router.get("/fnb/tabs/{tab_id}/loyalty-discount")
+    async def loyalty_discount(tab_id: str,
+                               current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "fnb"))):
+        tab = await db.fnb_tabs.find_one({"id": tab_id}, {"_id": 0, "booking_id": 1})
+        if not tab:
+            raise HTTPException(404, "Tab not found")
+        if not tab.get("booking_id"):
+            return {"eligible": False, "reason": "no_booking"}
+        info = await _loyalty_fnb_discount(db, tab["booking_id"])
+        if not info:
+            return {"eligible": False, "reason": "no_tier"}
+        return {"eligible": True, **info}
+
     @router.post("/fnb/tabs/{tab_id}/close")
     async def close_tab(tab_id: str, req: CloseReq,
                         current_user: dict = Depends(require_roles("admin", "manager", "receptionist", "fnb"))):
@@ -246,14 +288,24 @@ def create_fnb_tabs_router(db, require_roles):
         if req.payment_method == "room_folio" and not tab.get("booking_id"):
             raise HTTPException(400, "Cannot charge to room folio: no booking linked")
 
+        loyalty = None
+        if req.apply_loyalty and tab.get("booking_id"):
+            loyalty = await _loyalty_fnb_discount(db, tab["booking_id"])
+        effective_pct = req.discount_pct
+        if loyalty and loyalty.get("discount_pct", 0) > effective_pct:
+            effective_pct = loyalty["discount_pct"]
+
         subtotal = tab.get("subtotal", 0)
-        discount_amount = round(subtotal * req.discount_pct / 100, 2)
+        discount_amount = round(subtotal * effective_pct / 100, 2)
         total = round(subtotal - discount_amount + req.tip_amount, 2)
 
         now = datetime.now(timezone.utc).isoformat()
         patch = {
             "status": "closed",
-            "discount_pct": req.discount_pct,
+            "discount_pct": effective_pct,
+            "loyalty_tier": loyalty.get("tier_key") if loyalty else None,
+            "loyalty_tier_name": loyalty.get("tier_name") if loyalty else None,
+            "loyalty_discount_pct": loyalty.get("discount_pct") if loyalty else 0,
             "discount_amount": discount_amount,
             "tip_amount": req.tip_amount,
             "total": total,
@@ -279,7 +331,11 @@ def create_fnb_tabs_router(db, require_roles):
             }
             await db.guest_folio_charges.insert_one(charge_doc)
 
-        return {"closed": True, "total": total, "payment_method": req.payment_method, "charged_to_folio": req.payment_method == "room_folio"}
+        return {"closed": True, "total": total, "payment_method": req.payment_method,
+                "charged_to_folio": req.payment_method == "room_folio",
+                "loyalty_applied": bool(loyalty and loyalty.get("discount_pct", 0) > 0),
+                "loyalty_tier": loyalty.get("tier_name") if loyalty else None,
+                "effective_discount_pct": effective_pct}
 
     @router.get("/fnb/tabs/transfers/{property_id}")
     async def list_transfers(property_id: str, limit: int = 100,

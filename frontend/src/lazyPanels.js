@@ -274,6 +274,7 @@ export const ForecastPanel = N(() => import("./components/dashboard/ForecastPane
 export const CampaignsPanel = N(() => import("./components/dashboard/CampaignsPanel"), "CampaignsPanel");
 export const GuestAppPanel = N(() => import("./components/dashboard/GuestAppPanel"), "GuestAppPanel");
 export const SmartLocksPanel = N(() => import("./components/dashboard/SmartLocksPanel"), "SmartLocksPanel");
+export const SmartRoomsPanel = L(() => import("./components/dashboard/SmartRoomsPanel"));
 export const SetupWizardPanel = N(() => import("./components/dashboard/SetupWizardPanel"), "SetupWizardPanel");
 export const StockManagementPanel = N(() => import("./components/dashboard/StockManagementPanel"), "StockManagementPanel");
 export const AccountingPanel = N(() => import("./components/dashboard/AccountingPanel"), "AccountingPanel");

@@ -503,7 +503,23 @@ function CloseForm({ tabId, hasBooking, subtotal, onClosed, onCancel }) {
   const [tipAmount, setTipAmount] = useState(0);
   const [discountPct, setDiscountPct] = useState(0);
   const [busy, setBusy] = useState(false);
-  const total = (subtotal || 0) - ((subtotal || 0) * (parseFloat(discountPct) || 0) / 100) + (parseFloat(tipAmount) || 0);
+  const [loyalty, setLoyalty] = useState(null);
+  const [applyLoyalty, setApplyLoyalty] = useState(false);
+
+  useEffect(() => {
+    if (!hasBooking) return;
+    axios.get(`${API}/api/fnb/tabs/${tabId}/loyalty-discount`, { withCredentials: true })
+      .then((r) => {
+        if (r.data.eligible && r.data.discount_pct > 0) {
+          setLoyalty(r.data);
+          setApplyLoyalty(true);
+        }
+      })
+      .catch(() => {});
+  }, [tabId, hasBooking]);
+
+  const effectivePct = Math.max(parseFloat(discountPct) || 0, applyLoyalty && loyalty ? loyalty.discount_pct : 0);
+  const total = (subtotal || 0) - ((subtotal || 0) * effectivePct / 100) + (parseFloat(tipAmount) || 0);
 
   const submit = async () => {
     setBusy(true);
@@ -512,8 +528,9 @@ function CloseForm({ tabId, hasBooking, subtotal, onClosed, onCancel }) {
         payment_method: paymentMethod,
         tip_amount: parseFloat(tipAmount) || 0,
         discount_pct: parseFloat(discountPct) || 0,
+        apply_loyalty: applyLoyalty,
       }, { withCredentials: true });
-      toast.success(`Tab kapatıldı: £${r.data.total.toFixed(2)}${r.data.charged_to_folio ? " (Folyoya)" : ""}`);
+      toast.success(`Tab kapatıldı: £${r.data.total.toFixed(2)}${r.data.charged_to_folio ? " (Folyoya)" : ""}${r.data.loyalty_applied ? ` · ${r.data.loyalty_tier} indirimi %${r.data.effective_discount_pct}` : ""}`);
       onClosed();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Hata");
@@ -550,6 +567,15 @@ function CloseForm({ tabId, hasBooking, subtotal, onClosed, onCancel }) {
         </div>
         {!hasBooking && <div className="text-[10px] text-stone-500 mt-1">Folyo için booking_id gerekli.</div>}
       </div>
+      {loyalty && (
+        <label className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 cursor-pointer" data-testid="fnb-loyalty-discount">
+          <input type="checkbox" checked={applyLoyalty} onChange={(e) => setApplyLoyalty(e.target.checked)}
+            data-testid="fnb-loyalty-toggle" className="accent-amber-600" />
+          <span className="text-xs text-amber-800">
+            <span className="font-semibold">{loyalty.tier_name}</span> sadakat üyesi ({loyalty.guest_name}) — otomatik <span className="font-semibold">%{loyalty.discount_pct} F&B indirimi</span> uygula
+          </span>
+        </label>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <Input label="Bahşiş (£)" type="number" value={tipAmount} onChange={(v) => setTipAmount(v)} testId="fnb-close-tip" />
         <Input label="İndirim %" type="number" value={discountPct} onChange={(v) => setDiscountPct(v)} testId="fnb-close-discount" />

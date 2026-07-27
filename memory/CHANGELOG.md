@@ -2484,3 +2484,7 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - testing_agent tam tur: backend 40/40 PASS (mevcut 15 + yeni test_iteration476_market_pulse_seal.py 25 test — tekrar çalıştırılabilir, teardown'da modülleri geri yükler), frontend tüm kritik akışlar PASS (owner 7 sekme, portföy panosu + metrik/arama, 8 rapor + CSV, admin 10 otel ısı haritası + kurtarma uygula, Pulse admin paneli, ReveniQ #pulse + ROI hesaplayıcı + demo formu).
 - Sıfır kritik/minör bulgu. Yetki ayrımı (portal vs admin) ve modül geri yükleme doğrulandı. TEST_ önekli 2 demo lead + 1 restriction görevi oluşturuldu (zararsız).
 - NOT: ROI slider testlerinde React native input setter gerekir (rapor context notunda).
+
+## iter 478 (2026-07-27) — Deploy Hazırlık Kontrolü: PASS
+- deployment_agent ilk turda tek BLOCKER buldu: .gitignore'da onlarca mükerrer .env/*.env/credentials.json engelleme kalıbı (508 satır → temizlenip 357 satır; .env dosyaları artık repoya girebiliyor, memory/test_credentials.md hariç tutması korundu).
+- İkinci tur: status PASS — sıfır bulgu. Env kullanımı, CORS, supervisor, derleme, DB hepsi temiz. Uygulama yayına hazır.

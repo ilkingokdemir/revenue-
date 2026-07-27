@@ -2445,3 +2445,10 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Endpoint'ler: GET /api/owner-pulse/portfolio/overview (admin — TÜM tesisler, 10 tesis döndü), GET /api/owner-pulse/portal/portfolio-overview (owner — property_ids, gating: yeni "portfolio" modül anahtarı MODULE_KEYS'e eklendi).
 - Frontend: shared/PortfolioBoard.js (Market Pulse koyu tema), owner "Portföy" sekmesi (OwnerPortfolioBoard), admin "Portföy panosu (tüm tesisler)" görünümü (PortfolioBoardPanel, view id portfolio-board), OwnerPulseAdminPanel'e 6. toggle.
 - Test: curl admin(10 tesis)/owner(3 tesis) + her iki UI screenshot; pytest güncellenip 15/15 PASS (test MODULE_KEYS'e portfolio eklendi).
+
+## iter 471 (2026-07-27) — Isı Haritası Filtreleri + AI Kurtarma Planı + Limitsiz Portföy
+- Kullanıcı isteği: "bütün tesisler olsun limit yok" → portfolio endpoint'lerindeki [:12]/[:10] limitleri kaldırıldı.
+- Isı haritası hücrelerine adr + avail eklendi; PortfolioBoard'a Doluluk/ADR/Müsait Oda metrik sekmeleri (pf-metric-*) + otel arama (pf-search).
+- build_recovery_plan (kural tabanlı): 30g zayıf tarih analizi, ADR vs pazar WAP, taban fiyat, son-dakika promosyon, MLOS kaldırma, etkinlik paketi, rebook kuponu — etki dereceli 5 aksiyon. Endpoint'ler: GET /api/owner-pulse/portfolio/recovery/{pid} (admin), /api/owner-pulse/portal/recovery/{pid} (owner, izinsiz tesise 403).
+- UI: otel adına/⚠ simgesine tıkla → kurtarma planı modalı (pf-recovery-modal, zayıf tarih çipleri).
+- Test: curl (overview hücreleri, recovery 5 aksiyon, owner 200/403) + UI screenshot (modal, filtre, arama) + pytest 15/15 PASS.

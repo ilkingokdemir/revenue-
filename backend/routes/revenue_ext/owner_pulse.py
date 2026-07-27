@@ -232,8 +232,9 @@ async def build_portfolio_overview(db, pids) -> Dict:
             w["rev"] += s["revenue"]; w["nights"] += s["nights"]; w["cap"] += rooms * mdays
             w["ly_rev"] += ls["revenue"]; w["ly_nights"] += ls["nights"]; w["ly_cap"] += rooms * mdays
 
-        # ısı haritası (30 gün) + pace
+        # ısı haritası (30 gün) + pace + adr + müsait oda
         day_occ = defaultdict(int)
+        day_rev = defaultdict(float)
         pickup7 = defaultdict(int)
         h_end = today + timedelta(days=30)
         for b in bookings:
@@ -242,14 +243,21 @@ async def build_portfolio_overview(db, pids) -> Dict:
                 continue
             created = _parse_created(b.get("created_at"))
             fresh = created and (now - created).total_seconds() <= 7 * 86400
+            per_night = float(b.get("total_price") or 0) / max((co - ci).days, 1)
             d = max(ci, today)
             while d < min(co, h_end):
                 iso = d.isoformat()
                 day_occ[iso] += 1
+                day_rev[iso] += per_night
                 if fresh:
                     pickup7[iso] += 1
                 d += timedelta(days=1)
-        cells = [{"occ": min(100, round(day_occ[x] * 100 / rooms)), "pace": pickup7[x]} for x in heat_days]
+        cells = []
+        for x in heat_days:
+            booked = day_occ[x]
+            cells.append({"occ": min(100, round(booked * 100 / rooms)), "pace": pickup7[x],
+                          "adr": round(day_rev[x] / booked) if booked else 0,
+                          "avail": max(0, rooms - booked)})
         avg_occ = round(sum(c["occ"] for c in cells) / len(cells), 1)
         heat_rows.append({"property_id": pid, "name": prop.get("name") or pid, "rooms": rooms,
                           "avg_occ": avg_occ, "risk": avg_occ < 35, "cells": cells})
@@ -285,6 +293,89 @@ async def build_portfolio_overview(db, pids) -> Dict:
             "heatmap": {"days": [{"date": x, "dow": dow_tr[ddate.fromisoformat(x).weekday()]} for x in heat_days],
                         "rows": heat_rows},
             "properties": props_out}
+
+
+async def build_recovery_plan(db, pid: str) -> Dict:
+    """Riskli tesis için kural tabanlı kurtarma planı — zayıf tarihler + fiyat/promosyon aksiyonları."""
+    today = ddate.today()
+    rooms = await _total_rooms(db, pid)
+    bookings = await _fetch_bookings(db, pid)
+    prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "currency": 1}) or {}
+    day_occ = defaultdict(int)
+    day_rev = defaultdict(float)
+    h_end = today + timedelta(days=30)
+    for b in bookings:
+        ci, co = _parse_d(b.get("check_in")), _parse_d(b.get("check_out"))
+        if not ci or not co:
+            continue
+        per_night = float(b.get("total_price") or 0) / max((co - ci).days, 1)
+        d = max(ci, today)
+        while d < min(co, h_end):
+            day_occ[d.isoformat()] += 1
+            day_rev[d.isoformat()] += per_night
+            d += timedelta(days=1)
+    days = [(today + timedelta(days=i)).isoformat() for i in range(30)]
+    occ_of = {x: min(100, round(day_occ[x] * 100 / rooms)) for x in days}
+    weak = [x for x in days if occ_of[x] < 35]
+    weak_lastmin = [x for x in weak if (ddate.fromisoformat(x) - today).days <= 7]
+    weak_weekend = [x for x in weak if ddate.fromisoformat(x).weekday() >= 4]
+    avg_occ = round(sum(occ_of.values()) / 30, 1)
+    sold = sum(day_occ.values())
+    my_adr = round(sum(day_rev.values()) / sold, 2) if sold else 0
+
+    wap_vals = []
+    async for s in db.market_supply.find({"property_id": pid, "date": {"$gte": days[0], "$lte": days[-1]}},
+                                         {"_id": 0, "avg_price": 1}).sort("scanned_at", -1).limit(500):
+        if s.get("avg_price"):
+            wap_vals.append(float(s["avg_price"]))
+    market_wap = round(sum(wap_vals) / len(wap_vals), 2) if wap_vals else None
+    events = await db.market_events.find(
+        {"property_id": pid, "date": {"$gte": days[0], "$lte": days[-1]}},
+        {"_id": 0, "date": 1, "name": 1}).to_list(20)
+    weak_events = [e for e in events if e.get("date") in set(weak)]
+
+    floors = await db.min_rate_floors.find(
+        {"property_id": pid, "date": {"$gte": days[0], "$lte": days[-1]}},
+        {"_id": 0, "floor_rate": 1}).to_list(100)
+    avg_floor = round(sum(float(f.get("floor_rate") or 0) for f in floors) / len(floors), 2) if floors else None
+
+    actions = []
+    if weak:
+        if market_wap and my_adr and my_adr > market_wap:
+            target = round(max(avg_floor or 0, market_wap * 0.95), 2)
+            actions.append({"type": "price", "title": "Kurtarma fiyatı uygula",
+                            "desc": f"ADR'niz ({my_adr}) pazar ortalamasının ({market_wap}) üzerinde. {len(weak)} zayıf tarihte fiyatı ~{target} seviyesine çekin (taban korunur).",
+                            "impact": "yüksek"})
+        elif my_adr:
+            target = round(max(avg_floor or 0, my_adr * 0.88), 2)
+            actions.append({"type": "price", "title": "Zayıf tarihlerde %12 indirim",
+                            "desc": f"{len(weak)} zayıf tarihte fiyatı ~{target} seviyesine indirin (mevcut ADR {my_adr}, taban {avg_floor or '—'}).",
+                            "impact": "yüksek"})
+        else:
+            actions.append({"type": "price", "title": "Agresif açılış fiyatı",
+                            "desc": f"30 günde satış yok denecek kadar az. Pazar ortalamasının %15 altında görünürlük fiyatı açın{f' (~{round(market_wap*0.85,2)})' if market_wap else ''}.",
+                            "impact": "yüksek"})
+    if weak_lastmin:
+        actions.append({"type": "promo", "title": "Son dakika flash promosyonu",
+                        "desc": f"Önümüzdeki 7 günde {len(weak_lastmin)} zayıf tarih var. %15 son-dakika indirimi + mobil kupon açın (indirim katmanı üzerinden).",
+                        "impact": "yüksek"})
+    if weak_weekend:
+        actions.append({"type": "restriction", "title": "Min. konaklama kısıtını kaldır",
+                        "desc": f"{len(weak_weekend)} zayıf hafta sonu günü var — MLOS kısıtlarını kaldırıp 1 gecelik satışa açın.",
+                        "impact": "orta"})
+    if weak_events:
+        ev_names = ", ".join(sorted({e['name'] for e in weak_events})[:3])
+        actions.append({"type": "event", "title": "Etkinlik paketi oluştur",
+                        "desc": f"Zayıf tarihlere denk gelen etkinlikler: {ev_names}. Etkinlik temalı paket + OTA görünürlük kampanyası önerilir.",
+                        "impact": "orta"})
+    actions.append({"type": "crm", "title": "Rebook kuponu gönder",
+                    "desc": "Geçmiş misafirlere zayıf tarihler için %10-15 dönüş kuponu tarat (Rebook A/B modülü hazır).",
+                    "impact": "orta"})
+    return {"property_id": pid, "property_name": prop.get("name") or pid,
+            "currency": prop.get("currency") or "GBP", "rooms": rooms,
+            "avg_occ_30d": avg_occ, "my_adr": my_adr, "market_wap": market_wap,
+            "avg_floor": avg_floor, "weak_days": len(weak), "weak_dates": weak[:14],
+            "actions": actions}
 
 
 async def build_owner_report(db, pid: str, key: str, radar_build=None, compset_build=None, owner=None) -> Dict:
@@ -623,7 +714,7 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
         await _check(_pid(owner), "compset")
         pids = owner.get("property_ids") or [_pid(owner)]
         items = []
-        for pid in pids[:10]:
+        for pid in pids:
             prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1, "currency": 1}) or {}
             try:
                 cs = await compset_router.build(property_id=pid, days=30, current_user=owner)
@@ -642,12 +733,24 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
     async def portal_portfolio_overview(owner: dict = Depends(get_current_owner)):
         await _check(_pid(owner), "portfolio")
         pids = owner.get("property_ids") or [_pid(owner)]
-        return await build_portfolio_overview(db, pids[:12])
+        return await build_portfolio_overview(db, pids)
+
+    @router.get("/portal/recovery/{pid}")
+    async def portal_recovery(pid: str, owner: dict = Depends(get_current_owner)):
+        await _check(_pid(owner), "portfolio")
+        allowed = owner.get("property_ids") or [_pid(owner)]
+        if pid not in allowed:
+            raise HTTPException(403, "Bu tesise erişiminiz yok")
+        return await build_recovery_plan(db, pid)
 
     @router.get("/portfolio/overview")
     async def admin_portfolio_overview(current_user: dict = Depends(require_roles("admin", "manager"))):
         pids = [p["id"] async for p in db.properties.find({}, {"_id": 0, "id": 1}) if p.get("id")]
-        return await build_portfolio_overview(db, pids[:12])
+        return await build_portfolio_overview(db, pids)
+
+    @router.get("/portfolio/recovery/{pid}")
+    async def admin_recovery(pid: str, current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await build_recovery_plan(db, pid)
 
     @router.get("/portal/reports/{key}")
     async def portal_report(key: str, owner: dict = Depends(get_current_owner)):

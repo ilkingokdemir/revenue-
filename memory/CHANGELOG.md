@@ -2312,3 +2312,22 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   gradient SVG forecast çizgisi, renkli testimonial avatarları, marquee renkli noktalar.
 - Tüm data-testid'ler AYNEN korundu (test regresyonu yok). Görsel doğrulama: 4 ekran görüntüsü
   (iki hero + MHB pricing + RQ engines) — hepsi doğru render.
+
+## Iter 466 (2026-07-27) — AI Revenue Strategist (Gelir Strateji Robotu) TAMAMLANDI
+- Kullanıcı isteği: piyasa+geçmiş+rakip+doluluk+etkinlik+maks fiyatı analiz edip yorumlayan,
+  yapılanları değerlendiren, strateji öneren, tüm RM ile entegre AI robot.
+- YENİ backend: revenue_ext/revenue_strategist.py (/api/strategist):
+  _gather_intel → bookings (OTB+geçmiş 30g+STLY), comp_rate_snapshots (medyan), rate_overrides,
+  gap_campaigns, intraday_reprice_events, restriction_recommendations, lost_demand, events.
+  KPI'lar: ileri doluluk, ort. pazar farkı, pazar altı gün, potansiyel ek gelir, maks rakip fiyat.
+  LLM (gpt-5.2, EMERGENT_LLM_KEY) → JSON rapor: mevcut durum/piyasa analizi/geçmiş perf/
+  yapılanlar/riskler/fırsatlar/öneriler (3-8, action_type+tarih+hedef fiyat+öncelik).
+- Endpoints: GET/PUT config (auto_apply, tr|en, 30|90|365), POST analyze, GET reports,
+  POST actions/{aid}/apply (fiyat → rate_overrides source=ai-strategist; kısıt → restriction_
+  recommendations; kampanya → notification), POST dismiss. Auto-apply: ≤%15 fiyat değişimi.
+  JOB_HANDLERS["revenue_strategist"] + run_internal (haftalık zamanlanabilir).
+- YENİ frontend: RevenueStrategistPanel.js — koyu hero + ufuk/dil seçici + auto-apply toggle +
+  "Şimdi Analiz Et", 5 KPI, 4 rapor bölümü, risk/fırsat kartları, öneri listesi Uygula/Yoksay.
+  Menü: Revenue & rates > AI & Insights > "AI Strateji Robotu" (revenue-strategist-btn).
+- TEST: iteration_465 — backend 10/10 pytest, frontend %100. Curl E2E: 30g TR analiz 6 öneri,
+  apply → rate_override €179 yazıldı, dismiss, config validasyonları OK.

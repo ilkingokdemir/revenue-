@@ -375,7 +375,66 @@ async def build_recovery_plan(db, pid: str) -> Dict:
             "currency": prop.get("currency") or "GBP", "rooms": rooms,
             "avg_occ_30d": avg_occ, "my_adr": my_adr, "market_wap": market_wap,
             "avg_floor": avg_floor, "weak_days": len(weak), "weak_dates": weak[:14],
-            "actions": actions}
+            "weak_dates_all": weak, "actions": actions}
+
+
+async def apply_recovery_action(db, pid: str, action_type: str, applied_by: str) -> Dict:
+    """Kurtarma planı aksiyonunu tek tıkla uygular ve loglar."""
+    from routes.revenue_ext.owner_rates import set_manual_rate
+    plan = await build_recovery_plan(db, pid)
+    weak = plan["weak_dates_all"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if action_type == "price":
+        if not weak:
+            raise HTTPException(400, "Zayıf tarih yok — fiyat aksiyonu gereksiz")
+        wap, adr, floor = plan["market_wap"], plan["my_adr"], plan["avg_floor"] or 0
+        if wap and adr and adr > wap:
+            target = round(max(floor, wap * 0.95), 2)
+        elif adr:
+            target = round(max(floor, adr * 0.88), 2)
+        elif wap:
+            target = round(max(floor, wap * 0.85), 2)
+        else:
+            raise HTTPException(400, "Referans fiyat bulunamadı")
+        applied = 0
+        for d in weak:
+            try:
+                await set_manual_rate(db, pid, {"date": d, "rate": target, "mode": "gross"},
+                                      applied_by, "recovery-plan")
+                applied += 1
+            except HTTPException:
+                continue
+        detail = f"{applied} zayıf tarihe ~{target} kurtarma fiyatı yazıldı (taban korumalı, iki yönlü panoda görünür)"
+    elif action_type == "promo":
+        exists = await db.discount_layers.find_one(
+            {"property_id": pid, "source": "recovery_plan", "active": True}, {"_id": 0, "id": 1})
+        if exists:
+            detail = "Kurtarma promosyonu zaten aktif — mevcut katman korunuyor"
+        else:
+            count = await db.discount_layers.count_documents({"property_id": pid})
+            await db.discount_layers.insert_one({
+                "id": str(uuid.uuid4())[:8], "property_id": pid,
+                "name": "Kurtarma: Son dakika %15", "pct": 15.0, "active": True,
+                "order": count, "source": "recovery_plan",
+                "created_at": now_iso, "created_by_owner": applied_by})
+            detail = "%15 son-dakika indirim katmanı açıldı — nihai satış fiyatına anında yansır"
+    elif action_type in ("restriction", "event", "crm"):
+        titles = {"restriction": "MLOS kısıtlarını kaldır (zayıf hafta sonları)",
+                  "event": "Etkinlik paketi + OTA kampanyası hazırla",
+                  "crm": "Rebook kupon taraması başlat (A/B modülü)"}
+        await db.recovery_tasks.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "action_type": action_type,
+            "title": titles[action_type], "status": "open",
+            "weak_dates": weak[:14], "created_by": applied_by, "created_at": now_iso})
+        detail = f"Operasyon görevi oluşturuldu: {titles[action_type]}"
+    else:
+        raise HTTPException(400, "Bilinmeyen aksiyon tipi")
+
+    await db.recovery_actions.insert_one({
+        "id": str(uuid.uuid4()), "property_id": pid, "action_type": action_type,
+        "detail": detail, "applied_by": applied_by, "applied_at": now_iso})
+    return {"ok": True, "action_type": action_type, "detail": detail}
 
 
 async def build_owner_report(db, pid: str, key: str, radar_build=None, compset_build=None, owner=None) -> Dict:
@@ -751,6 +810,21 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
     @router.get("/portfolio/recovery/{pid}")
     async def admin_recovery(pid: str, current_user: dict = Depends(require_roles("admin", "manager"))):
         return await build_recovery_plan(db, pid)
+
+    @router.post("/portfolio/recovery/{pid}/apply")
+    async def admin_recovery_apply(pid: str, data: Dict,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        return await apply_recovery_action(db, pid, (data or {}).get("action_type", ""),
+                                           current_user.get("email", "admin"))
+
+    @router.post("/portal/recovery/{pid}/apply")
+    async def portal_recovery_apply(pid: str, data: Dict, owner: dict = Depends(get_current_owner)):
+        await _check(_pid(owner), "portfolio")
+        allowed = owner.get("property_ids") or [_pid(owner)]
+        if pid not in allowed:
+            raise HTTPException(403, "Bu tesise erişiminiz yok")
+        return await apply_recovery_action(db, pid, (data or {}).get("action_type", ""),
+                                           owner.get("email", "owner"))
 
     @router.get("/portal/reports/{key}")
     async def portal_report(key: str, owner: dict = Depends(get_current_owner)):

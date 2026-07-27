@@ -13,7 +13,9 @@ export default function PortfolioBoardPanel() {
   }, []);
   return (
     <div data-testid="admin-portfolio-panel">
-      <PortfolioBoard data={data} fetchRecovery={(pid) => axios.get(`${API}/owner-pulse/portfolio/recovery/${pid}`).then(r => r.data)} />
+      <PortfolioBoard data={data}
+        fetchRecovery={(pid) => axios.get(`${API}/owner-pulse/portfolio/recovery/${pid}`).then(r => r.data)}
+        applyRecovery={(pid, t) => axios.post(`${API}/owner-pulse/portfolio/recovery/${pid}/apply`, { action_type: t }).then(r => r.data)} />
     </div>
   );
 }

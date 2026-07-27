@@ -2452,3 +2452,9 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - build_recovery_plan (kural tabanlı): 30g zayıf tarih analizi, ADR vs pazar WAP, taban fiyat, son-dakika promosyon, MLOS kaldırma, etkinlik paketi, rebook kuponu — etki dereceli 5 aksiyon. Endpoint'ler: GET /api/owner-pulse/portfolio/recovery/{pid} (admin), /api/owner-pulse/portal/recovery/{pid} (owner, izinsiz tesise 403).
 - UI: otel adına/⚠ simgesine tıkla → kurtarma planı modalı (pf-recovery-modal, zayıf tarih çipleri).
 - Test: curl (overview hücreleri, recovery 5 aksiyon, owner 200/403) + UI screenshot (modal, filtre, arama) + pytest 15/15 PASS.
+
+## iter 472 (2026-07-27) — Kurtarma Planı "Uygula" (analiz → aksiyon döngüsü)
+- apply_recovery_action (owner_pulse.py): price → set_manual_rate ile tüm zayıf tarihlere taban-korumalı kurtarma fiyatı (rate_overrides, source=recovery-plan, iki yönlü panoda görünür); promo → discount_layers'a "Kurtarma: Son dakika %15" katmanı (idempotent); restriction/event/crm → recovery_tasks görev kaydı. Tüm uygulamalar recovery_actions'a loglanır.
+- Endpoint'ler: POST /api/owner-pulse/portfolio/recovery/{pid}/apply (admin), /api/owner-pulse/portal/recovery/{pid}/apply (owner, yetki kontrollü).
+- UI: modal aksiyonlarında "Uygula" butonu → ✓ UYGULANDI rozeti + sonuç satırı (pf-apply-*/pf-applied-*).
+- E2E doğrulama: price 30 override yazdı → owner-rates board'da source=recovery-plan + yeni satış fiyatı görüldü; promo katmanı aktif katman listesine düştü; idempotency OK. Test yan etkileri temizlendi. pytest 15/15 PASS.

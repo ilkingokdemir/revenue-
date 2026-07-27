@@ -5,11 +5,25 @@ const symOf = (c) => ({ GBP: "£", EUR: "€", TRY: "₺", USD: "$", CHF: "CHF "
 const fmt = (n) => (n || 0).toLocaleString("tr-TR", { maximumFractionDigits: 0 });
 const METRICS = [["occ", "Doluluk"], ["adr", "ADR"], ["avail", "Müsait Oda"]];
 
-export default function PortfolioBoard({ data, fetchRecovery }) {
+export default function PortfolioBoard({ data, fetchRecovery, applyRecovery }) {
   const [metric, setMetric] = useState("occ");
   const [q, setQ] = useState("");
   const [plan, setPlan] = useState(null);
   const [planLoading, setPlanLoading] = useState("");
+  const [applied, setApplied] = useState({});
+  const [applying, setApplying] = useState("");
+
+  const doApply = async (type) => {
+    if (!applyRecovery || !plan) return;
+    setApplying(type);
+    try {
+      const r = await applyRecovery(plan.property_id, type);
+      setApplied((a) => ({ ...a, [type]: r.detail }));
+    } catch (e) {
+      setApplied((a) => ({ ...a, [type]: "Hata: " + (e?.response?.data?.detail || "uygulanamadı") }));
+    }
+    setApplying("");
+  };
 
   if (!data) return <div className="text-center py-12 text-stone-400 text-sm">Yükleniyor…</div>;
   const c = symOf(data.currency);
@@ -18,6 +32,7 @@ export default function PortfolioBoard({ data, fetchRecovery }) {
   const openPlan = async (pid) => {
     if (!fetchRecovery) return;
     setPlanLoading(pid);
+    setApplied({});
     try { setPlan(await fetchRecovery(pid)); } catch { /* noop */ }
     setPlanLoading("");
   };
@@ -172,11 +187,22 @@ export default function PortfolioBoard({ data, fetchRecovery }) {
             <div className="space-y-2 mt-4">
               {plan.actions.map((a, i) => (
                 <div key={i} className={`rounded-lg border p-3 ${a.impact === "yüksek" ? "border-rose-500/40 bg-rose-500/5" : "border-stone-700 bg-stone-900/60"}`}>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold text-stone-100">{i + 1}. {a.title}</span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${a.impact === "yüksek" ? "bg-rose-500/20 text-rose-300" : "bg-amber-500/15 text-amber-300"}`}>{a.impact} etki</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${a.impact === "yüksek" ? "bg-rose-500/20 text-rose-300" : "bg-amber-500/15 text-amber-300"}`}>{a.impact} etki</span>
+                      {applyRecovery && (applied[a.type] ? (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300" data-testid={`pf-applied-${a.type}`}>✓ UYGULANDI</span>
+                      ) : (
+                        <button onClick={() => doApply(a.type)} disabled={applying === a.type} data-testid={`pf-apply-${a.type}`}
+                          className="text-[10px] font-bold px-2 py-0.5 rounded bg-teal-500/20 border border-teal-500/40 text-teal-200 hover:bg-teal-500/30 disabled:opacity-50">
+                          {applying === a.type ? "…" : "Uygula"}
+                        </button>
+                      ))}
+                    </span>
                   </div>
                   <div className="text-[11px] text-stone-400 mt-1">{a.desc}</div>
+                  {applied[a.type] && <div className="text-[10px] text-emerald-300 mt-1.5 border-t border-stone-800 pt-1.5">{applied[a.type]}</div>}
                 </div>
               ))}
             </div>

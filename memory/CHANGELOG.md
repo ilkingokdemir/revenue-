@@ -2543,3 +2543,10 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - UI: PriceCheckerSection'a opsiyonel e-posta alanı + "Bilgileriniz alındı" onay notu; DemoLeadsPanel'e "Price Checker: X sorgu → Y lead" istatistik çubuğu (demo-pc-stats), kaynak filtresi (demo-source-filter-*), amber "Price Checker 🔍" rozeti.
 - TEST: Curl E2E (lead oluşturma, duplicate update, 429 rate-limit 8→9. sorguda) + 2 UI screenshot (landing formu + CRM panel) doğrulandı. Test verileri temizlendi.
 - DERS: Webpack dev bazen düzenlemeden sonra eski bundle servis edebiliyor; UI'da yeni element görünmüyorsa önce `supervisorctl restart frontend`.
+
+## 2026-07-28 — Iter 484: Price Checker Otomatik "Pazar Raporu" E-postası
+- YENİ: price_checker.py — e-posta bırakan lead'e anında markalı HTML "Pazar Raporu" e-postası (medyan, fiyat bandı, hafta sonu artışı, etkinlik günleri, +% gelir potansiyeli, yıllık tahmin, "Ücretsiz Demo Planla" CTA'sı → /reveniq#demo). owner_pulse._send_email yeniden kullanıldı (Resend; key yoksa MOCK).
+- Dedupe: aynı e-postaya 24 saatte 1 rapor (report_email_status: sent/mock/skipped_recent/failed → price_check_leads'e loglanıyor).
+- UI: Landing onay notu artık rapor gönderildiyse "raporunuz e-postanıza gönderildi" diyor.
+- TEST: Curl E2E — 1. sorgu mock gönderim + log, 2. sorgu skipped_recent; test verisi temizlendi.
+- NOT: RESEND_API_KEY yok → tüm e-postalar MOCK. Gerçek gönderim için kullanıcıdan Resend anahtarı istenmeli.

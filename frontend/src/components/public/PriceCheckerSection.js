@@ -105,7 +105,9 @@ export default function PriceCheckerSection({ onDemo }) {
               <div className="mt-3 text-[10px] text-stone-500">* Pazar verileri tahminidir; birebir analiz için demo talep edin.</div>
               {result.lead_created && (
                 <div className="mt-2 text-xs text-emerald-300" data-testid="price-checker-lead-note">
-                  ✓ Bilgileriniz alındı — ekibimiz detaylı pazar raporunuzla birlikte sizinle iletişime geçecek.
+                  {["sent", "mock"].includes(result.report_email)
+                    ? "✓ Detaylı pazar raporunuz e-postanıza gönderildi — ekibimiz de sizinle iletişime geçecek."
+                    : "✓ Bilgileriniz alındı — ekibimiz detaylı pazar raporunuzla birlikte sizinle iletişime geçecek."}
                 </div>
               )}
             </div>

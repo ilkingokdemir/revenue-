@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 481 - E2E tested Revenue Brain (Öğrenen Beyin). Backend 10/10 pytest PASS: (1) aldgate-flats learn cycle returns {measured, weights_updated, lessons}; (2) status returns outcomes_measured=8, success_rate, hurt, weights[], lessons[], recent_outcomes[8] with all fields incl. verdict worked/neutral/hurt, last_cycle_at, goal{}; (3) PUT /default/goal target=45000 returns Turkish recommendation with gap math + progress + on_track, target=0/-100 → 400; (4) SELF-TUNING E2E: seeded 5 hurt outcomes bucket 8-21|weekday|up + temp base_rate=120 → learn produced factor 0.95 → ai-pricing suggestions returned 17+ items with learned_mult=0.95 & learned_bucket='8-21|weekday|up' on matching dates; status lessons include Turkish 'frenliyor'. CLEANUP successful (TEST_BRAIN outcomes=0, default learned_weights=0, base_rate restored to null); (5) cron evidence: db.revenue_brain_state has 10 property entries all with last_cycle_at; backend.err.log has 18 'Revenue Brain cycle' entries; (6) strategist code inspection: ÖĞRENİLMİŞ DERSLER + revenue_brain_lessons both present; (7) regression /api/revenue/ai-pricing/default/suggestions?days=14 returns 200 with str_mult AND learned_mult fields. Frontend: admin login → switched branch to Aldgate Flats → AI & Insights sidebar → 'Öğrenen Beyin' (data-testid=revenue-brain-btn). Verified 4 KPIs (outcomes=8, success=%12.5, hurt=4, weights=0), goal card save flow (toast+progress bar+Turkish recommendation showing 'Mevcut hızla ay sonu tahmini 5,058 — hedefin 39,942 altında. Kalan 3 günde günlük ek 13,314 gelir gerekli…'), lessons list (Turkish overall), weights table empty msg, recent outcomes table showing all 8 rows with correct Zarar verdi/Nötr/İşe yaradı badges, 'Şimdi Öğren' button triggered success toast. Zero JS/console errors after fix.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js", "issue": "RevenueBrainPanel was imported (line 94) and menu entry existed (menuSections.js id='revenue-brain', data-testid='revenue-brain-btn'), but NO render block for activeView==='revenue-brain' existed — clicking sidebar item highlighted the menu but rendered an empty white/dark main content area. FIXED by testing agent by adding the render block after BasePriceCurvePanel (App.js ~line 1456).", "selector": "[data-testid='revenue-brain-panel']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration481_revenue_brain.py",
+    "/app/test_reports/pytest/iter481.xml"
+  ],
+  "action_items": [
+    "REVIEW: Testing agent added missing render block in App.js for activeView==='revenue-brain' → RevenueBrainPanel. Verify the placement (currently right after base-curve). No other changes were made to business logic."
+  ],
+  "critical_code_review_comments": [
+    "App.js is now ~2620 lines — well past the 700-line guideline. The activeView switch for panels has ~40 branches and is a maintenance hazard; the fact that RevenueBrainPanel could be imported+menu-wired yet silently not render is a symptom. Extract a panel router (map activeView → lazy panel component) to eliminate whole classes of wire-up bugs.",
+    "revenue_brain.py generate_lessons deletes ALL lessons then re-inserts on every cycle — fine for now, but loses lesson_id continuity for any subscribing UI that keys off id. Consider upsert by bucket_key.",
+    "revenue_brain.py measure_outcomes computes baseline from prior 4 same-weekday-type dates but averages ALL 4 dates including same-dow-type only in name; the loop steps back by 7 days regardless of dow_type match — for a Friday decision it correctly grabs prior 4 Fridays, but the function name/comment 'aynı gün tipi' suggests weekday/weekend bucket average; verify intent (currently: same day-of-week, not same weekday/weekend bucket).",
+    "RevenueBrainPanel calls setGoalInput inside load() every render when goal.target_revenue exists — this overwrites user edits if load() runs after user starts typing. Consider only initializing goalInput once."
+  ],
+  "updated_files": [
+    "/app/frontend/src/App.js (added missing render block for activeView==='revenue-brain')",
+    "/app/backend/tests/test_iteration481_revenue_brain.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (all data-testid elements render, toasts fire, learn cycle works, goal recommendation renders Turkish text)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Test seeded 5 ai_pricing_outcomes with room_type_id='TEST_BRAIN' for property_id='default' + temporarily set one default room_type base_rate=120. ALL RESTORED: TEST_BRAIN outcomes=0, default learned_pricing_weights=0, room_type.base_rate=null (verified). Also set aldgate-flats + default goals to £45000 for current month (revenue_goals collection) — this is legitimate user config, left in place.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The App.js render block for RevenueBrainPanel (activeView==='revenue-brain') was added by iteration 481 testing agent. If main agent reorganizes App.js, ensure this block persists. All Turkish text (Öğrenen Beyin sidebar item, 'Zarar verdi/Nötr/İşe yaradı' badges, goal recommendation) verified rendering correctly. Cron loop (workers.py revenue_brain_loop) is confirmed live via 18 'Revenue Brain cycle' log lines and 10 revenue_brain_state docs.",
+  "rca of the issue": "Bug: RevenueBrainPanel imported and menu-wired but not rendered → blank main content when sidebar item clicked. Root cause: missing conditional render block in App.js. Reproduce: click sidebar 'Öğrenen Beyin' → main area blank. Mitigation applied by testing agent: added 4-line block after BasePriceCurvePanel render (App.js). Verified fix in browser: panel renders fully with all 11 data-testid elements, toasts, and correct data."
+}

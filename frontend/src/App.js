@@ -91,7 +91,7 @@ import {
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
   BrandVoicePanel,
-  CampaignsPanel, GuestAppPanel, SmartLocksPanel, SmartRoomsPanel, BasePriceCurvePanel, SetupWizardPanel, StockManagementPanel,
+  CampaignsPanel, GuestAppPanel, SmartLocksPanel, SmartRoomsPanel, BasePriceCurvePanel, RevenueBrainPanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
   ReportsHub, FinancePL, ShiftScheduler, ReceptionReport, PassOverDuties, ComplianceRegister,
@@ -1453,6 +1453,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           <BasePriceCurvePanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
+        {/* Öğrenen Revenue Beyni (closed learning loop) */}
+        {activeView === "revenue-brain" && (
+          <RevenueBrainPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
         {/* Setup Wizard */}
         {activeView === "setup-wizard" && (
           <SetupWizardPanel properties={properties} activePropertyId={activePropertyId} />
@@ -2616,4 +2621,3 @@ function AppWithLanguage() {
 }
 
 export default AppWithLanguage;
-

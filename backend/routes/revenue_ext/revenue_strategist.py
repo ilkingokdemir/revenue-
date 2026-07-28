@@ -397,6 +397,16 @@ def create_revenue_strategist_router(db, require_roles):
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         intel = await _gather_intel(db, pid, horizon)
         prompt = _build_prompt(intel, language)
+        # 🧠 Revenue Brain derslerini stratejiste besle
+        try:
+            lessons = await db.revenue_brain_lessons.find(
+                {"property_id": pid}, {"_id": 0, "lesson": 1}).sort("created_at", -1).to_list(6)
+            if lessons:
+                prompt += ("\n\n## ÖĞRENİLMİŞ DERSLER (geçmiş fiyat kararlarının ölçülmüş gerçek sonuçları — "
+                           "önerilerinde MUTLAKA dikkate al)\n"
+                           + "\n".join(f"- {l['lesson']}" for l in lessons))
+        except Exception:
+            pass
         chat = LlmChat(api_key=os.environ.get("EMERGENT_LLM_KEY", ""),
                        session_id=f"strategist-{pid}-{uuid.uuid4().hex[:8]}",
                        system_message=SYSTEM_PROMPT).with_model("openai", "gpt-5.2")

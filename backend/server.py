@@ -1621,6 +1621,9 @@ api_router.include_router(create_str_market_router(db, require_roles))
 from routes.marketing.price_checker import create_price_checker_router
 api_router.include_router(create_price_checker_router(db))
 
+from routes.revenue_ext.revenue_brain import create_revenue_brain_router
+api_router.include_router(create_revenue_brain_router(db, require_roles))
+
 from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
 api_router.include_router(create_ota_inbound_router(db, require_roles))
 
@@ -1927,11 +1930,12 @@ async def startup_event():
 
     # tick workers (workers.py — ROADMAP P1 refactor)
     import asyncio
-    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop
+    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop
     asyncio.create_task(scheduled_checkout_loop(db))
     asyncio.create_task(reports_loop(db))
     asyncio.create_task(otb_snapshot_loop(db))
     asyncio.create_task(str_scan_loop(db))
+    asyncio.create_task(revenue_brain_loop(db))
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

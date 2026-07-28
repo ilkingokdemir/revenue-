@@ -295,6 +295,12 @@ def create_ai_pricing_router(db, require_roles):
         _meds = [float(r.get("median_rate") or 0) for r in str_rows if r.get("median_rate")]
         str_med_avg = (sum(_meds) / len(_meds)) if _meds else 0.0
 
+        # 🧠 Öğrenilmiş çarpanlar (Revenue Brain kapalı döngüsü)
+        lw_rows = await db.learned_pricing_weights.find(
+            {"property_id": property_id, "factor": {"$ne": 1.0}},
+            {"_id": 0, "bucket_key": 1, "factor": 1}).to_list(100)
+        learned_map = {w["bucket_key"]: float(w["factor"]) for w in lw_rows}
+
         # Parallel occupancy fan-out per date
         async def _occ_for(snap):
             return snap.get("date"), await _occupancy_for_date(property_id, snap.get("date", ""), total_rooms)
@@ -341,6 +347,20 @@ def create_ai_pricing_router(db, require_roles):
                     max_pct=int(cfg.get("max_rate_pct", 250)),
                     str_mult=str_mult,
                 )
+                # 🧠 Öğrenilmiş çarpan uygula (yön + bağlam kovasına göre)
+                learned_mult = 1.0
+                learned_bucket = None
+                if learned_map and calc["suggested_rate"] != current_rate:
+                    from routes.revenue_ext.revenue_brain import bucket_key as _bk
+                    direction = "up" if calc["delta_vs_current_pct"] > 0 else "down"
+                    learned_bucket = _bk(days_out, date, direction)
+                    learned_mult = learned_map.get(learned_bucket, 1.0)
+                    if learned_mult != 1.0:
+                        adj = round(max(calc["floor_rate"], min(calc["ceil_rate"],
+                                    calc["suggested_rate"] * learned_mult)), 2)
+                        calc["suggested_rate"] = adj
+                        if current_rate:
+                            calc["delta_vs_current_pct"] = round((adj - current_rate) / current_rate * 100.0, 2)
 
                 prev_decision = dec_map.get((date, rt_id), {})
                 status = prev_decision.get("status", "pending")
@@ -359,6 +379,8 @@ def create_ai_pricing_router(db, require_roles):
                     "unavailable_pct": round(unavail, 1),
                     "str_median": float(str_snap.get("median_rate")) if str_snap else None,
                     "str_unavailable_pct": float(str_snap.get("unavailable_pct") or 0) if str_snap else None,
+                    "learned_mult": round(learned_mult, 3),
+                    "learned_bucket": learned_bucket if learned_mult != 1.0 else None,
                     "occupancy_pct": occ_pct,
                     "bookings": occ_data.get("bookings", 0),
                     "total_rooms": occ_data.get("total_rooms", total_rooms),
@@ -458,6 +480,7 @@ def create_ai_pricing_router(db, require_roles):
                     f"AI Pricing · ref £{item.get('ref_price')} × lead {item.get('lead_time_mult')} "
                     f"× occ {item.get('occupancy_mult')}"
                     + (f" × STR {item.get('str_mult')}" if (item.get('str_mult') or 1.0) != 1.0 else "")
+                    + (f" × öğrenilmiş {item.get('learned_mult')}" if (item.get('learned_mult') or 1.0) != 1.0 else "")
                     + f" → {item['suggested_rate']}"
                 ),
                 "updated_at": now_iso,
@@ -482,6 +505,8 @@ def create_ai_pricing_router(db, require_roles):
                 "str_mult": item.get("str_mult", 1.0),
                 "str_median": item.get("str_median"),
                 "str_unavailable_pct": item.get("str_unavailable_pct"),
+                "learned_mult": item.get("learned_mult", 1.0),
+                "learned_bucket": item.get("learned_bucket"),
                 "rationale": rationale or item.get("rationale"),
                 "decided_at": now_iso,
             }},

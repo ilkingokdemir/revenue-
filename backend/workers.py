@@ -113,6 +113,28 @@ async def str_scan_loop(db, interval_seconds: int = 3600):
         await asyncio.sleep(interval_seconds)
 
 
+async def revenue_brain_loop(db, interval_seconds: int = 21600):
+    """Revenue Brain öğrenme döngüsü — 20 saatte bir sonuç ölç + ağırlık öğren + ders üret."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            from routes.revenue_ext.revenue_brain import run_learning_cycle
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=20)).isoformat()
+            props = await db.properties.find(
+                {"is_active": {"$ne": False}}, {"_id": 0, "id": 1}).to_list(50)
+            for p in props:
+                state = await db.revenue_brain_state.find_one(
+                    {"property_id": p["id"]}, {"_id": 0, "last_cycle_at": 1})
+                if state and (state.get("last_cycle_at") or "") > cutoff:
+                    continue
+                res = await run_learning_cycle(db, p["id"])
+                logger.info(f"revenue_brain_loop: {p['id']} → {res}")
+        except Exception as e:
+            logger.warning(f"revenue_brain_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def reports_loop(db, interval_seconds: int = 300):
     while True:
         try:

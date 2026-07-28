@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { House, TrendUp, Percent, UsersThree } from "@phosphor-icons/react";
+import { House, TrendUp, Percent, Broadcast, ArrowsClockwise } from "@phosphor-icons/react";
 import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
 } from "recharts";
@@ -11,6 +11,8 @@ const API = process.env.REACT_APP_BACKEND_URL;
 export default function StrMarketView({ propertyId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [scan, setScan] = useState(null);
+  const pollRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -22,19 +24,65 @@ export default function StrMarketView({ propertyId }) {
     } finally { setLoading(false); }
   }, [propertyId]);
 
-  useEffect(() => { load(); }, [load]);
+  const pollStatus = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API}/api/str-market/${propertyId}/scan/status`, { withCredentials: true });
+      setScan(r.data);
+      if (r.data.status === "done") {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+        toast.success(`Canlı tarama bitti: ${r.data.live_ok}/${r.data.total} tarih Booking.com'dan alındı`);
+        load();
+      }
+    } catch (e) { /* noop */ }
+  }, [propertyId, load]);
+
+  useEffect(() => {
+    load();
+    pollStatus();
+    return () => pollRef.current && clearInterval(pollRef.current);
+  }, [load, pollStatus]);
+
+  const startScan = async () => {
+    try {
+      const r = await axios.post(`${API}/api/str-market/${propertyId}/scan?days=14`, {}, { withCredentials: true });
+      toast.info(`Booking.com STR taraması başladı (${r.data.dates_to_scan} tarih)…`);
+      setScan({ status: "running", scanned: 0, total: r.data.dates_to_scan, live_ok: 0 });
+      if (!pollRef.current) pollRef.current = setInterval(pollStatus, 3000);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Tarama başlatılamadı");
+    }
+  };
 
   if (loading || !data) return <div className="py-10 text-center text-sm text-stone-400" data-testid="str-market-loading">Yükleniyor…</div>;
 
   const s = data.summary;
+  const scanning = scan?.status === "running";
   return (
     <div className="space-y-4" data-testid="str-market-view">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs text-stone-500" data-testid="str-source-info">
+          {s.live_dates > 0
+            ? <>Kaynak: <span className="font-semibold text-emerald-600">{s.live_dates} gün Booking.com canlı</span> + {s.simulated_dates} gün simülasyon{s.last_scan_at ? ` · Son tarama: ${new Date(s.last_scan_at).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}</>
+            : <>Kaynak: simülasyon — gerçek pazar verisi için canlı tarama başlatın</>}
+        </div>
+        <button onClick={startScan} disabled={scanning} data-testid="str-scan-btn"
+          className="px-3 py-2 text-xs rounded-md bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-60 inline-flex items-center gap-1.5 font-medium">
+          {scanning
+            ? <><ArrowsClockwise size={13} className="animate-spin" /> Taranıyor {scan.scanned}/{scan.total}…</>
+            : <><Broadcast size={13} weight="fill" /> Booking.com'dan Canlı Tara</>}
+        </button>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi icon={House} color="rose" label="Aktif STR İlanı" value={s.listings_total} sub={`%${s.entire_home_pct} tüm ev`} testId="str-kpi-listings" />
+        <Kpi icon={House} color="rose" label="Aktif STR İlanı" value={s.listings_total}
+          sub={s.live_dates > 0 ? "Canlı ortalama" : `%${s.entire_home_pct} tüm ev`} testId="str-kpi-listings" />
         <Kpi icon={TrendUp} color="blue" label="STR Medyan Fiyat" value={`£${s.median_rate_avg}`} sub={`Hafta sonu +%${s.weekend_uplift_pct}`} testId="str-kpi-median" />
         <Kpi icon={Percent} color={s.hotel_vs_str_gap_pct >= 0 ? "emerald" : "amber"} label="Otel vs STR Farkı"
           value={`${s.hotel_vs_str_gap_pct >= 0 ? "+" : ""}${s.hotel_vs_str_gap_pct}%`} sub={`Otel baz £${s.hotel_base_rate}`} testId="str-kpi-gap" />
-        <Kpi icon={UsersThree} color="violet" label="Veri Kaynağı" value="Simülasyon" sub="Gerçek scraper P2" testId="str-kpi-source" />
+        <Kpi icon={Broadcast} color={s.live_dates > 0 ? "emerald" : "violet"} label="Veri Kaynağı"
+          value={s.live_dates > 0 ? `${s.live_dates} gün canlı` : "Simülasyon"}
+          sub={s.live_dates > 0 ? "Booking.com STR" : "Canlı tarama bekliyor"} testId="str-kpi-source" />
       </div>
 
       <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="str-market-chart">
@@ -52,7 +100,10 @@ export default function StrMarketView({ propertyId }) {
               <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={6} />
               <YAxis yAxisId="l" tick={{ fontSize: 10 }} width={44} />
               <YAxis yAxisId="r" orientation="right" tick={{ fontSize: 10 }} width={36} domain={[0, 100]} />
-              <Tooltip />
+              <Tooltip labelFormatter={(l) => {
+                const row = data.rows.find((r) => r.date === l);
+                return `${l} · ${row?.source === "booking-live" ? "🔴 Canlı (Booking.com)" : "Simülasyon"}`;
+              }} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Area yAxisId="l" type="monotone" dataKey="median_rate" name="STR Medyan (£)" stroke="#E11D48" strokeWidth={1.5} fill="url(#strFill)" />
               <Line yAxisId="r" type="monotone" dataKey="occupancy_proxy" name="Doluluk Sinyali (%)" stroke="#7C3AED" strokeWidth={1.5} dot={false} />

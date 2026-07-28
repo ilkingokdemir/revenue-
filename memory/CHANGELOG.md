@@ -2510,3 +2510,12 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - YENİ: `price_checker.py` + PriceCheckerSection — /reveniq landing'de ücretsiz public Price Checker (POST /api/public/price-check), lead'ler price_check_leads'e düşüyor.
 - TEST: iteration_479.json — backend 18/18, frontend %100.
 - NOT: RPG'ye karşı kalan boşluklar: native mobil app (backlog), price_checker rate-limit (öneri).
+
+## 2026-07-28 — Iter 480: STR Modülü CANLI Booking.com Scraper'a Yükseltildi
+- Kullanıcı isteği: "booking.com scraper var bizde bunu gelistir" → str_market.py simülasyondan canlı taramaya yükseltildi.
+- YENİ: `scrape_str_date()` — Booking.com araması apartman/tatil evi/villa filtresiyle (nflt=ht_id 201/220/213 + distance). 3 katman: httpx (UA rotasyonu) → ScrapingBee (key varsa) → **Playwright warm-context** (`utils/booking_scraper._get_warm_booking_context`, challenge'ı geçen çalışan yol).
+- YENİ: POST /str-market/{pid}/scan (arka plan task, 8 örnek tarih: 0-14 gün offset) + GET /scan/status (poll). Snapshot'lar str_market_snapshots'a (48h tazelik).
+- YENİ: overview hibrit — canlı tarihler booking-live, kalanlar canlı medyana KALİBRE edilmiş simülasyon (satır bazında source alanı).
+- UI: StrMarketView'a "Booking.com'dan Canlı Tara" butonu (str-scan-btn), 3sn'lik status poll, kaynak bilgi satırı (str-source-info), canlı KPI rozeti.
+- E2E DOĞRULANDI: aldgate-flats 8/8 tarih canlı çekildi (method=browser, 116 fiyat örneği/tarih, medyan £199 bugün), UI'da "8 gün canlı" rozeti + toast görüldü.
+- DERS: Datacenter IP'den httpx ile Booking.com 202 challenge veriyor; çalışan yol Playwright warm context (homepage cookie ısıtması).

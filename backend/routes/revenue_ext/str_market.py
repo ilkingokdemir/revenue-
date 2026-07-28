@@ -38,6 +38,17 @@ USER_AGENTS = [
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
 ]
 
+# Booking.com free-text `ss=` şehir çözümü için dest_id (booking_scraper ile aynı değerler)
+CITY_DEST_IDS = {
+    "london": ("-2601889", "city"),
+    "zurich": ("-2554920", "city"),
+    "zürich": ("-2554920", "city"),
+    "berlin": ("-1746443", "city"),
+    "munich": ("-1829149", "city"),
+    "münchen": ("-1829149", "city"),
+    "istanbul": ("-755070", "city"),
+}
+
 
 def _h(seed: str, lo: float, hi: float) -> float:
     n = int(hashlib.md5(seed.encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
@@ -77,8 +88,10 @@ async def scrape_str_date(city: str, checkin: str, checkout: str,
                f"&checkin={checkin}&checkout={checkout}&group_adults=2&no_rooms=1&group_children=0"
                f"&nflt={nflt}{cur_param}")
     else:
+        dest = CITY_DEST_IDS.get((city or "").strip().lower())
+        dest_param = f"&dest_id={dest[0]}&dest_type={dest[1]}" if dest else ""
         url = (f"https://www.booking.com/searchresults.en-gb.html?"
-               f"ss={city}&checkin={checkin}&checkout={checkout}"
+               f"ss={city}{dest_param}&checkin={checkin}&checkout={checkout}"
                f"&group_adults=2&no_rooms=1&group_children=0&nflt={STR_NFLT}{cur_param}")
 
     ua = _rand.choice(USER_AGENTS)
@@ -193,52 +206,56 @@ def _sim_row(property_id: str, base_nightly: float, listings_total: int, d) -> d
             "source": "simulated"}
 
 
-def create_str_market_router(db, require_roles):
-    router = APIRouter(prefix="/str-market", tags=["str-market"])
-
-    async def _run_scan(property_id: str, offsets: list):
-        prop = await db.properties.find_one(
-            {"id": property_id},
-            {"_id": 0, "city": 1, "latitude": 1, "longitude": 1, "currency": 1}) or {}
-        city = prop.get("city") or "London"
-        currency = (prop.get("currency") or "GBP").upper()
-        today = datetime.now(timezone.utc).date()
-        live_ok = 0
-        for idx, off in enumerate(offsets):
-            d = today + timedelta(days=off)
-            checkin = d.strftime("%Y-%m-%d")
-            checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
-            try:
-                res = await scrape_str_date(
-                    city, checkin, checkout,
-                    latitude=prop.get("latitude"), longitude=prop.get("longitude"),
-                    currency=currency)
-            except Exception as e:
-                logger.warning(f"STR scan error {checkin}: {e}")
-                res = None
-            if res:
-                live_ok += 1
-                await db.str_market_snapshots.update_one(
-                    {"property_id": property_id, "date": checkin},
-                    {"$set": {"property_id": property_id, "date": checkin,
-                              "median_rate": res["median_rate"], "avg_rate": res["avg_rate"],
-                              "min_rate": res["min_rate"],
-                              "active_listings": res["active_listings"],
-                              "unavailable_pct": res["unavailable_pct"],
-                              "price_samples": res["price_samples"],
-                              "currency": currency,
-                              "source": "booking-live", "method": res["method"],
-                              "scanned_at": _now()}},
-                    upsert=True)
-            await db.str_scan_status.update_one(
-                {"property_id": property_id},
-                {"$set": {"scanned": idx + 1, "live_ok": live_ok}})
-            await asyncio.sleep(1.2)
+async def run_str_scan(db, property_id: str, offsets: Optional[list] = None) -> dict:
+    """STR canlı taraması — router ve gece cron'u (workers.py) ortak kullanır."""
+    offsets = offsets or SCAN_OFFSETS
+    prop = await db.properties.find_one(
+        {"id": property_id},
+        {"_id": 0, "city": 1, "latitude": 1, "longitude": 1, "currency": 1}) or {}
+    city = prop.get("city") or "London"
+    currency = (prop.get("currency") or "GBP").upper()
+    today = datetime.now(timezone.utc).date()
+    live_ok = 0
+    for idx, off in enumerate(offsets):
+        d = today + timedelta(days=off)
+        checkin = d.strftime("%Y-%m-%d")
+        checkout = (d + timedelta(days=1)).strftime("%Y-%m-%d")
+        try:
+            res = await scrape_str_date(
+                city, checkin, checkout,
+                latitude=prop.get("latitude"), longitude=prop.get("longitude"),
+                currency=currency)
+        except Exception as e:
+            logger.warning(f"STR scan error {checkin}: {e}")
+            res = None
+        if res:
+            live_ok += 1
+            await db.str_market_snapshots.update_one(
+                {"property_id": property_id, "date": checkin},
+                {"$set": {"property_id": property_id, "date": checkin,
+                          "median_rate": res["median_rate"], "avg_rate": res["avg_rate"],
+                          "min_rate": res["min_rate"],
+                          "active_listings": res["active_listings"],
+                          "unavailable_pct": res["unavailable_pct"],
+                          "price_samples": res["price_samples"],
+                          "currency": currency,
+                          "source": "booking-live", "method": res["method"],
+                          "scanned_at": _now()}},
+                upsert=True)
         await db.str_scan_status.update_one(
             {"property_id": property_id},
-            {"$set": {"status": "done", "finished_at": _now(),
-                      "live_ok": live_ok, "scanned": len(offsets)}})
-        logger.info(f"STR scan done for {property_id}: {live_ok}/{len(offsets)} live dates")
+            {"$set": {"scanned": idx + 1, "live_ok": live_ok}})
+        await asyncio.sleep(1.2)
+    await db.str_scan_status.update_one(
+        {"property_id": property_id},
+        {"$set": {"status": "done", "finished_at": _now(),
+                  "live_ok": live_ok, "scanned": len(offsets)}})
+    logger.info(f"STR scan done for {property_id}: {live_ok}/{len(offsets)} live dates")
+    return {"live_ok": live_ok, "total": len(offsets)}
+
+
+def create_str_market_router(db, require_roles):
+    router = APIRouter(prefix="/str-market", tags=["str-market"])
 
     @router.post("/{property_id}/scan")
     async def start_scan(property_id: str, days: int = 14,
@@ -256,7 +273,7 @@ def create_str_market_router(db, require_roles):
                       "started_at": _now(), "finished_at": None,
                       "started_by": current_user.get("email")}},
             upsert=True)
-        asyncio.create_task(_run_scan(property_id, offsets))
+        asyncio.create_task(run_str_scan(db, property_id, offsets))
         return {"started": True, "dates_to_scan": len(offsets), "offsets": offsets}
 
     @router.get("/{property_id}/scan/status")

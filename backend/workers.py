@@ -2,7 +2,7 @@
 import asyncio
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,38 @@ async def otb_snapshot_loop(db, interval_seconds: int = 21600):
                 logger.info(f"OTB snapshot: {scan_date} için {total_docs} satır arşivlendi")
         except Exception as e:
             logger.warning(f"OTB snapshot tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
+async def str_scan_loop(db, interval_seconds: int = 3600):
+    """Gece STR taraması — canlı Booking.com STR verisini 20 saatte bir tazeler."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            from routes.revenue_ext.str_market import run_str_scan
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=20)).isoformat()
+            props = await db.properties.find(
+                {"is_active": {"$ne": False}, "latitude": {"$ne": None}},
+                {"_id": 0, "id": 1}).to_list(50)
+            for p in props:
+                pid = p["id"]
+                status = await db.str_scan_status.find_one({"property_id": pid}, {"_id": 0})
+                if status and status.get("status") == "running":
+                    continue
+                if status and (status.get("finished_at") or "") > cutoff:
+                    continue
+                await db.str_scan_status.update_one(
+                    {"property_id": pid},
+                    {"$set": {"property_id": pid, "status": "running", "scanned": 0,
+                              "live_ok": 0, "started_at": datetime.now(timezone.utc).isoformat(),
+                              "finished_at": None, "started_by": "cron"}},
+                    upsert=True)
+                res = await run_str_scan(db, pid)
+                logger.info(f"str_scan_loop: {pid} → {res}")
+                await asyncio.sleep(10)
+        except Exception as e:
+            logger.warning(f"str_scan_loop error: {e}")
         await asyncio.sleep(interval_seconds)
 
 

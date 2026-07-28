@@ -408,7 +408,14 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                     <td className="px-3 py-2 text-xs text-stone-600">
                       <span className="font-mono">{s.days_out}g</span>
                     </td>
-                    <td className="px-3 py-2"><DemandBadge bucket={s.demand_bucket} /></td>
+                    <td className="px-3 py-2">
+                      <DemandBadge bucket={s.demand_bucket} />
+                      {s.str_mult > 1 && (
+                        <span className="ml-1 text-[9px] px-1 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200 font-bold" data-testid={`ai-pricing-str-badge-${i}`} title={`STR baskısı: doluluk %${s.str_unavailable_pct} · medyan £${s.str_median}`}>
+                          STR×{s.str_mult}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-xs text-stone-700 font-mono">{s.occupancy_pct}%</td>
                     <td className="px-3 py-2 text-xs text-stone-700 font-mono">{cur(s.market_avg)}</td>
                     <td className="px-3 py-2 text-xs text-stone-700 font-mono">{cur(s.current_rate)}</td>
@@ -422,7 +429,7 @@ const AIPricingEnginePanel = ({ propertyId }) => {
                     <td className="px-3 py-2 text-[11px] text-stone-600 max-w-[280px]">
                       {s.rationale || (
                         <span className="text-stone-400 italic">
-                          {`ref ${cur(s.ref_price)} × lead ${s.lead_time_mult} × occ ${s.occupancy_mult}`}
+                          {`ref ${cur(s.ref_price)} × lead ${s.lead_time_mult} × occ ${s.occupancy_mult}${s.str_mult > 1 ? ` × STR ${s.str_mult}` : ""}`}
                         </span>
                       )}
                     </td>

@@ -60,6 +60,28 @@ def _occupancy_multiplier(occupancy_pct: float) -> float:
     return 0.95
 
 
+def _str_pressure_multiplier(str_unavail: float, str_median: float, ref: float,
+                             str_median_avg: float = 0.0) -> float:
+    """Canlı STR (Airbnb/tatil evi) talep baskısı → fiyat çarpanı."""
+    if str_unavail >= 90:
+        m = 1.10
+    elif str_unavail >= 80:
+        m = 1.06
+    elif str_unavail >= 70:
+        m = 1.03
+    else:
+        m = 1.0
+    # Tarih bazlı STR fiyat sıçraması da talep baskısı sinyalidir
+    if str_median and str_median_avg:
+        if str_median >= str_median_avg * 1.25:
+            m = max(m, 1.05)
+        elif str_median >= str_median_avg * 1.15:
+            m = max(m, 1.03)
+    if m > 1.0 and str_median and ref and str_median > ref * 1.3:
+        m += 0.02
+    return round(m, 3)
+
+
 def _classify_demand(occupancy_pct: float, unavailable_pct: float) -> str:
     """Bucket label used in UI badges / LLM prompt."""
     score = max(occupancy_pct, unavailable_pct)
@@ -81,12 +103,13 @@ def compute_suggestion(
     days_out: int,
     min_pct: int = 60,
     max_pct: int = 250,
+    str_mult: float = 1.0,
 ) -> dict:
     """Return the deterministic part of the suggestion (no LLM call)."""
     ref = market_avg if market_avg > 0 else (market_min or base_rate)
     lead_m = _lead_time_multiplier(days_out)
     occ_m = _occupancy_multiplier(occupancy_pct)
-    raw = ref * lead_m * occ_m
+    raw = ref * lead_m * occ_m * (str_mult or 1.0)
 
     floor_rate = round(base_rate * min_pct / 100.0, 2)
     ceil_rate = round(base_rate * max_pct / 100.0, 2)
@@ -103,6 +126,7 @@ def compute_suggestion(
         "ref_price": round(ref, 2),
         "lead_time_mult": lead_m,
         "occupancy_mult": occ_m,
+        "str_mult": round(str_mult or 1.0, 3),
         "floor_rate": floor_rate,
         "ceil_rate": ceil_rate,
         "delta_vs_current_pct": delta_pct,
@@ -260,6 +284,17 @@ def create_ai_pricing_router(db, require_roles):
         ).to_list(2000)
         dec_map = {(d["date"], d.get("room_type_id") or ""): d for d in dec_rows}
 
+        # Canlı STR (Booking.com apartman/tatil evi) talep baskısı sinyali (<48h taze)
+        str_cutoff = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+        str_rows = await db.str_market_snapshots.find(
+            {"property_id": property_id, "date": {"$gte": today_str, "$lte": end_str},
+             "scanned_at": {"$gte": str_cutoff}},
+            {"_id": 0, "date": 1, "median_rate": 1, "unavailable_pct": 1},
+        ).to_list(600)
+        str_map = {r["date"]: r for r in str_rows}
+        _meds = [float(r.get("median_rate") or 0) for r in str_rows if r.get("median_rate")]
+        str_med_avg = (sum(_meds) / len(_meds)) if _meds else 0.0
+
         # Parallel occupancy fan-out per date
         async def _occ_for(snap):
             return snap.get("date"), await _occupancy_for_date(property_id, snap.get("date", ""), total_rooms)
@@ -282,6 +317,13 @@ def create_ai_pricing_router(db, require_roles):
 
             days_out = (datetime.strptime(date, "%Y-%m-%d").date() - today.date()).days
 
+            str_snap = str_map.get(date)
+            ref_for_str = market_avg if market_avg > 0 else base_rate_avg
+            str_mult = _str_pressure_multiplier(
+                float(str_snap.get("unavailable_pct") or 0),
+                float(str_snap.get("median_rate") or 0),
+                ref_for_str, str_med_avg) if str_snap else 1.0
+
             for rt in room_types:
                 rt_id = rt.get("id", "")
                 base = float(rt.get("base_rate", base_rate_avg) or base_rate_avg)
@@ -297,6 +339,7 @@ def create_ai_pricing_router(db, require_roles):
                     days_out=days_out,
                     min_pct=int(cfg.get("min_rate_pct", 60)),
                     max_pct=int(cfg.get("max_rate_pct", 250)),
+                    str_mult=str_mult,
                 )
 
                 prev_decision = dec_map.get((date, rt_id), {})
@@ -314,6 +357,8 @@ def create_ai_pricing_router(db, require_roles):
                     "market_avg": round(market_avg, 2),
                     "market_min": round(market_min, 2),
                     "unavailable_pct": round(unavail, 1),
+                    "str_median": float(str_snap.get("median_rate")) if str_snap else None,
+                    "str_unavailable_pct": float(str_snap.get("unavailable_pct") or 0) if str_snap else None,
                     "occupancy_pct": occ_pct,
                     "bookings": occ_data.get("bookings", 0),
                     "total_rooms": occ_data.get("total_rooms", total_rooms),
@@ -411,7 +456,9 @@ def create_ai_pricing_router(db, require_roles):
                 "set_by": source,
                 "reason": (
                     f"AI Pricing · ref £{item.get('ref_price')} × lead {item.get('lead_time_mult')} "
-                    f"× occ {item.get('occupancy_mult')} → {item['suggested_rate']}"
+                    f"× occ {item.get('occupancy_mult')}"
+                    + (f" × STR {item.get('str_mult')}" if (item.get('str_mult') or 1.0) != 1.0 else "")
+                    + f" → {item['suggested_rate']}"
                 ),
                 "updated_at": now_iso,
             }},

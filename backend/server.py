@@ -1927,10 +1927,11 @@ async def startup_event():
 
     # tick workers (workers.py — ROADMAP P1 refactor)
     import asyncio
-    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop
+    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop
     asyncio.create_task(scheduled_checkout_loop(db))
     asyncio.create_task(reports_loop(db))
     asyncio.create_task(otb_snapshot_loop(db))
+    asyncio.create_task(str_scan_loop(db))
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

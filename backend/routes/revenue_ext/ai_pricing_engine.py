@@ -79,7 +79,7 @@ def _str_pressure_multiplier(str_unavail: float, str_median: float, ref: float,
             m = max(m, 1.03)
     if m > 1.0 and str_median and ref and str_median > ref * 1.3:
         m += 0.02
-    return round(m, 3)
+    return round(min(m, 1.12), 3)
 
 
 def _classify_demand(occupancy_pct: float, unavailable_pct: float) -> str:

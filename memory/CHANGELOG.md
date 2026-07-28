@@ -2519,3 +2519,12 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - UI: StrMarketView'a "Booking.com'dan Canlı Tara" butonu (str-scan-btn), 3sn'lik status poll, kaynak bilgi satırı (str-source-info), canlı KPI rozeti.
 - E2E DOĞRULANDI: aldgate-flats 8/8 tarih canlı çekildi (method=browser, 116 fiyat örneği/tarih, medyan £199 bugün), UI'da "8 gün canlı" rozeti + toast görüldü.
 - DERS: Datacenter IP'den httpx ile Booking.com 202 challenge veriyor; çalışan yol Playwright warm context (homepage cookie ısıtması).
+
+## 2026-07-28 — Iter 481: STR Talep Baskısı → AI Fiyatlama + Gece STR Cron'u
+- YENİ: `_str_pressure_multiplier` (ai_pricing_engine.py) — canlı STR doluluk (%90+→×1.10, %80+→×1.06, %70+→×1.03) + tarih bazlı fiyat sıçraması (avg×1.25→min 1.05) + ref×1.3 üstü medyan → +0.02; max 1.12 clamp. Öneri satırlarına str_mult/str_median/str_unavailable_pct alanları, apply reason'a "× STR" eklendi.
+- YENİ: workers.py `str_scan_loop` — saatlik kontrol, 20h'den eski taraması olan aktif tesisleri otomatik tarar. Filo doğrulandı: 6 tesis cron ile 8/8 canlı.
+- FIX: Koordinatsız şehir aramaları için CITY_DEST_IDS (london/zurich/berlin/munich/istanbul) — Zürih (default) 0/8'den 8/8'e çıktı.
+- UI: AIPricingEnginePanel'de gül rengi "STR×1.1" rozeti (ai-pricing-str-badge-{i}) + rasyonel string'de STR çarpanı.
+- TEST: iteration_480.json — backend 8/8, frontend rozet doğrulandı, konsol hatasız.
+- DERS: Playwright taraması sürerken backend hot-reload asılı kalabiliyor → 502'de supervisorctl restart backend.
+- NOT: 'default' property_id = Franziskaner by Centra şubesi (kasıtlı veri modeli).

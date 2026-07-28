@@ -123,6 +123,7 @@ DEFAULT_CONFIG = {
     "min_rate_pct": 60,                   # floor as % of base rate
     "max_rate_pct": 250,                  # ceiling as % of base rate
     "days_horizon": 30,                   # how many days ahead to compute
+    "target_updates_per_day": 12,         # autopilot cadence target (RPG parity)
     "last_run_at": None,
     "last_auto_applied": 0,
     "last_pending": 0,
@@ -455,7 +456,8 @@ def create_ai_pricing_router(db, require_roles):
             "use_llm": bool(data.get("use_llm", True)),
             "min_rate_pct": max(10, min(100, int(data.get("min_rate_pct", 60)))),
             "max_rate_pct": max(100, min(500, int(data.get("max_rate_pct", 250)))),
-            "days_horizon": max(1, min(90, int(data.get("days_horizon", 30)))),
+            "days_horizon": max(1, min(540, int(data.get("days_horizon", 30)))),
+            "target_updates_per_day": max(1, min(24, int(data.get("target_updates_per_day", 12)))),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.ai_pricing_config.update_one(
@@ -468,8 +470,27 @@ def create_ai_pricing_router(db, require_roles):
     @router.get("/revenue/ai-pricing/{property_id}/suggestions")
     async def list_suggestions(property_id: str, days: int = 30, use_llm: bool = True,
                                 _u: dict = Depends(require_roles("admin", "manager"))):
-        days = max(1, min(90, int(days)))
+        days = max(1, min(540, int(days)))
         return await _build_suggestions(property_id, days, use_llm)
+
+    @router.get("/revenue/ai-pricing/{property_id}/cadence")
+    async def cadence(property_id: str,
+                      _u: dict = Depends(require_roles("admin", "manager"))):
+        cfg = await _get_cfg(property_id)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        runs = await db.ai_pricing_run_log.find(
+            {"property_id": property_id, "run_at": {"$gte": today_start}},
+            {"_id": 0, "applied": 1, "run_at": 1, "source": 1},
+        ).sort("run_at", -1).to_list(100)
+        return {
+            "property_id": property_id,
+            "runs_today": len(runs),
+            "applied_today": sum(r.get("applied", 0) for r in runs),
+            "target_updates_per_day": int(cfg.get("target_updates_per_day", 12)),
+            "last_run_at": cfg.get("last_run_at"),
+            "horizon_days": int(cfg.get("days_horizon", 30)),
+            "recent_runs": runs[:10],
+        }
 
     @router.post("/revenue/ai-pricing/{property_id}/accept")
     async def accept_suggestion(property_id: str, data: Dict,
@@ -572,6 +593,9 @@ def create_ai_pricing_router(db, require_roles):
             }},
             upsert=True,
         )
+        await db.ai_pricing_run_log.insert_one({
+            "property_id": property_id, "applied": applied,
+            "source": "manual-or-cron", "run_at": now_iso})
         return {"applied": applied, "lrv_clamped": lrv_clamped, "summary": payload["summary"], "run_at": now_iso}
 
     @router.get("/revenue/ai-pricing/{property_id}/history")
@@ -617,6 +641,9 @@ def create_ai_pricing_router(db, require_roles):
             }},
             upsert=True,
         )
+        await db.ai_pricing_run_log.insert_one({
+            "property_id": property_id, "applied": applied,
+            "source": "scheduler", "run_at": now_iso})
         return {"applied": applied, "summary": payload["summary"], "run_at": now_iso}
 
     router.run_auto_apply_internal = _internal_auto_apply

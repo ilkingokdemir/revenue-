@@ -91,7 +91,7 @@ import {
   DevPortalAdminPanel, WholesalerHubPanel, LeadFunnelPanel,
   MarketingVideosPanel,
   BrandVoicePanel,
-  CampaignsPanel, GuestAppPanel, SmartLocksPanel, SmartRoomsPanel, SetupWizardPanel, StockManagementPanel,
+  CampaignsPanel, GuestAppPanel, SmartLocksPanel, SmartRoomsPanel, BasePriceCurvePanel, SetupWizardPanel, StockManagementPanel,
   AccountingPanel, POSPanel, PaymentsPanel, SurveyPanel, GuestJourneyPanel, MaintenancePanel,
   RateManagerPanel, MyRatesPanel, ReportsCentrePanel, ScheduledReports, MobileCompanion, EnhancedDashboard,
   ReportsHub, FinancePL, ShiftScheduler, ReceptionReport, PassOverDuties, ComplianceRegister,
@@ -1446,6 +1446,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Smart Rooms / IoT Control */}
         {activeView === "smart-rooms" && (
           <SmartRoomsPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Base Price Curve (18-month pricing) */}
+        {activeView === "base-curve" && (
+          <BasePriceCurvePanel properties={properties} activePropertyId={activePropertyId} />
         )}
 
         {/* Setup Wizard */}

@@ -258,6 +258,7 @@ export function buildMenuSections(t, user) {
         { divider: true, label: "AI & Insights" },
         { id: "revenue-strategist", icon: Robot, name: "AI Strateji Robotu", testId: "revenue-strategist-btn" },
         { id: "ai-pricing-v2", icon: Lightning, name: "AI pricing", testId: "ai-pricing-v2-btn" },
+        { id: "base-curve", icon: ChartLine, name: "Baz fiyat eğrisi (18 ay)", testId: "base-curve-btn" },
         { id: "min-rates", icon: ShieldCheck, name: "Minimum fiyat koruması", testId: "min-rates-btn" },
         { id: "discount-stack", icon: Tag, name: "İndirim katmanları & net fiyat", testId: "discount-stack-btn" },
         { id: "owner-rates", icon: ArrowsClockwise, name: "Sahip fiyat panosu (iki yönlü)", testId: "owner-rates-btn" },

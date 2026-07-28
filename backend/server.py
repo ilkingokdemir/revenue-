@@ -1612,6 +1612,15 @@ api_router.include_router(create_digital_keys_router(db, require_roles))
 from routes.hotel_ops.smart_rooms import create_smart_rooms_router
 api_router.include_router(create_smart_rooms_router(db, require_roles))
 
+from routes.revenue_ext.base_price_curve import create_base_price_curve_router
+api_router.include_router(create_base_price_curve_router(db, require_roles))
+
+from routes.revenue_ext.str_market import create_str_market_router
+api_router.include_router(create_str_market_router(db, require_roles))
+
+from routes.marketing.price_checker import create_price_checker_router
+api_router.include_router(create_price_checker_router(db))
+
 from routes.integrations_pkg.ota_inbound import create_ota_inbound_router
 api_router.include_router(create_ota_inbound_router(db, require_roles))
 

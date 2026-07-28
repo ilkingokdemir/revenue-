@@ -7,6 +7,7 @@ import {
   Building2, ShieldCheck, Gauge, SearchX,
 } from "lucide-react";
 import { DemoForm, FaqItem, fadeUp, goLogin, scrollTo } from "./landing/shared";
+import PriceCheckerSection from "./components/public/PriceCheckerSection";
 
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
@@ -350,6 +351,9 @@ export default function ReveniqLanding() {
           </div>
         </div>
       </section>
+
+      {/* Price Checker (lead-gen) */}
+      <PriceCheckerSection onDemo={() => { setDemoProduct("pulse"); scrollTo("#demo"); }} />
 
       {/* Pricing */}
       <section id="pricing" className="relative max-w-7xl mx-auto px-5 sm:px-8 py-24 overflow-visible">

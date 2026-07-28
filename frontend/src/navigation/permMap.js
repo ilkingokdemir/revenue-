@@ -107,6 +107,7 @@ export const SIDEBAR_PERM_MAP = {
     "forecast-btn":           "revenue_forecasting_view",
     "pace-reports-btn":       "revenue_forecasting_view",
     "ai-pricing-v2-btn":      "revenue_forecasting_view",
+    "base-curve-btn":         "revenue_forecasting_view",
     "parity-heatmap-btn":     "revenue_forecasting_view",
     "morning-brief-btn":      "revenue_forecasting_view",
     "nightly-recap-btn":      "revenue_forecasting_view",

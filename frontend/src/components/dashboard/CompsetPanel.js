@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, Suspense, lazy } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Crosshair, Plus, X, Sparkle, Trash, ChartLineUp, ListBullets } from "@phosphor-icons/react";
+import { Crosshair, Plus, X, Sparkle, Trash, ChartLineUp, ListBullets, Buildings } from "@phosphor-icons/react";
 
 const CompRadarPanel = lazy(() => import("./CompRadarPanel"));
+const StrMarketView = lazy(() => import("./StrMarketView"));
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/compset`;
 
@@ -94,9 +95,17 @@ export default function CompsetPanel({ propertyId = "default", initialTab = "lis
           className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2.5 border-b-2 -mb-px transition-colors ${tab === "radar" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
           <ChartLineUp size={14} /> Fiyat Radarı
         </button>
+        <button onClick={() => setTab("str")} data-testid="compset-tab-str"
+          className={`inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-2.5 border-b-2 -mb-px transition-colors ${tab === "str" ? "border-stone-900 text-stone-900" : "border-transparent text-stone-500 hover:text-stone-800"}`}>
+          <Buildings size={14} /> Airbnb / STR
+        </button>
       </div>
 
-      {tab === "radar" ? (
+      {tab === "str" ? (
+        <Suspense fallback={<div className="p-8 text-stone-400 text-sm">Yükleniyor…</div>}>
+          <StrMarketView propertyId={propertyId} />
+        </Suspense>
+      ) : tab === "radar" ? (
         <Suspense fallback={<div className="p-8 text-stone-400 text-sm">Yükleniyor…</div>}>
           <CompRadarPanel propertyId={propertyId === "default" ? "all" : propertyId} />
         </Suspense>

@@ -2528,3 +2528,10 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - TEST: iteration_480.json — backend 8/8, frontend rozet doğrulandı, konsol hatasız.
 - DERS: Playwright taraması sürerken backend hot-reload asılı kalabiliyor → 502'de supervisorctl restart backend.
 - NOT: 'default' property_id = Franziskaner by Centra şubesi (kasıtlı veri modeli).
+
+## 2026-07-28 — Iter 482: Haftalık Pulse'a "STR Pazar Zekâsı" Kartı
+- YENİ: `build_str_intelligence(db, pids)` (str_market.py) — son 7 günün STR kaynaklı fiyat artışları (ai_pricing_decisions.str_mult>1) + ileri 14 gün baskı görünümü (unavailable_pct>=70) + canlı taranan tesis sayısı.
+- YENİ: _apply_one artık ai_pricing_decisions'a str_mult/str_median/str_unavailable_pct yazıyor (digest'in veri kaynağı).
+- YENİ: Haftalık Pulse digest e-postasına gül rengi "🏠 STR Pazar Zekâsı" kartı: "2026-08-02 — STR pazarı sayesinde fiyat %10 yükseltildi (CHF 95 → CHF 105)" satırları + baskı günleri; veri yoksa "fiyatlarınız pazarla uyumlu" fallback'i.
+- YENİ: GET /api/owner-pulse/{pid}/digest/preview (admin) — e-posta HTML önizlemesi.
+- TEST: Curl E2E — sentetik karar ile kart doğrulandı, send-now 17/17 (mock), fallback dalı doğrulandı, test verisi temizlendi.

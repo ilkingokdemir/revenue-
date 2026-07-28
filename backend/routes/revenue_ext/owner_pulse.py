@@ -819,6 +819,34 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
                 <ul style="font-size:12px;color:#78716c;padding-left:16px;margin:0;">{ai}</ul>"""
         except Exception:
             pass
+
+        # 🏠 STR Pazar Zekâsı kartı
+        str_html = ""
+        try:
+            from routes.revenue_ext.str_market import build_str_intelligence
+            stri = await build_str_intelligence(db, pids_all)
+            if stri["interventions_count"] or stri["pressure_count"] or stri["live_props"]:
+                parts = ""
+                if stri["interventions"]:
+                    rows = "".join(
+                        f'<li style="margin-bottom:4px;"><b>{i["date"]}</b> — STR pazarı sayesinde fiyat <span style="color:#059669;font-weight:bold;">%{i["uplift_pct"]}</span> yükseltildi'
+                        + (f' ({c}{i["prev_rate"]:.0f} → {c}{i["new_rate"]:.0f})' if i.get("prev_rate") and i.get("new_rate") else "")
+                        + '</li>'
+                        for i in stri["interventions"][:5])
+                    parts += f'<div style="font-size:12px;font-weight:bold;color:#9f1239;margin-bottom:6px;">Bu hafta {stri["interventions_count"]} tarihte STR kaynaklı fiyat artışı uygulandı (ort. +%{stri["avg_uplift_pct"]})</div><ul style="font-size:12px;color:#78716c;padding-left:16px;margin:0 0 8px;">{rows}</ul>'
+                if stri["pressure_dates"]:
+                    pr = ", ".join(f'{p["date"]} (%{p["unavailable_pct"]:.0f})' for p in stri["pressure_dates"][:5])
+                    parts += f'<div style="font-size:12px;color:#78716c;">Önümüzdeki 14 günde STR doluluk baskısı yüksek günler: <b>{pr}</b> — motor bu tarihleri izliyor.</div>'
+                if not parts:
+                    parts = f'<div style="font-size:12px;color:#78716c;">{stri["live_props"]} tesisiniz için Airbnb/kısa dönem kiralama pazarı canlı taranıyor; şu an fiyat baskısı yok — fiyatlarınız pazarla uyumlu.</div>'
+                str_html = f"""
+                <div style="border:1px solid #fecdd3;background:#fff1f2;border-radius:10px;padding:12px 14px;margin-top:22px;">
+                  <div style="font-size:13px;font-weight:bold;color:#9f1239;">🏠 STR Pazar Zekâsı (Airbnb / Kısa Dönem)</div>
+                  <div style="margin-top:8px;">{parts}</div>
+                  <div style="font-size:11px;color:#be123c;margin-top:6px;">Veriler Booking.com kısa dönem kiralama segmentinden günlük otomatik taranır.</div>
+                </div>"""
+        except Exception:
+            pass
         base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
         return f"""
         <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#292524;">
@@ -830,6 +858,7 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
           {pf_html}
           {risk_html}
           {impact_html}
+          {str_html}
           <p style="text-align:center;margin:26px 0 8px;">
             <a href="{base}/owner" style="background:#0f766e;color:#fff;text-decoration:none;padding:11px 26px;border-radius:10px;font-weight:bold;display:inline-block;">Portalı Aç</a>
           </p>
@@ -1086,6 +1115,19 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
     async def admin_send_digest(pid: str,
                                 current_user: dict = Depends(require_roles("admin", "manager"))):
         return await _digest_sweep(pid)
+
+    @router.get("/{pid}/digest/preview")
+    async def admin_digest_preview(pid: str,
+                                   current_user: dict = Depends(require_roles("admin", "manager"))):
+        from fastapi.responses import HTMLResponse
+        q = {"$or": [{"property_id": pid}, {"property_ids": pid}]}
+        if pid == "default":
+            q["$or"].append({"property_id": {"$in": [None, ""]}})
+        owner = await db.unit_owners.find_one(q, {"_id": 0})
+        if not owner:
+            owner = {"name": "Önizleme", "property_id": pid, "property_ids": [pid]}
+        html = await _build_digest_html(owner)
+        return HTMLResponse(content=html)
 
     @router.get("/{pid}/digest/log")
     async def admin_digest_log(pid: str,

@@ -192,6 +192,57 @@ def _parse_search_html(text: str) -> Optional[dict]:
     }
 
 
+async def build_str_intelligence(db, pids: list, days_back: int = 7, days_fwd: int = 14) -> dict:
+    """Haftalık digest için STR zekâsı: uygulanan STR kaynaklı zamlar + ileri baskı görünümü."""
+    now = datetime.now(timezone.utc)
+    since = (now - timedelta(days=days_back)).isoformat()
+    decs = await db.ai_pricing_decisions.find(
+        {"property_id": {"$in": pids}, "decided_at": {"$gte": since},
+         "str_mult": {"$gt": 1.0}},
+        {"_id": 0, "property_id": 1, "date": 1, "prev_rate": 1, "new_rate": 1,
+         "str_mult": 1, "str_unavailable_pct": 1, "decided_at": 1},
+    ).sort("decided_at", -1).to_list(300)
+    seen = set()
+    interventions = []
+    for d0 in decs:
+        key = (d0["property_id"], d0["date"])
+        if key in seen:
+            continue
+        seen.add(key)
+        interventions.append({
+            "property_id": d0["property_id"], "date": d0["date"],
+            "prev_rate": d0.get("prev_rate"), "new_rate": d0.get("new_rate"),
+            "str_mult": d0.get("str_mult"),
+            "uplift_pct": round((float(d0.get("str_mult") or 1.0) - 1.0) * 100, 1),
+        })
+
+    today = now.date()
+    end_str = (today + timedelta(days=days_fwd)).strftime("%Y-%m-%d")
+    fresh_cutoff = (now - timedelta(hours=LIVE_FRESH_HOURS)).isoformat()
+    snaps = await db.str_market_snapshots.find(
+        {"property_id": {"$in": pids},
+         "date": {"$gte": today.strftime("%Y-%m-%d"), "$lte": end_str},
+         "scanned_at": {"$gte": fresh_cutoff},
+         "unavailable_pct": {"$gte": 70}},
+        {"_id": 0, "property_id": 1, "date": 1, "unavailable_pct": 1, "median_rate": 1},
+    ).sort("date", 1).to_list(100)
+    pressure_dates = [{"property_id": s["property_id"], "date": s["date"],
+                       "unavailable_pct": s["unavailable_pct"],
+                       "median_rate": s["median_rate"]} for s in snaps]
+
+    live_props = len(await db.str_market_snapshots.distinct(
+        "property_id", {"property_id": {"$in": pids}, "scanned_at": {"$gte": fresh_cutoff}}))
+    avg_uplift = round(sum(i["uplift_pct"] for i in interventions) / len(interventions), 1) if interventions else 0
+    return {
+        "interventions": interventions[:8],
+        "interventions_count": len(interventions),
+        "avg_uplift_pct": avg_uplift,
+        "pressure_dates": pressure_dates[:8],
+        "pressure_count": len(pressure_dates),
+        "live_props": live_props,
+    }
+
+
 def _sim_row(property_id: str, base_nightly: float, listings_total: int, d) -> dict:
     ds = d.strftime("%Y-%m-%d")
     dow = d.weekday()

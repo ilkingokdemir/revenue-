@@ -2566,3 +2566,7 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - YENİ: owner_pulse digest'ine mor "🧠 Bu Hafta Beyniniz Ne Öğrendi?" kartı: haftalık ölçülen karar sayısı + başarılı sayısı, son 4 Türkçe ders, aylık gelir hedefi ilerlemesi (%X yolda/geride + ay sonu tahmini + beyin tavsiyesi, para birimi simgesiyle).
 - TEST: Curl E2E — default (hedef CHF 45.000, %49.1 geride + tavsiye) ve aldgate (8 ölçüm + 2 ders) preview'ları doğrulandı.
 - NOT: Backend restart sonrası ilk istek yavaş olabiliyor (startup cron'ları); curl --max-time kullan.
+
+## 2026-07-28 — Iter 487: ReveniQ Landing "Öğrenen Beyin" Tanıtım Bölümü
+- YENİ: BrainShowcaseSection (components/public/) — #brain bölümü, Price Checker'ın hemen üstünde: 4 adımlı kapalı döngü (Ölçer→Öğrenir→Kendini Ayarlar→Uygular), gerçek formatta 3 ders örneği kartı, "Beyni Çalışırken Gör" CTA'sı (#demo'ya kaydırır, product 'pulse').
+- TEST: Screenshot doğrulandı — bölüm render, 4 adım, CTA scroll çalışıyor.

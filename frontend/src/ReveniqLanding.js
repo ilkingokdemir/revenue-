@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { DemoForm, FaqItem, fadeUp, goLogin, scrollTo } from "./landing/shared";
 import PriceCheckerSection from "./components/public/PriceCheckerSection";
+import BrainShowcaseSection from "./components/public/BrainShowcaseSection";
 
 const NAV_LINKS = [
   { label: "Features", href: "#features" },
@@ -351,6 +352,9 @@ export default function ReveniqLanding() {
           </div>
         </div>
       </section>
+
+      {/* Learning Brain showcase */}
+      <BrainShowcaseSection onDemo={() => { setDemoProduct("pulse"); scrollTo("#demo"); }} />
 
       {/* Price Checker (lead-gen) */}
       <PriceCheckerSection onDemo={() => { setDemoProduct("pulse"); scrollTo("#demo"); }} />

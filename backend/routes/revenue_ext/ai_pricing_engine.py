@@ -559,6 +559,10 @@ def create_ai_pricing_router(db, require_roles):
         """
         cfg = await _get_cfg(property_id)
         if not cfg.get("enabled") or not cfg.get("auto_apply"):
+            await db.ai_pricing_run_log.insert_one({
+                "property_id": property_id, "applied": 0,
+                "source": "skipped-disabled",
+                "run_at": datetime.now(timezone.utc).isoformat()})
             return {"applied": 0, "skipped_reason": "auto_apply disabled", "config": cfg}
 
         days = int(cfg.get("days_horizon", 30))

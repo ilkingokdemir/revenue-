@@ -81,3 +81,8 @@ Kalan FLYR boşlukları (P1 adayı): ~~gün-içi re-price~~ (iter 450 DONE), ~~A
 - DONE: F&B ↔ Sadakat köprüsü — tab kapatırken tier F&B indirimi otomatik uygulanıyor (apply_loyalty).
 - P1 kalan: Native Mobile App (React Native), Eco Sweep'in workers.py'ye gece cron'u olarak bağlanması (şu an manuel buton).
 - P2: IoT gerçek donanım sağlayıcı adaptörleri (şu an simülasyon).
+
+## Iter 479 sonrası (2026-07-28) — RoomPriceGenie paritesi
+- DONE: 18 ay fiyat ufku + baz fiyat eğrisi, Airbnb/STR compset sekmesi, ücretsiz Price Checker lead aracı.
+- P1 kalan: Price Checker lead'lerini Demo Leads CRM pipeline'ına bağlama; price-check endpoint'ine rate-limit.
+- P2: Gerçek Airbnb scraper adaptörü (şu an simülasyon), Native Mobile App.

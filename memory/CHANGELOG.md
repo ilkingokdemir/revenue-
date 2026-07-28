@@ -2501,3 +2501,12 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - TEST: iteration_478.json — backend 15/15, frontend %100. Testing agent düzeltmesi: lazyPanels.js SmartRoomsPanel N()→L() (default export).
 - DERS: `export default` kullanan panellerde lazyPanels'ta L() helper kullan, N() named export içindir.
 - NOT: Sadakat/POS/dijital anahtar modülleri zaten mevcuttu (loyalty_tier.py, pos.py, digital_keys.py) — çakışma taraması yapıldı, sadece eksik parçalar (IoT kontrol + loyalty-POS köprüsü) eklendi.
+
+## 2026-07-28 — Iter 479: RoomPriceGenie Gap Analizi + 3 Yeni Özellik
+- ANALİZ: RPG ürün sayfası tarandı; 12 özellikte eşit/önde, 6 boşluk bulundu. 3'ü kapatıldı:
+- YENİ: `base_price_curve.py` + BasePriceCurvePanel — 18 ay (540 gün) ileri fiyatlama. Baz fiyat + DOW çarpanları + sezonlar → eğri preview (Recharts) + apply (rate_overrides set_by='base-curve', mevcut override'lar korunur). Sidebar: "Baz fiyat eğrisi (18 ay)" (base-curve-btn, AI & Insights).
+- YENİ: AI pricing motoru ufku 90→540 gün, target_updates_per_day (1-24), GET /revenue/ai-pricing/{pid}/cadence + ai_pricing_run_log (skipped koşular da loglanıyor).
+- YENİ: `str_market.py` + StrMarketView — Airbnb/STR pazar simülasyonu, Compset paneline "Airbnb / STR" sekmesi (compset-tab-str). Kaynak: simulated (gerçek scraper P2).
+- YENİ: `price_checker.py` + PriceCheckerSection — /reveniq landing'de ücretsiz public Price Checker (POST /api/public/price-check), lead'ler price_check_leads'e düşüyor.
+- TEST: iteration_479.json — backend 18/18, frontend %100.
+- NOT: RPG'ye karşı kalan boşluklar: native mobil app (backlog), price_checker rate-limit (öneri).

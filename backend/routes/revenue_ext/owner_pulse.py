@@ -847,6 +847,49 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
                 </div>"""
         except Exception:
             pass
+
+        # 🧠 "Bu Hafta Beyniniz Ne Öğrendi?" kartı
+        brain_html = ""
+        try:
+            from routes.revenue_ext.revenue_brain import build_goal_progress
+            week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+            b_lessons = await db.revenue_brain_lessons.find(
+                {"property_id": {"$in": pids_all}}, {"_id": 0, "lesson": 1}
+            ).sort("created_at", -1).to_list(4)
+            measured_wk = await db.ai_pricing_outcomes.count_documents(
+                {"property_id": {"$in": pids_all}, "measured_at": {"$gte": week_ago}})
+            worked_wk = await db.ai_pricing_outcomes.count_documents(
+                {"property_id": {"$in": pids_all}, "measured_at": {"$gte": week_ago},
+                 "verdict": "worked"})
+            b_goal = None
+            for _p in pids_all:
+                _g = await build_goal_progress(db, _p)
+                if _g.get("target_revenue"):
+                    b_goal = _g
+                    break
+            if b_lessons or measured_wk or b_goal:
+                parts = ""
+                if measured_wk:
+                    parts += (f'<div style="font-size:12px;color:#57534e;margin-bottom:8px;">Bu hafta <b>{measured_wk}</b> fiyat kararının gerçek sonucu ölçüldü — '
+                              f'<b style="color:#059669;">{worked_wk}</b> tanesi hedeflenen etkiyi yarattı.</div>')
+                if b_lessons:
+                    rows = "".join(f'<li style="margin-bottom:4px;">{l["lesson"]}</li>' for l in b_lessons)
+                    parts += f'<ul style="font-size:12px;color:#57534e;padding-left:16px;margin:0 0 8px;">{rows}</ul>'
+                if b_goal:
+                    durum = "✓ yolda" if b_goal.get("on_track") else "⚠ geride"
+                    renk = "#059669" if b_goal.get("on_track") else "#d97706"
+                    parts += (f'<div style="font-size:12px;color:#57534e;">Aylık gelir hedefi <b>{c}{b_goal["target_revenue"]:,.0f}</b> — '
+                              f'ilerleme <b style="color:{renk};">%{b_goal.get("progress_pct", 0)} {durum}</b>, ay sonu tahmini {c}{b_goal["projection"]:,.0f}.</div>')
+                    if b_goal.get("recommendation"):
+                        parts += f'<div style="font-size:11px;color:#6d28d9;margin-top:6px;">🧠 {b_goal["recommendation"]}</div>'
+                brain_html = f"""
+                <div style="border:1px solid #ddd6fe;background:#f5f3ff;border-radius:10px;padding:12px 14px;margin-top:22px;">
+                  <div style="font-size:13px;font-weight:bold;color:#5b21b6;">🧠 Bu Hafta Beyniniz Ne Öğrendi?</div>
+                  <div style="margin-top:8px;">{parts}</div>
+                  <div style="font-size:11px;color:#7c3aed;margin-top:6px;">Öğrenen Revenue Beyni her gece kararlarının sonuçlarını ölçer ve fiyat motorunu otomatik ayarlar.</div>
+                </div>"""
+        except Exception:
+            pass
         base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
         return f"""
         <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#292524;">
@@ -859,6 +902,7 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
           {risk_html}
           {impact_html}
           {str_html}
+          {brain_html}
           <p style="text-align:center;margin:26px 0 8px;">
             <a href="{base}/owner" style="background:#0f766e;color:#fff;text-decoration:none;padding:11px 26px;border-radius:10px;font-weight:bold;display:inline-block;">Portalı Aç</a>
           </p>

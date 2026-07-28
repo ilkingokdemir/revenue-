@@ -2561,3 +2561,8 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - TEST: iteration_481.json — backend 10/10, frontend %100. Testing agent düzeltmesi: App.js render bloğu (bozuk dosya kuyruğu onarımında kaybolmuştu).
 - ÖNEMLİ OLAY: App.js kuyruğunda bozuk duplicate kod bulundu (muhtemelen kesintili yazım) → 'export default AppWithLanguage;' sonrası kırpıldı. DERS: App.js düzenlemelerinden sonra derleme logunu kontrol et.
 - REVIEW notu (gelecek refactor): App.js ~2620 satır, activeView switch ~40 dal — panel router map'ine çıkarılmalı (P2).
+
+## 2026-07-28 — Iter 486: Haftalık Pulse'a "Bu Hafta Beyniniz Ne Öğrendi?" Kartı
+- YENİ: owner_pulse digest'ine mor "🧠 Bu Hafta Beyniniz Ne Öğrendi?" kartı: haftalık ölçülen karar sayısı + başarılı sayısı, son 4 Türkçe ders, aylık gelir hedefi ilerlemesi (%X yolda/geride + ay sonu tahmini + beyin tavsiyesi, para birimi simgesiyle).
+- TEST: Curl E2E — default (hedef CHF 45.000, %49.1 geride + tavsiye) ve aldgate (8 ölçüm + 2 ders) preview'ları doğrulandı.
+- NOT: Backend restart sonrası ilk istek yavaş olabiliyor (startup cron'ları); curl --max-time kullan.

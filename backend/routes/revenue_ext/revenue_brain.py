@@ -76,7 +76,7 @@ async def measure_outcomes(db, pid: str) -> int:
             continue
         stay = datetime.strptime(dec["date"], "%Y-%m-%d")
         final_occ = await _occ_for_date(db, pid, dec["date"], total_rooms)
-        # Baseline: aynı gün tipindeki önceki 4 tarihin ortalama doluluğu
+        # Baseline: aynı haftanın gününe denk gelen önceki 4 tarihin ortalama doluluğu
         base_vals = []
         step = 7
         for k in range(1, 5):

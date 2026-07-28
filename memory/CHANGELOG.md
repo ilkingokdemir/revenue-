@@ -2550,3 +2550,14 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - UI: Landing onay notu artık rapor gönderildiyse "raporunuz e-postanıza gönderildi" diyor.
 - TEST: Curl E2E — 1. sorgu mock gönderim + log, 2. sorgu skipped_recent; test verisi temizlendi.
 - NOT: RESEND_API_KEY yok → tüm e-postalar MOCK. Gerçek gönderim için kullanıcıdan Resend anahtarı istenmeli.
+
+## 2026-07-28 — Iter 485 (test raporu 481): "Öğrenen Revenue Beyni" — Kapalı Öğrenme Döngüsü 🧠
+- YENİ: `revenue_brain.py` — 3 katman:
+  1) Outcome Tracker: geçmiş fiyat kararları gerçek doluluk vs aynı-haftagünü baseline ile ölçülür → worked/neutral/hurt.
+  2) Self-Tuning: bağlam kovaları (lead-time bandı × hafta içi/sonu × yön), kova başına ≥4 örneklemde öğrenilmiş çarpan (0.95 fren / 1.03 cesaret); ai_pricing_engine bunları OTOMATİK uygular (learned_mult/learned_bucket alanları, floor/ceil clamp korunur).
+  3) Ders Hafızası + Hedef: Türkçe dersler (revenue_brain_lessons) → revenue_strategist LLM prompt'una otomatik beslenir; aylık gelir hedefi (revenue_goals) + MTD/projeksiyon/tavsiye.
+- Cron: workers.revenue_brain_loop (20h döngü, tüm tesisler) — startup'ta 10 tesis için çalıştığı doğrulandı.
+- UI: RevenueBrainPanel ("Öğrenen Beyin", AI & Insights) — KPI'lar, hedef kartı + ilerleme çubuğu + beyin tavsiyesi, dersler, çarpan tablosu, son ölçümler, "Şimdi Öğren".
+- TEST: iteration_481.json — backend 10/10, frontend %100. Testing agent düzeltmesi: App.js render bloğu (bozuk dosya kuyruğu onarımında kaybolmuştu).
+- ÖNEMLİ OLAY: App.js kuyruğunda bozuk duplicate kod bulundu (muhtemelen kesintili yazım) → 'export default AppWithLanguage;' sonrası kırpıldı. DERS: App.js düzenlemelerinden sonra derleme logunu kontrol et.
+- REVIEW notu (gelecek refactor): App.js ~2620 satır, activeView switch ~40 dal — panel router map'ine çıkarılmalı (P2).

@@ -22,7 +22,9 @@ export default function RevenueBrainPanel({ properties = [], activePropertyId })
     try {
       const r = await axios.get(`${API}/api/revenue-brain/${propertyId}/status`, { withCredentials: true });
       setData(r.data);
-      if (r.data.goal?.target_revenue) setGoalInput(String(r.data.goal.target_revenue));
+      if (r.data.goal?.target_revenue) {
+        setGoalInput((prev) => prev || String(r.data.goal.target_revenue));
+      }
     } catch (e) { toast.error("Beyin durumu yüklenemedi"); }
   }, [propertyId]);
 

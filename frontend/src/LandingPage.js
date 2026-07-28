@@ -296,8 +296,20 @@ export default function LandingPage() {
             <p className="mt-4 text-stone-300 leading-relaxed max-w-2xl">
               ReveniQ is our dedicated AI revenue management platform — demand forecasting, dynamic pricing, competitor rate radar and gap-filler campaigns. It shares the same data as MyHotelBox, so it switches on in a day, not a quarter.
             </p>
+            <div className="mt-5 rounded-xl border border-violet-400/25 bg-violet-500/[0.08] p-4 max-w-2xl" data-testid="crosssell-brain-highlight">
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-violet-300 mb-1.5 flex items-center gap-1.5">
+                <span className="px-1.5 py-0.5 rounded bg-violet-500/25 border border-violet-400/30">NEW</span> Self-learning Revenue Brain
+              </div>
+              <p className="text-xs text-stone-300 leading-relaxed">
+                The only RMS that measures the real outcome of every price decision, learns lessons from it and auto-calibrates its own pricing engine — night after night, hotel by hotel.
+              </p>
+              <a href="/reveniq#brain" data-testid="crosssell-brain-link"
+                className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-violet-300 hover:text-violet-200 transition-colors">
+                See how the Brain learns <ArrowUpRight size={12} />
+              </a>
+            </div>
             <a href="/reveniq" data-testid="crosssell-reveniq-btn"
-              className="mt-8 inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:from-[#1E40AF] hover:to-[#0891B2] text-white text-sm font-bold transition-colors shadow-[0_8px_24px_rgba(6,182,212,0.3)]">
+              className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-gradient-to-r from-[#1D4ED8] to-[#06B6D4] hover:from-[#1E40AF] hover:to-[#0891B2] text-white text-sm font-bold transition-colors shadow-[0_8px_24px_rgba(6,182,212,0.3)]">
               Discover ReveniQ <ArrowUpRight size={15} />
             </a>
           </motion.div>

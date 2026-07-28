@@ -2570,3 +2570,8 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 ## 2026-07-28 — Iter 487: ReveniQ Landing "Öğrenen Beyin" Tanıtım Bölümü
 - YENİ: BrainShowcaseSection (components/public/) — #brain bölümü, Price Checker'ın hemen üstünde: 4 adımlı kapalı döngü (Ölçer→Öğrenir→Kendini Ayarlar→Uygular), gerçek formatta 3 ders örneği kartı, "Beyni Çalışırken Gör" CTA'sı (#demo'ya kaydırır, product 'pulse').
 - TEST: Screenshot doğrulandı — bölüm render, 4 adım, CTA scroll çalışıyor.
+
+## 2026-07-28 — Iter 488: MyHotelBox Landing'e "Öğrenen Beyin" Çapraz Tanıtımı
+- Mevcut ReveniQ cross-sell bölümüne (LandingPage.js) mor "NEW · Self-learning Revenue Brain" vurgu kutusu + "/reveniq#brain" linki eklendi (crosssell-brain-highlight / crosssell-brain-link).
+- TEST: Screenshot — kutu render, link /reveniq#brain'e gidip bölüme scroll ediyor.
+- NOT: MyHotelBox landing İngilizce olduğundan kutu metni bölüm diliyle uyumlu İngilizce yazıldı.

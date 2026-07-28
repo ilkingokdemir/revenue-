@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Funnel, EnvelopeSimple, Buildings, Trash, CheckCircle } from "@phosphor-icons/react";
+import { Funnel, EnvelopeSimple, Buildings, Trash, CheckCircle, MagnifyingGlass } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api/demo-requests`;
 const STATUS_TR = { new: "Yeni", contacted: "İletişimde", demo_scheduled: "Demo Planlandı", won: "Kazanıldı", lost: "Kaybedildi" };
@@ -31,16 +31,18 @@ export default function DemoLeadsPanel() {
   const [data, setData] = useState(null);
   const [filter, setFilter] = useState("");
   const [productFilter, setProductFilter] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("");
 
   const load = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (filter) params.set("status", filter);
       if (productFilter) params.set("product", productFilter);
+      if (sourceFilter) params.set("source", sourceFilter);
       const r = await axios.get(`${API}${params.toString() ? `?${params}` : ""}`);
       setData(r.data);
     } catch { toast.error("Demo talepleri yüklenemedi"); }
-  }, [filter, productFilter]);
+  }, [filter, productFilter, sourceFilter]);
   useEffect(() => { load(); }, [load]);
 
   const setStatus = async (id, status) => {
@@ -69,7 +71,13 @@ export default function DemoLeadsPanel() {
           <Funnel size={14} /> Web Sitesi · Satış Hunisi
         </div>
         <h2 className="text-2xl font-bold">Demo Talepleri</h2>
-        <p className="text-sm text-stone-400 mt-1">Tanıtım sitesindeki "Request Demo" formundan gelen potansiyel müşteriler.</p>
+        <p className="text-sm text-stone-400 mt-1">Tanıtım sitesindeki "Request Demo" formu ve Price Checker aracından gelen potansiyel müşteriler.</p>
+        {s.price_checker_queries > 0 && (
+          <div className="mt-3 inline-flex items-center gap-2 text-xs bg-white/10 rounded-lg px-3 py-1.5" data-testid="demo-pc-stats">
+            <MagnifyingGlass size={13} className="text-amber-300" />
+            <span className="text-stone-300">Price Checker: <b className="text-white">{s.price_checker_queries}</b> sorgu → <b className="text-amber-300">{s.price_checker_leads}</b> CRM lead'i</span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
@@ -98,6 +106,13 @@ export default function DemoLeadsPanel() {
             {label}
           </button>
         ))}
+        <span className="mx-1 text-stone-300">|</span>
+        {[["", "Tüm Kaynaklar"], ["landing", "Demo Formu"], ["price-checker", "Price Checker 🔍"]].map(([src, label]) => (
+          <button key={src} onClick={() => setSourceFilter(src)} data-testid={`demo-source-filter-${src || "all"}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-colors ${sourceFilter === src ? "bg-amber-500 text-white border-amber-500" : "bg-white text-stone-500 border-stone-200 hover:border-amber-400"}`}>
+            {label}
+          </button>
+        ))}
       </div>
 
       {items.length === 0 ? (
@@ -114,6 +129,9 @@ export default function DemoLeadsPanel() {
                   {(() => { const [pl, pc] = PRODUCT_BADGE[it.product] || PRODUCT_BADGE.pms; return (
                     <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${pc}`} data-testid={`demo-lead-product-${it.id}`}>{pl}</span>
                   ); })()}
+                  {it.source === "price-checker" && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border font-bold bg-amber-50 text-amber-700 border-amber-300" data-testid={`demo-lead-source-${it.id}`}>Price Checker 🔍</span>
+                  )}
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${STATUS_STYLE[it.status] || STATUS_STYLE.new}`}>{STATUS_TR[it.status] || it.status}</span>
                 </div>
                 <div className="text-xs text-stone-500 flex items-center gap-3 mt-1">

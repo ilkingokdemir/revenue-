@@ -14,6 +14,7 @@ const fadeUp = {
 export default function PriceCheckerSection({ onDemo }) {
   const [city, setCity] = useState("");
   const [rooms, setRooms] = useState("");
+  const [email, setEmail] = useState("");
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -25,10 +26,11 @@ export default function PriceCheckerSection({ onDemo }) {
       const r = await axios.post(`${API}/api/public/price-check`, {
         city: city.trim(),
         room_count: rooms ? parseInt(rooms, 10) : null,
+        email: email.trim() || null,
       });
       setResult(r.data);
     } catch (e) {
-      setError("Kontrol başarısız, tekrar deneyin");
+      setError(e?.response?.status === 429 ? "Çok fazla sorgu — bir saat sonra tekrar deneyin" : "Kontrol başarısız, tekrar deneyin");
     } finally { setBusy(false); }
   };
 
@@ -56,6 +58,10 @@ export default function PriceCheckerSection({ onDemo }) {
                 data-testid="price-checker-rooms"
                 className="w-20 px-3 py-3 rounded-xl bg-white/5 border border-white/15 text-sm text-white placeholder-stone-500 focus:outline-none focus:border-blue-400" />
             </div>
+            <input value={email} onChange={(e) => setEmail(e.target.value)}
+              placeholder="E-posta (opsiyonel — raporu gönderelim, demo daveti alın)"
+              data-testid="price-checker-email"
+              className="w-full px-4 py-3 rounded-xl bg-white/5 border border-white/15 text-sm text-white placeholder-stone-500 focus:outline-none focus:border-blue-400" />
             <button onClick={check} disabled={busy} data-testid="price-checker-submit"
               className="w-full py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-2 transition-opacity">
               <Search size={16} /> {busy ? "Kontrol ediliyor…" : "Pazarımı Kontrol Et"}
@@ -97,6 +103,11 @@ export default function PriceCheckerSection({ onDemo }) {
                 </button>
               </div>
               <div className="mt-3 text-[10px] text-stone-500">* Pazar verileri tahminidir; birebir analiz için demo talep edin.</div>
+              {result.lead_created && (
+                <div className="mt-2 text-xs text-emerald-300" data-testid="price-checker-lead-note">
+                  ✓ Bilgileriniz alındı — ekibimiz detaylı pazar raporunuzla birlikte sizinle iletişime geçecek.
+                </div>
+              )}
             </div>
           )}
         </motion.div>

@@ -52,6 +52,7 @@ def create_demo_requests_router(db, require_roles):
     async def list_demo_requests(
         status: str = "",
         product: str = "",
+        source: str = "",
         current_user: dict = Depends(require_roles("admin", "manager")),
     ):
         # legacy: eski "closed" kayıtları "lost" olarak taşı
@@ -61,14 +62,22 @@ def create_demo_requests_router(db, require_roles):
             q["status"] = status
         if product:
             q["product"] = product
+        if source == "price-checker":
+            q["source"] = "price-checker"
+        elif source == "landing":
+            q["source"] = {"$ne": "price-checker"}
         items = await db.demo_requests.find(q, {"_id": 0}).sort(
             "created_at", -1).to_list(500)
         counts = {s: await db.demo_requests.count_documents({"status": s})
                   for s in STATUSES}
         total = sum(counts.values())
         decided = counts["won"] + counts["lost"]
+        pc_leads = await db.demo_requests.count_documents({"source": "price-checker"})
+        pc_queries = await db.price_check_leads.count_documents({})
         return {"items": items,
                 "summary": {**counts, "total": total,
+                            "price_checker_leads": pc_leads,
+                            "price_checker_queries": pc_queries,
                             "win_rate": round(counts["won"] * 100 / decided, 1) if decided else None}}
 
     @router.patch("/demo-requests/{req_id}")

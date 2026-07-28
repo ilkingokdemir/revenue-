@@ -2535,3 +2535,11 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - YENİ: Haftalık Pulse digest e-postasına gül rengi "🏠 STR Pazar Zekâsı" kartı: "2026-08-02 — STR pazarı sayesinde fiyat %10 yükseltildi (CHF 95 → CHF 105)" satırları + baskı günleri; veri yoksa "fiyatlarınız pazarla uyumlu" fallback'i.
 - YENİ: GET /api/owner-pulse/{pid}/digest/preview (admin) — e-posta HTML önizlemesi.
 - TEST: Curl E2E — sentetik karar ile kart doğrulandı, send-now 17/17 (mock), fallback dalı doğrulandı, test verisi temizlendi.
+
+## 2026-07-28 — Iter 483: Price Checker → Demo CRM Entegrasyonu + Rate-Limit
+- YENİ: price_checker.py — e-posta verilen sorgular otomatik demo_requests'e düşüyor (source:'price-checker', product:'pulse', otomatik mesaj: şehir/oda/medyan/potansiyel/yıllık tahmin). Aynı e-posta için new/contacted lead varsa update (duplicate yok).
+- YENİ: IP başına saatte 10 sorgu rate-limit (X-Forwarded-For, price_check_leads.ip) → 429.
+- YENİ: demo_requests list endpoint'ine source filtresi (landing/price-checker) + summary'ye price_checker_leads/queries sayaçları.
+- UI: PriceCheckerSection'a opsiyonel e-posta alanı + "Bilgileriniz alındı" onay notu; DemoLeadsPanel'e "Price Checker: X sorgu → Y lead" istatistik çubuğu (demo-pc-stats), kaynak filtresi (demo-source-filter-*), amber "Price Checker 🔍" rozeti.
+- TEST: Curl E2E (lead oluşturma, duplicate update, 429 rate-limit 8→9. sorguda) + 2 UI screenshot (landing formu + CRM panel) doğrulandı. Test verileri temizlendi.
+- DERS: Webpack dev bazen düzenlemeden sonra eski bundle servis edebiliyor; UI'da yeni element görünmüyorsa önce `supervisorctl restart frontend`.

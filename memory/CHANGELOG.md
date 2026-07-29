@@ -2612,3 +2612,19 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI: enroll→run-now→gün0 gönderildi; started_at 3 gün geri alınınca run-now
   gün1+gün3 gönderdi, gün7 pending kaldı (zamanlama doğru). UI: quick-start sonrası kart
   AKTİF + admin e-postası + timeline göründü. Test mülkleri/kayıtları temizlendi.
+
+## Iter 485 (2026-07-29) — Menü Toparlama: Yeni IA + Basit/Pro Mod TAMAMLANDI
+- KULLANICI: "hersey cok karisik hersey heryerde duzenleyip toparla" → onay: hepsi (1+2+3).
+- menuSections.js TAMAMEN yeniden yazıldı: 9 karışık bölüm → 14 tutarlı bölüm
+  (Overview, Reservations, Direct Booking, Guests & Loyalty, Marketing & Messaging,
+  Operations, Revenue & rates, Channels & Distribution, Food & events, Finance,
+  Reports & Analytics, Portfolio & Owners, Apps & Integrations, Settings & Admin).
+  TÜM id/testId'ler korundu (routing + perm map + testler bozulmadı).
+- Mükerrer temizliği: marketplace 2x→1x, scheduled-reports 2x→1x.
+- Basit/Pro mod: core:true bayrağı (~31 çekirdek ekran). App.js: navMode state
+  (localStorage mhb_nav_mode, varsayılan simple), displayNavigation filtresi,
+  nav-mode-toggle segmented control, simple-mode-hint ("Pro moda geçin / ⌘K").
+  Basit modda akordiyon kapalı (hepsi açık), Pro modda eski akordiyon+hub davranışı.
+- i18n: tr.json + en.json yeni section_label anahtarları eklendi.
+- TEST: testing_agent iteration_485 — %100 pass, 0 bug. Not: dashboard yüklenirken
+  2 adet 401 konsol hatası (önceden var olan, bloklamıyor).

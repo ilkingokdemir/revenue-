@@ -2581,3 +2581,19 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - FIX: Owner test hesabı PIN'i bu DB'de yoktu → set-credentials ile 862347 sabitlendi + property_id 'default' bağlandı; owner login curl doğrulandı. test_credentials.md güncellendi.
 - Deployment agent: PASS — env/secrets/CORS/portlar/bağımlılıklar temiz, canlıya hazır.
 - Açık review notları (P2): App.js panel-router refactor; price-check rate-limit'i prod'da IP+parmak izi kombinasyonuna geçirilebilir.
+
+## Iter 483 (2026-07-29) — İlk Kullanıcı Deneyimi (FUX): Hızlı Başlangıç + Keşif Turu TAMAMLANDI
+- YENİ backend: POST /api/property-onboarding/quick-start/{property_id} (property_onboarding.py)
+  → tek çağrıda: 3 oda tipi (Standard Double/Deluxe King/Family Suite, base_price çarpanlı),
+  BAR + NR rate planları, para birimine göre VAT'lı vergi profili (TRY 20, GBP 20, EUR 10...),
+  15 demo rezervasyon (is_demo=True, tek tıkla silinebilir) ve onboarding'i complete işaretler.
+  Idempotent: mevcut oda/rate/vergi varsa atlar.
+- OnboardingWizard.js: üstte koyu "Hızlı Başlangıç — 30 saniyede kur" kartı (quick-start-btn),
+  "veya adım adım manuel kurulum" ayracı. FinishedScreen'e "Sıradaki 3 adım" keşif turu kartı
+  eklendi (Market Robot / Revenue Brain / Channel Manager → onNavigate ile ilgili view'a gider).
+- App.js: OnboardingWizard'a onNavigate={setActiveView} geçirildi.
+- SetupWizardPanel.js: kurulum ilerleme çubuğu (%) + "Önerilen sonraki adım: X bağlantısını kurun"
+  akıllı yönlendirme butonu (setup-next-step-btn).
+- E2E DOĞRULANDI (curl + playwright): boş mülkte banner → wizard → Hızlı Kurulum tıkla →
+  3 oda + 2 rate + 1 vergi + 15 rezervasyon oluştu → FinishedScreen + tur kartları görüldü.
+  Test mülkleri temizlendi, default onboarding state restore edildi.

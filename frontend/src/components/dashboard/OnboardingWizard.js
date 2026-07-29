@@ -26,11 +26,12 @@ const TINT_CLASSES = {
   violet: { bg: "from-violet-500 to-purple-600", ring: "ring-violet-400/50", soft: "bg-violet-50 text-violet-700 border-violet-200" },
 };
 
-export const OnboardingWizard = ({ propertyId = "default", onClose }) => {
+export const OnboardingWizard = ({ propertyId = "default", onClose, onNavigate }) => {
   const [status, setStatus] = useState(null);
   const [idx, setIdx] = useState(0);
   const [saving, setSaving] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [quickLoading, setQuickLoading] = useState(false);
 
   const [property, setProperty] = useState({ name: "", city: "", country: "United Kingdom", currency: "GBP" });
   const [rooms, setRooms] = useState([{ name: "Standard Double", max_guests: 2, bed_type: "double", base_price: 120, total_rooms: 10 }]);
@@ -205,8 +206,26 @@ export const OnboardingWizard = ({ propertyId = "default", onClose }) => {
     loadStatus();
   };
 
+  const runQuickStart = async () => {
+    setQuickLoading(true);
+    try {
+      const { data } = await axios.post(`${API}/property-onboarding/quick-start/${propertyId}`, {
+        property_name: property.name || undefined,
+        city: property.city || undefined,
+        currency: property.currency || undefined,
+        base_price: parseFloat(rooms[0]?.base_price) || 120,
+        seed_bookings: 15,
+      });
+      const c = data.created || {};
+      toast.success(`Hızlı kurulum tamam! ${c.rooms} oda tipi · ${c.rate_products} rate plan · ${c.bookings} demo rezervasyon oluşturuldu.`);
+      setFinished(true);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Hızlı kurulum başarısız");
+    } finally { setQuickLoading(false); }
+  };
+
   if (finished) {
-    return <FinishedScreen propertyId={propertyId} onClose={onClose} />;
+    return <FinishedScreen propertyId={propertyId} onClose={onClose} onNavigate={onNavigate} />;
   }
 
   return (
@@ -219,6 +238,31 @@ export const OnboardingWizard = ({ propertyId = "default", onClose }) => {
         {onClose && (
           <button onClick={onClose} className="text-xs text-stone-500 hover:text-stone-800">Skip for now →</button>
         )}
+      </div>
+
+      {/* Quick Start — one click setup */}
+      <div className="bg-stone-900 rounded-2xl p-5 md:p-6 flex flex-col md:flex-row md:items-center gap-4" data-testid="quick-start-card">
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg flex-shrink-0">
+          <Zap className="w-6 h-6 text-white" />
+        </div>
+        <div className="flex-1">
+          <h2 className="text-lg font-black text-white">Hızlı Başlangıç — 30 saniyede kur</h2>
+          <p className="text-xs text-stone-400 mt-1">
+            Tek tıkla <b className="text-stone-200">3 oda tipi</b>, <b className="text-stone-200">BAR + Non-Refundable rate planları</b>,
+            <b className="text-stone-200"> vergi profili</b> ve <b className="text-stone-200">15 demo rezervasyon</b> oluşturulur.
+            Panele boş değil, canlı verilerle girersiniz. Demo verileri tek tıkla silinebilir.
+          </p>
+        </div>
+        <button onClick={runQuickStart} disabled={quickLoading}
+          data-testid="quick-start-btn"
+          className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-white text-sm font-bold shadow-lg disabled:opacity-50 transition-transform hover:-translate-y-0.5 flex-shrink-0">
+          {quickLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+          {quickLoading ? "Kuruluyor…" : "Hızlı Kurulum Başlat"}
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider text-stone-400">
+        <div className="flex-1 h-px bg-stone-200" />veya adım adım manuel kurulum<div className="flex-1 h-px bg-stone-200" />
       </div>
 
       {/* Progress rail */}
@@ -430,7 +474,7 @@ export const OnboardingWizard = ({ propertyId = "default", onClose }) => {
 };
 
 // Helpers
-const FinishedScreen = ({ propertyId, onClose }) => {
+const FinishedScreen = ({ propertyId, onClose, onNavigate }) => {
   const [demoCount, setDemoCount] = useState(0);
   const [seeding, setSeeding] = useState(false);
   const [clearing, setClearing] = useState(false);
@@ -897,6 +941,33 @@ const FinishedScreen = ({ propertyId, onClose }) => {
             )}
             <p className="text-[10px] text-stone-400 mt-2">İsteğe bağlı · boş bırakabilirsiniz, daha sonra Market Robot → Our Booking.com Live kartından da ekleyebilirsiniz.</p>
           </div>
+        </div>
+      </div>
+
+      {/* Explore tour — the platform's core value in 3 clicks */}
+      <div className="mt-5 bg-white border border-stone-200 rounded-3xl p-6 md:p-7" data-testid="explore-tour-card">
+        <h2 className="text-xl font-black text-stone-900 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-violet-500" /> Sıradaki 3 adım — platformun gücünü keşfedin
+        </h2>
+        <p className="text-sm text-stone-500 mt-1">Kurulum bitti. Şimdi ReveniQ'nun asıl değerini görün:</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+          {[
+            { view: "revenue", icon: Radar, title: "Market Robot", desc: "Şehrinizdeki rakip fiyatlarını canlı tarayın, fiyat boşluklarını görün.", tint: "from-fuchsia-500 to-pink-600" },
+            { view: "revenue-brain", icon: Zap, title: "Revenue Brain", desc: "Geçmiş kararlarından öğrenen, fiyatları otomatik ayarlayan yapay zekâ.", tint: "from-violet-500 to-purple-600" },
+            { view: "chmgr-hub", icon: RefreshCw, title: "Channel Manager", desc: "Booking.com, Expedia ve Airbnb'ye tek yerden fiyat ve müsaitlik gönderin.", tint: "from-sky-500 to-blue-600" },
+          ].map(t => (
+            <button key={t.view} onClick={() => onNavigate ? onNavigate(t.view) : onClose?.()}
+              data-testid={`tour-${t.view}`}
+              className="p-4 rounded-2xl border border-stone-200 bg-stone-50 hover:bg-white hover:border-stone-300 hover:shadow-md text-left transition-all group">
+              <div className={`inline-flex w-9 h-9 rounded-xl bg-gradient-to-br ${t.tint} items-center justify-center text-white mb-2 group-hover:scale-110 transition-transform`}>
+                <t.icon className="w-4.5 h-4.5" />
+              </div>
+              <div className="text-sm font-black text-stone-900 flex items-center gap-1">
+                {t.title} <ArrowRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <p className="text-[11px] text-stone-500 mt-1">{t.desc}</p>
+            </button>
+          ))}
         </div>
       </div>
 

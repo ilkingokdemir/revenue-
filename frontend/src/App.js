@@ -2286,6 +2286,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             <OnboardingWizard
               propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : "default"}
               onClose={() => setActiveView("calendar")}
+              onNavigate={(view) => setActiveView(view)}
             />
           </div>
         )}

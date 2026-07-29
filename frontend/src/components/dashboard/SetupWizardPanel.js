@@ -74,6 +74,7 @@ export function SetupWizardPanel({ properties, activePropertyId }) {
   };
 
   const configuredCount = platforms.filter(p => p.configured).length;
+  const nextPlatform = platforms.find(p => !p.configured);
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-5" data-testid="setup-wizard-panel">
@@ -87,6 +88,31 @@ export function SetupWizardPanel({ properties, activePropertyId }) {
         </div>
         <Badge className="bg-indigo-100 text-indigo-700 text-xs">{configuredCount}/{platforms.length} connected</Badge>
       </div>
+
+      {!loading && platforms.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4" data-testid="setup-progress-card">
+          <div className="flex items-center justify-between text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+            <span>Kurulum ilerlemesi</span>
+            <span className="text-indigo-600">%{Math.round((configuredCount / platforms.length) * 100)}</span>
+          </div>
+          <div className="mt-2 h-2 w-full bg-stone-100 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-500"
+                 style={{ width: `${(configuredCount / platforms.length) * 100}%` }} />
+          </div>
+          {nextPlatform ? (
+            <button onClick={() => loadGuide(nextPlatform.id)}
+              data-testid="setup-next-step-btn"
+              className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+              <CaretRight size={12} weight="bold" />
+              Önerilen sonraki adım: <b>{nextPlatform.name}</b> bağlantısını kurun
+            </button>
+          ) : (
+            <p className="mt-3 text-xs font-semibold text-emerald-600 flex items-center gap-1.5">
+              <CheckCircle size={14} weight="fill" /> Tüm platformlar bağlı — harikasınız!
+            </p>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16"><ArrowsClockwise size={24} className="animate-spin text-stone-300" /></div>

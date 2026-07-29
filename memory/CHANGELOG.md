@@ -2575,3 +2575,9 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Mevcut ReveniQ cross-sell bölümüne (LandingPage.js) mor "NEW · Self-learning Revenue Brain" vurgu kutusu + "/reveniq#brain" linki eklendi (crosssell-brain-highlight / crosssell-brain-link).
 - TEST: Screenshot — kutu render, link /reveniq#brain'e gidip bölüme scroll ediyor.
 - NOT: MyHotelBox landing İngilizce olduğundan kutu metni bölüm diliyle uyumlu İngilizce yazıldı.
+
+## 2026-07-28 — Iter 489 (test raporu 482): Deployment Öncesi SEAL Regresyonu + Hazırlık ✅
+- Tam SEAL taraması: backend 13/14 (1 skip), frontend %100 — sıfır fonksiyonel hata. Tüm 478-481 özellikleri yeşil.
+- FIX: Owner test hesabı PIN'i bu DB'de yoktu → set-credentials ile 862347 sabitlendi + property_id 'default' bağlandı; owner login curl doğrulandı. test_credentials.md güncellendi.
+- Deployment agent: PASS — env/secrets/CORS/portlar/bağımlılıklar temiz, canlıya hazır.
+- Açık review notları (P2): App.js panel-router refactor; price-check rate-limit'i prod'da IP+parmak izi kombinasyonuna geçirilebilir.

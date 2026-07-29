@@ -144,12 +144,19 @@ async def process_due_drips(db) -> dict:
         for tpl in DRIP_EMAILS:
             if tpl["key"] in sent_keys or tpl["day"] > elapsed_days:
                 continue
+            # Atomic claim: only proceed if this key hasn't been recorded yet (guards
+            # against run-now racing the background loop).
+            claim = await db.onboarding_drip.update_one(
+                {"id": enr["id"], "sent.key": {"$ne": tpl["key"]}},
+                {"$push": {"sent": {"key": tpl["key"], "day": tpl["day"],
+                                    "sent_at": now.isoformat(), "status": "sending"}}})
+            if claim.modified_count == 0:
+                continue
             html = _render(tpl, enr.get("name", ""), pname)
             status = await _send_email(enr["email"], tpl["subject"], html)
             await db.onboarding_drip.update_one(
-                {"id": enr["id"]},
-                {"$push": {"sent": {"key": tpl["key"], "day": tpl["day"],
-                                    "sent_at": now.isoformat(), "status": status}}})
+                {"id": enr["id"], "sent.key": tpl["key"]},
+                {"$set": {"sent.$.status": status}})
             sent += 1
     return {"processed": processed, "sent": sent}
 

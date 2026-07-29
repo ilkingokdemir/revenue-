@@ -2628,3 +2628,16 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - i18n: tr.json + en.json yeni section_label anahtarları eklendi.
 - TEST: testing_agent iteration_485 — %100 pass, 0 bug. Not: dashboard yüklenirken
   2 adet 401 konsol hatası (önceden var olan, bloklamıyor).
+
+## Iter 486 (2026-07-29) — Derinlemesine Full-Stack Regresyon TAMAMLANDI
+- testing_agent tam SEAL: Backend pytest 26/26 PASS (auth+brute force, quick-start idempotens,
+  drip serisi, PMS core, revenue, finans, marketing, channel, landing'ler). Frontend %100
+  (login, dashboard, Basit/Pro toggle, ⌘K, landing'ler) — 0 kritik bug, konsol temiz.
+- Worker sağlığı: str_scan (8/8 live), revenue_brain, reports, otb_snapshot, onboarding_drip
+  döngüleri hatasız.
+- FIX (test bulgusu): onboarding_drip.process_due_drips'e atomik claim eklendi
+  (sent.key $ne filtresi + status 'sending'→gerçek statü) — run-now ile arka plan loop
+  çakışmasında çifte e-posta imkânsız. Paralel çift run-now testiyle doğrulandı (1 gönderim).
+- Minor notlar (düzeltilmedi, kritik değil): revenue-brain/goal ve channel-manager/health
+  GET 405 (POST-only, UI etkilenmiyor); property DELETE cascade değil; price-check rate
+  limit IP-shared (iter 482'den beri bilinen).

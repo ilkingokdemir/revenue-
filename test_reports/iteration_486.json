@@ -1,0 +1,38 @@
+{
+  "summary": "Iteration 486 — Derinlemesine full-stack regresyon. Backend pytest: 26/26 PASSED (auth, onboarding quick-start + drip, PMS core, revenue, finance, marketing, channel, landings). Frontend Playwright: MyHotelBox ve ReveniQ landing sayfaları render oldu, admin login → dashboard 3-KPI hero + oda/gelir/ADR/RevPAR kartları + tüm sidebar bölümleri (Overview, Reservations, Direct Booking, Guests & Loyalty, Marketing & Messaging) doğru; Simple/Pro toggle görünür (BASIT vurgulu), ⌘K komut paleti açılıyor ve Overview altındaki ekranları listeliyor. Kritik console hatası YOK.\n\nOnboarding derinlemesine doğrulaması (YENİ iter 483 özelliği):\n  ✓ POST /api/property-onboarding/quick-start/{pid} — geçici property üzerinde 3 oda + 2 rate plan + 1 vergi profili + 15 demo booking yarattı (is_demo:true, source:'quick_start')\n  ✓ İdempotency — ikinci çağrı oda/rate/vergi için 0 döndürdü (yalnız bookings/completed_at güncellendi)\n  ✓ property_onboarding.completed_at ve steps_completed doldu\n  ✓ Drip serisine otomatik enroll (welcome/market_robot/booking_url/revenue_brain 4 e-posta timeline)\n  ✓ POST /onboarding-drip/run-now — gün-0 'welcome' mock statüsüyle işlendi, timeline.welcome.sent_at doldu\n  ✓ GET /onboarding-drip/preview/welcome — 'MyHotelBox' ibaresi olan tam HTML döndü\n  ✓ Bilinmeyen key için 404\n\nWorker sağlığı (backend loglarından son 24s): str_scan_loop (camden/london/whitechapel = 8/8 live), revenue_brain_loop (tüm mülkler için hatasız), Scheduled-reports tick + OTB snapshot 88 satır arşivlendi, onboarding_drip_loop mevcut (30dk interval). Hiçbir traceback yok.\n\nSEED VERİ TEMİZLİĞİ: Test fixture'ının bıraktığı 3 property_onboarding + 3 onboarding_drip + 9 room_types + 6 rate_products + 3 tax_profiles + 45 bookings kaydı ('TEST_ITER486_*' prefix'li) motor client ile temizlendi. 'default' property'ye ve production seed'lerine dokunulmadı.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/revenue-brain/{pid}/goal", "issue": "Yalnız POST — GET → 405. OpenAPI'de GET yok. Belge/handler tutarsızlığı; UI çağırmıyorsa sorun değil."},
+      {"endpoint": "/api/revenue/channel-manager/{pid}/health", "issue": "GET → 405 (POST-only). Bir 'health' endpoint'i genelde GET olur; belge dışında çağrı yoksa opsiyonel."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration486_deep_regression.py",
+    "/app/test_reports/pytest/iter486.xml"
+  ],
+  "action_items": [
+    "(Opsiyonel) revenue-brain/goal ve channel-manager/health endpoint'lerine GET metodu eklenebilir veya /docs kullanım kılavuzu güncellenebilir — kritik değil.",
+    "(Test fixture iyileştirmesi) DELETE /api/properties/{pid} property_onboarding/onboarding_drip/room_types/rate_products/tax_profiles/bookings collections'ını cascade silmiyor. Testler dev DB'ye çöp bırakıyor; cascade delete veya /api/property-onboarding/reset entegrasyonu eklenebilir."
+  ],
+  "critical_code_review_comments": [
+    "quick-start içindeki `db.rate_products.insert_many([dict(d) for d in rate_docs])` gereksiz — rate_docs zaten dict listesi (rooms/tax_profiles/bookings için de aynı). Sadece kozmetik.",
+    "onboarding_drip.process_due_drips 'sent' listesini kilitle korumadığından, run-now ile aynı anda arka plan loop çakışırsa aynı e-posta 2 kez gönderilebilir. Çok düşük olasılık; unique index (property_id, key) veya findOneAndUpdate ile push atomik hale getirilebilir.",
+    "Public price-check rate limit hâlâ IP-shared (iter 482 not) — çözülmemiş; production'da CDN arkasında sorun olabilir."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration486_deep_regression.py (yeni)"
+  ],
+  "success_rate": {"backend": "100% (26/26)", "frontend": "100% (login, landings, dashboard render, nav toggle, cmdk — no console errors)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! — çalışıyor. Owner test hesabı iter 482'de skip edilmişti; bu iterasyonda owner-portal derinlemesine test EDİLMEDİ (skip protokolü korundu).",
+  "seed_data_creation": "Fixture geçici bir TEST_ITER486_* property + bağlı kayıtları yarattı; test sonunda motor client ile hepsi silindi. Production ('default', 'aldgate-flats' vb) mülklere DOKUNULMADI.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Onboarding quick-start akışı ve drip serisi backend'de sağlam. property DELETE cascade değil — test fixture'ında ilgili koleksiyonları manuel temizleyin ('TEST_ITER486_*' pattern). Owner portal seed'i hâlâ eksik (iter 482'de raporlandı). Public price-check rate limit'i shared IP; testte 1-2 sorgu ile sınırlı kalın. STR scan endpoint'i sadece status için kullanıldı — tam scan tetiklenmedi.",
+  "rca of the issue": "Bu iterasyonda işlevsel bug bulunmadı. iter 483 (onboarding quick-start + drip) ve iter 485 (nav yeniden düzenleme) tam yeşil kaldı. Sadece 2 minor OpenAPI metod uyuşmazlığı (goal/health GET olmayışı) not edildi — kullanıcı akışını etkilemiyor."
+}

@@ -416,6 +416,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
   const [activeView, setActiveView] = useState("dashboard");
   const [collapsedSections, setCollapsedSections] = useState({});
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Simple/Pro navigation mode — Simple shows ~30 core screens, Pro shows everything.
+  const [navMode, setNavMode] = useState(() => {
+    try { return localStorage.getItem("mhb_nav_mode") || "simple"; } catch { return "simple"; }
+  });
+  const setNavModePersist = useCallback((m) => {
+    setNavMode(m);
+    try { localStorage.setItem("mhb_nav_mode", m); } catch {}
+  }, []);
   const [isBatchResponding, setIsBatchResponding] = useState(false);
   const [batchResult, setBatchResult] = useState(null);
 
@@ -528,6 +536,16 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     items: section.items.filter(it => it.divider || canSeeSidebar(it.testId)),
   })).filter(section => section.items.length > 0);
 
+  // Simple mode: only core items, no dividers, drop empty sections.
+  // Falls back to Pro list if the active view is not a core screen (so nothing disappears mid-use).
+  const displayNavigation = useMemo(() => {
+    if (navMode !== "simple") return gatedNavigation;
+    return gatedNavigation.map(section => ({
+      ...section,
+      items: section.items.filter(it => !it.divider && (it.core || it.id === activeView)),
+    })).filter(section => section.items.length > 0);
+  }, [navMode, gatedNavigation, activeView]);
+
   // Flatten gated navigation into a Command Palette catalogue
   const commandItems = useMemo(() => {
     const out = [];
@@ -606,6 +624,21 @@ const Dashboard = ({ user, onLogout, permissions }) => {
               onAskAi={handleAskAi}
             />
           </div>
+          {/* Basit / Pro navigasyon modu */}
+          <div className="mt-3 flex rounded-lg bg-stone-800 p-0.5" data-testid="nav-mode-toggle">
+            <button onClick={() => setNavModePersist("simple")}
+              data-testid="nav-mode-simple"
+              className={`flex-1 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                navMode === "simple" ? "bg-emerald-600 text-white" : "text-stone-500 hover:text-stone-300"}`}>
+              Basit
+            </button>
+            <button onClick={() => setNavModePersist("pro")}
+              data-testid="nav-mode-pro"
+              className={`flex-1 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                navMode === "pro" ? "bg-indigo-600 text-white" : "text-stone-500 hover:text-stone-300"}`}>
+              Pro
+            </button>
+          </div>
           {/* Branch Selector — always visible */}
           <div className="mt-3" data-testid="branch-selector-container">
             <label className="text-[9px] uppercase tracking-[0.15em] font-semibold text-stone-600 mb-1 block px-0.5">Branch</label>
@@ -635,20 +668,23 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 custom-scrollbar">
-          {gatedNavigation.map((section, sIdx) => {
+          {displayNavigation.map((section, sIdx) => {
             const sectionKey = section.label || `section-${sIdx}`;
             const sectionHubId = `hub-${sectionKey.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
             // Default: ALL sections collapsed except Overview + the section containing the active view.
             // User explicit toggle is persisted in localStorage as `nav-open-<key>`.
+            // Simple mode: everything open (few items), no accordion needed.
             const containsActive = section.items.some((it) => it.id === activeView) || activeView === sectionHubId;
             const storedOpen = (typeof localStorage !== "undefined"
               ? localStorage.getItem(`nav-open-${sectionKey}`)
               : null);
             const isOverview = sectionKey === "Overview";
-            const reallyOpen = containsActive
+            const reallyOpen = navMode === "simple"
+              || containsActive
               || (storedOpen === "1")
               || (storedOpen !== "0" && isOverview);
             const toggleSection = () => {
+              if (navMode === "simple") return;
               const wasOpen = reallyOpen;
               if (wasOpen) {
                 // Collapse only — never auto-navigate when explicitly closing
@@ -721,6 +757,13 @@ const Dashboard = ({ user, onLogout, permissions }) => {
               </div>
             );
           })}
+          {navMode === "simple" && (
+            <button onClick={() => setNavModePersist("pro")}
+              data-testid="simple-mode-hint"
+              className="w-full mt-2 px-4 py-2.5 text-left text-[11px] text-stone-500 hover:text-stone-300 transition-colors">
+              Aradığınız ekran yok mu? <span className="text-indigo-400 font-bold">Pro moda geçin</span> veya ⌘K ile arayın.
+            </button>
+          )}
         </nav>
 
         {/* Language & User & Logout */}

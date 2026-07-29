@@ -1,0 +1,36 @@
+{
+  "summary": "Frontend-only test of the sidebar reorganization (iter 485): Simple/Pro nav mode toggle, 14-section IA, accordion behaviour, duplicate cleanup, ⌘K palette. Core functionality VERIFIED WORKING. Admin login → nav-mode-toggle visible; Simple mode shows ~29 core screens (spec ~30) + simple-mode-hint; Pro mode shows all 14 new sections; mhb_nav_mode persists in localStorage across reload; ⌘K palette in Simple mode successfully finds Parity monitor and other Pro-only items. Duplicate marketplace-btn and scheduled-reports-btn appear exactly once in code (Reports&Analytics / Apps&Integrations respectively).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_485.json"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Simple-mode visible nav item count is 29 -btn testIds (excluding utility buttons). Two core items use non -btn testIds: 'sidebar-calendar' (Calendar) and 'nav-reviews' (Reviews). Total core screens = 31, close to the ~30 target stated in spec.",
+    "menuSections.js correctly has each marketplace-btn / scheduled-reports-btn defined exactly once — duplicate cleanup confirmed.",
+    "Two 401 console errors were seen on dashboard load — likely a resource fetched without valid token. Non-blocking but worth checking (probably notifications/branches for an endpoint that requires additional scope)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (works)",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Simple mode is default when localStorage.mhb_nav_mode is empty. Pro mode uses accordion sections that are collapsed by default; child buttons are NOT rendered in DOM until section is expanded (this is expected). Section headers in DOM render label uppercase via CSS but underlying text is title case ('Overview','Reservations',...). Command palette (⌘K) always searches ALL items regardless of nav mode.",
+  "verified_checklist": {
+    "nav_mode_toggle_visible": true,
+    "nav_mode_simple_and_pro_click_work": true,
+    "localStorage_mhb_nav_mode_persists_after_reload": true,
+    "simple_mode_core_only_visible": true,
+    "simple_mode_hint_present": true,
+    "pro_mode_all_14_sections_present": true,
+    "marketplace_btn_deduplicated": true,
+    "scheduled_reports_btn_deduplicated": true,
+    "cmdk_palette_finds_parity_in_simple_mode": true,
+    "regression_dashboard_loads": true,
+    "no_critical_console_errors": true
+  }
+}

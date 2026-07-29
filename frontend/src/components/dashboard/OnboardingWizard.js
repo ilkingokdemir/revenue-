@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import {
   Building2, BedDouble, Tags, Receipt, CheckCircle2, Circle, Plus, Trash2,
   Sparkles, ArrowRight, ArrowLeft, PartyPopper, Loader2, MapPin, Banknote,
-  Radar, Zap, RefreshCw,
+  Radar, Zap, RefreshCw, Mail, BellOff,
 } from "lucide-react";
 import { getCurrencyInfo } from "../../lib/currency";
 
@@ -971,11 +971,86 @@ const FinishedScreen = ({ propertyId, onClose, onNavigate }) => {
         </div>
       </div>
 
+      {/* First 7 days email series */}
+      <DripCard propertyId={propertyId} />
+
       <div className="mt-6 flex justify-center">
         <button onClick={onClose} data-testid="onboarding-go-dashboard"
           className="px-8 py-3.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold text-sm inline-flex items-center gap-2">
           Go to Dashboard <ArrowRight className="w-4 h-4" />
         </button>
+      </div>
+    </div>
+  );
+};
+
+const DripCard = ({ propertyId }) => {
+  const [drip, setDrip] = useState(null);
+
+  const load = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/onboarding-drip/status/${propertyId}`);
+      setDrip(data);
+    } catch { /* silent */ }
+  }, [propertyId]);
+  useEffect(() => { load(); }, [load]);
+
+  const enrollOrToggle = async () => {
+    try {
+      if (!drip?.enrolled) {
+        await axios.post(`${API}/onboarding-drip/enroll/${propertyId}`, {});
+        toast.success("İlk 7 Gün e-posta serisine kaydoldunuz");
+      } else {
+        const { data } = await axios.post(`${API}/onboarding-drip/toggle/${propertyId}`);
+        toast.success(data.enabled ? "Seri tekrar açıldı" : "Seri duraklatıldı");
+      }
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "İşlem başarısız"); }
+  };
+
+  if (!drip) return null;
+  const active = drip.enrolled && drip.enabled;
+  return (
+    <div className="mt-5 bg-white border border-stone-200 rounded-3xl p-6 md:p-7" data-testid="drip-card">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-lg">
+          <Mail className="w-6 h-6" />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-black text-stone-900">İlk 7 Gün E-posta Serisi</h2>
+            {active && (
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">Aktif</span>
+            )}
+          </div>
+          <p className="text-sm text-stone-500 mt-1">
+            {active
+              ? <>Aktivasyon rehberi <b className="text-stone-900">{drip.email}</b> adresine gidiyor — hoş geldin, Market Robot (1. gün), Booking.com bağlantısı (3. gün) ve Revenue Brain raporu (7. gün).</>
+              : "Platformun çekirdek değerine adım adım yönlendiren 4 kısa e-posta: hoş geldin, Market Robot, Booking.com bağlantısı ve Revenue Brain raporu."}
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+            {(drip.timeline || []).map(t => (
+              <div key={t.key} data-testid={`drip-step-${t.key}`}
+                className={`p-2.5 rounded-xl border text-center ${t.sent_at ? "bg-emerald-50 border-emerald-200" : "bg-stone-50 border-stone-200"}`}>
+                <div className="text-[9px] uppercase font-bold text-stone-400">Gün {t.day}</div>
+                <div className="text-[11px] font-bold text-stone-800 truncate">
+                  {{ welcome: "Hoş geldin", market_robot: "Market Robot", booking_url: "Booking.com bağla", revenue_brain: "Revenue Brain" }[t.key] || t.key}
+                </div>
+                {t.sent_at
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mx-auto mt-1" />
+                  : <Circle className="w-3.5 h-3.5 text-stone-300 mx-auto mt-1" />}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4">
+            <button onClick={enrollOrToggle} data-testid="drip-toggle-btn"
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold shadow transition-transform hover:-translate-y-0.5 ${
+                active ? "bg-white border border-stone-300 text-stone-600 hover:bg-stone-50"
+                       : "bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white"}`}>
+              {active ? <><BellOff className="w-3.5 h-3.5" /> Seriyi Duraklat</> : <><Mail className="w-3.5 h-3.5" /> {drip.enrolled ? "Seriyi Aç" : "Seriye Kaydol"}</>}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

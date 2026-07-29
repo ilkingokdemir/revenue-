@@ -135,6 +135,21 @@ async def revenue_brain_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def onboarding_drip_loop(db, interval_seconds: int = 1800):
+    """İlk 7 Gün aktivasyon e-posta serisi — 30 dk'da bir süresi gelenleri gönderir."""
+    import logging
+    logger = logging.getLogger(__name__)
+    while True:
+        try:
+            from routes.platform_ext.onboarding_drip import process_due_drips
+            res = await process_due_drips(db)
+            if res.get("sent"):
+                logger.info(f"onboarding_drip_loop: {res}")
+        except Exception as e:
+            logger.warning(f"onboarding_drip_loop error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def reports_loop(db, interval_seconds: int = 300):
     while True:
         try:

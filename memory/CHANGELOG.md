@@ -2597,3 +2597,18 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI (curl + playwright): boş mülkte banner → wizard → Hızlı Kurulum tıkla →
   3 oda + 2 rate + 1 vergi + 15 rezervasyon oluştu → FinishedScreen + tur kartları görüldü.
   Test mülkleri temizlendi, default onboarding state restore edildi.
+
+## Iter 484 (2026-07-29) — "İlk 7 Gün" Onboarding Drip E-posta Serisi TAMAMLANDI
+- YENİ backend: routes/platform_ext/onboarding_drip.py — 4 Türkçe HTML e-posta şablonu:
+  Gün 0 hoş geldin, Gün 1 Market Robot, Gün 3 Booking.com URL bağla, Gün 7 Revenue Brain raporu.
+- Collection onboarding_drip: {property_id, email, name, started_at, enabled, sent[]}.
+  enroll_property() idempotent; quick-start ve /complete otomatik kaydeder (current_user email).
+- Endpoints: GET /onboarding-drip/status/{pid}, POST /enroll/{pid}, POST /toggle/{pid},
+  POST /run-now (test), GET /preview/{key}. E-posta gönderimi owner_pulse._send_email üzerinden
+  (Resend — key mock ise [MOCK EMAIL] loglar).
+- workers.py: onboarding_drip_loop (30 dk) + server.py startup'ta create_task.
+- OnboardingWizard.js FinishedScreen: DripCard — Aktif rozeti, 4 adımlı zaman çizelgesi
+  (gönderilen yeşil tik), Seriye Kaydol / Duraklat butonu (drip-toggle-btn).
+- E2E DOĞRULANDI: enroll→run-now→gün0 gönderildi; started_at 3 gün geri alınınca run-now
+  gün1+gün3 gönderdi, gün7 pending kaldı (zamanlama doğru). UI: quick-start sonrası kart
+  AKTİF + admin e-postası + timeline göründü. Test mülkleri/kayıtları temizlendi.

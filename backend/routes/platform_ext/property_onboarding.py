@@ -132,6 +132,11 @@ def create_onboarding_router(db):
             },
             upsert=True,
         )
+        try:
+            from routes.platform_ext.onboarding_drip import enroll_property
+            await enroll_property(db, property_id, current_user.get("email", ""), current_user.get("name", ""))
+        except Exception:
+            pass
         return {"ok": True, "completed_at": now}
 
     @router.post("/quick-start/{property_id}")
@@ -251,6 +256,11 @@ def create_onboarding_router(db):
                       "quick_start": True}},
             upsert=True,
         )
+        try:
+            from routes.platform_ext.onboarding_drip import enroll_property
+            await enroll_property(db, property_id, current_user.get("email", ""), current_user.get("name", ""))
+        except Exception:
+            pass
         return {"ok": True, "property_id": property_id, "currency": currency, "created": created}
 
     @router.post("/reset/{property_id}")

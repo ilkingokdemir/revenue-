@@ -37,6 +37,7 @@ import TodayHub from "./components/dashboard/TodayHub";
 import GlobalReportIssueFAB from "./components/dashboard/GlobalReportIssueFAB";
 import ActionFeedPanel from "./components/dashboard/ActionFeedPanel";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
+import { DepartmentShortcutsPanel } from "./components/dashboard/DepartmentShortcutsPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { LoginPage } from "./components/dashboard/LoginPage";
 import LandingPage from "./LandingPage";
@@ -436,6 +437,16 @@ const Dashboard = ({ user, onLogout, permissions }) => {
       return next;
     });
   }, []);
+  // Department shortcuts — admin-curated per-department task list shown in the sidebar
+  const [deptShortcuts, setDeptShortcuts] = useState([]);
+  const fetchDeptShortcuts = useCallback(async () => {
+    if (!user?.department) return;
+    try {
+      const { data } = await axios.get(`${API}/department-shortcuts/${user.department}`);
+      setDeptShortcuts(data.items || []);
+    } catch { /* silent */ }
+  }, [user?.department]);
+  useEffect(() => { fetchDeptShortcuts(); }, [fetchDeptShortcuts]);
   const [isBatchResponding, setIsBatchResponding] = useState(false);
   const [batchResult, setBatchResult] = useState(null);
 
@@ -585,6 +596,14 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     () => favorites.map((id) => commandItems.find((i) => i.id === id)).filter(Boolean),
     [favorites, commandItems]
   );
+  // Department shortcut items — skip ones already pinned personally
+  const deptItems = useMemo(
+    () => deptShortcuts
+      .filter((id) => !favorites.includes(id))
+      .map((id) => commandItems.find((i) => i.id === id))
+      .filter(Boolean),
+    [deptShortcuts, favorites, commandItems]
+  );
 
   // Resolve recent IDs back into rich items
   const recents = useMemo(
@@ -710,6 +729,28 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                     className="opacity-0 group-hover:opacity-100 text-amber-400 hover:text-amber-300 transition-opacity">
                     <Star size={13} weight="fill" />
                   </span>
+                </button>
+              ))}
+              <div className="mx-4 my-1 border-t border-stone-800/60" />
+            </div>
+          )}
+          {/* Departman kısayolları — admin tarafından yönetilir */}
+          {deptItems.length > 0 && (
+            <div className="mb-1" data-testid="dept-shortcuts-sidebar">
+              <div className="w-full flex items-center gap-1.5 px-4 py-2">
+                <Users size={10} weight="fill" className="text-sky-400" />
+                <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-sky-400/90">Departman</span>
+              </div>
+              {deptItems.map((item) => (
+                <button key={`dept-${item.id}`} onClick={() => navigate(item.id)}
+                  data-testid={`dept-sc-${item.id}`}
+                  className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
+                    activeView === item.id
+                      ? "bg-stone-800 text-white font-medium border-l-2 border-sky-400"
+                      : "text-stone-400 hover:text-stone-200 hover:bg-stone-800/50 border-l-2 border-transparent"
+                  }`}>
+                  <item.icon size={16} weight={activeView === item.id ? "fill" : "regular"} />
+                  <span className="flex-1 truncate">{item.name}</span>
                 </button>
               ))}
               <div className="mx-4 my-1 border-t border-stone-800/60" />
@@ -1562,6 +1603,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Setup Wizard */}
         {activeView === "setup-wizard" && (
           <SetupWizardPanel properties={properties} activePropertyId={activePropertyId} />
+        )}
+
+        {/* Department Shortcuts admin */}
+        {activeView === "dept-shortcuts" && (
+          <div className="p-6"><DepartmentShortcutsPanel catalog={commandItems} onChanged={fetchDeptShortcuts} /></div>
         )}
 
         {/* Stock Management */}

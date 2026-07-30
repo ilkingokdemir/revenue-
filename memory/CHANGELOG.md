@@ -2651,3 +2651,19 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - FIX: Star ikonu App.js'te zaten import'luydu → duplicate declaration düzeltildi.
 - E2E DOĞRULANDI (playwright): 2 öğe sabitlendi, Favoriler bölümü göründü, tıklama navigasyonu
   çalıştı, reload sonrası 2 favori korundu.
+
+## Iter 488 (2026-07-30) — Departman Kısayolları (görev ekle/çıkar) TAMAMLANDI
+- YENİ backend: routes/platform_ext/department_shortcuts.py — 7 departman için varsayılan
+  kısayol listeleri; GET / (tümü), GET /{dept}, PUT /{dept} (edit_users yetkisi, max 15 öğe).
+  Collection: department_shortcuts. server.py'ye router eklendi.
+- YENİ frontend: DepartmentShortcutsPanel.js — departman sekmeleri, chip listesi (X ile çıkar),
+  arama ile ekle (catalog=commandItems), "Tümünü temizle". Menü: Settings & Admin > Team &
+  Access > "Departman kısayolları" (dept-shortcuts-btn, receptionist hariç).
+- App.js: deptShortcuts state + fetch (user.department); sidebar'da Favoriler'in altında
+  "Departman" bölümü (sky-400, dept-sc-{id}) — kişisel favorilerde olanlar tekrarlanmaz.
+  Panel onChanged → sidebar anında yenilenir.
+- DERS: Hot reload, arka plan scraper görevi kapanışı bloklayınca takıldı (eski süreç kapandı,
+  yenisi başlamadı) → sudo supervisorctl restart backend ile çözüldü.
+- E2E DOĞRULANDI: curl (GET defaults, PUT custom, GET all, 400 invalid) + playwright
+  (sidebar Departman bölümü 6 öğe, panel aç, Ön Büro sekmesi, POS çıkar, arama ile
+  Housekeeping ekle — hepsi çalıştı).

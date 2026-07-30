@@ -481,6 +481,7 @@ export function buildMenuSections(t, user) {
 
         { divider: true, label: "Team & Access" },
         ...(user?.role !== "receptionist" ? [{ id: "team", icon: Users, name: t("nav.team"), testId: "team-btn", core: true }] : []),
+        ...(user?.role !== "receptionist" ? [{ id: "dept-shortcuts", icon: UsersThree, name: "Departman kısayolları", testId: "dept-shortcuts-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "contracts", icon: FileText, name: "Staff contracts", testId: "contracts-btn" }] : []),
         ...(user?.role !== "receptionist" ? [{ id: "onboarding-admin", icon: Users, name: "Onboarding review", testId: "onboarding-admin-btn" }] : []),
         ...(user?.role === "admin" ? [{ id: "roles-permissions", icon: ShieldCheck, name: "Roles & permissions", testId: "roles-permissions-btn" }] : []),

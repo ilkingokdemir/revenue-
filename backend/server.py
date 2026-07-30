@@ -767,6 +767,9 @@ api_router.include_router(onboarding_router)
 from routes.platform_ext.onboarding_drip import create_onboarding_drip_router
 onboarding_drip_router = create_onboarding_drip_router(db)
 api_router.include_router(onboarding_drip_router)
+from routes.platform_ext.department_shortcuts import create_department_shortcuts_router
+department_shortcuts_router = create_department_shortcuts_router(db)
+api_router.include_router(department_shortcuts_router)
 from routes.platform_ext.demo_seeder import create_demo_seeder_router
 demo_seeder_router = create_demo_seeder_router(db)
 api_router.include_router(demo_seeder_router)

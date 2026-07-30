@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import axios from "axios";
 import {
   House,
   CalendarCheck,
@@ -73,11 +74,27 @@ const CARD_META = {
   "site-feasibility": { icon: ChartLineUp, color: "from-violet-500 to-violet-600", label: "nav.site_feasibility" },
 };
 
-export default function MobileHome({ user, branding, onNavigate, kpis }) {
+export default function MobileHome({ user, branding, onNavigate, kpis, catalog = [] }) {
   const { t } = useTranslation();
   const { isNative, platform, online } = useCapacitor();
   const role = (user?.role || "manager").toLowerCase();
   const cards = ROLE_CARDS[role] || ROLE_CARDS.manager;
+
+  // Department shortcuts — admin-curated per-department task list
+  const [deptItems, setDeptItems] = useState([]);
+  useEffect(() => {
+    if (!user?.department) return;
+    axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/department-shortcuts/${user.department}`)
+      .then((r) => setDeptItems(r.data.items || []))
+      .catch(() => {});
+  }, [user?.department]);
+  const deptLabel = {
+    front_desk: "Ön Büro", management: "Yönetim", housekeeping: "Housekeeping",
+    food_beverage: "Y&İ", maintenance: "Teknik", spa_wellness: "Spa", concierge: "Concierge",
+  }[user?.department] || "Departman";
+  const catalogById = Object.fromEntries(catalog.map((c) => [c.id, c]));
+  const DEPT_COLORS = ["from-sky-500 to-blue-600", "from-emerald-500 to-teal-600", "from-violet-500 to-purple-600",
+    "from-amber-500 to-orange-600", "from-rose-500 to-pink-600", "from-indigo-500 to-blue-600"];
 
   const tNavOrFallback = (key, fallback) => {
     const out = t(key);
@@ -133,6 +150,33 @@ export default function MobileHome({ user, branding, onNavigate, kpis }) {
           <span>Hızlı ara veya komut çalıştır…</span>
         </button>
       </div>
+
+      {/* Department task shortcuts — managed by admin per department */}
+      {deptItems.length > 0 && (
+        <div className="px-5 mb-4" data-testid="mobile-dept-section">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-stone-500 mb-2">
+            {deptLabel} görevleri
+          </div>
+          <div className="grid grid-cols-2 gap-3" data-testid="mobile-dept-cards">
+            {deptItems.map((id, i) => {
+              const c = catalogById[id];
+              const meta = CARD_META[id];
+              const Icon = c?.icon || meta?.icon || House;
+              const label = c?.name || (meta ? tNavOrFallback(meta.label, id) : id);
+              const color = meta?.color || DEPT_COLORS[i % DEPT_COLORS.length];
+              return (
+                <button key={`dept-${id}`} onClick={() => onNavigate(id)}
+                  className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${color} text-white p-4 h-24 text-left active:scale-[0.97] transition-transform shadow-md`}
+                  data-testid={`mobile-dept-card-${id}`}>
+                  <Icon size={20} weight="fill" className="mb-2 opacity-90" />
+                  <div className="text-[13px] font-semibold leading-tight">{label}</div>
+                  <CaretRight size={14} weight="bold" className="absolute bottom-3 right-3 opacity-80" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Role-based cards */}
       <div className="px-5">

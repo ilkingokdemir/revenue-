@@ -2667,3 +2667,11 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI: curl (GET defaults, PUT custom, GET all, 400 invalid) + playwright
   (sidebar Departman bölümü 6 öğe, panel aç, Ön Büro sekmesi, POS çıkar, arama ile
   Housekeeping ekle — hepsi çalıştı).
+
+## Iter 489 (2026-07-30) — Departman Görevleri Mobil PWA Ana Ekranında TAMAMLANDI
+- MobileHome.js: user.department için /api/department-shortcuts fetch; "{{Departman}} görevleri"
+  kart bölümü (mobile-dept-section, mobile-dept-card-{id}) rol kartlarının ÜSTÜNDE.
+  catalog prop (App.js commandItems) ile ikon/isim çözümü; CARD_META fallback; renk döngüsü.
+- App.js: MobileHome'a catalog={commandItems} geçirildi.
+- E2E DOĞRULANDI (390x844 mobil viewport): admin girişi → MobileHome → "YÖNETİM GÖREVLERİ"
+  6 kart (Dashboard, Master dashboard, Revenue, Finance, Analytics, Team) render oldu.

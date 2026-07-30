@@ -929,6 +929,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             <MobileHome
               user={user}
               branding={branding}
+              catalog={commandItems}
               onNavigate={(id) => {
                 if (id === "__open_command_palette__") {
                   // Trigger ⌘K palette by dispatching the standard shortcut

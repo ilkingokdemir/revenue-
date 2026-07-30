@@ -39,6 +39,7 @@ import ActionFeedPanel from "./components/dashboard/ActionFeedPanel";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { DepartmentShortcutsPanel } from "./components/dashboard/DepartmentShortcutsPanel";
 import { GroupDisplacementPanel } from "./components/dashboard/GroupDisplacementPanel";
+import { DamageProtectionPanel } from "./components/dashboard/DamageProtectionPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { LoginPage } from "./components/dashboard/LoginPage";
 import LandingPage from "./LandingPage";
@@ -1615,6 +1616,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Group Displacement Analyzer */}
         {activeView === "group-displacement" && (
           <GroupDisplacementPanel activePropertyId={activePropertyId} />
+        )}
+
+        {/* Damage Protection */}
+        {activeView === "damage-protection" && (
+          <DamageProtectionPanel activePropertyId={activePropertyId} />
         )}
 
         {/* Stock Management */}

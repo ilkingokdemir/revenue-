@@ -2723,3 +2723,19 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI: 18 odalı düşük bütçeli talep → gerçek GPT-5.2 quote £7695 (> taban £3591),
   displacement bilgisi yanıtın içinde; regression: analyze reject/breakeven 63.33 doğru.
   Test verileri temizlendi.
+
+## Iter 493 (2026-07-30) — Guesty İncelemesi + Hasar Koruması (Damage Waiver) TAMAMLANDI
+- GUESTY ANALİZİ: Unified inbox/CM/AI messaging/dynamic pricing/guest portal/review AI bizde
+  zaten var. NET BOŞLUK: Damage Protection (Guesty Shield) — depozitosuz gecelik ücretli hasar
+  teminatı + claim workflow. Diğer adaylar (GuestyPay fraud, trust accounting) mevcut
+  rev-protection/city-ledger ile örtüşüyor.
+- YENİ backend: routes/finance_ext/damage_protection.py — config (enabled, fee_per_night,
+  coverage_limit, currency), stats (90g kapsanan gece × ücret = tahmini prim, ödenen/bekleyen
+  talepler, net havuz), claims CRUD (open→under_review→approved/denied→settled; approved_amount
+  otomatik). server.py'ye eklendi.
+- YENİ frontend: DamageProtectionPanel.js — config kartı (toggle+ücret+limit, blur'da kaydet),
+  5 KPI, talep listesi (durum rozetleri + İncele/Onayla/Reddet/Öde&Kapat butonları), yeni talep
+  formu. Menü: Finance > Payments > "Hasar koruması (damage waiver)" (damage-protection-btn).
+- E2E DOĞRULANDI: curl (config PUT/GET, claim create→approve→settle approved_amount 350,
+  stats: 677 gece × £3 = £2031 prim, net £1681) + playwright (panel, KPI'lar, UI'dan talep
+  oluşturma, durum butonları). Test talepleri temizlendi; default config AKTİF £3/gece bırakıldı.

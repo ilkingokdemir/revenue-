@@ -368,6 +368,7 @@ export function buildMenuSections(t, user) {
         { id: "vcc-automation", icon: CreditCard, name: "VCC otomatik tahsilat", testId: "vcc-automation-btn" },
         { id: "owner-summary", icon: Receipt, name: "Aylık sahip özeti", testId: "owner-summary-btn" },
         { id: "chargeback", icon: Scales, name: "Chargebacks", testId: "chargeback-btn" },
+        { id: "damage-protection", icon: ShieldCheck, name: "Hasar koruması (damage waiver)", testId: "damage-protection-btn" },
         { id: "card-vault", icon: CreditCard, name: "Card vault", testId: "card-vault-btn" },
 
         { divider: true, label: "Deposits" },

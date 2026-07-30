@@ -773,6 +773,9 @@ api_router.include_router(department_shortcuts_router)
 from routes.revenue_ext.group_displacement import create_group_displacement_router
 group_displacement_router = create_group_displacement_router(db)
 api_router.include_router(group_displacement_router)
+from routes.finance_ext.damage_protection import create_damage_protection_router
+damage_protection_router = create_damage_protection_router(db)
+api_router.include_router(damage_protection_router)
 from routes.platform_ext.demo_seeder import create_demo_seeder_router
 demo_seeder_router = create_demo_seeder_router(db)
 api_router.include_router(demo_seeder_router)

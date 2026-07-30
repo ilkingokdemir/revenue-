@@ -1056,6 +1056,17 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
 
         return {"property_id": property_id, "rooms": available_rooms}
 
+    @router.get("/booking/damage-waiver/{property_id}")
+    async def public_damage_waiver(property_id: str):
+        """Public: booking engine'in hasar koruması teklifini gösterebilmesi için."""
+        cfg = await db.damage_protection_config.find_one(
+            {"property_id": property_id, "enabled": True}, {"_id": 0})
+        if not cfg:
+            return {"enabled": False}
+        return {"enabled": True, "fee_per_night": float(cfg.get("fee_per_night", 0) or 0),
+                "coverage_limit": float(cfg.get("coverage_limit", 0) or 0),
+                "currency": cfg.get("currency", "GBP")}
+
     @router.post("/booking/reserve")
     async def create_booking(booking_data: BookingCreate):
         """Public endpoint: Create a new booking reservation"""
@@ -1108,6 +1119,16 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
             nightly_total += night_rate
         total_price = nightly_total * booking_data.rooms
 
+        # Optional damage waiver fee (guest opted in on the booking engine)
+        damage_waiver_fee = 0.0
+        if booking_data.damage_waiver:
+            dw_cfg = await db.damage_protection_config.find_one(
+                {"property_id": booking_data.property_id, "enabled": True}, {"_id": 0})
+            if dw_cfg:
+                damage_waiver_fee = round(
+                    float(dw_cfg.get("fee_per_night", 0) or 0) * nights * booking_data.rooms, 2)
+                total_price += damage_waiver_fee
+
         # Pull native currency from property (source of truth) with fallbacks
         prop_doc = await db.properties.find_one(
             {"id": booking_data.property_id}, {"_id": 0, "currency": 1}
@@ -1137,6 +1158,9 @@ def create_bookings_router(db, require_roles, LlmChat_dep, UserMessage_dep, rese
         )
 
         doc = booking.model_dump()
+        if damage_waiver_fee > 0:
+            doc["damage_waiver"] = True
+            doc["damage_waiver_fee"] = damage_waiver_fee
         await db.bookings.insert_one(doc)
         doc.pop("_id", None)
 

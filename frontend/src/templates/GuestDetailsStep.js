@@ -6,7 +6,7 @@ import { useLanguage } from "../i18n/LanguageContext";
 import { SmartUpsellEngine } from "./SmartUpsellEngine";
 import { PriceComparisonWidget } from "./PriceComparisonWidget";
 
-export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings }) {
+export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGuestForm, paymentMethod, setPaymentMethod, onBook, bookingLoading, totalPrice, subtotal, addOnsTotal, discountAmount, promoCode, setPromoCode, promoDiscount, applyPromo, setPromoDiscount, addOns, selectedAddOns, toggleAddOn, upsells, selectedUpsells, toggleUpsell, nights, adults, children, roomCount, checkIn, checkOut, socialProofSettings, dwConfig, damageWaiver, setDamageWaiver, waiverTotal }) {
   const { t: tr } = useLanguage();
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="guest-details-step">
@@ -102,6 +102,29 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
             )}
           </div>
 
+          {/* Damage Waiver opt-in */}
+          {dwConfig && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }} data-testid="damage-waiver-section">
+              <label className="flex items-start gap-3 cursor-pointer" data-testid="damage-waiver-option">
+                <input type="checkbox" checked={damageWaiver} onChange={e => setDamageWaiver(e.target.checked)}
+                  data-testid="damage-waiver-checkbox"
+                  className="mt-1 w-5 h-5 rounded border-gray-300 flex-shrink-0" style={{ accentColor: t.colors.accent }} />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <ShieldCheck size={18} weight="fill" style={{ color: t.colors.success }} />
+                    <span className="font-semibold text-slate-800 text-sm">Depozitosuz Konaklama — Hasar Koruması</span>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: t.colors.badgeBg, color: t.colors.success }}>
+                      +{dwConfig.currency === "TRY" ? "₺" : dwConfig.currency === "EUR" ? "€" : "£"}{dwConfig.fee_per_night}/gece
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Güvence depozitosu ödemeyin. {dwConfig.currency === "TRY" ? "₺" : dwConfig.currency === "EUR" ? "€" : "£"}{dwConfig.coverage_limit.toLocaleString()} tutarına kadar kazara oluşan hasarlar teminat altındadır.
+                  </p>
+                </div>
+              </label>
+            </div>
+          )}
+
           {/* Payment Method */}
           <div className="bg-white rounded-lg border border-gray-200 p-6" style={{ borderRadius: t.borderRadius }} data-testid="payment-method-section">
             <h2 className="text-xl font-semibold text-slate-900 mb-4 flex items-center gap-2" style={{ fontFamily: t.fonts.heading }}>
@@ -153,14 +176,14 @@ export function GuestDetailsStep({ t, selectedRoom, property, guestForm, setGues
         <div className="lg:col-span-1 space-y-4">
           {/* Price Comparison Widget */}
           <PriceComparisonWidget t={t} roomPrice={selectedRoom.base_price * nights} settings={socialProofSettings} />
-          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} />
+          <BookingSummary t={t} room={selectedRoom} property={property} totalPrice={totalPrice} subtotal={subtotal} addOnsTotal={addOnsTotal} discountAmount={discountAmount} promoDiscount={promoDiscount} selectedAddOns={selectedAddOns} selectedUpsells={selectedUpsells} nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut} waiverTotal={waiverTotal} />
         </div>
       </div>
     </div>
   );
 }
 
-function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut }) {
+function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, discountAmount, promoDiscount, selectedAddOns, selectedUpsells, nights, adults, children, roomCount, checkIn, checkOut, waiverTotal }) {
   const { t: tr } = useLanguage();
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-5 sticky top-20" style={{ borderRadius: t.borderRadius }} data-testid="booking-summary">
@@ -191,6 +214,11 @@ function BookingSummary({ t, room, property, totalPrice, subtotal, addOnsTotal, 
         {selectedUpsells?.length > 0 && selectedUpsells.map(u => (
           <div key={u.id} className="flex justify-between text-xs"><span className="text-amber-600">{u.name}</span><span>&pound;{u.price}</span></div>
         ))}
+        {waiverTotal > 0 && (
+          <div className="flex justify-between text-xs" data-testid="summary-damage-waiver">
+            <span className="text-slate-500">Hasar koruması</span><span>&pound;{waiverTotal.toFixed(0)}</span>
+          </div>
+        )}
         {discountAmount > 0 && (
           <div className="flex justify-between" style={{ color: t.colors.success }}>
             <span>{tr("summary.promo")} ({promoDiscount?.code})</span>

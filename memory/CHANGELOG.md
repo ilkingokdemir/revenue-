@@ -2739,3 +2739,20 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI: curl (config PUT/GET, claim create→approve→settle approved_amount 350,
   stats: 677 gece × £3 = £2031 prim, net £1681) + playwright (panel, KPI'lar, UI'dan talep
   oluşturma, durum butonları). Test talepleri temizlendi; default config AKTİF £3/gece bırakıldı.
+
+## Iter 494 (2026-07-30) — Hasar Koruması Booking Engine'de TAMAMLANDI
+- models.py BookingCreate: damage_waiver: bool = False.
+- bookings.py /booking/reserve: waiver seçiliyse damage_protection_config'ten ücret ×
+  gece × oda hesaplanıp total_price'a eklenir; booking dokümanına damage_waiver=true +
+  damage_waiver_fee yazılır. YENİ public GET /booking/damage-waiver/{pid} (sadece enabled ise).
+- BookingEngine.js: dwConfig fetch, damageWaiver state, waiverTotal → totalPrice,
+  reserve payload'ına damage_waiver. GuestDetailsStep.js: "Depozitosuz Konaklama — Hasar
+  Koruması +£X/gece" checkbox kartı (damage-waiver-checkbox) + özet satırı
+  (summary-damage-waiver).
+- DERS/FIX: props ekleme search_replace'i dosyada benzer bir bloğa denk gelip dosya sonuna
+  bozuk '>' bırakmıştı (webpack parse error). Bozuk satır silindi, props gerçek çağrı
+  noktasına (satır ~462) eklendi. Ayrıca /book sayfası networkidle'da timeout oluyor
+  (chat widget polling) → screenshot testlerinde domcontentloaded kullan.
+- E2E DOĞRULANDI: curl (reserve damage_waiver:true → total 240+6=246, fee kayıtlı) +
+  playwright (/book akışı: checkbox işaretle → özet £120→£123 'Hasar koruması £3').
+  Test rezervasyonu temizlendi.

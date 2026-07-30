@@ -369,9 +369,7 @@ class BookingCreate(BaseModel):
     children: int = 0
     rooms: int = 1
     special_requests: str = ""
-
-
-# ==================== INBOUND WEBHOOK MODEL ====================
+    damage_waiver: bool = False
 
 class InboundReviewPayload(BaseModel):
     external_review_id: str

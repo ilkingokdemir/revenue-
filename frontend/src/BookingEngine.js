@@ -56,6 +56,8 @@ function BookingEngineInner() {
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [guestForm, setGuestForm] = useState({ guest_name: "", guest_email: "", guest_phone: "", special_requests: "" });
   const [promoCode, setPromoCode] = useState("");
+  const [dwConfig, setDwConfig] = useState(null);
+  const [damageWaiver, setDamageWaiver] = useState(false);
   const [promoDiscount, setPromoDiscount] = useState(null);
   const [selectedAddOns, setSelectedAddOns] = useState([]);
   const [selectedUpsells, setSelectedUpsells] = useState([]);
@@ -120,6 +122,9 @@ function BookingEngineInner() {
         ]);
         setProperty(propRes.data);
         setReviews(revRes.data);
+        axios.get(`${API}/booking/damage-waiver/${propertyId}`)
+          .then(r => setDwConfig(r.data?.enabled ? r.data : null))
+          .catch(() => {});
         if (propRes.data.template_settings && Object.keys(propRes.data.template_settings).length > 1) {
           setCustomSettings(propRes.data.template_settings);
         }
@@ -193,7 +198,8 @@ function BookingEngineInner() {
 
   const subtotal = selectedRoom ? selectedRoom.base_price * nights * roomCount : 0;
   const discountAmount = promoDiscount ? promoDiscount.discount_amount : 0;
-  const totalPrice = Math.max(0, subtotal + addOnsTotal + upsellsTotal - discountAmount);
+  const waiverTotal = damageWaiver && dwConfig ? dwConfig.fee_per_night * nights * roomCount : 0;
+  const totalPrice = Math.max(0, subtotal + addOnsTotal + upsellsTotal + waiverTotal - discountAmount);
 
   const applyPromo = async () => {
     if (!promoCode.trim()) return;
@@ -239,6 +245,7 @@ function BookingEngineInner() {
         guest_name: guestForm.guest_name, guest_email: guestForm.guest_email,
         guest_phone: guestForm.guest_phone, check_in: checkIn, check_out: checkOut,
         adults, children, rooms: roomCount, special_requests: guestForm.special_requests,
+        damage_waiver: damageWaiver && !!dwConfig,
       });
       if (paymentMethod === "card") {
         const { data: pd } = await axios.post(`${API}/payments/booking-checkout`, {
@@ -453,6 +460,7 @@ function BookingEngineInner() {
           addOns={property?.add_ons || []} selectedAddOns={selectedAddOns} toggleAddOn={toggleAddOn}
           upsells={property?.upsells || []} selectedUpsells={selectedUpsells} toggleUpsell={toggleUpsell}
           nights={nights} adults={adults} children={children} roomCount={roomCount} checkIn={checkIn} checkOut={checkOut}
+          dwConfig={dwConfig} damageWaiver={damageWaiver} setDamageWaiver={setDamageWaiver} waiverTotal={waiverTotal}
           socialProofSettings={property?.social_proof?.settings} />
       )}
 

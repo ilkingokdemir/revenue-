@@ -890,6 +890,46 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
                 </div>"""
         except Exception:
             pass
+        # 🛡 Hasar Koruması Gelir kartı
+        dp_html = ""
+        try:
+            dp_enabled = await db.damage_protection_config.count_documents(
+                {"property_id": {"$in": pids_all}, "enabled": True})
+            if dp_enabled:
+                week_ago_iso = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+                wk_fees, wk_count, active_count = 0.0, 0, 0
+                async for b in db.bookings.find(
+                        {"property_id": {"$in": pids_all}, "damage_waiver": True,
+                         "status": {"$ne": "cancelled"}},
+                        {"_id": 0, "damage_waiver_fee": 1, "created_at": 1}):
+                    active_count += 1
+                    if (b.get("created_at") or "") >= week_ago_iso:
+                        wk_count += 1
+                        wk_fees += float(b.get("damage_waiver_fee") or 0)
+                claims = await db.damage_claims.find(
+                    {"property_id": {"$in": pids_all}}, {"_id": 0, "status": 1,
+                     "approved_amount": 1, "updated_at": 1}).to_list(500)
+                wk_paid = sum(float(cl.get("approved_amount") or 0) for cl in claims
+                              if cl.get("status") == "settled" and (cl.get("updated_at") or "") >= week_ago_iso)
+                open_claims = sum(1 for cl in claims if cl.get("status") in ("open", "under_review"))
+                net_wk = round(wk_fees - wk_paid, 2)
+                net_col = "#059669" if net_wk >= 0 else "#e11d48"
+                claim_line = (f'<div style="font-size:12px;color:#78716c;margin-top:4px;">Bu hafta ödenen hasar: <b>{c}{wk_paid:,.0f}</b>'
+                              + (f' · <span style="color:#d97706;font-weight:bold;">{open_claims} açık talep bekliyor</span>' if open_claims else ' · açık talep yok')
+                              + '</div>')
+                dp_html = f"""
+                <div style="border:1px solid #a7f3d0;background:#ecfdf5;border-radius:10px;padding:12px 14px;margin-top:22px;">
+                  <div style="font-size:13px;font-weight:bold;color:#065f46;">🛡 Hasar Koruması Geliri (Depozitosuz Konaklama)</div>
+                  <div style="font-size:12px;color:#57534e;margin-top:8px;">
+                    Bu hafta <b>{wk_count}</b> yeni rezervasyon hasar koruması aldı → prim <b>{c}{wk_fees:,.0f}</b>.
+                    Toplam <b>{active_count}</b> aktif korumalı rezervasyon.
+                  </div>
+                  {claim_line}
+                  <div style="font-size:12px;margin-top:6px;">Haftalık net katkı: <b style="color:{net_col};">{c}{net_wk:,.0f}</b></div>
+                  <div style="font-size:11px;color:#047857;margin-top:6px;">Misafirler depozito yerine gecelik küçük ücret öder; havuz onaylı hasarları karşılar.</div>
+                </div>"""
+        except Exception:
+            pass
         base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
         return f"""
         <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto;color:#292524;">
@@ -903,6 +943,7 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
           {impact_html}
           {str_html}
           {brain_html}
+          {dp_html}
           <p style="text-align:center;margin:26px 0 8px;">
             <a href="{base}/owner" style="background:#0f766e;color:#fff;text-decoration:none;padding:11px 26px;border-radius:10px;font-weight:bold;display:inline-block;">Portalı Aç</a>
           </p>

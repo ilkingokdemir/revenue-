@@ -2768,3 +2768,12 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI: curl (attach +£6 → total 266, ikinci attach 400, arrivals flag true) +
   playwright (arrivals'ta 3 buton, tıkla → toast '+6 GBP (2 gece)', kalkan 1→2).
   Test attach'ları revert edildi (demo veriler temiz).
+
+## Iter 496 (2026-07-30) — Haftalık Pulse'a Hasar Koruması Gelir Kartı TAMAMLANDI
+- owner_pulse.py _build_digest_html: dp_html kartı (brain_html'den sonra) — sadece
+  damage_protection_config enabled tesis varsa: bu hafta waiver'lı yeni rezervasyon sayısı +
+  gerçek prim toplamı (damage_waiver_fee), toplam aktif korumalı rezervasyon, bu hafta ödenen
+  hasar (settled approved_amount) + açık talep uyarısı, haftalık net katkı (negatifse kırmızı).
+- DOĞRULANDI: test waiver rezervasyonu + settled claim ile GET /owner-pulse/default/digest/
+  preview → kart render: '1 yeni rezervasyon → prim 6, ödenen 40, net -34'. Test verisi silindi.
+- Not: kart para simgesi dashboard para biriminden gelir (tesis CHF ise CHF gösterir).

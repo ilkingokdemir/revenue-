@@ -294,6 +294,7 @@ export function buildMenuSections(t, user) {
         { id: "channel-revenue", icon: Lightning, name: "Open pricing & yield", testId: "channel-revenue-btn" },
 
         { divider: true, label: "Tools" },
+        { id: "group-displacement", icon: Scales, name: "Grup displacement analizi", testId: "group-displacement-btn" },
         { id: "rev-protection", icon: ShieldCheck, name: "Revenue protection", testId: "rev-protection-btn" },
         { id: "hurdle-lrv", icon: ShieldCheck, name: "Hurdle rate & LRV", testId: "hurdle-lrv-btn" },
         { id: "rm-lab", icon: ChartLine, name: "RM Lab", testId: "rm-lab-btn" },

@@ -38,6 +38,7 @@ import GlobalReportIssueFAB from "./components/dashboard/GlobalReportIssueFAB";
 import ActionFeedPanel from "./components/dashboard/ActionFeedPanel";
 import { OnboardingBanner } from "./components/dashboard/OnboardingBanner";
 import { DepartmentShortcutsPanel } from "./components/dashboard/DepartmentShortcutsPanel";
+import { GroupDisplacementPanel } from "./components/dashboard/GroupDisplacementPanel";
 import { NotificationBell } from "./components/dashboard/NotificationBell";
 import { LoginPage } from "./components/dashboard/LoginPage";
 import LandingPage from "./LandingPage";
@@ -1609,6 +1610,11 @@ const Dashboard = ({ user, onLogout, permissions }) => {
         {/* Department Shortcuts admin */}
         {activeView === "dept-shortcuts" && (
           <div className="p-6"><DepartmentShortcutsPanel catalog={commandItems} onChanged={fetchDeptShortcuts} /></div>
+        )}
+
+        {/* Group Displacement Analyzer */}
+        {activeView === "group-displacement" && (
+          <GroupDisplacementPanel activePropertyId={activePropertyId} />
         )}
 
         {/* Stock Management */}

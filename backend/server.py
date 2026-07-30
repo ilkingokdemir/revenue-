@@ -770,6 +770,9 @@ api_router.include_router(onboarding_drip_router)
 from routes.platform_ext.department_shortcuts import create_department_shortcuts_router
 department_shortcuts_router = create_department_shortcuts_router(db)
 api_router.include_router(department_shortcuts_router)
+from routes.revenue_ext.group_displacement import create_group_displacement_router
+group_displacement_router = create_group_displacement_router(db)
+api_router.include_router(group_displacement_router)
 from routes.platform_ext.demo_seeder import create_demo_seeder_router
 demo_seeder_router = create_demo_seeder_router(db)
 api_router.include_router(demo_seeder_router)

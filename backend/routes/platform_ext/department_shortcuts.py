@@ -68,4 +68,17 @@ def create_department_shortcuts_router(db):
         )
         return {"ok": True, "department": department, "items": items}
 
+    @router.get("/badges/{property_id}")
+    async def badges(property_id: str,
+                     current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
+        """Canlı rozet sayıları — mobil görev kartları için."""
+        today = datetime.now(timezone.utc).date().isoformat()
+        q_prop = {} if property_id in ("all", "") else {"property_id": property_id}
+        arrivals = await db.bookings.count_documents(
+            {**q_prop, "check_in": today, "status": {"$nin": ["cancelled", "checked_in", "checked_out"]}})
+        dirty = await db.hk_turnover.count_documents({**q_prop, "state": "vacant_dirty"})
+        open_tasks = await db.staff_tasks.count_documents(
+            {**q_prop, "status": {"$nin": ["done", "completed", "cancelled"]}})
+        return {"arrivals": arrivals, "housekeeping": dirty, "hk-dispatch": dirty, "my-tasks": open_tasks}
+
     return router

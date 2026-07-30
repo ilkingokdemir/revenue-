@@ -2675,3 +2675,22 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - App.js: MobileHome'a catalog={commandItems} geçirildi.
 - E2E DOĞRULANDI (390x844 mobil viewport): admin girişi → MobileHome → "YÖNETİM GÖREVLERİ"
   6 kart (Dashboard, Master dashboard, Revenue, Finance, Analytics, Team) render oldu.
+
+## Iter 490 (2026-07-30) — RMS Rakip Analizi + Grup Displacement + Canlı Rozetler TAMAMLANDI
+- ARAŞTIRMA: Duetto GameChanger (Open Pricing — bizde var), Lybra Revolution Plus
+  (uçuş arama sinyali — dış API gerek, grup displacement — YOKTU), Atomize (autopilot — var),
+  RoomPriceGenie (basitlik — var). En kritik boşluk: GRUP DISPLACEMENT.
+- YENİ backend: routes/revenue_ext/group_displacement.py — POST /analyze (gece bazında:
+  kapasite, dolu, geçmiş 8 aynı haftagünü ile beklenen pickup, gruba müsait, yerinden edilen,
+  o gecenin gerçek transient ADR'i, displacement maliyeti, net değer; öneri accept/negotiate/
+  reject + breakeven & önerilen min fiyat; max 30 gece; group_displacement_analyses'e kaydeder),
+  GET /history/{pid}. server.py'ye eklendi.
+- YENİ frontend: GroupDisplacementPanel.js — form + renkli karar kartı + 5 KPI + gece tablosu
+  + geçmiş. Menü: Revenue & rates > Tools > "Grup displacement analizi" (group-displacement-btn).
+- Canlı rozetler: department_shortcuts.py'ye GET /badges/{pid} (arrivals=bugünkü girişler,
+  housekeeping/hk-dispatch=vacant_dirty, my-tasks=açık staff_tasks). MobileHome kartlarında
+  beyaz rozet (mobile-badge-{id}).
+- FIX: lucide-react'te 'Scales' yok → 'Scale' (derleme hatası çözüldü).
+- E2E DOĞRULANDI: curl (badges 13/28/1; accept senaryosu net +1800; reject senaryosu 18 oda@50
+  net -720, min 69.66; 400 validasyon) + playwright (panel REDDET kartı, 3 gece tablosu,
+  geçmiş; mobil rozetler 13 & 28 görüldü). Yönetim kısayol listesi restore edildi.

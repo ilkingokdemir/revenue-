@@ -82,10 +82,14 @@ export default function MobileHome({ user, branding, onNavigate, kpis, catalog =
 
   // Department shortcuts — admin-curated per-department task list
   const [deptItems, setDeptItems] = useState([]);
+  const [badges, setBadges] = useState({});
   useEffect(() => {
     if (!user?.department) return;
     axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/department-shortcuts/${user.department}`)
       .then((r) => setDeptItems(r.data.items || []))
+      .catch(() => {});
+    axios.get(`${process.env.REACT_APP_BACKEND_URL}/api/department-shortcuts/badges/all`)
+      .then((r) => setBadges(r.data || {}))
       .catch(() => {});
   }, [user?.department]);
   const deptLabel = {
@@ -168,6 +172,12 @@ export default function MobileHome({ user, branding, onNavigate, kpis, catalog =
                 <button key={`dept-${id}`} onClick={() => onNavigate(id)}
                   className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${color} text-white p-4 h-24 text-left active:scale-[0.97] transition-transform shadow-md`}
                   data-testid={`mobile-dept-card-${id}`}>
+                  {badges[id] > 0 && (
+                    <span className="absolute top-2.5 right-2.5 min-w-[22px] h-[22px] px-1.5 rounded-full bg-white/95 text-stone-900 text-[11px] font-black flex items-center justify-center shadow"
+                      data-testid={`mobile-badge-${id}`}>
+                      {badges[id]}
+                    </span>
+                  )}
                   <Icon size={20} weight="fill" className="mb-2 opacity-90" />
                   <div className="text-[13px] font-semibold leading-tight">{label}</div>
                   <CaretRight size={14} weight="bold" className="absolute bottom-3 right-3 opacity-80" />

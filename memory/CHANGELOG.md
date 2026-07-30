@@ -2777,3 +2777,16 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - DOĞRULANDI: test waiver rezervasyonu + settled claim ile GET /owner-pulse/default/digest/
   preview → kart render: '1 yeni rezervasyon → prim 6, ödenen 40, net -34'. Test verisi silindi.
 - Not: kart para simgesi dashboard para biriminden gelir (tesis CHF ise CHF gösterir).
+
+## Iter 497 (2026-07-30) — SEAL Regresyon Turu (iter 483-496 modülleri) %100 PASS
+- testing_agent tam tur: Backend pytest 18/18, Frontend Playwright tüm kritik akışlar geçti.
+- Kapsam: auth, quick-start (idempotens dahil), drip serisi, Basit/Pro + favoriler kalıcılığı,
+  departman kısayolları (sidebar + admin panel + rozetler), grup displacement (analyze/
+  verdicts/history + panel), hasar koruması (config/claims/stats + /book checkbox akışı +
+  reserve fee + pulse digest kartı), mobil MobileHome kartları, landing'ler.
+- 0 kritik / 0 minor bug. Test verileri temizlendi; management kısayolları ve default config
+  restore edildi. Bilinen kozmetik not: login sayfasında 2 adet ön-auth 401 konsol mesajı
+  (iter 485'ten beri, bloklamıyor).
+- Kalıcı test suite: backend/tests/test_iteration497_seal_regression.py (standalone pytest).
+- Minor backlog notları (bug değil): 'approved' ama 'settled' olmayan claim'ler stats'ta
+  paid/pending dışında kalıyor; drip run-now global (property-scoped değil).

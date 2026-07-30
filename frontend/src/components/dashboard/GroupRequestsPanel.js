@@ -10,10 +10,16 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Loader2, Users, Building2, Calendar, RefreshCw, Mail, Phone, FileText,
-  Check, X, DollarSign, MessageSquare, Briefcase, Sparkles,
+  Check, X, DollarSign, MessageSquare, Briefcase, Sparkles, Scale,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const VERDICT_META = {
+  accept:    { color: "text-emerald-300 bg-emerald-500/15 border-emerald-500/40", label: "KABUL" },
+  negotiate: { color: "text-amber-300 bg-amber-500/15 border-amber-500/40",       label: "PAZARLIK" },
+  reject:    { color: "text-rose-300 bg-rose-500/15 border-rose-500/40",          label: "REDDET" },
+};
 
 const STATUS_META = {
   pending:   { color: "text-amber-300 bg-amber-500/15 border-amber-500/30",   label: "Pending review" },
@@ -33,6 +39,7 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
   const [saving, setSaving] = useState(false);
   const [aiQuoting, setAiQuoting] = useState(false);
   const [aiQuote, setAiQuote] = useState(null);
+  const [verdicts, setVerdicts] = useState({});
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -42,6 +49,9 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
       setItems(Array.isArray(data) ? data : []);
     } catch { toast.error("Failed to load"); }
     setLoading(false);
+    axios.get(`${API}/group-displacement/verdicts/${propertyId}`)
+      .then(r => setVerdicts(r.data || {}))
+      .catch(() => {});
   }, [propertyId]);
 
   useEffect(() => { load(); }, [load]);
@@ -150,6 +160,8 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
             {filtered.map(g => {
               const meta = STATUS_META[g.status || "pending"] || STATUS_META.pending;
               const isActive = active?.id === g.id;
+              const v = verdicts[g.id];
+              const vm = v ? VERDICT_META[v.recommendation] : null;
               return (
                 <button key={g.id} onClick={() => open(g)} data-testid={`gr-item-${g.id}`}
                   className={`w-full text-left p-3 border-b border-stone-800/60 transition ${isActive ? "bg-orange-500/10" : "hover:bg-stone-800/40"}`}>
@@ -158,7 +170,15 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
                       <p className="text-sm font-bold text-stone-100 truncate">{g.contact_name || "—"}</p>
                       <p className="text-[11px] text-stone-400 truncate">{g.company_name || g.event_type || "—"}</p>
                     </div>
-                    <span className={`text-[9px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded border whitespace-nowrap ${meta.color}`}>{meta.label}</span>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`text-[9px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded border whitespace-nowrap ${meta.color}`}>{meta.label}</span>
+                      {vm && (
+                        <span className={`text-[9px] uppercase font-black tracking-widest px-1.5 py-0.5 rounded border whitespace-nowrap flex items-center gap-1 ${vm.color}`}
+                          data-testid={`gr-verdict-${g.id}`} title={v.reason}>
+                          <Scale className="w-2.5 h-2.5" />{vm.label}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-stone-400">
                     <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{g.check_in} → {g.check_out}</span>
@@ -203,6 +223,26 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
                 <Field icon={DollarSign} label="Budget range" value={active.budget_range || "—"} />
                 <Field icon={Calendar} label="Submitted" value={active.created_at ? new Date(active.created_at).toLocaleString() : "—"} />
               </div>
+
+              {verdicts[active.id] && (() => {
+                const v = verdicts[active.id];
+                const vm = VERDICT_META[v.recommendation];
+                return (
+                  <div className={`p-3 rounded-lg border ${vm.color}`} data-testid="gr-verdict-card">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Scale className="w-4 h-4" />
+                      <span className="text-xs font-black uppercase tracking-widest">Displacement: {vm.label}</span>
+                      {v.rate_estimated && <span className="text-[9px] text-stone-400">(tahmini fiyat {v.assumed_rate}/gece)</span>}
+                    </div>
+                    <p className="text-[11px] text-stone-300 leading-relaxed">{v.reason}</p>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-[10px] text-stone-400">
+                      <span>Net değer: <b className={v.net_value >= 0 ? "text-emerald-300" : "text-rose-300"}>{Number(v.net_value).toLocaleString()}</b></span>
+                      <span>Yerinden edilen oda: <b className="text-stone-200">{v.displaced_rooms}</b></span>
+                      <span>Önerilen min: <b className="text-stone-200">{v.suggested_min_rate}/gece</b></span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="border-t border-stone-800 pt-4 space-y-3">
                 <div>

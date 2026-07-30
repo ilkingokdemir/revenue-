@@ -2694,3 +2694,15 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI: curl (badges 13/28/1; accept senaryosu net +1800; reject senaryosu 18 oda@50
   net -720, min 69.66; 400 validasyon) + playwright (panel REDDET kartı, 3 gece tablosu,
   geçmiş; mobil rozetler 13 & 28 görüldü). Yönetim kısayol listesi restore edildi.
+
+## Iter 491 (2026-07-30) — Displacement × Grup Talepleri Entegrasyonu TAMAMLANDI
+- group_displacement.py refactor: hesaplama _compute() helper'a alındı (analyze aynı davranış).
+- YENİ: GET /group-displacement/verdicts/{pid} — pending/quoted group_bookings için hızlı karar:
+  quoted_price varsa oda-gece fiyatına çevrilir, yoksa fallback_adr*0.8 tahmini fiyat
+  (rate_estimated: true). Dönen map: {request_id: {recommendation, net_value, displaced_rooms,
+  suggested_min_rate, assumed_rate, rate_estimated, reason}}.
+- GroupRequestsPanel.js: load() verdicts'i de çeker; liste öğelerinde KABUL/PAZARLIK/REDDET
+  rozeti (gr-verdict-{id}, hover title=reason); detayda renkli karar kartı (gr-verdict-card):
+  net değer, yerinden edilen oda, önerilen min fiyat, tahmini fiyat notu.
+- E2E DOĞRULANDI: curl (15 odalı test talebi → accept, net 5320, tahmini 152) + playwright
+  (listede KABUL rozeti, detay kartı içerik doğru). Test talebi temizlendi.

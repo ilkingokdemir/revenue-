@@ -165,6 +165,7 @@ import {
   Bug,
   Lock,
   Funnel,
+  PushPin,
 } from "@phosphor-icons/react";
 import {
   Select,
@@ -424,6 +425,17 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     setNavMode(m);
     try { localStorage.setItem("mhb_nav_mode", m); } catch {}
   }, []);
+  // Pinned favorites — user-curated shortcuts shown at the top of the sidebar.
+  const [favorites, setFavorites] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("mhb_favorites") || "[]"); } catch { return []; }
+  });
+  const toggleFavorite = useCallback((id) => {
+    setFavorites((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id].slice(0, 12);
+      try { localStorage.setItem("mhb_favorites", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, []);
   const [isBatchResponding, setIsBatchResponding] = useState(false);
   const [batchResult, setBatchResult] = useState(null);
 
@@ -568,6 +580,12 @@ const Dashboard = ({ user, onLogout, permissions }) => {
     return out;
   }, [gatedNavigation, tNav, tSectionLabel]);
 
+  // Resolve favorite IDs into rich items (respects permission gating via commandItems)
+  const favItems = useMemo(
+    () => favorites.map((id) => commandItems.find((i) => i.id === id)).filter(Boolean),
+    [favorites, commandItems]
+  );
+
   // Resolve recent IDs back into rich items
   const recents = useMemo(
     () => recentsRaw.map((id) => commandItems.find((i) => i.id === id)).filter(Boolean),
@@ -668,6 +686,35 @@ const Dashboard = ({ user, onLogout, permissions }) => {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 custom-scrollbar">
+          {/* Favoriler — pinned shortcuts, always on top in both modes */}
+          {favItems.length > 0 && (
+            <div className="mb-1" data-testid="favorites-section">
+              <div className="w-full flex items-center gap-1.5 px-4 py-2">
+                <PushPin size={10} weight="fill" className="text-amber-400" />
+                <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-amber-400/90">Favoriler</span>
+              </div>
+              {favItems.map((item) => (
+                <button key={`fav-${item.id}`} onClick={() => navigate(item.id)}
+                  data-testid={`fav-item-${item.id}`}
+                  className={`group w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
+                    activeView === item.id
+                      ? "bg-stone-800 text-white font-medium border-l-2 border-amber-400"
+                      : "text-stone-400 hover:text-stone-200 hover:bg-stone-800/50 border-l-2 border-transparent"
+                  }`}>
+                  <item.icon size={16} weight={activeView === item.id ? "fill" : "regular"} />
+                  <span className="flex-1 truncate">{item.name}</span>
+                  <span role="button" tabIndex={-1}
+                    onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
+                    data-testid={`fav-remove-${item.id}`}
+                    title="Favorilerden kaldır"
+                    className="opacity-0 group-hover:opacity-100 text-amber-400 hover:text-amber-300 transition-opacity">
+                    <Star size={13} weight="fill" />
+                  </span>
+                </button>
+              ))}
+              <div className="mx-4 my-1 border-t border-stone-800/60" />
+            </div>
+          )}
           {displayNavigation.map((section, sIdx) => {
             const sectionKey = section.label || `section-${sIdx}`;
             const sectionHubId = `hub-${sectionKey.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
@@ -739,7 +786,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                       }
                       navigate(item.id);
                     }}
-                    className={`w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
+                    className={`group w-full flex items-center gap-2.5 px-4 py-2 text-left text-[13px] transition-all ${
                       activeView === item.id
                         ? "bg-stone-800 text-white font-medium border-l-2 border-emerald-500"
                         : "text-stone-400 hover:text-stone-200 hover:bg-stone-800/50 border-l-2 border-transparent"
@@ -747,10 +794,21 @@ const Dashboard = ({ user, onLogout, permissions }) => {
                     data-testid={item.testId}
                   >
                     <item.icon size={16} weight={activeView === item.id ? "fill" : "regular"} />
-                    {tNav(item)}
+                    <span className="flex-1 truncate">{tNav(item)}</span>
                     {item.id === "live-chat-inbox" && (
                       <HandoffSidebarBadge propertyId={activePropertyId} />
                     )}
+                    <span role="button" tabIndex={-1}
+                      onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
+                      data-testid={`fav-toggle-${item.id}`}
+                      title={favorites.includes(item.id) ? "Favorilerden kaldır" : "Favorilere sabitle"}
+                      className={`transition-opacity ${
+                        favorites.includes(item.id)
+                          ? "opacity-100 text-amber-400 hover:text-amber-300"
+                          : "opacity-0 group-hover:opacity-60 hover:!opacity-100 text-stone-500 hover:text-amber-400"
+                      }`}>
+                      <Star size={13} weight={favorites.includes(item.id) ? "fill" : "regular"} />
+                    </span>
                   </button>
                   );
                 })}

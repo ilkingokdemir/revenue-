@@ -2641,3 +2641,13 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Minor notlar (düzeltilmedi, kritik değil): revenue-brain/goal ve channel-manager/health
   GET 405 (POST-only, UI etkilenmiyor); property DELETE cascade değil; price-check rate
   limit IP-shared (iter 482'den beri bilinen).
+
+## Iter 487 (2026-07-30) — Favoriler (Menüye Sabitleme) TAMAMLANDI
+- App.js: favorites state (localStorage mhb_favorites, max 12), toggleFavorite, favItems memo
+  (commandItems üzerinden çözülür → izin gating'i otomatik uygulanır).
+- Sidebar: her menü öğesinde hover'da görünen yıldız (fav-toggle-{id}); sabitlenenler amber
+  dolu yıldız. Nav'ın en üstünde "Favoriler" bölümü (favorites-section, fav-item-{id},
+  fav-remove-{id}) — Basit ve Pro modda her zaman görünür, amber sol çizgi ile aktif vurgusu.
+- FIX: Star ikonu App.js'te zaten import'luydu → duplicate declaration düzeltildi.
+- E2E DOĞRULANDI (playwright): 2 öğe sabitlendi, Favoriler bölümü göründü, tıklama navigasyonu
+  çalıştı, reload sonrası 2 favori korundu.

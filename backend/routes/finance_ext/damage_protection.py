@@ -101,6 +101,34 @@ def create_damage_protection_router(db):
             "net_pool_90d": round(collected - paid, 2),
         }
 
+    @router.post("/attach/{booking_id}")
+    async def attach_waiver(booking_id: str,
+                            current_user: dict = Depends(require_perm("edit_bookings"))):
+        """Ön büro: rezervasyona tek tıkla hasar koruması ekle (check-in upsell)."""
+        booking = await db.bookings.find_one({"id": booking_id})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+        if booking.get("damage_waiver"):
+            raise HTTPException(400, "Bu rezervasyonda hasar koruması zaten var")
+        cfg = await db.damage_protection_config.find_one(
+            {"property_id": booking.get("property_id"), "enabled": True}, {"_id": 0})
+        if not cfg:
+            raise HTTPException(400, "Hasar koruması bu tesiste aktif değil")
+        try:
+            nights = max((datetime.strptime(booking["check_out"][:10], "%Y-%m-%d")
+                          - datetime.strptime(booking["check_in"][:10], "%Y-%m-%d")).days, 1)
+        except (ValueError, KeyError, TypeError):
+            nights = 1
+        fee = round(float(cfg.get("fee_per_night", 0) or 0) * nights * int(booking.get("rooms", 1) or 1), 2)
+        await db.bookings.update_one(
+            {"id": booking_id},
+            {"$set": {"damage_waiver": True, "damage_waiver_fee": fee,
+                      "damage_waiver_added_by": current_user.get("email", "")},
+             "$inc": {"total_price": fee}})
+        return {"ok": True, "fee": fee, "nights": nights,
+                "currency": cfg.get("currency", "GBP"),
+                "new_total": round(float(booking.get("total_price") or 0) + fee, 2)}
+
     @router.post("/claims")
     async def create_claim(body: ClaimIn,
                            current_user: dict = Depends(require_perm("edit_bookings"))):

@@ -107,6 +107,7 @@ def create_arrivals_router(db, require_roles):
                 "amount_paid": float(b.get("amount_paid") or 0),
                 "source": b.get("source", "direct"),
                 "special_requests": b.get("special_requests", ""),
+                "damage_waiver": bool(b.get("damage_waiver")),
                 "progress": {
                     "link_sent": bool(reg),
                     "registered": registered,

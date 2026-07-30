@@ -75,9 +75,27 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
   const [keyFor, setKeyFor] = useState(null);
   const [busy, setBusy] = useState(null); // booking id being mutated
   const [tips, setTips] = useState(null); // { guest, loading, items, model }
+  const [dwCfg, setDwCfg] = useState(null);
 
   const pid = propertyId || "all";
   const canAct = user?.role === "admin" || user?.role === "manager" || user?.role === "receptionist";
+
+  useEffect(() => {
+    if (!pid || pid === "all") { setDwCfg(null); return; }
+    axios.get(`${API}/booking/damage-waiver/${pid}`)
+      .then(r => setDwCfg(r.data?.enabled ? r.data : null))
+      .catch(() => setDwCfg(null));
+  }, [pid]);
+
+  const addWaiver = async (a) => {
+    setBusy(a.booking_id);
+    try {
+      const { data } = await axios.post(`${API}/damage-protection/attach/${a.booking_id}`);
+      toast.success(`Hasar koruması eklendi — +${data.fee} ${data.currency} (${data.nights} gece)`);
+      load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Eklenemedi"); }
+    finally { setBusy(null); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -322,6 +340,17 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {dwCfg && !a.damage_waiver ? (
+                        <button onClick={() => addWaiver(a)} disabled={!canAct || busy === a.booking_id}
+                          className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 border border-transparent hover:border-emerald-200 disabled:opacity-40"
+                          title={`Hasar koruması ekle (+${dwCfg.fee_per_night}/gece)`} data-testid={`add-waiver-${a.booking_id}`}>
+                          <ShieldCheck className="w-4 h-4" />
+                        </button>
+                      ) : a.damage_waiver ? (
+                        <span className="p-1.5 text-emerald-500" title="Hasar koruması aktif" data-testid={`waiver-active-${a.booking_id}`}>
+                          <ShieldCheck className="w-4 h-4 fill-emerald-100" />
+                        </span>
+                      ) : null}
                       <button onClick={() => loadSmartTips(a)} disabled={busy === a.booking_id}
                         className="p-1.5 hover:bg-amber-50 rounded-lg text-amber-500 border border-transparent hover:border-amber-200"
                         title="AI Smart Tips" data-testid={`smart-tips-${a.booking_id}`}>

@@ -2756,3 +2756,15 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI: curl (reserve damage_waiver:true → total 240+6=246, fee kayıtlı) +
   playwright (/book akışı: checkbox işaretle → özet £120→£123 'Hasar koruması £3').
   Test rezervasyonu temizlendi.
+
+## Iter 495 (2026-07-30) — Ön Büro Tek Tık Hasar Koruması (Check-in Upsell) TAMAMLANDI
+- damage_protection.py: POST /damage-protection/attach/{booking_id} — config aktifse fee ×
+  gece × oda hesaplar, booking'e damage_waiver/fee/added_by yazar, total_price'ı artırır;
+  zaten varsa 400, tesis pasifse 400.
+- pms/arrivals.py: arrivals listesine damage_waiver alanı eklendi.
+- ArrivalsCockpit.js: dwCfg fetch (public endpoint, pid 'all' ise gizli); satırda yeşil
+  ShieldCheck butonu (add-waiver-{id}, tooltip'te gecelik ücret) → attach + toast; waiver
+  varsa dolu kalkan rozeti (waiver-active-{id}).
+- E2E DOĞRULANDI: curl (attach +£6 → total 266, ikinci attach 400, arrivals flag true) +
+  playwright (arrivals'ta 3 buton, tıkla → toast '+6 GBP (2 gece)', kalkan 1→2).
+  Test attach'ları revert edildi (demo veriler temiz).

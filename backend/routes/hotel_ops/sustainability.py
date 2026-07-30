@@ -248,7 +248,7 @@ def create_sustainability_router(db, require_roles):
         # Property + room types for context
         prop = await db.properties.find_one({"id": property_id}, {"_id": 0}) or {}
         rooms = await db.room_types.find({"property_id": property_id}, {"_id": 0}).to_list(20)
-        avg_rate = sum(float(r.get("base_rate", 100)) for r in rooms) / max(1, len(rooms)) if rooms else 100
+        avg_rate = sum(float(r.get("base_rate") or r.get("base_price") or 100) for r in rooms) / max(1, len(rooms)) if rooms else 100
 
         try:
             ci = date.fromisoformat(gb.get("check_in", "")[:10])
@@ -262,9 +262,42 @@ def create_sustainability_router(db, require_roles):
         group_disc = 0.10 if total_rooms >= 10 else 0.05
         heuristic_total = round(avg_rate * total_rooms * nights * (1 - group_disc), 2)
 
+        # Displacement floor: teklif hiçbir zaman kırılma fiyatının altına inmez
+        displacement = None
+        floor_total = 0.0
+        try:
+            from routes.revenue_ext.group_displacement import compute_displacement
+            disp = await compute_displacement(db, property_id, ci, co, total_rooms,
+                                              round(heuristic_total / max(1, total_rooms * nights), 2))
+            floor_rate = round(disp["breakeven_rate"] * 1.05, 2)
+            floor_total = round(floor_rate * total_rooms * nights, 2)
+            displacement = {
+                "breakeven_rate": disp["breakeven_rate"],
+                "floor_rate": floor_rate,
+                "floor_total": floor_total,
+                "displaced_rooms": disp["total_displaced_rooms"],
+                "recommendation": disp["recommendation"],
+            }
+        except Exception as e:
+            logger.warning("Displacement floor unavailable: %s", e)
+
+        def _apply_floor(quote: dict) -> dict:
+            if displacement and float(quote.get("suggested_total", 0) or 0) < floor_total:
+                quote["suggested_total"] = floor_total
+                quote["per_room_per_night"] = displacement["floor_rate"]
+                quote["reasoning"] = (quote.get("reasoning", "") +
+                    f" [Displacement tabanı uygulandı: {displacement['displaced_rooms']} transient oda yerinden ediliyor; "
+                    f"kırılma fiyatı £{displacement['breakeven_rate']}/oda/gece — teklif £{displacement['floor_rate']}/oda/gece tabanına yükseltildi.]")
+                quote["displacement_floor_applied"] = True
+            else:
+                quote["displacement_floor_applied"] = False
+            if displacement:
+                quote["displacement"] = displacement
+            return quote
+
         api_key = os.environ.get("EMERGENT_LLM_KEY", "")
         if not api_key:
-            return {
+            return _apply_floor({
                 "suggested_total": heuristic_total,
                 "per_room_per_night": round(heuristic_total / max(1, total_rooms * nights), 2),
                 "discount_pct": round(group_disc * 100, 1),
@@ -274,7 +307,7 @@ def create_sustainability_router(db, require_roles):
                     f"{nights} nights × (1 − {int(group_disc*100)}% group discount) = £{heuristic_total}."
                 ),
                 "fallback": True,
-            }
+            })
 
         from emergentintegrations.llm.chat import LlmChat, UserMessage
         sys_prompt = (
@@ -284,11 +317,13 @@ def create_sustainability_router(db, require_roles):
             '"currency":"GBP","reasoning":"2-3 short sentences"}. '
             "Rules: never go below 70% of base × rooms × nights; offer a bigger discount "
             "for >15 rooms or >5 nights; consider event_type (corporate/wedding can carry 5-12% discount); "
-            "for tight budget hints, lean to the discounted end. No markdown, no extra fields."
+            "for tight budget hints, lean to the discounted end. "
+            "If displacement_analysis is provided, NEVER quote below floor_total — displaced transient "
+            "revenue must be covered. No markdown, no extra fields."
         )
         payload = {
             "rooms_in_property": [
-                {"name": r.get("name"), "base_rate": r.get("base_rate"), "max_occupancy": r.get("max_occupancy", 2)}
+                {"name": r.get("name"), "base_rate": r.get("base_rate") or r.get("base_price"), "max_occupancy": r.get("max_occupancy") or r.get("max_guests", 2)}
                 for r in rooms[:8]
             ],
             "request": {k: gb.get(k) for k in [
@@ -299,6 +334,7 @@ def create_sustainability_router(db, require_roles):
             "nights": nights,
             "avg_base_rate": round(avg_rate, 2),
             "currency": "GBP",
+            "displacement_analysis": displacement,
         }
         try:
             llm = LlmChat(
@@ -312,10 +348,10 @@ def create_sustainability_router(db, require_roles):
             parsed = _json.loads(m.group(0)) if m else {}
             parsed.setdefault("currency", "GBP")
             parsed["fallback"] = False
-            return parsed
+            return _apply_floor(parsed)
         except Exception as e:
             logger.exception("AI quote failed: %s", e)
-            return {
+            return _apply_floor({
                 "suggested_total": heuristic_total,
                 "per_room_per_night": round(heuristic_total / max(1, total_rooms * nights), 2),
                 "discount_pct": round(group_disc * 100, 1),
@@ -323,7 +359,7 @@ def create_sustainability_router(db, require_roles):
                 "reasoning": "AI engine unavailable; heuristic quote shown.",
                 "fallback": True,
                 "error": str(e)[:200],
-            }
+            })
 
     # ============================================================
     # PUBLIC: ESG eco-badge (used on direct booking widget header)

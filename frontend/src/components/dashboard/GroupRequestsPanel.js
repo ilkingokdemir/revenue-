@@ -280,6 +280,12 @@ export default function GroupRequestsPanel({ propertyId, hotelName = "" }) {
                           className="px-2 py-1 rounded bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-bold">Use this</button>
                       </div>
                       <p className="text-[11px] text-stone-300 leading-relaxed">{aiQuote.reasoning}</p>
+                      {aiQuote.displacement_floor_applied && (
+                        <p className="text-[10px] text-amber-300 mt-1 flex items-center gap-1" data-testid="gr-ai-floor-note">
+                          <Scale className="w-3 h-3" />Displacement tabanı uygulandı — teklif kırılma fiyatının altına inmez
+                          (min £{aiQuote.displacement?.floor_rate}/oda/gece)
+                        </p>
+                      )}
                       {aiQuote.fallback && <p className="text-[9px] text-amber-400 mt-1">Heuristic fallback</p>}
                     </div>
                   )}

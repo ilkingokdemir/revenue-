@@ -2706,3 +2706,20 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   net değer, yerinden edilen oda, önerilen min fiyat, tahmini fiyat notu.
 - E2E DOĞRULANDI: curl (15 odalı test talebi → accept, net 5320, tahmini 152) + playwright
   (listede KABUL rozeti, detay kartı içerik doğru). Test talebi temizlendi.
+
+## Iter 492 (2026-07-30) — AI Auto-Quote × Displacement Tabanı TAMAMLANDI
+- group_displacement.py refactor: compute_displacement() ve yardımcıları modül seviyesine
+  taşındı (db parametreli) — diğer modüller import edebilir. analyze/verdicts aynı davranış.
+- sustainability.py ai_auto_quote: heuristik fiyatla displacement hesaplanır,
+  floor_rate = breakeven*1.05; _apply_floor() 3 dönüş yolunda da (no-key, LLM, LLM-hata)
+  teklifi tabanın altındaysa yükseltir (displacement_floor_applied: true) ve yanıt içine
+  displacement özeti gömer. LLM payload'ına displacement_analysis + sistem kuralı eklendi
+  ("NEVER quote below floor_total").
+- FIX (önceden var olan bug): ai-quote avg_rate 'base_rate' okuyordu, oda tiplerinde alan
+  'base_price' → None ile TypeError 500 atıyordu. base_rate||base_price||100 fallback yapıldı
+  (max_occupancy||max_guests aynı şekilde).
+- GroupRequestsPanel: AI quote kartına amber "Displacement tabanı uygulandı (min £X/oda/gece)"
+  notu (gr-ai-floor-note, sadece floor_applied=true iken).
+- E2E DOĞRULANDI: 18 odalı düşük bütçeli talep → gerçek GPT-5.2 quote £7695 (> taban £3591),
+  displacement bilgisi yanıtın içinde; regression: analyze reject/breakeven 63.33 doğru.
+  Test verileri temizlendi.

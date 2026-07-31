@@ -1,0 +1,6 @@
+Checked: 1056 GET endpoints
+500 errors: 1
+
+[500] /api/properties -> REQUEST-ERROR: ConnectTimeout HTTPSConnectionPool(host='review-hub-108.preview.emergentagent.com', port=443): Max retries exceeded with url: /api/prop
+
+Suspicious 400s: 0

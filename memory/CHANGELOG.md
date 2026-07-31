@@ -2790,3 +2790,16 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - Kalıcı test suite: backend/tests/test_iteration497_seal_regression.py (standalone pytest).
 - Minor backlog notları (bug değil): 'approved' ama 'settled' olmayan claim'ler stats'ta
   paid/pending dışında kalıyor; drip run-now global (property-scoped değil).
+
+## Iter 498-499 (2026-07-31) — FULL DEEP TEST (bütün yazılım) + 4 LOW Fix DOĞRULANDI
+- Iter 498 GENİŞ TARAMA (testing_agent): 260/260 sidebar paneli tıklandı → 0 boş ekran, 0
+  crash; 1056/1056 backend endpoint (OpenAPI süpürmesi) → 0 beklenmeyen 500. Landing'ler,
+  mobil, owner portal, Basit mod: hepsi OK. Sadece 4 LOW bulgu.
+- Iter 499 FİXLER (hepsi testing_agent ile doğrulandı, %100 pass):
+  1. nightly_recap.py: GPT yorumu nightly_recap_cache koleksiyonunda (pid+date) cache'leniyor
+     — 2. çağrı 3.70s→0.13s.
+  2. NightlyRecapPanel: 'Loading recap…' yerine animasyonlu skeleton (recap-skeleton).
+  3. NightlyRecapPanel kontrast: yarı saydam gradyanlar (açık zeminde lavanta görünüyordu)
+     → solid bg-stone-950 koyu kartlar.
+  4. ChatbotAutomationPanel boş durumu: 'şube seçicisinden tek otel seçin' yönlendirme metni.
+- Kalıcı test: backend/tests/test_iteration498_endpoint_sweep.py (tam endpoint süpürmesi).

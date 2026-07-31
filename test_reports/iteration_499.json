@@ -1,0 +1,16 @@
+{
+  "summary": "Narrow re-test of 4 fixes from iter 498. All 4 verified PASS. FIX 1 (nightly-recap cache): 1st call 3.70s, 2nd call 0.13s, identical commentary from nightly_recap_cache. FIX 2 (skeleton): [data-testid=recap-skeleton] visible during load. FIX 3 (contrast): header/KPIs/commentary all on bg-stone-950 (rgb(12,10,9)) with white text — high contrast confirmed by screenshot. FIX 4 (chatbot empty state): guidance text 'Sol menünün üstündeki şube seçicisinden (\"All Branches\") tek bir otel seçtiğinizde bu panel aktifleşir.' present in [data-testid=chatbot-panel-empty]. Mini regression: login OK, dashboard loads, morning-brief panel opens.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/test_reports/iteration_499.json"],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (login endpoint returns token in 'token' field, not 'access_token')",
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Narrow verification tour completed for iter 498 fixes. Nightly recap cache proven via backend curl timing (0.13s cached vs 3.70s cold). Dark theme + skeleton verified in UI. Chatbot 'All Branches' guidance text present. If broader testing needed, re-run iter 498 endpoint sweep (test_iteration498_endpoint_sweep.py).",
+  "rca of the issue": "N/A — all 4 targeted fixes verified working"
+}

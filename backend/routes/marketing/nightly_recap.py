@@ -154,28 +154,39 @@ def create_nightly_recap_router(db, require_roles):
                 "adr_delta_pct":  round(((metrics["adr"] - ly["adr"]) / ly["adr"]) * 100, 1) if ly["adr"] else None,
             }
 
-        # GPT commentary
+        # GPT commentary (cached per property+date to keep loads fast)
         commentary = ""
-        api_key = os.environ.get("EMERGENT_LLM_KEY", "")
-        if api_key:
-            try:
-                from emergentintegrations.llm.chat import LlmChat, UserMessage
-                payload = {"target": metrics, "ly": yoy_block}
-                sys_prompt = (
-                    "You are a hotel revenue manager writing a 3-line nightly recap. "
-                    "Be concrete, mention the biggest mover (occupancy / ADR / RevPAR vs LY), "
-                    "and end with a brief recommendation for tonight. Plain text only, "
-                    "no markdown, no bullet points, max 70 words."
-                )
-                llm = LlmChat(
-                    api_key=api_key, session_id=f"nightly-{property_id}-{target_iso}",
-                    system_message=sys_prompt,
-                ).with_model("openai", "gpt-5.2")
-                import json as _json
-                resp = await llm.send_message(UserMessage(text=_json.dumps(payload)))
-                commentary = (resp or "").strip()[:600]
-            except Exception as e:
-                logger.exception("Nightly recap LLM failed: %s", e)
+        cached = await db.nightly_recap_cache.find_one(
+            {"property_id": property_id, "date": target_iso}, {"_id": 0, "commentary": 1})
+        if cached and cached.get("commentary"):
+            commentary = cached["commentary"]
+        else:
+            api_key = os.environ.get("EMERGENT_LLM_KEY", "")
+            if api_key:
+                try:
+                    from emergentintegrations.llm.chat import LlmChat, UserMessage
+                    payload = {"target": metrics, "ly": yoy_block}
+                    sys_prompt = (
+                        "You are a hotel revenue manager writing a 3-line nightly recap. "
+                        "Be concrete, mention the biggest mover (occupancy / ADR / RevPAR vs LY), "
+                        "and end with a brief recommendation for tonight. Plain text only, "
+                        "no markdown, no bullet points, max 70 words."
+                    )
+                    llm = LlmChat(
+                        api_key=api_key, session_id=f"nightly-{property_id}-{target_iso}",
+                        system_message=sys_prompt,
+                    ).with_model("openai", "gpt-5.2")
+                    import json as _json
+                    resp = await llm.send_message(UserMessage(text=_json.dumps(payload)))
+                    commentary = (resp or "").strip()[:600]
+                    if commentary:
+                        await db.nightly_recap_cache.update_one(
+                            {"property_id": property_id, "date": target_iso},
+                            {"$set": {"commentary": commentary,
+                                      "cached_at": datetime.now(timezone.utc).isoformat()}},
+                            upsert=True)
+                except Exception as e:
+                    logger.exception("Nightly recap LLM failed: %s", e)
 
         return {
             "property_id": property_id,

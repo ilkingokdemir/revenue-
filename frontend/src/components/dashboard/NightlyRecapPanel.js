@@ -44,8 +44,16 @@ export default function NightlyRecapPanel({ propertyId, hotelName = "" }) {
   useEffect(() => { setData(null); }, [propertyId]);
 
   if (loading && !data) return (
-    <div className="p-12 text-center text-stone-400">
-      <Loader2 className="w-5 h-5 animate-spin inline mr-2" />Loading recap…
+    <div className="p-5 space-y-5" data-testid="recap-skeleton">
+      <div className="h-28 rounded-2xl bg-stone-200 animate-pulse" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[0, 1, 2, 3].map(i => <div key={i} className="h-24 rounded-2xl bg-stone-200 animate-pulse" />)}
+      </div>
+      <div className="h-20 rounded-2xl bg-stone-200 animate-pulse" />
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[0, 1, 2, 3, 4].map(i => <div key={i} className="h-16 rounded-2xl bg-stone-200 animate-pulse" />)}
+      </div>
+      <p className="text-xs text-stone-400 text-center">Gece özeti ve AI yorumu hazırlanıyor…</p>
     </div>
   );
 
@@ -59,7 +67,7 @@ export default function NightlyRecapPanel({ propertyId, hotelName = "" }) {
   return (
     <div className="p-5 space-y-5" data-testid="nightly-recap-panel">
       {/* Header */}
-      <div className="bg-gradient-to-br from-indigo-900/40 via-violet-900/30 to-stone-900/50 border border-indigo-500/30 rounded-2xl p-5">
+      <div className="bg-stone-950 border border-indigo-500/30 rounded-2xl p-5">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-300">
@@ -90,7 +98,7 @@ export default function NightlyRecapPanel({ propertyId, hotelName = "" }) {
 
       {/* AI commentary */}
       {data?.commentary && (
-        <div className="bg-gradient-to-br from-violet-900/30 to-stone-900/50 border border-violet-500/30 rounded-2xl p-4" data-testid="recap-commentary">
+        <div className="bg-stone-950 border border-violet-500/30 rounded-2xl p-4" data-testid="recap-commentary">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-violet-300 font-bold mb-2">
             <Sparkles className="w-3 h-3" />AI commentary (GPT-5.2)
           </div>
@@ -109,7 +117,7 @@ export default function NightlyRecapPanel({ propertyId, hotelName = "" }) {
 
       {/* Top room types */}
       {data?.top_rooms?.length > 0 && (
-        <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-4" data-testid="recap-top-rooms">
+        <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4" data-testid="recap-top-rooms">
           <h3 className="text-sm font-bold text-stone-100 mb-3 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />Top performing room types
           </h3>
@@ -134,7 +142,7 @@ export default function NightlyRecapPanel({ propertyId, hotelName = "" }) {
 
       {/* YoY block */}
       {yoy && (
-        <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-4" data-testid="recap-yoy">
+        <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4" data-testid="recap-yoy">
           <h3 className="text-sm font-bold text-stone-100 mb-3">vs Same night last year — {new Date(yoy.date).toLocaleDateString("en", { day: "numeric", month: "short", year: "numeric" })}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
             <YoyRow label="Occupancy" cur={`${data.occupancy_pct}%`}  ly={`${yoy.occupancy_pct}%`} delta={occDelta} suffix="pp" />
@@ -152,7 +160,7 @@ function Kpi({ label, value, sub, delta, deltaSign }) {
   const dc = delta != null ? deltaClass(deltaSign) : null;
   const DI = dc?.icon;
   return (
-    <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-4">
+    <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4">
       <div className="text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-1">{label}</div>
       <div className="text-3xl font-black text-stone-100 tabular-nums">{value}</div>
       <div className="flex items-center justify-between text-[10px] mt-1">
@@ -165,7 +173,7 @@ function Kpi({ label, value, sub, delta, deltaSign }) {
 
 function Tile({ icon: Icon, label, value, color }) {
   return (
-    <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-3">
+    <div className="bg-stone-950 border border-stone-800 rounded-2xl p-3">
       <div className="text-[10px] uppercase tracking-widest text-stone-500 font-bold mb-1 flex items-center gap-1">
         <Icon className="w-3 h-3" />{label}
       </div>
@@ -178,7 +186,7 @@ function YoyRow({ label, cur, ly, delta, suffix }) {
   const dc = delta != null ? deltaClass(delta) : null;
   const DI = dc?.icon;
   return (
-    <div className="bg-stone-800/40 rounded-xl p-3">
+    <div className="bg-stone-800 rounded-xl p-3">
       <div className="text-[9px] uppercase tracking-widest text-stone-500 font-bold mb-0.5">{label}</div>
       <div className="text-base font-black text-stone-200 tabular-nums">{cur}</div>
       <div className="flex items-center justify-between text-[10px] mt-0.5">

@@ -181,7 +181,10 @@ const ChatbotAutomationPanel = ({ propertyId }) => {
     return (
       <div className="bg-white border border-stone-200 rounded-2xl p-6" data-testid="chatbot-panel-empty">
         <div className="flex items-center gap-3"><Bot className="w-6 h-6 text-violet-600" />
-          <p className="text-stone-600">Chatbot Automations için lütfen bir otel seçin.</p>
+          <div>
+            <p className="text-stone-600 font-semibold">Chatbot Automations için lütfen bir otel seçin.</p>
+            <p className="text-xs text-stone-400 mt-1">Sol menünün üstündeki şube seçicisinden ("All Branches") tek bir otel seçtiğinizde bu panel aktifleşir.</p>
+          </div>
         </div>
       </div>
     );

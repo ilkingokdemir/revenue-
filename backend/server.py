@@ -776,6 +776,12 @@ api_router.include_router(group_displacement_router)
 from routes.finance_ext.damage_protection import create_damage_protection_router
 damage_protection_router = create_damage_protection_router(db)
 api_router.include_router(damage_protection_router)
+from routes.guests.id_verification import create_id_verification_router
+id_verification_router = create_id_verification_router(db)
+api_router.include_router(id_verification_router)
+from routes.finance_ext.pay_by_link import create_pay_by_link_router
+pay_by_link_router = create_pay_by_link_router(db)
+api_router.include_router(pay_by_link_router)
 from routes.platform_ext.demo_seeder import create_demo_seeder_router
 demo_seeder_router = create_demo_seeder_router(db)
 api_router.include_router(demo_seeder_router)

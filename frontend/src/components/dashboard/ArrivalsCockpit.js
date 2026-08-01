@@ -97,6 +97,33 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
     finally { setBusy(null); }
   };
 
+  const verifyId = (a) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/webp";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        setBusy(a.booking_id);
+        toast.info("Kimlik AI ile okunuyor…");
+        try {
+          const { data } = await axios.post(`${API}/id-verification/verify`, {
+            booking_id: a.booking_id, image_base64: reader.result,
+          });
+          if (data.status === "verified") toast.success(`Kimlik doğrulandı ✓ ${data.extracted?.full_name || ""} (eşleşme %${Math.round(data.name_match * 100)})`);
+          else if (data.status === "mismatch") toast.warning(`İsim eşleşmedi: belgede "${data.extracted?.full_name}", rezervasyonda "${a.guest_name}"`);
+          else toast.error("Belge okunamadı — daha net bir fotoğraf deneyin");
+          load();
+        } catch (e) { toast.error(e?.response?.data?.detail || "Doğrulama başarısız"); }
+        finally { setBusy(null); }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -340,6 +367,21 @@ export const ArrivalsCockpit = ({ propertyId, user }) => {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      {a.id_verification === "verified" ? (
+                        <span className="p-1.5 text-sky-500" title="Kimlik doğrulandı ✓" data-testid={`idv-verified-${a.booking_id}`}>
+                          <UserCheck className="w-4 h-4" />
+                        </span>
+                      ) : (
+                        <button onClick={() => verifyId(a)} disabled={!canAct || busy === a.booking_id}
+                          className={`p-1.5 rounded-lg border border-transparent disabled:opacity-40 ${
+                            a.id_verification === "mismatch"
+                              ? "text-rose-500 hover:bg-rose-50 hover:border-rose-200"
+                              : "text-sky-600 hover:bg-sky-50 hover:border-sky-200"}`}
+                          title={a.id_verification === "mismatch" ? "İsim eşleşmedi — tekrar dene" : "Kimlik doğrula (AI)"}
+                          data-testid={`idv-btn-${a.booking_id}`}>
+                          <CreditCard className="w-4 h-4" />
+                        </button>
+                      )}
                       {dwCfg && !a.damage_waiver ? (
                         <button onClick={() => addWaiver(a)} disabled={!canAct || busy === a.booking_id}
                           className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 border border-transparent hover:border-emerald-200 disabled:opacity-40"

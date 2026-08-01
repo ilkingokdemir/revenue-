@@ -1,9 +1,6 @@
-# Image Integration Testing Playbook (iter 324)
-
-Image attachments via emergentintegrations:
-- Use **base64-encoded images** for all tests (no SVG/BMP/HEIC; only PNG/JPEG/WEBP)
-- Real-feature images required (no blank/solid color)
-- Resize large images to reasonable bounds before encoding
-- Vision endpoint: `POST /api/revenue/market-robot/scrape-booking-vision`
-  body: `{booking_url: str, hotel_name?: str, model?: "gpt-4o-mini"|"gpt-5-mini"|"gemini-2.5-flash"}`
-  returns: `{ok, hotel_name, room_count, price_per_night, currency, star_rating, raw_extraction, screenshot_size_bytes}`
+# Image Integration Testing Playbook
+- Always use base64-encoded images (JPEG/PNG/WEBP only) for tests.
+- No blank/solid-color images — must contain real visual features (text, edges, shadows).
+- Re-detect MIME after any transformation; animated images → first frame only.
+- Resize large images to reasonable bounds.
+- ID verification endpoint: POST /api/id-verification/verify {booking_id, image_base64} (admin token gerekli). Test images should look like ID documents (name text visible) for meaningful extraction; a photo with readable printed name is enough.

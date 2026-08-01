@@ -64,6 +64,11 @@ def create_arrivals_router(db, require_roles):
         ).to_list(1000)
         key_map = {k["booking_id"]: k for k in keys}
 
+        idvs = await db.id_verifications.find(
+            {"booking_id": {"$in": booking_ids}}, {"_id": 0, "booking_id": 1, "status": 1}
+        ).to_list(1000)
+        idv_map = {v["booking_id"]: v.get("status") for v in idvs}
+
         arrivals = []
         counters = {"total": 0, "registered": 0, "id_verified": 0, "paid": 0, "key_issued": 0}
         for b in bookings:
@@ -108,6 +113,7 @@ def create_arrivals_router(db, require_roles):
                 "source": b.get("source", "direct"),
                 "special_requests": b.get("special_requests", ""),
                 "damage_waiver": bool(b.get("damage_waiver")),
+                "id_verification": idv_map.get(b["id"], "none"),
                 "progress": {
                     "link_sent": bool(reg),
                     "registered": registered,

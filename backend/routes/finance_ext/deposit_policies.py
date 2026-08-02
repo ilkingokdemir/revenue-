@@ -45,20 +45,21 @@ class DepositPolicyIn(BaseModel):
 class DepositEvaluateIn(BaseModel):
     property_id: str = "default"
     channel: Optional[str] = ""
-    lead_days: int = 0
+    lead_days: Optional[int] = None
     rate_plan_id: Optional[str] = ""
     total_price: float = 0
     rooms: int = 1
 
 
-def _match_policy(policy: dict, channel: str, lead_days: int, rate_plan_id: str, rooms: int = 1) -> bool:
+def _match_policy(policy: dict, channel: str, lead_days: Optional[int], rate_plan_id: str, rooms: int = 1) -> bool:
     t = policy.get("trigger") or {}
     chans = t.get("channels") or []
     if chans and channel not in chans:
         return False
     lead_lte = t.get("lead_days_lte")
-    if lead_lte is not None and lead_days > int(lead_lte):
-        return False
+    if lead_lte is not None:
+        if lead_days is None or lead_days > int(lead_lte):
+            return False
     min_rooms = t.get("min_rooms")
     if min_rooms is not None and rooms < int(min_rooms):
         return False
@@ -130,7 +131,7 @@ def create_deposit_policies_router(db):
 
         matched = None
         for p in policies:
-            if _match_policy(p, data.channel or "", int(data.lead_days or 0), data.rate_plan_id or "", int(data.rooms or 1)):
+            if _match_policy(p, data.channel or "", data.lead_days, data.rate_plan_id or "", int(data.rooms or 1)):
                 matched = p
                 break
 

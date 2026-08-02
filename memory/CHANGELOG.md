@@ -2925,3 +2925,20 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   ve PaymentResultPage (navigator.language otomatik + ?lang= override, 3 dil tam çeviri).
   StripeLinkModal'da EN/TR/DE seçici (stripe-email-lang). Test: ?lang=tr → "Ödeme iptal edildi".
 - TEST (self-test): 4 akış da curl + screenshot ile uçtan uca doğrulandı.
+
+## Iter 508 (2026-08-02) — Enerji Raporu + Native Mobil + Derin SEAL Regresyonu TAMAMLANDI
+- 1) Enerji Raporu: GET /api/smart-rooms/{pid}/energy/report?months=6 (aylık kWh + £ tasarruf +
+  sweep sayısı, GBP_PER_KWH oranıyla). SmartRoomsPanel'e "Aylık Enerji Tasarrufu" bar grafiği
+  (energy-monthly-report testid).
+- 2) Native Mobil Uygulama (/app/mobile): Expo React Native (SDK 51) — LoginScreen (sunucu URL
+  yapılandırılabilir, JWT AsyncStorage), Bugün (pickup KPI + hedef + bildirimler), Rezervasyonlar,
+  Ödemeler (stats + link geçmişi + çıkış). Bottom tabs, TR arayüz. `npx expo export` ile 738 modül
+  başarıyla derlendi (jsEngine: jsc — container'da hermesc çalışmıyor). README ile Expo Go talimatları.
+  NOT: Cihaz/emülatör bu ortamda yok — kullanıcı Expo Go ile test etmeli.
+- 3) Derin SEAL Regresyonu (testing_agent, rapor: iteration_502.json): Backend 21 pass/24 (%96),
+  Frontend %100 — iter 500-508'in tüm akışları doğrulandı.
+- BUG FIX (regresyondan): deposit_policies evaluate — check_in/lead_days yokken lead_days_lte
+  politikaları her şeyi eşleştiriyordu ('Last-minute 50%' grup politikasını gölgeliyordu).
+  Fix: lead_days Optional[None] → lead_days_lte politikaları lead_days verilmeden eşleşmez.
+  Doğrulandı: rooms=4→Grup 30% (£300), rooms=1→eşleşme yok, lead_days=3→Last-minute 50%.
+- Kozmetik öneriler (stats key adları, /scheduler/configs GET) bilinçli olarak atlandı (over-engineering).

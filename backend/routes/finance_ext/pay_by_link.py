@@ -38,6 +38,28 @@ class SendLinkIn(BaseModel):
     checkout_url: str
     amount: float
     currency: str = "GBP"
+    language: str = "en"
+
+
+class BulkSendIn(BaseModel):
+    property_id: str = ""
+    language: str = "en"
+
+
+_EMAIL_I18N = {
+    "en": {"dear": "Dear", "body": "Please use the secure link below to complete your payment of",
+           "btn": "Pay Securely", "note": "Payment is processed securely by Stripe.",
+           "reminder": "This is a friendly reminder — your payment is still pending.",
+           "subject": "Payment request", "rem_subject": "Payment reminder"},
+    "tr": {"dear": "Sayın", "body": "Aşağıdaki güvenli bağlantıyı kullanarak ödemenizi tamamlayabilirsiniz:",
+           "btn": "Güvenli Öde", "note": "Ödemeniz Stripe altyapısıyla güvenle işlenir.",
+           "reminder": "Nazik bir hatırlatma — ödemeniz henüz tamamlanmadı.",
+           "subject": "Ödeme talebi", "rem_subject": "Ödeme hatırlatması"},
+    "de": {"dear": "Sehr geehrte/r", "body": "Bitte nutzen Sie den sicheren Link unten, um Ihre Zahlung abzuschließen:",
+           "btn": "Sicher bezahlen", "note": "Die Zahlung wird sicher über Stripe abgewickelt.",
+           "reminder": "Eine freundliche Erinnerung — Ihre Zahlung steht noch aus.",
+           "subject": "Zahlungsanforderung", "rem_subject": "Zahlungserinnerung"},
+}
 
 
 class TipApplyIn(BaseModel):
@@ -46,23 +68,22 @@ class TipApplyIn(BaseModel):
 
 
 def _link_email_html(booking: dict, hotel: str, checkout_url: str, amount: float,
-                     currency: str, reminder: bool = False) -> str:
+                     currency: str, reminder: bool = False, lang: str = "en") -> str:
+    t = _EMAIL_I18N.get(lang, _EMAIL_I18N["en"])
     sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(currency.upper(), currency.upper() + " ")
-    note = ("<p style='color:#b45309'>This is a friendly reminder — your payment is still pending.</p>"
-            if reminder else "")
+    note = f"<p style='color:#b45309'>{t['reminder']}</p>" if reminder else ""
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
       <h2 style="color:#1c1917">{hotel}</h2>
-      <p>Dear {booking.get('guest_name', 'Guest')},</p>
+      <p>{t['dear']} {booking.get('guest_name', '')},</p>
       {note}
-      <p>Please use the secure link below to complete your payment of
-         <b>{sym}{amount:.2f}</b> for your stay
+      <p>{t['body']} <b>{sym}{amount:.2f}</b>
          ({booking.get('check_in')} → {booking.get('check_out')}).</p>
       <p style="margin:28px 0;text-align:center">
         <a href="{checkout_url}" style="background:#4f46e5;color:#fff;padding:12px 28px;
-           border-radius:8px;text-decoration:none;font-weight:bold">Pay Securely</a>
+           border-radius:8px;text-decoration:none;font-weight:bold">{t['btn']}</a>
       </p>
-      <p style="color:#78716c;font-size:12px">Payment is processed securely by Stripe.</p>
+      <p style="color:#78716c;font-size:12px">{t['note']}</p>
     </div>"""
 
 
@@ -234,8 +255,9 @@ def create_pay_by_link_router(db):
         prop = await db.properties.find_one({"id": booking.get("property_id", "")}, {"_id": 0, "name": 1})
         hotel = (prop or {}).get("name", "Hotel")
         sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(body.currency.upper(), body.currency.upper() + " ")
-        html = _link_email_html(booking, hotel, body.checkout_url, body.amount, body.currency)
-        delivered = await _deliver_email(email, f"{hotel} — Payment request {sym}{body.amount:.2f}", html)
+        lang = body.language if body.language in _EMAIL_I18N else "en"
+        html = _link_email_html(booking, hotel, body.checkout_url, body.amount, body.currency, lang=lang)
+        delivered = await _deliver_email(email, f"{hotel} — {_EMAIL_I18N[lang]['subject']} {sym}{body.amount:.2f}", html)
         mocked = not delivered
         last_tx = await db.payment_transactions.find_one(
             {"booking_id": body.booking_id, "kind": "pay_by_link"},
@@ -317,6 +339,64 @@ def create_pay_by_link_router(db):
                "created_at": now.isoformat()}
         await db.pay_link_insights.update_one({"property_id": key}, {"$set": doc}, upsert=True)
         return await _attach_applied(doc)
+
+    @router.post("/pay-links/bulk-send")
+    async def bulk_send(body: BulkSendIn,
+                        current_user: dict = Depends(require_perm("edit_bookings"))):
+        q = {"status": "confirmed", "payment_status": {"$in": ["pending", "partial"]},
+             "guest_email": {"$nin": [None, ""]}, "total_price": {"$gt": 0}}
+        if body.property_id and body.property_id != "all":
+            q["property_id"] = body.property_id
+        bookings = await db.bookings.find(q, {"_id": 0}).sort("check_in", 1).to_list(20)
+        base = (os.environ.get("PUBLIC_BASE_URL") or "").rstrip("/")
+        lang = body.language if body.language in _EMAIL_I18N else "en"
+        sent = skipped = 0
+        results = []
+        for booking in bookings:
+            has_pending = await db.payment_transactions.find_one(
+                {"booking_id": booking["id"], "kind": "pay_by_link",
+                 "payment_status": "pending", "superseded_by": {"$exists": False}}, {"_id": 1})
+            if has_pending:
+                skipped += 1
+                continue
+            amount = float(booking.get("total_price") or 0)
+            currency = (booking.get("currency") or "gbp").lower()
+            try:
+                session = stripe.checkout.Session.create(
+                    line_items=[{"price_data": {
+                        "currency": currency,
+                        "unit_amount": int(round(amount * 100)),
+                        "product_data": {"name": f"Konaklama ödemesi — {booking.get('guest_name', '')} ({booking.get('check_in')} → {booking.get('check_out')})"},
+                    }, "quantity": 1}],
+                    mode="payment",
+                    success_url=f"{base}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+                    cancel_url=f"{base}/payment/cancel",
+                    metadata={"booking_id": booking["id"], "kind": "pay_by_link", "bulk": "true"})
+            except stripe.error.StripeError as e:
+                logger.warning(f"bulk session failed: {e}")
+                skipped += 1
+                continue
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await db.payment_transactions.insert_one({
+                "session_id": session.id, "booking_id": booking["id"],
+                "property_id": booking.get("property_id"), "kind": "pay_by_link",
+                "amount": amount, "currency": currency,
+                "status": "initiated", "payment_status": "pending",
+                "created_by": f"bulk:{current_user.get('email', '')}",
+                "created_at": now_iso, "updated_at": now_iso})
+            prop = await db.properties.find_one({"id": booking.get("property_id", "")}, {"_id": 0, "name": 1})
+            hotel = (prop or {}).get("name", "Hotel")
+            html = _link_email_html(booking, hotel, session.url, amount, currency.upper(), lang=lang)
+            delivered = await _deliver_email(
+                booking["guest_email"], f"{hotel} — {_EMAIL_I18N[lang]['subject']}", html)
+            await db.payment_transactions.update_one(
+                {"session_id": session.id},
+                {"$set": {"emailed_to": booking["guest_email"], "emailed_at": now_iso,
+                          "email_mocked": not delivered}})
+            sent += 1
+            results.append({"booking_ref": booking.get("booking_ref"),
+                            "guest": booking.get("guest_name"), "amount": amount})
+        return {"ok": True, "sent": sent, "skipped": skipped, "results": results}
 
     @router.post("/pay-links/insights/apply")
     async def apply_tip(body: TipApplyIn,

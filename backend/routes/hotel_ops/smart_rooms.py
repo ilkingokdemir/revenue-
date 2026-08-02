@@ -52,6 +52,48 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+async def run_eco_sweep(db, property_id: str = "", triggered_by: str = "nightly_cron") -> dict:
+    """Boş odaları eco moda alır. property_id boş/all ise tüm tesisleri tarar."""
+    if not property_id or property_id == "all":
+        props = await db.properties.find({}, {"_id": 0, "id": 1}).to_list(50)
+        pids = [p["id"] for p in props]
+    else:
+        pids = [property_id]
+    total_rooms, total_kwh = 0, 0.0
+    for pid in pids:
+        rooms = await db.rooms.find(
+            {"property_id": pid, "status": {"$ne": "occupied"}},
+            {"_id": 0, "id": 1, "name": 1}).to_list(300)
+        states = await db.smart_room_states.find(
+            {"property_id": pid, "scene": "eco"}, {"_id": 0, "room_id": 1}).to_list(300)
+        already_eco = {s["room_id"] for s in states}
+        targets = [r for r in rooms if r["id"] not in already_eco]
+        now = _now()
+        devices = {**DEFAULT_DEVICES, **SCENES["eco"]}
+        for r in targets:
+            await db.smart_room_states.update_one(
+                {"property_id": pid, "room_id": r["id"]},
+                {"$set": {"property_id": pid, "room_id": r["id"],
+                          "room_name": r.get("name"), "devices": dict(devices),
+                          "scene": "eco", "updated_at": now}},
+                upsert=True)
+        if targets:
+            kwh = round(len(targets) * KWH_PER_ECO_ROOM, 2)
+            await db.smart_room_energy_log.insert_one({
+                "id": str(uuid.uuid4()), "property_id": pid,
+                "rooms_affected": len(targets), "kwh_saved": kwh,
+                "at": now, "triggered_by": triggered_by})
+            await db.smart_room_actions.insert_one({
+                "id": str(uuid.uuid4()), "property_id": pid, "room_id": "*",
+                "action": "eco_sweep",
+                "detail": f"{len(targets)} boş oda eco moda alındı ({kwh} kWh)",
+                "by": triggered_by, "at": now})
+            total_rooms += len(targets)
+            total_kwh += kwh
+    return {"ok": True, "rooms_affected": total_rooms, "kwh_saved": round(total_kwh, 2),
+            "properties": len(pids)}
+
+
 def create_smart_rooms_router(db, require_roles):
     router = APIRouter(prefix="/smart-rooms", tags=["smart-rooms"])
     ROLES = ("admin", "manager", "receptionist", "housekeeping")
@@ -152,37 +194,7 @@ def create_smart_rooms_router(db, require_roles):
     @router.post("/{property_id}/eco-sweep")
     async def eco_sweep(property_id: str,
                         current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
-        rooms = await db.rooms.find(
-            {"property_id": property_id, "status": {"$ne": "occupied"}},
-            {"_id": 0, "id": 1, "name": 1},
-        ).to_list(300)
-        states = await db.smart_room_states.find(
-            {"property_id": property_id, "scene": "eco"}, {"_id": 0, "room_id": 1}
-        ).to_list(300)
-        already_eco = {s["room_id"] for s in states}
-        targets = [r for r in rooms if r["id"] not in already_eco]
-        now = _now()
-        devices = {**DEFAULT_DEVICES, **SCENES["eco"]}
-        for r in targets:
-            await db.smart_room_states.update_one(
-                {"property_id": property_id, "room_id": r["id"]},
-                {"$set": {"property_id": property_id, "room_id": r["id"],
-                          "room_name": r.get("name"), "devices": dict(devices),
-                          "scene": "eco", "updated_at": now}},
-                upsert=True,
-            )
-        kwh = round(len(targets) * KWH_PER_ECO_ROOM, 2)
-        if targets:
-            await db.smart_room_energy_log.insert_one({
-                "id": str(uuid.uuid4()), "property_id": property_id,
-                "rooms_affected": len(targets), "kwh_saved": kwh,
-                "at": now, "triggered_by": current_user.get("email", ""),
-            })
-            await _log(property_id, "*", "eco_sweep",
-                       f"{len(targets)} boş oda eco moda alındı ({kwh} kWh)",
-                       current_user.get("email", ""))
-        return {"ok": True, "rooms_affected": len(targets), "kwh_saved": kwh,
-                "already_eco": len(already_eco)}
+        return await run_eco_sweep(db, property_id, triggered_by=current_user.get("email", ""))
 
     @router.get("/{property_id}/energy/summary")
     async def energy_summary(property_id: str,

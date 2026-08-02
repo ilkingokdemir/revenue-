@@ -360,6 +360,33 @@ def create_dashboard_router(db, require_roles):
                 "icon": "check",
             })
 
+        # 10. Channel pickup drop alert (this week vs previous week)
+        cut7 = (now_utc - timedelta(days=7)).isoformat()
+        cut14 = (now_utc - timedelta(days=14)).isoformat()
+        ch_cur, ch_prev = {}, {}
+        async for r in db.bookings.aggregate([
+                {"$match": {**bk_q, "created_at": {"$gte": cut14, "$lte": now_utc.isoformat()}}},
+                {"$group": {"_id": {"src": "$source",
+                                    "wk": {"$cond": [{"$gte": ["$created_at", cut7]}, "cur", "prev"]}},
+                            "rooms": {"$sum": {"$ifNull": ["$rooms", 1]}}}}]):
+            src = r["_id"].get("src") or "Direct"
+            if src.startswith("demo_seed"):
+                continue
+            (ch_cur if r["_id"]["wk"] == "cur" else ch_prev)[src] = int(r["rooms"])
+        for src, prev_n in ch_prev.items():
+            cur_n = ch_cur.get(src, 0)
+            if prev_n >= 5 and cur_n <= prev_n * 0.6:
+                drop_pct = round((prev_n - cur_n) * 100 / prev_n)
+                notifications.append({
+                    "type": "channel_drop",
+                    "priority": "medium",
+                    "title": f"Channel pickup drop: {src} −{drop_pct}%",
+                    "subtitle": f"{cur_n} rooms this week vs {prev_n} last week — check rates/availability on this channel",
+                    "action": "channels",
+                    "ref_id": src,
+                    "icon": "trending-down",
+                })
+
         # Sort: high → medium → low, then by date
         priority_order = {"high": 0, "medium": 1, "low": 2}
         notifications.sort(key=lambda n: (priority_order.get(n["priority"], 3), n.get("created_at", "") or ""))

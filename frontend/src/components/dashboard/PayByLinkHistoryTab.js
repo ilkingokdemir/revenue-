@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { CheckCircle, Clock, WarningCircle, BellRinging, EnvelopeSimple, FileText, Sparkle, ArrowsClockwise } from "@phosphor-icons/react";
+import { CheckCircle, Clock, WarningCircle, BellRinging, EnvelopeSimple, FileText, Sparkle, ArrowsClockwise, PaperPlaneTilt } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -28,6 +29,21 @@ export const PayByLinkHistoryTab = ({ propertyId }) => {
     } catch (e) { /* silent */ }
     setTipsLoading(false);
   }, [propertyId]);
+
+  const [bulkSending, setBulkSending] = useState(false);
+
+  const bulkSend = async () => {
+    if (!window.confirm("Ödenmemiş rezervasyonlara (en fazla 20) toplu Stripe ödeme linki gönderilecek. Devam?")) return;
+    setBulkSending(true);
+    try {
+      const { data } = await axios.post(`${API}/pay-links/bulk-send`, {
+        property_id: propertyId || "", language: "en",
+      });
+      toast.success(`${data.sent} link gönderildi, ${data.skipped} atlandı (zaten aktif link var)`);
+      load();
+    } catch (e) { toast.error(e.response?.data?.detail || "Toplu gönderim başarısız"); }
+    setBulkSending(false);
+  };
 
   const applyTip = async (tip) => {
     try {
@@ -125,9 +141,17 @@ export const PayByLinkHistoryTab = ({ propertyId }) => {
 
       {/* Link & reminder history */}
       <div>
-        <h3 className="text-sm font-semibold text-stone-800 mb-2 flex items-center gap-1.5">
-          <BellRinging size={15} className="text-indigo-600" /> Stripe Link & Reminder History
-        </h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-stone-800 flex items-center gap-1.5">
+            <BellRinging size={15} className="text-indigo-600" /> Stripe Link & Reminder History
+          </h3>
+          <button onClick={bulkSend} disabled={bulkSending}
+            className="text-[11px] px-3 py-1.5 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5"
+            data-testid="bulk-send-links-btn">
+            {bulkSending ? <ArrowsClockwise size={12} className="animate-spin" /> : <PaperPlaneTilt size={12} weight="bold" />}
+            {bulkSending ? "Gönderiliyor…" : "Toplu Link Gönder"}
+          </button>
+        </div>
         {links.length === 0 ? (
           <div className="bg-white rounded-xl border border-stone-200 p-8 text-center text-sm text-stone-400">
             No Stripe payment links yet

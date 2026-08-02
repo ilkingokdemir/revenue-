@@ -11,6 +11,7 @@ export const StripeLinkModal = ({ booking, onClose }) => {
   const [links, setLinks] = useState([]);
   const [newLink, setNewLink] = useState(null);
   const [sending, setSending] = useState(false);
+  const [emailLang, setEmailLang] = useState("en");
   const [suggestion, setSuggestion] = useState(null);
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export const StripeLinkModal = ({ booking, onClose }) => {
       const { data } = await axios.post(`${API}/pay-links/send`, {
         booking_id: booking.id, checkout_url: newLink.checkout_url,
         amount: newLink.amount, currency: (newLink.currency || "gbp").toUpperCase(),
+        language: emailLang,
       });
       toast.success(data.status === "mocked"
         ? `E-posta hazırlandı (${data.to}) — demo modunda gerçek gönderim yapılmadı`
@@ -166,7 +168,14 @@ export const StripeLinkModal = ({ booking, onClose }) => {
                   </button>
                 </div>
               </div>
-              <div className="flex gap-2 mt-2.5">
+              <div className="flex gap-2 mt-2.5 items-center">
+                <select value={emailLang} onChange={e => setEmailLang(e.target.value)}
+                  className="text-[10px] border border-stone-200 rounded-lg px-1.5 py-1.5 bg-white text-stone-600"
+                  title="E-posta dili" data-testid="stripe-email-lang">
+                  <option value="en">EN</option>
+                  <option value="tr">TR</option>
+                  <option value="de">DE</option>
+                </select>
                 <button onClick={sendEmail} disabled={sending}
                   className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 text-[11px] font-semibold rounded-lg hover:bg-indigo-100 disabled:opacity-50 flex items-center justify-center gap-1.5"
                   data-testid="stripe-send-email-btn">

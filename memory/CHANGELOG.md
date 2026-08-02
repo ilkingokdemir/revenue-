@@ -2907,3 +2907,21 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   · +X puan" rozeti (tip-apply-N / tip-applied-N testid'leri).
 - TEST (self-test): curl (channel 4 hafta, apply baseline %13.3, applied log + impact null <7g)
   + UI screenshot (kanal tablosu, uygulandı rozeti) — OK.
+
+## Iter 507 (2026-08-02) — P1 Temizliği: Eco Cron, Kanal Uyarısı, Toplu Link, Misafir Dili TAMAMLANDI
+- TESPIT: ROADMAP'te açık görünen "Price Checker→CRM" ve "price-check rate-limit" ZATEN KODDA VARDI
+  (price_checker.py: demo_requests insert + IP 10/saat limit) — ROADMAP güncellendi, iş yapılmadı.
+- 1) Eco Sweep gece cron'u: smart_rooms.py'ye modül seviyesi run_eco_sweep(db, property_id) çıkarıldı
+  (boş property = tüm tesisler döngüsü); endpoint delegate eder. JOB_HANDLERS["eco_sweep"] +
+  03:30 UTC nightly cron seed. Test: trigger → 37 oda / 13 tesis / 55.5 kWh.
+- 2) Kanal Uyarısı: dashboard notifications #10 — kanal bazında bu hafta vs geçen hafta oda;
+  geçen hafta >=5 oda ve düşüş >=%40 ise "channel_drop" (medium) bildirimi (demo_seed hariç).
+  Test: "Agoda −50%" bildirimi üretildi.
+- 3) Toplu Ödeme Linki: POST /api/pay-links/bulk-send {property_id, language} — ödenmemiş confirmed
+  + guest_email'li rezervasyonlar (max 20), aktif pending linki olanlar atlanır; her biri için yeni
+  Stripe session + e-posta (mock-safe). UI: PayByLinkHistoryTab "Toplu Link Gönder" butonu (confirm +
+  toast). Test: 19 gönderildi / 1 atlandı.
+- 4) Misafir Dili: _EMAIL_I18N (EN/TR/DE) — ödeme e-postası (send + bulk + reminder subject'leri)
+  ve PaymentResultPage (navigator.language otomatik + ?lang= override, 3 dil tam çeviri).
+  StripeLinkModal'da EN/TR/DE seçici (stripe-email-lang). Test: ?lang=tr → "Ödeme iptal edildi".
+- TEST (self-test): 4 akış da curl + screenshot ile uçtan uca doğrulandı.

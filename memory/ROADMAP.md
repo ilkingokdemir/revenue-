@@ -86,3 +86,12 @@ Kalan FLYR boşlukları (P1 adayı): ~~gün-içi re-price~~ (iter 450 DONE), ~~A
 - DONE: 18 ay fiyat ufku + baz fiyat eğrisi, Airbnb/STR compset sekmesi, ücretsiz Price Checker lead aracı.
 - P1 kalan: Price Checker lead'lerini Demo Leads CRM pipeline'ına bağlama; price-check endpoint'ine rate-limit.
 - P2: Gerçek Airbnb scraper adaptörü (şu an simülasyon), Native Mobile App.
+
+## Iter 505-507 sonrası (2026-08-02)
+- DONE: Pay-by-Link tam paketi (QR + A5 yazdırma, AI dönüşüm ipuçları + etki takibi, analitik,
+  toplu gönderim, EN/TR/DE e-posta/sayfa, oto-hatırlatma cron, haftalık pickup raporu cron).
+- DONE: Pickup suite (24s kart, hedef+tahmin+geçmiş, kanal trendi, kanal düşüş uyarısı, güçlü gün bildirimi).
+- DONE (düzeltme): Price Checker→CRM ve rate-limit ZATEN VARDI — tekrar önerme.
+- DONE: Eco Sweep nightly cron (03:30 UTC, tüm tesisler).
+- P0 (anahtar bekliyor): Resend, Twilio, OTA push, FCM, Lighthouse compset.
+- P2: Native Mobile App (React Native), PCI/SOC2 dokümantasyonu, gerçek IoT/Airbnb adaptörleri.

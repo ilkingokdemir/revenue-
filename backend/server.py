@@ -1483,6 +1483,16 @@ async def _job_pickup_weekly_report(property_id: str) -> dict:
 
 JOB_HANDLERS["pickup_weekly_report"] = _job_pickup_weekly_report
 
+from routes.hotel_ops.smart_rooms import run_eco_sweep as _run_eco_sweep
+
+async def _job_eco_sweep(property_id: str) -> dict:
+    try:
+        return await _run_eco_sweep(db, property_id or "", triggered_by="nightly_cron")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["eco_sweep"] = _job_eco_sweep
+
 from routes.finance_ext.digital_auth import create_digital_auth_router
 api_router.include_router(create_digital_auth_router(db, require_roles))
 
@@ -1891,6 +1901,13 @@ async def startup_event():
                 "notes": "Haftalık pickup özeti — her pazartesi admin/manager'lara e-posta",
                 "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "system"})
             logger.info("Scheduler: seeded pickup_weekly_report weekly cron (Mon 07:00 UTC)")
+        if not await db.scheduler_config.find_one({"property_id": "", "job": "eco_sweep"}, {"_id": 1}):
+            await db.scheduler_config.insert_one({
+                "property_id": "", "job": "eco_sweep", "enabled": True,
+                "cron_hour": 3, "cron_minute": 30, "cron_dow": None,
+                "notes": "Gece Eco Sweep — boş odaları otomatik eco moda alır (enerji tasarrufu)",
+                "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "system"})
+            logger.info("Scheduler: seeded eco_sweep nightly cron (03:30 UTC)")
     except Exception as e:
         logger.warning("pickup/pay-link cron seed failed: %s", e)
 

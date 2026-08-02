@@ -156,8 +156,13 @@ def create_pickup_pulse_router(db):
                 {"$group": {"_id": None, "rooms": {"$sum": {"$ifNull": ["$rooms", 1]}}}}]):
             mtd_rooms = int(r.get("rooms") or 0)
         target_rooms = int((tgt or {}).get("target_rooms") or 0)
+        import calendar
+        days_in_month = calendar.monthrange(now.year, now.month)[1]
+        forecast_rooms = round(mtd_rooms / max(now.day, 1) * days_in_month)
         target = {"month": month, "target_rooms": target_rooms, "mtd_rooms": mtd_rooms,
-                  "progress_pct": round(mtd_rooms * 100 / target_rooms, 1) if target_rooms else 0}
+                  "progress_pct": round(mtd_rooms * 100 / target_rooms, 1) if target_rooms else 0,
+                  "forecast_rooms": forecast_rooms,
+                  "on_track": forecast_rooms >= target_rooms if target_rooms else None}
 
         return {
             "rooms_sold_24h": rooms_sold,
@@ -202,6 +207,18 @@ def create_pickup_pulse_router(db):
             {"property_id": property_id or "all"}, {"_id": 0, "created_at": 1, "emails_sent": 1, "email_mocked": 1},
             sort=[("created_at", -1)])
         return {**stats, "last_sent": last}
+
+    @router.get("/pulse/weekly-reports")
+    async def weekly_reports_archive(property_id: str = "", limit: int = 12,
+                                     current_user: dict = Depends(require_perm("view_bookings", "view_dashboard", mode="any"))):
+        q = {}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        return await db.pickup_weekly_reports.find(
+            q, {"_id": 0, "id": 1, "property_id": 1, "week_start": 1, "week_end": 1,
+                "rooms": 1, "room_nights": 1, "revenue": 1, "adr": 1,
+                "emailed_to": 1, "emails_sent": 1, "email_mocked": 1, "created_at": 1}
+        ).sort("created_at", -1).to_list(min(int(limit), 50))
 
     @router.post("/pulse/weekly-report/send")
     async def send_weekly_report(property_id: str = "",

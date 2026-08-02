@@ -27,6 +27,7 @@ class DepositTrigger(BaseModel):
     channels: List[str] = Field(default_factory=list)        # empty = all
     lead_days_lte: Optional[int] = None                       # apply when lead time ≤ N
     rate_plan_ids: List[str] = Field(default_factory=list)   # empty = all
+    min_rooms: Optional[int] = None                           # apply when rooms ≥ N (group rule)
 
 
 class DepositPolicyIn(BaseModel):
@@ -47,15 +48,19 @@ class DepositEvaluateIn(BaseModel):
     lead_days: int = 0
     rate_plan_id: Optional[str] = ""
     total_price: float = 0
+    rooms: int = 1
 
 
-def _match_policy(policy: dict, channel: str, lead_days: int, rate_plan_id: str) -> bool:
+def _match_policy(policy: dict, channel: str, lead_days: int, rate_plan_id: str, rooms: int = 1) -> bool:
     t = policy.get("trigger") or {}
     chans = t.get("channels") or []
     if chans and channel not in chans:
         return False
     lead_lte = t.get("lead_days_lte")
     if lead_lte is not None and lead_days > int(lead_lte):
+        return False
+    min_rooms = t.get("min_rooms")
+    if min_rooms is not None and rooms < int(min_rooms):
         return False
     rps = t.get("rate_plan_ids") or []
     if rps and rate_plan_id not in rps:
@@ -125,7 +130,7 @@ def create_deposit_policies_router(db):
 
         matched = None
         for p in policies:
-            if _match_policy(p, data.channel or "", int(data.lead_days or 0), data.rate_plan_id or ""):
+            if _match_policy(p, data.channel or "", int(data.lead_days or 0), data.rate_plan_id or "", int(data.rooms or 1)):
                 matched = p
                 break
 

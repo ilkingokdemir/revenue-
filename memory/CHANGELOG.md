@@ -2855,3 +2855,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   UI screenshot'ları (hedef çubuğu 7/120 %5.8, %30 preset £189.92) OK.
 - DERS: Aynı dosyaya aynı batch'te birden çok search_replace çakışabiliyor — state bloğu kaybolmuştu,
   tek tek yeniden uygulandı (editTarget is not defined hatası düzeltildi).
+
+## Iter 503 (2026-08-02) — Hatırlatma Geçmişi, Hedef Tahmini, Depozito Kuralları TAMAMLANDI
+- 1) Pay-by-Link sekmesi (PaymentsPanel): PayByLinkHistoryTab.js — GET /api/pay-links/history
+  (misafir adı + booking_ref join'li link/hatırlatma geçmişi, REMINDER + superseded rozetleri,
+  emailed_to "(demo)" göstergesi) + GET /api/pulse/weekly-reports (haftalık rapor arşivi).
+- 2) Hedef Tahmini: target bloğuna forecast_rooms (mtd/gün × ay günü) + on_track eklendi;
+  Pickup24Card'da "Forecast: ~X" çipi (yeşil=hedefte, amber=geride). Doğrulandı: 7 MTD → ~108 tahmin, hedef 120 → amber.
+- 3) Depozito Kuralları: MEVCUT deposit_policies altyapısına min_rooms trigger'ı eklendi (grup kuralı,
+  rooms >= N). DepositPolicyPanel'e "Min rooms" alanı. StripeLinkModal artık /deposit-policies/evaluate
+  çağırıp eşleşen politika önerisini çip olarak gösteriyor (tıklayınca tutarı uygular).
+  Test: "Grup Depozitosu 30%" (min_rooms 3) → 4 oda £1000 → £300 önerisi; 1 oda → eşleşme yok.
+- NOT: "Gerçek E-posta" maddesi kullanıcının Resend API anahtarını vermesini bekliyor (şu an mocked).
+- TEST (self-test): curl ile history/archive/forecast/evaluate + UI screenshot (Pay-by-Link sekmesi
+  REMINDER rozetleriyle, forecast çipi) — hepsi OK.

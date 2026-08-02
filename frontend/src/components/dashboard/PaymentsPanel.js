@@ -11,7 +11,8 @@ import {
 import {
   CurrencyGbp, ArrowsClockwise, CheckCircle, WarningCircle, Clock,
 } from "@phosphor-icons/react";
-import { CreditCard, BarChart3, Settings, TrendingUp, Shield, Smartphone, Plus, Send } from "lucide-react";
+import { CreditCard, BarChart3, Settings, TrendingUp, Shield, Smartphone, Plus, Send, Link2 } from "lucide-react";
+import { PayByLinkHistoryTab } from "./PayByLinkHistoryTab";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -108,6 +109,7 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
   const tabs = [
     { id: "dashboard", label: "Overview", icon: BarChart3 },
     { id: "guest-links", label: "Guest Links", icon: Send },
+    { id: "pay-links", label: "Pay-by-Link", icon: Link2 },
     { id: "terminal", label: "Card Terminals", icon: Smartphone },
     { id: "transactions", label: "Transactions", icon: CreditCard },
     { id: "settings", label: "Settings", icon: Settings },
@@ -356,6 +358,9 @@ export function PaymentsPanel({ properties, activePropertyId: propActiveProperty
             )}
           </div>
         )}
+
+        {/* Pay-by-Link history & reports */}
+        {tab === "pay-links" && <PayByLinkHistoryTab propertyId={propertyId} />}
 
         {/* Transactions */}
         {tab === "transactions" && (

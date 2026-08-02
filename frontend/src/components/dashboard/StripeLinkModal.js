@@ -10,6 +10,17 @@ export const StripeLinkModal = ({ booking, onClose }) => {
   const [links, setLinks] = useState([]);
   const [newLink, setNewLink] = useState(null);
   const [sending, setSending] = useState(false);
+  const [suggestion, setSuggestion] = useState(null);
+
+  useEffect(() => {
+    const leadDays = booking.check_in
+      ? Math.max(0, Math.round((new Date(booking.check_in) - Date.now()) / 86400000)) : 0;
+    axios.post(`${API}/deposit-policies/evaluate`, {
+      property_id: booking.property_id, channel: booking.source || "",
+      lead_days: leadDays, rooms: booking.rooms || 1,
+      total_price: booking.total_price || 0,
+    }).then(({ data }) => { if (data.matched) setSuggestion(data); }).catch(() => {});
+  }, [booking]);
 
   const sendEmail = async () => {
     setSending(true);
@@ -101,6 +112,14 @@ export const StripeLinkModal = ({ booking, onClose }) => {
                 {creating ? "Creating…" : "Create Link"}
               </button>
             </div>
+            {suggestion && (
+              <button onClick={() => setAmount(suggestion.deposit_required.toFixed(2))}
+                className="mt-1.5 w-full text-left text-[11px] px-3 py-2 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 hover:bg-rose-100 transition-colors"
+                data-testid="stripe-deposit-suggestion">
+                <b>Deposit policy: {suggestion.policy?.name}</b> — suggested £{suggestion.deposit_required.toFixed(2)}
+                {suggestion.non_refundable ? " · non-refundable" : ""} · due in {suggestion.due_within_hours}h (click to apply)
+              </button>
+            )}
           </div>
 
           {newLink && (

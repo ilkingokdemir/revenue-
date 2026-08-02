@@ -242,6 +242,22 @@ def create_pay_by_link_router(db):
                           "email_mocked": mocked}})
         return {"status": "mocked" if mocked else "sent", "to": email}
 
+    @router.get("/pay-links/history")
+    async def links_history(property_id: str = "", limit: int = 50,
+                            current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
+        q = {"kind": "pay_by_link"}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        txs = await db.payment_transactions.find(q, {"_id": 0}).sort("created_at", -1).to_list(min(int(limit), 200))
+        bids = list({t["booking_id"] for t in txs if t.get("booking_id")})
+        bmap = {b["id"]: b async for b in db.bookings.find(
+            {"id": {"$in": bids}}, {"_id": 0, "id": 1, "guest_name": 1, "booking_ref": 1})}
+        for t in txs:
+            bk = bmap.get(t.get("booking_id"), {})
+            t["guest_name"] = bk.get("guest_name", "")
+            t["booking_ref"] = bk.get("booking_ref", "")
+        return txs
+
     @router.get("/pay-links/{booking_id}")
     async def list_links(booking_id: str,
                          current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):

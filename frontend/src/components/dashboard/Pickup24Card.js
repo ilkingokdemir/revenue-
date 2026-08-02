@@ -143,7 +143,13 @@ export const Pickup24Card = ({ propertyId }) => {
           <div data-testid="pickup-target-bar">
             <div className="flex justify-between text-[10px] text-stone-500 mb-0.5">
               <span><b className="text-stone-700">{data.target.mtd_rooms}</b> / {data.target.target_rooms} rooms MTD</span>
-              <span className={`font-semibold ${data.target.progress_pct >= 100 ? "text-emerald-600" : "text-indigo-600"}`}>{data.target.progress_pct}%</span>
+              <span className="flex items-center gap-2">
+                <span className={`px-1.5 py-0 rounded-full font-semibold ${data.target.on_track ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}
+                  data-testid="pickup-forecast-chip" title="Month-end forecast at current pace">
+                  Forecast: ~{data.target.forecast_rooms}
+                </span>
+                <span className={`font-semibold ${data.target.progress_pct >= 100 ? "text-emerald-600" : "text-indigo-600"}`}>{data.target.progress_pct}%</span>
+              </span>
             </div>
             <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
               <div className={`h-full rounded-full transition-all ${data.target.progress_pct >= 100 ? "bg-emerald-500" : "bg-indigo-500"}`}

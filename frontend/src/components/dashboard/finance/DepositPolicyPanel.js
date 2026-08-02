@@ -141,6 +141,12 @@ export const DepositPolicyPanel = ({ propertyId = "" }) => {
                 onChange={e => setForm({ ...form, trigger: { ...form.trigger, lead_days_lte: e.target.value === "" ? null : parseInt(e.target.value) } })}
                 className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" />
             </Field>
+            <Field label="Min rooms ≥ (group rule, empty = any)">
+              <input type="number" value={form.trigger?.min_rooms ?? ""}
+                onChange={e => setForm({ ...form, trigger: { ...form.trigger, min_rooms: e.target.value === "" ? null : parseInt(e.target.value) } })}
+                placeholder="e.g. 5 for groups"
+                className="w-full border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="dep-form-min-rooms" />
+            </Field>
           </div>
           <div className="flex gap-4 mt-3">
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={form.non_refundable} onChange={e => setForm({ ...form, non_refundable: e.target.checked })} /> Non-refundable</label>

@@ -848,6 +848,33 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
         except Exception:
             pass
 
+        # 🌿 Enerji / Sürdürülebilirlik karnesi (son 30 gün Eco Sweep)
+        energy_html = ""
+        try:
+            month_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+            kwh30 = 0.0
+            sweeps30 = 0
+            async for r in db.smart_room_energy_log.aggregate([
+                    {"$match": {"property_id": {"$in": pids_all}, "at": {"$gte": month_ago}}},
+                    {"$group": {"_id": None, "kwh": {"$sum": "$kwh_saved"}, "n": {"$sum": 1}}}]):
+                kwh30 = round(float(r.get("kwh") or 0), 1)
+                sweeps30 = int(r.get("n") or 0)
+            if kwh30 > 0:
+                from routes.hotel_ops.smart_rooms import GBP_PER_KWH
+                co2 = round(kwh30 * 0.207, 1)
+                energy_html = f"""
+                <div style="border:1px solid #a7f3d0;background:#ecfdf5;border-radius:10px;padding:12px 14px;margin-top:22px;">
+                  <div style="font-size:13px;font-weight:bold;color:#065f46;">🌿 Enerji &amp; Sürdürülebilirlik Karnesi (30 gün)</div>
+                  <div style="font-size:12px;color:#57534e;margin-top:8px;">
+                    Gece Eco Sweep otomasyonu boş odaları eco moda alarak
+                    <b style="color:#059669;">{kwh30} kWh</b> enerji ve
+                    <b style="color:#059669;">£{round(kwh30 * GBP_PER_KWH, 2)}</b> tasarruf sağladı
+                    ({sweeps30} tarama) — yaklaşık <b>{co2} kg CO₂</b> emisyonu önlendi.
+                  </div>
+                </div>"""
+        except Exception:
+            pass
+
         # 🧠 "Bu Hafta Beyniniz Ne Öğrendi?" kartı
         brain_html = ""
         try:
@@ -942,6 +969,7 @@ def create_owner_pulse_router(db, require_roles, demand_radar_router, compset_ro
           {risk_html}
           {impact_html}
           {str_html}
+          {energy_html}
           {brain_html}
           {dp_html}
           <p style="text-align:center;margin:26px 0 8px;">

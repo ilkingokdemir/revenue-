@@ -200,6 +200,14 @@ async def _mark_paid(db, session_id: str, extra: dict):
                 "currency": (tx.get("currency") or "gbp").upper(),
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "created_by": "Stripe Pay-by-Link"})
+            try:
+                from routes.platform_ext.mobile_push import send_expo_push
+                await send_expo_push(
+                    db, "Ödeme alındı 💳",
+                    f"£{float(tx.get('amount') or 0):,.2f} — {(booking or {}).get('guest_name', 'Misafir')} ({(booking or {}).get('booking_ref', '')})",
+                    {"type": "payment_received", "booking_id": tx["booking_id"]})
+            except Exception:
+                pass
 
 
 def create_pay_by_link_router(db):

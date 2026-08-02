@@ -2942,3 +2942,16 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   Fix: lead_days Optional[None] → lead_days_lte politikaları lead_days verilmeden eşleşmez.
   Doğrulandı: rooms=4→Grup 30% (£300), rooms=1→eşleşme yok, lead_days=3→Last-minute 50%.
 - Kozmetik öneriler (stats key adları, /scheduler/configs GET) bilinçli olarak atlandı (over-engineering).
+
+## Iter 509 (2026-08-02) — Mobil Push + Mobil Housekeeping + Sahip Enerji Karnesi TAMAMLANDI
+- 1) Mobil Push (Expo Push API, anahtar gerektirmez): routes/platform_ext/mobile_push.py —
+  POST /api/mobile/push-token (kayıt), POST /api/mobile/push-test, GET /api/mobile/push-tokens.
+  send_expo_push(): exp.host'a chunk gönderim + DeviceNotRegistered token temizliği.
+  _mark_paid artık ödeme alınınca "Ödeme alındı 💳" push'u atar. Mobil: src/push.js (expo-notifications,
+  izin + token kaydı, login sonrası otomatik). Test: fake token → Expo API "invalid_removed: 1" (uç uca kanıt).
+- 2) Mobil Housekeeping: HousekeepingScreen — tesis çipleri, oda listesi, dokununca durum döngüsü
+  (dirty→in_progress→clean→inspected) PUT /api/housekeeping/rooms/{id}/status ile (optimistic UI).
+  Yeni "Odalar" tab'ı. expo export: 876 modül derlendi.
+- 3) Sahip Enerji Karnesi: owner_pulse digest'ine 🌿 kart — son 30 gün Eco Sweep kWh + £ + kg CO₂
+  (0.207 kg/kWh). Test: preview/default → "9.0 kWh, £2.52" kartı HTML'de.
+- NOT: Push'un cihazda görünmesi için kullanıcının Expo Go ile fiziksel cihazda giriş yapması gerekir.

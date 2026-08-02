@@ -5,7 +5,7 @@ Resepsiyon tek tıkla ödeme linki üretir; misafir linkten öder; sistem folioy
 Endpoints:
 - POST /api/pay-links/create {booking_id, amount?, origin_url} (staff)
 - GET  /api/pay-links/{booking_id} (staff) — geçmiş linkler
-- GET  /api/payments/status/{session_id} (public, poll)
+- GET  /api/pay-links/status/{session_id} (public, poll)
 - POST /api/stripe/webhook
 """
 import os
@@ -90,7 +90,7 @@ def create_pay_by_link_router(db):
             {"booking_id": booking_id, "kind": "pay_by_link"}, {"_id": 0}
         ).sort("created_at", -1).to_list(20)
 
-    @router.get("/payments/status/{session_id}")
+    @router.get("/pay-links/status/{session_id}")
     async def payment_status(session_id: str):
         rec = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
         if not rec:

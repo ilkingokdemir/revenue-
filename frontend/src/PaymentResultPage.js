@@ -16,7 +16,7 @@ export default function PaymentResultPage() {
     const poll = async () => {
       attempts += 1;
       try {
-        const { data } = await axios.get(`${API}/payments/status/${sessionId}`);
+        const { data } = await axios.get(`${API}/pay-links/status/${sessionId}`);
         if (data.payment_status === "paid") { setStatus("paid"); return; }
         if (["failed", "expired"].includes(data.payment_status)) { setStatus("failed"); return; }
       } catch (e) { /* keep polling */ }

@@ -25,7 +25,7 @@ export const StripeLinkModal = ({ booking, onClose }) => {
         origin_url: window.location.origin,
       });
       setNewLink(data);
-      navigator.clipboard?.writeText(data.checkout_url);
+      try { await navigator.clipboard?.writeText(data.checkout_url); } catch (err) { /* clipboard blocked */ }
       toast.success("Stripe payment link created & copied to clipboard");
       fetchLinks();
     } catch (e) {
@@ -36,7 +36,7 @@ export const StripeLinkModal = ({ booking, onClose }) => {
 
   const checkStatus = async (sessionId) => {
     try {
-      const { data } = await axios.get(`${API}/payments/status/${sessionId}`);
+      const { data } = await axios.get(`${API}/pay-links/status/${sessionId}`);
       if (data.payment_status === "paid") toast.success("Payment received!");
       else toast.info(`Status: ${data.payment_status}`);
       fetchLinks();
@@ -76,7 +76,7 @@ export const StripeLinkModal = ({ booking, onClose }) => {
               <div className="text-[10px] font-semibold text-indigo-700 uppercase mb-1">Link ready — copied to clipboard</div>
               <div className="flex items-center gap-2">
                 <input readOnly value={newLink.checkout_url} className="flex-1 text-[11px] bg-white border border-indigo-200 rounded px-2 py-1.5 text-stone-600 truncate" />
-                <button onClick={() => { navigator.clipboard?.writeText(newLink.checkout_url); toast.success("Copied"); }}
+                <button onClick={() => { navigator.clipboard?.writeText(newLink.checkout_url).then(() => toast.success("Copied")).catch(() => toast.error("Copy blocked — select the link manually")); }}
                   className="p-1.5 bg-white border border-indigo-200 rounded hover:bg-indigo-100" data-testid="stripe-copy-link-btn">
                   <Copy size={13} className="text-indigo-600" />
                 </button>

@@ -326,7 +326,7 @@ const BookingEnginePanel = ({ properties }) => {
                           )}
                           {booking.payment_status !== "paid" && (
                             <button onClick={() => setStripeLinkBooking(booking)}
-                              className="px-2 py-1 bg-indigo-50 text-indigo-700 text-[10px] rounded font-medium hover:bg-indigo-100 flex items-center gap-0.5" data-testid={`stripe-link-${booking.booking_ref}`}>
+                              className="px-2 py-1 bg-indigo-50 text-indigo-700 text-[10px] rounded font-medium hover:bg-indigo-100 flex items-center gap-0.5" data-testid={`stripe-link-${booking.booking_ref || booking.id}`}>
                               <CreditCard size={10} weight="bold" /> Stripe Link
                             </button>
                           )}

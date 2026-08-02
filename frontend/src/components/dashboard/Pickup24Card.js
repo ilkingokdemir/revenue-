@@ -92,7 +92,7 @@ export const Pickup24Card = ({ propertyId }) => {
               <div className="flex items-center gap-2 min-w-0">
                 <Bed size={13} className="text-stone-300 shrink-0" />
                 <div className="min-w-0">
-                  <span className="font-mono font-semibold text-stone-700">{b.booking_ref}</span>
+                  <span className="font-mono font-semibold text-stone-700">{b.booking_ref || "—"}</span>
                   <span className="text-stone-400 mx-1">·</span>
                   <span className="text-stone-600">{b.guest_name}</span>
                   <div className="text-[10px] text-stone-400 truncate">

@@ -2803,3 +2803,20 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
      → solid bg-stone-950 koyu kartlar.
   4. ChatbotAutomationPanel boş durumu: 'şube seçicisinden tek otel seçin' yönlendirme metni.
 - Kalıcı test: backend/tests/test_iteration498_endpoint_sweep.py (tam endpoint süpürmesi).
+
+## Iter 500 (2026-08-02) — 24-Saat Pickup Widget + Stripe Pay-by-Link TAMAMLANDI
+- YENİ backend: routes/pms/pickup_pulse.py — GET /api/pulse/pickup-24h?property_id=X
+  (son 24 saatte satılan odalar, pickup % = 24s oda-gecesi / 30 günlük kapasite, oda-gecesi,
+  gelir, pickup ADR, önceki 24s trend, kaynak dağılımı, konaklama tarihi dağılımı, son 15 rezervasyon).
+- YENİ frontend: Pickup24Card.js — TodayHub (ana dashboard) + DashboardHome'a eklendi.
+  Canlı nabız noktası, 5 istatistik, kaynak çipleri, genişletilebilir satılan oda listesi. 2dk auto-refresh.
+- Stripe Pay-by-Link frontend tamamlandı (backend pay_by_link.py önceki fork'ta yazılmıştı):
+  - StripeLinkModal.js: Rooms & Bookings > Bookings sekmesindeki ödenmemiş rezervasyonlarda
+    "Stripe Link" butonu → tutar gir → Stripe Checkout URL üret + kopyala + link geçmişi + durum kontrol.
+  - PaymentResultPage.js: /payment/success (polling ile durum) ve /payment/cancel sayfaları (App.js'e route eklendi).
+- FIX (test raporu iteration_500.json): /api/payments/status/{sid} rota çakışması (payments.py gölgeliyordu)
+  → /api/pay-links/status/{sid} olarak yeniden adlandırıldı (frontend güncellendi).
+  clipboard.writeText catch'lendi (preview iframe'de overlay hatası), stripe-link testid booking.id fallback.
+- E2E DOĞRULANDI: curl (pickup verisi + gerçek Stripe checkout URL + status pending/404) + testing_agent
+  (backend 9/9) + screenshot (kart + modal + link geçmişi 3 kayıt, hata overlay'i 0).
+- NOT: Stripe Emergent sandbox test anahtarları kullanıyor (canlıya geçişte kullanıcı kendi hesabını claim eder).

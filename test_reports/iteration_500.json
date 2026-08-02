@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 500 — Tested 24-Hour Pickup dashboard widget + Stripe Pay-by-Link (backend + frontend). Backend: 9/9 pytest passing. Frontend: pickup card renders with real data (35 rooms sold, 47.8% pickup, £11255.81 revenue, +35 trend, source chips, expandable sold-rooms list); Stripe Link modal opens on unpaid booking rows, creates real Stripe checkout URL, populates link history with pending status; /payment/cancel and /payment/success pages render with correct testids and polling behavior. Two frontend issues to report: (1) uncaught runtime error overlay from navigator.clipboard.writeText permission-denied when auto-copying link, (2) many stripe-link buttons have testid 'stripe-link-undefined' because booking_ref is empty for demo bookings.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/payments/status/{session_id}", "issue": "Route conflict: existing route in routes/finance_ext/payments.py (registered at server.py:437) shadows the new one in pay_by_link.py (registered at server.py:784). The old handler ALWAYS returns 200 (even for unknown session_id returns 200 with status=error, payment_status=unknown) and uses emergentintegrations StripeCheckout which cannot resolve sessions created directly via stripe.checkout.Session.create in pay_by_link.py — result: polling of pay-by-link sessions returns payment_status='unknown' from Stripe error instead of 'pending'. Frontend still renders as 'checking/processing' because 'unknown' is not in the terminal set, but the pending flow never resolves via polling. Fix: rename the new route path or share a single handler."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "StripeLinkModal", "issue": "Uncaught runtime error overlay: 'Failed to execute writeText on Clipboard: Write permission denied.' The auto-copy call `navigator.clipboard?.writeText(data.checkout_url)` at StripeLinkModal.js:28 (and line 79) returns a Promise that rejects in the preview iframe/permissions context. Wrap with `.catch(()=>{})` or check `document.hasFocus()` first. This creates a full-screen webpack error overlay that blocks all subsequent user clicks (including stripe-check-status-0).", "selector": "[data-testid=stripe-create-link-btn]", "priority": "HIGH"},
+      {"component": "BookingEnginePanel (Stripe Link buttons)", "issue": "Most Stripe Link buttons have data-testid='stripe-link-undefined' because demo bookings have no booking_ref. Use booking.id fallback: `data-testid={`stripe-link-${booking.booking_ref || booking.id}`}` to keep testids unique.", "selector": "[data-testid^=stripe-link-]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "PaymentResultPage polling for pay-by-link sessions", "issue": "Due to backend route conflict above, polling never resolves to 'paid' even after real payment because the shadowed route reads Stripe via a different code path. Verifying-your-payment state persists (visually acceptable as 'processing').", "affected_selectors": ["[data-testid=payment-result-page]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration500_pickup_paylinks.py",
+    "/app/test_reports/pytest/iter500.xml"
+  ],
+  "action_items": [
+    "Fix route conflict for /api/payments/status/{session_id} — either rename the pay_by_link.py route (e.g. /api/pay-links/status/{session_id}) or make old route delegate for pay-by-link kind sessions.",
+    "Wrap navigator.clipboard.writeText in StripeLinkModal.js (lines 28 and 79) with .catch to prevent uncaught promise rejection error overlay.",
+    "Use booking.id as fallback in data-testid for stripe-link buttons in BookingEnginePanel.",
+    "Consider populating booking_ref for existing demo bookings that lack one (cosmetic — pickup card sold-rooms list shows blank ref)."
+  ],
+  "critical_code_review_comments": [
+    "Route ordering matters: same path defined in two include_routers → later one is silently ignored by FastAPI. Consider assertion/registry check at startup.",
+    "pay_by_link.py: create_link ignores decimal precision by rounding amount*100 — acceptable but note that Stripe amount rounding for GBP may need banker's rounding for tax-inclusive scenarios.",
+    "StripeLinkModal: any clipboard/permissioned API call must be user-gesture-scoped AND error-swallowed to avoid dev overlay in embedded previews."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration500_pickup_paylinks.py"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "80% (4/5 flows fully clean; StripeLinkModal has uncaught clipboard error overlay)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026! (as documented)",
+  "seed_data_creation": "None. Used existing demo bookings and Stripe test keys.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Frontend Stripe Link modal successfully creates real Stripe test-mode checkout URLs and history renders. Backend pickup and pay-links CREATE + LIST all pass. Two known issues: (1) clipboard write throws uncaught error → wrap in .catch (2) /api/payments/status route conflict causes 'unknown' payment_status for pay_by_link sessions. Do not attempt real card payments; pending state is sufficient.",
+  "rca_of_the_issue": "1) Clipboard error: navigator.clipboard.writeText returns a rejected Promise in the sandboxed preview iframe (no user activation / permissions-policy) but the call is unhandled → React devtools/webpack overlay surfaces it as an uncaught runtime error, blocking pointer events. Fix: `.catch(()=>{})` on both calls. 2) Route conflict: FastAPI include_router registers first match wins; pay_by_link's GET /payments/status/{session_id} is shadowed by payments.py's earlier registration. The old handler uses emergentintegrations.StripeCheckout which does not know about sessions created via raw stripe.checkout.Session.create → Stripe lookup returns 'No such checkout.session' style error → response `payment_status: 'unknown'`, `status: 'error'` even for VALID new sessions. Mitigation: rename new endpoint path OR add early-return branch in old handler that detects `kind=='pay_by_link'` records and uses raw stripe.Session.retrieve."
+}

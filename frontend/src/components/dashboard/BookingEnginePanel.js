@@ -8,8 +8,10 @@ import {
 } from "@phosphor-icons/react";
 import { API } from "./config";
 import { RoomEditor } from "./RoomEditor";
+import { StripeLinkModal } from "./StripeLinkModal";
 
 const BookingEnginePanel = ({ properties }) => {
+  const [stripeLinkBooking, setStripeLinkBooking] = useState(null);
   const [rooms, setRooms] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -322,6 +324,12 @@ const BookingEnginePanel = ({ properties }) => {
                               <PaperPlaneTilt size={10} weight="bold" /> Pay Link
                             </button>
                           )}
+                          {booking.payment_status !== "paid" && (
+                            <button onClick={() => setStripeLinkBooking(booking)}
+                              className="px-2 py-1 bg-indigo-50 text-indigo-700 text-[10px] rounded font-medium hover:bg-indigo-100 flex items-center gap-0.5" data-testid={`stripe-link-${booking.booking_ref}`}>
+                              <CreditCard size={10} weight="bold" /> Stripe Link
+                            </button>
+                          )}
                           <button onClick={() => handleUpdateBookingStatus(booking.id, "checked_in")}
                             className="px-2 py-1 bg-blue-50 text-blue-700 text-[10px] rounded font-medium hover:bg-blue-100" data-testid={`checkin-${booking.booking_ref}`}>
                             Check In
@@ -339,6 +347,9 @@ const BookingEnginePanel = ({ properties }) => {
             </div>
           )}
         </>
+      )}
+      {stripeLinkBooking && (
+        <StripeLinkModal booking={stripeLinkBooking} onClose={() => { setStripeLinkBooking(null); fetchBookings(); }} />
       )}
     </div>
   );

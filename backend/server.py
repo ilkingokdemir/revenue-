@@ -782,6 +782,8 @@ api_router.include_router(id_verification_router)
 from routes.finance_ext.pay_by_link import create_pay_by_link_router
 pay_by_link_router = create_pay_by_link_router(db)
 api_router.include_router(pay_by_link_router)
+from routes.pms.pickup_pulse import create_pickup_pulse_router
+api_router.include_router(create_pickup_pulse_router(db))
 from routes.platform_ext.demo_seeder import create_demo_seeder_router
 demo_seeder_router = create_demo_seeder_router(db)
 api_router.include_router(demo_seeder_router)

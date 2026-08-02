@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import DeparturesBoard from "./DeparturesBoard";
+import { Pickup24Card } from "./Pickup24Card";
 import {
   Sparkle,
   ArrowRight,
@@ -351,6 +352,11 @@ export default function TodayHub({ propertyId, hotelName, onNavigate }) {
             Morning Brief'e git
           </button>
         </div>
+      </div>
+
+      {/* 24-Hour Pickup (Pulse) */}
+      <div className="mt-5">
+        <Pickup24Card propertyId={propertyId} />
       </div>
 
       {/* Scheduled Departures Board (Mews parity) */}

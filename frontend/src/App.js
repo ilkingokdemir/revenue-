@@ -27,6 +27,7 @@ import PublicEventPage from "./PublicEventPage";
 import GuestPortalV2Page from "./GuestPortalV2Page";
 import GuestPortalPage from "./GuestPortalPage";
 import GuestPaymentPage from "./GuestPaymentPage";
+import PaymentResultPage from "./PaymentResultPage";
 import TurkishPayPage from "./TurkishPayPage";
 // ---------- EAGER imports (rendered on every dashboard render or first paint) ----------
 import CommandPalette from "./components/CommandPalette";
@@ -2716,6 +2717,9 @@ function App() {
   if (window.location.pathname.startsWith("/pay/")) {
     const payToken = window.location.pathname.split("/pay/")[1];
     return <GuestPaymentPage token={payToken} />;
+  }
+  if (window.location.pathname === "/payment/success" || window.location.pathname === "/payment/cancel") {
+    return <PaymentResultPage />;
   }
   if (window.location.pathname === "/turkish-pay") {
     return <TurkishPayPage />;

@@ -9,6 +9,7 @@ import {
   TrendUp, TrendDown, CheckCircle, Bell, Package, Receipt,
 } from "@phosphor-icons/react";
 import { Progress } from "@/components/ui/progress";
+import { Pickup24Card } from "./Pickup24Card";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -155,6 +156,9 @@ export function DashboardHome({ properties, activePropertyId: propActiveProperty
           </div>
         </div>
       )}
+
+      {/* 24-Hour Pickup */}
+      <Pickup24Card propertyId={propertyId} />
 
       {/* Action Notifications — Don't Forget! */}
       {notifications && notifications.total > 0 && (

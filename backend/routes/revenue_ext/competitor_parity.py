@@ -177,6 +177,24 @@ def create_competitor_parity_router(db, require_roles):
         async for d in db.bookings.aggregate(pipeline):
             pickup = {"count": d.get("count", 0), "revenue": round(d.get("revenue") or 0, 2)}
 
+        # 24h pickup snapshot
+        cut24 = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        now_iso24 = datetime.now(timezone.utc).isoformat()
+        p24 = {"rooms": 0, "room_nights": 0, "revenue": 0.0}
+        async for d in db.bookings.aggregate([
+                {"$match": {"property_id": property_id, "created_at": {"$gte": cut24, "$lte": now_iso24},
+                            "status": {"$nin": ["cancelled"]}}},
+                {"$group": {"_id": None,
+                            "rooms": {"$sum": {"$ifNull": ["$rooms", 1]}},
+                            "room_nights": {"$sum": {"$multiply": [{"$ifNull": ["$rooms", 1]}, {"$ifNull": ["$nights", 1]}]}},
+                            "revenue": {"$sum": "$total_price"}}}]):
+            p24 = {"rooms": int(d.get("rooms") or 0), "room_nights": int(d.get("room_nights") or 0),
+                   "revenue": round(float(d.get("revenue") or 0), 2)}
+        total_rooms_mb = await db.rooms.count_documents({"property_id": property_id})
+        pickup_24h = {**p24,
+                      "pickup_pct": round(p24["room_nights"] * 100 / (total_rooms_mb * 30), 1) if total_rooms_mb else 0}
+        pickup_24h["strong_day"] = pickup_24h["pickup_pct"] >= 5
+
         # STLY snapshot for next 7 days
         ty_rooms = ly_rooms = 0
         for i in range(7):
@@ -243,6 +261,7 @@ def create_competitor_parity_router(db, require_roles):
             "as_of": datetime.now(timezone.utc).isoformat(),
             "today": {"date": today_iso, "arrivals": arrivals, "departures": departures, "in_house": in_house},
             "pickup_7d": pickup,
+            "pickup_24h": pickup_24h,
             "stly_7d": {"ty_rooms": ty_rooms, "ly_rooms": ly_rooms,
                         "delta": ty_rooms - ly_rooms,
                         "delta_pct": round(((ty_rooms - ly_rooms) / ly_rooms) * 100, 1) if ly_rooms else 0},

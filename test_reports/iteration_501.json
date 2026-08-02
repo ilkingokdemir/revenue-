@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 501 — Tested 4 enhancements on top of iteration_500 (24h pickup + Stripe pay-by-link). Backend: 10/10 pytest passing (1 skipped — no email-less booking in dataset). Frontend: pickup-24h-card + pickup-trend-chart render on TodayHub with realistic small numbers (2 rooms, 0.3% pickup, 6 room-nights, £726.8 revenue); Stripe Payment Link modal opens on unpaid booking → Create Link generates real cs_test_ Stripe URL → Send Email + WhatsApp buttons appear → clicking Send Email produces green success toast 'E-posta hazırlandı (emma.singh@example.com) — demo modunda gerçek gönderim yapılmadı' with no error overlay; Morning Brief panel renders 'PICKUP LAST 24 HOURS' block (brief-pickup-24h testid found). Master dashboard (Tier1DashboardPanel) renders without JS errors. No new critical bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration501_pickup_paylinks_enhancements.py",
+    "/app/test_reports/pytest/iter501.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: DashboardHome component is imported in App.js:75 but never rendered — the sidebar 'Master dashboard' item maps to Tier1DashboardPanel instead. Since regression checkpoint mentioned 'DashboardHome renders with Pickup24Card', clarify whether DashboardHome is deprecated or should be routable. Not a bug — Pickup24Card lives on TodayHub which is the actual default dashboard.",
+    "OPTIONAL (pre-existing): React hydration warning '<span> cannot be a child of <option>' surfaces in console — unrelated to iteration 501, worth cleaning up when convenient."
+  ],
+  "critical_code_review_comments": [
+    "pickup_pulse.py strong_day formula: `pickup_pct >= 5 and rooms_sold > prev_rooms_sold` — good, but no unit test asserts positive strong_day case. Consider a seeded fixture that guarantees strong_day=true so the notification branch (dashboard.py section 8) is exercised.",
+    "pay_by_link.py send_link_email uses `resend.Emails.send` inside `asyncio.to_thread` — good, but caught Exception is broad; log the traceback in warning to aid debugging real Resend failures.",
+    "Route conflict from iteration_500 (/api/payments/status/{session_id} shadowed) still present — did NOT re-verify but noting for main agent that it may still affect real Stripe payment webhooks resolving to paid state on frontend polling; _mark_paid works when invoked directly."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration501_pickup_paylinks_enhancements.py"
+  ],
+  "success_rate": {"backend": "100% (10/10, 1 skipped due to dataset)", "frontend": "100% (all iteration-501 flows clean, no error overlays)"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "None. Reused existing demo bookings and the previously-simulated paid tx for booking aa3ba080-435b-4ca4-8b65-134f85899d0f.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All iteration_501 enhancements verified: daily_trend has 14 entries, strong_day bool, rooms_sold_24h realistic (~2), morning-brief pickup_24h block, /api/pay-links/send mocked/404/400 branches, payment_received notification in /api/dashboard/notifications/all, Pickup24Card + pickup-trend-chart on TodayHub, Send Email flow on StripeLinkModal shows success toast with no error overlay, brief-pickup-24h in Morning Brief panel. Untouched: DashboardHome component is not routed anywhere (only Tier1DashboardPanel is). Pre-existing iteration_500 issues (clipboard error overlay, route conflict, undefined-booking-ref testids) were not observed this iteration — clipboard fix appears applied since no overlay surfaced during Create Link + Send Email flow.",
+  "rca_of_the_issue": "N/A — no new issues found."
+}

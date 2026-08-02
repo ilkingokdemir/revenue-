@@ -314,6 +314,52 @@ def create_dashboard_router(db, require_roles):
                 "icon": "lightning",
             })
 
+        # 8. Strong 24h pickup signal
+        now_utc = datetime.now(timezone.utc)
+        cut24 = (now_utc - timedelta(hours=24)).isoformat()
+        cut48 = (now_utc - timedelta(hours=48)).isoformat()
+        bk_q = {**prop_filter, "status": {"$nin": ["cancelled"]}}
+        cur24 = await db.bookings.find({**bk_q, "created_at": {"$gte": cut24, "$lte": now_utc.isoformat()}},
+                                       {"_id": 0, "rooms": 1, "nights": 1, "total_price": 1}).to_list(1000)
+        prev24 = await db.bookings.find({**bk_q, "created_at": {"$gte": cut48, "$lt": cut24}},
+                                        {"_id": 0, "rooms": 1}).to_list(1000)
+        total_rooms_n = await db.rooms.count_documents(prop_filter)
+        rooms24 = sum(int(b.get("rooms") or 1) for b in cur24)
+        rn24 = sum(int(b.get("rooms") or 1) * int(b.get("nights") or 1) for b in cur24)
+        prev_rooms24 = sum(int(b.get("rooms") or 1) for b in prev24)
+        pickup_pct24 = round(rn24 * 100 / (total_rooms_n * 30), 1) if total_rooms_n else 0
+        if pickup_pct24 >= 5 and rooms24 > prev_rooms24:
+            rev24 = sum(float(b.get("total_price") or 0) for b in cur24)
+            notifications.append({
+                "type": "pickup_strong",
+                "priority": "low",
+                "title": f"Strong sales day: {rooms24} rooms picked up in 24h",
+                "subtitle": f"£{rev24:,.0f} revenue · +{rooms24 - prev_rooms24} vs previous 24h · {pickup_pct24}% of 30-day capacity",
+                "action": "dashboard",
+                "ref_id": "",
+                "icon": "lightning",
+            })
+
+        # 9. Payments received via Pay-by-Link (last 24h)
+        recent_paid = await db.payment_transactions.find(
+            {**prop_filter, "kind": "pay_by_link", "payment_status": "paid",
+             "updated_at": {"$gte": cut24}},
+            {"_id": 0, "booking_id": 1, "amount": 1, "currency": 1, "updated_at": 1}
+        ).sort("updated_at", -1).to_list(5)
+        for tx in recent_paid:
+            bk = await db.bookings.find_one({"id": tx.get("booking_id", "")},
+                                            {"_id": 0, "guest_name": 1, "booking_ref": 1})
+            notifications.append({
+                "type": "payment_received",
+                "priority": "low",
+                "title": f"Payment received: £{float(tx.get('amount') or 0):,.2f}",
+                "subtitle": f"{(bk or {}).get('guest_name', 'Guest')} · {(bk or {}).get('booking_ref', '')} · via Stripe Pay-by-Link",
+                "action": "payments",
+                "ref_id": tx.get("booking_id", ""),
+                "created_at": tx.get("updated_at", ""),
+                "icon": "check",
+            })
+
         # Sort: high → medium → low, then by date
         priority_order = {"high": 0, "medium": 1, "low": 2}
         notifications.sort(key=lambda n: (priority_order.get(n["priority"], 3), n.get("created_at", "") or ""))

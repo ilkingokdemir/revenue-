@@ -945,6 +945,7 @@ const Dashboard = ({ user, onLogout, permissions }) => {
           ) : (
             <TodayHub
               propertyId={activePropertyId !== "all" ? activePropertyId : (properties?.[0]?.id || "default")}
+              pickupScope={activePropertyId}
               hotelName={properties?.find?.((p) => p.id === activePropertyId)?.name || branding?.app_name}
               onNavigate={navigate}
             />

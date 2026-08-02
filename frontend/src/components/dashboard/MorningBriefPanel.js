@@ -124,6 +124,24 @@ export default function MorningBriefPanel({ propertyId, hotelName = "" }) {
         </div>
       </div>
 
+      {/* 24h Pickup */}
+      {data?.pickup_24h && (
+        <div className={`bg-stone-900/60 border rounded-2xl p-4 flex items-center justify-between ${data.pickup_24h.strong_day ? "border-emerald-500/40" : "border-stone-800"}`} data-testid="brief-pickup-24h">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-stone-400 font-bold mb-1">Pickup last 24 hours</div>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-black text-rose-300 tabular-nums">{data.pickup_24h.rooms || 0} oda</span>
+              <span className="text-stone-400 text-sm">{data.pickup_24h.room_nights || 0} oda-gecesi · {cur(data.pickup_24h.revenue)}</span>
+            </div>
+          </div>
+          {data.pickup_24h.strong_day && (
+            <div className="px-3 py-1.5 rounded-lg text-xs font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              GÜÇLÜ SATIŞ GÜNÜ · %{data.pickup_24h.pickup_pct}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* STLY snapshot */}
       <div className="bg-stone-900/60 border border-stone-800 rounded-2xl p-4 flex items-center justify-between" data-testid="brief-stly">
         <div>

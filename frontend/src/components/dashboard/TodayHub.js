@@ -37,7 +37,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
  *   GET /api/morning-brief/{property_id}
  *   GET /api/tier1-dashboard/{property_id}?days=7  (graceful fallback)
  */
-export default function TodayHub({ propertyId, hotelName, onNavigate }) {
+export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigate }) {
   const [brief, setBrief] = useState(null);
   const [tier1, setTier1] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -356,7 +356,7 @@ export default function TodayHub({ propertyId, hotelName, onNavigate }) {
 
       {/* 24-Hour Pickup (Pulse) */}
       <div className="mt-5">
-        <Pickup24Card propertyId={propertyId} />
+        <Pickup24Card propertyId={pickupScope || propertyId} />
       </div>
 
       {/* Scheduled Departures Board (Mews parity) */}

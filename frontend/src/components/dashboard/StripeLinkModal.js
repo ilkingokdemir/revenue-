@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, Copy, CheckCircle, Clock, LinkSimple, ArrowsClockwise } from "@phosphor-icons/react";
+import { X, Copy, CheckCircle, Clock, LinkSimple, ArrowsClockwise, EnvelopeSimple, WhatsappLogo } from "@phosphor-icons/react";
 import { API } from "./config";
 
 export const StripeLinkModal = ({ booking, onClose }) => {
@@ -9,6 +9,28 @@ export const StripeLinkModal = ({ booking, onClose }) => {
   const [creating, setCreating] = useState(false);
   const [links, setLinks] = useState([]);
   const [newLink, setNewLink] = useState(null);
+  const [sending, setSending] = useState(false);
+
+  const sendEmail = async () => {
+    setSending(true);
+    try {
+      const { data } = await axios.post(`${API}/pay-links/send`, {
+        booking_id: booking.id, checkout_url: newLink.checkout_url,
+        amount: newLink.amount, currency: (newLink.currency || "gbp").toUpperCase(),
+      });
+      toast.success(data.status === "mocked"
+        ? `E-posta hazırlandı (${data.to}) — demo modunda gerçek gönderim yapılmadı`
+        : `Payment link emailed to ${data.to}`);
+    } catch (e) { toast.error(e.response?.data?.detail || "Email failed"); }
+    setSending(false);
+  };
+
+  const openWhatsApp = () => {
+    const phone = (booking.guest_phone || "").replace(/[^\d]/g, "");
+    const msg = encodeURIComponent(
+      `Hello ${booking.guest_name || ""}, please use this secure link to complete your payment of ${(newLink.currency || "gbp").toUpperCase()} ${newLink.amount?.toFixed(2)}: ${newLink.checkout_url}`);
+    window.open(phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`, "_blank");
+  };
 
   const fetchLinks = useCallback(async () => {
     try { const { data } = await axios.get(`${API}/pay-links/${booking.id}`); setLinks(data); } catch (e) { /* silent */ }
@@ -82,6 +104,19 @@ export const StripeLinkModal = ({ booking, onClose }) => {
                 </button>
               </div>
               <p className="text-[10px] text-indigo-500 mt-1.5">Share via email, WhatsApp or SMS. Guest pays securely on Stripe.</p>
+              <div className="flex gap-2 mt-2.5">
+                <button onClick={sendEmail} disabled={sending}
+                  className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 text-[11px] font-semibold rounded-lg hover:bg-indigo-100 disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  data-testid="stripe-send-email-btn">
+                  {sending ? <ArrowsClockwise size={12} className="animate-spin" /> : <EnvelopeSimple size={12} weight="bold" />}
+                  {sending ? "Sending…" : "Send Email"}
+                </button>
+                <button onClick={openWhatsApp}
+                  className="flex-1 px-3 py-1.5 bg-emerald-600 text-white text-[11px] font-semibold rounded-lg hover:bg-emerald-700 flex items-center justify-center gap-1.5"
+                  data-testid="stripe-send-whatsapp-btn">
+                  <WhatsappLogo size={13} weight="fill" /> WhatsApp
+                </button>
+              </div>
             </div>
           )}
 

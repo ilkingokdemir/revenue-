@@ -9,10 +9,13 @@ Endpoints:
 - POST /api/stripe/webhook
 """
 import os
+import asyncio
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import resend
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -30,6 +33,13 @@ class PayLinkIn(BaseModel):
     origin_url: str
 
 
+class SendLinkIn(BaseModel):
+    booking_id: str
+    checkout_url: str
+    amount: float
+    currency: str = "GBP"
+
+
 async def _mark_paid(db, session_id: str, extra: dict):
     res = await db.payment_transactions.update_one(
         {"session_id": session_id, "payment_status": {"$ne": "paid"}},
@@ -40,6 +50,17 @@ async def _mark_paid(db, session_id: str, extra: dict):
         if tx and tx.get("booking_id"):
             await db.bookings.update_one({"id": tx["booking_id"]},
                                          {"$set": {"payment_status": "paid"}})
+            booking = await db.bookings.find_one({"id": tx["booking_id"]}, {"_id": 0, "guest_name": 1, "booking_ref": 1})
+            await db.folio_items.insert_one({
+                "id": str(uuid.uuid4()), "booking_id": tx["booking_id"],
+                "property_id": tx.get("property_id"),
+                "type": "payment", "category": "card",
+                "description": f"Stripe Pay-by-Link tahsilatı ({(booking or {}).get('booking_ref', '')})",
+                "quantity": 1, "unit_price": float(tx.get("amount") or 0),
+                "amount": float(tx.get("amount") or 0),
+                "currency": (tx.get("currency") or "gbp").upper(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_by": "Stripe Pay-by-Link"})
 
 
 def create_pay_by_link_router(db):
@@ -82,6 +103,54 @@ def create_pay_by_link_router(db):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         })
         return {"checkout_url": session.url, "session_id": session.id, "amount": amount, "currency": currency}
+
+    @router.post("/pay-links/send")
+    async def send_link_email(body: SendLinkIn,
+                              current_user: dict = Depends(require_perm("edit_bookings"))):
+        booking = await db.bookings.find_one({"id": body.booking_id}, {"_id": 0})
+        if not booking:
+            raise HTTPException(404, "Booking not found")
+        email = booking.get("guest_email")
+        if not email:
+            raise HTTPException(400, "Rezervasyonda misafir e-postası yok")
+        prop = await db.properties.find_one({"id": booking.get("property_id", "")}, {"_id": 0, "name": 1})
+        hotel = (prop or {}).get("name", "Hotel")
+        sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(body.currency.upper(), body.currency.upper() + " ")
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;padding:24px">
+          <h2 style="color:#1c1917">{hotel}</h2>
+          <p>Dear {booking.get('guest_name', 'Guest')},</p>
+          <p>Please use the secure link below to complete your payment of
+             <b>{sym}{body.amount:.2f}</b> for your stay
+             ({booking.get('check_in')} → {booking.get('check_out')}).</p>
+          <p style="margin:28px 0;text-align:center">
+            <a href="{body.checkout_url}" style="background:#4f46e5;color:#fff;padding:12px 28px;
+               border-radius:8px;text-decoration:none;font-weight:bold">Pay Securely</a>
+          </p>
+          <p style="color:#78716c;font-size:12px">Payment is processed securely by Stripe.</p>
+        </div>"""
+        api_key = os.environ.get("RESEND_API_KEY", "")
+        mocked = not api_key or api_key == "re_123456789"
+        if not mocked:
+            resend.api_key = api_key
+            try:
+                await asyncio.to_thread(resend.Emails.send, {
+                    "from": os.environ.get("SENDER_EMAIL", "onboarding@resend.dev"),
+                    "to": [email],
+                    "subject": f"{hotel} — Payment request {sym}{body.amount:.2f}",
+                    "html": html})
+            except Exception as e:
+                logger.warning(f"pay-link email failed: {e}")
+                mocked = True
+        last_tx = await db.payment_transactions.find_one(
+            {"booking_id": body.booking_id, "kind": "pay_by_link"},
+            sort=[("created_at", -1)])
+        if last_tx:
+            await db.payment_transactions.update_one(
+                {"session_id": last_tx["session_id"]},
+                {"$set": {"emailed_to": email, "emailed_at": datetime.now(timezone.utc).isoformat(),
+                          "email_mocked": mocked}})
+        return {"status": "mocked" if mocked else "sent", "to": email}
 
     @router.get("/pay-links/{booking_id}")
     async def list_links(booking_id: str,

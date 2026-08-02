@@ -18,6 +18,7 @@ def create_pickup_pulse_router(db):
     async def pickup_24h(property_id: str = "",
                          current_user: dict = Depends(require_perm("view_bookings", "view_dashboard", mode="any"))):
         now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
         cut24 = (now - timedelta(hours=24)).isoformat()
         cut48 = (now - timedelta(hours=48)).isoformat()
         q = {"status": {"$nin": ["cancelled"]}}
@@ -26,16 +27,30 @@ def create_pickup_pulse_router(db):
             q["property_id"] = property_id
             rooms_q["property_id"] = property_id
 
-        cur = await db.bookings.find({**q, "created_at": {"$gte": cut24}}, _PROJ)\
+        cur = await db.bookings.find({**q, "created_at": {"$gte": cut24, "$lte": now_iso}}, _PROJ)\
             .sort("created_at", -1).to_list(1000)
         prev = await db.bookings.find({**q, "created_at": {"$gte": cut48, "$lt": cut24}},
                                       {"_id": 0, "rooms": 1}).to_list(1000)
         total_rooms = await db.rooms.count_documents(rooms_q)
 
+        cut14 = (now - timedelta(days=14)).isoformat()
+        daily = {}
+        async for r in db.bookings.aggregate([
+                {"$match": {**q, "created_at": {"$gte": cut14, "$lte": now_iso}}},
+                {"$group": {"_id": {"$substr": ["$created_at", 0, 10]},
+                            "rooms": {"$sum": {"$ifNull": ["$rooms", 1]}}}}]):
+            daily[r["_id"]] = int(r["rooms"])
+        daily_trend = []
+        for i in range(13, -1, -1):
+            d = (now - timedelta(days=i)).date().isoformat()
+            daily_trend.append({"date": d, "rooms": daily.get(d, 0)})
+
         rooms_sold = sum(int(b.get("rooms") or 1) for b in cur)
         prev_rooms_sold = sum(int(b.get("rooms") or 1) for b in prev)
         room_nights = sum(int(b.get("rooms") or 1) * int(b.get("nights") or 1) for b in cur)
         revenue = sum(float(b.get("total_price") or 0) for b in cur)
+        pickup_pct = round(room_nights * 100 / (total_rooms * 30), 1) if total_rooms else 0
+        strong_day = pickup_pct >= 5 and rooms_sold > prev_rooms_sold
 
         by_source = defaultdict(int)
         by_stay_date = defaultdict(int)
@@ -48,7 +63,9 @@ def create_pickup_pulse_router(db):
             "rooms_sold_24h": rooms_sold,
             "prev_rooms_sold_24h": prev_rooms_sold,
             "trend": rooms_sold - prev_rooms_sold,
-            "pickup_pct": round(room_nights * 100 / (total_rooms * 30), 1) if total_rooms else 0,
+            "pickup_pct": pickup_pct,
+            "strong_day": strong_day,
+            "daily_trend": daily_trend,
             "total_rooms": total_rooms,
             "room_nights_24h": room_nights,
             "revenue_24h": round(revenue, 2),

@@ -45,6 +45,12 @@ export const Pickup24Card = ({ propertyId }) => {
         </span>
       </div>
 
+      {data.strong_day && (
+        <div className="px-4 py-1.5 bg-emerald-50 border-b border-emerald-100 text-[11px] text-emerald-700 font-semibold flex items-center gap-1.5" data-testid="pickup-strong-day-banner">
+          <TrendUp size={12} weight="bold" /> Strong sales day — pickup is well above the usual pace
+        </div>
+      )}
+
       <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-stone-100">
         <div className="p-3 text-center">
           <div className="text-xl font-bold text-stone-900" data-testid="pickup-rooms-sold">{data.rooms_sold_24h}</div>
@@ -67,6 +73,27 @@ export const Pickup24Card = ({ propertyId }) => {
           <div className="text-[9px] text-stone-400 uppercase font-semibold">Pickup ADR</div>
         </div>
       </div>
+
+      {data.daily_trend?.length > 0 && (
+        <div className="px-4 pt-2 pb-1 border-t border-stone-100" data-testid="pickup-trend-chart">
+          <div className="text-[9px] text-stone-400 uppercase font-semibold mb-1">Daily pickup — last 14 days</div>
+          <div className="flex items-end gap-1 h-12">
+            {(() => {
+              const max = Math.max(...data.daily_trend.map(d => d.rooms), 1);
+              return data.daily_trend.map((d, i) => (
+                <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.date}: ${d.rooms} rooms`}>
+                  <div className={`w-full rounded-t transition-all ${i === data.daily_trend.length - 1 ? "bg-rose-500" : "bg-rose-200 hover:bg-rose-300"}`}
+                    style={{ height: `${Math.max(6, (d.rooms / max) * 100)}%` }} />
+                </div>
+              ));
+            })()}
+          </div>
+          <div className="flex justify-between text-[8px] text-stone-300 mt-0.5">
+            <span>{data.daily_trend[0]?.date.slice(5)}</span>
+            <span className="text-rose-400 font-semibold">today</span>
+          </div>
+        </div>
+      )}
 
       {data.by_source?.length > 0 && (
         <div className="px-4 py-2 border-t border-stone-100 flex flex-wrap gap-1.5">

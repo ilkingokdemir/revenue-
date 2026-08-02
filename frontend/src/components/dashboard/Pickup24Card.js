@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { Bed, TrendUp, TrendDown, CaretDown, CaretUp, Pulse } from "@phosphor-icons/react";
+import { toast } from "sonner";
+import { Bed, TrendUp, TrendDown, CaretDown, CaretUp, Pulse, PencilSimple, Target } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -13,6 +14,8 @@ const timeAgo = (iso) => {
 export const Pickup24Card = ({ propertyId }) => {
   const [data, setData] = useState(null);
   const [expanded, setExpanded] = useState(false);
+  const [editTarget, setEditTarget] = useState(false);
+  const [targetVal, setTargetVal] = useState("");
 
   const fetch = useCallback(async () => {
     try {
@@ -20,6 +23,17 @@ export const Pickup24Card = ({ propertyId }) => {
       setData(data);
     } catch (e) { /* silent */ }
   }, [propertyId]);
+
+  const saveTarget = async () => {
+    try {
+      await axios.put(`${API}/pulse/pickup-target`, {
+        property_id: propertyId || "all", target_rooms: parseInt(targetVal || "0", 10),
+      });
+      toast.success("Monthly target saved");
+      setEditTarget(false);
+      fetch();
+    } catch (e) { toast.error("Failed to save target"); }
+  };
 
   useEffect(() => { fetch(); const t = setInterval(fetch, 120000); return () => clearInterval(t); }, [fetch]);
 
@@ -104,6 +118,42 @@ export const Pickup24Card = ({ propertyId }) => {
           ))}
         </div>
       )}
+
+      {/* Monthly target progress */}
+      <div className="px-4 py-2 border-t border-stone-100" data-testid="pickup-target-section">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[9px] text-stone-400 uppercase font-semibold flex items-center gap-1">
+            <Target size={11} className="text-indigo-500" /> Monthly target — {data.target?.month}
+          </span>
+          {editTarget ? (
+            <span className="flex items-center gap-1">
+              <input type="number" min="0" value={targetVal} onChange={e => setTargetVal(e.target.value)}
+                className="w-20 border border-stone-200 rounded px-1.5 py-0.5 text-[11px]" data-testid="pickup-target-input" />
+              <button onClick={saveTarget} className="text-[10px] px-2 py-0.5 bg-indigo-600 text-white rounded font-semibold" data-testid="pickup-target-save">Save</button>
+              <button onClick={() => setEditTarget(false)} className="text-[10px] px-1.5 py-0.5 bg-stone-100 text-stone-500 rounded">✕</button>
+            </span>
+          ) : (
+            <button onClick={() => { setTargetVal(String(data.target?.target_rooms || "")); setEditTarget(true); }}
+              className="text-[10px] text-stone-400 hover:text-indigo-600 flex items-center gap-0.5" data-testid="pickup-target-edit">
+              <PencilSimple size={10} /> {data.target?.target_rooms ? "Edit" : "Set target"}
+            </button>
+          )}
+        </div>
+        {data.target?.target_rooms > 0 ? (
+          <div data-testid="pickup-target-bar">
+            <div className="flex justify-between text-[10px] text-stone-500 mb-0.5">
+              <span><b className="text-stone-700">{data.target.mtd_rooms}</b> / {data.target.target_rooms} rooms MTD</span>
+              <span className={`font-semibold ${data.target.progress_pct >= 100 ? "text-emerald-600" : "text-indigo-600"}`}>{data.target.progress_pct}%</span>
+            </div>
+            <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${data.target.progress_pct >= 100 ? "bg-emerald-500" : "bg-indigo-500"}`}
+                style={{ width: `${Math.min(100, data.target.progress_pct)}%` }} />
+            </div>
+          </div>
+        ) : (
+          <div className="text-[10px] text-stone-300">No target set for this month</div>
+        )}
+      </div>
 
       <button onClick={() => setExpanded(e => !e)}
         className="w-full px-4 py-2 border-t border-stone-100 text-[11px] text-stone-500 hover:bg-stone-50 flex items-center justify-center gap-1 font-medium"

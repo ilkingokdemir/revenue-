@@ -81,6 +81,16 @@ export const StripeLinkModal = ({ booking, onClose }) => {
         <div className="p-5 space-y-4">
           <div>
             <label className="text-[11px] font-semibold text-stone-500 uppercase">Amount ({booking.currency || "GBP"})</label>
+            <div className="flex gap-1.5 mt-1 mb-1.5">
+              {[{ label: "Full", pct: 100 }, { label: "50%", pct: 50 }, { label: "30% deposit", pct: 30 }].map(p => (
+                <button key={p.pct}
+                  onClick={() => setAmount(((booking.total_price || 0) * p.pct / 100).toFixed(2))}
+                  className={`text-[10px] px-2 py-1 rounded-full border font-medium transition-colors ${parseFloat(amount) === +((booking.total_price || 0) * p.pct / 100).toFixed(2) ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-stone-600 border-stone-200 hover:border-indigo-300"}`}
+                  data-testid={`stripe-preset-${p.pct}`}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2 mt-1">
               <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)}
                 className="flex-1 border border-stone-200 rounded-lg px-3 py-2 text-sm" data-testid="stripe-amount-input" />

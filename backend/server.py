@@ -1464,6 +1464,25 @@ async def _job_returning_guest_watch(property_id: str) -> dict:
 
 JOB_HANDLERS["returning_guest_watch"] = _job_returning_guest_watch
 
+from routes.finance_ext.pay_by_link import run_pay_link_reminders as _run_pay_link_reminders
+from routes.pms.pickup_pulse import run_weekly_pickup_report as _run_weekly_pickup_report
+
+async def _job_pay_link_reminder(property_id: str) -> dict:
+    try:
+        return await _run_pay_link_reminders(db, property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["pay_link_reminder"] = _job_pay_link_reminder
+
+async def _job_pickup_weekly_report(property_id: str) -> dict:
+    try:
+        return await _run_weekly_pickup_report(db, property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["pickup_weekly_report"] = _job_pickup_weekly_report
+
 from routes.finance_ext.digital_auth import create_digital_auth_router
 api_router.include_router(create_digital_auth_router(db, require_roles))
 
@@ -1855,6 +1874,25 @@ async def startup_event():
         {"$set": {"currency": "GBP"}}
     )
     logger.info("Admin user seeded and indexes created")
+
+    # Iter 502 — Seed pay-link reminder (daily 10:00 UTC) + weekly pickup report (Mon 07:00 UTC)
+    try:
+        if not await db.scheduler_config.find_one({"property_id": "", "job": "pay_link_reminder"}, {"_id": 1}):
+            await db.scheduler_config.insert_one({
+                "property_id": "", "job": "pay_link_reminder", "enabled": True,
+                "cron_hour": 10, "cron_minute": 0, "cron_dow": None,
+                "notes": "Ödenmemiş Stripe pay-by-link'ler için 24 saat sonra otomatik hatırlatma e-postası (yeni link üretir)",
+                "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "system"})
+            logger.info("Scheduler: seeded pay_link_reminder daily cron (10:00 UTC)")
+        if not await db.scheduler_config.find_one({"property_id": "", "job": "pickup_weekly_report"}, {"_id": 1}):
+            await db.scheduler_config.insert_one({
+                "property_id": "", "job": "pickup_weekly_report", "enabled": True,
+                "cron_hour": 7, "cron_minute": 0, "cron_dow": 0,
+                "notes": "Haftalık pickup özeti — her pazartesi admin/manager'lara e-posta",
+                "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "system"})
+            logger.info("Scheduler: seeded pickup_weekly_report weekly cron (Mon 07:00 UTC)")
+    except Exception as e:
+        logger.warning("pickup/pay-link cron seed failed: %s", e)
 
     # Iter 320 — Seed weekly geo-validate cron (every Monday 03:00 UTC).
     # Idempotent: upsert + don't override user changes if already exists.

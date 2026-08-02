@@ -2835,3 +2835,23 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   dashboard.py ve competitor_parity.py düzeltildi.
 - TodayHub'a pickupScope prop'u: "All Branches" seçiliyken pickup kartı tüm tesisleri kapsar.
 - TEST: testing_agent iteration_501 — backend 10/10, frontend %100, kritik sorun yok.
+
+## Iter 502 (2026-08-02) — Pickup Hedefleri, Oto-Hatırlatma, Haftalık Rapor, Kısmi Ödeme TAMAMLANDI
+- 1) Pickup Hedefleri: db.pickup_targets {property_id, month, target_rooms}. PUT /api/pulse/pickup-target,
+  pickup-24h yanıtına "target" bloğu (mtd_rooms, progress_pct). Pickup24Card'da aylık hedef ilerleme
+  çubuğu + inline hedef düzenleme (pickup-target-edit/input/save testid'leri).
+- 2) Otomatik Link Hatırlatma: run_pay_link_reminders (pay_by_link.py) — 24 saatten eski pending
+  linkler için YENİ Stripe session üretir (eskisi expire olur), eskiyi superseded_by ile işaretler,
+  misafire hatırlatma e-postası (mock-safe). JOB_HANDLERS["pay_link_reminder"] + günlük 10:00 UTC cron seed.
+- 3) Haftalık Pickup Raporu: run_weekly_pickup_report (pickup_pulse.py) — son 7 gün istatistikleri
+  (by_day/by_property/by_source), pickup_weekly_reports'a kayıt, admin/manager'lara e-posta (mock-safe).
+  GET /api/pulse/weekly-report (önizleme) + POST /send. JOB_HANDLERS["pickup_weekly_report"] +
+  pazartesi 07:00 UTC cron seed.
+- 4) Kısmi Ödeme: StripeLinkModal'da Full/50%/30% deposit ön ayar butonları. _mark_paid artık
+  toplam ödenen < rezervasyon tutarının %99'u ise payment_status="partial" yapar (tam ödemede "paid").
+- E-posta kodu DRY: _link_email_html + _deliver_email helper'ları (pay_by_link.py).
+- TEST (self-test): hedef PUT+GET+UI bar OK; reminder trigger (backdate ile 1 gönderim, yeni session,
+  superseded) OK; haftalık rapor send (4 alıcı, mocked) OK; £30 kısmi ödeme → booking "partial" OK;
+  UI screenshot'ları (hedef çubuğu 7/120 %5.8, %30 preset £189.92) OK.
+- DERS: Aynı dosyaya aynı batch'te birden çok search_replace çakışabiliyor — state bloğu kaybolmuştu,
+  tek tek yeniden uygulandı (editTarget is not defined hatası düzeltildi).

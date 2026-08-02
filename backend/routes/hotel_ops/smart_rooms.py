@@ -218,6 +218,35 @@ def create_smart_rooms_router(db, require_roles):
             "eco_rooms": eco_rooms,
         }
 
+    @router.get("/{property_id}/energy/report")
+    async def energy_report(property_id: str, months: int = 6,
+                            current_user: dict = Depends(require_roles(*ROLES))):
+        months = min(max(int(months), 1), 12)
+        now = datetime.now(timezone.utc)
+        since = (now - timedelta(days=31 * months)).isoformat()
+        q = {"at": {"$gte": since}}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        monthly = {}
+        async for r in db.smart_room_energy_log.aggregate([
+                {"$match": q},
+                {"$group": {"_id": {"$substr": ["$at", 0, 7]},
+                            "kwh": {"$sum": "$kwh_saved"},
+                            "sweeps": {"$sum": 1}}}]):
+            monthly[r["_id"]] = {"kwh": round(r["kwh"], 1), "sweeps": r["sweeps"]}
+        out = []
+        y, m = now.year, now.month
+        for _ in range(months):
+            key = f"{y:04d}-{m:02d}"
+            e = monthly.get(key, {"kwh": 0, "sweeps": 0})
+            out.append({"month": key, "kwh": e["kwh"], "sweeps": e["sweeps"],
+                        "cost_saved": round(e["kwh"] * GBP_PER_KWH, 2)})
+            y, m = (y - 1, 12) if m == 1 else (y, m - 1)
+        out.reverse()
+        return {"months": out, "rate_gbp_per_kwh": GBP_PER_KWH,
+                "total_kwh": round(sum(x["kwh"] for x in out), 1),
+                "total_cost_saved": round(sum(x["cost_saved"] for x in out), 2)}
+
     @router.get("/{property_id}/actions/log")
     async def actions_log(property_id: str, limit: int = 50,
                           current_user: dict = Depends(require_roles(*ROLES))):

@@ -34,6 +34,7 @@ export default function SmartRoomsPanel({ properties = [], activePropertyId }) {
 
   const [rooms, setRooms] = useState([]);
   const [energy, setEnergy] = useState(null);
+  const [report, setReport] = useState(null);
   const [tab, setTab] = useState("rooms");
   const [log, setLog] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -42,12 +43,14 @@ export default function SmartRoomsPanel({ properties = [], activePropertyId }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, e] = await Promise.all([
+      const [r, e, rep] = await Promise.all([
         axios.get(`${API}/api/smart-rooms/${propertyId}`, { withCredentials: true }),
         axios.get(`${API}/api/smart-rooms/${propertyId}/energy/summary`, { withCredentials: true }),
+        axios.get(`${API}/api/smart-rooms/${propertyId}/energy/report?months=6`, { withCredentials: true }),
       ]);
       setRooms(r.data.rooms || []);
       setEnergy(e.data);
+      setReport(rep.data);
     } catch (err) {
       toast.error(err?.response?.data?.detail || "Odalar yüklenemedi");
     } finally {
@@ -137,6 +140,33 @@ export default function SmartRoomsPanel({ properties = [], activePropertyId }) {
           <Kpi label="Maliyet Tasarrufu" value={`£${energy.cost_saved_30d}`} icon={Lightning} color="amber" testId="smart-kpi-cost" />
           <Kpi label="Eco Modda Oda" value={energy.eco_rooms} icon={Snowflake} color="sky" testId="smart-kpi-eco" />
           <Kpi label="Bugünkü İşlem" value={energy.actions_today} icon={ClockCounterClockwise} color="violet" testId="smart-kpi-actions" />
+        </div>
+      )}
+
+      {report?.months?.length > 0 && (
+        <div className="bg-white border border-stone-200 rounded-xl p-4 mb-5" data-testid="energy-monthly-report">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
+              <Leaf size={14} className="text-emerald-500" /> Aylık Enerji Tasarrufu (Eco Sweep)
+            </h3>
+            <span className="text-[10px] text-stone-400">
+              6 ay: <b className="text-emerald-600">{report.total_kwh} kWh</b> · <b className="text-amber-600">£{report.total_cost_saved}</b> (£{report.rate_gbp_per_kwh}/kWh)
+            </span>
+          </div>
+          <div className="flex items-end gap-2 h-24">
+            {(() => {
+              const max = Math.max(...report.months.map(m => m.kwh), 1);
+              return report.months.map(m => (
+                <div key={m.month} className="flex-1 flex flex-col items-center gap-0.5"
+                  title={`${m.month}: ${m.kwh} kWh · £${m.cost_saved} · ${m.sweeps} sweep`}>
+                  <span className="text-[9px] text-stone-500 font-semibold">{m.kwh > 0 ? `£${m.cost_saved}` : ""}</span>
+                  <div className="w-full bg-emerald-400 hover:bg-emerald-500 rounded-t transition-colors"
+                    style={{ height: `${Math.max(4, (m.kwh / max) * 100)}%` }} />
+                  <span className="text-[8px] text-stone-400">{m.month.slice(5)}</span>
+                </div>
+              ));
+            })()}
+          </div>
         </div>
       )}
 

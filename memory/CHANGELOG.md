@@ -2869,3 +2869,13 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - NOT: "Gerçek E-posta" maddesi kullanıcının Resend API anahtarını vermesini bekliyor (şu an mocked).
 - TEST (self-test): curl ile history/archive/forecast/evaluate + UI screenshot (Pay-by-Link sekmesi
   REMINDER rozetleriyle, forecast çipi) — hepsi OK.
+
+## Iter 504 (2026-08-02) — Ödeme Analitiği + Hedef Geçmişi TAMAMLANDI
+- 1) Ödeme Analitiği: GET /api/pay-links/stats (total/paid/pending, conversion_pct — superseded
+  linkler hariç, total_collected, avg_hours_to_pay). PayByLinkHistoryTab üstünde 5'li istatistik
+  kartı satırı (pay-link-stats, pay-link-conversion testid). "<1h" gösterimi.
+- 2) Hedef Geçmişi: GET /api/pulse/pickup-target/history?months=6 (ay bazında actual_rooms vs
+  target_rooms). Pickup24Card hedef bölümünde 6 aylık mini bar grafik (kesikli çizgi=hedef,
+  yeşil bar=hedef aşıldı, indigo=normal) (pickup-target-history testid).
+- BEKLEYEN: Gerçek E-posta (Resend key) ve SMS Hatırlatma (Twilio key) kullanıcı anahtarı bekliyor.
+- TEST (self-test): curl (stats 15/2/%14.3/£102.34, history 6 ay) + UI screenshot'ları OK.

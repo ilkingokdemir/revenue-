@@ -14,15 +14,18 @@ const STATUS_STYLE = {
 export const PayByLinkHistoryTab = ({ propertyId }) => {
   const [links, setLinks] = useState([]);
   const [reports, setReports] = useState([]);
+  const [stats, setStats] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [l, r] = await Promise.all([
+      const [l, r, s] = await Promise.all([
         axios.get(`${API}/pay-links/history`, { params: { property_id: propertyId || "" } }),
         axios.get(`${API}/pulse/weekly-reports`, { params: { property_id: "all" } }),
+        axios.get(`${API}/pay-links/stats`, { params: { property_id: propertyId || "" } }),
       ]);
       setLinks(l.data);
       setReports(r.data);
+      setStats(s.data);
     } catch (e) { /* silent */ }
   }, [propertyId]);
 
@@ -30,6 +33,32 @@ export const PayByLinkHistoryTab = ({ propertyId }) => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6" data-testid="pay-by-link-tab">
+      {/* Conversion analytics */}
+      {stats && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3" data-testid="pay-link-stats">
+          <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-stone-800">{stats.total_links}</div>
+            <div className="text-[9px] text-stone-400 uppercase font-semibold">Links Sent</div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-emerald-600">{stats.paid_links}</div>
+            <div className="text-[9px] text-stone-400 uppercase font-semibold">Paid</div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+            <div className={`text-lg font-bold ${stats.conversion_pct >= 50 ? "text-emerald-600" : "text-amber-600"}`} data-testid="pay-link-conversion">{stats.conversion_pct}%</div>
+            <div className="text-[9px] text-stone-400 uppercase font-semibold">Conversion</div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-emerald-700">£{stats.total_collected?.toLocaleString()}</div>
+            <div className="text-[9px] text-stone-400 uppercase font-semibold">Collected</div>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-xl p-3 text-center">
+            <div className="text-lg font-bold text-indigo-600">{stats.avg_hours_to_pay != null ? (stats.avg_hours_to_pay < 1 ? "<1h" : `${stats.avg_hours_to_pay}h`) : "—"}</div>
+            <div className="text-[9px] text-stone-400 uppercase font-semibold">Avg Time to Pay</div>
+          </div>
+        </div>
+      )}
+
       {/* Link & reminder history */}
       <div>
         <h3 className="text-sm font-semibold text-stone-800 mb-2 flex items-center gap-1.5">

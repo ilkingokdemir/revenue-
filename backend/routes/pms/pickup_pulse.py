@@ -208,6 +208,32 @@ def create_pickup_pulse_router(db):
             sort=[("created_at", -1)])
         return {**stats, "last_sent": last}
 
+    @router.get("/pulse/pickup-target/history")
+    async def target_history(property_id: str = "", months: int = 6,
+                             current_user: dict = Depends(require_perm("view_bookings", "view_dashboard", mode="any"))):
+        now = datetime.now(timezone.utc)
+        q = {"status": {"$nin": ["cancelled"]}}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        out = []
+        y, m = now.year, now.month
+        for _ in range(min(int(months), 12)):
+            month_key = f"{y:04d}-{m:02d}"
+            start = f"{month_key}-01"
+            end_y, end_m = (y + 1, 1) if m == 12 else (y, m + 1)
+            end = f"{end_y:04d}-{end_m:02d}-01"
+            actual = 0
+            async for r in db.bookings.aggregate([
+                    {"$match": {**q, "created_at": {"$gte": start, "$lt": end, "$lte": now.isoformat()}}},
+                    {"$group": {"_id": None, "rooms": {"$sum": {"$ifNull": ["$rooms", 1]}}}}]):
+                actual = int(r.get("rooms") or 0)
+            tgt = await db.pickup_targets.find_one(
+                {"property_id": property_id or "all", "month": month_key}, {"_id": 0, "target_rooms": 1})
+            out.append({"month": month_key, "actual_rooms": actual,
+                        "target_rooms": int((tgt or {}).get("target_rooms") or 0)})
+            y, m = (y - 1, 12) if m == 1 else (y, m - 1)
+        return list(reversed(out))
+
     @router.get("/pulse/weekly-reports")
     async def weekly_reports_archive(property_id: str = "", limit: int = 12,
                                      current_user: dict = Depends(require_perm("view_bookings", "view_dashboard", mode="any"))):

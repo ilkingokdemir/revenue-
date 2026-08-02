@@ -16,11 +16,16 @@ export const Pickup24Card = ({ propertyId }) => {
   const [expanded, setExpanded] = useState(false);
   const [editTarget, setEditTarget] = useState(false);
   const [targetVal, setTargetVal] = useState("");
+  const [targetHistory, setTargetHistory] = useState([]);
 
   const fetch = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API}/pulse/pickup-24h`, { params: { property_id: propertyId || "" } });
-      setData(data);
+      const [d, h] = await Promise.all([
+        axios.get(`${API}/pulse/pickup-24h`, { params: { property_id: propertyId || "" } }),
+        axios.get(`${API}/pulse/pickup-target/history`, { params: { property_id: propertyId || "", months: 6 } }),
+      ]);
+      setData(d.data);
+      setTargetHistory(h.data);
     } catch (e) { /* silent */ }
   }, [propertyId]);
 
@@ -158,6 +163,29 @@ export const Pickup24Card = ({ propertyId }) => {
           </div>
         ) : (
           <div className="text-[10px] text-stone-300">No target set for this month</div>
+        )}
+        {targetHistory.length > 1 && (
+          <div className="mt-2" data-testid="pickup-target-history">
+            <div className="flex items-end gap-1.5 h-10">
+              {(() => {
+                const max = Math.max(...targetHistory.map(h => Math.max(h.actual_rooms, h.target_rooms)), 1);
+                return targetHistory.map(h => (
+                  <div key={h.month} className="flex-1 relative flex flex-col justify-end h-full"
+                    title={`${h.month}: ${h.actual_rooms} actual / ${h.target_rooms || "—"} target`}>
+                    {h.target_rooms > 0 && (
+                      <div className="absolute left-0 right-0 border-t border-dashed border-stone-400"
+                        style={{ bottom: `${(h.target_rooms / max) * 100}%` }} />
+                    )}
+                    <div className={`w-full rounded-t ${h.target_rooms > 0 && h.actual_rooms >= h.target_rooms ? "bg-emerald-400" : "bg-indigo-300"}`}
+                      style={{ height: `${Math.max(4, (h.actual_rooms / max) * 100)}%` }} />
+                  </div>
+                ));
+              })()}
+            </div>
+            <div className="flex justify-between text-[8px] text-stone-300 mt-0.5">
+              {targetHistory.map(h => <span key={h.month}>{h.month.slice(5)}</span>)}
+            </div>
+          </div>
         )}
       </div>
 

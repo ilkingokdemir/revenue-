@@ -242,6 +242,37 @@ def create_pay_by_link_router(db):
                           "email_mocked": mocked}})
         return {"status": "mocked" if mocked else "sent", "to": email}
 
+    @router.get("/pay-links/stats")
+    async def links_stats(property_id: str = "",
+                          current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
+        q = {"kind": "pay_by_link"}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        txs = await db.payment_transactions.find(
+            q, {"_id": 0, "payment_status": 1, "amount": 1, "created_at": 1, "updated_at": 1,
+                "superseded_by": 1}).to_list(2000)
+        active = [t for t in txs if not t.get("superseded_by")]
+        paid = [t for t in txs if t.get("payment_status") == "paid"]
+        pending = [t for t in active if t.get("payment_status") == "pending"]
+        hours = []
+        for t in paid:
+            try:
+                c = datetime.fromisoformat(t["created_at"])
+                u = datetime.fromisoformat(t["updated_at"])
+                h = (u - c).total_seconds() / 3600
+                if 0 <= h < 24 * 30:
+                    hours.append(h)
+            except (ValueError, KeyError, TypeError):
+                pass
+        return {
+            "total_links": len(txs),
+            "paid_links": len(paid),
+            "pending_links": len(pending),
+            "conversion_pct": round(len(paid) * 100 / len(active), 1) if active else 0,
+            "total_collected": round(sum(float(t.get("amount") or 0) for t in paid), 2),
+            "avg_hours_to_pay": round(sum(hours) / len(hours), 1) if hours else None,
+        }
+
     @router.get("/pay-links/history")
     async def links_history(property_id: str = "", limit: int = 50,
                             current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):

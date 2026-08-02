@@ -2820,3 +2820,18 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - E2E DOĞRULANDI: curl (pickup verisi + gerçek Stripe checkout URL + status pending/404) + testing_agent
   (backend 9/9) + screenshot (kart + modal + link geçmişi 3 kayıt, hata overlay'i 0).
 - NOT: Stripe Emergent sandbox test anahtarları kullanıyor (canlıya geçişte kullanıcı kendi hesabını claim eder).
+
+## Iter 501 (2026-08-02) — Pickup & Pay-by-Link 4 Geliştirme TAMAMLANDI
+- 1) Pickup Bildirimi: dashboard/notifications'a "pickup_strong" (güçlü satış günü, pickup_pct>=5 ve
+  önceki 24s'ten fazla oda) ve "payment_received" (son 24s'te ödenen pay-by-link) bildirimleri eklendi.
+  Morning Brief'e pickup_24h bloğu (rooms/room_nights/revenue/pickup_pct/strong_day) + UI kartı (brief-pickup-24h).
+- 2) Link Otomatik Gönderim: POST /api/pay-links/send (Resend mock-safe e-posta) + StripeLinkModal'da
+  "Send Email" ve "WhatsApp" (wa.me deep link, guest_phone ile) butonları.
+- 3) Pickup Trend Grafiği: pickup-24h yanıtına daily_trend (14 gün) eklendi; Pickup24Card'da CSS bar chart.
+- 4) Ödenince Otomatik Folyo: _mark_paid artık folio_items'a type=payment/category=card kaydı ekliyor
+  (created_by='Stripe Pay-by-Link') + booking payment_status=paid + dashboard bildirimi.
+- ÖNEMLİ FIX: Demo rezervasyonlarında GELECEK tarihli created_at var → tüm 24s/14g sorgularına
+  "$lte: now" üst sınırı eklendi (önceden 130 oda görünüyordu, gerçek: ~2). pickup_pulse.py,
+  dashboard.py ve competitor_parity.py düzeltildi.
+- TodayHub'a pickupScope prop'u: "All Branches" seçiliyken pickup kartı tüm tesisleri kapsar.
+- TEST: testing_agent iteration_501 — backend 10/10, frontend %100, kritik sorun yok.

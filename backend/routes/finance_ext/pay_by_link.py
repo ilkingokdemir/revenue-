@@ -242,6 +242,64 @@ def create_pay_by_link_router(db):
                           "email_mocked": mocked}})
         return {"status": "mocked" if mocked else "sent", "to": email}
 
+    @router.get("/pay-links/insights")
+    async def links_insights(property_id: str = "", refresh: int = 0,
+                             current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
+        key = property_id or "all"
+        now = datetime.now(timezone.utc)
+        cached = await db.pay_link_insights.find_one({"property_id": key}, {"_id": 0})
+        if cached and not refresh and cached.get("created_at", "") > (now - timedelta(hours=24)).isoformat():
+            return cached
+        q = {"kind": "pay_by_link"}
+        if key != "all":
+            q["property_id"] = key
+        txs = await db.payment_transactions.find(
+            q, {"_id": 0, "payment_status": 1, "amount": 1, "created_at": 1,
+                "updated_at": 1, "emailed_to": 1, "superseded_by": 1}).to_list(2000)
+        active = [t for t in txs if not t.get("superseded_by")]
+        paid = [t for t in txs if t.get("payment_status") == "paid"]
+        hour_hist = {}
+        for t in txs:
+            try:
+                h = int(t["created_at"][11:13])
+                hour_hist.setdefault(h, {"sent": 0, "paid": 0})
+                hour_hist[h]["sent"] += 1
+                if t.get("payment_status") == "paid":
+                    hour_hist[h]["paid"] += 1
+            except (ValueError, KeyError, IndexError):
+                pass
+        conv = round(len(paid) * 100 / len(active), 1) if active else 0
+        emailed = sum(1 for t in txs if t.get("emailed_to"))
+        context = (f"Toplam link: {len(txs)}, aktif: {len(active)}, ödenen: {len(paid)}, "
+                   f"dönüşüm: %{conv}, e-postalanan: {emailed}. "
+                   f"Saat bazlı gönderim/ödeme: {hour_hist}")
+        tips = []
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            import json as _json
+            chat = LlmChat(
+                api_key=os.environ.get("EMERGENT_LLM_KEY", ""),
+                session_id=f"paylink-tips-{uuid.uuid4().hex[:8]}",
+                system_message=("Sen bir otel ödeme dönüşüm uzmanısın. Stripe ödeme linki istatistiklerine "
+                                "bakıp resepsiyon ekibine 3 kısa, somut, uygulanabilir Türkçe öneri ver. "
+                                'SADECE JSON dizi döndür: ["öneri 1","öneri 2","öneri 3"]')
+            ).with_model("openai", "gpt-5.2")
+            raw = await chat.send_message(UserMessage(text=context))
+            start, end = raw.find("["), raw.rfind("]")
+            if start >= 0 and end > start:
+                tips = [str(t) for t in _json.loads(raw[start:end + 1])][:3]
+        except Exception as e:
+            logger.warning(f"pay-link insights LLM failed: {e}")
+        if not tips:
+            tips = ["Linkleri rezervasyondan hemen sonra gönderin — ilk 1 saatte ödeme olasılığı en yüksektir.",
+                    "Ödenmeyen linkler için e-postaya ek WhatsApp ile de paylaşın.",
+                    "Yüksek tutarlarda %30 depozito seçeneği sunmak dönüşümü artırır."]
+        doc = {"property_id": key, "tips": tips,
+               "stats": {"total": len(txs), "paid": len(paid), "conversion_pct": conv},
+               "created_at": now.isoformat()}
+        await db.pay_link_insights.update_one({"property_id": key}, {"$set": doc}, upsert=True)
+        return doc
+
     @router.get("/pay-links/stats")
     async def links_stats(property_id: str = "",
                           current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):

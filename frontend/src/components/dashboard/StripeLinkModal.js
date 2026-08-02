@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { X, Copy, CheckCircle, Clock, LinkSimple, ArrowsClockwise, EnvelopeSimple, WhatsappLogo } from "@phosphor-icons/react";
+import { X, Copy, CheckCircle, Clock, LinkSimple, ArrowsClockwise, EnvelopeSimple, WhatsappLogo, QrCode } from "@phosphor-icons/react";
+import { QRCodeSVG } from "qrcode.react";
 import { API } from "./config";
 
 export const StripeLinkModal = ({ booking, onClose }) => {
@@ -133,6 +134,13 @@ export const StripeLinkModal = ({ booking, onClose }) => {
                 </button>
               </div>
               <p className="text-[10px] text-indigo-500 mt-1.5">Share via email, WhatsApp or SMS. Guest pays securely on Stripe.</p>
+              <div className="mt-2.5 flex items-center gap-3 bg-white border border-indigo-100 rounded-lg p-2.5" data-testid="stripe-qr-block">
+                <QRCodeSVG value={newLink.checkout_url} size={88} data-testid="stripe-qr-code" />
+                <div className="text-[10px] text-stone-500 leading-relaxed">
+                  <b className="text-stone-700 flex items-center gap-1"><QrCode size={12} /> Kiosk / Reception QR</b>
+                  Guest scans with their phone camera and pays instantly on Stripe.
+                </div>
+              </div>
               <div className="flex gap-2 mt-2.5">
                 <button onClick={sendEmail} disabled={sending}
                   className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 text-[11px] font-semibold rounded-lg hover:bg-indigo-100 disabled:opacity-50 flex items-center justify-center gap-1.5"

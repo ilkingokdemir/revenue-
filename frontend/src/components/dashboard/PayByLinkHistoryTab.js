@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
-import { CheckCircle, Clock, WarningCircle, BellRinging, EnvelopeSimple, FileText } from "@phosphor-icons/react";
+import { CheckCircle, Clock, WarningCircle, BellRinging, EnvelopeSimple, FileText, Sparkle, ArrowsClockwise } from "@phosphor-icons/react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -15,18 +15,29 @@ export const PayByLinkHistoryTab = ({ propertyId }) => {
   const [links, setLinks] = useState([]);
   const [reports, setReports] = useState([]);
   const [stats, setStats] = useState(null);
+  const [insights, setInsights] = useState(null);
+  const [tipsLoading, setTipsLoading] = useState(false);
+
+  const loadInsights = useCallback(async (refresh = 0) => {
+    setTipsLoading(true);
+    try {
+      const { data } = await axios.get(`${API}/pay-links/insights`, {
+        params: { property_id: propertyId || "", refresh },
+      });
+      setInsights(data);
+    } catch (e) { /* silent */ }
+    setTipsLoading(false);
+  }, [propertyId]);
+
+  useEffect(() => { loadInsights(); }, [loadInsights]);
 
   const load = useCallback(async () => {
-    try {
-      const [l, r, s] = await Promise.all([
-        axios.get(`${API}/pay-links/history`, { params: { property_id: propertyId || "" } }),
-        axios.get(`${API}/pulse/weekly-reports`, { params: { property_id: "all" } }),
-        axios.get(`${API}/pay-links/stats`, { params: { property_id: propertyId || "" } }),
-      ]);
-      setLinks(l.data);
-      setReports(r.data);
-      setStats(s.data);
-    } catch (e) { /* silent */ }
+    axios.get(`${API}/pay-links/history`, { params: { property_id: propertyId || "" } })
+      .then(r => setLinks(r.data)).catch(() => {});
+    axios.get(`${API}/pay-links/stats`, { params: { property_id: propertyId || "" } })
+      .then(r => setStats(r.data)).catch(() => {});
+    axios.get(`${API}/pulse/weekly-reports`, { params: { property_id: "all" } })
+      .then(r => setReports(r.data)).catch(() => {});
   }, [propertyId]);
 
   useEffect(() => { load(); }, [load]);
@@ -56,6 +67,29 @@ export const PayByLinkHistoryTab = ({ propertyId }) => {
             <div className="text-lg font-bold text-indigo-600">{stats.avg_hours_to_pay != null ? (stats.avg_hours_to_pay < 1 ? "<1h" : `${stats.avg_hours_to_pay}h`) : "—"}</div>
             <div className="text-[9px] text-stone-400 uppercase font-semibold">Avg Time to Pay</div>
           </div>
+        </div>
+      )}
+
+      {/* AI conversion tips */}
+      {insights?.tips?.length > 0 && (
+        <div className="bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 rounded-xl p-4" data-testid="pay-link-ai-tips">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-indigo-800 flex items-center gap-1.5">
+              <Sparkle size={14} weight="fill" className="text-indigo-500" /> AI Dönüşüm İpuçları
+            </h3>
+            <button onClick={() => loadInsights(1)} disabled={tipsLoading}
+              className="text-[10px] text-indigo-500 hover:text-indigo-700 flex items-center gap-1 disabled:opacity-50"
+              data-testid="pay-link-tips-refresh">
+              <ArrowsClockwise size={11} className={tipsLoading ? "animate-spin" : ""} /> Yenile
+            </button>
+          </div>
+          <ul className="space-y-1.5">
+            {insights.tips.map((t, i) => (
+              <li key={i} className="text-[11px] text-stone-600 flex gap-2">
+                <span className="text-indigo-400 font-bold shrink-0">{i + 1}.</span> {t}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

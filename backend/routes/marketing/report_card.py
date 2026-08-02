@@ -80,6 +80,19 @@ def create_report_card_router(db, require_roles):
         nudged_up = await db.upsell_offers.count_documents({**pq, "nudged_at": {"$gte": since}})
         nudged_cp = await db.rebook_dispatches.count_documents({**pq, "nudged_at": {"$gte": since}})
 
+        # 7. Pickup — hedef vs gerçekleşen (bu ay)
+        month_key = now.strftime("%Y-%m")
+        pickup_actual = 0
+        async for r in db.bookings.aggregate([
+                {"$match": {**pq, "status": {"$nin": ["cancelled"]},
+                            "created_at": {"$gte": f"{month_key}-01", "$lte": now.isoformat()}}},
+                {"$group": {"_id": None, "rooms": {"$sum": {"$ifNull": ["$rooms", 1]}}}}]):
+            pickup_actual = int(r.get("rooms") or 0)
+        tgt_doc = await db.pickup_targets.find_one(
+            {"property_id": property_id if property_id != "all" else "all", "month": month_key},
+            {"_id": 0, "target_rooms": 1})
+        pickup_target = int((tgt_doc or {}).get("target_rooms") or 0)
+
         grand_total = round(coupon_revenue + upsell_revenue + saved_revenue + noshow_posted, 2)
         return {"property_id": property_id, "days": days,
                 "period_start": since[:10], "period_end": now.date().isoformat(),
@@ -91,7 +104,30 @@ def create_report_card_router(db, require_roles):
                     "noshow": {"posted": noshow_posted},
                     "leakage": {"closed": leakage_closed},
                     "nudges": {"sent": nudged_up + nudged_cp},
+                    "pickup": {"month": month_key, "actual_rooms": pickup_actual,
+                               "target_rooms": pickup_target,
+                               "progress_pct": round(pickup_actual * 100 / pickup_target, 1) if pickup_target else None},
                 }}
+
+    def _pickup_html(d: dict) -> str:
+        p = d["sections"].get("pickup") or {}
+        if not p:
+            return ""
+        tgt = p.get("target_rooms") or 0
+        prog = p.get("progress_pct")
+        bar = ""
+        if tgt and prog is not None:
+            col = "#4ade80" if prog >= 100 else ("#818cf8" if prog >= 60 else "#fbbf24")
+            bar = f"""<div style="background:#e7e5e4;border-radius:6px;height:8px;margin-top:8px;">
+              <div style="background:{col};height:8px;border-radius:6px;width:{min(100, prog)}%;"></div></div>
+              <div style="font-size:11px;color:#78716c;margin-top:4px;">Hedefin %{prog}'i tamamlandı</div>"""
+        detail = f"{p.get('actual_rooms', 0)} oda satıldı" + (f" / hedef {tgt}" if tgt else " (hedef belirlenmedi)")
+        return f"""
+          <div style="border:1px solid #e7e5e4;border-radius:10px;padding:14px 16px;margin-top:6px;background:#fafaf9;">
+            <div style="font-weight:bold;font-size:13px;">🎯 Aylık Pickup — {p.get('month', '')}</div>
+            <div style="font-size:12px;color:#57534e;margin-top:2px;">{detail}</div>
+            {bar}
+          </div>"""
 
     def _report_html(d: dict, hotel_name: str) -> str:
         s = d["sections"]
@@ -118,6 +154,7 @@ def create_report_card_router(db, require_roles):
             <div style="font-size:12px;color:#a8a29e;">kazandırdı / kurtardı</div>
           </div>
           <table style="width:100%;border-collapse:separate;border-spacing:6px;">{rows_html}</table>
+          {_pickup_html(d)}
           <p style="font-size:12px;color:#78716c;">Ayrıca {d['sections']['nudges']['sent']} akıllı hatırlatma
           e-postası otomatik gönderildi.</p>
         </div>

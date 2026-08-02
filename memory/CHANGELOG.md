@@ -2879,3 +2879,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   yeşil bar=hedef aşıldı, indigo=normal) (pickup-target-history testid).
 - BEKLEYEN: Gerçek E-posta (Resend key) ve SMS Hatırlatma (Twilio key) kullanıcı anahtarı bekliyor.
 - TEST (self-test): curl (stats 15/2/%14.3/£102.34, history 6 ay) + UI screenshot'ları OK.
+
+## Iter 505 (2026-08-02) — Kiosk QR + AI Dönüşüm İpuçları + Rapor Kartına Pickup TAMAMLANDI
+- 1) Kiosk Ödeme QR: StripeLinkModal'da link oluşunca qrcode.react (QRCodeSVG, 88px) ile
+  "Kiosk / Reception QR" bloğu (stripe-qr-block) — misafir telefonla okutup anında öder.
+- 2) AI Dönüşüm İpuçları: GET /api/pay-links/insights — link istatistikleri + saat bazlı gönderim/ödeme
+  histogramını LlmChat (gpt-5.2) ile analiz edip 3 Türkçe somut öneri üretir; db.pay_link_insights'ta
+  24 saat cache, ?refresh=1 ile yenileme. LLM hata durumunda deterministik fallback ipuçları.
+  PayByLinkHistoryTab'da "AI Dönüşüm İpuçları" kartı + Yenile butonu (pay-link-ai-tips testid).
+- 3) Aylık Sahip Özeti: report_card.py _report_data'ya "pickup" bölümü (ay actual vs target +
+  progress_pct) ve e-posta HTML'ine 🎯 Aylık Pickup kartı (_pickup_html, ilerleme çubuklu).
+- UX FIX: PayByLinkHistoryTab yüklemesi Promise.all'dan bağımsız isteklere ayrıldı — geçmiş listesi
+  yavaş weekly-reports'u (2.4s) beklemeden anında render olur.
+- TEST (self-test): insights curl (gerçek LLM 3 öneri: saat bazlı %9 vs %33 analizi!), report-card
+  preview pickup bölümü, UI screenshot (QR bloğu + analitik satırı + AI ipuçları + geçmiş) — OK.

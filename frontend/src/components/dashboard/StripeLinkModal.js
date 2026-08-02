@@ -37,6 +37,26 @@ export const StripeLinkModal = ({ booking, onClose }) => {
     setSending(false);
   };
 
+  const printQR = () => {
+    const svg = document.querySelector('[data-testid="stripe-qr-block"] svg')?.outerHTML || "";
+    const w = window.open("", "_blank", "width=600,height=800");
+    if (!w) return;
+    w.document.write(`<!DOCTYPE html><html><head><title>Payment QR</title>
+      <style>@page{size:A5;margin:0}body{font-family:Arial,sans-serif;margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#fff}
+      .card{text-align:center;padding:48px;border:2px solid #1c1917;border-radius:24px;max-width:380px}
+      .qr svg{width:220px;height:220px}h1{font-size:20px;margin:0 0 4px;color:#1c1917}
+      .amt{font-size:30px;font-weight:900;color:#4f46e5;margin:12px 0}
+      .sub{font-size:13px;color:#57534e;line-height:1.5}</style></head>
+      <body><div class="card">
+        <h1>Scan to Pay</h1>
+        <div class="sub">${booking.guest_name || ""} · ${booking.booking_ref || ""}</div>
+        <div class="amt">£${Number(newLink.amount || 0).toFixed(2)}</div>
+        <div class="qr">${svg}</div>
+        <div class="sub" style="margin-top:14px">Point your phone camera at the QR code<br/>and complete your payment securely with Stripe.</div>
+      </div><script>window.onload=()=>window.print()</` + `script></body></html>`);
+    w.document.close();
+  };
+
   const openWhatsApp = () => {
     const phone = (booking.guest_phone || "").replace(/[^\d]/g, "");
     const msg = encodeURIComponent(
@@ -136,9 +156,14 @@ export const StripeLinkModal = ({ booking, onClose }) => {
               <p className="text-[10px] text-indigo-500 mt-1.5">Share via email, WhatsApp or SMS. Guest pays securely on Stripe.</p>
               <div className="mt-2.5 flex items-center gap-3 bg-white border border-indigo-100 rounded-lg p-2.5" data-testid="stripe-qr-block">
                 <QRCodeSVG value={newLink.checkout_url} size={88} data-testid="stripe-qr-code" />
-                <div className="text-[10px] text-stone-500 leading-relaxed">
+                <div className="text-[10px] text-stone-500 leading-relaxed flex-1">
                   <b className="text-stone-700 flex items-center gap-1"><QrCode size={12} /> Kiosk / Reception QR</b>
                   Guest scans with their phone camera and pays instantly on Stripe.
+                  <button onClick={printQR}
+                    className="mt-1.5 block text-[10px] px-2.5 py-1 bg-stone-800 text-white rounded-md hover:bg-stone-700 font-semibold"
+                    data-testid="stripe-qr-print-btn">
+                    Print A5 card
+                  </button>
                 </div>
               </div>
               <div className="flex gap-2 mt-2.5">

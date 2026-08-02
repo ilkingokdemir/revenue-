@@ -40,6 +40,11 @@ class SendLinkIn(BaseModel):
     currency: str = "GBP"
 
 
+class TipApplyIn(BaseModel):
+    property_id: str = "all"
+    tip: str
+
+
 def _link_email_html(booking: dict, hotel: str, checkout_url: str, amount: float,
                      currency: str, reminder: bool = False) -> str:
     sym = {"GBP": "£", "USD": "$", "EUR": "€", "TRY": "₺"}.get(currency.upper(), currency.upper() + " ")
@@ -247,9 +252,22 @@ def create_pay_by_link_router(db):
                              current_user: dict = Depends(require_perm("view_bookings", "edit_bookings", mode="any"))):
         key = property_id or "all"
         now = datetime.now(timezone.utc)
+
+        async def _attach_applied(doc: dict) -> dict:
+            logs = await db.pay_link_tip_log.find(
+                {"property_id": key}, {"_id": 0}).sort("applied_at", -1).to_list(20)
+            conv_now = float((doc.get("stats") or {}).get("conversion_pct") or 0)
+            for l in logs:
+                if l.get("applied_at", "") < (now - timedelta(days=7)).isoformat():
+                    l["impact_pts"] = round(conv_now - float(l.get("baseline_conversion") or 0), 1)
+                else:
+                    l["impact_pts"] = None
+            doc["applied"] = logs
+            return doc
+
         cached = await db.pay_link_insights.find_one({"property_id": key}, {"_id": 0})
         if cached and not refresh and cached.get("created_at", "") > (now - timedelta(hours=24)).isoformat():
-            return cached
+            return await _attach_applied(cached)
         q = {"kind": "pay_by_link"}
         if key != "all":
             q["property_id"] = key
@@ -298,7 +316,26 @@ def create_pay_by_link_router(db):
                "stats": {"total": len(txs), "paid": len(paid), "conversion_pct": conv},
                "created_at": now.isoformat()}
         await db.pay_link_insights.update_one({"property_id": key}, {"$set": doc}, upsert=True)
-        return doc
+        return await _attach_applied(doc)
+
+    @router.post("/pay-links/insights/apply")
+    async def apply_tip(body: TipApplyIn,
+                        current_user: dict = Depends(require_perm("edit_bookings"))):
+        key = body.property_id or "all"
+        q = {"kind": "pay_by_link"}
+        if key != "all":
+            q["property_id"] = key
+        txs = await db.payment_transactions.find(
+            q, {"_id": 0, "payment_status": 1, "superseded_by": 1}).to_list(2000)
+        active = [t for t in txs if not t.get("superseded_by")]
+        paid = [t for t in active if t.get("payment_status") == "paid"]
+        baseline = round(len(paid) * 100 / len(active), 1) if active else 0
+        log = {"id": str(uuid.uuid4()), "property_id": key, "tip": body.tip[:500],
+               "baseline_conversion": baseline,
+               "applied_at": datetime.now(timezone.utc).isoformat(),
+               "applied_by": current_user.get("email", "")}
+        await db.pay_link_tip_log.insert_one({**log})
+        return log
 
     @router.get("/pay-links/stats")
     async def links_stats(property_id: str = "",

@@ -2893,3 +2893,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   yavaş weekly-reports'u (2.4s) beklemeden anında render olur.
 - TEST (self-test): insights curl (gerçek LLM 3 öneri: saat bazlı %9 vs %33 analizi!), report-card
   preview pickup bölümü, UI screenshot (QR bloğu + analitik satırı + AI ipuçları + geçmiş) — OK.
+
+## Iter 506 (2026-08-02) — Kanal Bazlı Pickup + QR Yazdırma + İpucu Etki Takibi TAMAMLANDI
+- 1) Kanal Bazlı Pickup: GET /api/pulse/pickup-by-channel?weeks=4 (7 günlük kovalar, kanal başına
+  haftalık oda, top 6, demo_seed* kaynakları hariç). Pickup24Card "Show details" açılınca kanal
+  trend tablosu (trend okları ile) — lazy fetch (pickup-channel-trend testid).
+- 2) QR Yazdırma: StripeLinkModal'da "Print A5 card" butonu — QR SVG'yi alıp A5 yazdırma şablonu
+  (misafir adı, ref, tutar, talimat) yeni pencerede window.print() (stripe-qr-print-btn).
+  NOT: print penceresi otomasyonla test edilemedi, kod incelemesi + buton varlığı doğrulandı.
+- 3) İpucu Uygulama Takibi: POST /api/pay-links/insights/apply (baseline_conversion kaydeder,
+  db.pay_link_tip_log). insights yanıtına "applied" listesi eklenir; 7 günden eski uygulamalarda
+  impact_pts = güncel dönüşüm - baseline. UI: "Uygulandı işaretle" butonu → yeşil "✓ Uygulandı
+  · +X puan" rozeti (tip-apply-N / tip-applied-N testid'leri).
+- TEST (self-test): curl (channel 4 hafta, apply baseline %13.3, applied log + impact null <7g)
+  + UI screenshot (kanal tablosu, uygulandı rozeti) — OK.

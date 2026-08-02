@@ -29,6 +29,15 @@ export const PayByLinkHistoryTab = ({ propertyId }) => {
     setTipsLoading(false);
   }, [propertyId]);
 
+  const applyTip = async (tip) => {
+    try {
+      await axios.post(`${API}/pay-links/insights/apply`, {
+        property_id: propertyId || "all", tip,
+      });
+      loadInsights();
+    } catch (e) { /* silent */ }
+  };
+
   useEffect(() => { loadInsights(); }, [loadInsights]);
 
   const load = useCallback(async () => {
@@ -84,12 +93,33 @@ export const PayByLinkHistoryTab = ({ propertyId }) => {
             </button>
           </div>
           <ul className="space-y-1.5">
-            {insights.tips.map((t, i) => (
-              <li key={i} className="text-[11px] text-stone-600 flex gap-2">
-                <span className="text-indigo-400 font-bold shrink-0">{i + 1}.</span> {t}
-              </li>
-            ))}
+            {insights.tips.map((t, i) => {
+              const applied = (insights.applied || []).find(a => a.tip === t);
+              return (
+                <li key={i} className="text-[11px] text-stone-600 flex gap-2 items-start">
+                  <span className="text-indigo-400 font-bold shrink-0">{i + 1}.</span>
+                  <span className="flex-1">{t}</span>
+                  {applied ? (
+                    <span className="shrink-0 text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded-full font-semibold"
+                      title={`Baseline: %${applied.baseline_conversion}`} data-testid={`tip-applied-${i}`}>
+                      ✓ Uygulandı{applied.impact_pts != null ? ` · ${applied.impact_pts >= 0 ? "+" : ""}${applied.impact_pts} puan` : ""}
+                    </span>
+                  ) : (
+                    <button onClick={() => applyTip(t)}
+                      className="shrink-0 text-[9px] px-2 py-0.5 bg-white border border-indigo-200 text-indigo-600 rounded-full font-semibold hover:bg-indigo-50"
+                      data-testid={`tip-apply-${i}`}>
+                      Uygulandı işaretle
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
+          {(insights.applied || []).some(a => a.impact_pts != null) && (
+            <div className="mt-2 text-[10px] text-stone-400">
+              Etki, ipucu uygulandıktan 7 gün sonra dönüşüm oranı farkı olarak ölçülür.
+            </div>
+          )}
         </div>
       )}
 

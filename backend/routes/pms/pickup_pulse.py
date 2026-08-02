@@ -184,6 +184,40 @@ def create_pickup_pulse_router(db):
             "as_of": now.isoformat(),
         }
 
+    @router.get("/pulse/pickup-by-channel")
+    async def pickup_by_channel(property_id: str = "", weeks: int = 4,
+                                current_user: dict = Depends(require_perm("view_bookings", "view_dashboard", mode="any"))):
+        now = datetime.now(timezone.utc)
+        weeks = min(max(int(weeks), 1), 12)
+        start = now - timedelta(days=7 * weeks)
+        q = {"status": {"$nin": ["cancelled"]},
+             "created_at": {"$gte": start.isoformat(), "$lte": now.isoformat()}}
+        if property_id and property_id != "all":
+            q["property_id"] = property_id
+        rows = await db.bookings.find(q, {"_id": 0, "rooms": 1, "source": 1, "created_at": 1}).to_list(10000)
+        buckets = [defaultdict(int) for _ in range(weeks)]
+        totals = defaultdict(int)
+        for b in rows:
+            try:
+                created = datetime.fromisoformat(b["created_at"])
+            except (ValueError, KeyError):
+                continue
+            idx = min(int((created - start).days // 7), weeks - 1)
+            src = b.get("source") or "Direct"
+            if src.startswith("demo_seed"):
+                continue
+            r = int(b.get("rooms") or 1)
+            buckets[idx][src] += r
+            totals[src] += r
+        top = [s for s, _ in sorted(totals.items(), key=lambda x: -x[1])[:6]]
+        labels = [(start + timedelta(days=7 * i)).date().isoformat() for i in range(weeks)]
+        return {
+            "weeks": labels,
+            "channels": [{"source": s, "total": totals[s],
+                          "weekly": [buckets[i].get(s, 0) for i in range(weeks)]}
+                         for s in top],
+        }
+
     @router.put("/pulse/pickup-target")
     async def set_target(body: TargetIn,
                          current_user: dict = Depends(require_perm("edit_bookings"))):

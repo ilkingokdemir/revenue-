@@ -17,6 +17,20 @@ export const Pickup24Card = ({ propertyId }) => {
   const [editTarget, setEditTarget] = useState(false);
   const [targetVal, setTargetVal] = useState("");
   const [targetHistory, setTargetHistory] = useState([]);
+  const [channels, setChannels] = useState(null);
+
+  const toggleExpand = async () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && !channels) {
+      try {
+        const { data } = await axios.get(`${API}/pulse/pickup-by-channel`, {
+          params: { property_id: propertyId || "", weeks: 4 },
+        });
+        setChannels(data);
+      } catch (e) { /* silent */ }
+    }
+  };
 
   const fetch = useCallback(async () => {
     try {
@@ -189,12 +203,42 @@ export const Pickup24Card = ({ propertyId }) => {
         )}
       </div>
 
-      <button onClick={() => setExpanded(e => !e)}
+      <button onClick={toggleExpand}
         className="w-full px-4 py-2 border-t border-stone-100 text-[11px] text-stone-500 hover:bg-stone-50 flex items-center justify-center gap-1 font-medium"
         data-testid="pickup-expand-btn">
         {expanded ? <CaretUp size={11} /> : <CaretDown size={11} />}
-        {expanded ? "Hide sold rooms" : `Show sold rooms (${data.recent_bookings?.length || 0})`}
+        {expanded ? "Hide details" : `Show details — sold rooms & channels (${data.recent_bookings?.length || 0})`}
       </button>
+
+      {expanded && channels?.channels?.length > 0 && (
+        <div className="border-t border-stone-100 px-4 py-2" data-testid="pickup-channel-trend">
+          <div className="text-[9px] text-stone-400 uppercase font-semibold mb-1">Channel pickup — last 4 weeks (rooms/week)</div>
+          <table className="w-full text-[10px]">
+            <thead>
+              <tr className="text-stone-400">
+                <td className="py-0.5">Channel</td>
+                {channels.weeks.map(w => <td key={w} className="text-right" title={`Week of ${w}`}>{w.slice(5)}</td>)}
+                <td className="text-right font-semibold">Total</td>
+              </tr>
+            </thead>
+            <tbody>
+              {channels.channels.map(c => {
+                const trendUp = c.weekly[c.weekly.length - 1] >= c.weekly[0];
+                return (
+                  <tr key={c.source} className="border-t border-stone-50">
+                    <td className="py-1 font-medium text-stone-700 flex items-center gap-1">
+                      {trendUp ? <TrendUp size={10} className="text-emerald-500" /> : <TrendDown size={10} className="text-red-400" />}
+                      {c.source}
+                    </td>
+                    {c.weekly.map((v, i) => <td key={i} className="text-right text-stone-500">{v}</td>)}
+                    <td className="text-right font-bold text-stone-700">{c.total}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {expanded && (
         <div className="border-t border-stone-100 divide-y divide-stone-50 max-h-64 overflow-y-auto" data-testid="pickup-bookings-list">

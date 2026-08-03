@@ -2955,3 +2955,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - 3) Sahip Enerji Karnesi: owner_pulse digest'ine 🌿 kart — son 30 gün Eco Sweep kWh + £ + kg CO₂
   (0.207 kg/kWh). Test: preview/default → "9.0 kWh, £2.52" kartı HTML'de.
 - NOT: Push'un cihazda görünmesi için kullanıcının Expo Go ile fiziksel cihazda giriş yapması gerekir.
+
+## Iter 510 (2026-08-03) — Mobil Arrivals + Push Tercihleri + EAS Hazırlığı TAMAMLANDI
+- 1) Mobil Arrivals: ArrivalsScreen ("Girişler" tab) — GET /api/arrivals/all?window=today listesi,
+  tek dokunuş check-in (Alert onayı → PUT /api/bookings/{id}/status {checked_in}). Backend curl: 8 arrival.
+- 2) Push Tercihleri: db.mobile_push_prefs (user_email bazlı, token silinse de kalıcı).
+  POST/GET /api/mobile/push-prefs. send_expo_push(kind=...) blocked-email filtresi.
+  Yeni job mobile_daily_pulse (09:00 UTC cron seed): güçlü satış günü + kanal düşüşü push'ları.
+  Mobil: Bugün ekranında 3 Switch'li "Push Bildirim Tercihleri" kartı.
+  Doğrulandı: pickup_strong kapalı → no_tokens; açık kind → gönderim denendi.
+- 3) EAS Hazırlığı: /app/mobile/eas.json (preview=APK internal, production autoIncrement) + README
+  talimatları. Gerçek build kullanıcının Expo hesabını gerektirir (eas login).
+- expo export: 877 modül derlendi (Arrivals + prefs UI dahil).
+- DERS (2. tekrar!): AYNI dosyaya AYNI batch'te birden çok search_replace ASLA — send_expo_push
+  düzenlemesi paralel edit çakışmasıyla kaybolmuştu (prefs filtresi çalışmıyordu), tek tek yeniden uygulandı.

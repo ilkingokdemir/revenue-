@@ -1,7 +1,13 @@
 import { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, RefreshControl, StyleSheet } from "react-native";
+import { View, Text, ScrollView, RefreshControl, StyleSheet, Switch } from "react-native";
 import api from "../api";
 import { colors, card } from "../theme";
+
+const PREF_LABELS = {
+  payment_received: "Ödeme alındı bildirimleri",
+  pickup_strong: "Güçlü satış günü bildirimleri",
+  channel_drop: "Kanal düşüş uyarıları",
+};
 
 const Kpi = ({ label, value, color = colors.text }) => (
   <View style={[card, s.kpi]}>
@@ -14,6 +20,17 @@ export default function DashboardScreen() {
   const [pickup, setPickup] = useState(null);
   const [notifs, setNotifs] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [prefs, setPrefs] = useState(null);
+
+  useEffect(() => {
+    api.get("/mobile/push-prefs").then(({ data }) => setPrefs(data)).catch(() => {});
+  }, []);
+
+  const togglePref = async (key) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    try { await api.post("/mobile/push-prefs", next); } catch (e) { /* silent */ }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -80,4 +97,6 @@ const s = StyleSheet.create({
   bar: { height: 6, backgroundColor: colors.accent, borderRadius: 3 },
   notifTitle: { fontSize: 13, fontWeight: "700", color: colors.text },
   notifSub: { fontSize: 11, color: colors.sub, marginTop: 2 },
+  prefRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8, paddingVertical: 8 },
+  prefLbl: { fontSize: 13, color: colors.text, fontWeight: "600" },
 });

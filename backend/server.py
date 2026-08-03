@@ -1495,6 +1495,16 @@ async def _job_eco_sweep(property_id: str) -> dict:
 
 JOB_HANDLERS["eco_sweep"] = _job_eco_sweep
 
+from routes.platform_ext.mobile_push import run_mobile_daily_pulse as _run_mobile_daily_pulse
+
+async def _job_mobile_daily_pulse(property_id: str) -> dict:
+    try:
+        return await _run_mobile_daily_pulse(db, property_id or "")
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+JOB_HANDLERS["mobile_daily_pulse"] = _job_mobile_daily_pulse
+
 from routes.finance_ext.digital_auth import create_digital_auth_router
 api_router.include_router(create_digital_auth_router(db, require_roles))
 
@@ -1910,6 +1920,13 @@ async def startup_event():
                 "notes": "Gece Eco Sweep — boş odaları otomatik eco moda alır (enerji tasarrufu)",
                 "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "system"})
             logger.info("Scheduler: seeded eco_sweep nightly cron (03:30 UTC)")
+        if not await db.scheduler_config.find_one({"property_id": "", "job": "mobile_daily_pulse"}, {"_id": 1}):
+            await db.scheduler_config.insert_one({
+                "property_id": "", "job": "mobile_daily_pulse", "enabled": True,
+                "cron_hour": 9, "cron_minute": 0, "cron_dow": None,
+                "notes": "Mobil push günlük özeti — güçlü satış günü ve kanal düşüşü bildirimleri",
+                "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "system"})
+            logger.info("Scheduler: seeded mobile_daily_pulse cron (09:00 UTC)")
     except Exception as e:
         logger.warning("pickup/pay-link cron seed failed: %s", e)
 

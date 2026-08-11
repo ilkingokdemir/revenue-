@@ -3173,3 +3173,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   kategori/kritik bulgu/acil aksiyon). db.ai_insight_reports'a kaydedilir, /latest ile yüklenir.
   UI: Rapor sekmesi üstünde tam bölüm. TEST: 8 misafir, 5 alan, 5 tavsiye — ekran doğrulandı.
 - BEKLEYEN: Google Places anahtarı + Expo token.
+
+## Iter 517 — İçgörü Otomasyonu + Tavsiyeden Görev TAMAMLANDI
+- İçgörü üretimi _generate_insight(pid) ortak helper'a çıkarıldı (route + weekly kullanır).
+- İÇGÖRÜ OTOMASYONU: _run_weekly artık her tesiste içgörü raporu üretip haftalık e-postaya
+  "İÇGÖRÜ ÖZETİ" bloğu (özet + geliştirme alanları + tavsiyeler) ekliyor. TEST: e-posta
+  gövdesinde blok doğrulandı. (Pazartesi 08:00 scheduler zaten aktif.)
+- TAVSİYEDEN GÖREV: POST /ai-agent/insight-task/{pid} {tavsiye, etki} → staff_tasks
+  (department management, source insight_recommendation, aynı tavsiye açıkken dedupe).
+  UI: rapor sekmesinde her tavsiye satırında yeşil "Görev Aç" butonu (insight-task-btn-{i}).
+  TEST: created→dedupe already_open PASS.
+- Test kalıntısı report_email (regression@test.com) temizlendi.
+- BEKLEYEN: Google Places anahtarı + Expo token.

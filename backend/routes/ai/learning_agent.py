@@ -991,10 +991,7 @@ def create_learning_agent_router(db, require_roles):
     _KARNE["fn"] = _run_karne
 
     # ---------- AI insight report (kim, ne, öneri) ----------
-    @router.post("/ai-agent/insight-report/{property_id}")
-    async def insight_report(property_id: str,
-                             _: dict = Depends(require_roles("admin", "manager"))):
-        """Yorum + şikayetlerden yönetici içgörü raporu üret."""
+    async def _generate_insight(property_id: str):
         neg_reviews = await db.reviews.find(
             {"property_id": property_id, "rating": {"$lte": 3}},
             {"_id": 0, "author": 1, "guest_name": 1, "rating": 1,
@@ -1004,7 +1001,7 @@ def create_learning_agent_router(db, require_roles):
             {"_id": 0, "guest_name": 1, "category": 1, "severity": 1,
              "text": 1, "status": 1}).sort("created_at", -1).to_list(30)
         if not neg_reviews and not complaints:
-            raise HTTPException(400, "Analiz edilecek olumsuz yorum veya şikayet yok")
+            return None
         rev_lines = "\n".join(
             f"- {r.get('author') or r.get('guest_name') or 'Misafir'} ({r.get('rating')}/5, {r.get('platform', '')}): "
             f"{(r.get('comment') or r.get('text') or '')[:200]}" for r in neg_reviews)
@@ -1035,13 +1032,46 @@ def create_learning_agent_router(db, require_roles):
         try:
             report = json.loads(_strip_json(resp))
         except Exception:
-            raise HTTPException(500, "Rapor ayrıştırılamadı, tekrar deneyin")
+            return None
         doc = {"id": str(uuid.uuid4()), "property_id": property_id,
                "report": report, "neg_review_count": len(neg_reviews),
                "complaint_count": len(complaints), "created_at": _now_iso()}
         await db.ai_insight_reports.insert_one(dict(doc))
         doc.pop("_id", None)
         return doc
+
+    @router.post("/ai-agent/insight-report/{property_id}")
+    async def insight_report(property_id: str,
+                             _: dict = Depends(require_roles("admin", "manager"))):
+        doc = await _generate_insight(property_id)
+        if not doc:
+            raise HTTPException(400, "Analiz edilecek olumsuz yorum/şikayet yok veya rapor üretilemedi")
+        return doc
+
+    @router.post("/ai-agent/insight-task/{property_id}")
+    async def insight_task(property_id: str, body: dict,
+                           current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Rapordaki tavsiyeyi departman görevi olarak aç."""
+        tavsiye = (body.get("tavsiye") or "").strip()
+        if not tavsiye:
+            raise HTTPException(400, "tavsiye gerekli")
+        existing = await db.staff_tasks.find_one(
+            {"property_id": property_id, "source": "insight_recommendation",
+             "title": tavsiye[:120], "status": {"$in": ["open", "in_progress"]}},
+            {"_id": 0, "id": 1})
+        if existing:
+            return {"created": False, "reason": "already_open", "task_id": existing["id"]}
+        task_id = str(uuid.uuid4())
+        await db.staff_tasks.insert_one({
+            "id": task_id, "property_id": property_id,
+            "title": tavsiye[:120],
+            "description": (f"AI İçgörü Raporu tavsiyesi: {tavsiye}\n"
+                            f"Beklenen etki: {body.get('etki', '-')}"),
+            "status": "open", "priority": "normal", "department": "management",
+            "source": "insight_recommendation",
+            "created_by": current_user.get("email", ""),
+            "created_at": _now_iso()})
+        return {"created": True, "task_id": task_id}
 
     @router.get("/ai-agent/insight-report/{property_id}/latest")
     async def latest_insight(property_id: str,
@@ -1114,6 +1144,20 @@ def create_learning_agent_router(db, require_roles):
                 approval = round((sent - edited) / sent * 100, 1) if sent else 0
                 avg_q = round(qagg[0]["avg"], 1) if qagg else None
                 lesson_lines = "\n".join(f"  • {l['rule']}" for l in new_lessons) or "  • Bu hafta yeni kural öğrenilmedi"
+                insight_block = ""
+                try:
+                    ins = await _generate_insight(pid)
+                    if ins:
+                        rep = ins["report"]
+                        areas = "\n".join(f"  • [{g.get('oncelik', '-')}] {g.get('alan', '')}"
+                                          for g in rep.get("gelistirme_alanlari", [])[:5])
+                        tips = "\n".join(f"  • {t.get('tavsiye', '')}"
+                                         for t in rep.get("tavsiyeler", [])[:5])
+                        insight_block = (f"\nİÇGÖRÜ ÖZETİ:\n{rep.get('ozet', '')}\n\n"
+                                         f"Geliştirme alanları:\n{areas}\n\n"
+                                         f"Robotun tavsiyeleri:\n{tips}\n")
+                except Exception as ie:
+                    logger.warning(f"weekly insight failed {pid}: {ie}")
                 body = (
                     f"AI Yanıt Robotu — Haftalık Performans Özeti ({pid})\n\n"
                     f"Gönderilen yanıt: {sent}\n"
@@ -1122,6 +1166,7 @@ def create_learning_agent_router(db, require_roles):
                     f"Ortalama kalite skoru: {avg_q if avg_q is not None else '—'}/100\n"
                     f"Yanıt bekleyen yorum: {pending}\n\n"
                     f"Bu hafta öğrenilen kurallar:\n{lesson_lines}\n"
+                    f"{insight_block}"
                 )
                 await db.outbound_email_queue.insert_one({
                     "id": str(uuid.uuid4()), "property_id": pid,

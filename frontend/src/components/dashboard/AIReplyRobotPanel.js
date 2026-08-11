@@ -667,7 +667,19 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                     <div>
                       <p className="text-xs font-semibold text-emerald-300 mb-1.5">Robotun tavsiyeleri</p>
                       {(insight.report?.tavsiyeler || []).map((t, i) => (
-                        <p key={i} className="text-xs text-stone-300 mb-1">✅ <b>{t.tavsiye}</b> <span className="text-stone-500">→ {t.beklenen_etki}</span></p>
+                        <div key={i} className="flex items-start gap-2 mb-1">
+                          <p className="flex-1 text-xs text-stone-300">✅ <b>{t.tavsiye}</b> <span className="text-stone-500">→ {t.beklenen_etki}</span></p>
+                          <button data-testid={`insight-task-btn-${i}`}
+                            onClick={async () => {
+                              try {
+                                const { data } = await axios.post(`${API}/ai-agent/insight-task/${propertyId}`, { tavsiye: t.tavsiye, etki: t.beklenen_etki });
+                                toast.success(data.created ? "Yönetime görev açıldı" : "Bu tavsiye için zaten açık görev var");
+                              } catch { toast.error("Görev açılamadı"); }
+                            }}
+                            className="shrink-0 px-2 py-0.5 rounded text-[10px] bg-emerald-600/80 hover:bg-emerald-500 text-white">
+                            Görev Aç
+                          </button>
+                        </div>
                       ))}
                     </div>
                     {insight.report?.sikayet_teftis && (

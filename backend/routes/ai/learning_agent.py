@@ -824,6 +824,89 @@ def create_learning_agent_router(db, require_roles):
         return {"created": True, "task_id": task_id, "weakest": weakest,
                 "department": dept, "collection": coll_name}
 
+    @router.get("/ai-agent/monthly-report-pdf/{property_id}")
+    async def monthly_report_pdf(property_id: str, month: str = "",
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        """Aylık robot karnesi — tek sayfa PDF."""
+        import io
+        from fastapi.responses import Response as FastAPIResponse
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pdfcanvas
+        from reportlab.lib.units import mm
+
+        if not month:
+            month = datetime.now(timezone.utc).strftime("%Y-%m")
+        start, end = f"{month}-01", f"{month}-31T23:59:59"
+        q = {"property_id": property_id, "status": "sent",
+             "sent_at": {"$gte": start, "$lte": end}}
+        sent = await db.ai_agent_drafts.count_documents(q)
+        edited = await db.ai_agent_drafts.count_documents({**q, "was_edited": True})
+        qagg = await db.ai_agent_drafts.aggregate([
+            {"$match": {**q, "quality_score": {"$exists": True}}},
+            {"$group": {"_id": None, "avg": {"$avg": "$quality_score"}}}]).to_list(1)
+        lessons = await db.ai_agent_lessons.find(
+            {"property_id": property_id, "created_at": {"$gte": start, "$lte": end}},
+            {"_id": 0, "rule": 1}).to_list(10)
+        cats = await category_summary(property_id, _={})
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {}
+
+        buf = io.BytesIO()
+        c = pdfcanvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+        c.setFillColorRGB(0.36, 0.25, 0.85)
+        c.rect(0, h - 36 * mm, w, 36 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 20)
+        c.drawString(18 * mm, h - 18 * mm, "AI Yanit Robotu — Aylik Karne")
+        c.setFont("Helvetica", 11)
+        c.drawString(18 * mm, h - 26 * mm, f"{prop.get('name', property_id)}  ·  {month}")
+        y = h - 50 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+        approval = round((sent - edited) / sent * 100, 1) if sent else 0
+        avg_q = round(qagg[0]["avg"], 1) if qagg else None
+        stats = [("Gonderilen yanit", str(sent)),
+                 ("Duzenlenen", str(edited)),
+                 ("Onay orani", f"%{approval}"),
+                 ("Ortalama kalite", f"{avg_q}/100" if avg_q is not None else "—"),
+                 ("Yeni ogrenilen kural", str(len(lessons)))]
+        for label, val in stats:
+            c.setFont("Helvetica", 11)
+            c.drawString(18 * mm, y, label)
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(90 * mm, y, val)
+            y -= 9 * mm
+        y -= 4 * mm
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(18 * mm, y, "Bu ay ogrenilen kurallar")
+        y -= 8 * mm
+        c.setFont("Helvetica", 9)
+        for l in lessons or [{"rule": "Bu ay yeni kural ogrenilmedi."}]:
+            c.drawString(20 * mm, y, f"- {l['rule'][:100]}")
+            y -= 6 * mm
+        y -= 6 * mm
+        c.setFont("Helvetica-Bold", 13)
+        c.drawString(18 * mm, y, "Kategori skorlari (tum yorumlar)")
+        y -= 8 * mm
+        for cat in cats.get("categories", []):
+            if cat["avg"] is None:
+                continue
+            c.setFont("Helvetica", 9)
+            c.drawString(20 * mm, y, cat["category"].replace("_", " "))
+            bar_w = (cat["avg"] / 5) * 70 * mm
+            c.setFillColorRGB(0.36, 0.25, 0.85)
+            c.rect(60 * mm, y - 1, bar_w, 3.5 * mm, fill=1, stroke=0)
+            c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.drawString(135 * mm, y, f"{cat['avg']}/5 ({cat['mentions']})")
+            y -= 7 * mm
+        c.setFont("Helvetica", 8)
+        c.setFillColorRGB(0.5, 0.5, 0.5)
+        c.drawString(18 * mm, 14 * mm, f"MyHotelBox AI Yanit Robotu · olusturma: {_now_iso()[:16]}")
+        c.showPage()
+        c.save()
+        return FastAPIResponse(
+            content=buf.getvalue(), media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=robot-karne-{property_id}-{month}.pdf"})
+
     # ---------- robot settings ----------
     @router.get("/ai-agent/config/{property_id}")
     async def get_agent_config(property_id: str,

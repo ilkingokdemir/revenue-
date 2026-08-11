@@ -3145,3 +3145,13 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   11 string + review prompt butonları çevrildi. TEST: EN tarayıcıda İngilizce açıldı.
 - BEKLEYEN: Google Places API anahtarı + Expo token (kullanıcı butonlara tıklıyor ama
   anahtar metnini yapıştırmıyor — bir sonraki mesajda AIza.../token bekleniyor).
+
+## Iter 515 — Dashboard Robot Widget + Aylık PDF Karne TAMAMLANDI
+- WIDGET: TodayHub.js'e violet banner (today-robot-widget) — /ai-agent/inbox sayıları
+  ("20 yanıt onayınızı bekliyor · 6 yorum · 14 şikayet"), tıklayınca ai-reply-robot'a gider.
+  Ekran testi PASS (widget + navigasyon).
+- AYLIK KARNE: GET /api/ai-agent/monthly-report-pdf/{pid}?month=YYYY-MM (reportlab canvas,
+  tek sayfa: gönderim/onay/kalite/kurallar + kategori bar grafiği). Rapor sekmesinde
+  "📄 Aylık Karne (PDF)" indirme butonu (blob download). Curl: 200 application/pdf 3KB.
+  NOT: PDF'te Türkçe karakterler ASCII'ye sadeleştirildi (Helvetica unicode sınırı).
+- BEKLEYEN: Google Places anahtarı + Expo token (kullanıcıya yapıştırma talimatı verildi).

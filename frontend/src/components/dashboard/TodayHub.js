@@ -38,6 +38,7 @@ const API = process.env.REACT_APP_BACKEND_URL;
  *   GET /api/tier1-dashboard/{property_id}?days=7  (graceful fallback)
  */
 export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigate }) {
+  const [robotStats, setRobotStats] = useState(null);
   const [brief, setBrief] = useState(null);
   const [tier1, setTier1] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -59,6 +60,13 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
     return () => {
       abort = true;
     };
+  }, [propertyId]);
+
+  useEffect(() => {
+    if (!propertyId) return;
+    axios.get(`${API}/api/ai-agent/inbox/${propertyId}`)
+      .then(({ data }) => setRobotStats(data))
+      .catch(() => {});
   }, [propertyId]);
 
   const greet = useMemo(() => {
@@ -209,6 +217,31 @@ export default function TodayHub({ propertyId, pickupScope, hotelName, onNavigat
           </button>
         ))}
       </div>
+
+      {/* AI REPLY ROBOT WIDGET */}
+      {robotStats && (
+        <button
+          onClick={() => onNavigate && onNavigate("ai-reply-robot")}
+          data-testid="today-robot-widget"
+          className="w-full mb-6 p-4 rounded-2xl bg-gradient-to-r from-violet-500/10 via-violet-500/5 to-transparent border border-violet-500/20 flex items-center gap-3 text-left hover:-translate-y-0.5 transition-transform"
+        >
+          <div className="w-10 h-10 rounded-full bg-violet-500/15 flex items-center justify-center text-lg">🤖</div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-stone-900 text-sm">
+              AI Yanıt Robotu —{" "}
+              {robotStats.count > 0 ? (
+                <span className="text-violet-600">{robotStats.count} yanıt onayınızı bekliyor</span>
+              ) : (
+                <span className="text-emerald-600">tüm yorum ve şikayetler yanıtlandı ✓</span>
+              )}
+            </div>
+            <div className="text-xs text-stone-500 mt-0.5">
+              {robotStats.review_count} yorum · {robotStats.complaint_count} şikayet — taslakları incele & gönder
+            </div>
+          </div>
+          <ArrowRight size={16} className="text-violet-500" />
+        </button>
+      )}
 
       {/* INCREMENTAL REVENUE BANNER (from tier1) */}
       {heroRevenue && heroRevenue.amount > 0 && (

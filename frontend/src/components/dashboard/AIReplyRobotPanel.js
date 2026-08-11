@@ -540,6 +540,23 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             <div className="p-8 text-center text-stone-400 text-sm"><Loader2 className="w-5 h-5 mx-auto animate-spin mb-2" />Rapor yükleniyor…</div>
           ) : (
             <>
+              <div className="flex items-center justify-between">
+                <div />
+                <button data-testid="ai-robot-monthly-pdf-btn"
+                  onClick={async () => {
+                    try {
+                      const r = await axios.get(`${API}/ai-agent/monthly-report-pdf/${propertyId}`, { responseType: "blob" });
+                      const url = URL.createObjectURL(r.data);
+                      const a = document.createElement("a");
+                      a.href = url; a.download = `robot-karne-${propertyId}.pdf`; a.click();
+                      URL.revokeObjectURL(url);
+                      toast.success("Aylık karne indirildi");
+                    } catch { toast.error("PDF oluşturulamadı"); }
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-xs text-stone-100">
+                  📄 Aylık Karne (PDF)
+                </button>
+              </div>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <StatBox testId="ai-report-sent" label={`Son ${report.weeks} Hafta Gönderim`} value={report.totals.sent} />
                 <StatBox testId="ai-report-edited" label="Düzenlenen" value={report.totals.edited} />

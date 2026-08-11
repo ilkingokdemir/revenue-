@@ -1607,6 +1607,10 @@ JOB_HANDLERS["ai_weekly_summary"] = run_weekly_summary
 from routes.integrations_pkg.gbp_publish import create_gbp_router
 api_router.include_router(create_gbp_router(db, require_roles))
 
+from routes.integrations_pkg.review_sources import create_review_sources_router, run_review_source_sync
+api_router.include_router(create_review_sources_router(db, require_roles))
+JOB_HANDLERS["review_source_sync"] = run_review_source_sync
+
 # ===== Duetto Open Pricing (Iter 285 - segment×channel×room matrix) =====
 from routes.revenue_ext.open_pricing import create_open_pricing_router
 api_router.include_router(create_open_pricing_router(db, require_roles))

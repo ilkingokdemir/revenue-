@@ -43,14 +43,37 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [qualityWarning, setQualityWarning] = useState(null);
   const [config, setConfig] = useState(null);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [sources, setSources] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   const loadConfig = useCallback(async () => {
     if (!propertyId) return;
     try {
-      const { data } = await axios.get(`${API}/ai-agent/config/${propertyId}`);
-      setConfig(data);
+      const [{ data: c }, { data: s }] = await Promise.all([
+        axios.get(`${API}/ai-agent/config/${propertyId}`),
+        axios.get(`${API}/review-sources/${propertyId}`),
+      ]);
+      setConfig(c); setSources(s);
     } catch { /* silent */ }
   }, [propertyId]);
+
+  const saveSources = async () => {
+    try {
+      const { data } = await axios.put(`${API}/review-sources/${propertyId}`, sources);
+      setSources(data);
+      toast.success("Yorum kaynakları kaydedildi");
+    } catch { toast.error("Kaydedilemedi"); }
+  };
+
+  const syncNow = async () => {
+    setSyncing(true);
+    try {
+      const { data } = await axios.post(`${API}/review-sources/${propertyId}/sync-now`);
+      toast.success(`Senkron tamamlandı — ${data.total_new} yeni yorum eklendi`);
+      loadConfig(); load();
+    } catch { toast.error("Senkron başarısız"); }
+    setSyncing(false);
+  };
 
   const saveConfig = async () => {
     setSavingConfig(true);
@@ -553,6 +576,51 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                 {savingConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings2 className="w-4 h-4" />}
                 Ayarları Kaydet
               </button>
+
+              {sources && (
+                <div className="pt-4 mt-4 border-t border-stone-800 space-y-3" data-testid="ai-robot-sources-section">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-stone-200">Yorum Kaynakları</p>
+                    <span className={`px-2 py-0.5 text-[10px] rounded ${sources.google_live ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                      {sources.google_live ? "Google API bağlı" : "Simülasyon modu"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-stone-500">
+                    Her sabah 05:30'da Google/Booking yorumları otomatik çekilir, 06:00'da robot taslakları hazırlar.
+                    {!sources.google_live && " Gerçek Google yorumları için Google Places API anahtarı gerekir."}
+                  </p>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-stone-400">Google Place ID</label>
+                    <input data-testid="ai-robot-source-placeid" value={sources.google_place_id}
+                      onChange={(e) => setSources({ ...sources, google_place_id: e.target.value })}
+                      placeholder="ChIJ... (Google Place ID Finder'dan)"
+                      className="w-full px-3 py-2 rounded-lg bg-stone-900 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-stone-400">Booking.com otel sayfası URL</label>
+                    <input data-testid="ai-robot-source-booking" value={sources.booking_url}
+                      onChange={(e) => setSources({ ...sources, booking_url: e.target.value })}
+                      placeholder="https://www.booking.com/hotel/..."
+                      className="w-full px-3 py-2 rounded-lg bg-stone-900 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button data-testid="ai-robot-source-save" onClick={saveSources}
+                      className="px-4 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-xs text-stone-100">
+                      Kaynakları Kaydet
+                    </button>
+                    <button data-testid="ai-robot-source-sync" onClick={syncNow} disabled={syncing}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs text-white">
+                      {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                      Şimdi Senkronize Et
+                    </button>
+                  </div>
+                  {sources.last_sync_at && (
+                    <p className="text-[10px] text-stone-500" data-testid="ai-robot-source-lastsync">
+                      Son senkron: {sources.last_sync_at.slice(0, 16).replace("T", " ")} · {sources.last_result?.total_new ?? 0} yeni yorum
+                    </p>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>

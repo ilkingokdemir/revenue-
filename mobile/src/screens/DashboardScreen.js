@@ -22,9 +22,11 @@ export default function DashboardScreen() {
   const [notifs, setNotifs] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [prefs, setPrefs] = useState(null);
+  const [insight, setInsight] = useState(null);
 
   useEffect(() => {
     api.get("/mobile/push-prefs").then(({ data }) => setPrefs(data)).catch(() => {});
+    api.get("/ai-agent/insight-report/default/latest").then(({ data }) => data?.id && setInsight(data)).catch(() => {});
   }, []);
 
   const togglePref = async (key) => {
@@ -73,6 +75,15 @@ export default function DashboardScreen() {
         </>
       )}
       <Text style={s.section}>Bildirimler</Text>
+      {insight && (
+        <View style={[card, { marginBottom: 8, borderLeftWidth: 3, borderLeftColor: "#8B5CF6" }]}>
+          <Text style={s.notifTitle}>🕵️ AI İçgörü Özeti</Text>
+          <Text style={s.notifSub}>{insight.report?.ozet}</Text>
+          {(insight.report?.tavsiyeler || []).slice(0, 2).map((t, i) => (
+            <Text key={i} style={[s.notifSub, { marginTop: 4 }]}>✅ {t.tavsiye}</Text>
+          ))}
+        </View>
+      )}
       {notifs.map((n, i) => (
         <View key={i} style={[card, { marginBottom: 8 }]}>
           <Text style={s.notifTitle}>{n.title}</Text>

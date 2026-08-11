@@ -542,6 +542,25 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   {drafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                   {drafting ? "Robot yazıyor…" : draft ? "Yeniden Oluştur" : "AI Taslak Oluştur"}
                 </button>
+                {(selected.source_type === "complaint" || (selected.rating && selected.rating <= 3)) && (
+                  <button data-testid="ai-robot-winback-btn"
+                    onClick={async () => {
+                      try {
+                        toast.info("Geri kazanım teklifi hazırlanıyor…");
+                        const { data } = await axios.post(`${API}/ai-agent/winback`, {
+                          property_id: propertyId, source_type: selected.source_type,
+                          source_id: selected.source_id, discount_pct: 15,
+                        });
+                        await navigator.clipboard.writeText(data.message);
+                        toast.success(data.email_queued
+                          ? `%${data.discount_pct} teklif e-posta kuyruğuna eklendi ve panoya kopyalandı`
+                          : `%${data.discount_pct} teklif panoya kopyalandı (kod: ${data.code})`);
+                      } catch { toast.error("Teklif oluşturulamadı"); }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-amber-600/80 hover:bg-amber-500 text-xs font-medium text-white">
+                    🎁 %15 Geri Kazanım Teklifi Oluştur
+                  </button>
+                )}
                 {(draft || draftText) && (
                   <>
                     <div>
@@ -631,11 +650,28 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3" data-testid="ai-robot-insight">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium text-stone-200">🕵️ İçgörü & Teftiş Raporu — kim, ne dedi, ne yapmalı</p>
-                  <button data-testid="ai-robot-insight-btn" onClick={runInsight} disabled={insightLoading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs text-white">
-                    {insightLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                    {insightLoading ? "Analiz ediliyor…" : insight ? "Yeniden Analiz Et" : "Rapor Oluştur"}
-                  </button>
+                  <div className="flex gap-2">
+                    {insight && (
+                      <button data-testid="ai-robot-insight-pdf-btn"
+                        onClick={async () => {
+                          try {
+                            const r = await axios.get(`${API}/ai-agent/insight-pdf/${propertyId}`, { responseType: "blob" });
+                            const url = URL.createObjectURL(r.data);
+                            const a = document.createElement("a");
+                            a.href = url; a.download = `icgoru-${propertyId}.pdf`; a.click();
+                            URL.revokeObjectURL(url);
+                          } catch { toast.error("PDF oluşturulamadı"); }
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-xs text-stone-100">
+                        📄 PDF
+                      </button>
+                    )}
+                    <button data-testid="ai-robot-insight-btn" onClick={runInsight} disabled={insightLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs text-white">
+                      {insightLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      {insightLoading ? "Analiz ediliyor…" : insight ? "Yeniden Analiz Et" : "Rapor Oluştur"}
+                    </button>
+                  </div>
                 </div>
                 {!insight ? (
                   <p className="text-xs text-stone-500">Robot tüm olumsuz yorumları ve şikayetleri okuyup yönetici raporu çıkarır: kim ne konuda şikayetçi, hangi alanlar geliştirilmeli, somut tavsiyeler.</p>

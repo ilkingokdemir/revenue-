@@ -3185,3 +3185,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   TEST: created→dedupe already_open PASS.
 - Test kalıntısı report_email (regression@test.com) temizlendi.
 - BEKLEYEN: Google Places anahtarı + Expo token.
+
+## Iter 518 — Geri Kazanım + İçgörü PDF + Mobil İçgörü TAMAMLANDI
+- GERİ KAZANIM: POST /api/ai-agent/winback {property_id, source_type, source_id, discount_pct}
+  — LLM kişisel özür + %X indirim teklifi (kod WELCOMEX, misafir dilinde, soruna özel atıf).
+  guest_email varsa outbound_email_queue'ya (MOCKED), winback_offers'a loglanır. UI: şikayet
+  veya rating<=3 yorum seçiliyken "🎁 %15 Geri Kazanım Teklifi" butonu (panoya kopyalar).
+  TEST: klima şikayetine özel mesaj + email_queued True.
+- İÇGÖRÜ PDF: GET /api/ai-agent/insight-pdf/{pid} — son içgörü raporu reportlab PDF
+  (TR karakter transliterasyonu). UI: içgörü başlığında "📄 PDF" butonu. TEST: 200 pdf 3.7KB.
+- MOBİL İÇGÖRÜ: DashboardScreen'e violet kenarlıklı "🕵️ AI İçgörü Özeti" kartı (özet + 2
+  tavsiye, /ai-agent/insight-report/default/latest). Expo export PASS.
+- BEKLEYEN: Google Places anahtarı + Expo token.

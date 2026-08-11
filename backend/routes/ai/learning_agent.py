@@ -1080,6 +1080,108 @@ def create_learning_agent_router(db, require_roles):
             {"property_id": property_id}, {"_id": 0}, sort=[("created_at", -1)])
         return doc or {}
 
+    @router.post("/ai-agent/winback")
+    async def winback_offer(body: dict,
+                            current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Kötü yorum/şikayet bırakan misafire kişisel geri kazanım teklifi üret."""
+        pid = (body.get("property_id") or "").strip()
+        st, sid = body.get("source_type"), (body.get("source_id") or "").strip()
+        discount = max(5, min(50, int(body.get("discount_pct", 15))))
+        src = await _get_source(st, sid)
+        if not src:
+            raise HTTPException(404, "Kaynak bulunamadı")
+        cfg = await db.review_agent_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        prop = await db.properties.find_one({"id": pid}, {"_id": 0, "name": 1}) or {}
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        client = LlmChat(
+            api_key=os.environ.get("EMERGENT_LLM_KEY"),
+            session_id=f"winback-{uuid.uuid4()}",
+            system_message=(
+                f"Otel adına kötü deneyim yaşamış misafire kişisel bir 'geri kazanım' mesajı yaz. "
+                f"Misafirin dilinde yaz. Yaşadığı soruna özel atıf yap, içten özür dile, "
+                f"%{discount} indirimli 'tekrar deneyin' teklifi sun (kod: WELCOME{discount}), "
+                f"3-5 cümle. İmza: — {cfg.get('sign_off', 'Yönetim')}, {prop.get('name', '')}"),
+        ).with_model("openai", "gpt-5.2")
+        text = await client.send_message(UserMessage(text=_source_context(st, src)))
+        guest_email = src.get("guest_email", "")
+        queued = False
+        if guest_email:
+            await db.outbound_email_queue.insert_one({
+                "id": str(uuid.uuid4()), "property_id": pid, "to": guest_email,
+                "subject": f"Sizi tekrar ağırlamak isteriz — %{discount} özel teklif",
+                "body": text, "type": "winback_offer", "status": "queued",
+                "delivery_status": "mocked_email_queued", "created_at": _now_iso()})
+            queued = True
+        await db.winback_offers.insert_one({
+            "id": str(uuid.uuid4()), "property_id": pid, "source_type": st,
+            "source_id": sid, "discount_pct": discount, "message": text,
+            "email_queued": queued, "created_by": current_user.get("email", ""),
+            "created_at": _now_iso()})
+        return {"message": text, "discount_pct": discount,
+                "code": f"WELCOME{discount}", "email_queued": queued}
+
+    @router.get("/ai-agent/insight-pdf/{property_id}")
+    async def insight_pdf(property_id: str,
+                          _: dict = Depends(require_roles("admin", "manager"))):
+        import io
+        from fastapi.responses import Response as FastAPIResponse
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas as pdfcanvas
+        from reportlab.lib.units import mm
+        doc = await db.ai_insight_reports.find_one(
+            {"property_id": property_id}, {"_id": 0}, sort=[("created_at", -1)])
+        if not doc:
+            raise HTTPException(404, "Önce içgörü raporu oluşturun")
+        rep = doc["report"]
+
+        def _tr(s):
+            return str(s or "").translate(str.maketrans("ğĞıİşŞçÇöÖüÜ", "gGiIsScCoOuU"))
+
+        buf = io.BytesIO()
+        c = pdfcanvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+        c.setFillColorRGB(0.36, 0.25, 0.85)
+        c.rect(0, h - 30 * mm, w, 30 * mm, fill=1, stroke=0)
+        c.setFillColorRGB(1, 1, 1)
+        c.setFont("Helvetica-Bold", 17)
+        c.drawString(16 * mm, h - 16 * mm, "Icgoru & Teftis Raporu")
+        c.setFont("Helvetica", 10)
+        c.drawString(16 * mm, h - 23 * mm, f"{property_id} · {doc['created_at'][:10]} · {doc['neg_review_count']} olumsuz yorum + {doc['complaint_count']} sikayet")
+        y = h - 40 * mm
+        c.setFillColorRGB(0.1, 0.1, 0.1)
+
+        def line(txt, size=9, bold=False, dy=5.5):
+            nonlocal y
+            if y < 20 * mm:
+                c.showPage(); y = h - 20 * mm
+                c.setFillColorRGB(0.1, 0.1, 0.1)
+            c.setFont("Helvetica-Bold" if bold else "Helvetica", size)
+            c.drawString(16 * mm, y, _tr(txt)[:118])
+            y -= dy * mm
+
+        line(rep.get("ozet", ""), 9); y -= 3 * mm
+        line("KIM, NE ILE ILGILI KOTU DEGERLENDIRDI?", 11, True, 7)
+        for k in rep.get("kim_ne_dedi", []):
+            line(f"- {k.get('misafir')} | {k.get('konu')} | {k.get('sorun')}")
+        y -= 3 * mm
+        line("GELISTIRILMESI GEREKENLER", 11, True, 7)
+        for g in rep.get("gelistirme_alanlari", []):
+            line(f"- [{g.get('oncelik')}] {g.get('alan')} — {g.get('kanit')}")
+        y -= 3 * mm
+        line("TAVSIYELER", 11, True, 7)
+        for t in rep.get("tavsiyeler", []):
+            line(f"- {t.get('tavsiye')}")
+            line(f"   Etki: {t.get('beklenen_etki')}", 8)
+        y -= 3 * mm
+        tf = rep.get("sikayet_teftis", {})
+        line("SIKAYET TEFTISI", 11, True, 7)
+        line(f"En sik kategori: {tf.get('en_sik_kategori')}")
+        line(f"Kritik bulgu: {tf.get('kritik_bulgu')}")
+        line(f"Acil aksiyon: {tf.get('acil_aksiyon')}")
+        c.showPage(); c.save()
+        return FastAPIResponse(content=buf.getvalue(), media_type="application/pdf",
+                               headers={"Content-Disposition": f"attachment; filename=icgoru-{property_id}.pdf"})
+
     # ---------- robot settings ----------
     @router.get("/ai-agent/config/{property_id}")
     async def get_agent_config(property_id: str,

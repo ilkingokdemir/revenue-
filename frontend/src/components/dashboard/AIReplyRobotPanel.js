@@ -45,6 +45,50 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [savingConfig, setSavingConfig] = useState(false);
   const [sources, setSources] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [bench, setBench] = useState(null);
+  const [benchComps, setBenchComps] = useState([]);
+  const [scanning, setScanning] = useState(false);
+  const [portfolio, setPortfolio] = useState(null);
+  const [catData, setCatData] = useState(null);
+  const [categorizing, setCategorizing] = useState(false);
+  const [qrUrl, setQrUrl] = useState(null);
+
+  const loadBench = useCallback(async () => {
+    try {
+      const { data } = await axios.get(`${API}/reputation/benchmark/${propertyId}`);
+      setBench(data);
+      setBenchComps(data.competitors.length ? data.competitors : [{ name: "", place_id: "" }]);
+    } catch { /* silent */ }
+  }, [propertyId]);
+
+  const saveComps = async () => {
+    try {
+      await axios.put(`${API}/reputation/config/${propertyId}`, { competitors: benchComps.filter(c => c.name.trim()) });
+      toast.success("Rakipler kaydedildi");
+    } catch { toast.error("Kaydedilemedi"); }
+  };
+
+  const scanBench = async () => {
+    setScanning(true);
+    try {
+      await saveComps();
+      await axios.post(`${API}/reputation/scan/${propertyId}`);
+      toast.success("İtibar taraması tamamlandı");
+      loadBench();
+    } catch { toast.error("Tarama başarısız"); }
+    setScanning(false);
+  };
+
+  const runCategorize = async () => {
+    setCategorizing(true);
+    try {
+      const { data } = await axios.post(`${API}/ai-agent/categorize/${propertyId}`);
+      toast.success(`${data.categorized} yorum kategorilere puanlandı`);
+      const { data: c } = await axios.get(`${API}/ai-agent/categories/${propertyId}`);
+      setCatData(c);
+    } catch { toast.error("Analiz başarısız"); }
+    setCategorizing(false);
+  };
 
   const loadConfig = useCallback(async () => {
     if (!propertyId) return;
@@ -108,8 +152,19 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
         .then(({ data }) => setReport(data))
         .catch(() => toast.error("Rapor yüklenemedi"));
     }
-    if (tab === "settings" && propertyId) loadConfig();
-  }, [tab, propertyId, loadConfig]);
+    if (tab === "settings" && propertyId) {
+      loadConfig();
+      axios.get(`${API}/surveys/qr-image/${propertyId}`, { responseType: "blob" })
+        .then((r) => setQrUrl(URL.createObjectURL(r.data))).catch(() => {});
+    }
+    if (tab === "benchmark" && propertyId) loadBench();
+    if (tab === "portfolio") {
+      axios.get(`${API}/ai-agent/portfolio-report`).then(({ data }) => setPortfolio(data)).catch(() => {});
+    }
+    if (tab === "report" && propertyId) {
+      axios.get(`${API}/ai-agent/categories/${propertyId}`).then(({ data }) => setCatData(data)).catch(() => {});
+    }
+  }, [tab, propertyId, loadConfig, loadBench]);
 
   const bulkDraft = async () => {
     setBulkDrafting(true);
@@ -296,6 +351,14 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
         <button data-testid="ai-robot-tab-report" onClick={() => setTab("report")}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${tab === "report" ? "bg-violet-500/15 text-violet-300" : "text-stone-400 hover:text-stone-200"}`}>
           <TrendingUp className="w-4 h-4" /> Öğrenme Raporu
+        </button>
+        <button data-testid="ai-robot-tab-benchmark" onClick={() => setTab("benchmark")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${tab === "benchmark" ? "bg-violet-500/15 text-violet-300" : "text-stone-400 hover:text-stone-200"}`}>
+          <Star className="w-4 h-4" /> Benchmark
+        </button>
+        <button data-testid="ai-robot-tab-portfolio" onClick={() => setTab("portfolio")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${tab === "portfolio" ? "bg-violet-500/15 text-violet-300" : "text-stone-400 hover:text-stone-200"}`}>
+          <Layers className="w-4 h-4" /> Portföy
         </button>
         <button data-testid="ai-robot-tab-settings" onClick={() => setTab("settings")}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${tab === "settings" ? "bg-violet-500/15 text-violet-300" : "text-stone-400 hover:text-stone-200"}`}>
@@ -494,6 +557,35 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                 </ol>
                 <p className="mt-2 text-[10px] text-stone-500">Not: Google sandbox sunmuyor; onay gelene kadar yanıtlar güvenle kuyrukta bekletiliyor.</p>
               </details>
+              <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3" data-testid="ai-robot-categories">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-stone-200">Kategori Analizi (Semantik)</p>
+                  <button data-testid="ai-robot-categorize-btn" onClick={runCategorize} disabled={categorizing}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs text-white">
+                    {categorizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    Yorumları Analiz Et
+                  </button>
+                </div>
+                {catData?.categories?.some((c) => c.avg !== null) ? (
+                  <>
+                    {catData.weakest && (
+                      <p className="text-[11px] text-rose-300">⚠ En zayıf alan: <b>{catData.weakest.replace("_", " ")}</b> — operasyon ekibiyle paylaşın</p>
+                    )}
+                    {catData.categories.map((c) => (
+                      <div key={c.category} className="flex items-center gap-3">
+                        <span className="w-32 text-xs text-stone-400 capitalize">{c.category.replace("_", " ")}</span>
+                        <div className="flex-1 h-2 rounded-full bg-stone-800 overflow-hidden">
+                          <div className={`h-full ${(c.avg || 0) >= 4 ? "bg-emerald-500" : (c.avg || 0) >= 3 ? "bg-amber-500" : "bg-rose-500"}`}
+                            style={{ width: `${((c.avg || 0) / 5) * 100}%` }} />
+                        </div>
+                        <span className="w-20 text-xs text-stone-300 text-right">{c.avg ?? "—"} <span className="text-stone-600">({c.mentions})</span></span>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <p className="text-xs text-stone-500">Henüz analiz yok — "Yorumları Analiz Et" ile yorumları temizlik/personel/konum/yemek/oda/fiyat kategorilerine puanlatın.</p>
+                )}
+              </div>
               <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3">
                 <p className="text-sm font-medium text-stone-200 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-violet-400" /> Haftalık Gelişim</p>
                 {report.series.map((w) => (
@@ -621,7 +713,106 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   )}
                 </div>
               )}
+
+              <div className="pt-4 mt-4 border-t border-stone-800 space-y-2" data-testid="ai-robot-qr-section">
+                <p className="text-sm font-medium text-stone-200">Her-An Anket QR Kodu</p>
+                <p className="text-[10px] text-stone-500">Lobiye/odalara asın — misafir taratınca anında anket açılır. Düşük skorlu anketler otomatik şikayet olarak robota düşer.</p>
+                {qrUrl && <img data-testid="ai-robot-qr-img" src={qrUrl} alt="Anket QR" className="w-36 h-36 rounded-lg bg-white p-1" />}
+                <a data-testid="ai-robot-qr-link" href={`/survey/qr-${propertyId}`} target="_blank" rel="noreferrer"
+                  className="text-[11px] text-violet-300 underline block">Anket sayfasını aç: /survey/qr-{propertyId}</a>
+              </div>
             </>
+          )}
+        </div>
+      )}
+
+      {tab === "benchmark" && (
+        <div className="max-w-3xl space-y-4" data-testid="ai-robot-benchmark">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-stone-200">İtibar Benchmark'ı — 5 rakibe kadar takip</p>
+            {bench && (
+              <span className={`px-2 py-0.5 text-[10px] rounded ${bench.google_live ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                {bench.google_live ? "Google API bağlı" : "Simülasyon modu"}
+              </span>
+            )}
+          </div>
+          <div className="space-y-2">
+            {benchComps.map((c, i) => (
+              <div key={i} className="flex gap-2">
+                <input data-testid={`bench-comp-name-${i}`} value={c.name}
+                  onChange={(e) => setBenchComps(benchComps.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                  placeholder={`Rakip ${i + 1} adı`}
+                  className="flex-1 px-3 py-2 rounded-lg bg-stone-900 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
+                <input value={c.place_id}
+                  onChange={(e) => setBenchComps(benchComps.map((x, j) => j === i ? { ...x, place_id: e.target.value } : x))}
+                  placeholder="Google Place ID (opsiyonel)"
+                  className="flex-1 px-3 py-2 rounded-lg bg-stone-900 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
+              </div>
+            ))}
+            <div className="flex gap-2">
+              {benchComps.length < 5 && (
+                <button data-testid="bench-add-comp" onClick={() => setBenchComps([...benchComps, { name: "", place_id: "" }])}
+                  className="px-3 py-1.5 rounded-lg bg-stone-800 border border-stone-700 text-xs text-stone-300">+ Rakip Ekle</button>
+              )}
+              <button data-testid="bench-scan-btn" onClick={scanBench} disabled={scanning}
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs text-white">
+                {scanning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Star className="w-3.5 h-3.5" />}
+                Kaydet & Şimdi Tara
+              </button>
+            </div>
+          </div>
+          {bench?.table?.length > 0 && (
+            <div className="bg-stone-900 border border-stone-800 rounded-xl overflow-hidden" data-testid="bench-table">
+              <table className="w-full text-sm">
+                <thead><tr className="text-left text-[10px] uppercase tracking-wider text-stone-500 border-b border-stone-800">
+                  <th className="p-3">#</th><th className="p-3">Otel</th><th className="p-3">Puan</th><th className="p-3">Yorum</th><th className="p-3">30g Trend</th>
+                </tr></thead>
+                <tbody>
+                  {bench.table.map((row) => (
+                    <tr key={row.name} className={`border-b border-stone-800/50 ${row.entity === "self" ? "bg-violet-500/10" : ""}`}>
+                      <td className="p-3 text-stone-400">{row.rank}</td>
+                      <td className="p-3 text-stone-100">{row.entity === "self" ? "🏨 " : ""}{row.name}</td>
+                      <td className="p-3 font-semibold text-amber-300">{row.rating ?? "—"}</td>
+                      <td className="p-3 text-stone-400">{row.review_count ?? "—"}</td>
+                      <td className={`p-3 ${row.trend > 0 ? "text-emerald-400" : row.trend < 0 ? "text-rose-400" : "text-stone-500"}`}>
+                        {row.trend > 0 ? "▲" : row.trend < 0 ? "▼" : "—"} {row.trend !== 0 ? Math.abs(row.trend) : ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "portfolio" && (
+        <div className="space-y-3" data-testid="ai-robot-portfolio">
+          <p className="text-sm font-medium text-stone-200">Portföy Roll-up — tüm tesislerin robot performansı</p>
+          {!portfolio ? (
+            <div className="p-6 text-center text-stone-400 text-sm"><Loader2 className="w-5 h-5 mx-auto animate-spin" /></div>
+          ) : (
+            <div className="bg-stone-900 border border-stone-800 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm min-w-[720px]">
+                <thead><tr className="text-left text-[10px] uppercase tracking-wider text-stone-500 border-b border-stone-800">
+                  <th className="p-3">Tesis</th><th className="p-3">Gönderilen</th><th className="p-3">Onay %</th>
+                  <th className="p-3">Ø Kalite</th><th className="p-3">Bekleyen Yorum</th><th className="p-3">Açık Şikayet</th><th className="p-3">Kural</th>
+                </tr></thead>
+                <tbody>
+                  {portfolio.rows.map((r) => (
+                    <tr key={r.property_id} data-testid={`portfolio-row-${r.property_id}`} className="border-b border-stone-800/50">
+                      <td className="p-3 text-stone-100">{r.name}</td>
+                      <td className="p-3 text-stone-300">{r.sent}</td>
+                      <td className="p-3 text-violet-300">{r.approval_rate !== null ? `%${r.approval_rate}` : "—"}</td>
+                      <td className="p-3 text-emerald-300">{r.avg_quality ?? "—"}</td>
+                      <td className={`p-3 ${r.pending_reviews > 0 ? "text-amber-300" : "text-stone-500"}`}>{r.pending_reviews}</td>
+                      <td className={`p-3 ${r.open_complaints > 0 ? "text-rose-300" : "text-stone-500"}`}>{r.open_complaints}</td>
+                      <td className="p-3 text-stone-400">{r.lessons}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

@@ -3089,3 +3089,24 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   TEST: manuel tetik → 1 email kuyruklandı, içerik doğru.
 - Test değerleri geri alındı (tone=professional, threshold=70, sign_off=Yönetim).
 - EAS BUILD: Expo access token hâlâ kullanıcıdan BEKLENİYOR (4. hatırlatma).
+
+## Iter 511 — Rakip Paritesi 4 Eksik TAMAMLANDI (kullanıcı seçimi: A - hepsi)
+- 0) YORUM KAYNAĞI SENKRONU (önceki mesajdan devam): routes/integrations_pkg/review_sources.py
+  (/api/review-sources/{pid} GET/PUT, /sync-now). GOOGLE_PLACES_API_KEY varsa gerçek Places API
+  (New) v1 (X-Goog-FieldMask), yoksa SIMULATED (deterministik, dedupe: reviews.external_id).
+  Scheduler: review_source_sync 05:30. UI: Ayarlar > Yorum Kaynakları.
+- 1) İTİBAR BENCHMARK: routes/integrations_pkg/reputation_benchmark.py — 5 rakip (name+place_id),
+  günlük snapshot (reputation_snapshots), rank+trend tablosu. /api/reputation/{benchmark|config|scan}.
+  Scheduler: reputation_scan 07:00. UI: "Benchmark" sekmesi (tablo doğrulandı).
+- 2) QR HER-AN ANKET: surveys.py — token "qr-{pid}" (invite'sız, tekrar kullanılabilir),
+  GET /surveys/qr-image/{pid} (qrcode PNG). Düşük skor (NPS<=6 veya kategori<=2.5) →
+  guest_complaints'e otomatik şikayet (source: survey_low_score) → robot inbox'a düşer (TEST PASS).
+- 3) KATEGORİ SKORLARI: POST /ai-agent/categorize/{pid} (LLM, 6 kategori 1-5, batch 20),
+  GET /ai-agent/categories/{pid} (ortalama + weakest). UI: Rapor sekmesi bar grafiği.
+- 4) PORTFÖY ROLL-UP: GET /ai-agent/portfolio-report (13 tesis: sent/onay%/kalite/bekleyen/şikayet/
+  kural). UI: "Portföy" sekmesi tablo.
+- KRİTİK BUG FIX: sync ile eklenen yorumlar guest_name/review_text içermediğinden /api/reviews
+  (response_model=List[Review]) 500 veriyordu → insert şeması iki alan setini de içeriyor +
+  67 mevcut kayıt migre edildi. Regresyon: /api/reviews 200 OK.
+- YİNE dosya edit kaybı: surveys.py POST qr-branch edit'i sessizce uygulanmamıştı → yeniden
+  uygulandı. HER EDIT SONRASI grep doğrulaması ŞART.

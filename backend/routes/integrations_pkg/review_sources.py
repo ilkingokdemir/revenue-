@@ -51,8 +51,10 @@ def create_review_sources_router(db, require_roles):
             return False
         await db.reviews.insert_one({
             "id": str(uuid.uuid4()), "property_id": pid,
-            "platform": platform, "author": author,
-            "rating": rating, "comment": comment,
+            "platform": platform, "author": author, "guest_name": author,
+            "rating": int(rating) if rating else 3,
+            "comment": comment, "review_text": comment,
+            "response_status": "pending",
             "response_text": "", "external_id": external_id,
             "source": source, "created_at": _now(),
         })

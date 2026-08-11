@@ -1611,6 +1611,10 @@ from routes.integrations_pkg.review_sources import create_review_sources_router,
 api_router.include_router(create_review_sources_router(db, require_roles))
 JOB_HANDLERS["review_source_sync"] = run_review_source_sync
 
+from routes.integrations_pkg.reputation_benchmark import create_reputation_router, run_reputation_scan
+api_router.include_router(create_reputation_router(db, require_roles))
+JOB_HANDLERS["reputation_scan"] = run_reputation_scan
+
 # ===== Duetto Open Pricing (Iter 285 - segment×channel×room matrix) =====
 from routes.revenue_ext.open_pricing import create_open_pricing_router
 api_router.include_router(create_open_pricing_router(db, require_roles))

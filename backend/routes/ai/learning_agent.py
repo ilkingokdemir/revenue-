@@ -682,6 +682,96 @@ def create_learning_agent_router(db, require_roles):
         ).sort("sent_at", -1).to_list(min(limit, 200))
         return {"items": items, "count": len(items)}
 
+    # ---------- category scores (TrustYou-style semantic analysis) ----------
+    CATEGORIES = ["temizlik", "personel", "konum", "yemek", "oda_konforu", "fiyat_performans"]
+
+    @router.post("/ai-agent/categorize/{property_id}")
+    async def categorize_reviews(property_id: str,
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        """Skorlanmamış yorumları kategorilere puanla (1-5, bahsedilmemişse null)."""
+        targets = await db.reviews.find(
+            {"property_id": property_id, "category_scores": {"$exists": False}},
+            {"_id": 0, "id": 1, "comment": 1, "text": 1}).to_list(20)
+        done = 0
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            llm_key = os.environ.get("EMERGENT_LLM_KEY")
+            if not llm_key:
+                return {"categorized": 0, "reason": "no_llm_key"}
+            for r in targets:
+                text = (r.get("comment") or r.get("text") or "").strip()
+                if not text:
+                    continue
+                client = LlmChat(
+                    api_key=llm_key,
+                    session_id=f"ai-agent-cat-{uuid.uuid4()}",
+                    system_message=(
+                        "Otel yorumunu şu kategorilere 1-5 arası puanla (yorumda hiç "
+                        "bahsedilmeyen kategoriye null ver): temizlik, personel, konum, "
+                        "yemek, oda_konforu, fiyat_performans. "
+                        'SADECE JSON: {"temizlik": 4, "personel": null, ...}'
+                    ),
+                ).with_model("openai", "gpt-5.2")
+                resp = await client.send_message(UserMessage(text=text[:600]))
+                obj = json.loads(_strip_json(resp))
+                scores = {k: (int(v) if isinstance(v, (int, float)) else None)
+                          for k, v in obj.items() if k in CATEGORIES}
+                await db.reviews.update_one(
+                    {"id": r["id"]},
+                    {"$set": {"category_scores": scores, "categorized_at": _now_iso()}})
+                done += 1
+        except Exception as e:
+            logger.warning(f"categorize failed: {e}")
+        return {"categorized": done, "remaining_estimate": max(len(targets) - done, 0)}
+
+    @router.get("/ai-agent/categories/{property_id}")
+    async def category_summary(property_id: str,
+                               _: dict = Depends(require_roles("admin", "manager"))):
+        reviews = await db.reviews.find(
+            {"property_id": property_id, "category_scores": {"$exists": True}},
+            {"_id": 0, "category_scores": 1}).to_list(1000)
+        agg = {c: [] for c in CATEGORIES}
+        for r in reviews:
+            for c, v in (r.get("category_scores") or {}).items():
+                if c in agg and isinstance(v, (int, float)):
+                    agg[c].append(v)
+        out = [{"category": c, "avg": round(sum(v) / len(v), 2) if v else None,
+                "mentions": len(v)} for c, v in agg.items()]
+        scored = [o for o in out if o["avg"] is not None]
+        weakest = min(scored, key=lambda x: x["avg"])["category"] if scored else None
+        return {"property_id": property_id, "categories": out,
+                "weakest": weakest, "analyzed_reviews": len(reviews)}
+
+    # ---------- portfolio roll-up ----------
+    @router.get("/ai-agent/portfolio-report")
+    async def portfolio_report(_: dict = Depends(require_roles("admin", "manager"))):
+        rows = []
+        async for p in db.properties.find({}, {"_id": 0, "id": 1, "name": 1}):
+            pid = p["id"]
+            q = {"property_id": pid, "status": "sent"}
+            sent = await db.ai_agent_drafts.count_documents(q)
+            edited = await db.ai_agent_drafts.count_documents({**q, "was_edited": True})
+            qagg = await db.ai_agent_drafts.aggregate([
+                {"$match": {**q, "quality_score": {"$exists": True}}},
+                {"$group": {"_id": None, "avg": {"$avg": "$quality_score"}}}]).to_list(1)
+            pending = await db.reviews.count_documents(
+                {"property_id": pid,
+                 "$or": [{"response_text": {"$exists": False}}, {"response_text": ""}]})
+            open_complaints = await db.guest_complaints.count_documents(
+                {"property_id": pid, "status": {"$nin": ["resolved", "closed"]}})
+            lessons = await db.ai_agent_lessons.count_documents(
+                {"property_id": pid, "active": True})
+            rows.append({
+                "property_id": pid, "name": p.get("name", pid),
+                "sent": sent, "edited": edited,
+                "approval_rate": round((sent - edited) / sent * 100, 1) if sent else None,
+                "avg_quality": round(qagg[0]["avg"], 1) if qagg else None,
+                "pending_reviews": pending, "open_complaints": open_complaints,
+                "lessons": lessons,
+            })
+        rows.sort(key=lambda r: (r["pending_reviews"] + r["open_complaints"]), reverse=True)
+        return {"rows": rows, "count": len(rows)}
+
     # ---------- robot settings ----------
     @router.get("/ai-agent/config/{property_id}")
     async def get_agent_config(property_id: str,

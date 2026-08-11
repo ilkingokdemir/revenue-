@@ -201,6 +201,17 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
     @router.get("/surveys/public/{token}")
     async def get_public_survey(token: str):
         """Public endpoint - no auth required. Returns survey form data."""
+        if token.startswith("qr-"):
+            pid = token[3:]
+            settings = await db.survey_settings.find_one({"property_id": pid}, {"_id": 0})
+            ts = await db.template_settings.find_one({"property_id": pid}, {"_id": 0}) or {}
+            return {
+                "completed": False, "guest_name": "", "hotel_name": ts.get("hotel_name", pid),
+                "check_in": "", "check_out": "", "anytime": True,
+                "survey_type": settings.get("survey_type", "detailed") if settings else "detailed",
+                "categories": settings.get("categories", []) if settings else [],
+                "thank_you_message": settings.get("thank_you_message", "Thank you!") if settings else "Thank you!",
+            }
         invite = await db.survey_invites.find_one({"token": token}, {"_id": 0})
         if not invite:
             raise HTTPException(404, "Survey not found or expired")
@@ -225,11 +236,17 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
     @router.post("/surveys/public/{token}")
     async def submit_public_survey(token: str, data: Dict):
         """Public endpoint - no auth required. Submit survey response."""
-        invite = await db.survey_invites.find_one({"token": token}, {"_id": 0})
-        if not invite:
-            raise HTTPException(404, "Survey not found")
-        if invite.get("completed"):
-            raise HTTPException(400, "Survey already submitted")
+        if token.startswith("qr-"):
+            invite = {"property_id": token[3:], "id": "", "booking_ref": "qr-anytime",
+                      "guest_name": data.get("guest_name", "Misafir"),
+                      "guest_email": data.get("guest_email", ""),
+                      "check_in": "", "check_out": "", "qr": True}
+        else:
+            invite = await db.survey_invites.find_one({"token": token}, {"_id": 0})
+            if not invite:
+                raise HTTPException(404, "Survey not found")
+            if invite.get("completed"):
+                raise HTTPException(400, "Survey already submitted")
 
         nps_score = data.get("nps_score", 0)
         category_ratings = data.get("category_ratings", {})
@@ -259,7 +276,23 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
         response.pop("_id", None)
 
         # Mark invite as completed
-        await db.survey_invites.update_one({"token": token}, {"$set": {"completed": True, "completed_at": datetime.now(timezone.utc).isoformat()}})
+        if not invite.get("qr"):
+            await db.survey_invites.update_one({"token": token}, {"$set": {"completed": True, "completed_at": datetime.now(timezone.utc).isoformat()}})
+
+        # Düşük skor → şikayet olarak robot gelen kutusuna düşür
+        if (nps_score and nps_score <= 6) or (avg_category and avg_category <= 2.5):
+            sev = "high" if (nps_score or 10) <= 3 else "medium"
+            await db.guest_complaints.insert_one({
+                "id": str(uuid.uuid4()),
+                "property_id": invite["property_id"],
+                "guest_name": invite.get("guest_name") or "Anket Misafiri",
+                "room_number": "", "category": "other", "channel": "survey",
+                "text": comment or f"Düşük anket skoru (NPS: {nps_score}, kategori ort: {avg_category}). Yorum bırakılmadı.",
+                "severity": sev, "status": "open",
+                "source": "survey_low_score", "survey_response_id": response["id"],
+                "created_by": "Survey Bot",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
 
         # Update guest profile if auto_tag enabled
         settings = await db.survey_settings.find_one({"property_id": invite["property_id"]}, {"_id": 0})
@@ -282,6 +315,21 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
                 response["id"])
 
         return {"status": "submitted", "message": "Thank you for your feedback!"}
+
+    @router.get("/surveys/qr-image/{property_id}")
+    async def survey_qr_image(property_id: str,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Her-an anket QR kodu (PNG) — lobiye/odaya asılabilir."""
+        import io
+        import qrcode
+        from fastapi.responses import Response as FastAPIResponse
+        base_url = os.environ.get("REACT_APP_BACKEND_URL", "")
+        link = f"{base_url}/survey/qr-{property_id}"
+        img = qrcode.make(link)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return FastAPIResponse(content=buf.getvalue(), media_type="image/png",
+                               headers={"X-Survey-Link": link})
 
     # ==================== SURVEY ANALYTICS (Admin) ====================
 

@@ -305,4 +305,35 @@ def create_service_recovery_router(db, require_roles):
             "categories": CATEGORIES,
         }
 
+    @router.get("/service-recovery/{complaint_id}/tracking-link")
+    async def tracking_link(complaint_id: str,
+                            _: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        c = await db.guest_complaints.find_one({"id": complaint_id}, {"_id": 0})
+        if not c:
+            raise HTTPException(404, "Şikayet bulunamadı")
+        token = c.get("tracking_token")
+        if not token:
+            token = uuid.uuid4().hex[:12]
+            await db.guest_complaints.update_one(
+                {"id": complaint_id}, {"$set": {"tracking_token": token}})
+        base = os.environ.get("PUBLIC_BASE_URL") or os.environ.get("REACT_APP_BACKEND_URL", "")
+        return {"token": token, "url": f"{base}/track/{token}"}
+
+    @router.get("/public/complaint-track/{token}")
+    async def public_track(token: str):
+        """Public — misafir takip linki (auth yok)."""
+        c = await db.guest_complaints.find_one({"tracking_token": token}, {"_id": 0})
+        if not c:
+            raise HTTPException(404, "Kayıt bulunamadı")
+        return {
+            "guest_name": c.get("guest_name", ""),
+            "category": c.get("category", ""),
+            "status": c.get("status", "open"),
+            "created_at": c.get("created_at", ""),
+            "routed_department": c.get("routed_department", ""),
+            "response_text": c.get("guest_response_text", ""),
+            "response_at": c.get("guest_response_at", ""),
+            "resolved_at": c.get("resolved_at", ""),
+        }
+
     return router

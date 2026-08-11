@@ -3122,3 +3122,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   Duplicate engeli (source: weak_area + açık statü). UI: Rapor > Kategori Analizi'nde
   "Departmana Görev Aç" butonu. TEST: oda_konforu→maintenance görevi açıldı, tekrar=already_open.
 - BEKLEYEN: Google Places API anahtarı + Expo token kullanıcıdan İSTENİYOR.
+
+## Iter 513 — Misafir Takip Portalı + Kapsamlı Regresyon TAMAMLANDI
+- MİSAFİR YANIT PORTALI: service_recovery.py GET /{id}/tracking-link (auth, token üretir,
+  PUBLIC_BASE_URL kullanır) + PUBLIC GET /api/public/complaint-track/{token}.
+  Yeni /app/frontend/src/ComplaintTrackPage.js (route: /track/{token}, App.js pathname) —
+  4 adımlı zaman çizelgesi (alındı→iletildi→yanıtlandı→çözüldü) + yönetim yanıtı kutusu.
+  Robot panelinde şikayet seçiliyken "🔗 Takip Linki" kopyalama butonu.
+- REGRESYON (testing_agent iteration_503.json): 30/30 backend PASS, tüm frontend akışları PASS
+  (7 sekme, paste+kalite uyarısı, portföy 13 satır, QR, anket, takip sayfası).
+  Test suite: /app/backend/tests/test_ai_reply_robot_regression.py
+- Tek minör bulgu: anket sayfası İngilizce metinler → Türkçe'ye çevrildi (7 string).
+- BEKLEYEN: Google Places API anahtarı + Expo token (kullanıcı hâlâ paylaşmadı).

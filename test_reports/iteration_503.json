@@ -1,0 +1,33 @@
+{
+  "summary": "Comprehensive regression of AI Yanıt Robotu across backend (30 pytest tests) and frontend (login → panel → paste → quality-warning → all 6 tabs → portfolio → QR → public survey → complaint track). All backend endpoints pass. All frontend testids present and interactive. Quality warning correctly appears for junk text ('tamam bakarız işte olur', score 5/100). Draft LLM generation ~15s working. Portfolio shows 13 rows. Complaint tracking page renders with timeline + status.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Public survey /survey/qr-default", "issues": ["Survey UI text is English ('How was your stay?', 'Rate your experience', 'Submit Feedback') while spec says UI language is Turkish. Consider Turkish translations for guest-facing survey."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_reply_robot_regression.py",
+    "/app/test_reports/pytest/robot_regression.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: Translate public survey /survey/{token} page to Turkish (NPS labels, category headings, submit button)."
+  ],
+  "critical_code_review_comments": [
+    "Test-writer note: /api/ai-agent/lessons/{pid} POST expects field name 'rule' (not rule_type/content). Consider aliasing or documenting.",
+    "Inbox item schema uses 'source_id' key (not 'id') and draft uses 'ai_text' (not 'draft_text'); these are consistent internally but may confuse integrators — consider documenting in an API contract.",
+    "Scheduler trigger endpoints return status='triggered' — spec called for 'ok/success'; harmless but naming inconsistent with other endpoints."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ai_reply_robot_regression.py (new)"
+  ],
+  "success_rate": {"backend": "100% (30/30)", "frontend": "100% of tested flows"},
+  "test_credentials": "admin@hotelbox.com / HotelAdmin2026!",
+  "seed_data_creation": "Created several TEST_regression_* complaints (cleanliness→housekeeping, wifi→maintenance) and one paste-draft. Test cleanup resets review-sources to empty.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest suite at /app/backend/tests/test_ai_reply_robot_regression.py covers 30 endpoints of AI reply robot including LLM draft, paste, quality-check junk vs polite, send with edit-learning, lessons CRUD, stats, weekly report, batch draft, portfolio (13 props), categorize (6 dims), weak-area task, config, review-sources (with tripadvisor toggle+cleanup), reputation benchmark, public survey NPS 10/2 flows, QR image, service recovery routing + public track, mobile push prefs, scheduler triggers (4 jobs), reviews regression. Frontend verified all data-testids: ai-reply-robot-btn, ai-reply-robot-panel, filter chips (all/review/complaint), tabs (lessons/report/benchmark/portfolio/settings), ai-robot-paste-open-btn, paste-textarea, paste-generate-btn, draft-textarea, send-btn, quality-warning, portfolio-row-* (13), ai-robot-qr-img, complaint-track-page, track-status. Known: public survey UI is in English (minor design issue).",
+  "rca of the issue": "N/A — all requested flows pass."
+}

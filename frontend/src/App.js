@@ -113,6 +113,7 @@ import BookingWidgetPage from "./BookingWidgetPage";
 import AuthorizeFormPage from "./AuthorizeFormPage";
 import SpacesPublicPage from "./SpacesPublicPage";
 import GuestSurveyPage from "./GuestSurveyPage";
+import ComplaintTrackPage from "./ComplaintTrackPage";
 import UpsellOfferPage from "./UpsellOfferPage";
 import GuestRegistrationPage from "./GuestRegistrationPage";
 import GuestFeedbackPage from "./GuestFeedbackPage";
@@ -2737,6 +2738,10 @@ function App() {
   if (window.location.pathname.startsWith("/survey/")) {
     const token = window.location.pathname.split("/survey/")[1];
     return <GuestSurveyPage token={token} />;
+  }
+  if (window.location.pathname.startsWith("/track/")) {
+    const token = window.location.pathname.split("/track/")[1];
+    return <ComplaintTrackPage token={token} />;
   }
   if (window.location.pathname.startsWith("/register/")) {
     const token = window.location.pathname.split("/register/")[1];

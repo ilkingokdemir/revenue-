@@ -480,7 +480,22 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             ) : (
               <div className="space-y-3">
                 <div className="p-3 rounded-lg bg-stone-950 border border-stone-800">
-                  <p className="text-xs text-stone-500 mb-1">{selected.source_type === "review" ? "Misafir Yorumu" : "Misafir Şikayeti"} — {selected.guest_name}</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-stone-500">{selected.source_type === "review" ? "Misafir Yorumu" : "Misafir Şikayeti"} — {selected.guest_name}</p>
+                    {selected.source_type === "complaint" && (
+                      <button data-testid="ai-robot-tracking-link-btn"
+                        onClick={async () => {
+                          try {
+                            const { data } = await axios.get(`${API}/service-recovery/${selected.source_id}/tracking-link`);
+                            await navigator.clipboard.writeText(data.url);
+                            toast.success("Misafir takip linki panoya kopyalandı");
+                          } catch { toast.error("Link alınamadı"); }
+                        }}
+                        className="px-2 py-0.5 rounded text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300">
+                        🔗 Takip Linki
+                      </button>
+                    )}
+                  </div>
                   <p className="text-sm text-stone-200 whitespace-pre-wrap">{selected.text}</p>
                 </div>
                 <button data-testid="ai-robot-generate-btn" onClick={() => generateDraft(selected)} disabled={drafting}

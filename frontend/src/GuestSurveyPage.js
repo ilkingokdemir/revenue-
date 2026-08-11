@@ -71,7 +71,7 @@ export default function GuestSurveyPage({ token }) {
           <span className="text-4xl">🙏</span>
         </div>
         <h1 className="text-2xl font-bold text-stone-900 mb-3">Thank You!</h1>
-        <p className="text-stone-600">{survey?.thank_you_message || "Your feedback has been submitted. We truly appreciate you taking the time to share your experience."}</p>
+        <p className="text-stone-600">{survey?.thank_you_message || "Geri bildiriminiz alındı. Deneyiminizi paylaşmaya zaman ayırdığınız için içtenlikle teşekkür ederiz."}</p>
         {reviewPrompt?.show && (
           <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-3" data-testid="survey-review-prompt">
             <p className="text-sm text-stone-700">{reviewPrompt.message}</p>
@@ -102,7 +102,7 @@ export default function GuestSurveyPage({ token }) {
           {/* Header */}
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-stone-900 mb-1">{survey?.hotel_name || "Hotel"}</h1>
-            <p className="text-stone-500">How was your stay?</p>
+            <p className="text-stone-500">Konaklamanız nasıldı?</p>
             {survey?.check_in && survey?.check_out && (
               <p className="text-xs text-stone-400 mt-1">{survey.check_in} — {survey.check_out}</p>
             )}
@@ -110,7 +110,7 @@ export default function GuestSurveyPage({ token }) {
 
           {/* NPS Section */}
           <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 mb-6" data-testid="nps-section">
-            <h2 className="text-base font-semibold text-stone-800 mb-1">How likely are you to recommend us?</h2>
+            <h2 className="text-base font-semibold text-stone-800 mb-1">Bizi tavsiye etme olasılığınız nedir?</h2>
             <p className="text-xs text-stone-400 mb-5">On a scale of 0 to 10</p>
 
             <div className="flex justify-center gap-1.5 mb-3">
@@ -126,8 +126,8 @@ export default function GuestSurveyPage({ token }) {
               ))}
             </div>
             <div className="flex justify-between text-[10px] text-stone-400 px-1">
-              <span>Not at all likely</span>
-              <span>Extremely likely</span>
+              <span>Hiç olası değil</span>
+              <span>Kesinlikle tavsiye ederim</span>
             </div>
             {nps !== null && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
@@ -140,7 +140,7 @@ export default function GuestSurveyPage({ token }) {
           {/* Category Ratings */}
           {survey?.survey_type === "detailed" && survey?.categories?.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6 mb-6" data-testid="category-section">
-              <h2 className="text-base font-semibold text-stone-800 mb-4">Rate your experience</h2>
+              <h2 className="text-base font-semibold text-stone-800 mb-4">Deneyiminizi puanlayın</h2>
               <div className="space-y-4">
                 {survey.categories.filter(c => c.enabled).map(cat => (
                   <div key={cat.key}>
@@ -173,7 +173,7 @@ export default function GuestSurveyPage({ token }) {
             <h2 className="text-base font-semibold text-stone-800 mb-2">Any additional feedback?</h2>
             <textarea
               value={comment} onChange={e => setComment(e.target.value)}
-              placeholder="Tell us what you loved or what we can improve..."
+              placeholder="Nelerden memnun kaldınız, neleri iyileştirebiliriz?"
               rows={4}
               className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-700 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
               data-testid="survey-comment"
@@ -184,7 +184,7 @@ export default function GuestSurveyPage({ token }) {
           <button onClick={submit} disabled={nps === null || submitting}
             className="w-full bg-emerald-600 text-white py-3.5 rounded-xl text-base font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             data-testid="submit-survey-btn">
-            {submitting ? "Submitting..." : "Submit Feedback"}
+            {submitting ? "Gönderiliyor..." : "Geri Bildirimi Gönder"}
           </button>
 
           <p className="text-center text-[10px] text-stone-400 mt-4">Your feedback is anonymous and helps us improve.</p>

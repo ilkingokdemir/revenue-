@@ -3134,3 +3134,14 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   Test suite: /app/backend/tests/test_ai_reply_robot_regression.py
 - Tek minör bulgu: anket sayfası İngilizce metinler → Türkçe'ye çevrildi (7 string).
 - BEKLEYEN: Google Places API anahtarı + Expo token (kullanıcı hâlâ paylaşmadı).
+
+## Iter 514 — Takip Linki SMS/E-posta + Çok Dilli Anket TAMAMLANDI
+- TAKİP LİNKİ OTO-GÖNDERİM: service_recovery create artık guest_phone/guest_email kabul ediyor;
+  varsa tracking_token üretilir ve outbound_sms_queue + outbound_email_queue'ya Türkçe mesajla
+  kuyruklanır (MOCKED: mocked_sms_queued / mocked_email_queued). Response: tracking_url,
+  tracking_link_sent. ServiceRecoveryPanel formuna tel + e-posta inputları eklendi
+  (complaint-guest-phone/email testid). TEST: link_sent True, iki kuyruğa da yazıldı.
+- ÇOK DİLLİ ANKET: GuestSurveyPage SURVEY_I18N (tr/en/de) — navigator.language ile otomatik.
+  11 string + review prompt butonları çevrildi. TEST: EN tarayıcıda İngilizce açıldı.
+- BEKLEYEN: Google Places API anahtarı + Expo token (kullanıcı butonlara tıklıyor ama
+  anahtar metnini yapıştırmıyor — bir sonraki mesajda AIza.../token bekleniyor).

@@ -168,6 +168,8 @@ def create_service_recovery_router(db, require_roles):
             "property_id": property_id,
             "booking_id": data.get("booking_id", ""),
             "guest_name": data.get("guest_name", ""),
+            "guest_phone": (data.get("guest_phone") or "").strip(),
+            "guest_email": (data.get("guest_email") or "").strip(),
             "room_number": data.get("room_number", ""),
             "category": category,
             "channel": data.get("channel", "in_person"),  # in_person | email | phone | review
@@ -200,6 +202,39 @@ def create_service_recovery_router(db, require_roles):
                            "routed_task_id": routing["task_id"]})
         except Exception as e:
             logger.warning(f"complaint routing failed: {e}")
+
+        # Takip linkini misafire otomatik gönder (SMS/e-posta — MOCKED kuyruk)
+        try:
+            if record.get("guest_phone") or record.get("guest_email"):
+                t_token = uuid.uuid4().hex[:12]
+                await db.guest_complaints.update_one(
+                    {"id": record["id"]}, {"$set": {"tracking_token": t_token}})
+                base = os.environ.get("PUBLIC_BASE_URL") or ""
+                link = f"{base}/track/{t_token}"
+                msg = (f"Sayın {record.get('guest_name') or 'Misafirimiz'}, geri bildiriminiz "
+                       f"alındı ve ilgili ekibimize iletildi. Durumu buradan takip edebilirsiniz: {link}")
+                now_iso = datetime.now(timezone.utc).isoformat()
+                if record.get("guest_phone"):
+                    await db.outbound_sms_queue.insert_one({
+                        "id": str(uuid.uuid4()), "property_id": record.get("property_id", ""),
+                        "to": record["guest_phone"], "body": msg,
+                        "type": "complaint_tracking_link", "complaint_id": record["id"],
+                        "status": "queued", "delivery_status": "mocked_sms_queued",
+                        "created_at": now_iso})
+                if record.get("guest_email"):
+                    await db.outbound_email_queue.insert_one({
+                        "id": str(uuid.uuid4()), "property_id": record.get("property_id", ""),
+                        "to": record["guest_email"],
+                        "subject": "Geri bildiriminiz alındı — takip linkiniz",
+                        "body": msg, "type": "complaint_tracking_link",
+                        "complaint_id": record["id"],
+                        "status": "queued", "delivery_status": "mocked_email_queued",
+                        "created_at": now_iso})
+                record["tracking_token"] = t_token
+                record["tracking_url"] = link
+                record["tracking_link_sent"] = True
+        except Exception as e:
+            logger.warning(f"tracking link send failed: {e}")
         try:
             import asyncio
             from routes.platform_ext.mobile_push import send_expo_push

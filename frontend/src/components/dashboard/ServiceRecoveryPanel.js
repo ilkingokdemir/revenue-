@@ -286,6 +286,12 @@ function CreateModal({ propertyId, categories, onClose, onSaved }) {
           <input value={form.room_number} placeholder="Room # (opt.)"
             onChange={(e) => setForm({ ...form, room_number: e.target.value })}
             className="w-full px-3 py-2 rounded bg-stone-800 border border-stone-700 text-stone-100 text-sm" />
+          <input data-testid="complaint-guest-phone" value={form.guest_phone || ""} placeholder="Misafir tel (takip SMS'i için, ops.)"
+            onChange={(e) => setForm({ ...form, guest_phone: e.target.value })}
+            className="w-full px-3 py-2 rounded bg-stone-800 border border-stone-700 text-stone-100 text-sm" />
+          <input data-testid="complaint-guest-email" value={form.guest_email || ""} placeholder="Misafir e-posta (takip linki için, ops.)"
+            onChange={(e) => setForm({ ...form, guest_email: e.target.value })}
+            className="w-full px-3 py-2 rounded bg-stone-800 border border-stone-700 text-stone-100 text-sm" />
         </div>
       </div>
       <div className="flex justify-end gap-2 mt-4">

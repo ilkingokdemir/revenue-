@@ -21,6 +21,7 @@ class PushPrefsIn(BaseModel):
     payment_received: bool = True
     pickup_strong: bool = True
     channel_drop: bool = True
+    new_complaint: bool = True
 
 
 class PushTestIn(BaseModel):
@@ -131,7 +132,8 @@ def create_mobile_push_router(db):
     async def get_prefs(current_user: dict = Depends(require_perm("view_dashboard", "view_bookings", mode="any"))):
         doc = await db.mobile_push_prefs.find_one(
             {"user_email": current_user.get("email", "")}, {"_id": 0, "prefs": 1})
-        return (doc or {}).get("prefs") or {"payment_received": True, "pickup_strong": True, "channel_drop": True}
+        defaults = {"payment_received": True, "pickup_strong": True, "channel_drop": True, "new_complaint": True}
+        return {**defaults, **((doc or {}).get("prefs") or {})}
 
     @router.post("/mobile/push-test")
     async def push_test(body: PushTestIn,

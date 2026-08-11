@@ -30,6 +30,16 @@ from fastapi import APIRouter, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
 
+_MORNING = {}
+
+
+async def run_morning_drafts(property_id: str = "all") -> dict:
+    """Scheduler JOB_HANDLERS entry — delegates to the router closure."""
+    fn = _MORNING.get("fn")
+    if not fn:
+        return {"error": "learning_agent router not initialized"}
+    return await fn(property_id)
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -112,7 +122,9 @@ def create_learning_agent_router(db, require_roles):
 
         system_prompt = (
             f"Sen otel yönetimi adına misafir iletişimi yazan uzman bir asistansın. "
-            f"Türkçe yaz. {task} Yanıt 3-6 cümle olsun, klişelerden kaçın. "
+            f"ÖNEMLİ: Misafirin metninin dilini otomatik algıla ve yanıtı MİSAFİRİN DİLİNDE yaz "
+            f"(İngilizce yorum → İngilizce yanıt, Almanca → Almanca, Türkçe → Türkçe vb.). "
+            f"{task} Yanıt 3-6 cümle olsun, klişelerden kaçın. "
             f"Sonunda '— {sign_off}' imzası kullan, başka imza ekleme."
             f"{lesson_block}{example_block}"
         )
@@ -259,12 +271,8 @@ def create_learning_agent_router(db, require_roles):
         return doc or {}
 
     # ---------- bulk draft ----------
-    @router.post("/ai-agent/batch-draft/{property_id}")
-    async def batch_draft(property_id: str, body: dict = None,
-                          current_user: dict = Depends(require_roles("admin", "manager"))):
+    async def _batch_generate(property_id: str, created_by: str, limit: int = 25):
         import asyncio
-        body = body or {}
-        limit = min(int(body.get("limit", 25)), 50)
         inbox_data = await inbox(property_id, _={})
         targets = [i for i in inbox_data["items"] if not i.get("ai_draft")][:limit]
         sem = asyncio.Semaphore(4)
@@ -281,7 +289,7 @@ def create_learning_agent_router(db, require_roles):
                     "source_type": item["source_type"], "source_id": item["source_id"],
                     "context": _source_context(item["source_type"], src),
                     "ai_text": text, "status": "draft",
-                    "created_by": current_user.get("email", ""),
+                    "created_by": created_by,
                     "created_at": now, "batch": True,
                 }
                 await db.ai_agent_drafts.insert_one(dict(draft))
@@ -296,6 +304,41 @@ def create_learning_agent_router(db, require_roles):
         return {"property_id": property_id, "drafted_count": len(results),
                 "skipped_existing": len(inbox_data["items"]) - len(targets),
                 "items": results}
+
+    @router.post("/ai-agent/batch-draft/{property_id}")
+    async def batch_draft(property_id: str, body: dict = None,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        body = body or {}
+        limit = min(int(body.get("limit", 25)), 50)
+        return await _batch_generate(property_id, current_user.get("email", ""), limit)
+
+    async def _run_morning(property_id: str) -> dict:
+        """Scheduler job: sabah tüm bekleyenlere taslak hazırla + push özeti gönder."""
+        if property_id and property_id != "all":
+            pids = [property_id]
+        else:
+            pids = [p["id"] async for p in db.properties.find({}, {"_id": 0, "id": 1})]
+        total = 0
+        per_property = {}
+        for pid in pids:
+            try:
+                res = await _batch_generate(pid, "morning-robot", 25)
+                per_property[pid] = res["drafted_count"]
+                total += res["drafted_count"]
+            except Exception as e:
+                logger.warning(f"morning drafts failed for {pid}: {e}")
+                per_property[pid] = f"error: {e}"
+        if total:
+            try:
+                from routes.platform_ext.mobile_push import send_expo_push
+                await send_expo_push(db, "🤖 Sabah taslakları hazır",
+                                     f"{total} AI yanıt onayınızı bekliyor",
+                                     {"type": "morning_drafts", "count": total})
+            except Exception as e:
+                logger.warning(f"morning push failed: {e}")
+        return {"drafted_total": total, "per_property": per_property}
+
+    _MORNING["fn"] = _run_morning
 
     # ---------- send (approve / edit) ----------
     @router.post("/ai-agent/draft/paste")

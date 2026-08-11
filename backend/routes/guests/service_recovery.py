@@ -138,6 +138,18 @@ def create_service_recovery_router(db, require_roles):
         }
         await db.guest_complaints.insert_one(dict(record))
         record.pop("_id", None)
+        try:
+            import asyncio
+            from routes.platform_ext.mobile_push import send_expo_push
+            sev = record.get("severity", "")
+            asyncio.create_task(send_expo_push(
+                db, f"⚠️ Yeni şikayet — {record.get('guest_name') or 'Misafir'}",
+                f"[{record.get('category', '')}{' · ' + sev if sev else ''}] {record.get('text', '')[:110]}",
+                {"type": "new_complaint", "id": record["id"],
+                 "property_id": record.get("property_id", "")},
+                kind="new_complaint"))
+        except Exception as e:
+            logger.warning(f"complaint push failed: {e}")
         return record
 
     @router.put("/service-recovery/{complaint_id}")

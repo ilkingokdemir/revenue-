@@ -7,6 +7,7 @@ const PREF_LABELS = {
   payment_received: "Ödeme alındı bildirimleri",
   pickup_strong: "Güçlü satış günü bildirimleri",
   channel_drop: "Kanal düşüş uyarıları",
+  new_complaint: "Yeni şikayet bildirimleri",
 };
 
 const Kpi = ({ label, value, color = colors.text }) => (

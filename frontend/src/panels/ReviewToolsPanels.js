@@ -703,7 +703,7 @@ const NotificationSettings = ({ isOpen, onClose }) => {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [mobilePrefs, setMobilePrefs] = useState({ payment_received: true, pickup_strong: true, channel_drop: true });
+  const [mobilePrefs, setMobilePrefs] = useState({ payment_received: true, pickup_strong: true, channel_drop: true, new_complaint: true });
 
   useEffect(() => {
     if (isOpen) {
@@ -824,6 +824,7 @@ const NotificationSettings = ({ isOpen, onClose }) => {
             { key: "payment_received", label: "Ödeme alındı", desc: "Yeni ödeme geldiğinde bildir" },
             { key: "pickup_strong", label: "Güçlü satış günü", desc: "Son 24 saatte yüksek pickup olduğunda bildir" },
             { key: "channel_drop", label: "Kanal düşüşü", desc: "Bir OTA kanalında pickup düşünce uyar" },
+            { key: "new_complaint", label: "Yeni şikayet", desc: "Yeni misafir şikayeti kaydedildiğinde anında bildir" },
           ].map((p) => (
             <div key={p.key} className="flex items-center justify-between p-3 bg-[#FAF9F6] rounded-md border border-[#E7E5E4]">
               <div>

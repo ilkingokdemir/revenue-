@@ -3022,3 +3022,19 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - Backend stats: by_type {review, complaint} × {sent, edited, approval_rate} eklendi;
   stat kartlarında tür bazlı alt satırlar.
 - Screenshot testi: complaint=1, review=2, all=3 filtre PASS.
+
+## Iter 507 — TrustYou/GuestRevu paritesi: 4 özellik TAMAMLANDI
+- Rakip analizi (web search): TrustYou ResponseAI misafir dilinde yanıt + insan onayı zorunlu +
+  marka sesi; GuestRevu 10x hız iddiası. Bizim robot artık dil algılamada TrustYou paritesinde.
+- 1) DİL ALGILAMA: _generate_draft system prompt'u misafir metninin dilini algılayıp O DİLDE
+  yanıt yazıyor (EN yorum → EN yanıt test edildi). Tüm akışlar (inbox, paste, batch) kapsanır.
+- 2) SABAH TASLAĞI: learning_agent.py'de _batch_generate ortak helper'a çıkarıldı;
+  run_morning_drafts module-level (closure _MORNING["fn"] pattern) → server.py
+  JOB_HANDLERS["ai_morning_drafts"]. scheduler_config seed: property_id="all", 06:00, enabled.
+  Bittiğinde push özeti gönderir. Manuel tetik: POST /api/scheduler/trigger/all/ai_morning_drafts (test PASS).
+- 3) ŞİKAYET PUSH: service_recovery POST sonrası asyncio.create_task(send_expo_push(...,
+  kind="new_complaint")). PushPrefsIn'e new_complaint eklendi; GET prefs artık defaults ile
+  merge ediyor (eski kayıtlar için). Web (4. toggle, checked doğrulandı) + mobil etiket eklendi.
+- 4) EAS BUILD: eas-cli 21.8.0 mevcut, eas.json hazır (preview→APK). Gerçek build için
+  kullanıcının Expo hesabı token'ı GEREKLİ (EXPO_TOKEN) — kullanıcıdan istendi, BEKLEMEDE.
+- Expo export android bundle yeniden PASS.

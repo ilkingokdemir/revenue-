@@ -78,6 +78,7 @@ export const NightlyRecapPanel = L(() => import("./components/dashboard/NightlyR
 export const AccountingExportPanel = L(() => import("./components/dashboard/AccountingExportPanel"));
 export const LateCheckoutPanel = L(() => import("./components/dashboard/LateCheckoutPanel"));
 export const ServiceRecoveryPanel = L(() => import("./components/dashboard/ServiceRecoveryPanel"));
+export const AIReplyRobotPanel = L(() => import("./components/dashboard/AIReplyRobotPanel"));
 export const RoomQRPanel = L(() => import("./components/dashboard/RoomQRPanel"));
 export const TaxPresetsPanel = L(() => import("./components/dashboard/TaxPresetsPanel"));
 export const WalkInPanel = L(() => import("./components/dashboard/WalkInPanel"));

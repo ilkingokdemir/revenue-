@@ -409,6 +409,7 @@ export function buildMenuSections(t, user) {
       items: [
         { divider: true, label: "Reviews & Sentiment" },
         { id: "reviews", icon: ChatText, name: t("nav.reviews"), testId: "nav-reviews", core: true },
+        { id: "ai-reply-robot", icon: Sparkle, name: "AI Yanıt Robotu", testId: "ai-reply-robot-btn", core: true },
         { id: "review-sentiment", icon: Sparkle, name: "AI sentiment themes", testId: "review-sentiment-btn" },
         { id: "sentiment-heatmap", icon: ChartLineUp, name: "Sentiment heatmap", testId: "sentiment-heatmap-btn" },
 

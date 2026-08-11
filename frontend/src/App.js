@@ -76,7 +76,7 @@ import {
   NightAuditPanel, LoyaltyPanel, LogbookPanel, ForecastPanel,
   PaceReports, AIPricingV2Panel, ParityHeatmapPanel, MorningBriefPanel, RMLabPanel,
   ConciergeInboxPanel, GroupRequestsPanel, SustainabilityPanel, HousekeepingRoutePanel,
-  NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel,
+  NightlyRecapPanel, AccountingExportPanel, LateCheckoutPanel, ServiceRecoveryPanel, AIReplyRobotPanel,
   RoomQRPanel, TaxPresetsPanel, WalkInPanel, NoShowPanel, GuestPrefsPanel,
   CleaningChecklistsPanel, AttributionPanel, MewsUniversityPanel, ScheduledReportsPanel, CustomDashboardBuilder, GroupRoomingImportPanel, OpsQuickActionsPanel,
   TimeSlotsPanel, StaffOpsPanel, RevenueProtectionPanel, SpacesPanel, VccPanel, OwnerSummaryPanel, MarketplacePanel, MultiPropertyRollupPanel,
@@ -1663,6 +1663,15 @@ const Dashboard = ({ user, onLogout, permissions }) => {
             propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
             hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
           />
+        )}
+
+        {activeView === "ai-reply-robot" && (
+          <div className="p-6">
+            <AIReplyRobotPanel
+              propertyId={(activePropertyId && activePropertyId !== "all") ? activePropertyId : (properties?.[0]?.id || "")}
+              hotelName={properties?.find(p => p.id === activePropertyId)?.name || ""}
+            />
+          </div>
         )}
 
         {activeView === "service-recovery" && (

@@ -2969,3 +2969,16 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
 - expo export: 877 modül derlendi (Arrivals + prefs UI dahil).
 - DERS (2. tekrar!): AYNI dosyaya AYNI batch'te birden çok search_replace ASLA — send_expo_push
   düzenlemesi paralel edit çakışmasıyla kaybolmuştu (prefs filtresi çalışmıyordu), tek tek yeniden uygulandı.
+
+## Iter 503 (2026-06 fork) — Öğrenen AI Yanıt Robotu TAMAMLANDI
+- YENİ backend: routes/ai/learning_agent.py — yorum + şikayet için birleşik gelen kutusu,
+  AI taslak (gpt-5.2, brand sign_off + öğrenilen kurallar + few-shot örnekler), onayla/düzenle
+  & gönder akışı. Yönetici taslağı düzenlerse SequenceMatcher farkı ölçülür, LLM diff'ten
+  max 2 stil kuralı çıkarır → ai_agent_lessons; final metin ai_agent_examples'a few-shot olarak.
+- Endpoints: /api/ai-agent/{inbox,draft,send,lessons CRUD,stats,history}
+- Collections: ai_agent_drafts, ai_agent_lessons, ai_agent_examples
+- YENİ frontend: AIReplyRobotPanel.js — Gelen Kutusu + Robotun Öğrendikleri sekmeleri,
+  5 stat kartı, taslak düzenleme + gönderme, manuel kural ekleme/silme.
+  Menü: Reviews & Sentiment > "AI Yanıt Robotu" (ai-reply-robot-btn, core).
+- E2E DOĞRULANDI (curl + screenshot): taslak → düzenlenmiş gönderim → 2 kural öğrenildi →
+  sonraki taslakta lessons_applied=2, stats/history/manuel kural CRUD OK, UI login→panel→seçim OK.

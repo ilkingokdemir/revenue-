@@ -1182,6 +1182,33 @@ def create_learning_agent_router(db, require_roles):
         return FastAPIResponse(content=buf.getvalue(), media_type="application/pdf",
                                headers={"Content-Disposition": f"attachment; filename=icgoru-{property_id}.pdf"})
 
+    @router.get("/ai-agent/winback-stats/{property_id}")
+    async def winback_stats(property_id: str,
+                            _: dict = Depends(require_roles("admin", "manager"))):
+        q = {"property_id": property_id}
+        total = await db.winback_offers.count_documents(q)
+        queued = await db.winback_offers.count_documents({**q, "email_queued": True})
+        redeemed = await db.winback_offers.count_documents({**q, "redeemed": True})
+        return {"total": total, "email_queued": queued, "redeemed": redeemed,
+                "redeem_rate": round(redeemed / total * 100, 1) if total else 0}
+
+    @router.post("/ai-agent/winback/{offer_id}/redeem")
+    async def winback_redeem(offer_id: str,
+                             _: dict = Depends(require_roles("admin", "manager"))):
+        res = await db.winback_offers.update_one(
+            {"id": offer_id}, {"$set": {"redeemed": True, "redeemed_at": _now_iso()}})
+        if not res.matched_count:
+            raise HTTPException(404, "Teklif bulunamadı")
+        return {"ok": True}
+
+    @router.get("/ai-agent/insight-tasks/{property_id}")
+    async def insight_tasks(property_id: str,
+                            _: dict = Depends(require_roles("admin", "manager"))):
+        items = await db.staff_tasks.find(
+            {"property_id": property_id, "source": "insight_recommendation"},
+            {"_id": 0, "id": 1, "title": 1, "status": 1}).to_list(50)
+        return {"items": items}
+
     # ---------- robot settings ----------
     @router.get("/ai-agent/config/{property_id}")
     async def get_agent_config(property_id: str,

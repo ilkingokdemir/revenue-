@@ -138,4 +138,44 @@ def create_reputation_router(db, require_roles):
                        _: dict = Depends(require_roles("admin", "manager"))):
         return await _scan_property(property_id)
 
+    SIM_COMP_REVIEWS = {
+        0: [("kahvaltı", "Kahvaltı çeşitliliği zayıf, geç saatte açık büfe tükeniyor"),
+            ("personel", "Resepsiyon yoğun saatlerde ilgisiz")],
+        1: [("temizlik", "Odalarda toz ve eski mobilya şikayetleri"),
+            ("wifi", "İnternet bağlantısı üst katlarda kopuyor")],
+        2: [("ses yalıtımı", "Sokak gürültüsü ve ince duvarlar sık şikayet ediliyor"),
+            ("fiyat", "Fiyat/performans dengesizliği eleştiriliyor")],
+        3: [("klima", "Klima eski, yaz aylarında yetersiz"),
+            ("otopark", "Otopark ücretli ve yetersiz")],
+        4: [("check-in", "Check-in kuyrukları uzun"),
+            ("yemek", "Restoran menüsü sınırlı")],
+    }
+
+    @router.post("/reputation/competitor-spy/{property_id}")
+    async def competitor_spy(property_id: str,
+                             _: dict = Depends(require_roles("admin", "manager"))):
+        """Rakiplerin son yorumlarındaki zayıf yönleri raporla (SIMULATED / Places API)."""
+        cfg = await db.reputation_config.find_one({"property_id": property_id}, {"_id": 0}) or {}
+        comps = (cfg.get("competitors") or [])[:5]
+        if not comps:
+            raise HTTPException(400, "Önce Benchmark sekmesinden rakip ekleyin")
+        rows = []
+        for i, comp in enumerate(comps):
+            weaknesses = [{"konu": k, "bulgu": b} for k, b in SIM_COMP_REVIEWS.get(i % 5, [])]
+            rows.append({"name": comp.get("name", "?"), "mode": "simulated",
+                         "weaknesses": weaknesses,
+                         "firsat": f"{weaknesses[0]['konu']} alanında rakipten iyiysek pazarlamada vurgulayın"})
+        doc = {"id": str(uuid.uuid4()), "property_id": property_id,
+               "rows": rows, "created_at": datetime.now(timezone.utc).isoformat()}
+        await db.competitor_spy_reports.insert_one(dict(doc))
+        doc.pop("_id", None)
+        return doc
+
+    @router.get("/reputation/competitor-spy/{property_id}/latest")
+    async def competitor_spy_latest(property_id: str,
+                                    _: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.competitor_spy_reports.find_one(
+            {"property_id": property_id}, {"_id": 0}, sort=[("created_at", -1)])
+        return doc or {}
+
     return router

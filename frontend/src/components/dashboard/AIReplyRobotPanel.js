@@ -55,6 +55,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [insight, setInsight] = useState(null);
   const [insightLoading, setInsightLoading] = useState(false);
   const [voicePlaying, setVoicePlaying] = useState(false);
+  const [winbackStats, setWinbackStats] = useState(null);
+  const [insightTasks, setInsightTasks] = useState([]);
+  const [spy, setSpy] = useState(null);
+  const [spying, setSpying] = useState(false);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -193,6 +197,11 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     if (tab === "report" && propertyId) {
       axios.get(`${API}/ai-agent/categories/${propertyId}`).then(({ data }) => setCatData(data)).catch(() => {});
       axios.get(`${API}/ai-agent/insight-report/${propertyId}/latest`).then(({ data }) => data?.id && setInsight(data)).catch(() => {});
+      axios.get(`${API}/ai-agent/insight-tasks/${propertyId}`).then(({ data }) => setInsightTasks(data.items || [])).catch(() => {});
+      axios.get(`${API}/ai-agent/winback-stats/${propertyId}`).then(({ data }) => setWinbackStats(data)).catch(() => {});
+    }
+    if (tab === "benchmark" && propertyId) {
+      axios.get(`${API}/reputation/competitor-spy/${propertyId}/latest`).then(({ data }) => data?.id && setSpy(data)).catch(() => {});
     }
   }, [tab, propertyId, loadConfig, loadBench]);
 
@@ -626,6 +635,17 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   value={report.totals.trend === null ? "—" : `${report.totals.trend > 0 ? "+" : ""}${report.totals.trend}%`}
                   sub={report.totals.first_week_approval !== null ? `${report.totals.first_week_approval}% → ${report.totals.last_week_approval}%` : "Yeterli veri yok"} />
               </div>
+              {winbackStats && (
+                <div data-testid="ai-robot-winback-stats" className="bg-stone-900 border border-stone-800 rounded-xl p-4">
+                  <p className="text-sm font-medium text-stone-200 mb-3">🎁 Geri Kazanım Takibi</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <StatBox testId="winback-total" label="Üretilen Teklif" value={winbackStats.total} />
+                    <StatBox testId="winback-queued" label="E-posta Kuyruğunda" value={winbackStats.email_queued} />
+                    <StatBox testId="winback-redeemed" label="Kullanılan Kod" value={winbackStats.redeemed} />
+                    <StatBox testId="winback-rate" label="Dönüşüm Oranı" value={`%${winbackStats.redeem_rate}`} sub="Kod kullanım oranı" />
+                  </div>
+                </div>
+              )}
               {report.gbp_queue_pending > 0 && (
                 <div data-testid="ai-report-gbp-queue" className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
                   <Send className="w-4 h-4 shrink-0" />
@@ -702,21 +722,31 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-emerald-300 mb-1.5">Robotun tavsiyeleri</p>
-                      {(insight.report?.tavsiyeler || []).map((t, i) => (
+                      {(insight.report?.tavsiyeler || []).map((t, i) => {
+                        const task = insightTasks.find((x) => x.title === (t.tavsiye || "").slice(0, 120));
+                        return (
                         <div key={i} className="flex items-start gap-2 mb-1">
                           <p className="flex-1 text-xs text-stone-300">✅ <b>{t.tavsiye}</b> <span className="text-stone-500">→ {t.beklenen_etki}</span></p>
+                          {task ? (
+                            <span data-testid={`insight-task-status-${i}`} className={`shrink-0 px-2 py-0.5 rounded text-[10px] ${["done", "completed", "closed", "resolved"].includes(task.status) ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"}`}>
+                              {["done", "completed", "closed", "resolved"].includes(task.status) ? "✓ Tamamlandı" : "⏳ Görev açık"}
+                            </span>
+                          ) : (
                           <button data-testid={`insight-task-btn-${i}`}
                             onClick={async () => {
                               try {
                                 const { data } = await axios.post(`${API}/ai-agent/insight-task/${propertyId}`, { tavsiye: t.tavsiye, etki: t.beklenen_etki });
                                 toast.success(data.created ? "Yönetime görev açıldı" : "Bu tavsiye için zaten açık görev var");
+                                axios.get(`${API}/ai-agent/insight-tasks/${propertyId}`).then(({ data: d }) => setInsightTasks(d.items || [])).catch(() => {});
                               } catch { toast.error("Görev açılamadı"); }
                             }}
                             className="shrink-0 px-2 py-0.5 rounded text-[10px] bg-emerald-600/80 hover:bg-emerald-500 text-white">
                             Görev Aç
                           </button>
+                          )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     {insight.report?.sikayet_teftis && (
                       <div className="p-3 rounded-lg bg-stone-950 border border-stone-800 text-xs space-y-1">
@@ -985,6 +1015,46 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               </table>
             </div>
           )}
+          <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3" data-testid="bench-spy">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-stone-200">🕵️ Rakip Yorum Casusu — zayıf noktalarını keşfedin</p>
+              <button data-testid="bench-spy-btn" disabled={spying}
+                onClick={async () => {
+                  setSpying(true);
+                  try {
+                    const { data } = await axios.post(`${API}/reputation/competitor-spy/${propertyId}`);
+                    setSpy(data);
+                    toast.success("Rakip yorumları analiz edildi");
+                  } catch (e) { toast.error(e?.response?.data?.detail || "Analiz başarısız"); }
+                  setSpying(false);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs text-white">
+                {spying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {spy ? "Yeniden Tara" : "Rakipleri Tara"}
+              </button>
+            </div>
+            {!spy ? (
+              <p className="text-xs text-stone-500">Rakiplerinizin son yorumlarındaki tekrar eden şikayetleri bulur; sizin güçlü olduğunuz alanları pazarlama fırsatına çevirir. (Google Places anahtarı gelene kadar simülasyon modu)</p>
+            ) : (
+              <div className="space-y-3">
+                {(spy.rows || []).map((r, i) => (
+                  <div key={i} data-testid={`spy-row-${i}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <p className="text-xs font-semibold text-stone-100">{r.name}</p>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-300">{r.mode === "simulated" ? "simülasyon" : "canlı"}</span>
+                    </div>
+                    {(r.weaknesses || []).map((w, j) => (
+                      <p key={j} className="text-xs text-stone-400 mb-0.5">
+                        <span className="text-rose-300 font-medium">{w.konu}:</span> {w.bulgu}
+                      </p>
+                    ))}
+                    <p className="text-[11px] text-emerald-300 mt-1.5">💡 {r.firsat}</p>
+                  </div>
+                ))}
+                <p className="text-[10px] text-stone-600">Son tarama: {(spy.created_at || "").slice(0, 16).replace("T", " ")}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

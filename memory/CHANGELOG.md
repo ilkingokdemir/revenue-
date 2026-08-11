@@ -3197,3 +3197,19 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - MOBİL İÇGÖRÜ: DashboardScreen'e violet kenarlıklı "🕵️ AI İçgörü Özeti" kartı (özet + 2
   tavsiye, /ai-agent/insight-report/default/latest). Expo export PASS.
 - BEKLEYEN: Google Places anahtarı + Expo token.
+
+## Iter 519 (2026-08-11) — İçgörü Final Üçlüsü TAMAMLANDI (fork sonrası)
+- FIX: AIReplyRobotPanel.js'de önceki oturumdan kalan JSX syntax hatası (tavsiyeler map
+  içindeki ternary kapatılmamıştı, satır ~729) giderildi — panel derlenemiyordu.
+- 1) Geri Kazanım Takibi: Öğrenme Raporu sekmesine "🎁 Geri Kazanım Takibi" kartı
+  (üretilen teklif / e-posta kuyruğu / kullanılan kod / dönüşüm oranı).
+  Backend GET /ai-agent/winback-stats/{pid} + POST /ai-agent/winback/{id}/redeem hazırdı.
+- 2) Görev Rozeti: İçgörü tavsiyelerinin yanında görev durumu rozeti (⏳ Görev açık /
+  ✓ Tamamlandı); "Görev Aç" sonrası rozet anında güncellenir. GET /ai-agent/insight-tasks/{pid}.
+- 3) Rakip Yorum Casusu: Benchmark sekmesine "🕵️ Rakip Yorum Casusu" bölümü —
+  POST /reputation/competitor-spy/{pid} (SIMULATED, Places anahtarı gelince canlı),
+  zayıf noktalar + pazarlama fırsatı; son rapor sekme açılışında otomatik yüklenir.
+- E2E DOĞRULANDI (curl + 3 interaktif screenshot): spy taraması 1 satır render,
+  görev rozeti tıklama sonrası göründü, winback kartı verilerle yüklendi.
+- DERS: Paralel search_replace batch'inde useEffect edit'i kaybolmuştu — kritik edit'ler
+  sonrası grep ile doğrula.

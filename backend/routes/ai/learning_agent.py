@@ -341,33 +341,67 @@ def create_learning_agent_router(db, require_roles):
 
     _MORNING["fn"] = _run_morning
 
+    async def _quality_eval(context: str, text: str):
+        """LLM ile 0-100 kalite puanı + tek cümle değerlendirme döndür."""
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        llm_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not llm_key:
+            return None
+        client = LlmChat(
+            api_key=llm_key,
+            session_id=f"ai-agent-score-{uuid.uuid4()}",
+            system_message=(
+                "Otel misafir yanıtlarını değerlendiren bir kalite uzmanısın. "
+                "Yanıtı 0-100 arası puanla (empati, profesyonellik, çözüm netliği, "
+                "dil ve imla kalitesi, misafirin diline uygunluk). "
+                'SADECE geçerli JSON döndür: {"score": 0-100, "verdict": "tek cümle Türkçe değerlendirme"}'
+            ),
+        ).with_model("openai", "gpt-5.2")
+        resp = await client.send_message(UserMessage(text=(
+            f"BAĞLAM:\n{context[:400]}\n\nGÖNDERİLEN YANIT:\n{text}")))
+        obj = json.loads(_strip_json(resp))
+        return {"score": max(0, min(100, int(obj.get("score", 0)))),
+                "verdict": (obj.get("verdict") or "")[:300]}
+
     async def _score_quality(draft_id: str, context: str, final_text: str):
         """Fire-and-forget: gönderilen yanıta AI kalite puanı ver."""
         try:
-            from emergentintegrations.llm.chat import LlmChat, UserMessage
-            llm_key = os.environ.get("EMERGENT_LLM_KEY")
-            if not llm_key:
-                return
-            client = LlmChat(
-                api_key=llm_key,
-                session_id=f"ai-agent-score-{uuid.uuid4()}",
-                system_message=(
-                    "Otel misafir yanıtlarını değerlendiren bir kalite uzmanısın. "
-                    "Yanıtı 0-100 arası puanla (empati, profesyonellik, çözüm netliği, "
-                    "dil ve imla kalitesi, misafirin diline uygunluk). "
-                    'SADECE geçerli JSON döndür: {"score": 0-100, "verdict": "tek cümle Türkçe değerlendirme"}'
-                ),
-            ).with_model("openai", "gpt-5.2")
-            resp = await client.send_message(UserMessage(text=(
-                f"BAĞLAM:\n{context[:400]}\n\nGÖNDERİLEN YANIT:\n{final_text}")))
-            obj = json.loads(_strip_json(resp))
-            await db.ai_agent_drafts.update_one(
-                {"id": draft_id},
-                {"$set": {"quality_score": max(0, min(100, int(obj.get("score", 0)))),
-                          "quality_verdict": (obj.get("verdict") or "")[:300],
-                          "scored_at": _now_iso()}})
+            res = await _quality_eval(context, final_text)
+            if res:
+                await db.ai_agent_drafts.update_one(
+                    {"id": draft_id},
+                    {"$set": {"quality_score": res["score"],
+                              "quality_verdict": res["verdict"],
+                              "quality_text_hash": str(hash(final_text)),
+                              "scored_at": _now_iso()}})
         except Exception as e:
             logger.warning(f"quality scoring failed: {e}")
+
+    @router.post("/ai-agent/quality-check")
+    async def quality_check(body: dict,
+                            _: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Gönderim öncesi kalite kontrolü — skor < 70 ise warn=True."""
+        draft_id = (body.get("draft_id") or "").strip()
+        final_text = (body.get("final_text") or "").strip()
+        if not draft_id or not final_text:
+            raise HTTPException(400, "draft_id ve final_text gerekli")
+        draft = await db.ai_agent_drafts.find_one({"id": draft_id}, {"_id": 0})
+        if not draft:
+            raise HTTPException(404, "Taslak bulunamadı")
+        try:
+            res = await _quality_eval(draft.get("context", ""), final_text)
+        except Exception as e:
+            logger.warning(f"quality-check failed: {e}")
+            res = None
+        if not res:
+            return {"score": None, "verdict": "", "warn": False, "scored": False}
+        await db.ai_agent_drafts.update_one(
+            {"id": draft_id},
+            {"$set": {"quality_score": res["score"],
+                      "quality_verdict": res["verdict"],
+                      "quality_text_hash": str(hash(final_text)),
+                      "scored_at": _now_iso()}})
+        return {**res, "warn": res["score"] < 70, "scored": True}
 
     # ---------- send (approve / edit) ----------
     @router.post("/ai-agent/draft/paste")
@@ -469,7 +503,8 @@ def create_learning_agent_router(db, require_roles):
                       "was_edited": was_edited,
                       "similarity": round(similarity, 3),
                       "sent_at": now, "sent_by": who}})
-        asyncio.create_task(_score_quality(draft_id, draft.get("context", ""), final_text))
+        if draft.get("quality_text_hash") != str(hash(final_text)):
+            asyncio.create_task(_score_quality(draft_id, draft.get("context", ""), final_text))
         return {"ok": True, "draft_id": draft_id, "was_edited": was_edited,
                 "similarity": round(similarity, 3),
                 "google_queued": google_queued,

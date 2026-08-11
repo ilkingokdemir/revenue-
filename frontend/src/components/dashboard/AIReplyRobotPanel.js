@@ -40,6 +40,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [pasteKind, setPasteKind] = useState("review");
   const [pasteGuest, setPasteGuest] = useState("");
   const [filter, setFilter] = useState("all");
+  const [qualityWarning, setQualityWarning] = useState(null);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -115,15 +116,46 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
 
   const openPasteMode = () => {
     setSelected({ manual: true });
-    setDraft(null); setDraftText(""); setPasteText(""); setPasteGuest("");
+    setDraft(null); setDraftText(""); setPasteText(""); setPasteGuest(""); setQualityWarning(null);
     setTab("inbox");
   };
 
-  const sendResponse = async () => {
+  const QualityWarningBox = () => qualityWarning ? (
+    <div data-testid="ai-robot-quality-warning" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/40 space-y-2">
+      <p className="text-xs font-medium text-rose-300">
+        ⚠ Kalite skoru düşük: {qualityWarning.score}/100
+      </p>
+      <p className="text-[11px] text-stone-300">{qualityWarning.verdict}</p>
+      <div className="flex gap-2">
+        <button data-testid="ai-robot-warning-edit-btn" onClick={() => setQualityWarning(null)}
+          className="flex-1 px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-xs text-stone-100">
+          Düzenlemeye Devam
+        </button>
+        <button data-testid="ai-robot-warning-send-btn" onClick={() => sendResponse(true)}
+          className="flex-1 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-xs text-white">
+          Yine de Gönder
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  const sendResponse = async (force = false) => {
     if (!draft) return;
     setSending(true);
+    if (!force) {
+      try {
+        const { data: qc } = await axios.post(`${API}/ai-agent/quality-check`, {
+          draft_id: draft.id, final_text: draftText,
+        });
+        if (qc.warn) { setQualityWarning(qc); setSending(false); return; }
+      } catch { /* skor alınamazsa gönderime engel olma */ }
+    }
+    setQualityWarning(null);
     try {
       const { data } = await axios.post(`${API}/ai-agent/send/${draft.id}`, { final_text: draftText });
+      if (data.google_queued) {
+        toast.info("Yanıt Google yayın kuyruğuna eklendi (API onayı bekleniyor)");
+      }
       if (selected?.manual) {
         try { await navigator.clipboard.writeText(draftText); } catch { /* silent */ }
         toast.success(data.was_edited && data.learned_count > 0
@@ -158,7 +190,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   };
 
   const openItem = async (item) => {
-    setSelected(item); setDraft(null); setDraftText(item.ai_draft || "");
+    setSelected(item); setDraft(null); setDraftText(item.ai_draft || ""); setQualityWarning(null);
     if (item.ai_draft) {
       try {
         const { data } = await axios.get(`${API}/ai-agent/draft/latest`, {
@@ -315,12 +347,13 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                     <textarea data-testid="ai-robot-draft-textarea" value={draftText}
                       onChange={(e) => setDraftText(e.target.value)} rows={8}
                       className="w-full p-3 rounded-lg bg-stone-950 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none resize-y" />
+                    <QualityWarningBox />
                     <div className="flex gap-2">
                       <button data-testid="ai-robot-copy-btn" onClick={copyDraft}
                         className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-sm text-stone-100">
                         <Copy className="w-4 h-4" /> Kopyala
                       </button>
-                      <button data-testid="ai-robot-send-btn" onClick={sendResponse}
+                      <button data-testid="ai-robot-send-btn" onClick={() => sendResponse()}
                         disabled={sending || !draftText.trim()}
                         className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-sm font-medium text-white">
                         {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -357,7 +390,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                         onChange={(e) => setDraftText(e.target.value)} rows={8}
                         className="w-full p-3 rounded-lg bg-stone-950 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none resize-y" />
                     </div>
-                    <button data-testid="ai-robot-send-btn" onClick={sendResponse}
+                    <QualityWarningBox />
+                    <button data-testid="ai-robot-send-btn" onClick={() => sendResponse()}
                       disabled={sending || !draft || !draftText.trim()}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-sm font-medium text-white">
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
@@ -397,6 +431,21 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   {report.gbp_queue_pending} yanıt Google yayın kuyruğunda bekliyor (Google Business API onayı sonrası otomatik yayınlanacak)
                 </div>
               )}
+              <details data-testid="ai-robot-gbp-guide" className="bg-stone-900 border border-stone-800 rounded-xl p-4 text-sm text-stone-300">
+                <summary className="cursor-pointer font-medium text-stone-200 select-none">
+                  📋 Google Business Profile API Onay Başvurusu — Adım Adım Rehber
+                </summary>
+                <ol className="mt-3 space-y-2 pl-5 list-decimal text-xs text-stone-400">
+                  <li><b className="text-stone-300">Ön koşulları sağlayın:</b> Google Business Profile'ınız en az <b>60 gündür doğrulanmış ve aktif</b> olmalı; otelinizi temsil eden bir web siteniz bulunmalı.</li>
+                  <li><b className="text-stone-300">Google Cloud projesi açın:</b> console.cloud.google.com → yeni proje oluşturun ve <b>Proje Numarası</b>'nı not edin.</li>
+                  <li><b className="text-stone-300">API erişim başvurusu yapın:</b> Google'ın "GBP API contact form"unu doldurun (developers.google.com/my-business/content/prereqs adresindeki bağlantı). Başvuruyu, işletme profilinde <b>sahip/yönetici</b> olan e-posta ile yapın ve proje numarasını belirtin.</li>
+                  <li><b className="text-stone-300">Onayı kontrol edin:</b> APIs &amp; Services → Quotas'ta kota <b>0 QPM ise onaylanmadı, 300 QPM ise onaylandı</b> demektir (genelde 2 hafta sürer).</li>
+                  <li><b className="text-stone-300">API'leri etkinleştirin:</b> Onay sonrası "Google My Business API" + Account Management + Business Information API'lerini etkinleştirin.</li>
+                  <li><b className="text-stone-300">OAuth ekranını yapılandırın:</b> Consent screen'e uygulama adı, gizlilik politikası URL'si ekleyin; scope: <code className="text-violet-300">business.manage</code>. Web tipi OAuth Client ID + Secret oluşturun.</li>
+                  <li><b className="text-stone-300">Bize iletin:</b> Client ID + Client Secret'ı paylaşın → sistemde <code className="text-violet-300">GBP_LIVE=true</code> yapılıp kuyrukta bekleyen tüm yanıtlar otomatik yayınlanır.</li>
+                </ol>
+                <p className="mt-2 text-[10px] text-stone-500">Not: Google sandbox sunmuyor; onay gelene kadar yanıtlar güvenle kuyrukta bekletiliyor.</p>
+              </details>
               <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3">
                 <p className="text-sm font-medium text-stone-200 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-violet-400" /> Haftalık Gelişim</p>
                 {report.series.map((w) => (

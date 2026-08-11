@@ -3056,3 +3056,19 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   eklendi. Ayrıca dosya sonunda yine junk fragment oluştu (sed ile temizlendi) — learning_agent.py
   düzenlerken MUTLAKA ast.parse doğrula.
 - EAS BUILD: Kullanıcıdan Expo access token BEKLENİYOR (expo.dev/settings/access-tokens).
+
+## Iter 509 — Kalite Uyarısı + Google Onay Rehberi TAMAMLANDI
+- KALİTE UYARISI: POST /api/ai-agent/quality-check {draft_id, final_text} → {score, verdict,
+  warn: score<70}. _quality_eval ortak helper; send akışı quality_text_hash eşleşirse yeniden
+  puanlamaz. Frontend: sendResponse(force) — önce quality-check, warn ise rose uyarı kutusu
+  (ai-robot-quality-warning) "Düzenlemeye Devam" / "Yine de Gönder". Her iki panel (normal+paste).
+  UI TEST: kötü metin 5/100 → uyarı gösterildi, gönderim engellendi; "Yine de Gönder" ile force
+  gönderim PASS. Curl: kötü=3 warn:True, iyi=88 warn:False.
+- GOOGLE ONAY REHBERİ: /app/GOOGLE_ONAY_REHBERI.md (tam rehber) + rapor sekmesinde
+  <details data-testid="ai-robot-gbp-guide"> 7 adımlı Türkçe accordion rehber.
+- KRİTİK DERS (3. tekrar!): AIReplyRobotPanel.js'de paralel search_replace YİNE dosya sonuna
+  duplikasyon bıraktı ve sendResponse edit'leri kopya bölüme uygulandı (sed silince kayboldu,
+  yeniden uygulandı). BU DOSYALARDA EDIT SONRASI MUTLAKA grep ile doğrula + tek tek edit yap.
+- Ayrıca watchfiles reload bazen takılıyor (shutdown sonrası yeni worker başlamıyor) →
+  supervisorctl restart backend gerekiyor.
+- EAS BUILD: Expo access token hâlâ kullanıcıdan BEKLENİYOR.

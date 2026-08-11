@@ -52,6 +52,35 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [catData, setCatData] = useState(null);
   const [categorizing, setCategorizing] = useState(false);
   const [qrUrl, setQrUrl] = useState(null);
+  const [insight, setInsight] = useState(null);
+  const [insightLoading, setInsightLoading] = useState(false);
+  const [voicePlaying, setVoicePlaying] = useState(false);
+
+  const runInsight = async () => {
+    setInsightLoading(true);
+    try {
+      const { data } = await axios.post(`${API}/ai-agent/insight-report/${propertyId}`);
+      setInsight(data);
+      toast.success("İçgörü raporu hazır");
+    } catch (e) { toast.error(e?.response?.data?.detail || "Rapor oluşturulamadı"); }
+    setInsightLoading(false);
+  };
+
+  const playVoice = async () => {
+    setVoicePlaying(true);
+    try {
+      const { data } = await axios.get(`${API}/ai-agent/voice-summary/${propertyId}`);
+      if (data.audio_base64) {
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        audio.onended = () => setVoicePlaying(false);
+        await audio.play();
+        toast.success("Sesli özet çalıyor");
+      } else {
+        toast.error("Ses üretilemedi");
+        setVoicePlaying(false);
+      }
+    } catch { toast.error("Sesli özet alınamadı"); setVoicePlaying(false); }
+  };
 
   const loadBench = useCallback(async () => {
     try {
@@ -163,6 +192,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     }
     if (tab === "report" && propertyId) {
       axios.get(`${API}/ai-agent/categories/${propertyId}`).then(({ data }) => setCatData(data)).catch(() => {});
+      axios.get(`${API}/ai-agent/insight-report/${propertyId}/latest`).then(({ data }) => data?.id && setInsight(data)).catch(() => {});
     }
   }, [tab, propertyId, loadConfig, loadBench]);
 
@@ -316,6 +346,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
           </p>
         </div>
         <div className="flex gap-2">
+          <button data-testid="ai-robot-voice-btn" onClick={playVoice} disabled={voicePlaying}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 disabled:opacity-50 text-sm text-stone-100 border border-stone-700">
+            {voicePlaying ? <Loader2 className="w-4 h-4 animate-spin" /> : "🔊"} Sesli Özet
+          </button>
           <button data-testid="ai-robot-bulk-draft-btn" onClick={bulkDraft} disabled={bulkDrafting || !inbox.items.length}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-sm text-white">
             {bulkDrafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
@@ -411,6 +445,11 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   <span className={`ml-auto px-1.5 py-0.5 text-[10px] rounded ${it.source_type === "review" ? "bg-amber-500/15 text-amber-300" : "bg-rose-500/15 text-rose-300"}`}>
                     {it.source_type === "review" ? "Yorum" : "Şikayet"}
                   </span>
+                  {it.sla_breached && (
+                    <span data-testid={`sla-badge-${it.source_id}`} className="px-1.5 py-0.5 text-[10px] rounded bg-red-600/25 text-red-300 font-semibold">
+                      ⏰ SLA aşıldı
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-stone-400 line-clamp-2">{it.text}</p>
                 {it.ai_draft && <p className="text-[10px] text-violet-400 mt-1">✦ AI taslağı mevcut</p>}
@@ -589,6 +628,60 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                 </ol>
                 <p className="mt-2 text-[10px] text-stone-500">Not: Google sandbox sunmuyor; onay gelene kadar yanıtlar güvenle kuyrukta bekletiliyor.</p>
               </details>
+              <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3" data-testid="ai-robot-insight">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-stone-200">🕵️ İçgörü & Teftiş Raporu — kim, ne dedi, ne yapmalı</p>
+                  <button data-testid="ai-robot-insight-btn" onClick={runInsight} disabled={insightLoading}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-xs text-white">
+                    {insightLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                    {insightLoading ? "Analiz ediliyor…" : insight ? "Yeniden Analiz Et" : "Rapor Oluştur"}
+                  </button>
+                </div>
+                {!insight ? (
+                  <p className="text-xs text-stone-500">Robot tüm olumsuz yorumları ve şikayetleri okuyup yönetici raporu çıkarır: kim ne konuda şikayetçi, hangi alanlar geliştirilmeli, somut tavsiyeler.</p>
+                ) : (
+                  <div className="space-y-4 text-sm">
+                    <p className="text-stone-300 text-xs italic">{insight.report?.ozet}</p>
+                    <div>
+                      <p className="text-xs font-semibold text-amber-300 mb-1.5">Kim, ne ile ilgili kötü değerlendirdi?</p>
+                      <div className="space-y-1">
+                        {(insight.report?.kim_ne_dedi || []).map((k, i) => (
+                          <div key={i} className="flex gap-2 text-xs">
+                            <span className="text-stone-200 font-medium w-28 shrink-0 truncate">{k.misafir}</span>
+                            <span className="text-violet-300 w-24 shrink-0 truncate">{k.konu}</span>
+                            <span className="text-stone-400">{k.sorun}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-rose-300 mb-1.5">Geliştirilmesi gerekenler</p>
+                      {(insight.report?.gelistirme_alanlari || []).map((g, i) => (
+                        <div key={i} className="flex gap-2 text-xs mb-1">
+                          <span className={`px-1.5 rounded shrink-0 ${g.oncelik === "yüksek" ? "bg-rose-500/20 text-rose-300" : g.oncelik === "orta" ? "bg-amber-500/20 text-amber-300" : "bg-stone-700 text-stone-300"}`}>{g.oncelik}</span>
+                          <span className="text-stone-200 font-medium">{g.alan}</span>
+                          <span className="text-stone-500">— {g.kanit}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-emerald-300 mb-1.5">Robotun tavsiyeleri</p>
+                      {(insight.report?.tavsiyeler || []).map((t, i) => (
+                        <p key={i} className="text-xs text-stone-300 mb-1">✅ <b>{t.tavsiye}</b> <span className="text-stone-500">→ {t.beklenen_etki}</span></p>
+                      ))}
+                    </div>
+                    {insight.report?.sikayet_teftis && (
+                      <div className="p-3 rounded-lg bg-stone-950 border border-stone-800 text-xs space-y-1">
+                        <p className="font-semibold text-stone-200">Şikayet Teftişi</p>
+                        <p className="text-stone-400">En sık kategori: <span className="text-stone-200">{insight.report.sikayet_teftis.en_sik_kategori}</span></p>
+                        <p className="text-stone-400">Kritik bulgu: <span className="text-stone-200">{insight.report.sikayet_teftis.kritik_bulgu}</span></p>
+                        <p className="text-rose-300">Acil aksiyon: {insight.report.sikayet_teftis.acil_aksiyon}</p>
+                      </div>
+                    )}
+                    <p className="text-[10px] text-stone-600">{insight.neg_review_count} olumsuz yorum + {insight.complaint_count} şikayet analiz edildi · {(insight.created_at || "").slice(0, 16).replace("T", " ")}</p>
+                  </div>
+                )}
+              </div>
               <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3" data-testid="ai-robot-categories">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium text-stone-200">Kategori Analizi (Semantik)</p>
@@ -700,6 +793,14 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   onChange={(e) => setConfig({ ...config, warn_threshold: parseInt(e.target.value) })}
                   className="w-full accent-violet-500" />
                 <p className="text-[10px] text-stone-500">Kalite skoru bu değerin altında kalan yanıtlarda göndermeden önce uyarı gösterilir</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-stone-400">Şikayet yanıt süresi hedefi (SLA): <span className="text-violet-300 font-medium">{config.sla_minutes ?? 60}</span> dakika</label>
+                <input data-testid="ai-robot-config-sla" type="range" min="15" max="480" step="15"
+                  value={config.sla_minutes ?? 60}
+                  onChange={(e) => setConfig({ ...config, sla_minutes: parseInt(e.target.value) })}
+                  className="w-full accent-violet-500" />
+                <p className="text-[10px] text-stone-500">Bu süre içinde yanıtlanmayan şikayetlerde yöneticiye push uyarısı gider ve kayıt "SLA aşıldı" işaretlenir</p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs text-stone-400">Haftalık rapor e-postası</label>

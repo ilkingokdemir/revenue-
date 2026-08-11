@@ -1599,10 +1599,11 @@ api_router.include_router(create_web_concierge_router(db, require_roles))
 from routes.ai.review_agent import create_review_agent_router
 api_router.include_router(create_review_agent_router(db, require_roles))
 
-from routes.ai.learning_agent import create_learning_agent_router, run_morning_drafts, run_weekly_summary
+from routes.ai.learning_agent import create_learning_agent_router, run_morning_drafts, run_weekly_summary, run_monthly_karne
 api_router.include_router(create_learning_agent_router(db, require_roles))
 JOB_HANDLERS["ai_morning_drafts"] = run_morning_drafts
 JOB_HANDLERS["ai_weekly_summary"] = run_weekly_summary
+JOB_HANDLERS["ai_monthly_karne"] = run_monthly_karne
 
 from routes.integrations_pkg.gbp_publish import create_gbp_router
 api_router.include_router(create_gbp_router(db, require_roles))
@@ -2040,13 +2041,14 @@ async def startup_event():
 
     # tick workers (workers.py — ROADMAP P1 refactor)
     import asyncio
-    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop
+    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop, complaint_sla_loop
     asyncio.create_task(scheduled_checkout_loop(db))
     asyncio.create_task(reports_loop(db))
     asyncio.create_task(otb_snapshot_loop(db))
     asyncio.create_task(str_scan_loop(db))
     asyncio.create_task(revenue_brain_loop(db))
     asyncio.create_task(complaint_task_sync_loop(db))
+    asyncio.create_task(complaint_sla_loop(db))
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 
 _MORNING = {}
 _WEEKLY = {}
+_KARNE = {}
+
+
+async def run_monthly_karne(property_id: str = "all") -> dict:
+    fn = _KARNE.get("fn")
+    if not fn:
+        return {"error": "learning_agent router not initialized"}
+    return await fn(property_id)
 
 TONE_TEXT = {
     "professional": "Profesyonel ve saygılı bir ton kullan.",
@@ -231,6 +239,17 @@ def create_learning_agent_router(db, require_roles):
              "$or": [{"guest_response_text": {"$exists": False}},
                      {"guest_response_text": ""}]},
             {"_id": 0}).sort("created_at", -1).to_list(100)
+        cfg = await db.review_agent_config.find_one(
+            {"property_id": property_id}, {"_id": 0, "sla_minutes": 1}) or {}
+        sla_min = int(cfg.get("sla_minutes", 60))
+
+        def _mins_open(created: str):
+            try:
+                dt = datetime.fromisoformat((created or "").replace("Z", "+00:00"))
+                return int((datetime.now(timezone.utc) - dt).total_seconds() // 60)
+            except Exception:
+                return None
+
         items = (
             [{"source_type": "review", "source_id": r["id"],
               "guest_name": r.get("author") or r.get("guest_name") or "Misafir",
@@ -243,6 +262,9 @@ def create_learning_agent_router(db, require_roles):
               "title": f"{c.get('category', 'diğer')} · {c.get('severity', '')}",
               "text": c.get("text", ""), "severity": c.get("severity"),
               "created_at": c.get("created_at", ""),
+              "minutes_open": _mins_open(c.get("created_at", "")),
+              "sla_breached": bool(c.get("sla_breached")) or (
+                  (_mins_open(c.get("created_at", "")) or 0) > sla_min),
               "ai_draft": c.get("ai_draft", "")} for c in complaints]
         )
         items.sort(key=lambda x: x.get("created_at") or "", reverse=True)
@@ -907,6 +929,127 @@ def create_learning_agent_router(db, require_roles):
             content=buf.getvalue(), media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=robot-karne-{property_id}-{month}.pdf"})
 
+    @router.get("/ai-agent/voice-summary/{property_id}")
+    async def voice_summary(property_id: str,
+                            _: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        """Sabah özetini sese çevir (OpenAI TTS)."""
+        inbox_data = await inbox(property_id, _={})
+        st = await stats(property_id, _={})
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {}
+        sla_count = sum(1 for i in inbox_data["items"] if i.get("sla_breached"))
+        text = (
+            f"Günaydın. {prop.get('name', 'Oteliniz')} için A I yanıt robotu özeti. "
+            f"Gelen kutusunda {inbox_data['count']} bekleyen kayıt var: "
+            f"{inbox_data['review_count']} yorum ve {inbox_data['complaint_count']} şikayet. "
+            + (f"Dikkat: {sla_count} şikayette yanıt süresi hedefi aşıldı. " if sla_count else "")
+            + f"Bugüne kadar {st['sent']} yanıt gönderildi, onay oranı yüzde {st['approval_rate']}. "
+            + (f"Ortalama kalite skoru {st['avg_quality']}. " if st.get("avg_quality") else "")
+            + f"Robot şu ana kadar {st['lessons']} yazım kuralı öğrendi. İyi çalışmalar."
+        )
+        try:
+            from emergentintegrations.llm.openai import OpenAITextToSpeech
+            tts = OpenAITextToSpeech(api_key=os.environ.get("EMERGENT_LLM_KEY"))
+            audio_b64 = await tts.generate_speech_base64(
+                text=text[:4000], model="tts-1", voice="alloy")
+            return {"text": text, "audio_base64": audio_b64, "format": "mp3"}
+        except Exception as e:
+            logger.warning(f"voice summary TTS failed: {e}")
+            return {"text": text, "audio_base64": None, "error": str(e)}
+
+    # ---------- monthly karne email ----------
+    async def _run_karne(property_id: str) -> dict:
+        from datetime import timedelta
+        now = datetime.now(timezone.utc)
+        if property_id in ("", "all") and now.day != 1:
+            return {"skipped": True, "reason": "not_first_day_of_month"}
+        month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+        if property_id and property_id != "all":
+            pids = [property_id]
+        else:
+            pids = [p["id"] async for p in db.properties.find({}, {"_id": 0, "id": 1})]
+        base = os.environ.get("PUBLIC_BASE_URL", "")
+        queued = 0
+        for pid in pids:
+            try:
+                cfg = await db.review_agent_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+                to_email = cfg.get("report_email") or "admin@hotelbox.com"
+                link = f"{base}/api/ai-agent/monthly-report-pdf/{pid}?month={month}"
+                await db.outbound_email_queue.insert_one({
+                    "id": str(uuid.uuid4()), "property_id": pid, "to": to_email,
+                    "subject": f"📄 Aylık Robot Karnesi — {month}",
+                    "body": (f"AI Yanıt Robotu'nun {month} ayı karnesi hazır.\n"
+                             f"PDF karneyi indirmek için: {link}\n"
+                             f"(Giriş yaptıktan sonra link doğrudan indirir.)"),
+                    "type": "ai_monthly_karne", "status": "queued",
+                    "delivery_status": "mocked_email_queued",
+                    "created_at": _now_iso()})
+                queued += 1
+            except Exception as e:
+                logger.warning(f"karne email failed {pid}: {e}")
+        return {"queued": queued, "month": month}
+
+    _KARNE["fn"] = _run_karne
+
+    # ---------- AI insight report (kim, ne, öneri) ----------
+    @router.post("/ai-agent/insight-report/{property_id}")
+    async def insight_report(property_id: str,
+                             _: dict = Depends(require_roles("admin", "manager"))):
+        """Yorum + şikayetlerden yönetici içgörü raporu üret."""
+        neg_reviews = await db.reviews.find(
+            {"property_id": property_id, "rating": {"$lte": 3}},
+            {"_id": 0, "author": 1, "guest_name": 1, "rating": 1,
+             "comment": 1, "text": 1, "platform": 1}).sort("created_at", -1).to_list(40)
+        complaints = await db.guest_complaints.find(
+            {"property_id": property_id},
+            {"_id": 0, "guest_name": 1, "category": 1, "severity": 1,
+             "text": 1, "status": 1}).sort("created_at", -1).to_list(30)
+        if not neg_reviews and not complaints:
+            raise HTTPException(400, "Analiz edilecek olumsuz yorum veya şikayet yok")
+        rev_lines = "\n".join(
+            f"- {r.get('author') or r.get('guest_name') or 'Misafir'} ({r.get('rating')}/5, {r.get('platform', '')}): "
+            f"{(r.get('comment') or r.get('text') or '')[:200]}" for r in neg_reviews)
+        comp_lines = "\n".join(
+            f"- {c.get('guest_name') or 'Misafir'} [{c.get('category')}/{c.get('severity')}/{c.get('status')}]: "
+            f"{(c.get('text') or '')[:200]}" for c in complaints)
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        llm_key = os.environ.get("EMERGENT_LLM_KEY")
+        if not llm_key:
+            raise HTTPException(500, "LLM anahtarı yok")
+        client = LlmChat(
+            api_key=llm_key,
+            session_id=f"ai-insight-{uuid.uuid4()}",
+            system_message=(
+                "Sen bir otel operasyon danışmanısın. Olumsuz yorumları ve şikayetleri analiz et. "
+                "Türkçe yaz. SADECE geçerli JSON döndür, şema: "
+                '{"ozet": "2-3 cümle genel durum", '
+                '"kim_ne_dedi": [{"misafir": "ad", "konu": "kısa konu", "sorun": "tek cümle"}], '
+                '"gelistirme_alanlari": [{"alan": "...", "oncelik": "yüksek|orta|düşük", "kanit": "kaç misafir/örnek"}], '
+                '"tavsiyeler": [{"tavsiye": "somut aksiyon", "beklenen_etki": "tek cümle"}], '
+                '"sikayet_teftis": {"en_sik_kategori": "...", "kritik_bulgu": "...", "acil_aksiyon": "..."}}'
+                " En fazla 8 kim_ne_dedi, 5 gelistirme_alanlari, 5 tavsiye."
+            ),
+        ).with_model("openai", "gpt-5.2")
+        resp = await client.send_message(UserMessage(text=(
+            f"OLUMSUZ YORUMLAR ({len(neg_reviews)}):\n{rev_lines or '- yok'}\n\n"
+            f"ŞİKAYETLER ({len(complaints)}):\n{comp_lines or '- yok'}")))
+        try:
+            report = json.loads(_strip_json(resp))
+        except Exception:
+            raise HTTPException(500, "Rapor ayrıştırılamadı, tekrar deneyin")
+        doc = {"id": str(uuid.uuid4()), "property_id": property_id,
+               "report": report, "neg_review_count": len(neg_reviews),
+               "complaint_count": len(complaints), "created_at": _now_iso()}
+        await db.ai_insight_reports.insert_one(dict(doc))
+        doc.pop("_id", None)
+        return doc
+
+    @router.get("/ai-agent/insight-report/{property_id}/latest")
+    async def latest_insight(property_id: str,
+                             _: dict = Depends(require_roles("admin", "manager"))):
+        doc = await db.ai_insight_reports.find_one(
+            {"property_id": property_id}, {"_id": 0}, sort=[("created_at", -1)])
+        return doc or {}
+
     # ---------- robot settings ----------
     @router.get("/ai-agent/config/{property_id}")
     async def get_agent_config(property_id: str,
@@ -917,6 +1060,7 @@ def create_learning_agent_router(db, require_roles):
                 "sign_off": cfg.get("sign_off", "Yönetim"),
                 "tone": cfg.get("tone", "professional"),
                 "warn_threshold": int(cfg.get("warn_threshold", 70)),
+                "sla_minutes": int(cfg.get("sla_minutes", 60)),
                 "report_email": cfg.get("report_email", "")}
 
     @router.put("/ai-agent/config/{property_id}")
@@ -930,6 +1074,8 @@ def create_learning_agent_router(db, require_roles):
             upd["tone"] = body["tone"]
         if "warn_threshold" in body:
             upd["warn_threshold"] = max(0, min(100, int(body["warn_threshold"])))
+        if "sla_minutes" in body:
+            upd["sla_minutes"] = max(5, min(1440, int(body["sla_minutes"])))
         if "report_email" in body:
             upd["report_email"] = str(body["report_email"]).strip()[:120]
         await db.review_agent_config.update_one(

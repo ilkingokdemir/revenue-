@@ -3155,3 +3155,21 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   "📄 Aylık Karne (PDF)" indirme butonu (blob download). Curl: 200 application/pdf 3KB.
   NOT: PDF'te Türkçe karakterler ASCII'ye sadeleştirildi (Helvetica unicode sınırı).
 - BEKLEYEN: Google Places anahtarı + Expo token (kullanıcıya yapıştırma talimatı verildi).
+
+## Iter 516 — SLA + Aylık Karne E-postası + Sesli Özet + İÇGÖRÜ RAPORU TAMAMLANDI
+- SLA: config sla_minutes (default 60, Ayarlar'da slider 15-480dk). workers.py complaint_sla_loop
+  (300s) — süresi aşan yanıtsız şikayetlere sla_breached+sla_alerted + push (kind sla_breach).
+  Inbox complaint item'ları minutes_open + sla_breached döner; UI kırmızı "⏰ SLA aşıldı" rozeti
+  (test: 4 rozet). 
+- AYLIK KARNE E-POSTASI: run_monthly_karne (_KARNE closure) → JOB_HANDLERS["ai_monthly_karne"],
+  scheduler 08:30 günlük ama handler ayın 1'i değilse skip (manuel tetik tek tesiste bypass).
+  Önceki ay PDF linkiyle e-posta kuyruğu (MOCKED). Test: queued 1, month 2026-07.
+- SESLİ ÖZET: GET /ai-agent/voice-summary/{pid} — Türkçe özet metni + OpenAI TTS (tts-1, alloy,
+  emergentintegrations OpenAITextToSpeech) base64 mp3 (491KB test). UI: header "🔊 Sesli Özet"
+  butonu Audio ile çalar.
+- İÇGÖRÜ & TEFTİŞ RAPORU (kullanıcının son isteği): POST /ai-agent/insight-report/{pid} —
+  olumsuz yorumlar (rating<=3, 40) + şikayetler (30) → LLM JSON: ozet, kim_ne_dedi (misafir/konu/
+  sorun), gelistirme_alanlari (öncelikli), tavsiyeler (aksiyon+etki), sikayet_teftis (en sık
+  kategori/kritik bulgu/acil aksiyon). db.ai_insight_reports'a kaydedilir, /latest ile yüklenir.
+  UI: Rapor sekmesi üstünde tam bölüm. TEST: 8 misafir, 5 alan, 5 tavsiye — ekran doğrulandı.
+- BEKLEYEN: Google Places anahtarı + Expo token.

@@ -9,6 +9,50 @@ logger = logging.getLogger(__name__)
 _TASK_DONE = {"done", "completed", "closed", "resolved"}
 
 
+async def complaint_sla_loop(db, interval_seconds: int = 300):
+    """Yanıt süresi hedefi (SLA) aşılan şikayetlerde yöneticiyi uyar."""
+    while True:
+        try:
+            cfgs = {}
+            async for c in db.review_agent_config.find(
+                    {}, {"_id": 0, "property_id": 1, "sla_minutes": 1}):
+                cfgs[c["property_id"]] = int(c.get("sla_minutes", 60))
+            now = datetime.now(timezone.utc)
+            open_c = await db.guest_complaints.find(
+                {"status": {"$nin": ["resolved", "closed"]},
+                 "sla_alerted": {"$ne": True},
+                 "$or": [{"guest_response_text": {"$exists": False}},
+                         {"guest_response_text": ""}]},
+                {"_id": 0, "id": 1, "property_id": 1, "guest_name": 1,
+                 "created_at": 1, "category": 1}).to_list(300)
+            breached = 0
+            for c in open_c:
+                sla = cfgs.get(c.get("property_id"), 60)
+                try:
+                    dt = datetime.fromisoformat((c.get("created_at") or "").replace("Z", "+00:00"))
+                except Exception:
+                    continue
+                if (now - dt).total_seconds() / 60 > sla:
+                    await db.guest_complaints.update_one(
+                        {"id": c["id"]},
+                        {"$set": {"sla_breached": True, "sla_alerted": True,
+                                  "sla_alerted_at": now.isoformat()}})
+                    try:
+                        from routes.platform_ext.mobile_push import send_expo_push
+                        await send_expo_push(
+                            db, "⏰ Yanıt süresi aşıldı",
+                            f"{c.get('guest_name') or 'Misafir'} şikayeti {sla} dk içinde yanıtlanmadı ({c.get('category', '')})",
+                            {"type": "sla_breach", "id": c["id"]}, kind="sla_breach")
+                    except Exception:
+                        pass
+                    breached += 1
+            if breached:
+                logger.info(f"complaint_sla: {breached} SLA breach alerted")
+        except Exception as e:
+            logger.warning(f"complaint_sla error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def complaint_task_sync_loop(db, interval_seconds: int = 300):
     """Şikayetten oluşan departman görevi kapanınca şikayeti otomatik çözüldü yap."""
     while True:

@@ -2982,3 +2982,21 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
   Menü: Reviews & Sentiment > "AI Yanıt Robotu" (ai-reply-robot-btn, core).
 - E2E DOĞRULANDI (curl + screenshot): taslak → düzenlenmiş gönderim → 2 kural öğrenildi →
   sonraki taslakta lessons_applied=2, stats/history/manuel kural CRUD OK, UI login→panel→seçim OK.
+
+## Iter 504 (2026-06 fork) — 4 Özellik Paketi TAMAMLANDI
+1) MOBİL DEPARTURES: /app/mobile/src/screens/DeparturesScreen.js + App.js "Çıkışlar" sekmesi.
+   Kaynak: GET /bookings/timeline/all/todays-actions (departures) + GET /checkout/scheduled/today
+   (planlı self-service). 1-tap: PUT /bookings/{id}/status?status=checked_out (QUERY param!)
+   veya POST /checkout/scheduled/{id}/execute-now. BUG FIX: ArrivalsScreen check-in çağrısı
+   status'u JSON body gönderiyordu (422 dönerdi) → query param'a düzeltildi.
+   Expo export android bundle OK (1.42 MB, jsc).
+2) BİLDİRİM SENKRONU: Web NotificationSettings (ReviewToolsPanels.js) artık /api/mobile/push-prefs
+   GET+POST ile mobil push tercihlerini (payment_received, pickup_strong, channel_drop) aynı
+   kayıttan yönetiyor. Doğrulandı: mobilde kapatılan toggle web'de kapalı geliyor.
+3) TOPLU AI YANIT: POST /api/ai-agent/batch-draft/{pid} (semaphore 4, limit 25-50, mevcut
+   taslaklıları atlar). UI: "Tümüne Taslak Hazırla" butonu. Ek: GET /ai-agent/draft/latest
+   (source_type+source_id) → panel mevcut taslağı yükleyip direkt göndermeye izin veriyor.
+4) ÖĞRENME RAPORU: GET /api/ai-agent/report/{pid}?weeks=6 — haftalık sent/edited/approval_rate/
+   avg_similarity/lessons serisi + trend. UI: "Öğrenme Raporu" sekmesi (progress bar + haftalık kurallar).
+E2E: curl (batch 2 taslak, report 6 hafta, prefs POST/GET, checkout) + 3 screenshot (rapor sekmesi,
+bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.

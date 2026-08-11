@@ -24,7 +24,7 @@ export default function ArrivalsScreen() {
         text: "Check-in Yap",
         onPress: async () => {
           try {
-            await api.put(`/bookings/${b.id}/status`, { status: "checked_in" });
+            await api.put(`/bookings/${b.id}/status`, null, { params: { status: "checked_in" } });
             load();
           } catch (e) {
             Alert.alert("Hata", e.response?.data?.detail || "Check-in başarısız");

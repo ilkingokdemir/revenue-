@@ -8,7 +8,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import {
   Bot, RefreshCw, Sparkles, Send, Loader2, Star, ShieldAlert,
-  GraduationCap, Trash2, Plus, Inbox, CheckCircle2, Pencil,
+  GraduationCap, Trash2, Plus, Inbox, CheckCircle2, Pencil, Layers, TrendingUp,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -33,6 +33,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [drafting, setDrafting] = useState(false);
   const [sending, setSending] = useState(false);
   const [newRule, setNewRule] = useState("");
+  const [bulkDrafting, setBulkDrafting] = useState(false);
+  const [report, setReport] = useState(null);
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -49,7 +51,25 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   }, [propertyId]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { setSelected(null); setDraft(null); setDraftText(""); }, [propertyId]);
+  useEffect(() => { setSelected(null); setDraft(null); setDraftText(""); setReport(null); }, [propertyId]);
+
+  useEffect(() => {
+    if (tab === "report" && propertyId) {
+      axios.get(`${API}/ai-agent/report/${propertyId}`)
+        .then(({ data }) => setReport(data))
+        .catch(() => toast.error("Rapor yüklenemedi"));
+    }
+  }, [tab, propertyId]);
+
+  const bulkDraft = async () => {
+    setBulkDrafting(true);
+    try {
+      const { data } = await axios.post(`${API}/ai-agent/batch-draft/${propertyId}`, {});
+      toast.success(`${data.drafted_count} taslak hazırlandı${data.skipped_existing ? ` (${data.skipped_existing} zaten taslaklı)` : ""} — onay kuyruğunda`);
+      load();
+    } catch { toast.error("Toplu taslak başarısız"); }
+    setBulkDrafting(false);
+  };
 
   const generateDraft = async (item) => {
     setDrafting(true);
@@ -98,8 +118,16 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     } catch { toast.error("Silinemedi"); }
   };
 
-  const openItem = (item) => {
+  const openItem = async (item) => {
     setSelected(item); setDraft(null); setDraftText(item.ai_draft || "");
+    if (item.ai_draft) {
+      try {
+        const { data } = await axios.get(`${API}/ai-agent/draft/latest`, {
+          params: { source_type: item.source_type, source_id: item.source_id },
+        });
+        if (data?.id) { setDraft(data); setDraftText(data.ai_text); }
+      } catch { /* silent */ }
+    }
   };
 
   return (
@@ -117,10 +145,17 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             {hotelName ? `${hotelName} · ` : ""}Yorum ve şikayetlere AI taslak → düzenle → gönder. Her düzenlemeden öğrenir.
           </p>
         </div>
-        <button data-testid="ai-robot-refresh-btn" onClick={load}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-sm text-stone-100 border border-stone-700">
-          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Yenile
-        </button>
+        <div className="flex gap-2">
+          <button data-testid="ai-robot-bulk-draft-btn" onClick={bulkDraft} disabled={bulkDrafting || !inbox.items.length}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-sm text-white">
+            {bulkDrafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Layers className="w-4 h-4" />}
+            {bulkDrafting ? "Taslaklar hazırlanıyor…" : "Tümüne Taslak Hazırla"}
+          </button>
+          <button data-testid="ai-robot-refresh-btn" onClick={load}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-sm text-stone-100 border border-stone-700">
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Yenile
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -140,6 +175,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
         <button data-testid="ai-robot-tab-lessons" onClick={() => setTab("lessons")}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${tab === "lessons" ? "bg-violet-500/15 text-violet-300" : "text-stone-400 hover:text-stone-200"}`}>
           <GraduationCap className="w-4 h-4" /> Robotun Öğrendikleri ({lessons.length})
+        </button>
+        <button data-testid="ai-robot-tab-report" onClick={() => setTab("report")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${tab === "report" ? "bg-violet-500/15 text-violet-300" : "text-stone-400 hover:text-stone-200"}`}>
+          <TrendingUp className="w-4 h-4" /> Öğrenme Raporu
         </button>
       </div>
 
@@ -218,6 +257,50 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "report" && (
+        <div className="space-y-4 max-w-4xl" data-testid="ai-robot-report">
+          {!report ? (
+            <div className="p-8 text-center text-stone-400 text-sm"><Loader2 className="w-5 h-5 mx-auto animate-spin mb-2" />Rapor yükleniyor…</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <StatBox testId="ai-report-sent" label={`Son ${report.weeks} Hafta Gönderim`} value={report.totals.sent} />
+                <StatBox testId="ai-report-edited" label="Düzenlenen" value={report.totals.edited} />
+                <StatBox testId="ai-report-lessons" label="Öğrenilen Kural" value={report.totals.lessons_learned} />
+                <StatBox testId="ai-report-trend" label="Onay Oranı Trendi"
+                  value={report.totals.trend === null ? "—" : `${report.totals.trend > 0 ? "+" : ""}${report.totals.trend}%`}
+                  sub={report.totals.first_week_approval !== null ? `${report.totals.first_week_approval}% → ${report.totals.last_week_approval}%` : "Yeterli veri yok"} />
+              </div>
+              <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3">
+                <p className="text-sm font-medium text-stone-200 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-violet-400" /> Haftalık Gelişim</p>
+                {report.series.map((w) => (
+                  <div key={w.week_start} data-testid={`ai-report-week-${w.week_start}`} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-stone-400">{w.week_start} haftası</span>
+                      <span className="text-stone-300">
+                        {w.sent} gönderim · {w.edited} düzenleme · {w.lessons_learned} kural
+                        {w.approval_rate !== null && <span className="text-violet-300 ml-2">%{w.approval_rate} onay</span>}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-stone-800 overflow-hidden">
+                      <div className="h-full bg-violet-500 transition-all"
+                        style={{ width: `${w.approval_rate ?? 0}%` }} />
+                    </div>
+                    {w.lesson_rules.length > 0 && (
+                      <ul className="pl-4 pt-1 space-y-0.5">
+                        {w.lesson_rules.map((r, i) => (
+                          <li key={i} className="text-[11px] text-stone-500 list-disc">{r}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 

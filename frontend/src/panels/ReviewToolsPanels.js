@@ -703,6 +703,7 @@ const NotificationSettings = ({ isOpen, onClose }) => {
   });
   const [isSaving, setIsSaving] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [mobilePrefs, setMobilePrefs] = useState({ payment_received: true, pickup_strong: true, channel_drop: true });
 
   useEffect(() => {
     if (isOpen) {
@@ -717,12 +718,19 @@ const NotificationSettings = ({ isOpen, onClose }) => {
     } catch (error) {
       console.error("Error fetching notification settings:", error);
     }
+    try {
+      const { data } = await axios.get(`${API}/mobile/push-prefs`);
+      setMobilePrefs(data);
+    } catch (error) {
+      console.error("Error fetching mobile push prefs:", error);
+    }
   };
 
   const saveSettings = async () => {
     setIsSaving(true);
     try {
       await axios.put(`${API}/notifications/settings`, settings);
+      await axios.post(`${API}/mobile/push-prefs`, mobilePrefs);
       toast.success("Notification settings saved!");
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -803,6 +811,32 @@ const NotificationSettings = ({ isOpen, onClose }) => {
             </SelectContent>
           </Select>
           <p className="text-xs text-[#57534E]">Send alerts when reviews are at or below this rating</p>
+        </div>
+
+        {/* Mobile Push Preferences — synced with mobile app */}
+        <div className="space-y-2" data-testid="mobile-push-prefs-section">
+          <label className="text-sm font-medium text-[#1C1917] flex items-center gap-2">
+            <Bell size={16} className="text-[#57534E]" />
+            Mobil Push Bildirimleri
+          </label>
+          <p className="text-xs text-[#57534E]">Bu ayarlar mobil uygulamadaki push tercihleriyle senkronizedir.</p>
+          {[
+            { key: "payment_received", label: "Ödeme alındı", desc: "Yeni ödeme geldiğinde bildir" },
+            { key: "pickup_strong", label: "Güçlü satış günü", desc: "Son 24 saatte yüksek pickup olduğunda bildir" },
+            { key: "channel_drop", label: "Kanal düşüşü", desc: "Bir OTA kanalında pickup düşünce uyar" },
+          ].map((p) => (
+            <div key={p.key} className="flex items-center justify-between p-3 bg-[#FAF9F6] rounded-md border border-[#E7E5E4]">
+              <div>
+                <p className="text-sm font-medium text-[#1C1917]">{p.label}</p>
+                <p className="text-xs text-[#57534E]">{p.desc}</p>
+              </div>
+              <Switch
+                checked={!!mobilePrefs[p.key]}
+                onCheckedChange={(checked) => setMobilePrefs(prev => ({ ...prev, [p.key]: checked }))}
+                data-testid={`mobile-pref-${p.key}-switch`}
+              />
+            </div>
+          ))}
         </div>
 
         {/* Info Banner */}

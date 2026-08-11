@@ -250,6 +250,53 @@ def create_learning_agent_router(db, require_roles):
         lessons_used = len(await _active_lessons(property_id))
         return {**draft, "lessons_applied": lessons_used}
 
+    @router.get("/ai-agent/draft/latest")
+    async def latest_draft(source_type: str, source_id: str,
+                           _: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        doc = await db.ai_agent_drafts.find_one(
+            {"source_type": source_type, "source_id": source_id, "status": "draft"},
+            {"_id": 0}, sort=[("created_at", -1)])
+        return doc or {}
+
+    # ---------- bulk draft ----------
+    @router.post("/ai-agent/batch-draft/{property_id}")
+    async def batch_draft(property_id: str, body: dict = None,
+                          current_user: dict = Depends(require_roles("admin", "manager"))):
+        import asyncio
+        body = body or {}
+        limit = min(int(body.get("limit", 25)), 50)
+        inbox_data = await inbox(property_id, _={})
+        targets = [i for i in inbox_data["items"] if not i.get("ai_draft")][:limit]
+        sem = asyncio.Semaphore(4)
+        now = _now_iso()
+
+        async def _one(item):
+            async with sem:
+                src = await _get_source(item["source_type"], item["source_id"])
+                if not src:
+                    return None
+                text = await _generate_draft(property_id, item["source_type"], src)
+                draft = {
+                    "id": str(uuid.uuid4()), "property_id": property_id,
+                    "source_type": item["source_type"], "source_id": item["source_id"],
+                    "context": _source_context(item["source_type"], src),
+                    "ai_text": text, "status": "draft",
+                    "created_by": current_user.get("email", ""),
+                    "created_at": now, "batch": True,
+                }
+                await db.ai_agent_drafts.insert_one(dict(draft))
+                coll = db.reviews if item["source_type"] == "review" else db.guest_complaints
+                await coll.update_one({"id": item["source_id"]},
+                                      {"$set": {"ai_draft": text, "ai_draft_at": now,
+                                                "ai_draft_status": "pending_review"}})
+                return {"source_type": item["source_type"],
+                        "source_id": item["source_id"], "draft_id": draft["id"]}
+
+        results = [r for r in await asyncio.gather(*[_one(i) for i in targets]) if r]
+        return {"property_id": property_id, "drafted_count": len(results),
+                "skipped_existing": len(inbox_data["items"]) - len(targets),
+                "items": results}
+
     # ---------- send (approve / edit) ----------
     @router.post("/ai-agent/send/{draft_id}")
     async def send_response(draft_id: str, body: dict,
@@ -355,6 +402,74 @@ def create_learning_agent_router(db, require_roles):
             "edit_rate": round(edited / sent * 100, 1) if sent else 0,
             "approval_rate": round((sent - edited) / sent * 100, 1) if sent else 0,
             "lessons": lessons,
+        }
+
+    @router.get("/ai-agent/report/{property_id}")
+    async def learning_report(property_id: str, weeks: int = 6,
+                              _: dict = Depends(require_roles("admin", "manager"))):
+        from datetime import timedelta
+        weeks = min(max(weeks, 1), 12)
+        now = datetime.now(timezone.utc)
+        start = now - timedelta(weeks=weeks)
+        sent_drafts = await db.ai_agent_drafts.find(
+            {"property_id": property_id, "status": "sent",
+             "sent_at": {"$gte": start.isoformat()}}, {"_id": 0}).to_list(2000)
+        lessons = await db.ai_agent_lessons.find(
+            {"property_id": property_id,
+             "created_at": {"$gte": start.isoformat()}}, {"_id": 0}).to_list(500)
+
+        def week_start(iso: str):
+            try:
+                d = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+            except Exception:
+                return None
+            monday = d - timedelta(days=d.weekday())
+            return monday.strftime("%Y-%m-%d")
+
+        buckets = {}
+        cursor = (now - timedelta(days=now.weekday()))
+        for i in range(weeks):
+            wk = (cursor - timedelta(weeks=i)).strftime("%Y-%m-%d")
+            buckets[wk] = {"week_start": wk, "sent": 0, "edited": 0,
+                           "similarity_sum": 0.0, "lessons_learned": 0,
+                           "lesson_rules": []}
+        for d in sent_drafts:
+            wk = week_start(d.get("sent_at", ""))
+            if wk in buckets:
+                b = buckets[wk]
+                b["sent"] += 1
+                if d.get("was_edited"):
+                    b["edited"] += 1
+                b["similarity_sum"] += float(d.get("similarity") or 1.0)
+        for l in lessons:
+            wk = week_start(l.get("created_at", ""))
+            if wk in buckets:
+                buckets[wk]["lessons_learned"] += 1
+                buckets[wk]["lesson_rules"].append(l["rule"])
+
+        series = []
+        for wk in sorted(buckets):
+            b = buckets[wk]
+            sent = b["sent"]
+            series.append({
+                "week_start": wk, "sent": sent, "edited": b["edited"],
+                "approval_rate": round((sent - b["edited"]) / sent * 100, 1) if sent else None,
+                "avg_similarity": round(b["similarity_sum"] / sent, 3) if sent else None,
+                "lessons_learned": b["lessons_learned"],
+                "lesson_rules": b["lesson_rules"],
+            })
+        rates = [w["approval_rate"] for w in series if w["approval_rate"] is not None]
+        return {
+            "property_id": property_id, "weeks": weeks, "series": series,
+            "totals": {
+                "sent": sum(w["sent"] for w in series),
+                "edited": sum(w["edited"] for w in series),
+                "lessons_learned": sum(w["lessons_learned"] for w in series),
+                "first_week_approval": rates[0] if rates else None,
+                "last_week_approval": rates[-1] if rates else None,
+                "trend": (round(rates[-1] - rates[0], 1)
+                          if len(rates) >= 2 else None),
+            },
         }
 
     @router.get("/ai-agent/history/{property_id}")

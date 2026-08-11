@@ -39,6 +39,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [pasteText, setPasteText] = useState("");
   const [pasteKind, setPasteKind] = useState("review");
   const [pasteGuest, setPasteGuest] = useState("");
+  const [filter, setFilter] = useState("all");
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -199,8 +200,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatBox testId="ai-robot-stat-inbox" label="Bekleyen" value={inbox.count ?? inbox.items.length}
           sub={`${inbox.review_count} yorum · ${inbox.complaint_count} şikayet`} />
-        <StatBox testId="ai-robot-stat-sent" label="Gönderilen" value={stats?.sent ?? 0} />
-        <StatBox testId="ai-robot-stat-approval" label="Onay Oranı" value={`${stats?.approval_rate ?? 0}%`} sub="Düzenlemesiz onay" />
+        <StatBox testId="ai-robot-stat-sent" label="Gönderilen" value={stats?.sent ?? 0}
+          sub={stats?.by_type ? `${stats.by_type.review.sent} yorum · ${stats.by_type.complaint.sent} şikayet` : ""} />
+        <StatBox testId="ai-robot-stat-approval" label="Onay Oranı" value={`${stats?.approval_rate ?? 0}%`}
+          sub={stats?.by_type ? `Yorum %${stats.by_type.review.approval_rate} · Şikayet %${stats.by_type.complaint.approval_rate}` : "Düzenlemesiz onay"} />
         <StatBox testId="ai-robot-stat-edit" label="Düzenleme Oranı" value={`${stats?.edit_rate ?? 0}%`} sub="Öğrenme kaynağı" />
         <StatBox testId="ai-robot-stat-lessons" label="Öğrenilen Kural" value={stats?.lessons ?? 0} />
       </div>
@@ -223,19 +226,35 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
       {tab === "inbox" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1" data-testid="ai-robot-inbox-list">
+            <div className="flex gap-1.5 sticky top-0 bg-stone-950/90 backdrop-blur-sm z-10 pb-1">
+              {[
+                { id: "all", label: `Tümü (${inbox.count ?? inbox.items.length})` },
+                { id: "review", label: `★ Yorumlar (${inbox.review_count ?? 0})` },
+                { id: "complaint", label: `⚠ Şikayetler (${inbox.complaint_count ?? 0})` },
+              ].map((f) => (
+                <button key={f.id} data-testid={`ai-robot-filter-${f.id}`} onClick={() => setFilter(f.id)}
+                  className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${filter === f.id
+                    ? (f.id === "complaint" ? "border-rose-500/60 bg-rose-500/10 text-rose-300"
+                      : f.id === "review" ? "border-amber-500/60 bg-amber-500/10 text-amber-300"
+                      : "border-violet-500/60 bg-violet-500/10 text-violet-300")
+                    : "border-stone-700 text-stone-400 hover:text-stone-200"}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
             <button data-testid="ai-robot-paste-open-btn" onClick={openPasteMode}
               className={`w-full flex items-center gap-2 p-3 rounded-xl border border-dashed transition-colors text-sm ${selected?.manual ? "border-violet-500/60 bg-violet-500/10 text-violet-300" : "border-stone-700 text-stone-400 hover:border-violet-500/50 hover:text-violet-300"}`}>
               <ClipboardPaste className="w-4 h-4" />
               Dışarıdan Metin Yapıştır — Google, Booking, e-posta yorumu/şikayeti
             </button>
             {loading && <div className="p-6 text-center text-stone-400 text-sm"><Loader2 className="w-5 h-5 mx-auto animate-spin mb-2" />Yükleniyor…</div>}
-            {!loading && inbox.items.length === 0 && (
+            {!loading && inbox.items.filter((i) => filter === "all" || i.source_type === filter).length === 0 && (
               <div className="p-8 text-center text-stone-500 text-sm border border-dashed border-stone-800 rounded-xl">
                 <CheckCircle2 className="w-6 h-6 mx-auto mb-2 text-emerald-400" />
-                Tüm yorum ve şikayetler yanıtlandı 🎉
+                {filter === "complaint" ? "Tüm şikayetler yanıtlandı 🎉" : filter === "review" ? "Tüm yorumlar yanıtlandı 🎉" : "Tüm yorum ve şikayetler yanıtlandı 🎉"}
               </div>
             )}
-            {inbox.items.map((it) => (
+            {inbox.items.filter((i) => filter === "all" || i.source_type === filter).map((it) => (
               <button key={`${it.source_type}-${it.source_id}`}
                 data-testid={`ai-robot-inbox-item-${it.source_id}`}
                 onClick={() => openItem(it)}

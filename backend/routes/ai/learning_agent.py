@@ -425,6 +425,14 @@ def create_learning_agent_router(db, require_roles):
         edited = await db.ai_agent_drafts.count_documents(
             {**q, "status": "sent", "was_edited": True})
         lessons = await db.ai_agent_lessons.count_documents({**q, "active": True})
+
+        async def _type_stats(st):
+            qs = {**q, "status": "sent", "source_type": st}
+            s = await db.ai_agent_drafts.count_documents(qs)
+            e = await db.ai_agent_drafts.count_documents({**qs, "was_edited": True})
+            return {"sent": s, "edited": e,
+                    "approval_rate": round((s - e) / s * 100, 1) if s else 0}
+
         return {
             "total_drafts": total_drafts,
             "sent": sent,
@@ -432,6 +440,8 @@ def create_learning_agent_router(db, require_roles):
             "edit_rate": round(edited / sent * 100, 1) if sent else 0,
             "approval_rate": round((sent - edited) / sent * 100, 1) if sent else 0,
             "lessons": lessons,
+            "by_type": {"review": await _type_stats("review"),
+                        "complaint": await _type_stats("complaint")},
         }
 
     @router.get("/ai-agent/report/{property_id}")

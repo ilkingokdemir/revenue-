@@ -3014,3 +3014,11 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - E2E: curl (paste draft 2 kural uygulandı, edited send 2 yeni kural öğrendi) + screenshot
   (İspanyolca şikayet yapıştırıldı → Türkçe profesyonel yanıt, öğrenilen telafi kuralı
   otomatik uygulandı). PASS.
+
+## Iter 506 — Tek robot, filtreli gelen kutusu TAMAMLANDI
+- Kullanıcı kararı: tek robot + tek sayfa (ayrı robot İSTENMEDİ, öğrenme beyni ortak).
+- UI: Gelen kutusu üstüne sticky filtre çipleri "Tümü / ★ Yorumlar / ⚠ Şikayetler" (sayaçlı,
+  data-testid: ai-robot-filter-{all|review|complaint}).
+- Backend stats: by_type {review, complaint} × {sent, edited, approval_rate} eklendi;
+  stat kartlarında tür bazlı alt satırlar.
+- Screenshot testi: complaint=1, review=2, all=3 filtre PASS.

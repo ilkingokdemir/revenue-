@@ -6,6 +6,38 @@ from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger(__name__)
 
+_TASK_DONE = {"done", "completed", "closed", "resolved"}
+
+
+async def complaint_task_sync_loop(db, interval_seconds: int = 300):
+    """Şikayetten oluşan departman görevi kapanınca şikayeti otomatik çözüldü yap."""
+    while True:
+        try:
+            open_complaints = await db.guest_complaints.find(
+                {"routed_task_id": {"$exists": True, "$ne": ""},
+                 "status": {"$nin": ["resolved", "closed"]}},
+                {"_id": 0, "id": 1, "routed_task_id": 1, "routed_collection": 1,
+                 "routed_department": 1}).to_list(300)
+            resolved = 0
+            for c in open_complaints:
+                coll = getattr(db, c.get("routed_collection") or "staff_tasks", None)
+                if coll is None:
+                    continue
+                task = await coll.find_one({"id": c["routed_task_id"]}, {"_id": 0, "status": 1})
+                if task and (task.get("status") or "").lower() in _TASK_DONE:
+                    now = datetime.now(timezone.utc).isoformat()
+                    await db.guest_complaints.update_one(
+                        {"id": c["id"]},
+                        {"$set": {"status": "resolved", "resolved_at": now,
+                                  "resolved_by": f"auto ({c.get('routed_department', 'departman')} görevi tamamlandı)",
+                                  "resolution_notes": "Departman görevi kapatıldığı için otomatik çözüldü."}})
+                    resolved += 1
+            if resolved:
+                logger.info(f"complaint_task_sync: auto-resolved {resolved} complaints")
+        except Exception as e:
+            logger.warning(f"complaint_task_sync error: {e}")
+        await asyncio.sleep(interval_seconds)
+
 
 async def scheduled_checkout_loop(db, interval_seconds: int = 300):
     while True:

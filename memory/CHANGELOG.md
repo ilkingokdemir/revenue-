@@ -3072,3 +3072,20 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - Ayrıca watchfiles reload bazen takılıyor (shutdown sonrası yeni worker başlamıyor) →
   supervisorctl restart backend gerekiyor.
 - EAS BUILD: Expo access token hâlâ kullanıcıdan BEKLENİYOR.
+
+## Iter 510 — Görev Senkron + Robot Ayarları + Haftalık E-posta TAMAMLANDI
+- 1) GÖREV SENKRON: workers.py complaint_task_sync_loop (300s) — routed_task_id'li açık
+  şikayetlerde görev statusu done/completed/closed/resolved ise şikayet otomatik "resolved"
+  (resolved_by: 'auto (dept görevi tamamlandı)'). server.py startup'a eklendi. TEST: housekeeping
+  görevi completed → şikayet resolved PASS.
+- 2) ROBOT AYARLARI: GET/PUT /api/ai-agent/config/{pid} (review_agent_config koleksiyonu):
+  sign_off, tone (professional/warm/friendly/formal → TONE_TEXT prompt'a eklenir),
+  warn_threshold (quality-check artık bu eşiği kullanır), report_email. UI: "Ayarlar" sekmesi
+  (imza input, ton butonları, eşik slider, e-posta) — kaydetme toast'ı doğrulandı.
+- 3) HAFTALIK E-POSTA: run_weekly_summary (_WEEKLY closure) → JOB_HANDLERS["ai_weekly_summary"],
+  scheduler_config seed (all, Pazartesi cron_dow=0, 08:00). Son 7 gün: sent/edited/onay%/Ø kalite/
+  bekleyen + öğrenilen kurallar → outbound_email_queue (MOCKED, delivery_status:
+  mocked_email_queued), alıcı: config.report_email || admin@hotelbox.com.
+  TEST: manuel tetik → 1 email kuyruklandı, içerik doğru.
+- Test değerleri geri alındı (tone=professional, threshold=70, sign_off=Yönetim).
+- EAS BUILD: Expo access token hâlâ kullanıcıdan BEKLENİYOR (4. hatırlatma).

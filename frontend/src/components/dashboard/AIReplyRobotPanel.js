@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
   Bot, RefreshCw, Sparkles, Send, Loader2, Star, ShieldAlert,
   GraduationCap, Trash2, Plus, Inbox, CheckCircle2, Pencil, Layers, TrendingUp,
-  ClipboardPaste, Copy,
+  ClipboardPaste, Copy, Settings2,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -41,6 +41,26 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [pasteGuest, setPasteGuest] = useState("");
   const [filter, setFilter] = useState("all");
   const [qualityWarning, setQualityWarning] = useState(null);
+  const [config, setConfig] = useState(null);
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  const loadConfig = useCallback(async () => {
+    if (!propertyId) return;
+    try {
+      const { data } = await axios.get(`${API}/ai-agent/config/${propertyId}`);
+      setConfig(data);
+    } catch { /* silent */ }
+  }, [propertyId]);
+
+  const saveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      const { data } = await axios.put(`${API}/ai-agent/config/${propertyId}`, config);
+      setConfig(data);
+      toast.success("Robot ayarları kaydedildi");
+    } catch { toast.error("Ayarlar kaydedilemedi"); }
+    setSavingConfig(false);
+  };
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -65,7 +85,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
         .then(({ data }) => setReport(data))
         .catch(() => toast.error("Rapor yüklenemedi"));
     }
-  }, [tab, propertyId]);
+    if (tab === "settings" && propertyId) loadConfig();
+  }, [tab, propertyId, loadConfig]);
 
   const bulkDraft = async () => {
     setBulkDrafting(true);
@@ -252,6 +273,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
         <button data-testid="ai-robot-tab-report" onClick={() => setTab("report")}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${tab === "report" ? "bg-violet-500/15 text-violet-300" : "text-stone-400 hover:text-stone-200"}`}>
           <TrendingUp className="w-4 h-4" /> Öğrenme Raporu
+        </button>
+        <button data-testid="ai-robot-tab-settings" onClick={() => setTab("settings")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm ${tab === "settings" ? "bg-violet-500/15 text-violet-300" : "text-stone-400 hover:text-stone-200"}`}>
+          <Settings2 className="w-4 h-4" /> Ayarlar
         </button>
       </div>
 
@@ -472,6 +497,62 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   </div>
                 ))}
               </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === "settings" && (
+        <div className="max-w-xl space-y-4" data-testid="ai-robot-settings">
+          {!config ? (
+            <div className="p-6 text-center text-stone-400 text-sm"><Loader2 className="w-5 h-5 mx-auto animate-spin mb-2" />Ayarlar yükleniyor…</div>
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-xs text-stone-400">Yanıt imzası</label>
+                <input data-testid="ai-robot-config-signoff" value={config.sign_off}
+                  onChange={(e) => setConfig({ ...config, sign_off: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-stone-900 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
+                <p className="text-[10px] text-stone-500">Her yanıtın sonuna "— {config.sign_off || "Yönetim"}" olarak eklenir</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-stone-400">Yanıt tonu</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "professional", label: "Profesyonel" },
+                    { id: "warm", label: "Sıcak & İçten" },
+                    { id: "friendly", label: "Samimi" },
+                    { id: "formal", label: "Resmi & Kurumsal" },
+                  ].map((t) => (
+                    <button key={t.id} data-testid={`ai-robot-config-tone-${t.id}`}
+                      onClick={() => setConfig({ ...config, tone: t.id })}
+                      className={`px-3 py-2 rounded-lg text-xs border ${config.tone === t.id ? "border-violet-500/60 bg-violet-500/10 text-violet-300" : "border-stone-700 text-stone-400 hover:text-stone-200"}`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-stone-400">Kalite uyarı eşiği: <span className="text-violet-300 font-medium">{config.warn_threshold}</span>/100</label>
+                <input data-testid="ai-robot-config-threshold" type="range" min="0" max="100" step="5"
+                  value={config.warn_threshold}
+                  onChange={(e) => setConfig({ ...config, warn_threshold: parseInt(e.target.value) })}
+                  className="w-full accent-violet-500" />
+                <p className="text-[10px] text-stone-500">Kalite skoru bu değerin altında kalan yanıtlarda göndermeden önce uyarı gösterilir</p>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs text-stone-400">Haftalık rapor e-postası</label>
+                <input data-testid="ai-robot-config-email" type="email" value={config.report_email}
+                  onChange={(e) => setConfig({ ...config, report_email: e.target.value })}
+                  placeholder="yonetici@otel.com"
+                  className="w-full px-3 py-2 rounded-lg bg-stone-900 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
+                <p className="text-[10px] text-stone-500">Robotun haftalık performans özeti her pazartesi 08:00'de bu adrese gönderilir</p>
+              </div>
+              <button data-testid="ai-robot-config-save" onClick={saveConfig} disabled={savingConfig}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-sm font-medium text-white">
+                {savingConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Settings2 className="w-4 h-4" />}
+                Ayarları Kaydet
+              </button>
             </>
           )}
         </div>

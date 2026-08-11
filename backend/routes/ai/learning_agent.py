@@ -32,6 +32,22 @@ from fastapi import APIRouter, Depends, HTTPException
 logger = logging.getLogger(__name__)
 
 _MORNING = {}
+_WEEKLY = {}
+
+TONE_TEXT = {
+    "professional": "Profesyonel ve saygılı bir ton kullan.",
+    "warm": "Sıcak, içten ve kişisel bir ton kullan.",
+    "friendly": "Samimi ve enerjik ama saygılı bir ton kullan.",
+    "formal": "Resmi ve kurumsal bir ton kullan.",
+}
+
+
+async def run_weekly_summary(property_id: str = "all") -> dict:
+    """Scheduler JOB_HANDLERS entry — delegates to the router closure."""
+    fn = _WEEKLY.get("fn")
+    if not fn:
+        return {"error": "learning_agent router not initialized"}
+    return await fn(property_id)
 
 
 async def run_morning_drafts(property_id: str = "all") -> dict:
@@ -96,6 +112,7 @@ def create_learning_agent_router(db, require_roles):
         cfg = await db.review_agent_config.find_one(
             {"property_id": property_id}, {"_id": 0}) or {}
         sign_off = cfg.get("sign_off", "Yönetim")
+        tone_line = TONE_TEXT.get(cfg.get("tone", "professional"), TONE_TEXT["professional"])
         lessons = await _active_lessons(property_id)
         examples = await _few_shot_examples(property_id, source_type)
 
@@ -123,6 +140,7 @@ def create_learning_agent_router(db, require_roles):
 
         system_prompt = (
             f"Sen otel yönetimi adına misafir iletişimi yazan uzman bir asistansın. "
+            f"{tone_line} "
             f"ÖNEMLİ: Misafirin metninin dilini otomatik algıla ve yanıtı MİSAFİRİN DİLİNDE yaz "
             f"(İngilizce yorum → İngilizce yanıt, Almanca → Almanca, Türkçe → Türkçe vb.). "
             f"{task} Yanıt 3-6 cümle olsun, klişelerden kaçın. "
@@ -395,13 +413,16 @@ def create_learning_agent_router(db, require_roles):
             res = None
         if not res:
             return {"score": None, "verdict": "", "warn": False, "scored": False}
+        cfg = await db.review_agent_config.find_one(
+            {"property_id": draft.get("property_id", "")}, {"_id": 0}) or {}
+        threshold = max(0, min(100, int(cfg.get("warn_threshold", 70))))
         await db.ai_agent_drafts.update_one(
             {"id": draft_id},
             {"$set": {"quality_score": res["score"],
                       "quality_verdict": res["verdict"],
                       "quality_text_hash": str(hash(final_text)),
                       "scored_at": _now_iso()}})
-        return {**res, "warn": res["score"] < 70, "scored": True}
+        return {**res, "warn": res["score"] < threshold, "threshold": threshold, "scored": True}
 
     # ---------- send (approve / edit) ----------
     @router.post("/ai-agent/draft/paste")
@@ -660,5 +681,91 @@ def create_learning_agent_router(db, require_roles):
             {"property_id": property_id, "status": "sent"}, {"_id": 0}
         ).sort("sent_at", -1).to_list(min(limit, 200))
         return {"items": items, "count": len(items)}
+
+    # ---------- robot settings ----------
+    @router.get("/ai-agent/config/{property_id}")
+    async def get_agent_config(property_id: str,
+                               _: dict = Depends(require_roles("admin", "manager"))):
+        cfg = await db.review_agent_config.find_one(
+            {"property_id": property_id}, {"_id": 0}) or {}
+        return {"property_id": property_id,
+                "sign_off": cfg.get("sign_off", "Yönetim"),
+                "tone": cfg.get("tone", "professional"),
+                "warn_threshold": int(cfg.get("warn_threshold", 70)),
+                "report_email": cfg.get("report_email", "")}
+
+    @router.put("/ai-agent/config/{property_id}")
+    async def set_agent_config(property_id: str, body: dict,
+                               current_user: dict = Depends(require_roles("admin", "manager"))):
+        upd = {"property_id": property_id, "updated_at": _now_iso(),
+               "updated_by": current_user.get("email", "")}
+        if "sign_off" in body:
+            upd["sign_off"] = str(body["sign_off"]).strip()[:80] or "Yönetim"
+        if body.get("tone") in TONE_TEXT:
+            upd["tone"] = body["tone"]
+        if "warn_threshold" in body:
+            upd["warn_threshold"] = max(0, min(100, int(body["warn_threshold"])))
+        if "report_email" in body:
+            upd["report_email"] = str(body["report_email"]).strip()[:120]
+        await db.review_agent_config.update_one(
+            {"property_id": property_id}, {"$set": upd}, upsert=True)
+        return await get_agent_config(property_id, _={})
+
+    # ---------- weekly email summary ----------
+    async def _run_weekly(property_id: str) -> dict:
+        from datetime import timedelta
+        if property_id and property_id != "all":
+            pids = [property_id]
+        else:
+            pids = [p["id"] async for p in db.properties.find({}, {"_id": 0, "id": 1})]
+        week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        queued = []
+        for pid in pids:
+            try:
+                q = {"property_id": pid, "status": "sent", "sent_at": {"$gte": week_ago}}
+                sent = await db.ai_agent_drafts.count_documents(q)
+                if not sent:
+                    continue
+                edited = await db.ai_agent_drafts.count_documents({**q, "was_edited": True})
+                qagg = await db.ai_agent_drafts.aggregate([
+                    {"$match": {**q, "quality_score": {"$exists": True}}},
+                    {"$group": {"_id": None, "avg": {"$avg": "$quality_score"}}},
+                ]).to_list(1)
+                new_lessons = await db.ai_agent_lessons.find(
+                    {"property_id": pid, "created_at": {"$gte": week_ago}},
+                    {"_id": 0, "rule": 1}).to_list(20)
+                pending = await db.reviews.count_documents(
+                    {"property_id": pid,
+                     "$or": [{"response_text": {"$exists": False}}, {"response_text": ""}]})
+                cfg = await db.review_agent_config.find_one(
+                    {"property_id": pid}, {"_id": 0}) or {}
+                to_email = cfg.get("report_email") or "admin@hotelbox.com"
+                approval = round((sent - edited) / sent * 100, 1) if sent else 0
+                avg_q = round(qagg[0]["avg"], 1) if qagg else None
+                lesson_lines = "\n".join(f"  • {l['rule']}" for l in new_lessons) or "  • Bu hafta yeni kural öğrenilmedi"
+                body = (
+                    f"AI Yanıt Robotu — Haftalık Performans Özeti ({pid})\n\n"
+                    f"Gönderilen yanıt: {sent}\n"
+                    f"Düzenlenen: {edited}\n"
+                    f"Onay oranı: %{approval}\n"
+                    f"Ortalama kalite skoru: {avg_q if avg_q is not None else '—'}/100\n"
+                    f"Yanıt bekleyen yorum: {pending}\n\n"
+                    f"Bu hafta öğrenilen kurallar:\n{lesson_lines}\n"
+                )
+                await db.outbound_email_queue.insert_one({
+                    "id": str(uuid.uuid4()), "property_id": pid,
+                    "to": to_email,
+                    "subject": f"🤖 AI Yanıt Robotu Haftalık Özet — {pid}",
+                    "body": body, "status": "queued",
+                    "type": "ai_weekly_summary",
+                    "delivery_status": "mocked_email_queued",
+                    "created_at": _now_iso(),
+                })
+                queued.append({"property_id": pid, "to": to_email, "sent": sent})
+            except Exception as e:
+                logger.warning(f"weekly summary failed for {pid}: {e}")
+        return {"queued": len(queued), "details": queued}
+
+    _WEEKLY["fn"] = _run_weekly
 
     return router

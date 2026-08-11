@@ -3038,3 +3038,21 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - 4) EAS BUILD: eas-cli 21.8.0 mevcut, eas.json hazır (preview→APK). Gerçek build için
   kullanıcının Expo hesabı token'ı GEREKLİ (EXPO_TOKEN) — kullanıcıdan istendi, BEKLEMEDE.
 - Expo export android bundle yeniden PASS.
+
+## Iter 508 — Kalite Skoru + Şikayet Yönlendirme + GBP Kuyruğu TAMAMLANDI
+- 1) KALİTE SKORU: send sonrası fire-and-forget _score_quality (gpt-5.2, 0-100 + verdict) →
+  ai_agent_drafts.quality_score. stats.avg_quality (aggregate), report haftalık avg_quality +
+  totals. UI: rapor sekmesinde "Ø Kalite Skoru" kartı + haftalık Ø kalite (test: 96/100).
+- 2) ŞİKAYET YÖNLENDİRME: service_recovery DEPT_ROUTING (cleanliness/amenities→housekeeping_tasks,
+  maintenance/wifi/facilities→maintenance_requests, diğerleri→staff_tasks + department alanı).
+  Complaint'e routed_department/routed_task_id yazılır. Test: cleanliness→housekeeping,
+  wifi→maintenance PASS.
+- 3) GBP OTOMATİK YAYIN (MOCK/PENDING_APPROVAL): integration_expert playbook — Google Business
+  Profile API canlı erişim Google onayı gerektirir (60+ gün doğrulanmış profil, quota grant),
+  sandbox YOK → mock mod. Yeni routes/integrations_pkg/gbp_publish.py (/api/gbp/status|queue|
+  publish|delete). Send akışı: Google platformlu review yanıtı otomatik gbp_publish_queue'ya
+  (PENDING_APPROVAL). .env: GBP_LIVE=false. UI: rapor sekmesinde amber kuyruk banner'ı + toast.
+- BUG FIX: rapor quality accumulation edit'i ilk seferde uygulanmamıştı (sessiz kayıp) → yeniden
+  eklendi. Ayrıca dosya sonunda yine junk fragment oluştu (sed ile temizlendi) — learning_agent.py
+  düzenlerken MUTLAKA ast.parse doğrula.
+- EAS BUILD: Kullanıcıdan Expo access token BEKLENİYOR (expo.dev/settings/access-tokens).

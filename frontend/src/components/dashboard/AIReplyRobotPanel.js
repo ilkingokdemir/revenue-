@@ -380,14 +380,23 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             <div className="p-8 text-center text-stone-400 text-sm"><Loader2 className="w-5 h-5 mx-auto animate-spin mb-2" />Rapor yükleniyor…</div>
           ) : (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <StatBox testId="ai-report-sent" label={`Son ${report.weeks} Hafta Gönderim`} value={report.totals.sent} />
                 <StatBox testId="ai-report-edited" label="Düzenlenen" value={report.totals.edited} />
                 <StatBox testId="ai-report-lessons" label="Öğrenilen Kural" value={report.totals.lessons_learned} />
+                <StatBox testId="ai-report-quality" label="Ø Kalite Skoru"
+                  value={report.totals.avg_quality !== null && report.totals.avg_quality !== undefined ? `${report.totals.avg_quality}/100` : "—"}
+                  sub="AI değerlendirmesi" />
                 <StatBox testId="ai-report-trend" label="Onay Oranı Trendi"
                   value={report.totals.trend === null ? "—" : `${report.totals.trend > 0 ? "+" : ""}${report.totals.trend}%`}
                   sub={report.totals.first_week_approval !== null ? `${report.totals.first_week_approval}% → ${report.totals.last_week_approval}%` : "Yeterli veri yok"} />
               </div>
+              {report.gbp_queue_pending > 0 && (
+                <div data-testid="ai-report-gbp-queue" className="flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+                  <Send className="w-4 h-4 shrink-0" />
+                  {report.gbp_queue_pending} yanıt Google yayın kuyruğunda bekliyor (Google Business API onayı sonrası otomatik yayınlanacak)
+                </div>
+              )}
               <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-3">
                 <p className="text-sm font-medium text-stone-200 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-violet-400" /> Haftalık Gelişim</p>
                 {report.series.map((w) => (
@@ -396,6 +405,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                       <span className="text-stone-400">{w.week_start} haftası</span>
                       <span className="text-stone-300">
                         {w.sent} gönderim · {w.edited} düzenleme · {w.lessons_learned} kural
+                        {w.avg_quality !== null && w.avg_quality !== undefined && <span className="text-emerald-300 ml-2">Ø {w.avg_quality} kalite</span>}
                         {w.approval_rate !== null && <span className="text-violet-300 ml-2">%{w.approval_rate} onay</span>}
                       </span>
                     </div>

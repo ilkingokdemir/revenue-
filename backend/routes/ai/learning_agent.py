@@ -21,6 +21,7 @@ Endpoints
 """
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
+import asyncio
 import json
 import logging
 import os
@@ -340,6 +341,34 @@ def create_learning_agent_router(db, require_roles):
 
     _MORNING["fn"] = _run_morning
 
+    async def _score_quality(draft_id: str, context: str, final_text: str):
+        """Fire-and-forget: gönderilen yanıta AI kalite puanı ver."""
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            llm_key = os.environ.get("EMERGENT_LLM_KEY")
+            if not llm_key:
+                return
+            client = LlmChat(
+                api_key=llm_key,
+                session_id=f"ai-agent-score-{uuid.uuid4()}",
+                system_message=(
+                    "Otel misafir yanıtlarını değerlendiren bir kalite uzmanısın. "
+                    "Yanıtı 0-100 arası puanla (empati, profesyonellik, çözüm netliği, "
+                    "dil ve imla kalitesi, misafirin diline uygunluk). "
+                    'SADECE geçerli JSON döndür: {"score": 0-100, "verdict": "tek cümle Türkçe değerlendirme"}'
+                ),
+            ).with_model("openai", "gpt-5.2")
+            resp = await client.send_message(UserMessage(text=(
+                f"BAĞLAM:\n{context[:400]}\n\nGÖNDERİLEN YANIT:\n{final_text}")))
+            obj = json.loads(_strip_json(resp))
+            await db.ai_agent_drafts.update_one(
+                {"id": draft_id},
+                {"$set": {"quality_score": max(0, min(100, int(obj.get("score", 0)))),
+                          "quality_verdict": (obj.get("verdict") or "")[:300],
+                          "scored_at": _now_iso()}})
+        except Exception as e:
+            logger.warning(f"quality scoring failed: {e}")
+
     # ---------- send (approve / edit) ----------
     @router.post("/ai-agent/draft/paste")
     async def paste_draft(body: dict,
@@ -387,6 +416,7 @@ def create_learning_agent_router(db, require_roles):
         # write back to source
         now = _now_iso()
         who = current_user.get("name") or current_user.get("email", "")
+        google_queued = False
         if draft.get("manual"):
             pass  # harici kaynak: yanıt yönetici tarafından kopyalanıp platformda yayınlanır
         elif draft["source_type"] == "review":
@@ -395,6 +425,21 @@ def create_learning_agent_router(db, require_roles):
                 {"$set": {"response_text": final_text, "responded_at": now,
                           "responded_by": who, "ai_assisted": True,
                           "ai_draft_status": "published"}})
+            src_review = await db.reviews.find_one({"id": draft["source_id"]}, {"_id": 0})
+            if src_review and "google" in (src_review.get("platform") or "").lower():
+                await db.gbp_publish_queue.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "property_id": draft["property_id"],
+                    "review_id": draft["source_id"],
+                    "draft_id": draft_id,
+                    "comment": final_text[:4000],
+                    "guest_name": src_review.get("author") or "",
+                    "status": "PENDING_APPROVAL",
+                    "mode": "mock",
+                    "created_by": who,
+                    "created_at": now,
+                })
+                google_queued = True
         else:
             await db.guest_complaints.update_one(
                 {"id": draft["source_id"]},
@@ -424,8 +469,10 @@ def create_learning_agent_router(db, require_roles):
                       "was_edited": was_edited,
                       "similarity": round(similarity, 3),
                       "sent_at": now, "sent_by": who}})
+        asyncio.create_task(_score_quality(draft_id, draft.get("context", ""), final_text))
         return {"ok": True, "draft_id": draft_id, "was_edited": was_edited,
                 "similarity": round(similarity, 3),
+                "google_queued": google_queued,
                 "new_lessons": new_lessons,
                 "learned_count": len(new_lessons)}
 
@@ -468,6 +515,11 @@ def create_learning_agent_router(db, require_roles):
         edited = await db.ai_agent_drafts.count_documents(
             {**q, "status": "sent", "was_edited": True})
         lessons = await db.ai_agent_lessons.count_documents({**q, "active": True})
+        qagg = await db.ai_agent_drafts.aggregate([
+            {"$match": {**q, "quality_score": {"$exists": True}}},
+            {"$group": {"_id": None, "avg": {"$avg": "$quality_score"}, "n": {"$sum": 1}}},
+        ]).to_list(1)
+        avg_quality = round(qagg[0]["avg"], 1) if qagg else None
 
         async def _type_stats(st):
             qs = {**q, "status": "sent", "source_type": st}
@@ -483,6 +535,7 @@ def create_learning_agent_router(db, require_roles):
             "edit_rate": round(edited / sent * 100, 1) if sent else 0,
             "approval_rate": round((sent - edited) / sent * 100, 1) if sent else 0,
             "lessons": lessons,
+            "avg_quality": avg_quality,
             "by_type": {"review": await _type_stats("review"),
                         "complaint": await _type_stats("complaint")},
         }
@@ -515,6 +568,7 @@ def create_learning_agent_router(db, require_roles):
             wk = (cursor - timedelta(weeks=i)).strftime("%Y-%m-%d")
             buckets[wk] = {"week_start": wk, "sent": 0, "edited": 0,
                            "similarity_sum": 0.0, "lessons_learned": 0,
+                           "quality_sum": 0.0, "quality_n": 0,
                            "lesson_rules": []}
         for d in sent_drafts:
             wk = week_start(d.get("sent_at", ""))
@@ -524,6 +578,9 @@ def create_learning_agent_router(db, require_roles):
                 if d.get("was_edited"):
                     b["edited"] += 1
                 b["similarity_sum"] += float(d.get("similarity") or 1.0)
+                if d.get("quality_score") is not None:
+                    b["quality_sum"] += float(d["quality_score"])
+                    b["quality_n"] += 1
         for l in lessons:
             wk = week_start(l.get("created_at", ""))
             if wk in buckets:
@@ -538,16 +595,22 @@ def create_learning_agent_router(db, require_roles):
                 "week_start": wk, "sent": sent, "edited": b["edited"],
                 "approval_rate": round((sent - b["edited"]) / sent * 100, 1) if sent else None,
                 "avg_similarity": round(b["similarity_sum"] / sent, 3) if sent else None,
+                "avg_quality": round(b["quality_sum"] / b["quality_n"], 1) if b["quality_n"] else None,
                 "lessons_learned": b["lessons_learned"],
                 "lesson_rules": b["lesson_rules"],
             })
         rates = [w["approval_rate"] for w in series if w["approval_rate"] is not None]
+        quals = [w["avg_quality"] for w in series if w["avg_quality"] is not None]
+        gbp_pending = await db.gbp_publish_queue.count_documents(
+            {"property_id": property_id, "status": "PENDING_APPROVAL"})
         return {
             "property_id": property_id, "weeks": weeks, "series": series,
+            "gbp_queue_pending": gbp_pending,
             "totals": {
                 "sent": sum(w["sent"] for w in series),
                 "edited": sum(w["edited"] for w in series),
                 "lessons_learned": sum(w["lessons_learned"] for w in series),
+                "avg_quality": round(sum(quals) / len(quals), 1) if quals else None,
                 "first_week_approval": rates[0] if rates else None,
                 "last_week_approval": rates[-1] if rates else None,
                 "trend": (round(rates[-1] - rates[0], 1)

@@ -1603,6 +1603,9 @@ from routes.ai.learning_agent import create_learning_agent_router, run_morning_d
 api_router.include_router(create_learning_agent_router(db, require_roles))
 JOB_HANDLERS["ai_morning_drafts"] = run_morning_drafts
 
+from routes.integrations_pkg.gbp_publish import create_gbp_router
+api_router.include_router(create_gbp_router(db, require_roles))
+
 # ===== Duetto Open Pricing (Iter 285 - segment×channel×room matrix) =====
 from routes.revenue_ext.open_pricing import create_open_pricing_router
 api_router.include_router(create_open_pricing_router(db, require_roles))

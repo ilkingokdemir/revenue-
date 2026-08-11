@@ -44,6 +44,57 @@ SUGGESTED_ACTIONS = {
 def create_service_recovery_router(db, require_roles):
     router = APIRouter()
 
+    DEPT_ROUTING = {
+        "cleanliness":   ("housekeeping", "housekeeping_tasks"),
+        "amenities":     ("housekeeping", "housekeeping_tasks"),
+        "maintenance":   ("maintenance", "maintenance_requests"),
+        "wifi":          ("maintenance", "maintenance_requests"),
+        "facilities":    ("maintenance", "maintenance_requests"),
+        "noise":         ("front_office", "staff_tasks"),
+        "billing":       ("front_office", "staff_tasks"),
+        "check_in_out":  ("front_office", "staff_tasks"),
+        "staff_attitude": ("management", "staff_tasks"),
+        "food_beverage": ("fnb", "staff_tasks"),
+        "other":         ("front_office", "staff_tasks"),
+    }
+
+    async def _route_to_department(record: dict) -> dict:
+        """Şikayeti kategorisine göre ilgili departmana görev olarak ata."""
+        dept, coll_name = DEPT_ROUTING.get(record.get("category", "other"),
+                                           ("front_office", "staff_tasks"))
+        sev = record.get("severity", "medium")
+        priority = "urgent" if sev in ("high", "critical") else "normal"
+        now = datetime.now(timezone.utc)
+        task_id = str(uuid.uuid4())
+        title = f"Şikayet: {record.get('category', '')} — {record.get('guest_name') or 'Misafir'}"
+        desc = (f"[{sev.upper()}] {record.get('text', '')[:400]}\n"
+                f"Önerilen aksiyon: {record.get('ai_action', '-')}")
+        if coll_name == "housekeeping_tasks":
+            await db.housekeeping_tasks.insert_one({
+                "id": task_id, "property_id": record.get("property_id", ""),
+                "room_number": record.get("room_number", ""),
+                "task_type": "complaint", "status": "pending",
+                "priority": "urgent" if priority == "urgent" else "high",
+                "notes": desc, "due_date": now.strftime("%Y-%m-%d"),
+                "source": "service_recovery", "complaint_id": record["id"],
+                "created_at": now.isoformat()})
+        elif coll_name == "maintenance_requests":
+            await db.maintenance_requests.insert_one({
+                "id": task_id, "property_id": record.get("property_id", ""),
+                "room_number": record.get("room_number", ""),
+                "title": title, "description": desc,
+                "status": "open", "priority": priority,
+                "source": "service_recovery", "complaint_id": record["id"],
+                "created_at": now.isoformat()})
+        else:
+            await db.staff_tasks.insert_one({
+                "id": task_id, "property_id": record.get("property_id", ""),
+                "title": title, "description": desc,
+                "status": "open", "priority": priority,
+                "department": dept, "source": "service_recovery",
+                "complaint_id": record["id"], "created_at": now.isoformat()})
+        return {"department": dept, "task_id": task_id, "collection": coll_name}
+
     async def _classify(text: str, category: str) -> dict:
         """Use GPT-5.2 via Emergent LLM key to classify severity."""
         api_key = os.environ.get("EMERGENT_LLM_KEY", "")
@@ -138,6 +189,17 @@ def create_service_recovery_router(db, require_roles):
         }
         await db.guest_complaints.insert_one(dict(record))
         record.pop("_id", None)
+        try:
+            routing = await _route_to_department(record)
+            await db.guest_complaints.update_one(
+                {"id": record["id"]},
+                {"$set": {"routed_department": routing["department"],
+                          "routed_task_id": routing["task_id"],
+                          "routed_collection": routing["collection"]}})
+            record.update({"routed_department": routing["department"],
+                           "routed_task_id": routing["task_id"]})
+        except Exception as e:
+            logger.warning(f"complaint routing failed: {e}")
         try:
             import asyncio
             from routes.platform_ext.mobile_push import send_expo_push

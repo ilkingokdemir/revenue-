@@ -772,6 +772,58 @@ def create_learning_agent_router(db, require_roles):
         rows.sort(key=lambda r: (r["pending_reviews"] + r["open_complaints"]), reverse=True)
         return {"rows": rows, "count": len(rows)}
 
+    WEAK_AREA_ROUTING = {
+        "temizlik": ("housekeeping", "housekeeping_tasks"),
+        "oda_konforu": ("maintenance", "maintenance_requests"),
+        "yemek": ("fnb", "staff_tasks"),
+        "personel": ("management", "staff_tasks"),
+        "konum": ("management", "staff_tasks"),
+        "fiyat_performans": ("management", "staff_tasks"),
+    }
+
+    @router.post("/ai-agent/weak-area-task/{property_id}")
+    async def weak_area_task(property_id: str,
+                             current_user: dict = Depends(require_roles("admin", "manager"))):
+        """En zayıf kategoriye iyileştirme görevi aç (tekrar açılmaz)."""
+        summary = await category_summary(property_id, _={})
+        weakest = summary.get("weakest")
+        if not weakest:
+            raise HTTPException(400, "Önce kategori analizi çalıştırın")
+        cat_row = next((c for c in summary["categories"] if c["category"] == weakest), {})
+        dept, coll_name = WEAK_AREA_ROUTING.get(weakest, ("management", "staff_tasks"))
+        existing = await getattr(db, coll_name).find_one(
+            {"property_id": property_id, "source": "weak_area",
+             "weak_category": weakest,
+             "status": {"$in": ["open", "pending", "in_progress"]}}, {"_id": 0, "id": 1})
+        if existing:
+            return {"created": False, "reason": "already_open",
+                    "task_id": existing["id"], "weakest": weakest}
+        now = datetime.now(timezone.utc)
+        task_id = str(uuid.uuid4())
+        title = f"İyileştirme: {weakest.replace('_', ' ')} (Ø {cat_row.get('avg')}/5)"
+        desc = (f"Yorum analizi en zayıf alanı '{weakest.replace('_', ' ')}' olarak gösterdi "
+                f"(ortalama {cat_row.get('avg')}/5, {cat_row.get('mentions')} yorumda geçti). "
+                f"Kök nedeni araştırıp iyileştirme planı hazırlayın.")
+        base = {"id": task_id, "property_id": property_id,
+                "source": "weak_area", "weak_category": weakest,
+                "created_by": current_user.get("email", ""),
+                "created_at": now.isoformat()}
+        if coll_name == "housekeeping_tasks":
+            await db.housekeeping_tasks.insert_one({
+                **base, "room_number": "", "task_type": "improvement",
+                "status": "pending", "priority": "high", "notes": desc,
+                "due_date": now.strftime("%Y-%m-%d")})
+        elif coll_name == "maintenance_requests":
+            await db.maintenance_requests.insert_one({
+                **base, "room_number": "", "title": title,
+                "description": desc, "status": "open", "priority": "normal"})
+        else:
+            await db.staff_tasks.insert_one({
+                **base, "title": title, "description": desc,
+                "status": "open", "priority": "normal", "department": dept})
+        return {"created": True, "task_id": task_id, "weakest": weakest,
+                "department": dept, "collection": coll_name}
+
     # ---------- robot settings ----------
     @router.get("/ai-agent/config/{property_id}")
     async def get_agent_config(property_id: str,

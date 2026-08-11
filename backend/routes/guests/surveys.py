@@ -314,7 +314,21 @@ def create_surveys_router(db, require_roles, LlmChat, UserMessage, resend):
                 f"Low NPS ({nps_score}) from {invite.get('guest_name', 'Guest')} - {invite.get('booking_ref', '')}",
                 response["id"])
 
-        return {"status": "submitted", "message": "Thank you for your feedback!"}
+        return {"status": "submitted", "message": "Thank you for your feedback!",
+                "review_prompt": await _review_prompt(invite["property_id"], nps_score, avg_category)}
+
+    async def _review_prompt(pid: str, nps: int, avg_cat: float):
+        """Yüksek skorlu misafiri TripAdvisor/Google yorumuna yönlendir (GuestRevu paritesi)."""
+        if not ((nps and nps >= 9) or (avg_cat and avg_cat >= 4.5)):
+            return {"show": False}
+        cfg = await db.review_source_config.find_one({"property_id": pid}, {"_id": 0}) or {}
+        ta = cfg.get("tripadvisor_url", "")
+        gp = cfg.get("google_place_id", "")
+        google_url = f"https://search.google.com/local/writereview?placeid={gp}" if gp else ""
+        if not ta and not google_url:
+            return {"show": False}
+        return {"show": True, "tripadvisor_url": ta, "google_url": google_url,
+                "message": "Deneyiminizi çok beğendiğinize sevindik! Bir dakikanızı ayırıp yorumunuzu paylaşır mısınız?"}
 
     @router.get("/surveys/qr-image/{property_id}")
     async def survey_qr_image(property_id: str,

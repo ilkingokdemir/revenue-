@@ -3110,3 +3110,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   67 mevcut kayıt migre edildi. Regresyon: /api/reviews 200 OK.
 - YİNE dosya edit kaybı: surveys.py POST qr-branch edit'i sessizce uygulanmamıştı → yeniden
   uygulandı. HER EDIT SONRASI grep doğrulaması ŞART.
+
+## Iter 512 — Anketten TripAdvisor + Zayıf Alan Görevleri TAMAMLANDI
+- 1) ANKETTEN TRIPADVISOR: surveys.py _review_prompt — NPS>=9 veya kategori ort>=4.5 ise
+  yanıt review_prompt döner (tripadvisor_url review_source_config'ten, google_url place_id'den
+  writereview linki). GuestSurveyPage teşekkür ekranında TA/Google butonları
+  (survey-review-prompt testid). Ayarlar > Yorum Kaynakları'na TripAdvisor URL alanı eklendi.
+  UI E2E TEST: NPS 10 → iki buton göründü. Düşük skor → prompt yok. Test config temizlendi.
+- 2) ZAYIF ALAN GÖREVLERİ: POST /ai-agent/weak-area-task/{pid} — weakest kategori →
+  WEAK_AREA_ROUTING (temizlik→housekeeping, oda_konforu→maintenance, diğer→staff_tasks).
+  Duplicate engeli (source: weak_area + açık statü). UI: Rapor > Kategori Analizi'nde
+  "Departmana Görev Aç" butonu. TEST: oda_konforu→maintenance görevi açıldı, tekrar=already_open.
+- BEKLEYEN: Google Places API anahtarı + Expo token kullanıcıdan İSTENİYOR.

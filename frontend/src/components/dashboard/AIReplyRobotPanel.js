@@ -569,7 +569,21 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                 {catData?.categories?.some((c) => c.avg !== null) ? (
                   <>
                     {catData.weakest && (
-                      <p className="text-[11px] text-rose-300">⚠ En zayıf alan: <b>{catData.weakest.replace("_", " ")}</b> — operasyon ekibiyle paylaşın</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-rose-300">⚠ En zayıf alan: <b>{catData.weakest.replace("_", " ")}</b></p>
+                        <button data-testid="ai-robot-weak-task-btn"
+                          onClick={async () => {
+                            try {
+                              const { data } = await axios.post(`${API}/ai-agent/weak-area-task/${propertyId}`);
+                              toast.success(data.created
+                                ? `${data.department} departmanına iyileştirme görevi açıldı`
+                                : "Bu alan için zaten açık bir görev var");
+                            } catch { toast.error("Görev açılamadı"); }
+                          }}
+                          className="px-3 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-500 text-[11px] text-white">
+                          Departmana Görev Aç
+                        </button>
+                      </div>
                     )}
                     {catData.categories.map((c) => (
                       <div key={c.category} className="flex items-center gap-3">
@@ -693,6 +707,13 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                     <input data-testid="ai-robot-source-booking" value={sources.booking_url}
                       onChange={(e) => setSources({ ...sources, booking_url: e.target.value })}
                       placeholder="https://www.booking.com/hotel/..."
+                      className="w-full px-3 py-2 rounded-lg bg-stone-900 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-stone-400">TripAdvisor otel sayfası URL <span className="text-stone-600">(yüksek puanlı anket misafiri buraya yönlendirilir)</span></label>
+                    <input data-testid="ai-robot-source-tripadvisor" value={sources.tripadvisor_url || ""}
+                      onChange={(e) => setSources({ ...sources, tripadvisor_url: e.target.value })}
+                      placeholder="https://www.tripadvisor.com/Hotel_Review-..."
                       className="w-full px-3 py-2 rounded-lg bg-stone-900 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
                   </div>
                   <div className="flex gap-2">

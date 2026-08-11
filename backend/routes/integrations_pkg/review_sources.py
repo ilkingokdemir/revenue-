@@ -137,6 +137,7 @@ def create_review_sources_router(db, require_roles):
         return {"property_id": property_id,
                 "google_place_id": cfg.get("google_place_id", ""),
                 "booking_url": cfg.get("booking_url", ""),
+                "tripadvisor_url": cfg.get("tripadvisor_url", ""),
                 "enabled": cfg.get("enabled", True),
                 "last_sync_at": cfg.get("last_sync_at", ""),
                 "last_result": cfg.get("last_result", {}),
@@ -151,6 +152,8 @@ def create_review_sources_router(db, require_roles):
             upd["google_place_id"] = str(body["google_place_id"]).strip()[:120]
         if "booking_url" in body:
             upd["booking_url"] = str(body["booking_url"]).strip()[:300]
+        if "tripadvisor_url" in body:
+            upd["tripadvisor_url"] = str(body["tripadvisor_url"]).strip()[:300]
         if "enabled" in body:
             upd["enabled"] = bool(body["enabled"])
         await db.review_source_config.update_one(

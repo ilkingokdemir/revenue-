@@ -10,6 +10,7 @@ export default function GuestSurveyPage({ token }) {
   const [survey, setSurvey] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitted, setSubmitted] = useState(false);
+  const [reviewPrompt, setReviewPrompt] = useState(null);
   const [nps, setNps] = useState(null);
   const [catRatings, setCatRatings] = useState({});
   const [comment, setComment] = useState("");
@@ -36,11 +37,12 @@ export default function GuestSurveyPage({ token }) {
     if (nps === null) return;
     setSubmitting(true);
     try {
-      await axios.post(`${API}/surveys/public/${token}`, {
+      const { data } = await axios.post(`${API}/surveys/public/${token}`, {
         nps_score: nps,
         category_ratings: catRatings,
         comment,
       });
+      if (data?.review_prompt?.show) setReviewPrompt(data.review_prompt);
       setSubmitted(true);
     } catch (e) {
       setError("Failed to submit. Please try again.");
@@ -70,6 +72,25 @@ export default function GuestSurveyPage({ token }) {
         </div>
         <h1 className="text-2xl font-bold text-stone-900 mb-3">Thank You!</h1>
         <p className="text-stone-600">{survey?.thank_you_message || "Your feedback has been submitted. We truly appreciate you taking the time to share your experience."}</p>
+        {reviewPrompt?.show && (
+          <div className="mt-6 p-4 rounded-xl bg-amber-50 border border-amber-200 space-y-3" data-testid="survey-review-prompt">
+            <p className="text-sm text-stone-700">{reviewPrompt.message}</p>
+            <div className="flex gap-2 justify-center flex-wrap">
+              {reviewPrompt.tripadvisor_url && (
+                <a data-testid="survey-tripadvisor-btn" href={reviewPrompt.tripadvisor_url} target="_blank" rel="noreferrer"
+                  className="px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium">
+                  ⭐ TripAdvisor'da Değerlendir
+                </a>
+              )}
+              {reviewPrompt.google_url && (
+                <a data-testid="survey-google-btn" href={reviewPrompt.google_url} target="_blank" rel="noreferrer"
+                  className="px-4 py-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium">
+                  Google'da Değerlendir
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );

@@ -3000,3 +3000,17 @@ Kullanıcı Mews karşılaştırması istedi; tespit edilen 4 eksik sırayla yap
    avg_similarity/lessons serisi + trend. UI: "Öğrenme Raporu" sekmesi (progress bar + haftalık kurallar).
 E2E: curl (batch 2 taslak, report 6 hafta, prefs POST/GET, checkout) + 3 screenshot (rapor sekmesi,
 bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
+
+## Iter 505 — Yapıştır & Yanıtla (harici metin) TAMAMLANDI
+- POST /api/ai-agent/draft/paste {property_id, kind: review|complaint, text, guest_name?} —
+  harici (Google/Booking/e-posta) metne AI yanıt; manual=True taslak, send akışında kaynak
+  koleksiyon güncellenmez ama öğrenme (example + lesson) aynen çalışır.
+- UI: Gelen kutusu üstünde "Dışarıdan Metin Yapıştır" kartı → sağ panelde tür seçici
+  (Yorum/Şikayet), misafir adı, yapıştırma alanı, AI yanıt + Kopyala + Onayla & Kopyala
+  (onayda pano kopyası otomatik). data-testid: ai-robot-paste-*.
+- NOT/DERS: Paralel search_replace çakışması dosya sonuna junk fragment bıraktı
+  (IndentationError) → sed ile temizlerken paste endpoint de silindi, yeniden eklendi.
+  learning_agent.py düzenlerken anchor'ları dikkatli seç.
+- E2E: curl (paste draft 2 kural uygulandı, edited send 2 yeni kural öğrendi) + screenshot
+  (İspanyolca şikayet yapıştırıldı → Türkçe profesyonel yanıt, öğrenilen telafi kuralı
+  otomatik uygulandı). PASS.

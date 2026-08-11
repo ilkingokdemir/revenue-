@@ -298,6 +298,34 @@ def create_learning_agent_router(db, require_roles):
                 "items": results}
 
     # ---------- send (approve / edit) ----------
+    @router.post("/ai-agent/draft/paste")
+    async def paste_draft(body: dict,
+                          current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
+        property_id = (body.get("property_id") or "").strip()
+        kind = body.get("kind", "review")
+        text = (body.get("text") or "").strip()
+        guest_name = (body.get("guest_name") or "Misafir").strip()
+        if kind not in ("review", "complaint") or not property_id or not text:
+            raise HTTPException(400, "property_id, kind (review|complaint) ve text gerekli")
+        src = ({"author": guest_name, "rating": body.get("rating", "?"),
+                "platform": body.get("platform", "harici"), "comment": text}
+               if kind == "review" else
+               {"guest_name": guest_name, "category": body.get("category", "genel"),
+                "severity": body.get("severity", "-"), "text": text})
+        ai_text = await _generate_draft(property_id, kind, src)
+        draft = {
+            "id": str(uuid.uuid4()), "property_id": property_id,
+            "source_type": kind, "source_id": "manual",
+            "manual": True,
+            "context": _source_context(kind, src),
+            "ai_text": ai_text, "status": "draft",
+            "created_by": current_user.get("email", ""),
+            "created_at": _now_iso(),
+        }
+        await db.ai_agent_drafts.insert_one(dict(draft))
+        lessons_used = len(await _active_lessons(property_id))
+        return {**draft, "lessons_applied": lessons_used}
+
     @router.post("/ai-agent/send/{draft_id}")
     async def send_response(draft_id: str, body: dict,
                             current_user: dict = Depends(require_roles("admin", "manager", "receptionist"))):
@@ -316,7 +344,9 @@ def create_learning_agent_router(db, require_roles):
         # write back to source
         now = _now_iso()
         who = current_user.get("name") or current_user.get("email", "")
-        if draft["source_type"] == "review":
+        if draft.get("manual"):
+            pass  # harici kaynak: yanıt yönetici tarafından kopyalanıp platformda yayınlanır
+        elif draft["source_type"] == "review":
             await db.reviews.update_one(
                 {"id": draft["source_id"]},
                 {"$set": {"response_text": final_text, "responded_at": now,

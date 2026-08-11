@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import {
   Bot, RefreshCw, Sparkles, Send, Loader2, Star, ShieldAlert,
   GraduationCap, Trash2, Plus, Inbox, CheckCircle2, Pencil, Layers, TrendingUp,
+  ClipboardPaste, Copy,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -35,6 +36,9 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [newRule, setNewRule] = useState("");
   const [bulkDrafting, setBulkDrafting] = useState(false);
   const [report, setReport] = useState(null);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteKind, setPasteKind] = useState("review");
+  const [pasteGuest, setPasteGuest] = useState("");
 
   const load = useCallback(async () => {
     if (!propertyId) return;
@@ -85,12 +89,46 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     setDrafting(false);
   };
 
+  const generatePasteDraft = async () => {
+    if (!pasteText.trim()) { toast.error("Önce müşteri metnini yapıştırın"); return; }
+    setDrafting(true);
+    try {
+      const { data } = await axios.post(`${API}/ai-agent/draft/paste`, {
+        property_id: propertyId, kind: pasteKind,
+        text: pasteText.trim(), guest_name: pasteGuest.trim() || undefined,
+      });
+      setDraft(data); setDraftText(data.ai_text);
+      toast.success(data.lessons_applied > 0
+        ? `Yanıt hazır — ${data.lessons_applied} öğrenilmiş kural uygulandı`
+        : "Yanıt hazır");
+    } catch { toast.error("Yanıt oluşturulamadı"); }
+    setDrafting(false);
+  };
+
+  const copyDraft = async () => {
+    try {
+      await navigator.clipboard.writeText(draftText);
+      toast.success("Yanıt panoya kopyalandı");
+    } catch { toast.error("Kopyalanamadı"); }
+  };
+
+  const openPasteMode = () => {
+    setSelected({ manual: true });
+    setDraft(null); setDraftText(""); setPasteText(""); setPasteGuest("");
+    setTab("inbox");
+  };
+
   const sendResponse = async () => {
     if (!draft) return;
     setSending(true);
     try {
       const { data } = await axios.post(`${API}/ai-agent/send/${draft.id}`, { final_text: draftText });
-      if (data.was_edited && data.learned_count > 0) {
+      if (selected?.manual) {
+        try { await navigator.clipboard.writeText(draftText); } catch { /* silent */ }
+        toast.success(data.was_edited && data.learned_count > 0
+          ? `Yanıt panoya kopyalandı — robot ${data.learned_count} yeni kural öğrendi 🎓`
+          : "Yanıt onaylandı ve panoya kopyalandı — platforma yapıştırabilirsiniz");
+      } else if (data.was_edited && data.learned_count > 0) {
         toast.success(`Yanıt gönderildi — robot ${data.learned_count} yeni kural öğrendi 🎓`);
       } else if (data.was_edited) {
         toast.success("Yanıt gönderildi — düzenlemeniz örnek olarak kaydedildi");
@@ -185,6 +223,11 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
       {tab === "inbox" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="space-y-2 max-h-[70vh] overflow-y-auto pr-1" data-testid="ai-robot-inbox-list">
+            <button data-testid="ai-robot-paste-open-btn" onClick={openPasteMode}
+              className={`w-full flex items-center gap-2 p-3 rounded-xl border border-dashed transition-colors text-sm ${selected?.manual ? "border-violet-500/60 bg-violet-500/10 text-violet-300" : "border-stone-700 text-stone-400 hover:border-violet-500/50 hover:text-violet-300"}`}>
+              <ClipboardPaste className="w-4 h-4" />
+              Dışarıdan Metin Yapıştır — Google, Booking, e-posta yorumu/şikayeti
+            </button>
             {loading && <div className="p-6 text-center text-stone-400 text-sm"><Loader2 className="w-5 h-5 mx-auto animate-spin mb-2" />Yükleniyor…</div>}
             {!loading && inbox.items.length === 0 && (
               <div className="p-8 text-center text-stone-500 text-sm border border-dashed border-stone-800 rounded-xl">
@@ -217,7 +260,59 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             {!selected ? (
               <div className="p-8 text-center text-stone-500 text-sm">
                 <Bot className="w-8 h-8 mx-auto mb-2 text-stone-600" />
-                Yanıtlamak için soldan bir yorum veya şikayet seçin
+                Yanıtlamak için soldan bir yorum veya şikayet seçin — ya da harici metin yapıştırın
+              </div>
+            ) : selected.manual ? (
+              <div className="space-y-3" data-testid="ai-robot-paste-form">
+                <p className="text-sm font-medium text-stone-200 flex items-center gap-2">
+                  <ClipboardPaste className="w-4 h-4 text-violet-400" /> Müşteri metnini yapıştırın
+                </p>
+                <div className="flex gap-2">
+                  <button data-testid="ai-robot-paste-kind-review" onClick={() => setPasteKind("review")}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs border ${pasteKind === "review" ? "border-amber-500/60 bg-amber-500/10 text-amber-300" : "border-stone-700 text-stone-400"}`}>
+                    ★ Yorum
+                  </button>
+                  <button data-testid="ai-robot-paste-kind-complaint" onClick={() => setPasteKind("complaint")}
+                    className={`flex-1 px-3 py-1.5 rounded-lg text-xs border ${pasteKind === "complaint" ? "border-rose-500/60 bg-rose-500/10 text-rose-300" : "border-stone-700 text-stone-400"}`}>
+                    ⚠ Şikayet
+                  </button>
+                </div>
+                <input data-testid="ai-robot-paste-guest-input" value={pasteGuest}
+                  onChange={(e) => setPasteGuest(e.target.value)}
+                  placeholder="Misafir adı (opsiyonel)"
+                  className="w-full px-3 py-2 rounded-lg bg-stone-950 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none" />
+                <textarea data-testid="ai-robot-paste-textarea" value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)} rows={5}
+                  placeholder="Müşterinin yorumunu veya şikayet metnini buraya yapıştırın…"
+                  className="w-full p-3 rounded-lg bg-stone-950 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none resize-y" />
+                <button data-testid="ai-robot-paste-generate-btn" onClick={generatePasteDraft}
+                  disabled={drafting || !pasteText.trim()}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-sm font-medium text-white">
+                  {drafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {drafting ? "Robot yazıyor…" : draft ? "Yeniden Oluştur" : "AI Yanıt Oluştur"}
+                </button>
+                {draft && (
+                  <>
+                    <textarea data-testid="ai-robot-draft-textarea" value={draftText}
+                      onChange={(e) => setDraftText(e.target.value)} rows={8}
+                      className="w-full p-3 rounded-lg bg-stone-950 border border-stone-700 text-sm text-stone-100 focus:border-violet-500 outline-none resize-y" />
+                    <div className="flex gap-2">
+                      <button data-testid="ai-robot-copy-btn" onClick={copyDraft}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-sm text-stone-100">
+                        <Copy className="w-4 h-4" /> Kopyala
+                      </button>
+                      <button data-testid="ai-robot-send-btn" onClick={sendResponse}
+                        disabled={sending || !draftText.trim()}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-sm font-medium text-white">
+                        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        {sending ? "Kaydediliyor…" : "Onayla & Kopyala"}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-stone-500 text-center">
+                      Onayladığınızda yanıt panoya kopyalanır — Google/Booking'e yapıştırın. Düzenlemeleriniz robota öğretilir.
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <div className="space-y-3">

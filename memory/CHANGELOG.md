@@ -3266,3 +3266,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   + reminder_sent flag (dedupe). Manuel tetik: POST /ai-agent/winback-reminders/run.
   UI: "🔔 Hatırlatıldı" rozeti. TEST: 3 gün kala teklif → 1 e-posta kuyruğa, 2. çalıştırma 0.
 - BEKLEYEN: Expo token (4. kez metin yapıştırıldı, token yok) + Google Places anahtarı.
+
+## Iter 524 (2026-08-12) — Taslak Görseli (AI) TAMAMLANDI
+- POST /reputation/social-drafts/{id}/image — Gemini Nano Banana (gemini-3.1-flash-image-preview,
+  emergentintegrations + EMERGENT_LLM_KEY) ile fotogerçekçi Instagram görseli; yazısız,
+  konu+otel+taslak bağlamlı. /app/backend/uploads/social_images/{id}.png'e kaydedilir,
+  /api/uploads static mount ile servis edilir; image_url draft dokümanına yazılır.
+- UI: Arşiv öğesinde "Görsel Üret"/"Yeni Görsel" butonu (loading spinner), görsel önizleme
+  (max-h-56, tıklayınca yeni sekmede tam boy).
+- TEST: curl ile üretim 9 sn, 1408px görsel; UI'da buton + görsel render doğrulandı.
+- DERS (tekrar): AYNI dosyaya paralel search_replace batch'i edit kaybetti/duplike blok üretti.
+  AIReplyRobotPanel.js'e edit'ler artık TEK TEK (sıralı) uygulanmalı, her batch sonrası
+  babel syntax + grep doğrulaması yapılmalı.

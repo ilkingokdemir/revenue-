@@ -279,6 +279,43 @@ def create_reputation_router(db, require_roles):
             raise HTTPException(404, "Taslak bulunamadı")
         return {"ok": True}
 
+    @router.post("/reputation/social-drafts/{draft_id}/image")
+    async def social_draft_image(draft_id: str,
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        """Taslak için Gemini Nano Banana ile sosyal medya görseli üret."""
+        doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Taslak bulunamadı")
+        prop = await db.properties.find_one(
+            {"id": doc["property_id"]}, {"_id": 0, "name": 1}) or {}
+        import base64
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        chat = LlmChat(api_key=os.environ.get("EMERGENT_LLM_KEY"),
+                       session_id=f"social-img-{uuid.uuid4()}",
+                       system_message="You are a hotel marketing visual designer.")
+        chat.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(
+            modalities=["image", "text"])
+        prompt = (f"Instagram için fotogerçekçi, sıcak ve davetkar bir otel pazarlama görseli üret. "
+                  f"Konu: {doc.get('topic', '')}. Otel: {prop.get('name', '')}. "
+                  f"Gönderi metni bağlamı: {(doc.get('draft') or '')[:300]}. "
+                  f"Görselde hiçbir yazı/metin/logo OLMASIN; sadece atmosferik, profesyonel fotoğraf.")
+        try:
+            _text, images = await chat.send_message_multimodal_response(UserMessage(text=prompt))
+        except Exception as e:
+            logger.warning(f"social image generation failed: {e}")
+            raise HTTPException(502, "Görsel üretilemedi, tekrar deneyin")
+        if not images:
+            raise HTTPException(502, "Görsel üretilemedi, tekrar deneyin")
+        os.makedirs("/app/backend/uploads/social_images", exist_ok=True)
+        with open(f"/app/backend/uploads/social_images/{draft_id}.png", "wb") as f:
+            f.write(base64.b64decode(images[0]["data"]))
+        image_url = f"/api/uploads/social_images/{draft_id}.png"
+        await db.social_drafts.update_one(
+            {"id": draft_id},
+            {"$set": {"image_url": image_url,
+                      "image_generated_at": datetime.now(timezone.utc).isoformat()}})
+        return {"image_url": image_url}
+
     @router.post("/reputation/trend-alerts/run")
     async def trend_alerts_run(_: dict = Depends(require_roles("admin", "manager"))):
         """Puan düşüş trendi kontrolünü manuel tetikle."""

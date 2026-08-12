@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
   Bot, RefreshCw, Sparkles, Send, Loader2, Star, ShieldAlert,
   GraduationCap, Trash2, Plus, Inbox, CheckCircle2, Pencil, Layers, TrendingUp,
-  ClipboardPaste, Copy, Settings2,
+  ClipboardPaste, Copy, Settings2, ImageIcon,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -63,6 +63,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [socialDrafts, setSocialDrafts] = useState([]);
   const [editingDraft, setEditingDraft] = useState(null);
   const [editDraftText, setEditDraftText] = useState("");
+  const [imagingDraft, setImagingDraft] = useState(null);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -1136,6 +1137,21 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                     <span className="text-[10px] text-violet-300 uppercase tracking-wider">{d.topic}{d.edited ? " · düzenlendi" : ""}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-stone-600">{(d.created_at || "").slice(0, 16).replace("T", " ")}</span>
+                      <button data-testid={`social-draft-image-${d.id}`} disabled={imagingDraft === d.id}
+                        onClick={async () => {
+                          setImagingDraft(d.id);
+                          toast.info("Görsel üretiliyor… (~15 sn)");
+                          try {
+                            const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/image`);
+                            setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, image_url: `${data.image_url}?t=${Date.now()}` } : x));
+                            toast.success("Görsel hazır 🖼️");
+                          } catch (e) { toast.error(e?.response?.data?.detail || "Görsel üretilemedi"); }
+                          setImagingDraft(null);
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-violet-600/80 hover:bg-violet-500 disabled:opacity-50 text-white">
+                        {imagingDraft === d.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImageIcon className="w-3 h-3" />}
+                        {d.image_url ? "Yeni Görsel" : "Görsel Üret"}
+                      </button>
                       <button data-testid={`social-draft-edit-${d.id}`}
                         onClick={() => {
                           if (editingDraft === d.id) { setEditingDraft(null); return; }
@@ -1176,6 +1192,14 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                     </div>
                   ) : (
                     <p className="text-xs text-stone-300 whitespace-pre-wrap">{d.draft}</p>
+                  )}
+                  {d.image_url && (
+                    <a href={`${process.env.REACT_APP_BACKEND_URL}${d.image_url.split("?")[0]}`} target="_blank" rel="noreferrer">
+                      <img data-testid={`social-draft-img-${d.id}`}
+                        src={`${process.env.REACT_APP_BACKEND_URL}${d.image_url}`}
+                        alt={d.topic}
+                        className="mt-2 rounded-lg border border-stone-800 max-h-56 object-cover" />
+                    </a>
                   )}
                 </div>
               ))}

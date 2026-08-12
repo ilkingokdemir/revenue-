@@ -64,6 +64,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [editingDraft, setEditingDraft] = useState(null);
   const [editDraftText, setEditDraftText] = useState("");
   const [imagingDraft, setImagingDraft] = useState(null);
+  const [imageStyle, setImageStyle] = useState("sicak");
+  const [packagingDraft, setPackagingDraft] = useState(null);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -1130,7 +1132,19 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
           </div>
           {socialDrafts.length > 0 && (
             <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-draft-archive">
-              <p className="text-sm font-medium text-stone-200">🗂️ Sosyal Taslak Arşivi ({socialDrafts.length})</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-stone-200">🗂️ Sosyal Taslak Arşivi ({socialDrafts.length})</p>
+                <label className="flex items-center gap-1.5 text-[10px] text-stone-500">
+                  Görsel stili:
+                  <select data-testid="social-image-style-select" value={imageStyle}
+                    onChange={(e) => setImageStyle(e.target.value)}
+                    className="px-2 py-1 rounded bg-stone-950 border border-stone-700 text-[11px] text-stone-200 outline-none">
+                    <option value="sicak">Sıcak</option>
+                    <option value="minimal">Minimal</option>
+                    <option value="luks">Lüks</option>
+                  </select>
+                </label>
+              </div>
               {socialDrafts.map((d) => (
                 <div key={d.id} data-testid={`social-draft-${d.id}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
                   <div className="flex items-center justify-between mb-1">
@@ -1142,7 +1156,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                           setImagingDraft(d.id);
                           toast.info("Görsel üretiliyor… (~15 sn)");
                           try {
-                            const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/image`);
+                            const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/image`, { style: imageStyle });
                             setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, image_url: `${data.image_url}?t=${Date.now()}` } : x));
                             toast.success("Görsel hazır 🖼️");
                           } catch (e) { toast.error(e?.response?.data?.detail || "Görsel üretilemedi"); }
@@ -1194,12 +1208,47 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                     <p className="text-xs text-stone-300 whitespace-pre-wrap">{d.draft}</p>
                   )}
                   {d.image_url && (
-                    <a href={`${process.env.REACT_APP_BACKEND_URL}${d.image_url.split("?")[0]}`} target="_blank" rel="noreferrer">
-                      <img data-testid={`social-draft-img-${d.id}`}
-                        src={`${process.env.REACT_APP_BACKEND_URL}${d.image_url}`}
-                        alt={d.topic}
-                        className="mt-2 rounded-lg border border-stone-800 max-h-56 object-cover" />
-                    </a>
+                    <div className="mt-2">
+                      <a href={`${process.env.REACT_APP_BACKEND_URL}${d.image_url.split("?")[0]}`} target="_blank" rel="noreferrer">
+                        <img data-testid={`social-draft-img-${d.id}`}
+                          src={`${process.env.REACT_APP_BACKEND_URL}${d.image_url}`}
+                          alt={d.topic}
+                          className="rounded-lg border border-stone-800 max-h-56 object-cover" />
+                      </a>
+                      <div className="flex items-center gap-2 mt-2">
+                        <button data-testid={`social-draft-download-${d.id}`}
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}${d.image_url.split("?")[0]}`);
+                              const blob = await res.blob();
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement("a");
+                              a.href = url;
+                              a.download = `sosyal-${(d.topic || "gorsel").replace(/\s+/g, "-")}.png`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                              toast.success("Görsel indirildi — Instagram'a yüklemeye hazır 📲");
+                            } catch { toast.error("İndirilemedi"); }
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
+                          ⬇️ Görseli İndir
+                        </button>
+                        <button data-testid={`social-draft-package-${d.id}`} disabled={packagingDraft === d.id}
+                          onClick={async () => {
+                            setPackagingDraft(d.id);
+                            try {
+                              const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/send-package`);
+                              toast.success(data.task_created
+                                ? "📦 Hazır paket pazarlama görevine iliştirildi"
+                                : "Bu taslak için paket görevi zaten açık");
+                            } catch { toast.error("Paket gönderilemedi"); }
+                            setPackagingDraft(null);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[10px] bg-emerald-600/80 hover:bg-emerald-500 disabled:opacity-50 text-white">
+                          {packagingDraft === d.id ? "Gönderiliyor…" : "📦 Pakete Gönder (metin + görsel)"}
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               ))}

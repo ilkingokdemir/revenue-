@@ -3278,3 +3278,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
 - DERS (tekrar): AYNI dosyaya paralel search_replace batch'i edit kaybetti/duplike blok üretti.
   AIReplyRobotPanel.js'e edit'ler artık TEK TEK (sıralı) uygulanmalı, her batch sonrası
   babel syntax + grep doğrulaması yapılmalı.
+
+## Iter 525 (2026-08-12) — Görsel İndirme + Hazır Paket + Stil Seçimi TAMAMLANDI
+- 1) GÖRSEL İNDİRME: "⬇️ Görseli İndir" — fetch blob → download (sosyal-{konu}.png).
+- 2) HAZIR PAKET: POST /reputation/social-drafts/{id}/send-package — metin + görsel URL +
+  stil bilgisiyle marketing staff_task (source social_package, draft_id dedupe,
+  attachment_url alanı). UI: "📦 Pakete Gönder (metin + görsel)" butonu.
+  TEST: task_created=true, 2. çağrı dedupe, UI toast doğrulandı.
+- 3) STİL SEÇİMİ: image endpoint body {style: sicak|minimal|luks} → IMG_STYLES prompt
+  varyasyonu; image_style draft'a kaydedilir. UI: arşiv başlığında stil select.
+  TEST: luks stiliyle yeniden üretim başarılı (görsel belirgin şekilde farklı).
+- Frontend edit'ler bu kez SIRALI uygulandı — çakışma/kayıp yaşanmadı.
+- BEKLEYEN: Expo token (6. kez buton metni geldi, token değeri yok) + Google Places anahtarı.

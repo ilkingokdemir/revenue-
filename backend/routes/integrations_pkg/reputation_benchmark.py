@@ -279,10 +279,18 @@ def create_reputation_router(db, require_roles):
             raise HTTPException(404, "Taslak bulunamadı")
         return {"ok": True}
 
+    IMG_STYLES = {
+        "sicak": "Sıcak, davetkar, altın saat ışığı, samimi ve içten bir atmosfer.",
+        "minimal": "Minimalist, temiz kompozisyon, bol negatif alan, sade pastel tonlar.",
+        "luks": "Lüks, sofistike, zengin dokular, dramatik ışık, premium beş yıldızlı his.",
+    }
+
     @router.post("/reputation/social-drafts/{draft_id}/image")
-    async def social_draft_image(draft_id: str,
+    async def social_draft_image(draft_id: str, body: dict = None,
                                  _: dict = Depends(require_roles("admin", "manager"))):
         """Taslak için Gemini Nano Banana ile sosyal medya görseli üret."""
+        style = ((body or {}).get("style") or "sicak").lower()
+        style_prompt = IMG_STYLES.get(style, IMG_STYLES["sicak"])
         doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
         if not doc:
             raise HTTPException(404, "Taslak bulunamadı")
@@ -295,7 +303,8 @@ def create_reputation_router(db, require_roles):
                        system_message="You are a hotel marketing visual designer.")
         chat.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(
             modalities=["image", "text"])
-        prompt = (f"Instagram için fotogerçekçi, sıcak ve davetkar bir otel pazarlama görseli üret. "
+        prompt = (f"Instagram için fotogerçekçi bir otel pazarlama görseli üret. "
+                  f"Stil: {style_prompt} "
                   f"Konu: {doc.get('topic', '')}. Otel: {prop.get('name', '')}. "
                   f"Gönderi metni bağlamı: {(doc.get('draft') or '')[:300]}. "
                   f"Görselde hiçbir yazı/metin/logo OLMASIN; sadece atmosferik, profesyonel fotoğraf.")
@@ -312,9 +321,38 @@ def create_reputation_router(db, require_roles):
         image_url = f"/api/uploads/social_images/{draft_id}.png"
         await db.social_drafts.update_one(
             {"id": draft_id},
-            {"$set": {"image_url": image_url,
+            {"$set": {"image_url": image_url, "image_style": style,
                       "image_generated_at": datetime.now(timezone.utc).isoformat()}})
-        return {"image_url": image_url}
+        return {"image_url": image_url, "style": style}
+
+    @router.post("/reputation/social-drafts/{draft_id}/send-package")
+    async def social_draft_send_package(draft_id: str,
+                                        current_user: dict = Depends(require_roles("admin", "manager"))):
+        """Metin + görseli hazır paket olarak pazarlama görevine iliştir."""
+        doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
+        if not doc:
+            raise HTTPException(404, "Taslak bulunamadı")
+        existing = await db.staff_tasks.find_one(
+            {"property_id": doc["property_id"], "source": "social_package",
+             "draft_id": draft_id, "status": {"$in": ["open", "in_progress"]}},
+            {"_id": 0, "id": 1})
+        if existing:
+            return {"task_created": False, "task_id": existing["id"]}
+        desc = f"Yayına hazır sosyal medya paketi.\n\nGönderi metni:\n{doc.get('draft', '')}"
+        if doc.get("image_url"):
+            desc += f"\n\nGörsel: {doc['image_url']} (stil: {doc.get('image_style', 'sicak')})"
+        task_id = str(uuid.uuid4())
+        await db.staff_tasks.insert_one({
+            "id": task_id, "property_id": doc["property_id"],
+            "title": f"📦 Sosyal medya paketi: {doc.get('topic', '')}"[:120],
+            "description": desc, "attachment_url": doc.get("image_url"),
+            "status": "open", "priority": "normal", "department": "marketing",
+            "source": "social_package", "draft_id": draft_id,
+            "created_by": current_user.get("email", ""),
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        await db.social_drafts.update_one(
+            {"id": draft_id}, {"$set": {"packaged_task_id": task_id}})
+        return {"task_created": True, "task_id": task_id}
 
     @router.post("/reputation/trend-alerts/run")
     async def trend_alerts_run(_: dict = Depends(require_roles("admin", "manager"))):

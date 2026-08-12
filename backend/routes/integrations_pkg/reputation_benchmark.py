@@ -264,6 +264,21 @@ def create_reputation_router(db, require_roles):
             {"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
         return {"items": items}
 
+    @router.put("/reputation/social-drafts/{draft_id}")
+    async def social_draft_update(draft_id: str, body: dict,
+                                  current_user: dict = Depends(require_roles("admin", "manager"))):
+        text = (body.get("draft") or "").strip()
+        if not text:
+            raise HTTPException(400, "draft boş olamaz")
+        res = await db.social_drafts.update_one(
+            {"id": draft_id},
+            {"$set": {"draft": text[:2000], "edited": True,
+                      "updated_by": current_user.get("email", ""),
+                      "updated_at": datetime.now(timezone.utc).isoformat()}})
+        if not res.matched_count:
+            raise HTTPException(404, "Taslak bulunamadı")
+        return {"ok": True}
+
     @router.post("/reputation/trend-alerts/run")
     async def trend_alerts_run(_: dict = Depends(require_roles("admin", "manager"))):
         """Puan düşüş trendi kontrolünü manuel tetikle."""

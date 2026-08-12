@@ -1236,6 +1236,12 @@ def create_learning_agent_router(db, require_roles):
                             and bool(o.get("expires_at")) and o["expires_at"] < now)
         return {"items": offers}
 
+    @router.post("/ai-agent/winback-reminders/run")
+    async def winback_reminders_run(_: dict = Depends(require_roles("admin", "manager"))):
+        """Süresi yaklaşan kod hatırlatmalarını manuel tetikle."""
+        from workers import run_winback_reminder_check
+        return await run_winback_reminder_check(db)
+
     @router.post("/ai-agent/winback/{offer_id}/redeem")
     async def winback_redeem(offer_id: str,
                              _: dict = Depends(require_roles("admin", "manager"))):

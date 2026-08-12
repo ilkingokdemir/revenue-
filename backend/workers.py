@@ -61,6 +61,50 @@ async def rating_trend_alert_loop(db, interval_seconds: int = 21600):
         await asyncio.sleep(interval_seconds)
 
 
+async def run_winback_reminder_check(db) -> dict:
+    """Süresi 5 gün içinde dolacak kullanılmamış kodlara hatırlatma e-postası kuyruğa ekle."""
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    d5 = (now_dt + timedelta(days=5)).isoformat()
+    offers = await db.winback_offers.find(
+        {"redeemed": {"$ne": True}, "reminder_sent": {"$ne": True},
+         "guest_email": {"$nin": ["", None]},
+         "expires_at": {"$gte": now, "$lte": d5}}, {"_id": 0}).to_list(100)
+    queued = 0
+    for o in offers:
+        try:
+            prop = await db.properties.find_one({"id": o["property_id"]}, {"_id": 0, "name": 1}) or {}
+            days_left = max(1, (datetime.fromisoformat(o["expires_at"]) - now_dt).days)
+            await db.outbound_email_queue.insert_one({
+                "id": str(uuid.uuid4()), "property_id": o["property_id"],
+                "to": o["guest_email"],
+                "subject": f"⏳ %{o['discount_pct']} indirim kodunuzun süresi dolmak üzere — {prop.get('name', '')}",
+                "body": (f"Merhaba,\n\nSize özel WELCOME{o['discount_pct']} geri kazanım kodunuzun "
+                         f"geçerlilik süresi {days_left} gün içinde doluyor "
+                         f"(son gün: {o['expires_at'][:10]}).\n"
+                         f"Rezervasyonunuzda kodu kullanarak %{o['discount_pct']} indirimden yararlanabilirsiniz.\n\n"
+                         f"Sizi tekrar ağırlamayı çok isteriz.\n— {prop.get('name', 'Otel Yönetimi')}"),
+                "type": "winback_reminder", "status": "queued",
+                "delivery_status": "mocked_email_queued", "created_at": now})
+            await db.winback_offers.update_one(
+                {"id": o["id"]}, {"$set": {"reminder_sent": True, "reminder_sent_at": now}})
+            queued += 1
+        except Exception as e:
+            logger.warning(f"winback reminder failed {o.get('id')}: {e}")
+    return {"reminders_queued": queued}
+
+
+async def winback_reminder_loop(db, interval_seconds: int = 21600):
+    while True:
+        try:
+            res = await run_winback_reminder_check(db)
+            if res["reminders_queued"]:
+                logger.info(f"winback reminders: {res}")
+        except Exception as e:
+            logger.warning(f"winback reminder tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def complaint_sla_loop(db, interval_seconds: int = 300):
     """Yanıt süresi hedefi (SLA) aşılan şikayetlerde yöneticiyi uyar."""
     while True:

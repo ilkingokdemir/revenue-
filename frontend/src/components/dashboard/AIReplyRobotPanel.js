@@ -61,6 +61,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [spy, setSpy] = useState(null);
   const [spying, setSpying] = useState(false);
   const [socialDrafts, setSocialDrafts] = useState([]);
+  const [editingDraft, setEditingDraft] = useState(null);
+  const [editDraftText, setEditDraftText] = useState("");
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -657,6 +659,9 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                           <span className="text-violet-300 shrink-0 font-mono">WELCOME{o.discount_pct}</span>
                           <span className="text-stone-500 flex-1 truncate hidden md:inline">{o.message}</span>
                           <span className="text-stone-600 shrink-0">{(o.created_at || "").slice(0, 10)}</span>
+                          {!o.redeemed && !o.expired && o.reminder_sent && (
+                            <span data-testid={`winback-reminder-${o.id}`} className="shrink-0 px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 text-[10px]">🔔 Hatırlatıldı</span>
+                          )}
                           {o.redeemed ? (
                             <span className="shrink-0 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">
                               {o.redeemed_via === "reservation" ? "✓ Rezervasyonda kullanıldı (otomatik)" : "✓ Kullanıldı"}
@@ -1128,9 +1133,17 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               {socialDrafts.map((d) => (
                 <div key={d.id} data-testid={`social-draft-${d.id}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-violet-300 uppercase tracking-wider">{d.topic}</span>
+                    <span className="text-[10px] text-violet-300 uppercase tracking-wider">{d.topic}{d.edited ? " · düzenlendi" : ""}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] text-stone-600">{(d.created_at || "").slice(0, 16).replace("T", " ")}</span>
+                      <button data-testid={`social-draft-edit-${d.id}`}
+                        onClick={() => {
+                          if (editingDraft === d.id) { setEditingDraft(null); return; }
+                          setEditingDraft(d.id); setEditDraftText(d.draft);
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300">
+                        <Pencil className="w-3 h-3" /> {editingDraft === d.id ? "Vazgeç" : "Düzenle"}
+                      </button>
                       <button data-testid={`social-draft-copy-${d.id}`}
                         onClick={async () => {
                           try {
@@ -1143,7 +1156,27 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                       </button>
                     </div>
                   </div>
-                  <p className="text-xs text-stone-300 whitespace-pre-wrap">{d.draft}</p>
+                  {editingDraft === d.id ? (
+                    <div className="space-y-2">
+                      <textarea data-testid={`social-draft-textarea-${d.id}`} value={editDraftText}
+                        onChange={(e) => setEditDraftText(e.target.value)} rows={4}
+                        className="w-full p-2 rounded-lg bg-stone-900 border border-stone-700 text-xs text-stone-100 focus:border-violet-500 outline-none resize-y" />
+                      <button data-testid={`social-draft-save-${d.id}`}
+                        onClick={async () => {
+                          try {
+                            await axios.put(`${API}/reputation/social-drafts/${d.id}`, { draft: editDraftText });
+                            setSocialDrafts((prev) => prev.map((x) => x.id === d.id ? { ...x, draft: editDraftText, edited: true } : x));
+                            setEditingDraft(null);
+                            toast.success("Taslak güncellendi");
+                          } catch { toast.error("Kaydedilemedi"); }
+                        }}
+                        className="px-3 py-1 rounded-lg text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white">
+                        Kaydet
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-stone-300 whitespace-pre-wrap">{d.draft}</p>
+                  )}
                 </div>
               ))}
             </div>

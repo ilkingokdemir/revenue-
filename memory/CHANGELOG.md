@@ -3255,3 +3255,14 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   TEST: Franziskaner ▼0.23 bildirimi otomatik oluştu, dedupe çalışıyor.
 - E2E DOĞRULANDI: curl (arşiv, stats, expiry reject, trend run, notifications) + screenshot.
 - BEKLEYEN: Expo token (kullanıcı 3. kez metin yapıştırdı, token yok) + Google Places anahtarı.
+
+## Iter 523 (2026-08-12) — Taslak Düzenleme + Kod Hatırlatması TAMAMLANDI
+- 1) TASLAK DÜZENLEME: PUT /reputation/social-drafts/{id} (edited flag + updated_by/at).
+  Arşivde "Düzenle" butonu → inline textarea → "Kaydet"; başlıkta "· düzenlendi" etiketi.
+  TEST: UI'dan düzenlendi, toast + kalıcı kayıt doğrulandı.
+- 2) KOD HATIRLATMASI: workers.py run_winback_reminder_check + winback_reminder_loop
+  (6 saatte bir, server.py kayıtlı). Süresi 5 gün içinde dolacak, kullanılmamış,
+  hatırlatılmamış, guest_email'li kodlara MOCKED e-posta kuyruğu (type winback_reminder)
+  + reminder_sent flag (dedupe). Manuel tetik: POST /ai-agent/winback-reminders/run.
+  UI: "🔔 Hatırlatıldı" rozeti. TEST: 3 gün kala teklif → 1 e-posta kuyruğa, 2. çalıştırma 0.
+- BEKLEYEN: Expo token (4. kez metin yapıştırıldı, token yok) + Google Places anahtarı.

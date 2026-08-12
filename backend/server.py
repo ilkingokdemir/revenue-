@@ -2041,7 +2041,7 @@ async def startup_event():
 
     # tick workers (workers.py — ROADMAP P1 refactor)
     import asyncio
-    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop, complaint_sla_loop
+    from workers import scheduled_checkout_loop, reports_loop, otb_snapshot_loop, str_scan_loop, revenue_brain_loop, complaint_task_sync_loop, complaint_sla_loop, rating_trend_alert_loop
     asyncio.create_task(scheduled_checkout_loop(db))
     asyncio.create_task(reports_loop(db))
     asyncio.create_task(otb_snapshot_loop(db))
@@ -2049,6 +2049,7 @@ async def startup_event():
     asyncio.create_task(revenue_brain_loop(db))
     asyncio.create_task(complaint_task_sync_loop(db))
     asyncio.create_task(complaint_sla_loop(db))
+    asyncio.create_task(rating_trend_alert_loop(db))
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -220,12 +220,14 @@ def create_booking_widget_router(db, require_roles):
         if wb_match:
             pct = int(wb_match.group(1))
             wb_q = {"property_id": data["property_id"], "discount_pct": pct,
-                    "redeemed": {"$ne": True}}
+                    "redeemed": {"$ne": True},
+                    "$or": [{"expires_at": {"$exists": False}},
+                            {"expires_at": {"$gte": now}}]}
             winback_offer = await db.winback_offers.find_one(
                 {**wb_q, "guest_email": data["guest_email"]}, {"_id": 0}) or \
                 await db.winback_offers.find_one(wb_q, {"_id": 0})
             if not winback_offer:
-                raise HTTPException(400, "Bu geri kazanım kodu geçerli değil veya kullanılmış")
+                raise HTTPException(400, "Bu geri kazanım kodu geçersiz, kullanılmış veya süresi dolmuş")
             wb_discount = round(total * pct / 100, 2)
             total = round(total - wb_discount, 2)
         elif coupon_code:

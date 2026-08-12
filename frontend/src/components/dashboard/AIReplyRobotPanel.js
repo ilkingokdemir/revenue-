@@ -60,6 +60,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [insightTasks, setInsightTasks] = useState([]);
   const [spy, setSpy] = useState(null);
   const [spying, setSpying] = useState(false);
+  const [socialDrafts, setSocialDrafts] = useState([]);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -204,6 +205,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     }
     if (tab === "benchmark" && propertyId) {
       axios.get(`${API}/reputation/competitor-spy/${propertyId}/latest`).then(({ data }) => data?.id && setSpy(data)).catch(() => {});
+      axios.get(`${API}/reputation/social-drafts/${propertyId}`).then(({ data }) => setSocialDrafts(data.items || [])).catch(() => {});
     }
   }, [tab, propertyId, loadConfig, loadBench]);
 
@@ -640,10 +642,11 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               {winbackStats && (
                 <div data-testid="ai-robot-winback-stats" className="bg-stone-900 border border-stone-800 rounded-xl p-4">
                   <p className="text-sm font-medium text-stone-200 mb-3">🎁 Geri Kazanım Takibi</p>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <StatBox testId="winback-total" label="Üretilen Teklif" value={winbackStats.total} />
                     <StatBox testId="winback-queued" label="E-posta Kuyruğunda" value={winbackStats.email_queued} />
                     <StatBox testId="winback-redeemed" label="Kullanılan Kod" value={winbackStats.redeemed} />
+                    <StatBox testId="winback-expired" label="Süresi Dolan" value={winbackStats.expired ?? 0} sub="30 gün geçerlilik" />
                     <StatBox testId="winback-rate" label="Dönüşüm Oranı" value={`%${winbackStats.redeem_rate}`} sub="Kod kullanım oranı" />
                   </div>
                   {winbackOffers.length > 0 && (
@@ -658,6 +661,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                             <span className="shrink-0 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">
                               {o.redeemed_via === "reservation" ? "✓ Rezervasyonda kullanıldı (otomatik)" : "✓ Kullanıldı"}
                             </span>
+                          ) : o.expired ? (
+                            <span data-testid={`winback-expired-${o.id}`} className="shrink-0 px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 text-[10px]">⏱ Süresi doldu</span>
                           ) : (
                             <button data-testid={`winback-redeem-${o.id}`}
                               onClick={async () => {
@@ -1117,6 +1122,32 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
               </div>
             )}
           </div>
+          {socialDrafts.length > 0 && (
+            <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-draft-archive">
+              <p className="text-sm font-medium text-stone-200">🗂️ Sosyal Taslak Arşivi ({socialDrafts.length})</p>
+              {socialDrafts.map((d) => (
+                <div key={d.id} data-testid={`social-draft-${d.id}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] text-violet-300 uppercase tracking-wider">{d.topic}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-stone-600">{(d.created_at || "").slice(0, 16).replace("T", " ")}</span>
+                      <button data-testid={`social-draft-copy-${d.id}`}
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(d.draft);
+                            toast.success("Taslak panoya kopyalandı");
+                          } catch { toast.error("Kopyalanamadı"); }
+                        }}
+                        className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300">
+                        <Copy className="w-3 h-3" /> Kopyala
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-stone-300 whitespace-pre-wrap">{d.draft}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

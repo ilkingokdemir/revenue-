@@ -19,7 +19,7 @@ Endpoints
   GET    /api/ai-agent/stats/{property_id}            — KPIs (drafts, sent, edit rate, lessons)
   GET    /api/ai-agent/history/{property_id}          — sent responses log
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 import asyncio
 import json
@@ -1123,6 +1123,7 @@ def create_learning_agent_router(db, require_roles):
                 f"Otel adına kötü deneyim yaşamış misafire kişisel bir 'geri kazanım' mesajı yaz. "
                 f"Misafirin dilinde yaz. Yaşadığı soruna özel atıf yap, içten özür dile, "
                 f"%{discount} indirimli 'tekrar deneyin' teklifi sun (kod: WELCOME{discount}), "
+                f"teklifin 30 gün geçerli olduğunu belirt, "
                 f"3-5 cümle. İmza: — {cfg.get('sign_off', 'Yönetim')}, {prop.get('name', '')}"),
         ).with_model("openai", "gpt-5.2")
         text = await client.send_message(UserMessage(text=_source_context(st, src)))
@@ -1139,6 +1140,7 @@ def create_learning_agent_router(db, require_roles):
             "id": str(uuid.uuid4()), "property_id": pid, "source_type": st,
             "source_id": sid, "discount_pct": discount, "message": text,
             "guest_email": guest_email,
+            "expires_at": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
             "email_queued": queued, "created_by": current_user.get("email", ""),
             "created_at": _now_iso()})
         return {"message": text, "discount_pct": discount,
@@ -1210,10 +1212,14 @@ def create_learning_agent_router(db, require_roles):
     async def winback_stats(property_id: str,
                             _: dict = Depends(require_roles("admin", "manager"))):
         q = {"property_id": property_id}
+        now = _now_iso()
         total = await db.winback_offers.count_documents(q)
         queued = await db.winback_offers.count_documents({**q, "email_queued": True})
         redeemed = await db.winback_offers.count_documents({**q, "redeemed": True})
+        expired = await db.winback_offers.count_documents(
+            {**q, "redeemed": {"$ne": True}, "expires_at": {"$lt": now}})
         return {"total": total, "email_queued": queued, "redeemed": redeemed,
+                "expired": expired,
                 "redeem_rate": round(redeemed / total * 100, 1) if total else 0}
 
     @router.get("/ai-agent/winback-offers/{property_id}")
@@ -1221,10 +1227,13 @@ def create_learning_agent_router(db, require_roles):
                                   _: dict = Depends(require_roles("admin", "manager"))):
         offers = await db.winback_offers.find(
             {"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(20)
+        now = _now_iso()
         for o in offers:
             src = await _get_source(o.get("source_type"), o.get("source_id"))
             o["guest_name"] = (src or {}).get("guest_name") or (src or {}).get("author") or "Misafir"
             o["message"] = (o.get("message") or "")[:160]
+            o["expired"] = (not o.get("redeemed")
+                            and bool(o.get("expires_at")) and o["expires_at"] < now)
         return {"items": offers}
 
     @router.post("/ai-agent/winback/{offer_id}/redeem")

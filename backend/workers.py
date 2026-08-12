@@ -9,6 +9,58 @@ logger = logging.getLogger(__name__)
 _TASK_DONE = {"done", "completed", "closed", "resolved"}
 
 
+async def run_rating_trend_check(db, threshold: float = -0.2) -> dict:
+    """Şube puanı düşüş trendine girince yöneticiye bildirim aç (7 gün dedupe)."""
+    now_dt = datetime.now(timezone.utc)
+    d30 = (now_dt - timedelta(days=30)).isoformat()
+    d60 = (now_dt - timedelta(days=60)).isoformat()
+    d7 = (now_dt - timedelta(days=7)).isoformat()
+    alerts = []
+    async for p in db.properties.find({}, {"_id": 0, "id": 1, "name": 1}):
+        pid = p["id"]
+        cur = await db.reviews.aggregate([
+            {"$match": {"property_id": pid, "rating": {"$type": "number"},
+                        "created_at": {"$gte": d30}}},
+            {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "n": {"$sum": 1}}}]).to_list(1)
+        prev = await db.reviews.aggregate([
+            {"$match": {"property_id": pid, "rating": {"$type": "number"},
+                        "created_at": {"$gte": d60, "$lt": d30}}},
+            {"$group": {"_id": None, "avg": {"$avg": "$rating"}}}]).to_list(1)
+        if not cur or not prev or cur[0]["n"] < 2:
+            continue
+        trend = round(cur[0]["avg"] - prev[0]["avg"], 2)
+        if trend > threshold:
+            continue
+        existing = await db.notifications.find_one(
+            {"category": "rating_trend", "property_id": pid, "created_at": {"$gte": d7}},
+            {"_id": 0, "id": 1})
+        if existing:
+            continue
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()), "type": "warning",
+            "title": f"📉 Puan düşüş uyarısı — {p.get('name', pid)}",
+            "message": (f"{p.get('name', pid)} şubesinin ortalama puanı son 30 günde "
+                        f"{abs(trend)} puan düştü ({round(prev[0]['avg'], 2)} → "
+                        f"{round(cur[0]['avg'], 2)}). İçgörü raporunu inceleyin."),
+            "category": "rating_trend", "property_id": pid,
+            "target_user": "", "target_role": "", "link_to": "ai-reply-robot",
+            "priority": "high", "read": False,
+            "created_by": "System", "created_at": now_dt.isoformat()})
+        alerts.append({"property_id": pid, "trend": trend})
+    return {"alerts_created": len(alerts), "details": alerts}
+
+
+async def rating_trend_alert_loop(db, interval_seconds: int = 21600):
+    while True:
+        try:
+            res = await run_rating_trend_check(db)
+            if res["alerts_created"]:
+                logger.info(f"rating trend alerts: {res}")
+        except Exception as e:
+            logger.warning(f"rating trend alert tick error: {e}")
+        await asyncio.sleep(interval_seconds)
+
+
 async def complaint_sla_loop(db, interval_seconds: int = 300):
     """Yanıt süresi hedefi (SLA) aşılan şikayetlerde yöneticiyi uyar."""
     while True:

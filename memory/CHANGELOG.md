@@ -3240,3 +3240,18 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   "✓ Rezervasyonda kullanıldı (otomatik)". TEST: 200→170 (%15), stats 2/2 redeemed,
   tekrar kullanım engellendi.
 - E2E DOĞRULANDI: curl (3 akış) + screenshot (trend kolonu, 📣 buton, otomatik rozet).
+
+## Iter 522 (2026-08-12) — Taslak Arşivi + Kod Geçerlilik + Lig Bildirimi TAMAMLANDI
+- 1) SOSYAL TASLAK ARŞİVİ: GET /reputation/social-drafts/{pid}. Benchmark sekmesinde
+  "🗂️ Sosyal Taslak Arşivi" bölümü — konu etiketi + tarih + "Kopyala" butonu; Pazarlamaya
+  Gönder sonrası arşiv otomatik yenilenir.
+- 2) KOD SON KULLANMA (30 gün): winback insert'e expires_at (+30g), LLM mesajı geçerlilik
+  süresini belirtir. Stats'a "expired" sayacı + UI'da "Süresi Dolan" kutusu (5 kolon) ve
+  "⏱ Süresi doldu" rozeti. booking-widget süresi dolmuş kodu 400 ile reddeder.
+  TEST: backdated WELCOME20 → expired:1, rezervasyonda reddedildi.
+- 3) LİG BİLDİRİMİ: workers.py run_rating_trend_check + rating_trend_alert_loop (6 saatte bir,
+  server.py'de kayıtlı). Trend <= -0.2 & >=2 yorum → db.notifications'a high-priority uyarı
+  (kategori rating_trend, 7 gün dedupe). Manuel tetik: POST /reputation/trend-alerts/run.
+  TEST: Franziskaner ▼0.23 bildirimi otomatik oluştu, dedupe çalışıyor.
+- E2E DOĞRULANDI: curl (arşiv, stats, expiry reject, trend run, notifications) + screenshot.
+- BEKLEYEN: Expo token (kullanıcı 3. kez metin yapıştırdı, token yok) + Google Places anahtarı.

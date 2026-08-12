@@ -257,4 +257,17 @@ def create_reputation_router(db, require_roles):
         return {"task_created": task_id is not None,
                 "task_id": task_id or existing["id"], "social_draft": draft}
 
+    @router.get("/reputation/social-drafts/{property_id}")
+    async def social_drafts_list(property_id: str,
+                                 _: dict = Depends(require_roles("admin", "manager"))):
+        items = await db.social_drafts.find(
+            {"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+        return {"items": items}
+
+    @router.post("/reputation/trend-alerts/run")
+    async def trend_alerts_run(_: dict = Depends(require_roles("admin", "manager"))):
+        """Puan düşüş trendi kontrolünü manuel tetikle."""
+        from workers import run_rating_trend_check
+        return await run_rating_trend_check(db)
+
     return router

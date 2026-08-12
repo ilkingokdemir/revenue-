@@ -3290,3 +3290,17 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   TEST: luks stiliyle yeniden üretim başarılı (görsel belirgin şekilde farklı).
 - Frontend edit'ler bu kez SIRALI uygulandı — çakışma/kayıp yaşanmadı.
 - BEKLEYEN: Expo token (6. kez buton metni geldi, token değeri yok) + Google Places anahtarı.
+
+## Iter 526 (2026-08-12) — Yayın Takvimi + Anket Görseli + Paket Önizleme TAMAMLANDI
+- 1) YAYIN TAKVİMİ: send-package body {publish_date}; mevcut görevde tarih güncelleme
+  (date_updated). GET /reputation/social-calendar/{pid} — paketlenmiş taslaklar tarihe göre
+  sıralı (tarihli önce), task_status ile. UI: taslakta tarih input + "📅 Yayın Planı" bölümü
+  (thumb + konu + ⏳ Bekliyor / ✓ Yayınlandı rozeti).
+- 2) ANKET GÖRSELİ: POST /reputation/survey-to-draft/{pid} — nps>=9 + yorumlu + daha önce
+  çevrilmemiş survey_responses'tan LLM ile övgü alıntılı taslak (sadece ilk ad); response'a
+  social_draft_created flag (dedupe). UI: arşiv başlığında "🎉 Anket Övgüsünden Taslak".
+  TEST: Ayşe'nin 10/10 yorumu taslağa çevrildi.
+- 3) PAKET ÖNİZLEME: "📱 Önizleme" → Instagram tarzı telefon çerçevesi modalı (avatar +
+  kullanıcı adı + kare görsel + ikon satırı + caption). data-testid=instagram-preview-modal.
+- E2E DOĞRULANDI: curl (3 akış + tarih güncelleme + takvim sıralaması) + 2 screenshot.
+- BEKLEYEN: Expo token (7. kez buton metni, token yok) + Google Places anahtarı.

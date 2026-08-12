@@ -66,6 +66,10 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [imagingDraft, setImagingDraft] = useState(null);
   const [imageStyle, setImageStyle] = useState("sicak");
   const [packagingDraft, setPackagingDraft] = useState(null);
+  const [publishDates, setPublishDates] = useState({});
+  const [socialCalendar, setSocialCalendar] = useState([]);
+  const [previewDraft, setPreviewDraft] = useState(null);
+  const [surveyDrafting, setSurveyDrafting] = useState(false);
 
   const runInsight = async () => {
     setInsightLoading(true);
@@ -211,6 +215,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
     if (tab === "benchmark" && propertyId) {
       axios.get(`${API}/reputation/competitor-spy/${propertyId}/latest`).then(({ data }) => data?.id && setSpy(data)).catch(() => {});
       axios.get(`${API}/reputation/social-drafts/${propertyId}`).then(({ data }) => setSocialDrafts(data.items || [])).catch(() => {});
+      axios.get(`${API}/reputation/social-calendar/${propertyId}`).then(({ data }) => setSocialCalendar(data.items || [])).catch(() => {});
     }
   }, [tab, propertyId, loadConfig, loadBench]);
 
@@ -1134,16 +1139,32 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-draft-archive">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-stone-200">🗂️ Sosyal Taslak Arşivi ({socialDrafts.length})</p>
-                <label className="flex items-center gap-1.5 text-[10px] text-stone-500">
-                  Görsel stili:
-                  <select data-testid="social-image-style-select" value={imageStyle}
-                    onChange={(e) => setImageStyle(e.target.value)}
-                    className="px-2 py-1 rounded bg-stone-950 border border-stone-700 text-[11px] text-stone-200 outline-none">
-                    <option value="sicak">Sıcak</option>
-                    <option value="minimal">Minimal</option>
-                    <option value="luks">Lüks</option>
-                  </select>
-                </label>
+                <div className="flex items-center gap-3">
+                  <button data-testid="survey-to-draft-btn" disabled={surveyDrafting}
+                    onClick={async () => {
+                      setSurveyDrafting(true);
+                      try {
+                        const { data } = await axios.post(`${API}/reputation/survey-to-draft/${propertyId}`);
+                        toast.success(`${data.guest} adlı misafirin övgüsü taslağa çevrildi 🎉`);
+                        const { data: d } = await axios.get(`${API}/reputation/social-drafts/${propertyId}`);
+                        setSocialDrafts(d.items || []);
+                      } catch (e) { toast.error(e?.response?.data?.detail || "Taslak üretilemedi"); }
+                      setSurveyDrafting(false);
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[10px] bg-amber-600/80 hover:bg-amber-500 disabled:opacity-50 text-white">
+                    {surveyDrafting ? "Üretiliyor…" : "🎉 Anket Övgüsünden Taslak"}
+                  </button>
+                  <label className="flex items-center gap-1.5 text-[10px] text-stone-500">
+                    Görsel stili:
+                    <select data-testid="social-image-style-select" value={imageStyle}
+                      onChange={(e) => setImageStyle(e.target.value)}
+                      className="px-2 py-1 rounded bg-stone-950 border border-stone-700 text-[11px] text-stone-200 outline-none">
+                      <option value="sicak">Sıcak</option>
+                      <option value="minimal">Minimal</option>
+                      <option value="luks">Lüks</option>
+                    </select>
+                  </label>
+                </div>
               </div>
               {socialDrafts.map((d) => (
                 <div key={d.id} data-testid={`social-draft-${d.id}`} className="p-3 rounded-lg bg-stone-950 border border-stone-800">
@@ -1215,7 +1236,12 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                           alt={d.topic}
                           className="rounded-lg border border-stone-800 max-h-56 object-cover" />
                       </a>
-                      <div className="flex items-center gap-2 mt-2">
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <button data-testid={`social-draft-preview-${d.id}`}
+                          onClick={() => setPreviewDraft(d)}
+                          className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
+                          📱 Önizleme
+                        </button>
                         <button data-testid={`social-draft-download-${d.id}`}
                           onClick={async () => {
                             try {
@@ -1233,14 +1259,20 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                           className="px-2.5 py-1 rounded-lg text-[10px] bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200">
                           ⬇️ Görseli İndir
                         </button>
+                        <input data-testid={`social-publish-date-${d.id}`} type="date"
+                          value={publishDates[d.id] || d.publish_date || ""}
+                          onChange={(e) => setPublishDates((p) => ({ ...p, [d.id]: e.target.value }))}
+                          className="px-2 py-1 rounded-lg text-[10px] bg-stone-950 border border-stone-700 text-stone-300 outline-none" />
                         <button data-testid={`social-draft-package-${d.id}`} disabled={packagingDraft === d.id}
                           onClick={async () => {
                             setPackagingDraft(d.id);
                             try {
-                              const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/send-package`);
+                              const pd = publishDates[d.id] || d.publish_date || "";
+                              const { data } = await axios.post(`${API}/reputation/social-drafts/${d.id}/send-package`, { publish_date: pd });
                               toast.success(data.task_created
                                 ? "📦 Hazır paket pazarlama görevine iliştirildi"
-                                : "Bu taslak için paket görevi zaten açık");
+                                : data.date_updated ? "Yayın tarihi güncellendi 📅" : "Bu taslak için paket görevi zaten açık");
+                              axios.get(`${API}/reputation/social-calendar/${propertyId}`).then(({ data: c }) => setSocialCalendar(c.items || [])).catch(() => {});
                             } catch { toast.error("Paket gönderilemedi"); }
                             setPackagingDraft(null);
                           }}
@@ -1252,6 +1284,57 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+          {socialCalendar.length > 0 && (
+            <div className="bg-stone-900 border border-stone-800 rounded-xl p-4 space-y-2" data-testid="social-calendar">
+              <p className="text-sm font-medium text-stone-200">📅 Yayın Planı ({socialCalendar.length})</p>
+              {socialCalendar.map((c) => (
+                <div key={c.draft_id} data-testid={`calendar-item-${c.draft_id}`} className="flex items-center gap-3 p-2 rounded-lg bg-stone-950 border border-stone-800 text-xs">
+                  <span className={`shrink-0 w-24 font-mono ${c.publish_date ? "text-amber-300" : "text-stone-600"}`}>
+                    {c.publish_date || "tarihsiz"}
+                  </span>
+                  {c.image_url && (
+                    <img src={`${process.env.REACT_APP_BACKEND_URL}${c.image_url.split("?")[0]}`} alt=""
+                      className="w-8 h-8 rounded object-cover border border-stone-800 shrink-0" />
+                  )}
+                  <span className="text-violet-300 uppercase text-[10px] shrink-0">{c.topic}</span>
+                  <span className="text-stone-500 flex-1 truncate">{c.draft}</span>
+                  <span className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] ${["done", "completed", "closed"].includes(c.task_status) ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                    {["done", "completed", "closed"].includes(c.task_status) ? "✓ Yayınlandı" : "⏳ Bekliyor"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {previewDraft && (
+            <div data-testid="instagram-preview-modal" onClick={() => setPreviewDraft(null)}
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+              <div onClick={(e) => e.stopPropagation()}
+                className="w-[340px] bg-stone-950 border border-stone-700 rounded-3xl overflow-hidden shadow-2xl">
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-stone-800">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-[11px] font-bold text-white">
+                      {(hotelName || "O").slice(0, 1).toUpperCase()}
+                    </div>
+                    <span className="text-xs font-semibold text-stone-100">{(hotelName || "otelimiz").toLowerCase().replace(/\s+/g, "")}</span>
+                  </div>
+                  <button data-testid="preview-close-btn" onClick={() => setPreviewDraft(null)} className="text-stone-500 hover:text-stone-200 text-lg leading-none">×</button>
+                </div>
+                {previewDraft.image_url ? (
+                  <img src={`${process.env.REACT_APP_BACKEND_URL}${previewDraft.image_url.split("?")[0]}`} alt=""
+                    className="w-full aspect-square object-cover" />
+                ) : (
+                  <div className="w-full aspect-square bg-stone-900 flex items-center justify-center text-stone-600 text-xs">Görsel yok — "Görsel Üret" ile ekleyin</div>
+                )}
+                <div className="px-3 py-2 flex items-center gap-3 text-stone-300">
+                  <Star className="w-4 h-4" /><Send className="w-4 h-4" /><Copy className="w-4 h-4" />
+                </div>
+                <p className="px-3 pb-3 text-xs text-stone-200 leading-relaxed">
+                  <span className="font-semibold">{(hotelName || "otelimiz").toLowerCase().replace(/\s+/g, "")}</span>{" "}
+                  {previewDraft.draft}
+                </p>
+              </div>
             </div>
           )}
         </div>

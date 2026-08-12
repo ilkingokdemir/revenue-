@@ -326,9 +326,10 @@ def create_reputation_router(db, require_roles):
         return {"image_url": image_url, "style": style}
 
     @router.post("/reputation/social-drafts/{draft_id}/send-package")
-    async def social_draft_send_package(draft_id: str,
+    async def social_draft_send_package(draft_id: str, body: dict = None,
                                         current_user: dict = Depends(require_roles("admin", "manager"))):
         """Metin + görseli hazır paket olarak pazarlama görevine iliştir."""
+        publish_date = ((body or {}).get("publish_date") or "").strip()
         doc = await db.social_drafts.find_one({"id": draft_id}, {"_id": 0})
         if not doc:
             raise HTTPException(404, "Taslak bulunamadı")
@@ -337,22 +338,93 @@ def create_reputation_router(db, require_roles):
              "draft_id": draft_id, "status": {"$in": ["open", "in_progress"]}},
             {"_id": 0, "id": 1})
         if existing:
-            return {"task_created": False, "task_id": existing["id"]}
+            if publish_date:
+                await db.staff_tasks.update_one(
+                    {"id": existing["id"]}, {"$set": {"publish_date": publish_date}})
+                await db.social_drafts.update_one(
+                    {"id": draft_id}, {"$set": {"publish_date": publish_date}})
+            return {"task_created": False, "task_id": existing["id"],
+                    "date_updated": bool(publish_date)}
         desc = f"Yayına hazır sosyal medya paketi.\n\nGönderi metni:\n{doc.get('draft', '')}"
         if doc.get("image_url"):
             desc += f"\n\nGörsel: {doc['image_url']} (stil: {doc.get('image_style', 'sicak')})"
+        if publish_date:
+            desc += f"\n\nPlanlanan yayın tarihi: {publish_date}"
         task_id = str(uuid.uuid4())
         await db.staff_tasks.insert_one({
             "id": task_id, "property_id": doc["property_id"],
             "title": f"📦 Sosyal medya paketi: {doc.get('topic', '')}"[:120],
             "description": desc, "attachment_url": doc.get("image_url"),
+            "publish_date": publish_date or None,
             "status": "open", "priority": "normal", "department": "marketing",
             "source": "social_package", "draft_id": draft_id,
             "created_by": current_user.get("email", ""),
             "created_at": datetime.now(timezone.utc).isoformat()})
         await db.social_drafts.update_one(
-            {"id": draft_id}, {"$set": {"packaged_task_id": task_id}})
+            {"id": draft_id},
+            {"$set": {"packaged_task_id": task_id,
+                      **({"publish_date": publish_date} if publish_date else {})}})
         return {"task_created": True, "task_id": task_id}
+
+    @router.get("/reputation/social-calendar/{property_id}")
+    async def social_calendar(property_id: str,
+                              _: dict = Depends(require_roles("admin", "manager"))):
+        """Paketlenmiş gönderilerin yayın planı — tarihe göre sıralı."""
+        drafts = await db.social_drafts.find(
+            {"property_id": property_id, "packaged_task_id": {"$exists": True}},
+            {"_id": 0}).to_list(100)
+        items = []
+        for d in drafts:
+            task = await db.staff_tasks.find_one(
+                {"id": d.get("packaged_task_id")}, {"_id": 0, "status": 1})
+            items.append({"draft_id": d["id"], "topic": d.get("topic"),
+                          "draft": (d.get("draft") or "")[:120],
+                          "image_url": d.get("image_url"),
+                          "publish_date": d.get("publish_date"),
+                          "task_status": (task or {}).get("status", "open")})
+        items.sort(key=lambda x: (x["publish_date"] is None, x["publish_date"] or "", ))
+        return {"items": items}
+
+    @router.post("/reputation/survey-to-draft/{property_id}")
+    async def survey_to_draft(property_id: str,
+                              _: dict = Depends(require_roles("admin", "manager"))):
+        """Övgü dolu QR anket yorumunu sosyal medya taslağına çevir."""
+        resp = await db.survey_responses.find_one(
+            {"property_id": property_id, "nps_score": {"$gte": 9},
+             "comment": {"$nin": ["", None]},
+             "social_draft_created": {"$ne": True}},
+            {"_id": 0}, sort=[("submitted_at", -1)])
+        if not resp:
+            raise HTTPException(404, "Sosyal medyaya çevrilecek yeni övgü dolu anket yorumu yok")
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {}
+        first_name = (resp.get("guest_name") or "Misafirimiz").split()[0]
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            chat = LlmChat(api_key=os.environ.get("EMERGENT_LLM_KEY"),
+                           session_id=f"survey-social-{uuid.uuid4()}",
+                           system_message=("Otel pazarlama uzmanısın. Misafir övgüsünü alıntılayan, "
+                                           "Türkçe, 2-3 cümlelik Instagram gönderi taslağı yaz. "
+                                           "Misafirin sadece adını kullan (soyadı YOK). "
+                                           "1-2 emoji + 3 hashtag ekle. Sadece gönderi metnini döndür."))
+            chat.with_model("openai", "gpt-5.2")
+            draft = await chat.send_message(UserMessage(text=(
+                f"Otel: {prop.get('name', '')}. Misafir adı: {first_name}. "
+                f"NPS puanı: {resp.get('nps_score')}/10. "
+                f"Misafir yorumu: \"{resp.get('comment', '')[:400]}\"")))
+        except Exception as e:
+            logger.warning(f"survey social draft failed: {e}")
+            draft = (f"💬 {first_name} adlı misafirimiz deneyimini şöyle anlattı: "
+                     f"\"{resp.get('comment', '')[:180]}\" Teşekkürler! "
+                     f"#misafirmemnuniyeti #otel #tesekkurler")
+        draft_id = str(uuid.uuid4())
+        await db.social_drafts.insert_one({
+            "id": draft_id, "property_id": property_id,
+            "topic": "anket övgüsü", "draft": draft, "source": "survey_praise",
+            "survey_response_id": resp.get("id"),
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        await db.survey_responses.update_one(
+            {"id": resp.get("id")}, {"$set": {"social_draft_created": True}})
+        return {"draft_id": draft_id, "draft": draft, "guest": first_name}
 
     @router.post("/reputation/trend-alerts/run")
     async def trend_alerts_run(_: dict = Depends(require_roles("admin", "manager"))):

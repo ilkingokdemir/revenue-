@@ -214,7 +214,21 @@ def create_booking_widget_router(db, require_roles):
         # Direct conversion kuponu (iter 376) — total üzerinden indirim
         coupon_code = (data.get("coupon_code") or "").strip().upper()
         coupon_info = None
-        if coupon_code:
+        winback_offer = None
+        import re as _re
+        wb_match = _re.match(r"^WELCOME(\d{1,2})$", coupon_code)
+        if wb_match:
+            pct = int(wb_match.group(1))
+            wb_q = {"property_id": data["property_id"], "discount_pct": pct,
+                    "redeemed": {"$ne": True}}
+            winback_offer = await db.winback_offers.find_one(
+                {**wb_q, "guest_email": data["guest_email"]}, {"_id": 0}) or \
+                await db.winback_offers.find_one(wb_q, {"_id": 0})
+            if not winback_offer:
+                raise HTTPException(400, "Bu geri kazanım kodu geçerli değil veya kullanılmış")
+            wb_discount = round(total * pct / 100, 2)
+            total = round(total - wb_discount, 2)
+        elif coupon_code:
             from routes.integrations_pkg.direct_conversion import redeem_coupon_for_booking
             coupon_info = await redeem_coupon_for_booking(
                 db, coupon_code, total, guest_email=data["guest_email"],
@@ -256,8 +270,21 @@ def create_booking_widget_router(db, require_roles):
                 "coupon_discount_amount": coupon_info["discount_amount"],
                 "coupon_commission_saved": coupon_info["commission_saved"],
             })
+        if winback_offer:
+            booking.update({
+                "coupon_code": coupon_code,
+                "coupon_discount_pct": winback_offer["discount_pct"],
+                "coupon_discount_amount": wb_discount,
+                "coupon_type": "winback",
+            })
         await db.bookings.insert_one(booking)
         booking.pop("_id", None)
+
+        if winback_offer:
+            await db.winback_offers.update_one(
+                {"id": winback_offer["id"]},
+                {"$set": {"redeemed": True, "redeemed_at": now,
+                          "redeemed_via": "reservation", "booking_ref": booking_ref}})
 
         # Confirmed (no payment) → log email mock immediately
         if not pay_now:

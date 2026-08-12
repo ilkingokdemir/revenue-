@@ -206,4 +206,55 @@ def create_reputation_router(db, require_roles):
             {"property_id": property_id}, {"_id": 0}, sort=[("created_at", -1)])
         return doc or {}
 
+    @router.post("/reputation/spy-opportunity/{property_id}")
+    async def spy_opportunity(property_id: str, body: dict,
+                              current_user: dict = Depends(require_roles("admin", "manager"))):
+        """KANITLI FIRSAT → pazarlama görevi + sosyal medya taslağı."""
+        konu = (body.get("konu") or "").strip()
+        firsat = (body.get("firsat") or "").strip()
+        comp_name = (body.get("competitor") or "").strip()
+        puan = body.get("bizim_puan")
+        if not konu:
+            raise HTTPException(400, "konu gerekli")
+        prop = await db.properties.find_one({"id": property_id}, {"_id": 0, "name": 1}) or {}
+        try:
+            from emergentintegrations.llm.chat import LlmChat, UserMessage
+            client = LlmChat(
+                api_key=os.environ.get("EMERGENT_LLM_KEY"),
+                session_id=f"spy-social-{uuid.uuid4()}",
+                system_message=("Otel pazarlama uzmanısın. Türkçe, 2-3 cümlelik Instagram/Facebook "
+                                "gönderi taslağı yaz; rakip adı VERME, kendi güçlü yönümüzü öv. "
+                                "1-2 emoji ve 3 hashtag ekle. Sadece gönderi metnini döndür."),
+            ).with_model("openai", "gpt-5.2")
+            draft = await client.send_message(UserMessage(text=(
+                f"Otel: {prop.get('name', '')}. Güçlü alanımız: {konu} (misafir puanı {puan}/5). "
+                f"Rakipler bu alanda zayıf. Fırsat notu: {firsat}")))
+        except Exception as e:
+            logger.warning(f"spy social draft failed: {e}")
+            draft = (f"✨ {prop.get('name', 'Otelimiz')}'de {konu} misafirlerimizden {puan}/5 puan alıyor! "
+                     f"Farkı yaşamak için sizi bekliyoruz. #otel #misafirmemnuniyeti #tatil")
+        existing = await db.staff_tasks.find_one(
+            {"property_id": property_id, "source": "spy_opportunity",
+             "weak_topic": konu, "status": {"$in": ["open", "in_progress"]}},
+            {"_id": 0, "id": 1})
+        task_id = None
+        if not existing:
+            task_id = str(uuid.uuid4())
+            await db.staff_tasks.insert_one({
+                "id": task_id, "property_id": property_id,
+                "title": f"Pazarlama fırsatı: {konu}"[:120],
+                "description": (f"{firsat}\n"
+                                + (f"Rakip ({comp_name}) bu alanda zayıf.\n" if comp_name else "")
+                                + f"\nSosyal medya taslağı:\n{draft}"),
+                "status": "open", "priority": "normal", "department": "marketing",
+                "source": "spy_opportunity", "weak_topic": konu,
+                "created_by": current_user.get("email", ""),
+                "created_at": datetime.now(timezone.utc).isoformat()})
+        await db.social_drafts.insert_one({
+            "id": str(uuid.uuid4()), "property_id": property_id, "topic": konu,
+            "draft": draft, "source": "spy_opportunity",
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        return {"task_created": task_id is not None,
+                "task_id": task_id or existing["id"], "social_draft": draft}
+
     return router

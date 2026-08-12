@@ -655,7 +655,9 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                           <span className="text-stone-500 flex-1 truncate hidden md:inline">{o.message}</span>
                           <span className="text-stone-600 shrink-0">{(o.created_at || "").slice(0, 10)}</span>
                           {o.redeemed ? (
-                            <span className="shrink-0 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">✓ Kullanıldı</span>
+                            <span className="shrink-0 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">
+                              {o.redeemed_via === "reservation" ? "✓ Rezervasyonda kullanıldı (otomatik)" : "✓ Kullanıldı"}
+                            </span>
                           ) : (
                             <button data-testid={`winback-redeem-${o.id}`}
                               onClick={async () => {
@@ -1090,6 +1092,25 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                       </div>
                     ))}
                     <p className={`text-[11px] mt-1.5 ${(r.firsat || "").startsWith("KANITLI") ? "text-emerald-300 font-semibold" : "text-emerald-300"}`}>💡 {r.firsat}</p>
+                    {(r.firsat || "").startsWith("KANITLI") && (
+                      <button data-testid={`spy-marketing-btn-${i}`}
+                        onClick={async () => {
+                          try {
+                            toast.info("Sosyal medya taslağı hazırlanıyor…");
+                            const w0 = (r.weaknesses || [])[0] || {};
+                            const { data } = await axios.post(`${API}/reputation/spy-opportunity/${propertyId}`, {
+                              konu: w0.konu, firsat: r.firsat, competitor: r.name, bizim_puan: w0.bizim_puan,
+                            });
+                            await navigator.clipboard.writeText(data.social_draft);
+                            toast.success(data.task_created
+                              ? "Pazarlamaya görev açıldı — sosyal medya taslağı panoya kopyalandı 📣"
+                              : "Görev zaten açıktı — taslak panoya kopyalandı");
+                          } catch { toast.error("Gönderilemedi"); }
+                        }}
+                        className="mt-1.5 px-2.5 py-1 rounded-lg text-[10px] bg-violet-600/80 hover:bg-violet-500 text-white">
+                        📣 Pazarlamaya Gönder (görev + sosyal medya taslağı)
+                      </button>
+                    )}
                   </div>
                 ))}
                 <p className="text-[10px] text-stone-600">Son tarama: {(spy.created_at || "").slice(0, 16).replace("T", " ")}</p>
@@ -1108,7 +1129,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
             <div className="bg-stone-900 border border-stone-800 rounded-xl overflow-x-auto">
               <table className="w-full text-sm min-w-[860px]">
                 <thead><tr className="text-left text-[10px] uppercase tracking-wider text-stone-500 border-b border-stone-800">
-                  <th className="p-3">Tesis</th><th className="p-3">Ø Puan</th><th className="p-3">Yorum</th><th className="p-3">Anket</th><th className="p-3">Gönderilen</th><th className="p-3">Onay %</th>
+                  <th className="p-3">Tesis</th><th className="p-3">Ø Puan</th><th className="p-3">30g Trend</th><th className="p-3">Yorum</th><th className="p-3">Anket</th><th className="p-3">Gönderilen</th><th className="p-3">Onay %</th>
                   <th className="p-3">Ø Kalite</th><th className="p-3">Bekleyen Yorum</th><th className="p-3">Açık Şikayet</th><th className="p-3">Kural</th>
                 </tr></thead>
                 <tbody>
@@ -1123,6 +1144,13 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                         {r.avg_rating != null ? (
                           <span className={r.avg_rating === best ? "text-emerald-300" : r.avg_rating === worst ? "text-rose-300" : "text-amber-300"}>
                             {r.avg_rating}{r.avg_rating === best ? " 🏆" : r.avg_rating === worst ? " ⚠" : ""}
+                          </span>
+                        ) : <span className="text-stone-600">—</span>}
+                      </td>
+                      <td className="p-3" data-testid={`portfolio-trend-${r.property_id}`}>
+                        {r.rating_trend != null ? (
+                          <span className={r.rating_trend > 0 ? "text-emerald-400" : r.rating_trend < 0 ? "text-rose-400" : "text-stone-500"}>
+                            {r.rating_trend > 0 ? "▲" : r.rating_trend < 0 ? "▼" : "—"} {r.rating_trend !== 0 ? Math.abs(r.rating_trend) : ""}
                           </span>
                         ) : <span className="text-stone-600">—</span>}
                       </td>

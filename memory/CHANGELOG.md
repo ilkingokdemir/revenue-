@@ -3225,3 +3225,18 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   Portföy sekmesi tablosuna Ø Puan (🏆 en iyi / ⚠ en kötü renkli), Yorum, Anket kolonları.
 - E2E DOĞRULANDI (curl + interaktif screenshot): 13 şube satırı, redeem akışı, casus rozetleri.
 - BEKLEYEN: Expo token (kullanıcı yine yapıştırmadı) + Google Places anahtarı.
+
+## Iter 521 (2026-08-12) — Lig Tablosu + Fırsat Paylaşımı + Kod Otomatik Algılama TAMAMLANDI
+- 1) ŞUBE LİG TABLOSU: portfolio-report'a rating_trend (son 30g vs önceki 30g Ø puan farkı).
+  Portföy tablosuna "30g Trend" kolonu (▲ yeşil / ▼ kırmızı). TEST: Franziskaner ▼0.23.
+- 2) KANITLI FIRSAT PAYLAŞIMI: POST /reputation/spy-opportunity/{pid} — LLM sosyal medya
+  taslağı (rakip adı vermeden) + marketing departmanına staff_task (dedupe weak_topic ile)
+  + social_drafts koleksiyonu. UI: KANITLI FIRSAT satırında "📣 Pazarlamaya Gönder" butonu,
+  taslak panoya kopyalanır. TEST: task_created=true + GPT taslağı üretildi.
+- 3) KOD OTOMATİK ALGILAMA: booking-widget/book artık coupon_code=WELCOME{pct} algılar →
+  eşleşen kullanılmamış winback teklifini bulur (önce guest_email, sonra property eşleşmesi),
+  %pct indirimi uygular, teklifi redeemed_via=reservation + booking_ref ile OTOMATİK işaretler.
+  Geçersiz/kullanılmış kod 400 döner. Winback insert'e guest_email eklendi. UI rozeti:
+  "✓ Rezervasyonda kullanıldı (otomatik)". TEST: 200→170 (%15), stats 2/2 redeemed,
+  tekrar kullanım engellendi.
+- E2E DOĞRULANDI: curl (3 akış) + screenshot (trend kolonu, 📣 buton, otomatik rozet).

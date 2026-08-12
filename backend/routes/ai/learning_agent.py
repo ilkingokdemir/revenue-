@@ -767,6 +767,10 @@ def create_learning_agent_router(db, require_roles):
     # ---------- portfolio roll-up ----------
     @router.get("/ai-agent/portfolio-report")
     async def portfolio_report(_: dict = Depends(require_roles("admin", "manager"))):
+        from datetime import timedelta
+        now_dt = datetime.now(timezone.utc)
+        d30 = (now_dt - timedelta(days=30)).isoformat()
+        d60 = (now_dt - timedelta(days=60)).isoformat()
         rows = []
         async for p in db.properties.find({}, {"_id": 0, "id": 1, "name": 1}):
             pid = p["id"]
@@ -789,11 +793,21 @@ def create_learning_agent_router(db, require_roles):
             sagg = await db.surveys.aggregate([
                 {"$match": {"property_id": pid, "overall_score": {"$type": "number"}}},
                 {"$group": {"_id": None, "avg": {"$avg": "$overall_score"}}}]).to_list(1)
+            cur = await db.reviews.aggregate([
+                {"$match": {"property_id": pid, "rating": {"$type": "number"},
+                            "created_at": {"$gte": d30}}},
+                {"$group": {"_id": None, "avg": {"$avg": "$rating"}}}]).to_list(1)
+            prev = await db.reviews.aggregate([
+                {"$match": {"property_id": pid, "rating": {"$type": "number"},
+                            "created_at": {"$gte": d60, "$lt": d30}}},
+                {"$group": {"_id": None, "avg": {"$avg": "$rating"}}}]).to_list(1)
+            trend = round(cur[0]["avg"] - prev[0]["avg"], 2) if cur and prev else None
             rows.append({
                 "property_id": pid, "name": p.get("name", pid),
                 "avg_rating": round(ragg[0]["avg"], 2) if ragg else None,
                 "review_count": ragg[0]["n"] if ragg else 0,
                 "survey_score": round(sagg[0]["avg"], 2) if sagg else None,
+                "rating_trend": trend,
                 "sent": sent, "edited": edited,
                 "approval_rate": round((sent - edited) / sent * 100, 1) if sent else None,
                 "avg_quality": round(qagg[0]["avg"], 1) if qagg else None,
@@ -1124,6 +1138,7 @@ def create_learning_agent_router(db, require_roles):
         await db.winback_offers.insert_one({
             "id": str(uuid.uuid4()), "property_id": pid, "source_type": st,
             "source_id": sid, "discount_pct": discount, "message": text,
+            "guest_email": guest_email,
             "email_queued": queued, "created_by": current_user.get("email", ""),
             "created_at": _now_iso()})
         return {"message": text, "discount_pct": discount,

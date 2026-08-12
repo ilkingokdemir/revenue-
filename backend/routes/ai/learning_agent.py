@@ -783,8 +783,17 @@ def create_learning_agent_router(db, require_roles):
                 {"property_id": pid, "status": {"$nin": ["resolved", "closed"]}})
             lessons = await db.ai_agent_lessons.count_documents(
                 {"property_id": pid, "active": True})
+            ragg = await db.reviews.aggregate([
+                {"$match": {"property_id": pid, "rating": {"$type": "number"}}},
+                {"$group": {"_id": None, "avg": {"$avg": "$rating"}, "n": {"$sum": 1}}}]).to_list(1)
+            sagg = await db.surveys.aggregate([
+                {"$match": {"property_id": pid, "overall_score": {"$type": "number"}}},
+                {"$group": {"_id": None, "avg": {"$avg": "$overall_score"}}}]).to_list(1)
             rows.append({
                 "property_id": pid, "name": p.get("name", pid),
+                "avg_rating": round(ragg[0]["avg"], 2) if ragg else None,
+                "review_count": ragg[0]["n"] if ragg else 0,
+                "survey_score": round(sagg[0]["avg"], 2) if sagg else None,
                 "sent": sent, "edited": edited,
                 "approval_rate": round((sent - edited) / sent * 100, 1) if sent else None,
                 "avg_quality": round(qagg[0]["avg"], 1) if qagg else None,
@@ -1191,6 +1200,17 @@ def create_learning_agent_router(db, require_roles):
         redeemed = await db.winback_offers.count_documents({**q, "redeemed": True})
         return {"total": total, "email_queued": queued, "redeemed": redeemed,
                 "redeem_rate": round(redeemed / total * 100, 1) if total else 0}
+
+    @router.get("/ai-agent/winback-offers/{property_id}")
+    async def winback_offers_list(property_id: str,
+                                  _: dict = Depends(require_roles("admin", "manager"))):
+        offers = await db.winback_offers.find(
+            {"property_id": property_id}, {"_id": 0}).sort("created_at", -1).to_list(20)
+        for o in offers:
+            src = await _get_source(o.get("source_type"), o.get("source_id"))
+            o["guest_name"] = (src or {}).get("guest_name") or (src or {}).get("author") or "Misafir"
+            o["message"] = (o.get("message") or "")[:160]
+        return {"items": offers}
 
     @router.post("/ai-agent/winback/{offer_id}/redeem")
     async def winback_redeem(offer_id: str,

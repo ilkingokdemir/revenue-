@@ -56,6 +56,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
   const [insightLoading, setInsightLoading] = useState(false);
   const [voicePlaying, setVoicePlaying] = useState(false);
   const [winbackStats, setWinbackStats] = useState(null);
+  const [winbackOffers, setWinbackOffers] = useState([]);
   const [insightTasks, setInsightTasks] = useState([]);
   const [spy, setSpy] = useState(null);
   const [spying, setSpying] = useState(false);
@@ -199,6 +200,7 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
       axios.get(`${API}/ai-agent/insight-report/${propertyId}/latest`).then(({ data }) => data?.id && setInsight(data)).catch(() => {});
       axios.get(`${API}/ai-agent/insight-tasks/${propertyId}`).then(({ data }) => setInsightTasks(data.items || [])).catch(() => {});
       axios.get(`${API}/ai-agent/winback-stats/${propertyId}`).then(({ data }) => setWinbackStats(data)).catch(() => {});
+      axios.get(`${API}/ai-agent/winback-offers/${propertyId}`).then(({ data }) => setWinbackOffers(data.items || [])).catch(() => {});
     }
     if (tab === "benchmark" && propertyId) {
       axios.get(`${API}/reputation/competitor-spy/${propertyId}/latest`).then(({ data }) => data?.id && setSpy(data)).catch(() => {});
@@ -644,6 +646,37 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                     <StatBox testId="winback-redeemed" label="Kullanılan Kod" value={winbackStats.redeemed} />
                     <StatBox testId="winback-rate" label="Dönüşüm Oranı" value={`%${winbackStats.redeem_rate}`} sub="Kod kullanım oranı" />
                   </div>
+                  {winbackOffers.length > 0 && (
+                    <div className="mt-3 space-y-1.5" data-testid="winback-offer-list">
+                      {winbackOffers.map((o) => (
+                        <div key={o.id} data-testid={`winback-offer-${o.id}`} className="flex items-center gap-2 p-2 rounded-lg bg-stone-950 border border-stone-800 text-xs">
+                          <span className="text-stone-200 font-medium w-28 truncate shrink-0">{o.guest_name}</span>
+                          <span className="text-violet-300 shrink-0 font-mono">WELCOME{o.discount_pct}</span>
+                          <span className="text-stone-500 flex-1 truncate hidden md:inline">{o.message}</span>
+                          <span className="text-stone-600 shrink-0">{(o.created_at || "").slice(0, 10)}</span>
+                          {o.redeemed ? (
+                            <span className="shrink-0 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px]">✓ Kullanıldı</span>
+                          ) : (
+                            <button data-testid={`winback-redeem-${o.id}`}
+                              onClick={async () => {
+                                try {
+                                  await axios.post(`${API}/ai-agent/winback/${o.id}/redeem`);
+                                  setWinbackOffers((prev) => prev.map((x) => x.id === o.id ? { ...x, redeemed: true } : x));
+                                  setWinbackStats((prev) => {
+                                    const redeemed = (prev?.redeemed || 0) + 1;
+                                    return { ...prev, redeemed, redeem_rate: prev?.total ? Math.round(redeemed / prev.total * 1000) / 10 : 0 };
+                                  });
+                                  toast.success("Kod kullanıldı olarak işaretlendi 🎉");
+                                } catch { toast.error("İşaretlenemedi"); }
+                              }}
+                              className="shrink-0 px-2 py-0.5 rounded text-[10px] bg-emerald-600/80 hover:bg-emerald-500 text-white">
+                              Kullanıldı İşaretle
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {report.gbp_queue_pending > 0 && (
@@ -1044,11 +1077,19 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                       <span className="px-1.5 py-0.5 rounded text-[9px] bg-amber-500/15 text-amber-300">{r.mode === "simulated" ? "simülasyon" : "canlı"}</span>
                     </div>
                     {(r.weaknesses || []).map((w, j) => (
-                      <p key={j} className="text-xs text-stone-400 mb-0.5">
-                        <span className="text-rose-300 font-medium">{w.konu}:</span> {w.bulgu}
-                      </p>
+                      <div key={j} className="flex items-start gap-2 mb-0.5">
+                        <p className="text-xs text-stone-400 flex-1">
+                          <span className="text-rose-300 font-medium">{w.konu}:</span> {w.bulgu}
+                        </p>
+                        {w.bizim_puan != null && (
+                          <span data-testid={`spy-our-score-${i}-${j}`}
+                            className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] ${w.bizim_puan >= 3.5 ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>
+                            Biz: {w.bizim_puan}/5
+                          </span>
+                        )}
+                      </div>
                     ))}
-                    <p className="text-[11px] text-emerald-300 mt-1.5">💡 {r.firsat}</p>
+                    <p className={`text-[11px] mt-1.5 ${(r.firsat || "").startsWith("KANITLI") ? "text-emerald-300 font-semibold" : "text-emerald-300"}`}>💡 {r.firsat}</p>
                   </div>
                 ))}
                 <p className="text-[10px] text-stone-600">Son tarama: {(spy.created_at || "").slice(0, 16).replace("T", " ")}</p>
@@ -1060,20 +1101,33 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
 
       {tab === "portfolio" && (
         <div className="space-y-3" data-testid="ai-robot-portfolio">
-          <p className="text-sm font-medium text-stone-200">Portföy Roll-up — tüm tesislerin robot performansı</p>
+          <p className="text-sm font-medium text-stone-200">Portföy Roll-up — tüm şubelerin yorum & robot performansı karşılaştırması</p>
           {!portfolio ? (
             <div className="p-6 text-center text-stone-400 text-sm"><Loader2 className="w-5 h-5 mx-auto animate-spin" /></div>
           ) : (
             <div className="bg-stone-900 border border-stone-800 rounded-xl overflow-x-auto">
-              <table className="w-full text-sm min-w-[720px]">
+              <table className="w-full text-sm min-w-[860px]">
                 <thead><tr className="text-left text-[10px] uppercase tracking-wider text-stone-500 border-b border-stone-800">
-                  <th className="p-3">Tesis</th><th className="p-3">Gönderilen</th><th className="p-3">Onay %</th>
+                  <th className="p-3">Tesis</th><th className="p-3">Ø Puan</th><th className="p-3">Yorum</th><th className="p-3">Anket</th><th className="p-3">Gönderilen</th><th className="p-3">Onay %</th>
                   <th className="p-3">Ø Kalite</th><th className="p-3">Bekleyen Yorum</th><th className="p-3">Açık Şikayet</th><th className="p-3">Kural</th>
                 </tr></thead>
                 <tbody>
-                  {portfolio.rows.map((r) => (
+                  {(() => {
+                    const rated = portfolio.rows.filter((r) => r.avg_rating != null);
+                    const best = rated.length ? Math.max(...rated.map((r) => r.avg_rating)) : null;
+                    const worst = rated.length > 1 ? Math.min(...rated.map((r) => r.avg_rating)) : null;
+                    return portfolio.rows.map((r) => (
                     <tr key={r.property_id} data-testid={`portfolio-row-${r.property_id}`} className="border-b border-stone-800/50">
                       <td className="p-3 text-stone-100">{r.name}</td>
+                      <td className="p-3 font-semibold">
+                        {r.avg_rating != null ? (
+                          <span className={r.avg_rating === best ? "text-emerald-300" : r.avg_rating === worst ? "text-rose-300" : "text-amber-300"}>
+                            {r.avg_rating}{r.avg_rating === best ? " 🏆" : r.avg_rating === worst ? " ⚠" : ""}
+                          </span>
+                        ) : <span className="text-stone-600">—</span>}
+                      </td>
+                      <td className="p-3 text-stone-400">{r.review_count ?? "—"}</td>
+                      <td className="p-3 text-stone-300">{r.survey_score ?? "—"}</td>
                       <td className="p-3 text-stone-300">{r.sent}</td>
                       <td className="p-3 text-violet-300">{r.approval_rate !== null ? `%${r.approval_rate}` : "—"}</td>
                       <td className="p-3 text-emerald-300">{r.avg_quality ?? "—"}</td>
@@ -1081,7 +1135,8 @@ export default function AIReplyRobotPanel({ propertyId, hotelName = "" }) {
                       <td className={`p-3 ${r.open_complaints > 0 ? "text-rose-300" : "text-stone-500"}`}>{r.open_complaints}</td>
                       <td className="p-3 text-stone-400">{r.lessons}</td>
                     </tr>
-                  ))}
+                    ));
+                  })()}
                 </tbody>
               </table>
             </div>

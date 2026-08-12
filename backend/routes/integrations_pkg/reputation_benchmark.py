@@ -151,6 +151,13 @@ def create_reputation_router(db, require_roles):
             ("yemek", "Restoran menüsü sınırlı")],
     }
 
+    SPY_TOPIC_TO_CATEGORY = {
+        "kahvaltı": "yemek", "yemek": "yemek", "personel": "personel",
+        "check-in": "personel", "temizlik": "temizlik", "wifi": "oda_konforu",
+        "ses yalıtımı": "oda_konforu", "klima": "oda_konforu",
+        "otopark": "konum", "fiyat": "fiyat_performans",
+    }
+
     @router.post("/reputation/competitor-spy/{property_id}")
     async def competitor_spy(property_id: str,
                              _: dict = Depends(require_roles("admin", "manager"))):
@@ -159,12 +166,33 @@ def create_reputation_router(db, require_roles):
         comps = (cfg.get("competitors") or [])[:5]
         if not comps:
             raise HTTPException(400, "Önce Benchmark sekmesinden rakip ekleyin")
+        cat_reviews = await db.reviews.find(
+            {"property_id": property_id, "category_scores": {"$exists": True}},
+            {"_id": 0, "category_scores": 1}).to_list(1000)
+        cat_scores = {}
+        for r in cat_reviews:
+            for c, v in (r.get("category_scores") or {}).items():
+                if isinstance(v, (int, float)):
+                    cat_scores.setdefault(c, []).append(v)
+        our = {c: round(sum(v) / len(v), 2) for c, v in cat_scores.items()}
         rows = []
         for i, comp in enumerate(comps):
-            weaknesses = [{"konu": k, "bulgu": b} for k, b in SIM_COMP_REVIEWS.get(i % 5, [])]
+            weaknesses = []
+            for k, b in SIM_COMP_REVIEWS.get(i % 5, []):
+                cat = SPY_TOPIC_TO_CATEGORY.get(k)
+                weaknesses.append({"konu": k, "bulgu": b,
+                                   "bizim_kategori": cat, "bizim_puan": our.get(cat)})
+            w0 = weaknesses[0]
+            if w0.get("bizim_puan") is not None and w0["bizim_puan"] >= 3.5:
+                firsat = (f"KANITLI FIRSAT: {w0['konu']} alanında bizim puanımız {w0['bizim_puan']}/5 — "
+                          f"rakip burada zayıf, pazarlamada öne çıkarın")
+            elif w0.get("bizim_puan") is not None:
+                firsat = (f"{w0['konu']} alanında bizim puanımız da düşük ({w0['bizim_puan']}/5) — "
+                          f"önce kendi puanımızı yükseltelim")
+            else:
+                firsat = f"{w0['konu']} alanında rakipten iyiysek pazarlamada vurgulayın"
             rows.append({"name": comp.get("name", "?"), "mode": "simulated",
-                         "weaknesses": weaknesses,
-                         "firsat": f"{weaknesses[0]['konu']} alanında rakipten iyiysek pazarlamada vurgulayın"})
+                         "weaknesses": weaknesses, "firsat": firsat})
         doc = {"id": str(uuid.uuid4()), "property_id": property_id,
                "rows": rows, "created_at": datetime.now(timezone.utc).isoformat()}
         await db.competitor_spy_reports.insert_one(dict(doc))

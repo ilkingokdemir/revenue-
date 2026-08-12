@@ -3213,3 +3213,15 @@ bildirim senkronu, taslak gönderme akışı) + expo export. Hepsi PASS.
   görev rozeti tıklama sonrası göründü, winback kartı verilerle yüklendi.
 - DERS: Paralel search_replace batch'inde useEffect edit'i kaybolmuştu — kritik edit'ler
   sonrası grep ile doğrula.
+
+## Iter 520 (2026-08-12) — Kod Kullanım + Casus Karşılaştırma + Şube Karşılaştırma TAMAMLANDI
+- 1) KOD KULLANIM: GET /ai-agent/winback-offers/{pid} (son 20 teklif + misafir adı).
+  Geri Kazanım kartında teklif listesi + "Kullanıldı İşaretle" butonu → POST redeem →
+  rozet ✓ Kullanıldı + dönüşüm oranı GERÇEK ZAMANLI güncellenir (%0→%100 test edildi).
+- 2) CASUS KARŞILAŞTIRMA: competitor_spy artık zayıf konu → bizim kategori puanı eşler
+  (SPY_TOPIC_TO_CATEGORY: kahvaltı→yemek, wifi→oda_konforu vb). Her zayıflıkta "Biz: X/5"
+  rozeti (yeşil ≥3.5 / amber); puanımız ≥3.5 ise fırsat "KANITLI FIRSAT: ..." otomatik kanıtlı.
+- 3) ŞUBE KARŞILAŞTIRMA: portfolio-report'a avg_rating, review_count, survey_score eklendi.
+  Portföy sekmesi tablosuna Ø Puan (🏆 en iyi / ⚠ en kötü renkli), Yorum, Anket kolonları.
+- E2E DOĞRULANDI (curl + interaktif screenshot): 13 şube satırı, redeem akışı, casus rozetleri.
+- BEKLEYEN: Expo token (kullanıcı yine yapıştırmadı) + Google Places anahtarı.
